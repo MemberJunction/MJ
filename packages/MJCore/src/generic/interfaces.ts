@@ -738,16 +738,6 @@ export interface IMetadataProvider {
 
     Refresh(providerToUse?: IMetadataProvider): Promise<boolean>
 
-    /**
-     * OPTIONAL scoped refresh: re-fetches ONLY the entity-family metadata (entities, fields,
-     * field values/permissions/relationships/settings/organic keys) of the named schemas and
-     * atomically merges it into the cached metadata — instead of reloading the entire instance
-     * graph like {@link Refresh}. Providers that don't implement it (or any scoped-path failure)
-     * fall back to a full Refresh. Designed for the RSU / schema-evolution flow where a runtime
-     * schema update touches exactly one connector schema.
-     */
-    RefreshSchemas?(schemas: string[], providerToUse?: IMetadataProvider): Promise<boolean>
-
     RefreshIfNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
 
     CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider): Promise<boolean>

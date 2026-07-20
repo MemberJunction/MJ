@@ -71,12 +71,14 @@ export class Metadata {
 
     /**
      * SCOPED refresh convenience: re-fetches ONLY the entity-family metadata of the named schemas
-     * via the provider's {@link IMetadataProvider.RefreshSchemas} (atomic merge, full-Refresh
-     * fallback semantics). Providers without scoped support fall back to a full Refresh here.
+     * (atomic merge, full-Refresh fallback semantics). `RefreshSchemas` is a capability of
+     * `ProviderBase` (which every real provider extends), not of the `IMetadataProvider` interface
+     * — we dispatch to it via a structural check so the sensitive core interface stays untouched;
+     * any provider lacking it falls back to a full Refresh.
      */
     public async RefreshSchemas(schemas: string[], providerToUse?: IMetadataProvider): Promise<boolean> {
         this._entityMapPopulated = false;
-        const p = Metadata.Provider;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+        const p = Metadata.Provider as IMetadataProvider & { RefreshSchemas?: (schemas: string[], providerToUse?: IMetadataProvider) => Promise<boolean> };  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
         return p.RefreshSchemas ? await p.RefreshSchemas(schemas, providerToUse) : await p.Refresh(providerToUse);
     }
 

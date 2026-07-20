@@ -165,7 +165,10 @@ export class IntegrationCustomColumnPromoter {
         const schemas = [...new Set(
             entityNames.map(n => this.provider.EntityByName(n)?.SchemaName).filter((s): s is string => !!s)
         )];
-        if (schemas.length > 0 && this.provider.RefreshSchemas) await this.provider.RefreshSchemas(schemas);
+        // RefreshSchemas is a ProviderBase capability, not on IMetadataProvider — dispatch via a
+        // structural check (keeps the core interface untouched); no scoping support → full Refresh.
+        const p = this.provider as IMetadataProvider & { RefreshSchemas?: (schemas: string[]) => Promise<boolean> };
+        if (schemas.length > 0 && p.RefreshSchemas) await p.RefreshSchemas(schemas);
         else await this.provider.Refresh();
     }
 
