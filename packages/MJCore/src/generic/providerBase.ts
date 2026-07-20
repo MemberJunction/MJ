@@ -1824,7 +1824,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         return serveFromSlot();
                     }
                 }
-                // Client smart validation round trip
+                // Client smart validation round trip.
+                //
+                // Guarded on `checker` (R4-2): the block above is entered when `!checker ||
+                // TrustLocalCacheCompletely`. If we got here via `!checker` AND the B43 permission
+                // gate DECLINED to serve (denied user / non-warmer), execution used to fall
+                // straight into `await checker(...)` = `await undefined(...)` — a TypeError instead
+                // of the promised "fall through to authorized execution". Every in-tree provider
+                // implements the optional `RunQueriesWithCacheCheck`, so this was latent, but the
+                // pre-B43 code handled `!checker` and this must too: skip the round trip and let
+                // the normal PreRunQuery/InternalRunQuery path below authorize and execute.
+                if (!checker) {
+                    // fall through to normal execution below
+                } else {
                 const response = await checker([{
                     params,
                     cacheStatus: { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount }
@@ -1853,6 +1865,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                             ErrorMessage: ''
                         };
                     }
+                }
                 }
                 // validation transport failed — fall through to a normal execution
             }

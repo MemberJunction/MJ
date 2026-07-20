@@ -2148,7 +2148,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
-            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
             const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
@@ -2214,7 +2214,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -2572,7 +2572,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
-        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number },
+        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] },
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         // The server cache stores the full-width superset — project down to the
@@ -2588,6 +2588,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             results: results as T[],
             maxUpdatedAt: serverCached.maxUpdatedAt,
             rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
+            // Carry aggregates through (B40-family, 4th drop). The server slot stores them and
+            // GetRunViewResult returns them, but this serve-leg's inline serverCached type omitted
+            // the field, so TypeScript could not flag the drop. Both callers (noCacheStatus + stale)
+            // now widen their type to match, so the field flows.
+            aggregateResults: serverCached.aggregateResults,
         };
     }
 
