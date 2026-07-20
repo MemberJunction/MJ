@@ -1,16 +1,29 @@
--- U2 — soft-PK guard for spUpdateExistingEntityFieldsFromSchema.
+-- U2 soft-PK guard + catalog-view materialization for spUpdateExistingEntityFieldsFromSchema (SQL Server).
 --
--- A SOFT primary key (EntityField.IsSoftPrimaryKey = 1, resolved from additionalSchemaInfo for
--- integration tables) has NO physical PK/UNIQUE constraint in the database. The schema-sync
--- sproc compared IsPrimaryKey/IsUnique against the PHYSICAL constraint catalog unconditionally,
--- so every run (a) flagged each soft-PK field as a material change and (b) overwrote
--- IsPrimaryKey/IsUnique back to 0 — undoing the resolved soft PK (the keyless-entity root)
--- despite the documented IsSoftPrimaryKey protection.
+-- This migration SUPERSEDES the guard-only V202607181210 (deleted in this same change) and folds in
+-- the #temp-table materialization so the FINAL sproc definition carries BOTH fixes regardless of the
+-- order the two independent changes land in. Its timestamp sorts AFTER the standalone materialization
+-- migration (V202607181900, shipped separately), so on a fresh install this definition wins. Without
+-- this reconciliation, whichever of "guard" and "materialize" had the later timestamp would silently
+-- revert the other (both CREATE OR ALTER the same routine and do not textually conflict, so nothing
+-- would flag it).
 --
--- Fix: soft-PK rows are excluded from the PK/unique material-change predicate and their
--- IsPrimaryKey/IsUnique values are frozen in the UPDATE. All other attributes still sync.
--- (The PostgreSQL function receives the same guard via the CodeGenLib emitter, which
--- re-creates it on every codegen run.)
+-- (1) SOFT-PK GUARD (U2): a SOFT primary key (EntityField.IsSoftPrimaryKey = 1, resolved from
+--     additionalSchemaInfo for integration tables) has NO physical PK/UNIQUE constraint. The sproc
+--     compared IsPrimaryKey/IsUnique against the PHYSICAL constraint catalog unconditionally, so every
+--     run (a) flagged each soft-PK field as a material change and (b) overwrote IsPrimaryKey/IsUnique
+--     back to 0 — undoing the resolved soft PK (the keyless-entity root) despite the documented
+--     IsSoftPrimaryKey protection. Fix: soft-PK rows are excluded from the PK/unique material-change
+--     predicate and their IsPrimaryKey/IsUnique values are frozen in the UPDATE. All other attributes
+--     still sync. (PostgreSQL receives the same guard via the CodeGenLib emitter, which re-creates the
+--     function on every codegen run.)
+--
+-- (2) MATERIALIZATION: the four catalog-introspection views, joined directly over the sys.* catalog,
+--     get poor cardinality estimates and the optimizer nested-loops, going super-linear as CodeGen
+--     inflates the catalog mid-run (a single call exceeded 2 min at 600 tables; SS codegen at 600
+--     tables did not complete in 15 min). Materialize each view into a #temp table first (SQL Server
+--     auto-creates statistics on #temp tables) so the reconciliation join hash-joins. Mirrors the
+--     pattern the sibling spDeleteUnneededEntityFields already uses. Behavior is otherwise identical.
 
 CREATE OR ALTER PROC [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema]
     @ExcludedSchemaNames NVARCHAR(MAX),
@@ -37,6 +50,20 @@ BEGIN
           AND TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value))) IS NOT NULL;
         IF EXISTS (SELECT 1 FROM @ScopedEntityIDs) SET @IsScoped = 1;
     END
+
+    -- Materialize the catalog-introspection views into #temp tables before the reconciliation
+    -- join below (see header note 2). #temp tables auto-get statistics, so the join hash-joins
+    -- instead of nested-looping over the sys.* catalog. #uef_cols honors the scope filter so a
+    -- scoped run only materializes the listed entities' columns.
+    IF OBJECT_ID('tempdb..#uef_cols') IS NOT NULL DROP TABLE #uef_cols;
+    SELECT * INTO #uef_cols FROM [${flyway:defaultSchema}].vwSQLColumnsAndEntityFields
+        WHERE @IsScoped = 0 OR EntityID IN (SELECT EntityID FROM @ScopedEntityIDs);
+    IF OBJECT_ID('tempdb..#uef_fk') IS NOT NULL DROP TABLE #uef_fk;
+    SELECT * INTO #uef_fk FROM [${flyway:defaultSchema}].vwForeignKeys;
+    IF OBJECT_ID('tempdb..#uef_pk') IS NOT NULL DROP TABLE #uef_pk;
+    SELECT * INTO #uef_pk FROM [${flyway:defaultSchema}].vwTablePrimaryKeys;
+    IF OBJECT_ID('tempdb..#uef_uk') IS NOT NULL DROP TABLE #uef_uk;
+    SELECT * INTO #uef_uk FROM [${flyway:defaultSchema}].vwTableUniqueKeys;
 
     DECLARE @FilteredRows TABLE (
         EntityID UNIQUEIDENTIFIER,
@@ -94,12 +121,12 @@ BEGIN
     FROM
         [${flyway:defaultSchema}].EntityField ef
     INNER JOIN
-        [${flyway:defaultSchema}].vwSQLColumnsAndEntityFields fromSQL
+        #uef_cols fromSQL
         ON ef.EntityID = fromSQL.EntityID AND ef.Name = fromSQL.FieldName
     INNER JOIN
         [${flyway:defaultSchema}].Entity e ON ef.EntityID = e.ID
     LEFT OUTER JOIN
-        [${flyway:defaultSchema}].vwForeignKeys fk
+        #uef_fk fk
         ON ef.Name = fk.[column]
            AND e.BaseTable = fk.[table]
            AND e.SchemaName = fk.[schema_name]
@@ -107,10 +134,10 @@ BEGIN
         [${flyway:defaultSchema}].Entity re
         ON re.BaseTable = fk.referenced_table AND re.SchemaName = fk.[referenced_schema]
     LEFT OUTER JOIN
-        [${flyway:defaultSchema}].vwTablePrimaryKeys pk
+        #uef_pk pk
         ON e.BaseTable = pk.TableName AND ef.Name = pk.ColumnName AND e.SchemaName = pk.SchemaName
     LEFT OUTER JOIN
-        [${flyway:defaultSchema}].vwTableUniqueKeys uk
+        #uef_uk uk
         ON e.BaseTable = uk.TableName AND ef.Name = uk.ColumnName AND e.SchemaName = uk.SchemaName
     LEFT OUTER JOIN
         @ExcludedSchemas excludedSchemas ON e.SchemaName = excludedSchemas.SchemaName
