@@ -9,7 +9,9 @@
     "src/lib/components/entity-details/entity-details.component.ts",
     "src/lib/components/entity-details/entity-details.component.dom.test.ts",
     "src/lib/components/erd-composite/erd-composite.component.ts",
-    "src/lib/components/erd-composite/erd-composite.component.dom.test.ts"
+    "src/lib/components/erd-composite/erd-composite.component.dom.test.ts",
+    "src/lib/components/mj-entity-erd.component.ts",
+    "src/lib/components/mj-entity-erd.component.dom.test.ts"
   ],
   "exclude": [
     "node_modules",
