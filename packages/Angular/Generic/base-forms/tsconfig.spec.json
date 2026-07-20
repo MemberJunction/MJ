@@ -22,7 +22,10 @@
     "src/lib/toolbar/form-toolbar.component.ts",
     "src/lib/toolbar/form-toolbar.component.dom.test.ts",
     "src/lib/isa-related-panel/isa-related-panel.component.ts",
-    "src/lib/isa-related-panel/isa-related-panel.component.dom.test.ts"
+    "src/lib/isa-related-panel/isa-related-panel.component.dom.test.ts",
+    "src/lib/host/entity-form-host.component.ts",
+    "src/lib/host/entity-form-host.component.dom.test.ts",
+    "src/lib/resolver/form-resolver.service.ts"
   ],
   "exclude": [
     "node_modules",
