@@ -448,7 +448,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
     /**
      * Extracts the entity name from a RunView fingerprint.
-     * Fingerprint format: `EntityName|Filter|OrderBy|ResultType|MaxRows|StartRow|AggHash[|Connection]`
+     * Fingerprint format: `Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|…]`
+     * (built in GenerateRunViewFingerprint below — that array is the ground truth). NOTE:
+     * `ResultType` is deliberately NOT a segment; the cache stores plain JSON regardless and
+     * transformation happens post-cache. An earlier version of this comment listed it, which
+     * would put any new segment-indexing predicate one position off — MaxRows is [3], not [4].
      * @param fingerprint - The RunView cache fingerprint
      * @returns The entity name, or null if the fingerprint is malformed
      */
@@ -466,6 +470,52 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     protected isFilteredFingerprint(fingerprint: string): boolean {
         const parts = fingerprint.split('|');
         return parts.length >= 2 && parts[1] !== '_' && parts[1] !== '';
+    }
+
+    /**
+     * Returns true if the fingerprint identifies a **subset slot** — a cache entry whose rows are
+     * a TRUNCATION (`MaxRows`) or an OFFSET WINDOW (`StartRow`) of the matching set rather than
+     * the complete set.
+     *
+     * Subset slots are safe to STORE and SERVE (a cold read of the slot is exactly what the DB
+     * would have returned), but they must NEVER be maintained in place by the BaseEntity
+     * save/delete event path:
+     *
+     *  - **Save/upsert** appends the saved row to the slot, so a `MaxRows: 1` slot grows to 2, 3,
+     *    4 … rows — silently violating the caller's own row limit and serving a set that is
+     *    neither the first-N nor the full set (one arbitrary original row plus every locally
+     *    saved row).
+     *  - **Delete/remove** shrinks the slot below the limit, so a `MaxRows: 1` slot serves 0 rows
+     *    while the DB still has 47 matching rows to choose a TOP 1 from.
+     *
+     * Neither can be repaired in JS: deciding whether a newly saved row belongs *inside* the
+     * window, and which row it would displace, requires re-running the query's TOP/OFFSET against
+     * the database. So we treat subset slots exactly as filtered slots are treated on save —
+     * conservatively INVALIDATE and let the next read repopulate from the DB.
+     *
+     * This is the row-level counterpart to the `totalRowCount` subset-slot handling: the total is
+     * maintained across the delta because the DB total is knowable; the ROWS are not, so the slot
+     * is dropped instead.
+     *
+     * Fingerprint format: `Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch[|…]`.
+     * Parsing is deliberately conservative — if the segments aren't cleanly numeric (e.g. a filter
+     * value containing a literal `|` shifts the positions), we return false and preserve existing
+     * behavior rather than over-invalidating. Such a fingerprint is filtered by definition, and
+     * filtered slots are already invalidated on save.
+     *
+     * @param fingerprint - The RunView cache fingerprint
+     */
+    protected isSubsetFingerprint(fingerprint: string): boolean {
+        const parts = fingerprint.split('|');
+        if (parts.length < 5) return false;
+
+        // MaxRows: -1 (or 0) means "no limit"; any positive value truncates the set.
+        const maxRows = Number(parts[3]);
+        if (Number.isFinite(maxRows) && maxRows > 0) return true;
+
+        // StartRow: > 0 means the slot is an offset window, not the head of the set.
+        const startRow = Number(parts[4]);
+        return Number.isFinite(startRow) && startRow > 0;
     }
 
     /**
@@ -726,7 +776,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             LogStatusVerbose(`LocalCacheManager: remote-invalidate (delete) for "${entityName}" PK=${key.ToConcatenatedString()}, removing from ${fingerprints.size} cached fingerprint(s)`);
             for (const fingerprint of fingerprintSnapshot) {
                 try {
-                    await this.RemoveSingleEntity(fingerprint, key, nowISO);
+                    // Subset slot (MaxRows/StartRow): removing a row would shrink it below the
+                    // caller's own row limit while the DB still has rows to fill the window.
+                    if (this.isSubsetFingerprint(fingerprint)) {
+                        await this.InvalidateRunViewResult(fingerprint);
+                    } else {
+                        await this.RemoveSingleEntity(fingerprint, key, nowISO);
+                    }
                 } catch (err) {
                     LogError(`HandleRemoteInvalidateEvent: failed to remove from "${fingerprint}": ${(err as Error).message}`);
                 }
@@ -747,7 +803,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
                 for (const fingerprint of fingerprintSnapshot) {
                     try {
-                        if (!this.isFilteredFingerprint(fingerprint)) {
+                        // Subset slot (MaxRows/StartRow): upserting would grow the slot past the
+                        // caller's own row limit. Invalidate, same as a filtered slot.
+                        if (!this.isFilteredFingerprint(fingerprint) && !this.isSubsetFingerprint(fingerprint)) {
                             await this.UpsertSingleEntity(fingerprint, recordData, key, nowISO);
                         } else {
                             await this.InvalidateRunViewResult(fingerprint);
@@ -848,7 +906,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         nowISO: string
     ): Promise<void> {
         const keyStr = key.ToConcatenatedString();
-        if (eventType === 'delete') {
+        // Subset slots (MaxRows-truncated / StartRow-offset) cannot be maintained in place in
+        // EITHER direction — upserting grows them past the caller's own row limit and removing
+        // shrinks them below it. Drop the slot and let the next read repopulate it from the DB.
+        if (this.isSubsetFingerprint(fingerprint)) {
+            LogStatusVerbose(`LocalCacheManager: Invalidating subset (MaxRows/StartRow) cache "${fingerprint.substring(0, 60)}"`);
+            await this.InvalidateRunViewResult(fingerprint);
+        } else if (eventType === 'delete') {
             LogStatusVerbose(`LocalCacheManager: Removing entity ${keyStr} from cache "${fingerprint.substring(0, 60)}"`);
             await this.RemoveSingleEntity(fingerprint, key, nowISO);
         } else if (!this.isFilteredFingerprint(fingerprint)) {
