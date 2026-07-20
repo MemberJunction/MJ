@@ -108,6 +108,18 @@ export class RunComputerUseParams {
      */
     public AppProfile?: AppProfile;
 
+    /**
+     * Maximum *agent* time (ms) before the run gracefully expires with a
+     * `TimeBudgetExceeded` status (CU-B4). "Agent time" excludes engine-side
+     * settle waiting (ΣSettleMs) — a slow app must not consume the agent's
+     * reasoning budget (pairs with CU-A1). The engine checks this at each step
+     * boundary and, on expiry, runs one forced final judge so the run is scored
+     * on real end-state rather than zeroed. Omit/0 to disable engine-side time
+     * budgeting (the caller's outer failsafe still applies). Distinct from
+     * MaxSteps, which bounds decision count.
+     */
+    public MaxExecutionTimeMs?: number;
+
     /** Override for the controller system prompt */
     public ControllerPrompt?: string;
 

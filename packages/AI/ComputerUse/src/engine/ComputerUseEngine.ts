@@ -441,6 +441,9 @@ export class ComputerUseEngine {
         let lastVerdict: JudgeVerdict | undefined;
         let consecutiveEmptySteps = 0;
         let consecutiveJudgeDisagreements = 0;
+        // Cumulative engine-side settle wait, excluded from the agent-time budget
+        // so a slow app doesn't consume the agent's reasoning time (CU-B4/A1).
+        let cumulativeSettleMs = 0;
 
         for (let stepNumber = 1; stepNumber <= context.Params.MaxSteps; stepNumber++) {
             // Check cancellation
@@ -448,8 +451,20 @@ export class ComputerUseEngine {
                 return this.buildResult(context, 'Cancelled', false, lastVerdict);
             }
 
+            // Agent-time budget (CU-B4): never START a step past the budget.
+            // Graceful expiry runs one forced final judge so the run is scored
+            // on real end-state, not zeroed (pairs with CU-D4).
+            if (this.agentTimeBudgetExceeded(context, cumulativeSettleMs)) {
+                this.log(`Agent-time budget (${context.Params.MaxExecutionTimeMs}ms, settle excluded) exceeded before step ${stepNumber} — expiring gracefully`);
+                const verdict = await this.forceFinalJudge(context, stepNumber, lastVerdict);
+                const result = this.buildResult(context, 'TimeBudgetExceeded', false, verdict);
+                this.onRunComplete(result);
+                return result;
+            }
+
             // Execute one step
             const step = await this.executeSingleStep(context, stepNumber);
+            cumulativeSettleMs += step.SettleMs;
             context.AddStep(step);
             this.onStepComplete(step, context.Params);
 
@@ -505,11 +520,54 @@ export class ComputerUseEngine {
             }
         }
 
-        // Exhausted all steps without completion
+        // Exhausted all steps without completion. Force a fresh final judge so
+        // the verdict reflects the true end-state (it may be up to a few steps
+        // stale) and the run is scored on evidence (CU-B4.3 / CU-D4).
         this.log(`Run exhausted all ${context.Params.MaxSteps} steps without completion`);
-        const result = this.buildResult(context, 'MaxStepsReached', false, lastVerdict);
+        const finalVerdict = await this.forceFinalJudge(context, context.Params.MaxSteps, lastVerdict);
+        const result = this.buildResult(context, 'MaxStepsReached', false, finalVerdict);
         this.onRunComplete(result);
         return result;
+    }
+
+    /**
+     * Whether the agent-time budget is exhausted (CU-B4). Agent time excludes
+     * cumulative settle wait, so a slow-to-render app doesn't burn the agent's
+     * reasoning budget. Returns false when no budget is configured.
+     */
+    private agentTimeBudgetExceeded(context: RunContext, cumulativeSettleMs: number): boolean {
+        const max = context.Params.MaxExecutionTimeMs;
+        if (!max || max <= 0) {
+            return false;
+        }
+        const agentTimeMs = Math.max(0, context.ElapsedMs - cumulativeSettleMs);
+        return agentTimeMs >= max;
+    }
+
+    /**
+     * Run one forced judge evaluation of the current end-state, used on graceful
+     * budget expiry (step or time) so the run is scored on a fresh verdict
+     * rather than a stale/absent one (CU-B4.3 / CU-D4). Never throws — falls
+     * back to the prior verdict on any failure or when no judge is configured.
+     */
+    private async forceFinalJudge(
+        context: RunContext,
+        stepNumber: number,
+        lastVerdict?: JudgeVerdict
+    ): Promise<JudgeVerdict | undefined> {
+        try {
+            const lastStep = context.StepHistory[context.StepHistory.length - 1];
+            // If the last step already judged the final frame, that verdict IS
+            // fresh — don't pay for a redundant re-judge of the same state.
+            if (lastStep?.JudgeVerdict) {
+                return lastStep.JudgeVerdict;
+            }
+            const verdict = await this.evaluateJudge(context, stepNumber, true, lastStep?.ScreenshotHash ?? '');
+            return verdict ?? lastVerdict;
+        } catch (error) {
+            this.logError('Forced final judge evaluation failed', error);
+            return lastVerdict;
+        }
     }
 
     /**

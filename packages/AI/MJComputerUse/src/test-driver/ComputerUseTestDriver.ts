@@ -109,6 +109,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
      * These are registered locally and take precedence over global oracles
      * of the same type.
      */
+    /**
+     * The driver's hard Stop() failsafe fires at this multiple of the agent-time
+     * budget. The engine self-expires gracefully at 1× (CU-B4); this outer catch
+     * only trips if the engine is genuinely hung.
+     */
+    private static readonly TIMEOUT_FAILSAFE_MULTIPLIER = 2;
+
     private static readonly builtInOracles: Map<string, IOracle> = new Map<string, IOracle>([
         ['goal-completion', new GoalCompletionOracle()],
         ['url-match', new UrlMatchOracle()],
@@ -185,8 +192,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
             this.logToTestRun(context, 'info', `Executing Computer Use: goal="${input.goal}", startUrl="${input.startUrl ?? 'none'}"`);
 
-            // 3. Execute with timeout
+            // 3. Execute with timeout. The engine owns the agent-time budget
+            // (CU-B4): it self-expires *gracefully* at effectiveTimeout with a
+            // forced final judge, so the run is scored on evidence. The driver's
+            // own Stop() timer (in executeWithTimeout) is widened to a generous
+            // outer failsafe that only fires if the engine is genuinely hung.
             const effectiveTimeout = this.getEffectiveTimeout(context.test, config);
+            runParams.MaxExecutionTimeMs = effectiveTimeout;
             const { result, timedOut, browserDiagnostics } = await this.executeWithTimeout(runParams, effectiveTimeout, context, config);
 
             // 4. Build actual output with execution configuration
@@ -530,12 +542,18 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         let timedOut = false;
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-        if (timeoutMs > 0) {
+        // The engine self-expires gracefully at timeoutMs (its MaxExecutionTimeMs
+        // agent budget) with a forced final judge. This driver-side hard Stop() is
+        // now only an OUTER FAILSAFE for a genuinely hung engine, so it fires at
+        // 2× the agent budget (CU-B4). If it ever fires, the engine didn't expire
+        // on its own — a real hang, correctly surfaced as a hard timeout.
+        const failsafeMs = timeoutMs > 0 ? timeoutMs * ComputerUseTestDriver.TIMEOUT_FAILSAFE_MULTIPLIER : 0;
+        if (failsafeMs > 0) {
             timeoutId = setTimeout(() => {
                 timedOut = true;
-                this.logToTestRun(context, 'warn', `Stopping engine due to timeout (${timeoutMs}ms)`);
+                this.logToTestRun(context, 'warn', `Stopping engine due to failsafe timeout (${failsafeMs}ms; engine did not self-expire at ${timeoutMs}ms)`);
                 engine.Stop();
-            }, timeoutMs);
+            }, failsafeMs);
         }
 
         try {

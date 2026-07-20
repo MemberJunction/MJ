@@ -25,6 +25,7 @@ export { StepRecord } from './judge.js';
  * - 'Failed':          Judge confirmed the goal was NOT met after best effort
  * - 'Impossible':      Judge determined the goal cannot be accomplished (e.g., missing permissions, non-existent page)
  * - 'MaxStepsReached': Hit step limit without judge confirmation either way
+ * - 'TimeBudgetExceeded': Hit the agent-time budget (MaxExecutionTimeMs, excluding settle) — gracefully expired with a forced final judge (CU-B4)
  * - 'Error':           Infrastructure or runtime error (browser crash, LLM failure, etc.)
  * - 'Cancelled':       Externally cancelled via engine.Stop()
  */
@@ -33,6 +34,7 @@ export type ComputerUseStatus =
     | 'Failed'
     | 'Impossible'
     | 'MaxStepsReached'
+    | 'TimeBudgetExceeded'
     | 'Error'
     | 'Cancelled';
 
