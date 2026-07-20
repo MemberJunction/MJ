@@ -1514,7 +1514,7 @@ async function processRSUPendingWork(): Promise<void> {
             existingMap.Status = 'Active';
             existingMap.SyncEnabled = true;
             if (await existingMap.Save()) {
-              await ReenableFieldMapsForEntityMap(entityMapID, systemUser, Metadata.Provider);
+              await ReenableFieldMapsForEntityMap(entityMapID, systemUser, Metadata.Provider); // global-provider-ok: server startup recovery — runs once before any per-request context exists
               console.log(`[RSU] Re-enabled previously-disabled entity map for ${objName} → ${entity.Name} (${entityMapID})`);
             } else {
               console.warn(`[RSU] Failed to re-enable entity map for ${objName}: ${existingMap.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -1592,7 +1592,7 @@ async function processRSUPendingWork(): Promise<void> {
       if ((item.UnselectedAction ?? 'disable') !== 'ignore') {
         try {
           const disabledObjects = await DisableUnselectedEntityMaps(
-            item.CompanyIntegrationID, item.SourceObjectNames, systemUser, Metadata.Provider
+            item.CompanyIntegrationID, item.SourceObjectNames, systemUser, Metadata.Provider // global-provider-ok: server startup recovery — runs once before any per-request context exists
           );
           if (disabledObjects.length > 0) {
             console.log(`[RSU] Disabled ${disabledObjects.length} unselected entity map(s): ${disabledObjects.join(', ')}`);

@@ -1227,7 +1227,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const parents = new Set<string>();
             for (const f of engine.GetIntegrationObjectFields(io.ID)) {
                 const parentID = f.RelatedIntegrationObjectID?.toUpperCase();
-                if (!parentID || parentID === io.ID.toUpperCase()) continue;
+                if (!parentID || UUIDsEqual(parentID, io.ID)) continue;
                 const parentName = nameById.get(parentID);
                 if (parentName) parents.add(parentName);
             }
