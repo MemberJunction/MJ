@@ -72,7 +72,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 32],
         ['client-cache', ClientCacheChecks, 13],
-        ['runquery-cache', RunQueryCacheChecks, 10],
+        ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
         ['rls-isolation', RlsIsolationChecks, 9],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 8],

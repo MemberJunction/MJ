@@ -42,6 +42,7 @@ import {
     RunQueryWithCacheCheckParams,
     RunQueriesWithCacheCheckResponse,
     RunQueryWithCacheCheckResult,
+    QueryCacheAuthorization,
     QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
@@ -2865,6 +2866,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * B45 override of the RunQuery cache-serve seam — enforce the SAME authorization on a
+     * cache HIT that the miss path enforces. Resolution uses `resolveQuery()` (QueryEngine as
+     * the single source of truth, with CategoryPath disambiguation of same-named queries — the
+     * B46 pairing), and authorization is the FULL `MJQueryEntityExtended.UserCanRun` (roles +
+     * entity CanRead + recursive composition) — exactly the check `ValidateQueryForExecution`
+     * applies before a real execution. The base's roles-only check would let a user read cached
+     * rows of a query whose underlying entities they cannot read.
+     *
+     * Non-throwing by contract: any resolution error degrades to `resolvable: false`, which the
+     * gate treats as "fall through to authorized execution" — one extra query run, never an
+     * unauthorized serve and never a crashed cache path.
+     */
+    protected override ResolveQueryCacheAuthorization(params: RunQueryParams, user?: UserInfo): QueryCacheAuthorization {
+        try {
+            const query = this.resolveQuery(params);
+            if (!query) {
+                return { resolvable: false, authorized: false };
+            }
+            return {
+                resolvable: true,
+                authorized: !user || query.UserCanRun(user).canRun,
+                categoryPath: query.CategoryPath,
+                queryName: query.Name
+            };
+        } catch (e) {
+            LogStatusEx({ message: `ResolveQueryCacheAuthorization: resolution failed (${e instanceof Error ? e.message : String(e)}) — treating as unresolvable.`, verboseOnly: true });
+            return { resolvable: false, authorized: false };
+        }
+    }
+
+    /**
      * Resolves a query from RunQueryParams (by ID or Name+CategoryPath).
      * Uses QueryEngine as the single source of truth for query metadata.
      */
@@ -3339,7 +3371,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 __startRow: params.StartRow ?? 0,
                 __eds: externalDataSourceID,
             };
-            fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString);
+            fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString, query.CategoryPath);
             const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint); // TTL-enforced
             if (cached) {
                 return {

@@ -1,5 +1,5 @@
 /**
- * runquery-cache.checks.ts — the 'runquery-cache' bundle (Q1–Q9) + its fixtures.
+ * runquery-cache.checks.ts — the 'runquery-cache' bundle (Q1–Q12) + its fixtures.
  *
  * PORTED VERBATIM from packages/MJServer/integration-test-scripts/runquery-cache-tests.ts.
  * Unlike the cache suites, this bundle needs self-contained fixtures: one Query
@@ -14,10 +14,10 @@
  * always run when the runquery-cache bundle is selected. Static RunView/RunQuery
  * imports replace the original in-function `await import(...)` (MJ rule: no dynamic import).
  */
-import { RunView, RunQuery, Metadata } from '@memberjunction/core';
-import type { IRunQueryProvider, UserInfo } from '@memberjunction/core';
+import { RunView, RunQuery, Metadata, UserInfo } from '@memberjunction/core';
+import type { IRunQueryProvider, RunQueryResult } from '@memberjunction/core';
 import { QueryEngine } from '@memberjunction/core-entities';
-import type { MJQueryCategoryEntity, MJQueryEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
+import type { MJQueryCategoryEntity, MJQueryEntity, MJQueryEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '../test-runner';
 import { IntegrationCheckRegistry } from '../check-registry';
 import { NamedCheck, IntegrationCheckContext, RunQueryFixtures } from '../check';
@@ -27,6 +27,50 @@ export const RUNQUERY_SETTING_PREFIX = 'mj.integrationtest.rq';
 
 function Sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** The seeded role-less principal (shared with the permission-engine bundle's PE9/PE10). */
+export const NOGRANT_EMAIL = 'it-nogrant@integration.test';
+
+let noGrantMemo: { User: UserInfo | undefined } | undefined;
+
+/**
+ * Load the seeded role-less user as a real `UserInfo` for Q12. Role-less by definition, so the
+ * reconstructed principal needs no UserRoles rows — an empty roles array IS the fixture's shape
+ * (asserted). Returns undefined (⇒ skip-as-pass) when the seed has not been pushed.
+ */
+async function loadNoGrantUser(ctx: { User: UserInfo; Provider: import('@memberjunction/core').IMetadataProvider }): Promise<UserInfo | undefined> {
+    if (noGrantMemo !== undefined) {
+        return noGrantMemo.User;
+    }
+    const rv = new RunView();
+    const userResult = await rv.RunView<{ ID: string; Name: string; Email: string; Type: string; IsActive: boolean }>({
+        EntityName: 'MJ: Users',
+        ExtraFilter: `Email='${NOGRANT_EMAIL}'`,
+        Fields: ['ID', 'Name', 'Email', 'Type', 'IsActive'],
+        ResultType: 'simple'
+    }, ctx.User);
+    if (!userResult.Success || userResult.Results.length === 0) {
+        noGrantMemo = { User: undefined };
+        return undefined;
+    }
+    const row = userResult.Results[0];
+    const roleCheck = await rv.RunView<{ ID: string }>({
+        EntityName: 'MJ: User Roles',
+        ExtraFilter: `UserID='${row.ID}'`,
+        Fields: ['ID'],
+        ResultType: 'simple'
+    }, ctx.User);
+    if (roleCheck.Success && roleCheck.Results.length > 0) {
+        // The fixture's entire meaning is "zero roles" — a role would silently flip Q12's
+        // preconditions, so refuse to use it rather than produce a confusing failure downstream.
+        console.warn(`  ⚠ '${NOGRANT_EMAIL}' has ${roleCheck.Results.length} role(s) — fixture invalid, Q12 will skip`);
+        noGrantMemo = { User: undefined };
+        return undefined;
+    }
+    const user = new UserInfo(ctx.Provider, { ID: row.ID, Name: row.Name, Email: row.Email, Type: row.Type, IsActive: row.IsActive, UserRoles: [] });
+    noGrantMemo = { User: user };
+    return user;
 }
 
 /** Resolve the bundle's fixtures or fail loudly (driver/script must create them first). */
@@ -340,6 +384,156 @@ export const RunQueryCacheChecks: NamedCheck[] = [
             AssertEqual(hit.CacheHit, true, 'second call must be a TTL cache hit');
             AssertEqual(JSON.stringify(hit.Results), JSON.stringify(miss.Results),
                 'the cached slot must serve byte-identical row data to the miss');
+        }
+    },
+    {
+        Id: 'runquery-cache.Q11',
+        Name: 'Q11: BREAK ATTEMPT (B46) — same-named queries in DIFFERENT categories must not share a cache slot',
+        Fn: async (ctx): Promise<void> => {
+            // Query names are unique only WITHIN a category. Before B46 the RunQuery fingerprint
+            // was `Name|ID|Params` — a by-name request for '/A/Collide' and '/B/Collide' landed on
+            // ONE slot, so whichever ran first had its rows served for the other. The fingerprint
+            // now carries the resolved query's full CategoryPath. This check builds the collision
+            // shape directly: two queries, one shared name, two categories, DISTINGUISHABLE rows.
+            const { Category } = requireFixtures(ctx);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const rq = new RunQuery();
+            const stamp = Date.now();
+            const sharedName = `CacheTest Collide ${stamp}`;
+
+            const categoryB = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', ctx.User);
+            categoryB.Name = `Integration Test Queries B ${stamp}`;
+            categoryB.UserID = ctx.User.ID;
+            Assert(await categoryB.Save(), `category B save failed: ${categoryB.LatestResult?.CompleteMessage}`);
+            let queryA: MJQueryEntity | undefined;
+            let queryB: MJQueryEntity | undefined;
+            try {
+                queryA = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+                queryA.Name = sharedName;
+                queryA.CategoryID = Category.ID;
+                queryA.SQL = `SELECT 'A' AS Slot`;
+                queryA.Status = 'Approved';
+                Assert(await queryA.Save(), `query A save failed: ${queryA.LatestResult?.CompleteMessage}`);
+
+                queryB = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+                queryB.Name = sharedName;
+                queryB.CategoryID = categoryB.ID;
+                queryB.SQL = `SELECT 'B' AS Slot`;
+                queryB.Status = 'Approved';
+                Assert(await queryB.Save(), `query B save failed: ${queryB.LatestResult?.CompleteMessage}`);
+
+                // resolveQuery reads the QueryEngine cache — refresh so both fixtures resolve,
+                // then take each query's CANONICAL CategoryPath from the engine (guarantees the
+                // format resolveQuery compares against, rather than hand-assembling '/Name/').
+                await QueryEngine.Instance.Config(true, ctx.User);
+                const engineA = QueryEngine.Instance.Queries.find(q => q.ID === queryA!.ID);
+                const engineB = QueryEngine.Instance.Queries.find(q => q.ID === queryB!.ID);
+                Assert(!!engineA && !!engineB, 'both collide queries must resolve in the QueryEngine after refresh');
+                Assert(engineA!.CategoryPath !== engineB!.CategoryPath,
+                    `precondition: the two categories must yield distinct paths (both='${engineA!.CategoryPath}')`);
+
+                const runA = await rq.RunQuery({ QueryName: sharedName, CategoryPath: engineA!.CategoryPath, CacheLocal: true }, ctx.User);
+                Assert(runA.Success, `run A failed: ${runA.ErrorMessage}`);
+                AssertEqual(String(runA.Results[0].Slot), 'A', 'category-A request must execute query A');
+
+                // THE COLLISION PROBE: same name, category B, within category-A's slot TTL.
+                // Pre-B46 this was served query A's cached rows (Slot='A') as a cache hit.
+                const runB = await rq.RunQuery({ QueryName: sharedName, CategoryPath: engineB!.CategoryPath, CacheLocal: true }, ctx.User);
+                Assert(runB.Success, `run B failed: ${runB.ErrorMessage}`);
+                AssertEqual(String(runB.Results[0].Slot), 'B',
+                    "category-B request must execute query B — serving 'A' means the fingerprint ignored the category (B46)");
+
+                // Both slots must now coexist independently: repeats hit their OWN slot.
+                const hitA = await rq.RunQuery({ QueryName: sharedName, CategoryPath: engineA!.CategoryPath, CacheLocal: true }, ctx.User);
+                const hitB = await rq.RunQuery({ QueryName: sharedName, CategoryPath: engineB!.CategoryPath, CacheLocal: true }, ctx.User);
+                AssertEqual(hitA.CacheHit, true, 'repeat category-A request must hit its own slot');
+                AssertEqual(hitB.CacheHit, true, 'repeat category-B request must hit its own slot');
+                AssertEqual(String(hitA.Results[0].Slot), 'A', 'category-A slot must still serve A rows');
+                AssertEqual(String(hitB.Results[0].Slot), 'B', 'category-B slot must still serve B rows');
+            } finally {
+                if (queryB) { await queryB.Delete(); }
+                if (queryA) { await queryA.Delete(); }
+                await categoryB.Delete();
+            }
+        }
+    },
+    {
+        Id: 'runquery-cache.Q12',
+        Name: 'Q12: BREAK ATTEMPT (B45) — a cache HIT must enforce the SAME permissions as a cache MISS',
+        Fn: async (ctx): Promise<void> => {
+            // B45: the TTL gate authorized with the roles-only QueryInfo.UserCanRun while the miss
+            // path (ValidateQueryForExecution) enforces the FULL MJQueryEntityExtended.UserCanRun
+            // (roles + entity CanRead + composition). Wedge shape: a query with NO explicit run
+            // permissions (roles-only says YES to everyone) over an entity the seeded role-less
+            // user cannot read (full check says NO). A warmed slot must NOT be served to that user.
+            const noGrant = await loadNoGrantUser(ctx);
+            if (!noGrant) {
+                console.warn(`  ⚠ runquery-cache.Q12 SKIPPED — seeded user '${NOGRANT_EMAIL}' not found. Seed with: npx mj sync push --dir=metadata-optional/integration-test`);
+                return;
+            }
+            const { Category } = requireFixtures(ctx);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const rq = new RunQuery();
+            const settingsEntity = md.EntityByName('MJ: User Settings');
+            Assert(!!settingsEntity, "entity 'MJ: User Settings' must exist");
+
+            let query: MJQueryEntity | undefined;
+            let bridge: MJQueryEntityEntity | undefined;
+            try {
+                query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+                query.Name = `CacheTest Perm ${Date.now()}`;
+                query.CategoryID = Category.ID;
+                query.SQL = `SELECT COUNT(*) AS SettingCount FROM ${ctx.Schema ?? '__mj'}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
+                query.Status = 'Approved';
+                Assert(await query.Save(), `perm fixture query save failed: ${query.LatestResult?.CompleteMessage}`);
+
+                // The Query Entities bridge row is what makes the FULL check consult entity
+                // CanRead — without it both checks trivially allow and the check is vacuous.
+                bridge = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities', ctx.User);
+                bridge.QueryID = query.ID;
+                bridge.EntityID = settingsEntity!.ID;
+                Assert(await bridge.Save(), `query-entity bridge save failed: ${bridge.LatestResult?.CompleteMessage}`);
+
+                await QueryEngine.Instance.Config(true, ctx.User);
+                const engineQ = QueryEngine.Instance.Queries.find(q => q.ID === query!.ID);
+                Assert(!!engineQ, 'perm fixture query must resolve in the QueryEngine after refresh');
+
+                // ANTI-VACUITY preconditions — this pins the PARITY GAP, not a generic deny:
+                // roles-only WOULD serve the role-less user; the full check refuses.
+                Assert(engineQ!.UserHasRunPermissions(noGrant), 'precondition: roles-only check must PASS for the role-less user (open default)');
+                AssertEqual(engineQ!.UserCanRun(noGrant).canRun, false, 'precondition: FULL check must DENY the role-less user (entity CanRead)');
+                AssertEqual(engineQ!.UserCanRun(ctx.User).canRun, true, 'precondition: the context user must be fully authorized');
+
+                // Make the query resolvable in the PROVIDER metadata cache too — the pre-B45
+                // roles-only gate read this.Queries, so without this refresh a regression to it
+                // would hide behind "unresolvable ⇒ warmer tie-break ⇒ deny" and never go red.
+                await ctx.Provider.Refresh();
+
+                // Warm the slot as the fully-authorized context user and prove it serves.
+                const warm = await rq.RunQuery({ QueryID: query.ID, CacheLocal: true }, ctx.User);
+                Assert(warm.Success, `warm failed: ${warm.ErrorMessage}`);
+                const hit = await rq.RunQuery({ QueryID: query.ID, CacheLocal: true }, ctx.User);
+                AssertEqual(hit.CacheHit, true, 'the warmed slot must serve the authorized warmer');
+
+                // THE PARITY PROBE: the role-less user requests the warmed slot. Serving cached
+                // rows here is the B45 leak — the miss path would have denied this exact request.
+                let denied: RunQueryResult | undefined;
+                let threw = false;
+                try {
+                    denied = await rq.RunQuery({ QueryID: query.ID, CacheLocal: true }, noGrant);
+                } catch {
+                    threw = true; // a thrown permission error is an acceptable deny surface
+                }
+                if (!threw) {
+                    Assert(denied!.CacheHit !== true,
+                        'SECURITY: the warmed slot was served to a user the miss path would deny (B45 — hit easier than miss)');
+                    AssertEqual(denied!.Success, false,
+                        'the role-less request must fail with a permission error, exactly as a cache miss would');
+                }
+            } finally {
+                if (bridge) { await bridge.Delete(); }
+                if (query) { await query.Delete(); }
+            }
         }
     }
 ];

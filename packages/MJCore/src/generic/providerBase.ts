@@ -97,6 +97,22 @@ export function MetadataFromSimpleObjectWithoutUser(data: any, md: IMetadataProv
  * for iterating through all metadata collections.
  * Each entry maps a property key to its corresponding class constructor.
  */
+/**
+ * Result of `ProviderBase.ResolveQueryCacheAuthorization` — the single pre-fingerprint
+ * resolution + authorization computation the RunQuery TTL cache gate relies on (B45/B46).
+ * See the method JSDoc for the full contract.
+ */
+export interface QueryCacheAuthorization {
+    /** Metadata could resolve the request (by ID, or by name [+ stated category]). */
+    resolvable: boolean;
+    /** The user may run the resolved query. Meaningful only when `resolvable` is true. */
+    authorized: boolean;
+    /** Canonical full category path of the RESOLVED query (e.g. '/MJ/AI/Agents/'; '' when uncategorized). */
+    categoryPath?: string;
+    /** Resolved query name — for log messages when the request was by ID only. */
+    queryName?: string;
+}
+
 export const AllMetadataArrays = [
     { key: 'AllEntities', class: EntityInfo  },
     { key: 'AllApplications', class: ApplicationInfo  },
@@ -1729,6 +1745,54 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return false;
     }
 
+    /**
+     * The RunQuery cache-serve seam (B45/B46) — resolves a RunQuery request against this
+     * provider's query metadata and answers, in ONE computation performed BEFORE fingerprinting:
+     *
+     *  - `categoryPath`: the RESOLVED query's canonical full category path. This becomes a
+     *    distinguishing fingerprint segment (B46) so two same-named queries in different
+     *    categories can never collide onto one cache slot. When the request is unresolvable the
+     *    caller falls back to the CALLER-STATED `params.CategoryPath` (still distinguishing,
+     *    just not canonicalized).
+     *  - `resolvable`: whether metadata could resolve the request at all. Runtime-created
+     *    queries are typically NOT resolvable from the base metadata cache (it does not refresh
+     *    in-process) — the gate then applies the warmer tie-break instead.
+     *  - `authorized`: whether `user` may run the resolved query. Meaningful only when
+     *    `resolvable` is true.
+     *
+     * The BASE implementation resolves from the metadata `Queries` cache and enforces the
+     * ROLES-ONLY `QueryInfo.UserCanRun` — the strongest check available at this layer.
+     * Providers with richer query metadata MUST override this to enforce the SAME authorization
+     * their miss path enforces (`GenericDatabaseProvider` overrides with
+     * `MJQueryEntityExtended.UserCanRun`, which adds entity CanRead + recursive composition
+     * checks — the exact check `ValidateQueryForExecution` applies on a cache miss). The
+     * invariant this seam exists to hold: **a cache HIT must never be easier to read than a
+     * cache MISS** (B45 was precisely that asymmetry — the TTL gate checked roles only while
+     * the miss path also checked entity read permissions).
+     */
+    protected ResolveQueryCacheAuthorization(params: RunQueryParams, user?: UserInfo): QueryCacheAuthorization {
+        const requestedPath = params.CategoryPath?.trim().toLowerCase();
+        const qInfo = this.Queries.find(q =>
+            (params.QueryID && UUIDsEqual(q.ID, params.QueryID))
+            || (!params.QueryID && params.QueryName
+                && q.Name?.trim().toLowerCase() === params.QueryName.trim().toLowerCase()
+                // When the caller states a category, honor it as a disambiguator — same-named
+                // queries in other categories must not resolve (mirrors resolveQuery()).
+                && (!requestedPath || q.CategoryPath?.trim().toLowerCase() === requestedPath))
+        );
+        if (!qInfo) {
+            return { resolvable: false, authorized: false };
+        }
+        return {
+            resolvable: true,
+            // No user (client-side / trusted single-user context) ⇒ nothing to authorize against;
+            // the gate only consults `authorized` when a contextUser is present.
+            authorized: !user || qInfo.UserCanRun(user),
+            categoryPath: qInfo.CategoryPath,
+            queryName: qInfo.Name
+        };
+    }
+
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // Shallow-clone for symmetry with RunView — pipeline must never mutate caller objects
         params = { ...params };
@@ -1754,6 +1818,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             && LocalCacheManager.Instance.IsInitialized;
         let queryFingerprint: string | undefined;
         if (queryCacheEngaged) {
+            // Resolve + authorize ONCE, BEFORE fingerprinting (B45/B46 seam). The resolved
+            // category feeds the fingerprint below, and the same result drives the permission
+            // gate on a hit — so the slot key and the authorization decision can never disagree
+            // about WHICH query they are talking about.
+            const queryAuth = this.ResolveQueryCacheAuthorization(params, contextUser);
             // MaxRows/StartRow shape the result set — they MUST distinguish cache slots,
             // so fold them into the parameters portion of the fingerprint.
             const fingerprintParams: Record<string, unknown> = {
@@ -1762,7 +1831,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 __startRow: params.StartRow ?? 0
             };
             queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
-                params.QueryID, params.QueryName, fingerprintParams, this.InstanceConnectionString
+                params.QueryID, params.QueryName, fingerprintParams, this.InstanceConnectionString,
+                // B46: the full category path is a DISTINGUISHING element. Canonical resolved
+                // path when metadata resolves; the caller-stated path otherwise (runtime-created
+                // queries) — either way, same-named queries in different categories get
+                // different slots.
+                queryAuth.resolvable ? queryAuth.categoryPath : params.CategoryPath
             );
             const cached = await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint); // TTL-enforced
             if (cached) {
@@ -1795,16 +1869,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // provider cache ⇒ ALSO fall through (never serve rows we cannot authorize);
                     // that costs one query run, not correctness.
                     if (contextUser) {
-                        const qInfo = this.Queries.find(q =>
-                            (params.QueryID && UUIDsEqual(q.ID, params.QueryID))
-                            || (!params.QueryID && params.QueryName && q.Name?.trim().toLowerCase() === params.QueryName.trim().toLowerCase())
-                        );
-                        if (qInfo) {
-                            // Metadata can answer — enforce it.
-                            if (qInfo.UserCanRun(contextUser)) {
+                        if (queryAuth.resolvable) {
+                            // Metadata can answer — enforce it. `authorized` comes from the
+                            // provider's STRONGEST available check (B45): the base enforces
+                            // roles-only QueryInfo.UserCanRun; GenericDatabaseProvider's
+                            // override enforces the full MJQueryEntityExtended.UserCanRun
+                            // (roles + entity CanRead + recursive composition) — the identical
+                            // check ValidateQueryForExecution applies on the miss path, so a
+                            // hit is never easier to read than a miss.
+                            if (queryAuth.authorized) {
                                 return serveFromSlot();
                             }
-                            LogStatusEx({ message: `RunQuery cache: user '${contextUser.Email}' lacks run permission on '${qInfo.Name}' — falling through to authorized execution.`, verboseOnly: true });
+                            LogStatusEx({ message: `RunQuery cache: user '${contextUser.Email}' lacks run permission on '${queryAuth.queryName ?? params.QueryName ?? params.QueryID}' — falling through to authorized execution.`, verboseOnly: true });
                         } else if (cached.warmedForUserID && UUIDsEqual(cached.warmedForUserID, contextUser.ID)) {
                             // Metadata CANNOT answer — runtime-created queries never appear in the
                             // provider's Queries cache (it does not refresh in-process; verified:

@@ -21,7 +21,7 @@ and it can't count cache reads).
 |---|---|
 | `server-cache-tests.ts` | 26 tests against SQLServerDataProvider (`TrustLocalCacheCompletely = true`) |
 | `client-cache-tests.ts` | 12 tests against a running MJAPI via GraphQLDataProvider (`TrustLocalCacheCompletely = false`) |
-| `runquery-cache-tests.ts` | 9 tests for RunQuery result caching: TTL mode, smart CacheValidationSQL validation, fingerprinting, adversarial break attempts. **Creates and deletes its own Query fixtures** — see the file header |
+| `runquery-cache-tests.ts` | 12 tests for RunQuery result caching: TTL mode, smart CacheValidationSQL validation, fingerprinting, adversarial break attempts — incl. Q11 (B46: same-named queries in different categories must not share a slot) and Q12 (B45: a cache HIT enforces the same permissions as a MISS; needs the seeded `it-nogrant@integration.test` principal, skips loudly without it). **Creates and deletes its own Query fixtures** — see the file header |
 | `record-process-tests.ts` | **Deterministic** — drives `RecordSetProcessor` over an in-memory source: ProcessRun/Detail persistence (the tracker's fire-and-forget queue), mixed counts, throw-isolation, circuit breaker, batching, bounded concurrency (6 tests) |
 | `rls-isolation-tests.ts` | **Deterministic** — Row-Level Security multi-user isolation: `{{UserID}}` predicate substitution, two users get distinct predicates (cache fingerprint can't leak A→B), adaptive live RunView scoping check (3 tests) |
 | `record-process-facade-tests.ts` | **Deterministic** — the `RecordProcessExecutor` facade: a real `MJ: Record Processes` definition run via `Run()` + `RunByID()`, ScopeType→source mapping, ProcessRun linked back via `RecordProcessID` (2 tests) |

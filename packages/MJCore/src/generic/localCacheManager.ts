@@ -2269,16 +2269,23 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         queryId?: string,
         queryName?: string,
         parameters?: Record<string, unknown>,
-        connectionPrefix?: string
+        connectionPrefix?: string,
+        categoryPath?: string
     ): string {
         const name = queryName?.trim() || 'Unknown';
         const id = queryId || '_';
         const params = parameters ? JSON.stringify(parameters) : '_';
         const connection = connectionPrefix || '';
+        // Full CategoryPath is a DISTINGUISHING element (B46). Two queries can share a Name in
+        // different categories; without this a name-only request collides their cache slots and
+        // serves one query's rows for the other. The RESOLVED canonical path is passed by the
+        // caller (see resolveQueryCacheContext), so a request by ID, by name, or by name+category
+        // that all resolve to the same query produce the same category segment. Normalized to '_'
+        // when absent/unresolvable, so uncategorized and runtime-created queries keep a stable key.
+        const category = (categoryPath && categoryPath.trim()) ? categoryPath.trim().toLowerCase() : '_';
 
-        // Build human-readable fingerprint with pipe separators
-        // Format: QueryName|QueryID|Params|Connection
-        const parts = [name, id, params];
+        // Format: QueryName|QueryID|Category|Params[|Connection]
+        const parts = [name, id, category, params];
 
         // Only include connection if provided
         if (connection) {
