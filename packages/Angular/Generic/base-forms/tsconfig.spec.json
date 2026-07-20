@@ -25,6 +25,8 @@
     "src/lib/isa-related-panel/isa-related-panel.component.dom.test.ts",
     "src/lib/host/entity-form-host.component.ts",
     "src/lib/host/entity-form-host.component.dom.test.ts",
+    "src/lib/interactive-form/interactive-form.component.ts",
+    "src/lib/interactive-form/interactive-form.component.dom.test.ts",
     "src/lib/resolver/form-resolver.service.ts"
   ],
   "exclude": [
