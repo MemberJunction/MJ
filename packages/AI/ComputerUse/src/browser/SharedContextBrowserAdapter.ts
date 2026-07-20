@@ -20,7 +20,17 @@ import {
     ActionExecutionResult,
     CookieEntry,
     KeyModifier,
+    AccessibilityNode,
+    ElementInfo,
 } from '../types/browser.js';
+import {
+    getVisibleText,
+    getSelectionText,
+    getTitle,
+    waitForLoadState,
+    getAccessibilitySnapshot,
+    queryElement,
+} from './page-perception.js';
 
 export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
     private sharedContext: BrowserContext;
@@ -183,6 +193,38 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
         this.requirePage();
         const buffer = await this.page!.screenshot({ type: 'png', fullPage: false });
         return buffer.toString('base64');
+    }
+
+    // ─── Perception (CU-A3) ────────────────────────────────
+    // Delegated to the shared page-perception helpers so the suite adapter has
+    // the SAME perception surface as PlaywrightBrowserAdapter. Before this, SCBA
+    // inherited the no-op BaseBrowserAdapter defaults, so every settle/grounding/
+    // diagnostic feature silently got nothing in suite mode.
+
+    public override async GetVisibleText(): Promise<string> {
+        return getVisibleText(this.page);
+    }
+
+    public override async GetSelectionText(): Promise<string> {
+        return getSelectionText(this.page);
+    }
+
+    public override async GetTitle(): Promise<string> {
+        return getTitle(this.page);
+    }
+
+    public override async WaitForLoadState(
+        state: 'load' | 'domcontentloaded' | 'networkidle'
+    ): Promise<void> {
+        return waitForLoadState(this.page, state);
+    }
+
+    public override async GetAccessibilitySnapshot(): Promise<AccessibilityNode | null> {
+        return getAccessibilitySnapshot(this.page);
+    }
+
+    public override async QueryElement(selector: string): Promise<ElementInfo> {
+        return queryElement(this.page, selector, this.config.ActionTimeoutMs);
     }
 
     // ─── Action Execution ──────────────────────────────────

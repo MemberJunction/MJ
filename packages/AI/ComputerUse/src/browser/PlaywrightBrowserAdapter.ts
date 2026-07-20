@@ -27,32 +27,17 @@ import {
     AudioCaptureChunk,
     AccessibilityNode,
     ElementInfo,
-    BoundingBox,
     KeyModifier,
 } from '../types/browser.js';
 import { ClassifyConnectEndpoint } from './connect-endpoint.js';
-
-/**
- * Shape of a node returned by Playwright's `page.accessibility.snapshot()`.
- * Only the fields we map are declared. As of Playwright 1.58 the
- * `accessibility` namespace remains at runtime but is no longer in the public
- * `.d.ts`, so we declare a precise local view rather than reach for `any`.
- */
-interface PlaywrightAXNode {
-    role: string;
-    name: string;
-    value?: string | number;
-    children?: PlaywrightAXNode[];
-}
-
-/**
- * Typed view of the (now untyped-in-d.ts) `page.accessibility` namespace.
- * Lets us call `snapshot()` without `any` while staying resilient to the
- * field having been dropped from the published types.
- */
-interface PlaywrightAccessibilityNamespace {
-    snapshot(): Promise<PlaywrightAXNode | null>;
-}
+import {
+    getVisibleText,
+    getSelectionText,
+    getTitle,
+    waitForLoadState,
+    getAccessibilitySnapshot,
+    queryElement,
+} from './page-perception.js';
 
 /**
  * Minimal shape of a CDP `Page.screencastFrame` event payload — only the
@@ -432,128 +417,34 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
      * screenshot. Returns '' when no page is open (guarded, never throws on
      * a closed adapter).
      */
+    // The perception surface is shared with SharedContextBrowserAdapter via
+    // page-perception.ts (CU-A3) — both adapters delegate to one implementation
+    // so the suite adapter can't silently inherit no-ops, and the two can't drift.
+
     public override async GetVisibleText(): Promise<string> {
-        if (!this.page) {
-            return '';
-        }
-        return this.page.innerText('body');
+        return getVisibleText(this.page);
     }
 
-    /**
-     * Read the page's current text selection via `page.evaluate(window.getSelection())`. Returns '' when
-     * no page is open or nothing is selected (guarded, never throws on a closed adapter) — the copy-out
-     * source for the remote-browser human clipboard path.
-     */
     public override async GetSelectionText(): Promise<string> {
-        if (!this.page) {
-            return '';
-        }
-        return this.page.evaluate(() => window.getSelection()?.toString() ?? '');
+        return getSelectionText(this.page);
     }
 
-    /**
-     * Return the current page title. Returns '' when no page is open (guarded,
-     * never throws on a closed adapter).
-     */
     public override async GetTitle(): Promise<string> {
-        if (!this.page) {
-            return '';
-        }
-        return this.page.title();
+        return getTitle(this.page);
     }
 
-    /**
-     * Wait until the page reaches the given load state. No-op when no page is
-     * open (guarded, never throws on a closed adapter).
-     */
     public override async WaitForLoadState(
         state: 'load' | 'domcontentloaded' | 'networkidle'
     ): Promise<void> {
-        if (!this.page) {
-            return;
-        }
-        await this.page.waitForLoadState(state);
+        return waitForLoadState(this.page, state);
     }
 
-    /**
-     * Capture the page's accessibility tree, mapped recursively into our own
-     * {@link AccessibilityNode} type. Returns `null` when no page is open or
-     * Playwright produces no snapshot (e.g. a blank page).
-     */
     public override async GetAccessibilitySnapshot(): Promise<AccessibilityNode | null> {
-        if (!this.page) {
-            return null;
-        }
-        // `page.accessibility` exists at runtime but was dropped from Playwright's
-        // public types in 1.58; bridge to it through a precise typed view.
-        const accessibility = (this.page as unknown as { accessibility: PlaywrightAccessibilityNamespace }).accessibility;
-        const root = await accessibility.snapshot();
-        return root ? this.mapAccessibilityNode(root) : null;
+        return getAccessibilitySnapshot(this.page);
     }
 
-    /**
-     * Recursively map a Playwright accessibility snapshot node into our own
-     * {@link AccessibilityNode}. Null-safe on every field; omits empty children.
-     */
-    private mapAccessibilityNode(node: PlaywrightAXNode): AccessibilityNode {
-        const mapped = new AccessibilityNode();
-        mapped.Role = node.role ?? '';
-        mapped.Name = node.name ?? '';
-        if (node.value !== undefined) {
-            mapped.Value = String(node.value);
-        }
-        if (node.children && node.children.length > 0) {
-            mapped.Children = node.children.map(child => this.mapAccessibilityNode(child));
-        }
-        return mapped;
-    }
-
-    /**
-     * Introspect a single element via `page.locator(selector)`. Reports
-     * existence (`count() > 0`), visibility, inner text, and bounding box.
-     * Never throws on a missing element — returns `Exists:false` instead.
-     * Bounded by the configured action timeout where Playwright supports it.
-     */
     public override async QueryElement(selector: string): Promise<ElementInfo> {
-        const info = new ElementInfo();
-        if (!this.page) {
-            return info;
-        }
-
-        try {
-            const locator = this.page.locator(selector);
-            const count = await locator.count();
-            if (count === 0) {
-                return info; // Exists:false, Visible:false, Text:''
-            }
-
-            info.Exists = true;
-            // Scope subsequent reads to the first match for stability.
-            const first = locator.first();
-            info.Visible = await first.isVisible();
-
-            // innerText can throw on detached/hidden nodes — guard it.
-            try {
-                info.Text = await first.innerText({ timeout: this.config.ActionTimeoutMs });
-            } catch {
-                info.Text = '';
-            }
-
-            const box = await first.boundingBox();
-            if (box) {
-                const bb = new BoundingBox();
-                bb.XMin = box.x;
-                bb.YMin = box.y;
-                bb.XMax = box.x + box.width;
-                bb.YMax = box.y + box.height;
-                info.BoundingBox = bb;
-            }
-        } catch {
-            // Any failure (invalid selector, navigation race) → treat as absent.
-            return new ElementInfo();
-        }
-
-        return info;
+        return queryElement(this.page, selector, this.config.ActionTimeoutMs);
     }
 
     // ─── Screencast (CDP live viewport feed) ───────────────
