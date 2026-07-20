@@ -477,8 +477,29 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     protected isFilteredFingerprint(fingerprint: string): boolean {
         const parts = fingerprint.split('|');
         return (parts.length >= 2 && parts[1] !== '_' && parts[1] !== '')
+            || this.hasUserSearch(parts)
             || this.hasNarrowingSegment(parts)
             || this.hasAggregates(parts);
+    }
+
+    /**
+     * Returns true if the slot was produced by a user search (fingerprint segment [6]).
+     *
+     * `UserSearchString` generates LIKE / full-text WHERE clauses, so it narrows rows exactly as
+     * `ExtraFilter` does — but it lives at index [6], INSIDE the 7-segment base, where neither the
+     * `parts[1]` filter check nor `hasNarrowingSegment` (which starts at index 7) was looking.
+     *
+     * Same bug class as H1/H3, different hiding place: a row-narrowing predicate invisible to the
+     * maintainability check. Demonstrated by upserting a non-matching row into a search slot —
+     * a search for "annual gala" subsequently served "Totally Unrelated Row". Explorer grid
+     * searches are the reachable surface. (N1)
+     *
+     * @param parts - the fingerprint already split on '|'
+     */
+    protected hasUserSearch(parts: string[]): boolean {
+        const USER_SEARCH_INDEX = 6;
+        const search = parts[USER_SEARCH_INDEX];
+        return !!search && search !== '_';
     }
 
     /**
@@ -553,6 +574,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             }
             if (seg.includes('://')) {
                 continue;          // connection identity — not a predicate
+            }
+            if (seg === 'f:*') {
+                // Full-width client projection. `ProviderBase.clientCacheFingerprint` appends an
+                // `f:<fields>` segment to EVERY client fingerprint, so omitting this classified
+                // 100% of client slots as narrowing — which disabled the client's entire
+                // differential-merge path (R1). `f:*` means "all fields", so it narrows neither
+                // rows nor columns and is genuinely safe to maintain.
+                //
+                // A NARROW `f:<a,b,c>` deliberately still falls through to narrowing: upserting a
+                // full row into a column-projected slot poisons its shape for the next reader.
+                continue;
             }
             return true;           // unknown or known-narrowing segment → do not maintain
         }
@@ -865,7 +897,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 try {
                     // Subset slot (MaxRows/StartRow): removing a row would shrink it below the
                     // caller's own row limit while the DB still has rows to fill the window.
-                    if (this.isSubsetFingerprint(fingerprint)) {
+                    if (this.hasAggregates(fingerprint.split('|'))) {
+                        // The remote DELETE branch checked only isSubsetFingerprint, so an
+                        // aggregate slot took RemoveSingleEntity — whose storeCachedResults drops
+                        // aggregates on the premise "this path never runs for one". False here.
+                        // The slot survived with correct rows and NO aggregates, so later hits
+                        // returned Success with nothing for a caller that requested COUNT(*).
+                        // Same miss the LOCAL delete branch had; this is the second copy of the
+                        // maintenance logic. (N2)
+                        await this.InvalidateRunViewResult(fingerprint);
+                    } else if (this.isSubsetFingerprint(fingerprint)) {
                         await this.InvalidateRunViewResult(fingerprint);
                     } else {
                         await this.RemoveSingleEntity(fingerprint, key, nowISO);
@@ -1864,7 +1905,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Refusing the merge is safe: the caller falls back to a normal fetch, which
             // repopulates the slot correctly. A missed optimization, never wrong data.
             const fpParts = fingerprint.split('|');
-            if (this.isSubsetFingerprint(fingerprint) || this.hasNarrowingSegment(fpParts) || this.hasAggregates(fpParts)) {
+            // Deliberately does NOT include hasNarrowingSegment (R1). Every CLIENT fingerprint
+            // carries an `f:<fields>` segment, so including it classified 100% of client slots as
+            // unmergeable — and this method's only caller THROWS on a decline, inside a
+            // Promise.all over the batch, with no refetch path. That converted the client's
+            // primary staleness-reconciliation path into a hard failure for any returning browser
+            // holding a warm IndexedDB slot. H4/H5 only ever required the subset and aggregate
+            // refusals; the narrowing axis on THIS path is tracked separately (see B41).
+            if (this.isSubsetFingerprint(fingerprint) || this.hasAggregates(fpParts)) {
                 LogStatusVerbose(`LocalCacheManager.ApplyDifferentialUpdate: refusing to merge into a subset/narrowing slot "${fingerprint.substring(0, 60)}" — invalidating instead`);
                 await this.InvalidateRunViewResult(fingerprint);
                 return null;

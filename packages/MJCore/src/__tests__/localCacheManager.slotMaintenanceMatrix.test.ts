@@ -102,6 +102,13 @@ const SLOT_TYPES: SlotType[] = [
         why: 'an offset window is not the head of the set; maintaining it in place silently shifts the page',
     },
     {
+        name: 'user search (UserSearchString, segment [6])  <-- N1',
+        params: { EntityName: ENTITY, UserSearchString: 'annual gala' },
+        saveMaintains: false,
+        deleteMaintains: true,   // as with any predicate, a deleted row matches nothing
+        why: 'UserSearchString generates LIKE/FTS WHERE clauses — a row predicate sitting INSIDE the 7-segment base, where neither the parts[1] check nor hasNarrowingSegment (index 7+) was looking',
+    },
+    {
         name: 'aggregates (aggHash segment)  <-- H2',
         params: { EntityName: ENTITY, Aggregates: [{ expression: 'COUNT(*)', alias: 'Cnt' }] },
         saveMaintains: false,
@@ -180,6 +187,25 @@ describe('LocalCacheManager — slot maintenance matrix (slot type x mutation)',
             expect(hasNarrowing([...base, 'rls:abc123'])).toBe(true);                // narrows (H3)
             expect(hasNarrowing([...base, 'vw:some-view-id'])).toBe(true);           // narrows (H1)
             expect(hasNarrowing([...base, 'futureSegment:whatever'])).toBe(true);    // UNKNOWN → deny
+        });
+
+        it('classifies a user-search slot as non-maintainable (N1)', () => {
+            // The blind spot was positional: hasNarrowingSegment starts at index 7, the filter
+            // check reads index 1, and UserSearch sits at 6 — a row predicate hiding between the
+            // two guards. Proven by a search slot being upserted with a non-matching row.
+            const hasSearch = (cache as unknown as { hasUserSearch(p: string[]): boolean }).hasUserSearch.bind(cache);
+            expect(hasSearch(['E', '_', '_', '-1', '0', '_', '_'])).toBe(false);
+            expect(hasSearch(['E', '_', '_', '-1', '0', '_', 'annual gala'])).toBe(true);
+        });
+
+        it('allowlists the full-width client projection f:* but NOT a narrow one (R1)', () => {
+            // Every CLIENT fingerprint carries an f:<fields> segment. Omitting f:* classified
+            // 100% of client slots as unmergeable, which disabled the client's differential path
+            // entirely. f:* narrows neither rows nor columns; a narrow projection still does.
+            const hasNarrowing = (cache as unknown as { hasNarrowingSegment(p: string[]): boolean }).hasNarrowingSegment.bind(cache);
+            const base = ['E', '_', '_', '-1', '0', '_', '_'];
+            expect(hasNarrowing([...base, 'f:*'])).toBe(false);
+            expect(hasNarrowing([...base, 'f:ID,Name'])).toBe(true);
         });
 
         it('classifies an aggregate-bearing slot as non-maintainable (H2)', () => {

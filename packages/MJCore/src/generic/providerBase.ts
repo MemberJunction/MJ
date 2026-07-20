@@ -2587,6 +2587,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Differential merge failed - this should not happen normally
             // Throwing an exception rather than returning partial data which would be dangerous
             // as the caller would have no way of knowing the data is incomplete
+            //
+            // NOTE (R1): this throw is only safe while ApplyDifferentialUpdate declines RARELY.
+            // It runs inside a Promise.all over the whole batch, so one undecidable slot rejects
+            // the caller's entire RunViews call, and there is no refetch path here — a
+            // 'differential' server reply carries only a delta. The guard in
+            // ApplyDifferentialUpdate is therefore deliberately narrow (subset + aggregates only,
+            // NOT narrowing segments), so this stays effectively unreachable. Do not widen that
+            // guard without first giving this branch a real full-fetch fallback.
             throw new Error(
                 `Differential cache merge failed for entity '${param.EntityName}'. ` +
                 `Cache fingerprint may be invalid or cache data corrupted. ` +
