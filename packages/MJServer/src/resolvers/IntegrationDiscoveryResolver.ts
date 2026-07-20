@@ -2381,8 +2381,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * full Refresh when the provider doesn't support scoping or no schema is known.
      */
     private async refreshMetadataForSchema(
-        // Structural type: accepts both IMetadataProvider and the Metadata facade (which proxies
-        // Refresh but has no RefreshSchemas — it falls through to the full refresh).
+        // Structural type: accepts both IMetadataProvider and the Metadata facade (both expose
+        // RefreshSchemas on current MJCore; anything without it falls through to a full Refresh).
         md: { Refresh: () => Promise<boolean>; RefreshSchemas?: (schemas: string[]) => Promise<boolean> },
         schemaName: string | null | undefined,
     ): Promise<void> {

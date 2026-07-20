@@ -4123,6 +4123,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Reconcile per-Type timestamps from the t0 snapshot so the next staleness check does
             // NOT schedule a redundant full reload for the entity-family types we just refreshed.
             this.reconcileScopedRefreshTimestamps(t0Remote);
+            // PERSIST the merged result + reconciled timestamps. Without this, the periodic
+            // RefreshIfNeeded timer's LoadLocalMetadataFromStorage() would restore the STALE
+            // pre-merge snapshot — reverting the scoped merge (a transient "entity not found"
+            // window for the just-created entities) and discarding the reconciled timestamps
+            // (forcing the very full reload this path exists to avoid). Mirrors the full-load
+            // path, which always persists after updating local metadata.
+            await this.SaveLocalMetadataToStorage();
             LogStatus(`[ScopedRefresh] Refreshed ${freshEntities.length} entities across schema(s) [${cleaned.join(', ')}] without a full metadata reload`);
             return true;
         } catch (e) {
