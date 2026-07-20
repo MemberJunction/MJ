@@ -1706,11 +1706,30 @@ export class BaseAgent {
      */
     // ── Realtime per-session capture state (scoped to one executeRealtimeSession run) ──────────
     /**
-     * In-flight realtime turn rows keyed by transcript role (`'user'`/`'assistant'`), driving the
-     * create-on-start / update-on-complete persistence lifecycle. Reset at the start of every
-     * realtime session so a prior run can never leak an in-flight id into the next.
+     * The current realtime turn row per transcript role (`'user'`/`'assistant'`), driving the
+     * create-on-start / update-on-complete persistence lifecycle. `open` is true while the row is an
+     * unfinalized In-Progress interim (so subsequent interim deltas fold into it and a following final
+     * finalizes it in place); it flips false once finalized, but the entry is KEPT so a streamed
+     * `ReplacesPrevious` re-final can still update the same row. A new turn is detected when the next
+     * interim (or non-replacing final) arrives with the current entry already closed. Reset at the
+     * start of every realtime session so a prior run can never leak a row id into the next.
      */
-    private realtimeInFlightTurns: Map<string, string> = new Map();
+    private realtimeInFlightTurns: Map<string, { id: string; open: boolean }> = new Map();
+    /**
+     * Per-role serialization queue for transcript persistence.
+     *
+     * The runner dispatches provider transcript frames FIRE-AND-FORGET (`void this.handleTranscript(t)`),
+     * so frames for the same role can be in flight CONCURRENTLY. {@link persistRealtimeTranscript} does a
+     * check-then-act on {@link realtimeInFlightTurns} that spans `await`s (GetEntityObject / Load / Save):
+     * without serialization, two captions arriving a few ms apart both observe "no tracked row yet", both
+     * take the create branch, and the turn is persisted TWICE. Observed in production against a streamed
+     * Grok session (two byte-identical rows, the second created 17ms before the first's final update).
+     *
+     * Each role's calls are therefore chained through this map so the read-modify-write is atomic with
+     * respect to other frames of the SAME role. Roles are independent (separate `realtimeInFlightTurns`
+     * entries), so they are not serialized against each other. Reset per session alongside the turn map.
+     */
+    private realtimePersistQueues: Map<string, Promise<void>> = new Map();
     /** Active audio recording controller for the current realtime session, or `null` when recording is off. */
     private realtimeRecording: RealtimeRecordingController | null = null;
     /** Storage account id the active recording stores to (RecordingStorageProviderID ?? AttachmentStorageProviderID). */
@@ -1738,6 +1757,7 @@ export class BaseAgent {
         // 3) Resolve recording (OFF by default; runtime > agent > off; consent + storage gated) and reset
         //    the per-session turn-lifecycle state, then build the injected deps and run the session.
         this.realtimeInFlightTurns = new Map();
+        this.realtimePersistQueues = new Map();
         const recording = await this.resolveRealtimeRecording(params);
         this.realtimeRecording = recording?.controller ?? null;
         this.realtimeRecordingAccountId = recording?.storageAccountId ?? null;
@@ -2074,6 +2094,7 @@ export class BaseAgent {
             DelegateToTarget: (request) => this.delegateRealtimeToTarget(params, config, request),
             ExecuteTool: (call) => this.executeRealtimeTool(params, call),
             PersistTranscript: (transcript) => this.persistRealtimeTranscript(params, transcript),
+            FlushTranscripts: () => this.flushRealtimeTranscriptQueues(),
             Recording: this.realtimeRecording ?? undefined,
             FinalizeRecording: () => this.finalizeRealtimeRecording(params),
             CheckpointUsage: (usage) => this.checkpointRealtimeUsage(promptRun, usage),
@@ -2384,7 +2405,47 @@ export class BaseAgent {
      * @param transcript The transcript turn (interim delta or final) emitted by the model.
      * @returns The created row id on first creation of a turn, else `null`.
      */
-    private async persistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null> {
+    private persistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null> {
+        // Serialize per role — see realtimePersistQueues. Transcript frames arrive fire-and-forget, so
+        // without this chain two concurrent captions can both pass the "is there a tracked row?" check
+        // before either has written one back, and the turn is persisted twice.
+        const roleKey = transcript.Role;
+        const run = () => this.persistRealtimeTranscriptSerialized(params, transcript);
+        const prior = this.realtimePersistQueues.get(roleKey) ?? Promise.resolve();
+        // `.then(run, run)` (not `.then(run)`) so a rejected predecessor never strands the rest of the
+        // queue — each frame runs regardless of how the previous one settled.
+        const result = prior.then(run, run);
+        // The stored link swallows outcomes: the queue only needs ordering, and an unhandled rejection
+        // parked in the map would surface as an unhandled promise rejection.
+        this.realtimePersistQueues.set(roleKey, result.then(() => undefined, () => undefined));
+        return result;
+    }
+
+    /**
+     * Waits for every role's queued transcript writes to settle.
+     *
+     * Transcript frames are dispatched fire-and-forget, so writes for the last turns of a session can
+     * still be in flight at teardown. The session runner calls this during `Stop()` — after the provider
+     * session is closed, so no new frames can arrive — under its own hard timeout, which is why this
+     * method itself is unbounded and simply awaits what is queued.
+     *
+     * Awaits the STORED queue links, which are outcome-swallowing by construction, so a failed write
+     * can never reject here and abort the drain for other roles.
+     */
+    private async flushRealtimeTranscriptQueues(): Promise<void> {
+        const pending = [...this.realtimePersistQueues.values()];
+        if (pending.length === 0) {
+            return;
+        }
+        await Promise.all(pending);
+    }
+
+    /**
+     * The actual persistence work for one transcript frame. Runs under the per-role queue established by
+     * {@link persistRealtimeTranscript}, so it may safely read-modify-write {@link realtimeInFlightTurns}
+     * across its `await`s without another frame of the same role interleaving.
+     */
+    private async persistRealtimeTranscriptSerialized(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null> {
         if (!transcript.Text?.trim()) {
             return null;
         }
@@ -2399,9 +2460,12 @@ export class BaseAgent {
 
         // ── INTERIM: create the In-Progress row once per turn (first delta) ───────────────────────
         if (!transcript.IsFinal) {
-            if (this.realtimeInFlightTurns.has(roleKey)) {
-                return null; // already created for this turn; ignore subsequent deltas
+            if (this.realtimeInFlightTurns.get(roleKey)?.open) {
+                return null; // an In-Progress row for THIS turn already exists; fold this delta into it
             }
+            // A closed entry (a prior turn's finalized row still tracked for streamed re-finals) means
+            // THIS delta begins a NEW turn — fall through and create a fresh In-Progress row, replacing
+            // the tracked entry below.
             const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
             detail.NewRecord();
             detail.ConversationID = conversationID;
@@ -2418,18 +2482,36 @@ export class BaseAgent {
                 });
                 return null;
             }
-            this.realtimeInFlightTurns.set(roleKey, detail.ID);
+            this.realtimeInFlightTurns.set(roleKey, { id: detail.ID, open: true });
             return detail.ID;
         }
 
-        // ── FINAL: update the in-flight row (or create+finalize when no interim was seen) ─────────
-        const inFlightId = this.realtimeInFlightTurns.get(roleKey);
-        this.realtimeInFlightTurns.delete(roleKey);
-        let detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+        // ── FINAL: update the in-flight row, or create+finalize a fresh turn ──────────────────────
+        // Every real provider shape must yield exactly ONE row per turn:
+        //   1. interim-based (OpenAI): delta(s) open the In-Progress row → final finalizes it;
+        //   2. streamed re-finals (Grok user captions): the SAME turn emits repeated finals, each the
+        //      full growing text — the 2nd+ carry ReplacesPrevious=true (stamped by the driver) and
+        //      REPLACE the turn's row, not append;
+        //   3. finals-only single (+ ElevenLabs corrections): one non-replacing final, optionally
+        //      followed by a ReplacesPrevious correction;
+        //   4. (robustness) a provider that emits BOTH interim deltas AND repeated completeds.
+        //
+        // Reuse the tracked row iff this final REPLACES the turn (ReplacesPrevious) OR the tracked row
+        // is still an OPEN interim (this final finalizes it). A non-replacing final whose tracked entry
+        // is already CLOSED (a prior turn's finalized row) starts a NEW turn. The entry is then KEPT
+        // (closed) rather than deleted, so a later streamed re-final can still update this same row and
+        // the next interim/non-replacing-final correctly detects the turn boundary via `open`.
+        const inFlight = this.realtimeInFlightTurns.get(roleKey);
+        let detail: MJConversationDetailEntity | null = null;
+        if (inFlight && (transcript.ReplacesPrevious || inFlight.open)) {
+            const candidate = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            if (await candidate.Load(inFlight.id)) {
+                detail = candidate; // update the existing row in place → not a new turn
+            }
+        }
         let created = false;
-        if (inFlightId && await detail.Load(inFlightId)) {
-            // updating the existing streaming row → not a new turn
-        } else {
+        if (!detail) {
+            detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
             detail.NewRecord();
             detail.ConversationID = conversationID;
             detail.Role = mjRole;
@@ -2445,10 +2527,18 @@ export class BaseAgent {
         if (this.realtimeRecording) {
             detail.UtteranceEndMs = this.realtimeRecording.NowOffsetMs();
         }
-        if (!await detail.Save()) {
+        const saved = await detail.Save();
+        if (!saved) {
             this.logError(`Failed to finalize realtime transcript turn: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
                 agent: params.agent, category: 'RealtimeSession'
             });
+        }
+        // Track this turn's now-finalized (closed) row so a subsequent ReplacesPrevious re-final updates
+        // it in place, and so the next interim / non-replacing final detects the new-turn boundary via
+        // `open === false`. Only bind a real id — a failed create leaves an empty id that would poison
+        // the next lookup, so leave the prior entry untouched in that case.
+        if (saved && detail.ID) {
+            this.realtimeInFlightTurns.set(roleKey, { id: detail.ID, open: false });
         }
         return created ? detail.ID : null;
     }

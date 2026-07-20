@@ -10,14 +10,24 @@ const MockOpenAI = vi.hoisted(() => vi.fn().mockImplementation(function (this: R
     };
 }));
 
+// Mirror of the SDK's typed abort error (thrown when a request's AbortSignal fires)
+const MockAPIUserAbortError = vi.hoisted(() => class APIUserAbortError extends Error {
+    constructor(message: string = 'Request was aborted.') {
+        super(message);
+        this.name = 'APIUserAbortError';
+    }
+});
+
 // Mock the openai SDK
 vi.mock('openai', () => ({
-    OpenAI: MockOpenAI
+    OpenAI: MockOpenAI,
+    APIUserAbortError: MockAPIUserAbortError
 }));
 
 // Mock @memberjunction/global
 vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: Function) => target
+    RegisterClass: () => (target: Function) => target,
+    ToJSONSafe: (value: unknown) => value
 }));
 
 // Mock @memberjunction/ai - provide the classes and constants the provider imports
@@ -109,7 +119,28 @@ vi.mock('@memberjunction/ai', () => {
 });
 
 import { OpenAILLM } from '../models/openAI';
-import { ChatMessageRole } from '@memberjunction/ai';
+import { ChatMessageRole, ChatParams, ChatResult } from '@memberjunction/ai';
+
+/**
+ * Typed view of the protected members exercised by the cancellation tests — avoids `any`
+ * while still reaching the driver's internals.
+ */
+type OpenAILLMInternals = {
+    buildRequestOptions(params: ChatParams): { signal?: AbortSignal };
+    isCancellationError(error: unknown, cancellationToken?: AbortSignal): boolean;
+    nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult>;
+    createStreamingRequest(params: ChatParams): Promise<unknown>;
+    finalizeStreamingResponse(content: string | null, lastChunk: unknown, usage: unknown): ChatResult;
+};
+
+/** Build a minimal ChatParams, optionally carrying a cancellation token. */
+function buildChatParams(cancellationToken?: AbortSignal): ChatParams {
+    const params = new ChatParams();
+    params.model = 'gpt-4o';
+    params.messages = [{ role: ChatMessageRole.user, content: 'hello' }];
+    params.cancellationToken = cancellationToken;
+    return params;
+}
 
 describe('OpenAILLM', () => {
     let instance: OpenAILLM;
@@ -362,6 +393,97 @@ describe('OpenAILLM', () => {
             expect(resetState.inThinkingBlock).toBe(false);
             expect(resetState.pendingContent).toBe('');
             expect(resetState.thinkingComplete).toBe(false);
+        });
+    });
+
+    describe('cancellation (ChatParams.cancellationToken)', () => {
+        let internals: OpenAILLMInternals;
+
+        beforeEach(() => {
+            internals = instance as unknown as OpenAILLMInternals;
+        });
+
+        it('buildRequestOptions returns an empty object when no token is supplied', () => {
+            expect(internals.buildRequestOptions(buildChatParams())).toEqual({});
+        });
+
+        it('buildRequestOptions forwards the token as the SDK `signal` request option', () => {
+            const controller = new AbortController();
+            expect(internals.buildRequestOptions(buildChatParams(controller.signal))).toEqual({
+                signal: controller.signal
+            });
+        });
+
+        it('passes the signal to the SDK on the non-streaming path', async () => {
+            const controller = new AbortController();
+            mockCreate.mockResolvedValueOnce({
+                choices: [{ message: { content: 'hi' }, finish_reason: 'stop', index: 0 }],
+                usage: { prompt_tokens: 5, completion_tokens: 2 },
+                model: 'gpt-4o'
+            });
+
+            await internals.nonStreamingChatCompletion(buildChatParams(controller.signal));
+
+            expect(mockCreate).toHaveBeenCalledWith(expect.anything(), { signal: controller.signal });
+        });
+
+        it('passes the signal to the SDK on the streaming path', async () => {
+            const controller = new AbortController();
+            mockCreate.mockResolvedValueOnce({});
+
+            await internals.createStreamingRequest(buildChatParams(controller.signal));
+
+            expect(mockCreate).toHaveBeenCalledWith(expect.anything(), { signal: controller.signal });
+        });
+
+        it('returns a clean, non-failover-able failure when the non-streaming request is aborted', async () => {
+            const controller = new AbortController();
+            mockCreate.mockRejectedValueOnce(new MockAPIUserAbortError());
+            controller.abort();
+
+            const result = await internals.nonStreamingChatCompletion(buildChatParams(controller.signal));
+
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('cancelled');
+            expect(result.errorMessage).toBe('Request was aborted.');
+            expect(result.errorInfo?.severity).toBe('Fatal');
+            expect(result.errorInfo?.canFailover).toBe(false);
+            expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
+        });
+
+        it('rethrows non-cancellation errors from the non-streaming path', async () => {
+            mockCreate.mockRejectedValueOnce(new Error('boom'));
+            await expect(internals.nonStreamingChatCompletion(buildChatParams())).rejects.toThrow('boom');
+        });
+
+        it('identifies SDK abort errors and already-aborted tokens as cancellations', () => {
+            const controller = new AbortController();
+            controller.abort();
+            expect(internals.isCancellationError(new MockAPIUserAbortError())).toBe(true);
+            expect(internals.isCancellationError(new Error('nope'), controller.signal)).toBe(true);
+            expect(internals.isCancellationError(new Error('nope'))).toBe(false);
+        });
+
+        it('finalizes an aborted stream as a cancelled result rather than a truncated success', async () => {
+            const controller = new AbortController();
+            mockCreate.mockResolvedValueOnce({});
+
+            await internals.createStreamingRequest(buildChatParams(controller.signal));
+            controller.abort();
+
+            const result = internals.finalizeStreamingResponse('partial content', null, null);
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('cancelled');
+            expect(result.errorInfo?.canFailover).toBe(false);
+        });
+
+        it('finalizes a normal stream as a success', async () => {
+            mockCreate.mockResolvedValueOnce({});
+            await internals.createStreamingRequest(buildChatParams());
+
+            const result = internals.finalizeStreamingResponse('all done', null, null);
+            expect(result.success).toBe(true);
+            expect(result.statusText).toBe('success');
         });
     });
 });

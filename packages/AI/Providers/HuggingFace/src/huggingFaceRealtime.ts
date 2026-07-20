@@ -145,6 +145,12 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
         const connection = this.createRawConnection(this.resolveUpstreamUrl(params));
         const session = new HuggingFaceRealtimeSession(connection);
         session.SetConnectTimeTools(params.Tools ?? []);
+        // Declare the PCM rate the HF pipeline actually runs at (native 16 kHz, or the deployment's
+        // Config.sampleRate override) so the SERVER-BRIDGED audio plane resamples correctly. Without
+        // this the session reports no rate and the bridge falls back to the 24 kHz contract default —
+        // feeding 24 kHz into a 16 kHz pipeline, the documented "silent on the bridge" footgun. The
+        // client-direct pact already carries this rate; this keeps the two topologies consistent.
+        session.SetSampleRate(HuggingFaceRealtime.ResolveSampleRate(params));
         session.applyInitialConfig(params);
         await session.WaitForConfigApplied();
         return session;
@@ -370,6 +376,22 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
 export class HuggingFaceRealtimeSession extends OpenAIRealtimeSession {
     /** Fingerprint of the currently-declared tool set; {@link RegisterTools} no-ops identical re-declares. */
     private currentToolsFingerprint = HuggingFaceRealtime.ToolSetFingerprint([]);
+
+    /** The PCM sample rate this session's audio plane runs at (HF-native 16 kHz unless overridden). */
+    private sessionSampleRate = HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE;
+
+    /**
+     * HuggingFace speech-to-speech runs at 16 kHz for BOTH input and output (not the OpenAI-family
+     * 24 kHz default the base session leaves undefined). Declaring them lets the server-bridged audio
+     * plane resample correctly instead of feeding 24 kHz into a 16 kHz pipeline.
+     */
+    public get InputSampleRate(): number { return this.sessionSampleRate; }
+    public get OutputSampleRate(): number { return this.sessionSampleRate; }
+
+    /** Sets the resolved PCM sample rate (called at connect with the native default or Config override). */
+    public SetSampleRate(rate: number): void {
+        this.sessionSampleRate = rate;
+    }
 
     /** Beta (pre-GA) event names older speech-to-speech builds emit, mapped to their GA equivalents. */
     private static readonly BETA_EVENT_ALIASES: Readonly<Record<string, string>> = {

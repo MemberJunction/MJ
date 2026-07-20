@@ -76,7 +76,9 @@ export function MapEffortLevelToOpenAIRealtime(effortLevel: string): RealtimeRea
         return named as RealtimeReasoningEffort;
     }
     const numValue = Number.parseInt(named, 10);
-    if (Number.isNaN(numValue)) {
+    // A non-numeric OR non-positive value is nonsensical for a 1–100 scale — drop it (no override)
+    // rather than silently flooring 0/negatives to a real 'minimal' reasoning setting.
+    if (Number.isNaN(numValue) || numValue <= 0) {
         return undefined;
     }
     if (numValue <= 20) return 'minimal';
@@ -314,13 +316,16 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     // silently dropping the prompt AND tools); `instructions` is the server-authored co-agent
     // identity; `tools` is the server-authored tool authority. `audio` remains an intentional,
     // documented override channel.
-    const protectedBag = rest as JSONObject & { type?: unknown; instructions?: unknown; tools?: unknown };
-    if (protectedBag.type !== undefined || protectedBag.instructions !== undefined || protectedBag.tools !== undefined) {
-        RealtimeDiagLog('[OpenAIRealtime][diag] Scrubbing protected wire field(s) (type/instructions/tools) from the session Config bag — these are server-authored and cannot be overridden per session');
+    const protectedBag = rest as JSONObject & { type?: unknown; instructions?: unknown; tools?: unknown; model?: unknown };
+    if (protectedBag.type !== undefined || protectedBag.instructions !== undefined || protectedBag.tools !== undefined || protectedBag.model !== undefined) {
+        RealtimeDiagLog('[OpenAIRealtime][diag] Scrubbing protected wire field(s) (type/instructions/tools/model) from the session Config bag — these are server-authored and cannot be overridden per session');
     }
     delete protectedBag.type;
     delete protectedBag.instructions;
     delete protectedBag.tools;
+    // `model` is server-authoritative on the client-direct minted session (set from params.Model) —
+    // a bag override would let a browser pin a different model in the ephemeral pact.
+    delete protectedBag.model;
 
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.
@@ -695,6 +700,18 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     protected responseActive = false;
 
     /**
+     * Whether the CURRENT user turn has already produced at least one finalized input transcription.
+     * Streamed-transcription providers (Grok) emit `input_audio_transcription.completed` REPEATEDLY
+     * for one utterance, each carrying the full growing text; without this flag every repeat lands as
+     * a fresh non-replacing final and the persistence layer mints a duplicate `ConversationDetail`
+     * row per caption. The second-and-later completeds are flagged {@link RealtimeTranscript.ReplacesPrevious}
+     * so they REPLACE the turn's row in place — exactly the client-direct driver's behavior, kept in
+     * sync here so the two topologies persist identically. Reset on each `speech_started` (new turn).
+     * Harmless for single-completed providers (OpenAI): the flag is always false on the one completed.
+     */
+    private userTurnTranscribed = false;
+
+    /**
      * @param connection The injectable provider-connection seam.
      * @param profile The provider profile (defaults to OpenAI's so existing direct construction keeps working).
      */
@@ -1042,11 +1059,22 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
                 return this.emitTranscript('assistant', event.transcript, true);
             case 'conversation.item.input_audio_transcription.delta':
                 return this.emitTranscript('user', event.delta ?? '', false);
-            case 'conversation.item.input_audio_transcription.completed':
-                return this.emitTranscript('user', event.transcript, true);
+            case 'conversation.item.input_audio_transcription.completed': {
+                // Streamed transcription (Grok): the 2nd+ completed of a turn REPLACES the turn's row
+                // in place rather than appending a duplicate. The first completed of the turn is a
+                // normal (non-replacing) final. Flag flips here and resets on the next speech_started.
+                const replacesPrevious = this.userTurnTranscribed;
+                this.userTurnTranscribed = true;
+                return this.emitTranscript('user', event.transcript, true, replacesPrevious);
+            }
             case 'response.function_call_arguments.done':
                 return this.handleFunctionCall(event.call_id, event.name, event.arguments);
             case 'input_audio_buffer.speech_started':
+                // A new user turn begins — reset the streamed-transcription flag so its first
+                // completed is a fresh (non-replacing) final. Do this UNCONDITIONALLY (not only on
+                // true barge-in): handleInterruption gates its handler on responseActive, but the
+                // turn boundary is real regardless of whether the model was mid-response.
+                this.userTurnTranscribed = false;
                 return this.handleInterruption();
             case 'response.created':
                 // A response is in flight (whether server-VAD-triggered or locally triggered).
@@ -1116,12 +1144,18 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.outputHandler?.(this.decodeBase64(deltaBase64));
     }
 
-    /** Emits a transcript event, skipping empty/whitespace text — empty captions are pure noise. */
-    private emitTranscript(role: 'user' | 'assistant', text: string, isFinal: boolean): void {
+    /**
+     * Emits a transcript event, skipping empty/whitespace text — empty captions are pure noise.
+     *
+     * @param replacesPrevious When true, this final REPLACES the current turn's persisted row in
+     *   place (streamed-transcription providers whose repeated completeds carry the full growing
+     *   text) rather than appending a new turn. Defaults to false (append/normal final).
+     */
+    private emitTranscript(role: 'user' | 'assistant', text: string, isFinal: boolean, replacesPrevious = false): void {
         if (!text || text.trim().length === 0) {
             return;
         }
-        this.transcriptHandler?.({ Role: role, Text: text, IsFinal: isFinal });
+        this.transcriptHandler?.({ Role: role, Text: text, IsFinal: isFinal, ReplacesPrevious: replacesPrevious });
     }
 
     /** Forwards a completed function call to the tool-call handler. */

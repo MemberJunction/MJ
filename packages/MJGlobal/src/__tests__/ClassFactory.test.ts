@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ClassFactory, ClassRegistration } from '../ClassFactory';
 
 // ---- Test class hierarchies ----
@@ -730,6 +730,130 @@ describe('ClassFactory', () => {
       const after = factory.GetRegistration(Animal, 'pet');
       expect(after!.SubClass).toBe(before!.SubClass);
       expect(after!.SubClass).toBe(Dog);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────────────
+  // Explicit resolution failure (B35): CreateInstance never returned null for an unknown
+  // key, so `if (instance)` was a broken failure test at every call site.
+  // ────────────────────────────────────────────────────────────────────────────────────
+  describe('resolution failure reporting', () => {
+    /** A base that CAN stand alone — the BaseEntity-style legitimate fallback. */
+    class StandaloneBase {
+      Kind = 'standalone';
+    }
+    class StandaloneSub extends StandaloneBase {
+      Kind = 'sub';
+    }
+    /** A base that CANNOT stand alone — opts in via the explicit static marker. */
+    class MarkedBase {
+      public static readonly RequiresSubclass = true;
+      DoWork(): string {
+        throw new Error('must be overridden');
+      }
+    }
+    class MarkedSub extends MarkedBase {
+      override DoWork(): string {
+        return 'real work';
+      }
+    }
+
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it('successful resolution is unchanged and reports Resolved: true', () => {
+      factory.Register(StandaloneBase, StandaloneSub, 'known', 0, true);
+      const result = factory.TryCreateInstance<StandaloneBase>(StandaloneBase, 'known');
+      expect(result.Resolved).toBe(true);
+      expect(result.Instance).toBeInstanceOf(StandaloneSub);
+      expect(result.Reason).toBeUndefined();
+      // The legacy surface behaves identically.
+      expect(factory.CreateInstance<StandaloneBase>(StandaloneBase, 'known')).toBeInstanceOf(StandaloneSub);
+    });
+
+    it('fallback WITHOUT the marker returns the base instance and warns (BaseEntity-style fallback preserved)', () => {
+      const result = factory.TryCreateInstance<StandaloneBase>(StandaloneBase, 'no-such-key');
+      expect(result.Resolved).toBe(false);
+      expect(result.Instance).toBeInstanceOf(StandaloneBase);
+      expect(result.Reason).toContain('no-such-key');
+      expect(warnSpy).toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('CreateInstance still falls back to the base class when the base has no marker', () => {
+      const instance = factory.CreateInstance<StandaloneBase>(StandaloneBase, 'no-such-key');
+      expect(instance).toBeInstanceOf(StandaloneBase);
+    });
+
+    it('fallback WITH the marker throws from CreateInstance instead of returning a hollow stub', () => {
+      expect(() => factory.CreateInstance<MarkedBase>(MarkedBase, 'no-such-key')).toThrow(/MarkedBase/);
+      expect(errorSpy).toHaveBeenCalled();
+    });
+
+    it('fallback WITH the marker returns Resolved: false / Instance: null from TryCreateInstance', () => {
+      const result = factory.TryCreateInstance<MarkedBase>(MarkedBase, 'no-such-key');
+      expect(result.Resolved).toBe(false);
+      expect(result.Instance).toBeNull();
+      expect(result.Reason).toContain('RequiresSubclass=true');
+    });
+
+    it('a marked base still resolves its registered subclass normally', () => {
+      factory.Register(MarkedBase, MarkedSub, 'real', 0, true);
+      const result = factory.TryCreateInstance<MarkedBase>(MarkedBase, 'real');
+      expect(result.Resolved).toBe(true);
+      expect(result.Instance!.DoWork()).toBe('real work');
+    });
+
+    it('the diagnostic lists the registered keys for the base class so typos are obvious', () => {
+      factory.Register(MarkedBase, MarkedSub, 'CorrectKey', 0, true);
+      const result = factory.TryCreateInstance<MarkedBase>(MarkedBase, 'CorectKey');
+      expect(result.Reason).toContain("'CorrectKey'");
+      expect(result.Reason).toContain('CorectKey');
+    });
+
+    it('the diagnostic names the anchor base class and reports the marker state', () => {
+      const result = factory.TryCreateInstance<StandaloneBase>(StandaloneBase, 'missing');
+      expect(result.Reason).toContain('StandaloneBase');
+      expect(result.Reason).toContain('RequiresSubclass=false');
+    });
+
+    it('repeated failures for the same base/key log only once (hot-path safety)', () => {
+      factory.TryCreateInstance<StandaloneBase>(StandaloneBase, 'missing');
+      factory.TryCreateInstance<StandaloneBase>(StandaloneBase, 'missing');
+      factory.TryCreateInstance<StandaloneBase>(StandaloneBase, 'missing');
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('a null base class yields Resolved: false with a null instance and never throws', () => {
+      const result = factory.TryCreateInstance<StandaloneBase>(null, 'anything');
+      expect(result.Resolved).toBe(false);
+      expect(result.Instance).toBeNull();
+      expect(factory.CreateInstance<StandaloneBase>(null, 'anything')).toBeNull();
+    });
+
+    it('constructor params still flow through both surfaces', () => {
+      factory.Register(Animal, Dog, 'pet', 0, true);
+      const viaTry = factory.TryCreateInstance<Animal>(Animal, 'pet', 'Rex', 'Lab');
+      expect((viaTry.Instance as Dog).Breed).toBe('Lab');
+      const viaCreate = factory.CreateInstance<Animal>(Animal, 'pet', 'Rex', 'Lab');
+      expect((viaCreate as Dog).Name).toBe('Rex');
+    });
+
+    it('the async surface honors the marker too', async () => {
+      await expect(factory.CreateInstanceAsync<MarkedBase>(MarkedBase, 'no-such-key')).rejects.toThrow(/MarkedBase/);
+      const result = await factory.TryCreateInstanceAsync<MarkedBase>(MarkedBase, 'no-such-key');
+      expect(result.Resolved).toBe(false);
+      expect(result.Instance).toBeNull();
     });
   });
 });

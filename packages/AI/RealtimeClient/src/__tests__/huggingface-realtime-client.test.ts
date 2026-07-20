@@ -531,11 +531,21 @@ describe('HuggingFaceRealtimeClient (extended edge coverage)', () => {
             await expect(client.Disconnect()).resolves.toBeUndefined();
         });
 
-        it('resets the response state machine so a stale busy flag cannot survive reconnection', async () => {
+        it('Disconnect fully resets the response state machine so a reused instance cannot inherit stale state', async () => {
             await connect(client);
+            // Poison the full state machine: active response + a queued tool-result trigger.
             client.Emit({ type: 'response.created' });
+            client.SendToolResult('c1', '{"r":1}'); // queues pendingResultResponse behind the active response
             expect(client.IsBusy).toBe(true);
             await client.Disconnect();
+            expect(client.IsBusy).toBe(false);
+            // Reconnect on the SAME instance: a fresh turn must NOT flush a leaked queued trigger.
+            await connect(client);
+            const before = client.Fake.Frames().filter((f) => f.type === 'response.create').length;
+            client.Emit({ type: 'response.created' });
+            client.Emit({ type: 'response.done', response: {} });
+            // No leaked pendingResultResponse fired an extra response.create on session 2:
+            expect(client.Fake.Frames().filter((f) => f.type === 'response.create').length).toBe(before);
             expect(client.IsBusy).toBe(false);
         });
     });
