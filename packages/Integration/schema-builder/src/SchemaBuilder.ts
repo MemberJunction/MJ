@@ -240,7 +240,7 @@ export class SchemaBuilder {
     public BuildRSUInput(
         schemaOutput: SchemaBuilderOutput,
         input: SchemaBuilderInput,
-        rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean }
+        rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean; AdditionalSchemaInfoAuthoritative?: boolean }
     ): RSUPipelineInput {
         // Combine all migration file contents into a single SQL block
         const migrationSQL = schemaOutput.MigrationFiles
@@ -263,6 +263,7 @@ export class SchemaBuilder {
             Description: `Integration: ${input.SourceType} — ${affectedTables.join(', ')}`,
             AffectedTables: affectedTables,
             AdditionalSchemaInfo: schemaOutput.AdditionalSchemaInfoUpdate?.Content,
+            AdditionalSchemaInfoAuthoritative: rsuOptions?.AdditionalSchemaInfoAuthoritative,
             MetadataFiles: metadataFiles.length > 0 ? metadataFiles : undefined,
             SkipGitCommit: rsuOptions?.SkipGitCommit,
             SkipRestart: rsuOptions?.SkipRestart,

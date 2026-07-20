@@ -113,6 +113,16 @@ export interface RSUPipelineInput {
   /** Optional: additionalSchemaInfo JSON content for soft FKs. */
   AdditionalSchemaInfo?: string;
 
+  /**
+   * When true, this input's AdditionalSchemaInfo payload represents the FULL current resolution
+   * for each schema it contains (e.g. a schema-evolution refresh that re-resolved the whole
+   * connector). The writer then REPLACES each contained schema's table list wholesale — pruning
+   * entries for tables that vanished from the resolution (rsuplan: "adds new ones, removes old
+   * ones that no longer exist"). Leave false/unset for subset builds (ApplyAll of selected
+   * objects), where pruning would wrongly delete other tables' soft constraints.
+   */
+  AdditionalSchemaInfoAuthoritative?: boolean;
+
   /** Optional: metadata JSON files for mj-sync. */
   MetadataFiles?: Array<{ Path: string; Content: string }>;
 
@@ -1010,7 +1020,9 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * Path comes from RSU_ADDITIONAL_SCHEMA_INFO_PATH config, resolved relative to WorkDir.
    */
   private async writeAdditionalSchemaInfo(inputs: RSUPipelineInput[]): Promise<boolean> {
-    const contents = inputs.map((i) => i.AdditionalSchemaInfo).filter((c): c is string => !!c);
+    const contents = inputs
+      .filter((i): i is RSUPipelineInput & { AdditionalSchemaInfo: string } => !!i.AdditionalSchemaInfo)
+      .map((i) => ({ content: i.AdditionalSchemaInfo, authoritative: i.AdditionalSchemaInfoAuthoritative === true }));
 
     if (contents.length === 0) return true;
 
@@ -1029,12 +1041,23 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       }
     }
 
-    // Merge each incoming config (keyed by schema name) into existing
-    for (const content of contents) {
+    // Merge each incoming config (keyed by schema name) into existing.
+    // Authoritative payloads (full re-resolution, e.g. schema evolution) REPLACE the schema's
+    // table list wholesale — pruning tables that vanished (rsuplan: "adds new ones, removes old
+    // ones that no longer exist"). Subset payloads upsert per-table, never pruning siblings.
+    for (const { content, authoritative } of contents) {
       try {
         const incoming: Record<string, Array<{ TableName: string }>> = JSON.parse(content);
         for (const [schemaName, tables] of Object.entries(incoming)) {
           if (!Array.isArray(tables)) continue;
+          if (authoritative) {
+            const before = existing[schemaName]?.length ?? 0;
+            existing[schemaName] = [...tables];
+            if (before > tables.length) {
+              this.rsuLog(`additionalSchemaInfo[${schemaName}]: authoritative replace pruned ${before - tables.length} vanished table entr${before - tables.length === 1 ? 'y' : 'ies'}`);
+            }
+            continue;
+          }
           if (!existing[schemaName]) existing[schemaName] = [];
           for (const table of tables) {
             const idx = existing[schemaName].findIndex((t) => t.TableName.toLowerCase() === table.TableName.toLowerCase());

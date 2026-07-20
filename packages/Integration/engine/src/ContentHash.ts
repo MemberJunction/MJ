@@ -26,6 +26,12 @@ export const CONTENT_HASH_COLUMN = '__mj_integration_ContentHash';
  * Note: this hashes the MAPPED field values (what actually lands in MJ), not the raw
  * external payload — so a change in a source field we don't map won't (correctly) count
  * as a change for sync purposes.
+ *
+ * Design note (the rsuplan "hard fact"): the plan observes that positional/row-number
+ * hashing would force rewriting every row after a mid-stream INSERT (each row's position
+ * shifts by one). This implementation sidesteps that entirely by keying the hash on the
+ * record's IDENTITY (ExternalID / PK), never its position — an insert changes only its own
+ * row; every other row's hash, and therefore its skip-write, is unaffected.
  */
 export function computeContentHash(fields: Record<string, unknown>): string {
     const canonical = canonicalize(fields);

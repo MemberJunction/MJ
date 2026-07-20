@@ -5916,6 +5916,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 const rsuInput = builder.BuildRSUInput(schemaOutput, schemaInput, {
                     SkipGitCommit: skipGitCommit,
                     SkipRestart: skipRestart,
+                    // Schema evolution runs a FULL re-resolution of this connector's schema, so its
+                    // soft-constraint payload is the complete current truth — authorize the writer to
+                    // prune additionalSchemaInfo entries for tables that vanished from the resolution
+                    // (rsuplan: "adds new ones, removes old ones that no longer exist"). Subset
+                    // ApplyAll builds deliberately do NOT set this.
+                    AdditionalSchemaInfoAuthoritative: true,
                 });
 
                 // NEW objects need entities (post-codegen/restart) before their entity maps can be
