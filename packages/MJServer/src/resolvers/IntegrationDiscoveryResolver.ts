@@ -1382,8 +1382,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Refresh the metadata cache so subsequent reads see the new IO/IOF
             // rows the pipeline just wrote.  Without this the engine returns the
             // pre-pipeline snapshot until the next process bootstrap.
+            // Scoped: discovery persisted IO/IOF DATA rows only — entity metadata outside this
+            // connector's schema cannot have changed, so skip the full-instance reload.
             const md = provider ?? new Metadata();
-            await md.Refresh();
+            await this.refreshMetadataForSchema(md, this.deriveSchemaName(companyIntegration.Integration));
             await IntegrationEngine.Instance.Config(true, user, provider);
 
             return {
@@ -2371,6 +2373,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         return result;
     }
 
+    /**
+     * Scoped-when-possible metadata refresh: every RSU/refresh flow here touches exactly ONE
+     * connector schema, so use the provider's RefreshSchemas (entity-family-only, atomic merge)
+     * when available instead of reloading the entire instance's metadata graph — the full reload
+     * is the runtime-reset cost that grows with every accrued connector schema. Falls back to a
+     * full Refresh when the provider doesn't support scoping or no schema is known.
+     */
+    private async refreshMetadataForSchema(
+        // Structural type: accepts both IMetadataProvider and the Metadata facade (which proxies
+        // Refresh but has no RefreshSchemas — it falls through to the full refresh).
+        md: { Refresh: () => Promise<boolean>; RefreshSchemas?: (schemas: string[]) => Promise<boolean> },
+        schemaName: string | null | undefined,
+    ): Promise<void> {
+        if (schemaName && md.RefreshSchemas) await md.RefreshSchemas([schemaName]);
+        else await md.Refresh();
+    }
+
     private async runSchemaRefreshPipeline(
         companyIntegrationID: string,
         user: UserInfo,
@@ -2391,8 +2410,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const result = await pipeline.Run(runOpts as unknown as Parameters<typeof pipeline.Run>[0]);
 
         // Refresh in-memory caches so downstream queries (object picker,
-        // ApplyAll, etc.) see the just-written IO/IOF rows.
-        await (provider ?? new Metadata()).Refresh();
+        // ApplyAll, etc.) see the just-written IO/IOF rows. Scoped — see refreshMetadataForSchema.
+        await this.refreshMetadataForSchema(provider ?? new Metadata(), this.deriveSchemaName(companyIntegration.Integration));
         await IntegrationEngine.Instance.Config(true, user, provider);
 
         return {
@@ -3457,7 +3476,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // If restart happened, this code never executes (process died).
             // If skipRestart=true, we can do entity maps now.
             if (skipRestart) {
-                await provider.Refresh();
+                await this.refreshMetadataForSchema(provider, schemaName); // scoped: only this connector's schema gained entities
                 const entityMapsCreated = await this.createEntityAndFieldMaps(
                     input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user, provider,
                     input.DefaultSyncDirection ?? 'Pull'
@@ -5326,7 +5345,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
                 if (skipRestart) {
                     // Entity maps, field maps, sync
-                    await provider.Refresh();
+                    await this.refreshMetadataForSchema(provider, build.schemaName); // scoped: only this connector's schema gained entities
                     const entityMapsCreated = await this.createEntityAndFieldMaps(
                         build.connInput.CompanyIntegrationID, build.objects, build.connector,
                         build.companyIntegration, build.schemaName, user, provider,
@@ -5714,7 +5733,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (!refresh.Success) {
                 return { Success: false, HasChanges: false, Message: `Schema evolution aborted — metadata re-resolution failed: ${refresh.FailureMessage ?? 'unknown error'}` };
             }
-            await md.Refresh();
+            await this.refreshMetadataForSchema(md, schemaName); // scoped: evolution touches only this connector's schema
             await IntegrationEngine.Instance.Config(true, user, md);
 
             // ── Phase 2 — DIFF: resolved-Active objects vs prior entity maps ──
@@ -5977,7 +5996,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 // skipRestart=true: entities exist after provider.Refresh() — create the new
                 // objects' entity maps inline, then apply the disabled-by-default rule.
                 if (newObjects.length > 0 && skipRestart) {
-                    await md.Refresh();
+                    await this.refreshMetadataForSchema(md, schemaName); // scoped: only this connector's schema gained entities
                     const newObjectInputs = objects.filter(o => newObjects.some(n => n.toLowerCase() === o.SourceObjectName.toLowerCase()));
                     const created = await this.createEntityAndFieldMaps(
                         companyIntegrationID, newObjectInputs, connector, companyIntegration, schemaName, user, md, 'Pull'

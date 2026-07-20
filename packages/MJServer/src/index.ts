@@ -1430,6 +1430,12 @@ async function processRSUPendingWork(): Promise<void> {
   // Wait a moment for metadata to be fully loaded
   await new Promise(resolve => setTimeout(resolve, 3000));
 
+  // ONE full refresh for the whole batch: the pre-restart CodeGen ran once, so a single reload
+  // sees every pending item's entities. The previous per-item Refresh() inside the loop re-ran a
+  // FULL metadata reload N times at boot — under live traffic — which is the startup metadata-cache
+  // race amplifier (each reload is a window; more schemas = longer reloads = wider windows).
+  await Metadata.Provider.Refresh(); // global-provider-ok: server startup recovery — one-shot global cache refresh
+
   for (const item of pendingItems) {
     try {
       const md = new Metadata(); // global-provider-ok: server startup recovery — runs once before any per-request context exists
@@ -1439,8 +1445,6 @@ async function processRSUPendingWork(): Promise<void> {
         console.warn(`[RSU] No system user found, skipping pending work for ${item.CompanyIntegrationID}`);
         continue;
       }
-
-      await Metadata.Provider.Refresh(); // global-provider-ok: server startup recovery — one-shot global cache refresh
 
       // Resolve connector
       const rv = new RunView();

@@ -124,6 +124,23 @@ export const AllMetadataArrays = [
     { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
 ];
 
+/**
+ * Pure merge for a schema-scoped metadata refresh: replaces every entity belonging to one of the
+ * refreshed `schemas` with the freshly-loaded set (which also handles removals — an entity absent
+ * from the fresh set is dropped), keeps all other schemas' entities untouched, and re-sorts
+ * alphabetically by Name to preserve the deterministic ordering `PostProcessEntityMetadata`
+ * guarantees (CodeGen and other consumers rely on it). Generic + pure for unit testing.
+ */
+export function MergeScopedEntities<T extends { Name: string; SchemaName?: string }>(
+    existing: readonly T[],
+    fresh: readonly T[],
+    schemas: readonly string[],
+): T[] {
+    const scoped = new Set(schemas.map(s => s.trim().toLowerCase()));
+    const kept = existing.filter(e => !scoped.has((e.SchemaName ?? '').trim().toLowerCase()));
+    return [...kept, ...fresh].sort((a, b) => a.Name.localeCompare(b.Name));
+}
+
 
 /**
  * Raw entity-metadata row shapes flowing into `PostProcessEntityMetadata` from the
@@ -3952,6 +3969,132 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return true; // subclass is telling us not to do any refresh ops right now
     }
 
+    /** MJ_Metadata dataset item codes that are children of Entities (keyed by EntityID). */
+    private static readonly _mjMetadataEntityChildCodes: readonly string[] = [
+        'EntityFieldValues', 'EntityPermissions', 'EntityRelationships', 'EntitySettings',
+        'EntityOrganicKeys', 'EntityOrganicKeyRelatedEntities',
+    ];
+    /** MJ_Metadata dataset item codes OUTSIDE the entity family (never touched by a scoped refresh). */
+    private static readonly _mjMetadataNonEntityCodes: readonly string[] = [
+        'Applications', 'ApplicationEntities', 'ApplicationSettings',
+        'Roles', 'RowLevelSecurityFilters', 'AuditLogTypes', 'Authorizations', 'AuthorizationRoles',
+        'QueryCategories', 'Queries', 'QueryFields', 'QueryPermissions', 'QueryEntities',
+        'QueryParameters', 'QueryDependencies', 'SQLDialects', 'QuerySQLs',
+        'EntityDocumentTypes', 'Libraries', 'ExplorerNavigationItems',
+    ];
+
+    /**
+     * SCOPED metadata refresh (rsuplan runtime-reset bottleneck): re-fetches ONLY the entity-family
+     * metadata (entities + fields + field values/permissions/relationships/settings/organic keys) of
+     * the named schemas and atomically merges it into the cached metadata — instead of reloading the
+     * ENTIRE instance graph the way {@link Refresh} does. Designed for the RSU / schema-evolution
+     * flow, where a runtime schema update touches exactly one connector schema but previously paid
+     * a full-instance reload (a cost that grows with every accrued connector schema).
+     *
+     * Semantics + safety:
+     * - Entities of the scoped schemas are REPLACED wholesale by the fresh load (which also handles
+     *   removals); all other schemas' EntityInfo instances are untouched (never mutated — they may
+     *   be shared across request-scoped provider shells). The container + lookup maps swap
+     *   atomically, so concurrent readers never see a half-built state.
+     * - Non-entity metadata (Applications, Roles, Queries, …) is NOT refreshed here.
+     * - Cross-schema relationships: only relationships OWNED by scoped entities are refreshed.
+     *   Inbound edges owned by out-of-scope entities are left as-is (the RSU flow never changes
+     *   them); use a full {@link Refresh} when they matter.
+     * - Local metadata timestamps are deliberately NOT advanced — the next staleness check may
+     *   still trigger a full refresh (the SAFE direction: over-refresh, never stale-mask).
+     * - Falls back to a full {@link Refresh} on: empty schema list, no cached metadata yet,
+     *   `MJ_DISABLE_SCOPED_REFRESH=1` (ops kill-switch), or ANY error in the scoped path.
+     *
+     * @param schemas schema names whose entity metadata should be re-fetched (e.g. ['wild_apricot'])
+     * @returns true when the scoped merge (or the fallback full refresh) succeeded
+     */
+    public async RefreshSchemas(schemas: string[], providerToUse?: IMetadataProvider): Promise<boolean> {
+        const cleaned = (schemas ?? []).map(s => s?.trim()).filter((s): s is string => !!s && s.length > 0);
+        if (
+            cleaned.length === 0 ||
+            !this.AllowRefresh ||
+            process.env.MJ_DISABLE_SCOPED_REFRESH === '1' ||
+            !this._localMetadata?.AllEntities?.length
+        ) {
+            return this.Refresh(providerToUse); // full-refresh fallback
+        }
+        try {
+            const esc = (s: string) => s.replace(/'/g, "''");
+            const inList = (vals: string[]) => vals.map(v => `'${esc(v)}'`).join(',');
+            const zero = (codes: readonly string[]): DatasetItemFilterType[] =>
+                codes.map(c => ({ ItemCode: c, Filter: '1=0' }));
+            const schemaIn = `SchemaName IN (${inList(cleaned)})`;
+
+            // ── Phase A — entities + fields of the scoped schemas (both views expose SchemaName).
+            // Children + non-entity items are zero-filled so the batch moves only scoped rows.
+            const phaseA: DatasetItemFilterType[] = [
+                { ItemCode: 'Entities', Filter: schemaIn },
+                { ItemCode: 'EntityFields', Filter: schemaIn },
+                ...zero(ProviderBase._mjMetadataEntityChildCodes),
+                ...zero(ProviderBase._mjMetadataNonEntityCodes),
+            ];
+            const a = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, phaseA, this.CurrentUser, providerToUse, true);
+            if (!a?.Success) return this.Refresh(providerToUse);
+            const aByCode = new Map(a.Results.map(r => [r.Code, r.Results] as const));
+            const entityRows: EntityMetadataRow[] = aByCode.get('Entities') ?? [];
+            const fieldRows: EntityFieldMetadataRow[] = aByCode.get('EntityFields') ?? [];
+
+            // ── Phase B — entity-child rows via dialect-safe literal ID lists (no view quoting /
+            // subselect differences between SQL Server + PostgreSQL to worry about).
+            let fieldValues: EntityFieldValueMetadataRow[] = [];
+            let permissions: EntityChildMetadataRow[] = [];
+            let relationships: EntityChildMetadataRow[] = [];
+            let settings: EntityChildMetadataRow[] = [];
+            let organicKeys: OrganicKeyMetadataRow[] = [];
+            let organicKeyRelated: OrganicKeyRelatedEntityMetadataRow[] = [];
+            if (entityRows.length > 0) {
+                const idIn = `EntityID IN (${inList(entityRows.map(e => e.ID))})`;
+                const phaseB: DatasetItemFilterType[] = [
+                    { ItemCode: 'Entities', Filter: '1=0' },
+                    { ItemCode: 'EntityFields', Filter: '1=0' },
+                    // EntityFieldValues key off EntityFieldID, not EntityID — scope by the fields just loaded.
+                    { ItemCode: 'EntityFieldValues', Filter: fieldRows.length > 0 ? `EntityFieldID IN (${inList(fieldRows.map(f => f.ID))})` : '1=0' },
+                    { ItemCode: 'EntityPermissions', Filter: idIn },
+                    { ItemCode: 'EntityRelationships', Filter: idIn },
+                    { ItemCode: 'EntitySettings', Filter: idIn },
+                    { ItemCode: 'EntityOrganicKeys', Filter: idIn },
+                    // OrganicKeyRelatedEntities key off EntityOrganicKeyID (grandchild) — a dialect-safe
+                    // one-pass scope isn't expressible, so load the (tiny) table and filter client-side.
+                    ...zero(ProviderBase._mjMetadataNonEntityCodes),
+                ];
+                const b = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, phaseB, this.CurrentUser, providerToUse, true);
+                if (!b?.Success) return this.Refresh(providerToUse);
+                const bByCode = new Map(b.Results.map(r => [r.Code, r.Results] as const));
+                fieldValues = bByCode.get('EntityFieldValues') ?? [];
+                permissions = bByCode.get('EntityPermissions') ?? [];
+                relationships = bByCode.get('EntityRelationships') ?? [];
+                settings = bByCode.get('EntitySettings') ?? [];
+                organicKeys = bByCode.get('EntityOrganicKeys') ?? [];
+                const okIDs = new Set(organicKeys.map(k => NormalizeUUID(k.ID)));
+                const allOkRelated: OrganicKeyRelatedEntityMetadataRow[] = bByCode.get('EntityOrganicKeyRelatedEntities') ?? [];
+                organicKeyRelated = allOkRelated.filter(r => okIDs.has(NormalizeUUID(r.EntityOrganicKeyID)));
+            }
+
+            // ── Build fresh EntityInfo instances (children stitched, Sequence-sorted) — never
+            // mutate existing shared Info objects.
+            const freshEntities = this.PostProcessEntityMetadata(
+                entityRows, fieldRows, fieldValues, permissions, relationships, settings,
+                organicKeys, organicKeyRelated,
+            );
+
+            // ── Atomic merge: new container (unchanged arrays shared by reference), scoped
+            // entities replaced, global alphabetical re-sort, container + maps swapped together.
+            const next = Object.assign(new AllMetadata(), this._localMetadata);
+            next.AllEntities = MergeScopedEntities(this._localMetadata.AllEntities, freshEntities, cleaned);
+            this.UpdateLocalMetadata(next);
+            LogStatus(`[ScopedRefresh] Refreshed ${freshEntities.length} entities across schema(s) [${cleaned.join(', ')}] without a full metadata reload`);
+            return true;
+        } catch (e) {
+            LogError(`RefreshSchemas([${cleaned.join(', ')}]) failed — falling back to full Refresh(): ${e instanceof Error ? e.message : e}`);
+            return this.Refresh(providerToUse);
+        }
+    }
+
     /**
      * Checks if local metadata is out of date and needs refreshing.
      * Compares local timestamps with server timestamps.
@@ -4514,15 +4657,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Called automatically from UpdateLocalMetadata().
      */
     protected RebuildEntityMaps(): void {
+        // Build into FRESH maps, then swap the references atomically. The previous
+        // clear()-then-refill left a window where a concurrent EntityByName()/EntityByID()
+        // during a Refresh() read an EMPTY (or partially-filled) map and failed with
+        // "Entity X not found in metadata" — the boot/refresh metadata-cache race, which
+        // widens as more entities accrue (longer refill loop, more frequent refreshes).
+        // Readers hold either the complete old map or the complete new one, never a
+        // half-built state.
         const entities = this._localMetadata?.AllEntities;
-        this._entityMapByName.clear();
-        this._entityMapByID.clear();
+        const byName = new Map<string, EntityInfo>();
+        const byID = new Map<string, EntityInfo>();
         if (entities) {
             for (const e of entities) {
-                this._entityMapByName.set(e.Name.trim().toLowerCase(), e);
-                this._entityMapByID.set(NormalizeUUID(e.ID), e);
+                byName.set(e.Name.trim().toLowerCase(), e);
+                byID.set(NormalizeUUID(e.ID), e);
             }
         }
+        this._entityMapByName = byName;
+        this._entityMapByID = byID;
     }
 
     /**
