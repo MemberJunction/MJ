@@ -1,30 +1,25 @@
 /**
- * remote-op-wire-progress-tests.ts — over-the-wire RO-3 test: a GraphQLDataProvider client (Node, system
- * API key) calls RecordProcess.RunNow with an `onProgress` callback, and asserts that the typed
- * RemoteOpProgress emitted server-side arrives over the `RemoteOperationProgress` GraphQL subscription.
- * This exercises the full attached-over-the-wire path: client subscribe -> mutation (with progressChannelId)
- * -> server emitProgress -> PubSub publish -> subscription -> client onProgress.
+ * remote-op-wire-progress-tests.ts — over-the-wire RO-3 test (CLIENT transport).
  *
- * SKIPS cleanly (exit 0) when MJAPI is not reachable, so it never fails CI on a server-less box. When MJAPI
- * is up it runs against it. Requires the server to be running the RO-3 resolver build.
+ * Thin dispatcher: runs the 'remote-op-wire-progress' bundle (WIRE1) from the shared
+ * IntegrationCheckRegistry against a live MJAPI via GraphQLDataProvider. The check body + its
+ * over-the-wire fixtures live ONCE in @memberjunction/testing-integration and are consumed identically
+ * by this script and the IntegrationTestDriver (IT15).
+ *
+ * SKIPS cleanly (exit 0) when MJAPI is not reachable, so it never fails CI on a server-less box.
  *
  * USAGE (from the repo root, with MJAPI running):
  *   npx tsx packages/MJServer/integration-test-scripts/remote-op-wire-progress-tests.ts
  *
  * Exit code: 0 = passed (or skipped), 1 = failures, 2 = setup error.
  */
-import { LoadEnv, LoadClientConfig, TestRunner, Assert, AssertEqual } from './lib/harness';
-import { GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
-import { Metadata, RunView, RemoteOpProgress } from '@memberjunction/core';
 import {
-    MJActionCategoryEntity,
-    MJRecordProcessEntity,
-    MJProcessRunEntity,
-    RecordProcessRunNowOperation,
-} from '@memberjunction/core-entities';
+    LoadEnv, LoadClientConfig, TestRunner, EmitOutcomes, IntegrationCheckRegistry, bootstrapIntegrationClient
+} from './lib/harness';
+import type { IntegrationCheckContext } from './lib/harness';
+import { Metadata } from '@memberjunction/core';
 
-const ACT_ENTITY = 'MJ: Action Categories';
-const PREFIX = 'mj-remote-op-wire';
+const BUNDLE = 'remote-op-wire-progress';
 
 async function reachable(url: string, apiKey: string): Promise<boolean> {
     try {
@@ -41,86 +36,49 @@ async function reachable(url: string, apiKey: string): Promise<boolean> {
 
 async function main(): Promise<void> {
     LoadEnv();
-    const client = LoadClientConfig();
+    // A server-less box (e.g. the CI integration lane) has no MJ_API_KEY — LoadClientConfig throws.
+    // That's a SKIP condition, not a setup error: without a key/URL there is no MJAPI to test against.
+    let client: ReturnType<typeof LoadClientConfig>;
+    try {
+        client = LoadClientConfig();
+    } catch (error) {
+        console.log(`remote-op-wire-progress-tests: SKIPPED — client config unavailable (${error instanceof Error ? error.message : String(error)}). Set MJ_API_KEY + start MJAPI to run the over-the-wire RO-3 test.`);
+        process.exit(0);
+    }
     if (!(await reachable(client.Url, client.MJAPIKey))) {
         console.log(`remote-op-wire-progress-tests: SKIPPED — MJAPI not reachable at ${client.Url} (start MJAPI to run the over-the-wire RO-3 test).`);
         process.exit(0);
     }
 
-    // ws endpoint derived from the http endpoint (http->ws / https->wss).
-    const wsUrl = client.Url.replace(/^http/, 'ws');
-    const config = new GraphQLProviderConfigData('', client.Url, wsUrl, async () => '', '__mj', undefined, undefined, client.MJAPIKey);
-    await setupGraphQLClient(config);
+    const cc = await bootstrapIntegrationClient();
+    const md = new Metadata(); // global-provider-ok: dedicated single-provider Node integration test — bootstrapIntegrationClient configured the one global GraphQLDataProvider this process uses
+    const ctx: IntegrationCheckContext = {
+        User: md.CurrentUser,
+        Provider: Metadata.Provider, // global-provider-ok: the single global GraphQLDataProvider just configured for this dedicated test process
+        Storage: cc.Storage,
+        Schema: process.env.MJ_CORE_SCHEMA ?? '__mj'
+    };
 
-    const provider = Metadata.Provider; // global-provider-ok: the GraphQLDataProvider just configured by setupGraphQLClient — this Node test IS the single global provider
-    const user = provider.CurrentUser;
-    const suite = new TestRunner('Remote Operations RO-3 over-the-wire progress (GraphQLDataProvider -> live MJAPI)');
-
-    // Fixtures created over the wire: 2 throwaway Action Categories + a FieldRules Record Process.
-    const entityID = provider.EntityByName(ACT_ENTITY)!.ID;
-    const catIds: string[] = [];
-    for (const n of [1, 2]) {
-        const cat = await provider.GetEntityObject<MJActionCategoryEntity>(ACT_ENTITY, user);
-        cat.NewRecord();
-        cat.Name = `${PREFIX}-cat-${n}`;
-        cat.Status = 'Active';
-        Assert(await cat.Save(), `creating fixture category ${n} failed: ${cat.LatestResult?.CompleteMessage}`);
-        catIds.push(cat.ID);
-    }
-    const ruleSet = { Rules: [{ TargetField: 'Description', Source: { Kind: 'formula', Expression: "fields.Name + ' — wire'" } }] };
-    const rp = await provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', user);
-    rp.NewRecord();
-    rp.Name = `${PREFIX}-record-process (safe to delete)`;
-    rp.EntityID = entityID;
-    rp.Status = 'Active';
-    rp.WorkType = 'FieldRules';
-    rp.ScopeType = 'Filter';
-    rp.ScopeFilter = '1 = 0';
-    rp.Configuration = JSON.stringify(ruleSet);
-    rp.BatchSize = 10;
-    Assert(await rp.Save(), `creating the FieldRules Record Process failed: ${rp.LatestResult?.CompleteMessage}`);
-
+    const reg = IntegrationCheckRegistry.Instance;
+    const lifecycle = reg.GetLifecycle(BUNDLE);
     let failures = 0;
     try {
-        suite.Test('WIRE1: RunNow over the wire returns the run summary AND streams typed progress to onProgress', async () => {
-            const events: RemoteOpProgress[] = [];
-            // No provider passed -> uses the global GraphQLDataProvider -> marshalled over GraphQL.
-            const result = await new RecordProcessRunNowOperation().Execute(
-                { recordProcessID: rp.ID, dryRun: true, scope: { Kind: 'records', RecordIDs: catIds } },
-                { onProgress: (p) => events.push(p) },
-            );
-            Assert(result.Success, `op failed over the wire: ${result.ErrorMessage}`);
-            AssertEqual(result.Output?.processed, 2, 'processed count came back over the wire');
-            Assert(events.length >= 1, `expected >= 1 progress event over the wire, got ${events.length}`);
-            for (const e of events) {
-                AssertEqual(e.OperationKey, 'RecordProcess.RunNow', 'wire progress OperationKey');
-            }
-            console.log(`      → over-the-wire: processed ${result.Output?.processed}, received ${events.length} streamed progress event(s)`);
-        });
-
-        failures = await suite.Run();
-    } finally {
-        const runRes = await new RunView().RunView<MJProcessRunEntity>(
-            { EntityName: 'MJ: Process Runs', ExtraFilter: `RecordProcessID='${rp.ID}'`, ResultType: 'entity_object' }, user,
-        );
-        for (const run of runRes.Results ?? []) {
-            const details = await new RunView().RunView(
-                { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${run.ID}'`, ResultType: 'entity_object' }, user,
-            );
-            for (const d of details.Results ?? []) {
-                await (d as MJProcessRunEntity).Delete().catch(() => undefined);
-            }
-            await run.Delete().catch(() => undefined);
+        if (lifecycle) {
+            await lifecycle.Setup(ctx);
         }
-        await rp.Delete().catch(() => undefined);
-        for (const id of catIds) {
-            const cat = await provider.GetEntityObject<MJActionCategoryEntity>(ACT_ENTITY, user);
-            if (await cat.Load(id)) {
-                await cat.Delete().catch(() => undefined);
-            }
+        const suite = new TestRunner('Remote Operations RO-3 over-the-wire progress (GraphQLDataProvider -> live MJAPI)');
+        for (const check of reg.GetBundle(BUNDLE)) {
+            suite.Test(check.Name, () => check.Fn(ctx));
+        }
+        failures = await suite.Run();
+        if (process.env.EMIT_OUTCOMES) {
+            await EmitOutcomes(suite, process.env.EMIT_OUTCOMES);
+        }
+    } finally {
+        if (lifecycle) {
+            await lifecycle.Teardown(ctx);
         }
     }
-
     process.exit(failures > 0 ? 1 : 0);
 }
 

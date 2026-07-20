@@ -1,0 +1,266 @@
+/**
+ * Unit tests for IS-A (Table-Per-Type / shared-PK-FK) validation in manage-metadata.ts.
+ *
+ * IS-A intent is DECLARED — via the additionalSchemaInfo "ISARelationships" config, or an @lookup
+ * on Entity.ParentID in a metadata-sync file — and is NEVER inferred from schema shape. CodeGen's
+ * only job here is to verify what the schema author declared:
+ *
+ *   validateISARelationships / buildISAValidationSQL — FORWARD validation of every DECLARED
+ *   relationship, channel-agnostic (it reads the end state of Entity.ParentID, so one check covers
+ *   every declaration mechanism). It reports ONLY provable-cannot-work defects (hard errors); a
+ *   declaration that merely "looks off" but would still function passes silently — flagging it
+ *   would be inference that misfires on correct declarations.
+ *
+ * Scope matters and is asserted below: the query is gated on `ParentID IS NOT NULL`, so an entity
+ * nobody declared as IS-A — including any customer/external schema added to the system — is never
+ * examined and can never be false-positived.
+ *
+ * The query is exercised against a real SQLServerDialect so assertions verify actually composed
+ * SQL. The loop is exercised with injected recordsets; SQLLogging.LogSQLAndExecute is captured to
+ * PROVE validation never writes metadata.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mock heavy dependencies that are not needed for these tests (mirrors metadataConfig.test.ts).
+vi.mock('mssql', () => ({}));
+vi.mock('../Config/config', () => ({
+   configInfo: {},
+   currentWorkingDirectory: '/tmp',
+   getSettingValue: vi.fn(),
+   mj_core_schema: () => '__mj',
+   dbPlatform: () => 'sqlserver',
+   outputDir: '/tmp',
+}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+   const actual = await importOriginal<typeof import('@memberjunction/core')>();
+   return { ...actual, LogError: vi.fn(), LogStatus: vi.fn() };
+});
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+   const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
+   return { ...actual };
+});
+vi.mock('../Misc/status_logging', () => ({
+   logError: vi.fn(),
+   logMessage: vi.fn(),
+   logStatus: vi.fn(),
+}));
+vi.mock('../Database/sql', () => ({ SQLUtilityBase: class {} }));
+vi.mock('../Misc/advanced_generation', () => ({ AdvancedGeneration: class {} }));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+   const actual = await importOriginal<typeof import('@memberjunction/global')>();
+   return { ...actual };
+});
+vi.mock('uuid', () => ({ v4: vi.fn(() => 'mock-uuid') }));
+// Capturing mock: proves neither path emits an UPDATE (both are read-only by design).
+vi.mock('../Misc/sql_logging', () => ({
+   SQLLogging: { LogSQLAndExecute: vi.fn(async () => undefined) },
+}));
+vi.mock('@memberjunction/aiengine', () => ({ AIEngine: class {} }));
+
+import { ManageMetadataBase } from '../Database/manage-metadata';
+import { SQLLogging } from '../Misc/sql_logging';
+import { logError } from '../Misc/status_logging';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+import type { SQLDialect } from '@memberjunction/sql-dialect';
+import type { CodeGenConnection, CodeGenQueryResult, CodeGenQueryRow } from '../Database/codeGenDatabaseProvider';
+
+// ---------------------------------------------------------------------------
+// Test harness — expose the protected methods and inject a fake recordset.
+// dialect() is overridden to a real SQLServerDialect so quoting is genuine;
+// qsql() is identity to bypass the (unavailable) dbProvider; runQuery() returns
+// the injected rows.
+// ---------------------------------------------------------------------------
+class TestableISA extends ManageMetadataBase {
+   private _rows: CodeGenQueryRow[] = [];
+   private _throw = false;
+
+   public setRecordset(rows: CodeGenQueryRow[]): void { this._rows = rows; }
+   public setThrow(v: boolean): void { this._throw = v; }
+
+   protected get dialect(): SQLDialect { return new SQLServerDialect(); }
+   protected qsql(sql: string): string { return sql; }
+   protected async runQuery(_pool: CodeGenConnection, _sql: string): Promise<CodeGenQueryResult> {
+      if (this._throw) throw new Error('simulated query failure');
+      return { recordset: this._rows };
+   }
+
+   public testBuildValidationSQL(): string { return this.buildISAValidationSQL('__mj'); }
+   public testValidate(): Promise<{ success: boolean; errorCount: number }> {
+      return this.validateISARelationships({} as CodeGenConnection);
+   }
+}
+
+const PARENT_ID = 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA';
+const CHILD_ID = 'BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB';
+
+/** A fully-valid declared IS-A row; each test overrides only the field under test. */
+const validationRow = (overrides: Partial<CodeGenQueryRow> = {}): CodeGenQueryRow => ({
+   ChildEntityID: CHILD_ID,
+   ChildEntityName: 'Event Products',
+   ParentID: PARENT_ID,
+   ParentEntityName: 'Products',
+   ChildPKCount: 1,
+   ParentPKCount: 1,
+   ChildPKName: 'ID',
+   ChildPKType: 'uniqueidentifier',
+   ParentPKName: 'ID',
+   ParentPKType: 'uniqueidentifier',
+   ...overrides,
+});
+
+describe('IS-A relationships (manage-metadata)', () => {
+   beforeEach(() => {
+      vi.mocked(SQLLogging.LogSQLAndExecute).mockClear();
+      vi.mocked(logError).mockClear();
+   });
+
+   describe('buildISAValidationSQL', () => {
+      it('selects every DECLARED IS-A child regardless of how it was declared', () => {
+         const sql = new TestableISA().testBuildValidationSQL();
+         // channel-agnostic: keys off the END STATE of ParentID, not any config source
+         expect(sql).toContain('child.[ParentID] IS NOT NULL');
+      });
+
+      it('LEFT JOINs the parent so an unresolvable ParentID still returns a row', () => {
+         // an INNER JOIN here would silently DROP the unresolvable-parent hard-error case
+         const sql = new TestableISA().testBuildValidationSQL().replace(/\s+/g, ' ');
+         expect(sql).toContain('LEFT JOIN [__mj].[vwEntities] parent ON parent.[ID] = child.[ParentID]');
+         expect(sql).not.toContain('INNER JOIN [__mj].[vwEntities] parent');
+      });
+
+      it('is GATED on declared intent — it never examines an entity nobody declared as IS-A', () => {
+         // The safety property for customer/external schema: validation reads ONLY rows a human
+         // explicitly declared. A new association table can never be false-positived, because it
+         // is never looked at. There is deliberately no schema-shape inference anywhere here.
+         const sql = new TestableISA().testBuildValidationSQL().replace(/\s+/g, ' ');
+         // The WHERE clause is the whole gate, and it is ONLY the declared-intent check.
+         const where = sql.slice(sql.lastIndexOf('WHERE'));
+         expect(where).toBe('WHERE child.[ParentID] IS NOT NULL');
+      });
+
+      it('carries NO FK/soft-FK columns — nothing that would feed a misfiring inference check', () => {
+         // The query only gathers what the provable-cannot-work checks need (PK counts + types).
+         // It deliberately does NOT select the child PK's FK target or soft-FK flag, because there
+         // is no "warning" tier that would second-guess a valid declaration from those.
+         const sql = new TestableISA().testBuildValidationSQL();
+         expect(sql).not.toContain('RelatedEntityID');
+         expect(sql).not.toContain('IsSoftForeignKey');
+      });
+
+      it('carries the PK counts and PK types needed by the severity rules', () => {
+         const sql = new TestableISA().testBuildValidationSQL();
+         expect(sql).toContain('[ChildPKCount]');
+         expect(sql).toContain('[ParentPKCount]');
+         expect(sql).toContain('[ChildPKType]');
+         expect(sql).toContain('[ParentPKType]');
+      });
+   });
+
+   describe('validateISARelationships — HARD ERRORS (runtime provably cannot work)', () => {
+      it('errors when ParentID does not resolve to any entity', async () => {
+         const t = new TestableISA();
+         t.setRecordset([validationRow({ ParentEntityName: null })]);
+
+         const result = await t.testValidate();
+
+         expect(result).toEqual({ success: false, errorCount: 1 });
+         expect(String(vi.mocked(logError).mock.calls[0][0])).toContain('does not resolve');
+      });
+
+      it('errors on a composite child primary key', async () => {
+         const t = new TestableISA();
+         t.setRecordset([validationRow({ ChildPKCount: 2 })]);
+
+         const result = await t.testValidate();
+
+         expect(result).toEqual({ success: false, errorCount: 1 });
+         expect(String(vi.mocked(logError).mock.calls[0][0])).toContain('composite primary key');
+      });
+
+      it('errors on a composite parent primary key', async () => {
+         const t = new TestableISA();
+         t.setRecordset([validationRow({ ParentPKCount: 2 })]);
+
+         const result = await t.testValidate();
+
+         expect(result).toEqual({ success: false, errorCount: 1 });
+         expect(String(vi.mocked(logError).mock.calls[0][0])).toContain('composite primary key');
+      });
+
+      it('errors when the child PK type differs from the parent PK type', async () => {
+         // The parent and child SHARE one PK value, so the value must be legal as BOTH PKs.
+         const t = new TestableISA();
+         t.setRecordset([validationRow({ ChildPKType: 'int' })]);
+
+         const result = await t.testValidate();
+
+         expect(result).toEqual({ success: false, errorCount: 1 });
+         const msg = String(vi.mocked(logError).mock.calls[0][0]);
+         expect(msg).toContain('type mismatch');
+         expect(msg).toContain('int');
+         expect(msg).toContain('uniqueidentifier');
+      });
+
+      it('does NOT error on a PK type differing only by case/whitespace', async () => {
+         const t = new TestableISA();
+         t.setRecordset([validationRow({ ChildPKType: ' UniqueIdentifier ' })]);
+
+         const result = await t.testValidate();
+
+         expect(result).toEqual({ success: true, errorCount: 0 });
+      });
+
+      it('reports ONE verdict per child even when a composite PK fans the join out', async () => {
+         // A 2-column PK yields 2 rows from the same LEFT JOIN — the entity must not be double-reported.
+         const t = new TestableISA();
+         t.setRecordset([
+            validationRow({ ChildPKCount: 2, ChildPKName: 'TenantID' }),
+            validationRow({ ChildPKCount: 2, ChildPKName: 'ProductID' }),
+         ]);
+
+         const result = await t.testValidate();
+
+         expect(result).toEqual({ success: false, errorCount: 1 });
+         expect(logError).toHaveBeenCalledTimes(1);
+      });
+   });
+
+   describe('validateISARelationships — clean + failure paths', () => {
+      it('passes silently for a fully-valid declared IS-A', async () => {
+         const t = new TestableISA();
+         t.setRecordset([validationRow()]);
+
+         const result = await t.testValidate();
+
+         expect(result).toEqual({ success: true, errorCount: 0 });
+         expect(logError).not.toHaveBeenCalled();
+      });
+
+      it('passes when nothing declares an IS-A relationship at all', async () => {
+         const t = new TestableISA();
+         t.setRecordset([]);
+
+         const result = await t.testValidate();
+
+         expect(result).toEqual({ success: true, errorCount: 0 });
+      });
+
+      it('never mutates metadata — validation is strictly read-only', async () => {
+         const t = new TestableISA();
+         t.setRecordset([validationRow({ ChildPKCount: 2 }), validationRow({ ChildPKType: 'int' })]);
+
+         await t.testValidate();
+
+         expect(SQLLogging.LogSQLAndExecute).not.toHaveBeenCalled();
+      });
+
+      it('reports failure (does not throw) when the validation query errors', async () => {
+         const t = new TestableISA();
+         t.setThrow(true);
+
+         const result = await t.testValidate();
+
+         expect(result.success).toBe(false);
+      });
+   });
+});

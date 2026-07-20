@@ -203,6 +203,10 @@ export class VectorSearchProvider extends BaseSearchProvider {
             }
 
             const apiKey = GetAIAPIKey(model.DriverClass);
+            // All indexes in this model group share the same embedding model; they should also
+            // share the same dimension config. Take the first non-null Dimensions value —
+            // undefined means "use the model's native default".
+            const dimensions = indexes.find(idx => idx.Dimensions != null)?.Dimensions ?? undefined;
             // Check embedding cache before calling the model
             const cacheKey = `${model.DriverClass}::${query}`;
             let queryVector = this.getCachedEmbedding(cacheKey);
@@ -224,7 +228,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 // and fall back to Name when APIName isn't set or is empty.
                 // `||` (not `??`) so an empty-string `APIName` also falls back.
                 const modelName = model.APIName || model.Name;
-                const embedResult = await embeddingInstance.EmbedText({ text: query, model: modelName });
+                const embedResult = await embeddingInstance.EmbedText({ text: query, model: modelName, dimensions });
                 if (!embedResult?.vector?.length) {
                     LogError(`VectorSearchProvider: Failed to embed with ${model.Name}`);
                     return [];
@@ -240,7 +244,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
                     r => r.VectorIndexID && UUIDsEqual(r.VectorIndexID, vectorIndex.ID)
                 );
                 const mergedFilter = this.mergeMetadataFilters(filter, perIndexRow?.MetadataFilter);
-                return this.queryOneIndex(vectorIndex, queryVector!, query, topK, mergedFilter, contextUser)
+                const providerConfig = perIndexRow?.ExternalIndexConfig as Record<string, unknown> | undefined;
+                return this.queryOneIndex(vectorIndex, queryVector!, query, topK, mergedFilter, providerConfig, contextUser)
                     .catch(error => {
                         LogError(`VectorSearchProvider: Error querying index "${vectorIndex.Name}": ${error}`);
                         return [] as SearchResultItem[];
@@ -263,6 +268,10 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * wiring in the active data-provider connection and passing the original query text so the
      * provider can fuse a keyword (full-text) component with the vector search in one statement.
      * Otherwise it falls back to the standard external `QueryIndex` path.
+     *
+     * @param providerConfig - Optional opaque config blob passed through to the vector DB
+     *   driver. Each driver reads the keys it understands (e.g. Pinecone reads `namespace`).
+     *   Sourced from the scope's rendered `ExternalIndexConfig`. Ignored by the colocated path.
      */
     private async queryOneIndex(
         vectorIndex: MJVectorIndexEntity,
@@ -270,6 +279,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         queryText: string,
         topK: number,
         filter: object | undefined,
+        providerConfig: Record<string, unknown> | undefined,
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
         const rv = new RunView();
@@ -323,6 +333,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
             topK,
             includeMetadata: true,
             filter,
+            providerConfig,
         }, contextUser);
 
         if (!response.success || !response.data?.matches) {

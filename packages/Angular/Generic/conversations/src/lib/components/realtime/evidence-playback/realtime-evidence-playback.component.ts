@@ -53,7 +53,7 @@ export interface EvidencePlaybackTurn {
   imports: [CommonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './realtime-evidence-playback.component.html',
-  styleUrls: ['./realtime-evidence-playback.component.scss'],
+  styleUrls: ['./realtime-evidence-playback.component.css'],
 })
 export class RealtimeEvidencePlaybackComponent implements OnDestroy {
   /** The session's transcript turns, in chronological order. */
