@@ -8,7 +8,8 @@
     "src/lib/query-parameter-form/**/*.ts",
     "src/lib/query-info-panel/**/*.ts",
     "src/lib/query-row-detail/**/*.ts",
-    "src/lib/query-data-grid/models/**/*.ts"
+    "src/lib/query-data-grid/models/**/*.ts",
+    "src/lib/query-viewer/**/*.ts"
   ],
   "exclude": [
     "node_modules",
