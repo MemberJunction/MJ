@@ -71,6 +71,7 @@ import {
     LocalStorageInjectionAuthMethod,
     AppProfile,
     SettleConfig,
+    hashesSimilar,
 } from '@memberjunction/computer-use';
 import type { AuthMethod, ComputerUseResult, BrowserDiagnosticEvent } from '@memberjunction/computer-use';
 import { BaseBrowserAdapter } from '@memberjunction/computer-use';
@@ -91,6 +92,7 @@ import { GoalCompletionOracle } from './oracles/GoalCompletionOracle.js';
 import { UrlMatchOracle } from './oracles/UrlMatchOracle.js';
 import { StepCountOracle } from './oracles/StepCountOracle.js';
 import { isOracleAdvisory, partitionGatingOracles } from './oracle-scoring.js';
+import { classifyFailure, FailureSignals } from './classify-failure.js';
 
 /**
  * Test driver for Computer Use browser automation tests.
@@ -255,6 +257,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             const passedChecks = oracleResults.filter(r => r.passed).length;
             const totalChecks = oracleResults.length;
 
+            // 6b. Classify the failure (CU-F5) from engine signals + oracle results,
+            //     so deterministic failures can be told apart and the retry policy
+            //     can key on the class. Stamped on the result and actualOutput.
+            const failureClass = this.computeFailureClass(result, gating, !!runParams.AppProfile?.ReadinessBeacon);
+            if (failureClass) {
+                (actualOutput as Record<string, unknown>).failureClass = failureClass;
+                this.logToTestRun(context, 'info', `Failure class: ${failureClass}`);
+            }
+
             // 7. Build structured outputs (screenshots from each step)
             const outputs = this.buildOutputs(result);
 
@@ -273,6 +284,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 actualOutput,
                 durationMs: result.TotalDurationMs,
                 outputs,
+                failureClass,
             };
 
             this.logToTestRun(context, 'info', `Computer Use test completed: ${status} (Score: ${score.toFixed(2)})`);
@@ -900,8 +912,17 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             this.logToTestRun(context, 'warn', `Oracle evaluation on timeout partial failed: ${msg}`);
         }
 
-        const { score } = this.scoreOracleResults(oracleResults, config.scoringWeights);
+        const { gating, score } = this.scoreOracleResults(oracleResults, config.scoringWeights);
         const passedChecks = oracleResults.filter(r => r.passed).length;
+
+        // The engine hung past its own budget and the driver force-stopped it.
+        // Classify as a time overrun (timeout-stuck/progressing) unless an
+        // app-error/crash better explains it (CU-F5). result.Status here is the
+        // forced-Stop 'Cancelled', so override to TimeBudgetExceeded for intent.
+        const failureClass = this.computeFailureClass(result, gating, !!config.appProfile?.readinessBeacon, 'TimeBudgetExceeded');
+        if (failureClass) {
+            (actualOutput as Record<string, unknown>).failureClass = failureClass;
+        }
 
         return {
             targetType: 'Computer Use',
@@ -918,6 +939,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             durationMs: result.TotalDurationMs,
             errorMessage: `Test execution timed out after ${timeoutMs}ms`,
             outputs: this.buildOutputs(result),
+            failureClass,
         };
     }
 
@@ -931,6 +953,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         actualOutput: Record<string, unknown>,
         context: DriverExecutionContext
     ): DriverExecutionResult {
+        // Classify (CU-F5): normally 'cancelled', unless an app-error/crash was
+        // the real cause before the cancel. (beaconConfigured is don't-care here —
+        // a 'Cancelled' status resolves before the beacon branch.)
+        const failureClass = this.computeFailureClass(result, [], false);
+        if (failureClass) {
+            (actualOutput as Record<string, unknown>).failureClass = failureClass;
+        }
         return {
             targetType: 'Computer Use',
             targetLogId: context.testRun.ID,
@@ -946,6 +975,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             durationMs: result.TotalDurationMs,
             errorMessage: `Test execution was cancelled after ${result.TotalSteps} step(s)`,
             outputs: this.buildOutputs(result),
+            failureClass,
         };
     }
 
@@ -1140,6 +1170,46 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         const gating = partitionGatingOracles(oracleResults);
         const scoringSet = gating.length > 0 ? gating : oracleResults;
         return { gating, score: this.calculateScore(scoringSet, weights) };
+    }
+
+    /**
+     * Classify a finished run into a machine-readable failure class (CU-F5) from
+     * engine signals (loop detection, settle-budget, beacon, diagnostics,
+     * terminal status) + the gating oracle results. Returns undefined on success.
+     * `gatingOracles` are the status-determining oracles (advisory excluded).
+     */
+    private computeFailureClass(
+        result: ComputerUseResult,
+        gatingOracles: OracleResult[],
+        beaconConfigured: boolean,
+        statusOverride?: ComputerUseResult['Status']
+    ): string | undefined {
+        const steps = result.Steps ?? [];
+        const anyDiag = (predicate: (d: BrowserDiagnosticEvent) => boolean): boolean =>
+            steps.some(s => (s.Diagnostics ?? []).some(predicate));
+
+        const signals: FailureSignals = {
+            status: statusOverride ?? result.Status,
+            failureReason: result.FailureReason,
+            hasCrash: anyDiag(d => d.type === 'crash'),
+            hasAppError: anyDiag(d => d.type === 'pageerror' || d.type === 'requestfailed' || (d.type === 'console' && d.level === 'error')),
+            settleBudgetExhausted: steps.length > 0 && steps[steps.length - 1].SettleReason === 'budget',
+            tailHashStable: this.tailHashStable(steps.map(s => s.ScreenshotHash)),
+            beaconConfigured,
+            beaconEverReady: steps.some(s => s.SettleReason === 'beacon-ready'),
+            oraclesFailed: gatingOracles.some(r => !r.passed),
+        };
+        return classifyFailure(signals) ?? undefined;
+    }
+
+    /** True when the last few non-empty frame hashes are perceptually stable (a frozen/stuck tail). */
+    private tailHashStable(hashes: string[]): boolean {
+        const nonEmpty = hashes.filter(h => h !== '');
+        if (nonEmpty.length < 2) {
+            return false;
+        }
+        const tail = nonEmpty.slice(-3);
+        return tail.every(h => hashesSimilar(tail[0], h));
     }
 
     // ═══════════════════════════════════════════════════════════

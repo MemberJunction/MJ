@@ -269,6 +269,15 @@ export interface DriverExecutionResult {
    * The engine persists each item as a TestRunOutput entity record.
    */
   outputs?: TestRunOutputItem[];
+
+  /**
+   * Optional machine-readable failure classification a driver may compute from
+   * its run signals (e.g. Computer Use's `nav-loop` / `stuck-page` / `app-error`
+   * / `assertion` — CU-F5). Free-form so each driver owns its own taxonomy; a
+   * retry scheduler keys policy on it (never retry `assertion`, retry
+   * `env-stall` after a health gate, etc.). Absent on success.
+   */
+  failureClass?: string;
 }
 
 /**
