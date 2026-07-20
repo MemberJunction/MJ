@@ -1,7 +1,7 @@
 /**
  * @fileoverview Entity-map / field-map lifecycle helpers shared by the ApplyAll selection
  * path, the post-restart RSU pending-work consumer, and the schema-evolution refresh diff
- * (RSU spec): selection removal DISABLES (never deletes — data is kept), re-selection
+ * Selection removal DISABLES (never deletes — data is kept), re-selection
  * re-enables, and a refresh's new objects arrive disabled-by-default.
  */
 import { CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
@@ -12,7 +12,7 @@ import type {
 } from '@memberjunction/core-entities';
 
 /**
- * RSU-spec remove-as-disable: entity maps for this CompanyIntegration whose
+ * Remove-as-disable: entity maps for this CompanyIntegration whose
  * ExternalObjectName is NOT in the selected set are set `Status='Inactive'` +
  * `SyncEnabled=false`, and their Active field maps are disabled with them. Data and
  * tables are KEPT — a later re-selection re-enables everything (see
@@ -55,7 +55,7 @@ export async function DisableUnselectedEntityMaps(
 
 /**
  * Sets one entity map's enabled state (Status + SyncEnabled) and cascades the same status to
- * its field maps. Used by the schema-evolution diff (RSU spec): NEW objects arrive
+ * its field maps. Used by the schema-evolution diff: NEW objects arrive
  * `enabled=false` by default (the user turns them on after the refresh; autoEnableNewObjects
  * opts into enabled=true).
  */
@@ -78,7 +78,7 @@ export async function SetEntityMapEnabled(
 }
 
 /**
- * RSU-spec re-add-re-enables: flips every non-Active field map of an entity map back to
+ * Re-add re-enables: flips every non-Active field map of an entity map back to
  * Active. Called when a previously-removed (disabled) object is re-selected — the entity
  * map itself is re-activated by the caller's create-or-reuse; this brings its field maps
  * back with it.
@@ -116,7 +116,7 @@ async function SetFieldMapsStatus(
 }
 
 /**
- * U10 / RSU-spec §schema-change: resets the PULL watermark for the given entity maps so the
+ * U10 schema-change: resets the PULL watermark for the given entity maps so the
  * next sync ignores the incremental cursor, re-fetches the full object, and BACKFILLS rows
  * for newly-added columns (content-hash keeps genuinely-unchanged mapped values write-free
  * only when the mapped set is unchanged — a schema change alters the mapped set, so changed

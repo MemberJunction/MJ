@@ -1501,7 +1501,7 @@ async function processRSUPendingWork(): Promise<void> {
         if (existingMapResult.Success && existingMapResult.Results.length > 0) {
           const existingMap = existingMapResult.Results[0];
           entityMapID = existingMap.ID;
-          // RSU-spec re-add-re-enables: a previously-removed (disabled) object that is
+          // Re-add re-enables: a previously-removed (disabled) object that is
           // re-selected comes back Active WITH its field maps re-enabled. Skipped in
           // CreateDisabled (schema-evolution) mode — a refresh must never resurrect a
           // map the user turned off.
@@ -1525,7 +1525,7 @@ async function processRSUPendingWork(): Promise<void> {
           entityMap.EntityID = entity.ID;
           entityMap.ExternalObjectName = objName;
           entityMap.SyncDirection = 'Pull';
-          // RSU-spec refresh diff: schema-evolution-born maps arrive DISABLED (the user
+          // Refresh diff: schema-evolution-born maps arrive DISABLED (the user
           // enables them after the refresh); the first-apply/selection path stays Active.
           entityMap.Status = item.CreateDisabled ? 'Inactive' : 'Active';
           entityMap.SyncEnabled = !item.CreateDisabled;
@@ -1582,7 +1582,7 @@ async function processRSUPendingWork(): Promise<void> {
         }
       }
 
-      // RSU-spec remove-as-disable: entity maps whose object is NOT in this apply's selection
+      // Remove-as-disable: entity maps whose object is NOT in this apply's selection
       // are disabled (data kept; re-selection re-enables). 'ignore' opts out for subset applies.
       if ((item.UnselectedAction ?? 'disable') !== 'ignore') {
         try {

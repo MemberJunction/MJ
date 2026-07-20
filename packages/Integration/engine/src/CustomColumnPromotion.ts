@@ -229,7 +229,7 @@ export function inferColumnTypeFromSamples(samples: unknown[]): InferredColumnTy
 }
 
 /**
- * Infers a column type from a sync-time custom-key statistic (RSU-spec out-of-band capture):
+ * Infers a column type from a sync-time custom-key statistic (out-of-band capture):
  * type from the bounded value sample, string WIDTH widened to cover the TRUE longest observed
  * value (`maxLength` — tracked across every record, while the sample is capped and may miss
  * the widest). Same generous 2×/floor/cap sizing rules as {@link inferColumnTypeFromSamples}.

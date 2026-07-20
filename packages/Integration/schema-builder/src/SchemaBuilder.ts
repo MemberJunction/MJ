@@ -145,7 +145,7 @@ export class SchemaBuilder {
             const existingContent = this.ReadFileIfExists(input.AdditionalSchemaInfoPath);
             const existingConfig = this.SoftFKEmitter.ParseExistingConfig(existingContent);
             const withPKs = this.SoftFKEmitter.MergeSoftPKs(existingConfig, allConfigs);
-            // RSU-spec: this run's PK/FK resolution REPLACES the prior run's entries for the
+            // This run's PK/FK resolution REPLACES the prior run's entries for the
             // tables it covers (adds new, removes gone) — clear their FKs before the rebuild so
             // a stale FK never outlives the resolution that once declared it. Clearing happens
             // even when allSoftFKs is empty (a table that lost every FK ends clear).

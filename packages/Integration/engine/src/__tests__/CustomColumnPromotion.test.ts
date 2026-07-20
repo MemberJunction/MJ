@@ -228,10 +228,10 @@ describe('CustomColumnPromotion', () => {
     });
 });
 
-// ── RSU-spec stats-driven type inference ───────────────────────────────────────
+// ── stats-driven type inference ───────────────────────────────────────
 import { inferColumnTypeFromStats } from '../CustomColumnPromotion';
 
-describe('inferColumnTypeFromStats (RSU spec — width from the TRUE observed maximum)', () => {
+describe('inferColumnTypeFromStats (width from the TRUE observed maximum)', () => {
     it('widens a string bound to cover a maxLength the capped sample missed', () => {
         // Sample only saw short values; the true longest observed value was 300 chars.
         const t = inferColumnTypeFromStats(['short', 'tiny'], 300);

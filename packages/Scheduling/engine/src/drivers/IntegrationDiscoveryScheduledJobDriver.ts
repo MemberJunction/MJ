@@ -52,7 +52,7 @@ export class IntegrationDiscoveryScheduledJobDriver extends BaseScheduledJob {
 
         this.log(`Starting integration DISCOVERY refresh for CompanyIntegration: ${config.CompanyIntegrationID}`);
 
-        // RSU-spec sync lock: a discovery refresh REWRITES the IO/IOF metadata a sync reads, so it
+        // sync lock: a discovery refresh REWRITES the IO/IOF metadata a sync reads, so it
         // holds the maintenance lock for its duration (data syncs refuse/skip while held). If a
         // sync is currently running, SKIP this fire — the next scheduled fire refreshes normally.
         if (!IntegrationEngine.AcquireMaintenanceLock(config.CompanyIntegrationID, 'scheduled metadata discovery refresh')) {
@@ -88,7 +88,7 @@ export class IntegrationDiscoveryScheduledJobDriver extends BaseScheduledJob {
             };
         }
 
-        // RSU-spec: deactivating a connector stops it from syncing "nor update its schema from time
+        // deactivating a connector stops it from syncing "nor update its schema from time
         // to time" (spec §deactivate). The sync path gates on IsActive in IntegrationEngine.RunSync,
         // but a scheduled DISCOVERY refresh calls the creation pipeline directly and would otherwise
         // keep rediscovering/evolving the schema of a deactivated connector. Skip when IsActive=false

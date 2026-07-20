@@ -241,8 +241,8 @@ describe('decideSchemaLimitViolations (§B — operator/env table+column caps at
     });
 });
 
-describe('decideSemanticOverlay (RSU spec — external-wins-when-present for semantic attributes)', () => {
-    it('a returned description OVERRIDES the curated one (the HubSpot example)', () => {
+describe('decideSemanticOverlay (external-wins-when-present for semantic attributes)', () => {
+    it('a returned description OVERRIDES the curated one (the worked example)', () => {
         const r = decideSemanticOverlay('Curated description', 'Vendor-returned description');
         expect(r.value).toBe('Vendor-returned description');
         expect(r.changed).toBe(true);

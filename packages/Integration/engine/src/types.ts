@@ -125,7 +125,7 @@ export interface MappedRecord {
 /**
  * Per-key statistics for CUSTOM (unmapped) source keys observed during a sync — aggregated
  * IN MEMORY across every fetched record, REGARDLESS of whether the row was written or the
- * content-hash fast path skipped it. RSU-spec custom-overflow rule: a newly-appearing custom
+ * content-hash fast path skipped it. Custom-overflow behaviour: a newly-appearing custom
  * column must NOT affect the row-hash match (so unchanged rows stay skip-cheap), yet its
  * presence + sizing statistics must still surface as a promotion candidate at sync end. This
  * out-of-band aggregation is what makes both true at once — candidates and generous sizing
@@ -232,7 +232,7 @@ export type PostSyncSchemaPromotionCallback = (ctx: {
     Provider?: unknown;
     /**
      * The sync's in-memory custom-key statistics (keyed by entity name). Supplements the
-     * overflow-column scan: with the RSU-spec hash basis (overflow excluded from matching),
+     * overflow-column scan: with the Content-hash basis (overflow excluded from matching),
      * unchanged rows never write their overflow JSON, so the column scan alone under-reports —
      * these stats carry the candidates + sizing evidence for exactly those skipped rows.
      */
@@ -452,7 +452,7 @@ export interface SourceFieldInfo {
      * report PKs) — semantically distinct from an explicit `false` (the source
      * affirmed it is NOT a PK). The persist overlay (`decideBooleanOverlay`)
      * treats `undefined` as no-opinion so a Declared `true` survives; coercing
-     * silence to `false` here is the U1 bug that wiped declared PKs (the ACGI
+     * silence to `false` here is the U1 bug that wiped declared PKs (the
      * keyless-entity root). Never write `?? false` when mapping into this field.
      */
     IsPrimaryKey?: boolean;

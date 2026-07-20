@@ -177,7 +177,7 @@ export class SoftFKConfigEmitter {
     }
 
     /**
-     * RSU-spec additionalSchemaInfo lifecycle: for each table THIS run resolves, the run's
+     * additionalSchemaInfo lifecycle: for each table THIS run resolves, the run's
      * FK set REPLACES the prior run's entries ("adds new ones, removes old ones that no
      * longer exist" — soft constraints track the CURRENT resolution). Clears the ForeignKeys
      * of every table in targetConfigs so the subsequent {@link MergeSchemaConfig} rebuilds

@@ -91,7 +91,7 @@ export interface CustomKeyAccumulator {
 export const CUSTOM_KEY_SAMPLE_CAP = 20;
 
 /**
- * RSU-spec out-of-band custom-key aggregation: folds one batch of unmapped-field objects into
+ * Out-of-band custom-key aggregation: folds one batch of unmapped-field objects into
  * the per-map accumulator — BEFORE any skip decision, so candidates + sizing stats exist even
  * when the content-hash fast path skips every row (the match hash deliberately excludes
  * unmapped keys). Pure over its inputs (mutates only `agg`); null/undefined values don't count

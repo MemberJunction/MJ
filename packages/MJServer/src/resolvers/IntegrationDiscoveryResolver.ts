@@ -106,10 +106,10 @@ class ApplyAllInput {
     @Field({ nullable: true }) CronExpression?: string;
     @Field({ nullable: true }) ScheduleTimezone?: string;
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips the sync step after schema + entity maps are created' }) StartSync?: boolean;
-    @Field(() => Boolean, { nullable: true, description: 'If true, ignores watermarks and does a full re-fetch. When OMITTED: defaults to TRUE on the connector\'s FIRST apply (no prior entity maps — RSU-spec "always full generally as the default" for the first sync), FALSE thereafter.' }) FullSync?: boolean;
+    @Field(() => Boolean, { nullable: true, description: 'If true, ignores watermarks and does a full re-fetch. When OMITTED: defaults to TRUE on the connector\'s FIRST apply (no prior entity maps — a full sync by default for the first sync), FALSE thereafter.' }) FullSync?: boolean;
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
     @Field({ nullable: true, defaultValue: 'Pull', description: 'SyncDirection applied to all created entity maps: Pull | Push | Bidirectional. Defaults to Pull.' }) DefaultSyncDirection?: string;
-    @Field({ nullable: true, defaultValue: 'disable', description: 'RSU-spec remove-as-disable: what to do with existing entity maps whose object is NOT in this selection. "disable" (default) = Status=Disabled + SyncEnabled=false (+ field maps disabled; data kept, re-selection re-enables). "ignore" = leave them untouched (additive apply — use for subset/partial applies).' }) UnselectedAction?: string;
+    @Field({ nullable: true, defaultValue: 'disable', description: 'Remove-as-disable: what to do with existing entity maps whose object is NOT in this selection. "disable" (default) = Status=Disabled + SyncEnabled=false (+ field maps disabled; data kept, re-selection re-enables). "ignore" = leave them untouched (additive apply — use for subset/partial applies).' }) UnselectedAction?: string;
 }
 
 @ObjectType()
@@ -171,7 +171,7 @@ class ApplyAllBatchInput {
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
     @Field({ nullable: true, description: 'Override sync direction for the initial sync: Pull | Push | Bidirectional. Defaults to entity map SyncDirection.' }) SyncDirection?: string;
     @Field({ nullable: true, description: 'Override sync direction stored in the created schedule: Pull | Push | Bidirectional.' }) ScheduleSyncDirection?: string;
-    @Field({ nullable: true, defaultValue: 'disable', description: 'RSU-spec remove-as-disable (same as ApplyAllInput.UnselectedAction): "disable" (default) disables entity maps whose object is absent from each connector\'s selection; "ignore" leaves them untouched.' }) UnselectedAction?: string;
+    @Field({ nullable: true, defaultValue: 'disable', description: 'Remove-as-disable (same as ApplyAllInput.UnselectedAction): "disable" (default) disables entity maps whose object is absent from each connector\'s selection; "ignore" leaves them untouched.' }) UnselectedAction?: string;
 }
 
 @ObjectType()
@@ -223,9 +223,9 @@ class SchemaEvolutionOutput {
     @Field({ nullable: true }) GitCommitSuccess?: boolean;
     @Field({ nullable: true }) APIRestarted?: boolean;
     @Field(() => [String], { nullable: true }) Warnings?: string[];
-    /** RSU-spec refresh diff: objects newly present in this resolution (tables created; EM/EFMs created DISABLED unless autoEnableNewObjects). */
+    /** Refresh diff: objects newly present in this resolution (tables created; EM/EFMs created DISABLED unless autoEnableNewObjects). */
     @Field(() => [String], { nullable: true }) NewObjects?: string[];
-    /** RSU-spec refresh diff: objects absent from this resolution — their EM/EFMs were disabled (data kept). */
+    /** Refresh diff: objects absent from this resolution — their EM/EFMs were disabled (data kept). */
     @Field(() => [String], { nullable: true }) RemovedObjects?: string[];
     /** Continuing objects whose column set / constraints changed this run. */
     @Field(() => [String], { nullable: true }) ChangedObjects?: string[];
@@ -1000,7 +1000,7 @@ class ListSourceObjectsItem {
     /** True when the source system flags this as user/custom (e.g. SF __c names). */
     @Field() IsCustom: boolean;
     /**
-     * RSU-spec DAG exposure: the source object names this object DEPENDS ON (its parents in
+     * DAG exposure: the source object names this object DEPENDS ON (its parents in
      * the sync DAG — hard FK edges via RelatedIntegrationObjectID plus soft-FK declarations
      * via Configuration.parentObjectName(s)/ReferencedType). Lets a selection UI auto-check
      * dependencies when this object is picked and warn when a depended-on object is removed.
@@ -1145,7 +1145,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     SupportsWrite: true,
                   }) as ExternalObjectSchema);
 
-            // RSU-spec DAG exposure: per-object parent names from the same FK graph the sync
+            // DAG exposure: per-object parent names from the same FK graph the sync
             // engine layers by, so a consumer can auto-check dependencies at selection time.
             const depsByName = this.computeObjectDependencyNames(companyIntegration.IntegrationID);
 
@@ -1209,7 +1209,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
-     * RSU-spec DAG exposure: object name (lowercased) → sorted parent object names, derived from
+     * DAG exposure: object name (lowercased) → sorted parent object names, derived from
      * the SAME dependency edges the sync engine layers by — hard FK pointers
      * (IntegrationObjectField.RelatedIntegrationObjectID) plus soft-FK declarations in the IO's
      * Configuration (parentObjectName / parentObjectNames map / ReferencedType). Reads the
@@ -1344,7 +1344,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("deactivateAbsent", { nullable: true, description: "Comprehensive refresh (default true): objects/fields ABSENT from this discovery are deactivated (Status='Disabled', never deleted, reversible on a later rediscovery). Pass false for a scoped/partial discovery so it never disables what it didn't probe." }) deactivateAbsent: boolean | undefined,
         @Ctx() ctx: AppContext
     ): Promise<RefreshConnectorSchemaOutput> {
-        // RSU-spec sync lock: a metadata refresh rewrites the IO/IOF rows a sync reads.
+        // sync lock: a metadata refresh rewrites the IO/IOF rows a sync reads.
         if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'metadata refresh')) {
             return {
                 Success: false, RunID: 'not-started',
@@ -3400,7 +3400,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 sourceObjectFields[resolvedNames[i]] = resolved.sourceObjects[i].Fields ?? null;
             }
 
-            // RSU-spec: the sync after a connector's FIRST apply defaults to FULL ("always full
+            // the sync after a connector's FIRST apply defaults to FULL ("always full
             // generally as the default"); later applies default incremental. "First" = no entity
             // map existed for this connection before this apply. Explicit input always wins.
             const priorMapsResult = await new RunView().RunView<{ ID: string }>({
@@ -3460,7 +3460,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user, provider,
                     input.DefaultSyncDirection ?? 'Pull'
                 );
-                // RSU-spec remove-as-disable: objects absent from THIS selection get their entity
+                // Remove-as-disable: objects absent from THIS selection get their entity
                 // map + field maps disabled (data kept; re-selection re-enables). 'ignore' opts out
                 // for additive/subset applies (e.g. test-harness per-scope runs).
                 if ((input.UnselectedAction ?? 'disable') !== 'ignore') {
@@ -3664,7 +3664,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             return null;
         }
 
-        // RSU-spec re-add-re-enables: a previously-removed (disabled) object that is re-selected
+        // Re-add re-enables: a previously-removed (disabled) object that is re-selected
         // comes back WITH its field maps — the create-field-maps idempotency below skips existing
         // rows, so without this they would stay Disabled forever.
         if (wasDisabled) {
@@ -3975,7 +3975,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 return { Success: false, Message: 'Connector is deactivated (IsActive=false); sync not started' };
             }
 
-            // RSU-spec sync lock: refuse while a metadata refresh / schema evolution / RSU pipeline
+            // sync lock: refuse while a metadata refresh / schema evolution / RSU pipeline
             // holds the maintenance lock for this connection (the engine also refuses — this gives
             // the client an immediate, unambiguous answer).
             const maintenance = IntegrationEngine.GetMaintenanceLock(companyIntegrationID);
@@ -5673,11 +5673,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
         @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
-        @Arg("autoEnableNewObjects", { defaultValue: false, description: 'RSU-spec: newly-appeared objects get their entity maps created DISABLED by default (the user enables them after the refresh). Pass true to auto-enable them instead.' }) autoEnableNewObjects: boolean,
+        @Arg("autoEnableNewObjects", { defaultValue: false, description: 'newly-appeared objects get their entity maps created DISABLED by default (the user enables them after the refresh). Pass true to auto-enable them instead.' }) autoEnableNewObjects: boolean,
         @Arg("deactivateAbsent", { nullable: true, description: 'Deactivate IO/IOF absent from this re-discovery (default true — comprehensive refresh; gated on the connector\'s authoritative-discovery getter).' }) deactivateAbsent: boolean | undefined,
         @Ctx() ctx: AppContext
     ): Promise<SchemaEvolutionOutput> {
-        // RSU-spec sync lock: schema evolution rewrites the metadata, field maps and DDL a sync
+        // sync lock: schema evolution rewrites the metadata, field maps and DDL a sync
         // reads — data syncs (manual + scheduled) must not run while this is in flight.
         if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'schema evolution')) {
             return {
@@ -5693,7 +5693,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
             const rv = new RunView();
 
-            // ── Phase 1 — FULL RE-RESOLUTION (RSU spec: "the exact same algorithm as before") ──
+            // ── Phase 1 — FULL RE-RESOLUTION (: "the exact same algorithm as before") ──
             // Re-run the creation pipeline: introspect (static + runtime discovery), persist with
             // the external-wins-when-present overlay, deactivate absent (gated on authoritative
             // discovery), PK-classify the residual. The diff below is computed against the
@@ -5892,7 +5892,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
                 // NEW objects need entities (post-codegen/restart) before their entity maps can be
                 // created — hand them to the post-restart consumer via the SAME pending-work channel
-                // ApplyAll uses. RSU-spec default: created DISABLED (user enables after the refresh);
+                // ApplyAll uses. default: created DISABLED (user enables after the refresh);
                 // autoEnableNewObjects opts in. Removal was already handled in Phase 3 → 'ignore'.
                 if (newObjects.length > 0 && !skipRestart) {
                     const { join } = await import('node:path');
@@ -5987,7 +5987,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
-     * RSU-spec refresh diff (continuing objects): reconciles one entity map's field maps to the
+     * Refresh diff (continuing objects): reconciles one entity map's field maps to the
      * post-resolution IOF set — source fields WITHOUT a field map get one created (Active when
      * the map is enabled, Disabled when it isn't), and field maps whose source field is no
      * longer Active in the resolution are DISABLED (never deleted — a later re-appearance

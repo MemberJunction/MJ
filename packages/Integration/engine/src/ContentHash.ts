@@ -42,7 +42,7 @@ const OVERFLOW_HASH_KEY = '__mj_integration_overflow';
 /**
  * LEGACY basis builder — folds captured (unmapped/overflow) source fields into the hash basis
  * under {@link OVERFLOW_HASH_KEY}. Retained for back-compat with external callers/tests, but
- * **the engine no longer uses it for change detection** (RSU-spec rule): the match/write hash
+ * **the engine no longer uses it for change detection**: the match/write hash
  * is MAPPED fields only ({@link computeContentHash}), so a newly-appearing custom column does
  * NOT break the row match and unchanged rows stay skip-cheap. Custom keys still surface — the
  * engine aggregates them in memory (`SyncResult.CustomKeyStats`) as promotion candidates with
@@ -66,7 +66,7 @@ export function contentHashBasis(
 
 /**
  * LEGACY hash over MAPPED fields PLUS captured (overflow) fields. No longer used by the
- * engine's change detection — see {@link contentHashBasis} for the RSU-spec policy and the
+ * engine's change detection — see {@link contentHashBasis} for the change-detection policy and the
  * one-time migration behavior. Kept exported for back-compat.
  */
 export function computeContentHashWithOverflow(

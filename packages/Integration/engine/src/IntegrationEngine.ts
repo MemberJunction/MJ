@@ -272,7 +272,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private static readonly activeSyncs = new Map<string, Promise<SyncResult>>();
 
     /**
-     * RSU-spec maintenance locks: while a metadata refresh / schema evolution / RSU pipeline is
+     * Maintenance locks: while a metadata refresh / schema evolution / RSU pipeline is
      * running for a CompanyIntegration, data syncs MUST NOT start ("locks of sync and scheduled
      * sync must occur" — the refresh is rewriting the very metadata, field maps and DDL the sync
      * would read). Held per-CI; RunSync refuses with a clear error while held, and the scheduled
@@ -524,7 +524,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return existing;
         }
 
-        // RSU-spec: a metadata refresh / schema evolution / RSU pipeline holds the maintenance
+        // A metadata refresh / schema evolution / RSU pipeline holds the maintenance
         // lock — a sync starting mid-refresh would read half-rewritten metadata/field maps/DDL.
         // Refuse loudly (no queueing: the refresh may restart the process; the caller/schedule
         // simply retries after it completes).
@@ -1198,7 +1198,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // (Configuration.parentObjectNames = {"<var>":"<SiblingObject>"}) instead of the
                     // single parentObjectName. Include those parents too, or a `/a/{x}/b/{y}/c` child
                     // orders after only ONE of its parents — the sync DAG must gate it behind ALL of
-                    // them (parents-populated-before-child, RSU-spec §DAG). Matches what the wizard's
+                    // them (parents-populated-before-child, the DAG ordering). Matches what the wizard's
                     // DependsOn exposes, so UI hint and sync ordering agree. Additive edges only
                     // (cycle-guarded downstream), so this can only make ordering MORE correct.
                     if (cfg.parentObjectNames && typeof cfg.parentObjectNames === 'object' && !Array.isArray(cfg.parentObjectNames)) {
@@ -1662,7 +1662,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
         let orphanTrackingOverflowed = false; // set if the ID set exceeds ORPHAN_DETECTION_MAX_IDS → skip the sweep, don't OOM
         const accumulatedMapped: MappedRecord[] = []; // partition-reconcile mode: collect mapped records, apply post-loop
-        // RSU-spec custom-key stats: in-memory aggregation of every UNMAPPED source key seen this
+        // Custom-key stats: in-memory aggregation of every UNMAPPED source key seen this
         // run, independent of whether the row is written or content-hash-skipped. Bounded memory:
         // one entry per distinct key + a capped value sample. See CustomKeyStat.
         const customKeyAgg = new Map<string, CustomKeyAccumulator>();
@@ -1841,7 +1841,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const mapped = this.fieldMappingEngine.Apply(
                 batch.Records, fieldMaps, entityMap.Entity
             );
-            // RSU-spec custom-key stats: aggregate unmapped keys for EVERY mapped record here —
+            // Custom-key stats: aggregate unmapped keys for EVERY mapped record here —
             // before any skip decision — so candidates + sizing stats exist even when the
             // content-hash fast path skips the row (the hash basis deliberately excludes them).
             foldCustomKeyStats(mapped.map(r => r.UnmappedFields), customKeyAgg);
@@ -2073,7 +2073,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             );
         }
 
-        // Surface the run's custom-key statistics (RSU-spec out-of-band candidates). Keyed by the
+        // Surface the run's custom-key statistics (out-of-band candidates). Keyed by the
         // target MJ entity so the post-sync promotion callback can line them up with its scan.
         if (customKeyAgg.size > 0) {
             result.CustomKeyStats = {
@@ -2851,7 +2851,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const buckets = partitionRecords(mappedRecords, idOf, partitionOf);
         const newRollups = new Map<string, string>();
         for (const [partition, recs] of buckets) {
-            // RSU-spec hash basis: MAPPED fields only — an unmapped/custom key must never move a
+            // Content-hash basis: MAPPED fields only — an unmapped/custom key must never move a
             // partition rollup (its capture + promotion is handled out-of-band via CustomKeyStats).
             newRollups.set(partition, partitionRollupHash(recs, r => r.MappedFields));
         }
@@ -3866,7 +3866,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // watermark-less sources. On the next sync, a record whose freshly-computed
         // hash equals the stored hash can be skipped without loading it (see
         // PrefetchContentHashes / UpdateRecord). No-op on tables predating the column.
-        // RSU-spec basis: unmapped/custom keys are EXCLUDED — a newly-appearing custom
+        // Content-hash basis: unmapped/custom keys are EXCLUDED — a newly-appearing custom
         // column must not break the row match (its capture + stats ride CustomKeyStats;
         // promotion + the schema-change watermark reset backfill it properly). Rows whose
         // stored hash predates this basis (overflow folded in) mismatch ONCE, rewrite, and
@@ -4037,7 +4037,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             aggregate.Success = false;
         }
 
-        // Merge custom-key stats (RSU-spec out-of-band candidates) by entity name. Two maps
+        // Merge custom-key stats (out-of-band candidates) by entity name. Two maps
         // targeting the SAME entity merge per-key: occurrences/totals sum, max length wins,
         // samples concat under the same bounded cap.
         if (mapResult.CustomKeyStats) {
@@ -4348,7 +4348,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 ContextUser: contextUser,
                 SyncedEntityNames: syncedEntityNames,
                 Provider: this._provider,
-                // RSU-spec: the run's in-memory custom-key candidates — needed because the
+                // The run's in-memory custom-key candidates — needed because the
                 // overflow-column scan alone under-reports once the hash basis excludes
                 // overflow (skipped rows never write their overflow JSON).
                 CustomKeyStats: result.CustomKeyStats,

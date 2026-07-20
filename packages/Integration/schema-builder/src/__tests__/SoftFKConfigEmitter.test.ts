@@ -186,12 +186,12 @@ describe('SoftFKConfigEmitter', () => {
     });
 });
 
-// ── RSU-spec additionalSchemaInfo lifecycle: per-table REPLACE for soft FKs ────
+// ── additionalSchemaInfo lifecycle: per-table REPLACE for soft FKs ────
 // "when we then get a new set from a schema refresh, it replaces the primary key and
 // foreign key mappings … for the tables (adds new ones, removes old ones that no longer
 // exist)". MergeSoftPKs already replaces per table; ClearForeignKeysForTables gives FKs
 // the same semantics — this run's tables get exactly this run's FK set, others untouched.
-describe('SoftFKConfigEmitter.ClearForeignKeysForTables (RSU spec — replace, not accumulate)', () => {
+describe('SoftFKConfigEmitter.ClearForeignKeysForTables (replace, not accumulate)', () => {
     const emitter = new SoftFKConfigEmitter();
     const existing = () => ({
         crm: [

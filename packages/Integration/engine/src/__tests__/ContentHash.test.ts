@@ -102,8 +102,8 @@ describe('computeContentHashWithOverflow (custom/overflow fields counted as chan
     });
 });
 
-// ── RSU-spec hash basis: MAPPED fields only ────────────────────────────────────
-describe('RSU-spec hash basis (unmapped/custom keys excluded from matching)', () => {
+// ── Content-hash basis: MAPPED fields only ────────────────────────────────────
+describe('Content-hash basis (unmapped/custom keys excluded from matching)', () => {
     it('a newly-appearing custom key does NOT change the match hash', () => {
         const mapped = { id: '1', name: 'Ada' };
         // The engine compares/writes computeContentHash(mapped) — custom keys ride

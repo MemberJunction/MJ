@@ -110,10 +110,10 @@ export function decideBooleanOverlay(
 
 /**
  * Pure overlay rule for SEMANTIC string attributes (Description, DisplayName, the
- * IncrementalWatermarkField cursor name) — RSU-spec "war of attrition", external-wins-when-present:
+ * IncrementalWatermarkField cursor name) — external-wins-when-present:
  *
- *   - The external system RETURNED a non-empty value that differs → Discovered wins (the
- *     spec's HubSpot example: a returned description overrides the metadata folder's).
+ *   - The external system RETURNED a non-empty value that differs → Discovered wins (a
+ *     returned source description overrides the metadata folder's).
  *   - The external system returned the SAME value → no change, Declared credited.
  *   - The external system was SILENT (null/undefined/empty) → the curated value sticks.
  *
@@ -515,10 +515,10 @@ export class IntegrationSchemaSync {
     const existing = existingObjects.find((o) => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase());
 
     if (existing) {
-      // Declared row exists. RSU-spec overlay rule (external-wins-when-present): when the
+      // Declared row exists. Overlay rule (external-wins-when-present): when the
       // EXTERNAL system returns a value for an attribute, that value overrides the curated
       // metadata; when the external system is SILENT on it, the curated value sticks. This is
-      // the per-attribute "war of attrition" from the RSU plan — e.g. a HubSpot object that
+      // the per-attribute overlay precedence — e.g. a source object that
       // returns a description overrides the metadata folder's description, but an object whose
       // describe carries none keeps the curated text. (Previously curated non-empty values were
       // never overwritten; the spec inverts that precedence.)
@@ -538,7 +538,7 @@ export class IntegrationSchemaSync {
       }
       // §3 metadata refresh — same external-wins-when-present rule for the watermark cursor
       // field: a discovery that REPORTS one overrides the stored value ("prefer new over old
-      // always for the same existing columns" — RSU spec); a silent discovery leaves the
+      // always for the same existing columns"); a silent discovery leaves the
       // curated choice untouched.
       const wmOverlay = decideSemanticOverlay(existing.IncrementalWatermarkField, srcObj.IncrementalWatermarkField);
       if (wmOverlay.changed) {
@@ -657,14 +657,14 @@ export class IntegrationSchemaSync {
     const winners: FieldMergeLog['AttributeWinners'] = {};
 
     if (existing) {
-      // Declared row exists. RSU-spec overlay rule — external-wins-when-present, per attribute:
+      // Declared row exists. Overlay rule — external-wins-when-present, per attribute:
       //  - Describe wins for DDL-affecting attributes (Type, AllowsNull, IsRequired, IsPrimaryKey,
       //    IsUniqueKey, IsReadOnly) whenever the source states an opinion; `undefined` = no opinion
       //    and the Declared value sticks (decideBooleanOverlay). Width is the spec's one explicit
       //    exception: "pick the larger" (decideLengthOverlay — grow-only, never shrink).
       //  - Semantic attributes (Description, DisplayName) follow the SAME rule: a source that
       //    RETURNS a value overrides the curated one; a silent source keeps the curated value.
-      //    (The RSU spec's HubSpot example — a returned description overrides the metadata
+      // (The worked example — a returned description overrides the metadata
       //    folder's description; absent, the metadata description stays.)
       //
       // Returned attribute winners surface EXACTLY which source decided each
@@ -737,7 +737,7 @@ export class IntegrationSchemaSync {
         dirty = true;
       }
       winners.IsReadOnly = roOverlay.winner;
-      // Description / DisplayName — external-wins-when-present (RSU spec): a source that
+      // Description / DisplayName — external-wins-when-present: a source that
       // returns a value overrides the curated one; a silent source keeps the curated value.
       const fieldDescOverlay = decideSemanticOverlay(existing.Description, srcField.Description);
       if (fieldDescOverlay.changed) {

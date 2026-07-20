@@ -226,14 +226,14 @@ export interface RSUPendingWork {
   /** Override sync direction for the created schedule (stored in ScheduledJob.Configuration). */
   ScheduleSyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
   /**
-   * RSU-spec remove-as-disable: what the post-restart consumer does with existing entity maps
+   * Remove-as-disable: what the post-restart consumer does with existing entity maps
    * whose object is NOT in SourceObjectNames. 'disable' (default) = Status='Disabled' +
    * SyncEnabled=false (+ field maps disabled; data kept, re-selection re-enables);
    * 'ignore' = leave them untouched (additive/subset apply).
    */
   UnselectedAction?: 'disable' | 'ignore';
   /**
-   * RSU-spec refresh diff: when true, entity maps + field maps CREATED by this pending work
+   * Refresh diff: when true, entity maps + field maps CREATED by this pending work
    * are born DISABLED (Status='Disabled', SyncEnabled=false) — the schema-evolution default
    * for newly-appeared objects ("we enable nothing; the user needs to go turn them on").
    * Existing maps are never force-disabled by this flag.

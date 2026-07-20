@@ -49,7 +49,7 @@ import {
 
 /**
  * A custom-key candidate persisted to CompanyIntegration.Configuration.customKeyCandidates
- * (RSU-spec out-of-band capture): key identity + sizing statistics + the inferred column
+ * (out-of-band capture): key identity + sizing statistics + the inferred column
  * type, NEVER raw sample values (PII-safe — the config row is operator-visible). Written
  * with REPLACE semantics per synced entity on every sync, so keys that vanish evict.
  */
@@ -100,7 +100,7 @@ export function registerIntegrationCustomColumnPromoter(): void {
         const user = ctx.ContextUser as UserInfo;
         const provider = ctx.Provider as IMetadataProvider | undefined;
         const promoter = new IntegrationCustomColumnPromoter(user, provider);
-        // RSU-spec out-of-band candidates: persist the sync's in-memory custom-key statistics
+        // out-of-band candidates: persist the sync's in-memory custom-key statistics
         // (REPLACE semantics per synced entity — vanished keys evict) so on-demand
         // IntegrationListCustomColumnCandidates sees them even when the content-hash fast path
         // skipped every row (the hash basis excludes overflow, so skipped rows never write it).
@@ -243,7 +243,7 @@ export class IntegrationCustomColumnPromoter {
 
         // Candidate sources, most-authoritative first (dedup by key):
         //  1. live overflow-column scan (rows that were actually written),
-        //  2. THIS run's in-memory stats (rows the content-hash fast path skipped — RSU-spec
+        // 2. THIS run's in-memory stats (rows the content-hash fast path skipped —
         //     out-of-band capture; the hash basis excludes overflow so skips never write it),
         //  3. candidates persisted from prior runs (survive restarts for on-demand listing).
         const overflowJson = await this.scanOverflow(entityName);
@@ -293,7 +293,7 @@ export class IntegrationCustomColumnPromoter {
         }));
     }
 
-    /** Maps THIS run's in-memory custom-key stats to promotion candidates (RSU-spec out-of-band capture). */
+    /** Maps THIS run's in-memory custom-key stats to promotion candidates (out-of-band capture). */
     private candidatesFromStats(stats?: CustomKeyStat[]): PromotionCandidate[] {
         if (!stats || stats.length === 0) return [];
         return stats

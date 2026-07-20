@@ -1,10 +1,10 @@
--- U2 (RSU-spec alignment) — soft-PK guard for spUpdateExistingEntityFieldsFromSchema.
+-- U2 — soft-PK guard for spUpdateExistingEntityFieldsFromSchema.
 --
 -- A SOFT primary key (EntityField.IsSoftPrimaryKey = 1, resolved from additionalSchemaInfo for
 -- integration tables) has NO physical PK/UNIQUE constraint in the database. The schema-sync
 -- sproc compared IsPrimaryKey/IsUnique against the PHYSICAL constraint catalog unconditionally,
 -- so every run (a) flagged each soft-PK field as a material change and (b) overwrote
--- IsPrimaryKey/IsUnique back to 0 — undoing the resolved soft PK (the ACGI keyless-entity root)
+-- IsPrimaryKey/IsUnique back to 0 — undoing the resolved soft PK (the keyless-entity root)
 -- despite the documented IsSoftPrimaryKey protection.
 --
 -- Fix: soft-PK rows are excluded from the PK/unique material-change predicate and their
@@ -135,7 +135,7 @@ BEGIN
           ISNULL(LTRIM(RTRIM(ef.RelatedEntityFieldName)), '') <> ISNULL(LTRIM(RTRIM(fk.referenced_column)), '') OR
           -- U2 soft-PK guard: soft-PK rows are never a PK/unique "material change" — the physical
           -- catalog has no row for them, so the raw comparison fired on EVERY run and the update
-          -- undid the resolved soft PK (ACGI keyless-entity root). Physical rows sync as before.
+          -- undid the resolved soft PK (keyless-entity root). Physical rows sync as before.
           (ef.IsSoftPrimaryKey = 0 AND ef.IsPrimaryKey <> CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END) OR
           (ef.IsSoftPrimaryKey = 0 AND ef.IsUnique <> CASE
               WHEN pk.ColumnName IS NOT NULL THEN 1

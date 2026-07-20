@@ -5,7 +5,7 @@
  * The bug: `IsPrimaryKey: f.IsPrimaryKey ?? false` turned a sample's SILENCE (the source
  * has no opinion — e.g. a list API that doesn't report PKs) into a hard "not a PK" opinion.
  * The persist overlay (`decideBooleanOverlay`) then saw a DEFINED `false` that differed from
- * the Declared `true` and let "Discovered" win — wiping the curated primary key (the ACGI
+ * the Declared `true` and let "Discovered" win — wiping the curated primary key (the
  * keyless-entity root). The overlay itself was already correct; the coercion upstream of it
  * was the fabrication. These tests pin the mapping end of the contract.
  */

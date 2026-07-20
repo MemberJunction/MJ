@@ -80,10 +80,10 @@ describe('CustomOverflow', () => {
     });
 });
 
-// ── RSU-spec out-of-band custom-key aggregation ────────────────────────────────
+// ── Out-of-band custom-key aggregation ────────────────────────────────
 import { foldCustomKeyStats, CUSTOM_KEY_SAMPLE_CAP, type CustomKeyAccumulator } from '../CustomOverflow';
 
-describe('foldCustomKeyStats (RSU spec — candidates exist even when every row is skipped)', () => {
+describe('foldCustomKeyStats (candidates exist even when every row is skipped)', () => {
     it('aggregates occurrences, max serialized length, and a bounded sample', () => {
         const agg = new Map<string, CustomKeyAccumulator>();
         foldCustomKeyStats([
