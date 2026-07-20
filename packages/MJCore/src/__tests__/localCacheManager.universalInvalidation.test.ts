@@ -825,4 +825,137 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
         });
     });
 
+    // ========================================================================
+    // Subset slots — MaxRows-truncated / StartRow-offset cache entries (B30)
+    //
+    // Regression guard: a `MaxRows: 1` result was stored as if it were the COMPLETE set and
+    // then maintained in place by save events, so the slot grew to 2, 3, 4 … rows — the served
+    // result was neither the first-N nor the full set, just one arbitrary original row plus
+    // every locally-saved row. `BypassCache` returned 1 row every time.
+    // ========================================================================
+
+    describe('Subset fingerprints (MaxRows / StartRow)', () => {
+        const isSubset = (fp: string) =>
+            (cacheManager as unknown as { isSubsetFingerprint: (fp: string) => boolean })
+                .isSubsetFingerprint(fp);
+
+        // Fingerprint format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch
+        function makeEvent(entityName: string, type: 'save' | 'delete', row: Record<string, unknown>) {
+            return {
+                type,
+                baseEntity: {
+                    EntityInfo: { Name: entityName, PrimaryKeys: [{ Name: 'ID' }], AllowCaching: true },
+                    Get: (fieldName: string) => row[fieldName],
+                    GetAll: () => ({ ...row }),
+                },
+            };
+        }
+
+        const fireEvent = (event: unknown) =>
+            (cacheManager as unknown as { HandleBaseEntityEvent: (e: unknown) => Promise<void> })
+                .HandleBaseEntityEvent(event);
+
+        async function seedSlot(fp: string, rows: Record<string, unknown>[]): Promise<void> {
+            await cacheManager.SetRunViewResult(
+                fp,
+                { EntityName: 'Users' } as Parameters<typeof cacheManager.SetRunViewResult>[1],
+                rows,
+                '2024-01-01T00:00:00Z'
+            );
+        }
+
+        describe('isSubsetFingerprint', () => {
+            it('should return false for an unlimited fingerprint (MaxRows -1, StartRow 0)', () => {
+                expect(isSubset('Users|_|_|-1|0|_|_')).toBe(false);
+            });
+
+            it('should return true for a MaxRows-limited fingerprint', () => {
+                expect(isSubset('Users|_|_|1|0|_|_')).toBe(true);
+                expect(isSubset('Users|_|_|250|0|_|_')).toBe(true);
+            });
+
+            it('should return true for a StartRow-offset (paginated) fingerprint', () => {
+                expect(isSubset('Users|_|_|-1|100|_|_')).toBe(true);
+            });
+
+            it('should return false for MaxRows 0 (treated as no limit)', () => {
+                expect(isSubset('Users|_|_|0|0|_|_')).toBe(false);
+            });
+
+            it('should return false (conservatively) for a malformed / too-short fingerprint', () => {
+                expect(isSubset('Users')).toBe(false);
+                expect(isSubset('Users|_|_|notanumber|alsonot|_|_')).toBe(false);
+            });
+        });
+
+        it('should NOT grow a MaxRows-limited slot on save — it invalidates instead', async () => {
+            const fp = 'Users|_|_|1|0|_|_'; // MaxRows: 1
+            await seedSlot(fp, [{ ID: '1', Name: 'Alice' }]);
+
+            // A newly saved row must never be appended into a MaxRows: 1 slot.
+            await fireEvent(makeEvent('Users', 'save', { ID: '99', Name: 'Brand New' }));
+
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).toBeNull(); // slot dropped; next read repopulates from the DB
+        });
+
+        it('should never exceed MaxRows across a series of saves', async () => {
+            const fp = 'Users|_|_|1|0|_|_';
+
+            for (let i = 1; i <= 3; i++) {
+                await seedSlot(fp, [{ ID: '1', Name: 'Alice' }]); // simulate the cold re-read
+                await fireEvent(makeEvent('Users', 'save', { ID: `new-${i}`, Name: `New ${i}` }));
+
+                const cached = await cacheManager.GetRunViewResult(fp);
+                // Either invalidated (null) or, if present, still within the caller's limit.
+                expect(cached?.results.length ?? 0).toBeLessThanOrEqual(1);
+            }
+        });
+
+        it('should invalidate a MaxRows-limited slot on delete rather than shrinking it below the limit', async () => {
+            const fp = 'Users|_|_|1|0|_|_';
+            await seedSlot(fp, [{ ID: '1', Name: 'Alice' }]);
+
+            await fireEvent(makeEvent('Users', 'delete', { ID: '1', Name: 'Alice' }));
+
+            // Removing in place would leave a 0-row slot while the DB still has rows for TOP 1.
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).toBeNull();
+        });
+
+        it('should invalidate a StartRow-offset (paginated) slot on save', async () => {
+            const fp = 'Users|_|_|50|100|_|_'; // page 3 of 50
+            await seedSlot(fp, [{ ID: '1', Name: 'Alice' }]);
+
+            await fireEvent(makeEvent('Users', 'save', { ID: '99', Name: 'Brand New' }));
+
+            expect(await cacheManager.GetRunViewResult(fp)).toBeNull();
+        });
+
+        it('should still maintain an UNLIMITED slot in place on save (no regression)', async () => {
+            const fp = 'Users|_|_|-1|0|_|_';
+            await seedSlot(fp, [{ ID: '1', Name: 'Alice' }, { ID: '2', Name: 'Bob' }]);
+
+            await fireEvent(makeEvent('Users', 'save', { ID: '1', Name: 'Alice Updated' }));
+
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).not.toBeNull();
+            expect(cached!.results).toHaveLength(2);
+            const row = cached!.results.find((r) => (r as Record<string, unknown>).ID === '1') as Record<string, unknown>;
+            expect(row.Name).toBe('Alice Updated');
+        });
+
+        it('should still maintain an UNLIMITED slot in place on delete (no regression)', async () => {
+            const fp = 'Users|_|_|-1|0|_|_';
+            await seedSlot(fp, [{ ID: '1', Name: 'Alice' }, { ID: '2', Name: 'Bob' }]);
+
+            await fireEvent(makeEvent('Users', 'delete', { ID: '1', Name: 'Alice' }));
+
+            const cached = await cacheManager.GetRunViewResult(fp);
+            expect(cached).not.toBeNull();
+            expect(cached!.results).toHaveLength(1);
+            expect((cached!.results[0] as Record<string, unknown>).ID).toBe('2');
+        });
+    });
+
 });

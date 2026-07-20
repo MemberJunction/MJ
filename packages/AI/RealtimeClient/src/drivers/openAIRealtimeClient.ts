@@ -138,6 +138,8 @@ export class OpenAIRealtimeClient extends OpenAIProtocolRealtimeClient {
             this.remoteAudioEl = null;
         }
         this.remoteStream = null;
+        // Session-scoped host handlers must not survive into a later Connect on a reused instance.
+        this.remoteStreamHandlers = [];
 
         this.sessionConfig = null;
         this.resetResponseState();

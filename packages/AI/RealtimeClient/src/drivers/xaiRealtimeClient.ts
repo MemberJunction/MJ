@@ -162,6 +162,8 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {
             this.playback?.Flush();
             this.responseActive = false;
             this.activeResponseKind = 'normal';
+            // Floor to the user — drop the queued auto-trigger (see the brain's docstring).
+            this.pendingResultResponse = false;
             this.emitInterruption();
         }
         this.setState('listening');

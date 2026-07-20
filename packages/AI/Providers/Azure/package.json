@@ -10,7 +10,9 @@
   ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction",
   "license": "MIT",

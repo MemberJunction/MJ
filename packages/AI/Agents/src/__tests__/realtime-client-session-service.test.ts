@@ -1648,3 +1648,57 @@ describe('RealtimeClientSessionService.resolveDelegationTarget', () => {
         expect(r.Error).toContain('No target agent is configured');
     });
 });
+
+describe('C1: session-tuning knobs flow into the driver Config bag', () => {
+    class BagExposingService extends RealtimeClientSessionService {
+        public Bag(
+            input: Parameters<RealtimeClientSessionService['buildSessionConfigBag']>[0],
+            effectiveConfig?: RealtimeCoAgentConfig,
+            driverClass?: string
+        ): JSONObject | undefined {
+            return this.buildSessionConfigBag(input, effectiveConfig, driverClass);
+        }
+    }
+
+    const tuningConfig: RealtimeCoAgentConfig = {
+        realtime: {
+            session: { effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' },
+            voice: { providers: { OpenAIRealtime: { voice: 'sage' } } },
+        },
+    };
+
+    it('folds effortLevel/parallelToolCalls/inputTranscriptionModel in UNDER the provider voice', () => {
+        const svc = new BagExposingService();
+        const bag = svc.Bag({} as Parameters<BagExposingService['Bag']>[0], tuningConfig, 'OpenAIRealtime');
+        expect(bag).toMatchObject({ effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1', voice: 'sage' });
+    });
+
+    it('the runtime bag WINS over configured tuning (cascade precedence)', () => {
+        const svc = new BagExposingService();
+        const bag = svc.Bag(
+            { Config: { effortLevel: 20 } } as unknown as Parameters<BagExposingService['Bag']>[0],
+            tuningConfig,
+            'OpenAIRealtime'
+        );
+        expect(bag?.effortLevel).toBe(20);
+        expect(bag?.parallelToolCalls).toBe(true); // untouched keys still flow
+    });
+
+    it('no tuning section + no voice ⇒ the original runtime bag is returned byte-for-byte', () => {
+        const svc = new BagExposingService();
+        const runtime = { anything: 1 } as unknown as JSONObject;
+        const bag = svc.Bag({ Config: runtime } as unknown as Parameters<BagExposingService['Bag']>[0], {}, 'OpenAIRealtime');
+        expect(bag).toBe(runtime);
+    });
+
+    it('disableAutoResponse still rides on top of the folded bag', () => {
+        const svc = new BagExposingService();
+        const bag = svc.Bag(
+            { DisableAutoResponse: true } as unknown as Parameters<BagExposingService['Bag']>[0],
+            tuningConfig,
+            'OpenAIRealtime'
+        );
+        expect(bag?.disableAutoResponse).toBe(true);
+        expect(bag?.effortLevel).toBe('high');
+    });
+});
