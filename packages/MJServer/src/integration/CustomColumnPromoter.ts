@@ -156,6 +156,19 @@ export class IntegrationCustomColumnPromoter {
         return this.provider as unknown as DatabaseProviderBase;
     }
 
+    /**
+     * Scoped-when-possible metadata refresh: promotion touches exactly the schemas owning the
+     * promoted entities, so reload only those (falls back to a full Refresh when the provider
+     * doesn't support scoping or no schema can be derived).
+     */
+    private async refreshForEntities(entityNames: string[]): Promise<void> {
+        const schemas = [...new Set(
+            entityNames.map(n => this.provider.EntityByName(n)?.SchemaName).filter((s): s is string => !!s)
+        )];
+        if (schemas.length > 0 && this.provider.RefreshSchemas) await this.provider.RefreshSchemas(schemas);
+        else await this.provider.Refresh();
+    }
+
     /** Entry point: promote custom columns for every entity touched by the sync. */
     public async PromoteForSync(
         companyIntegrationID: string,
@@ -179,7 +192,8 @@ export class IntegrationCustomColumnPromoter {
         const promoted = columnsAdded.length > 0;
         if (promoted) {
             // Make the freshly-created EntityFields visible in-process for the next sync's mapping.
-            try { await this.provider.Refresh(); } catch (err) { LogError(`[CustomColumnPromoter] provider.Refresh failed: ${this.msg(err)}`); }
+            // Scoped: only the promoted entities' schemas changed.
+            try { await this.refreshForEntities(columnsAdded.map(c => c.EntityName)); } catch (err) { LogError(`[CustomColumnPromoter] metadata refresh failed: ${this.msg(err)}`); }
         }
         return { Promoted: promoted, ColumnsAdded: columnsAdded, SchemaUpdatePending: promoted };
     }
@@ -216,7 +230,7 @@ export class IntegrationCustomColumnPromoter {
         // the spread's row.Save() builds a sproc call from the STALE field list that doesn't match the
         // regenerated sproc → "Error executing SQL" (the spread-save failures). Re-loading metadata
         // here aligns the entity's field set with the new DB sproc so the backfill saves succeed.
-        try { await this.provider.Refresh(); } catch (err) { LogError(`[CustomColumnPromoter] pre-spread Refresh failed: ${this.msg(err)}`); }
+        try { await this.refreshForEntities([entityName]); } catch (err) { LogError(`[CustomColumnPromoter] pre-spread refresh failed: ${this.msg(err)}`); }
         const refreshedEntityInfo = this.provider.EntityByName(entityName) ?? entityInfo;
         await this.spreadAndRebaseline(entityName, entityMap.ID, refreshedEntityInfo, work);
 

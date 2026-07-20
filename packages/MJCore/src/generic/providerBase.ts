@@ -4033,6 +4033,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         // Coalesce: concurrent scoped refreshes of the SAME schema set (e.g. two syncs of one
         // connector finishing together) share a single fetch+merge instead of racing duplicates.
+        // Only when no explicit providerToUse is passed — coalescing across DISTINCT providers
+        // could silently substitute one caller's provider (e.g. read-only vs read-write) for
+        // another's; an explicit provider always gets its own fetch.
+        if (providerToUse) return this.executeScopedRefresh(cleaned, providerToUse);
         const key = [...cleaned].map(s => s.toLowerCase()).sort().join('|');
         const inflight = this._inflightScopedRefreshes.get(key);
         if (inflight) return inflight;
