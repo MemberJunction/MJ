@@ -69,6 +69,8 @@ import {
     CookieInjectionAuthMethod,
     CookieEntry,
     LocalStorageInjectionAuthMethod,
+    AppProfile,
+    SettleConfig,
 } from '@memberjunction/computer-use';
 import type { AuthMethod, ComputerUseResult } from '@memberjunction/computer-use';
 import { BaseBrowserAdapter } from '@memberjunction/computer-use';
@@ -381,6 +383,9 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             params.ScreenshotHistoryDepth = config.screenshotHistoryDepth;
         }
 
+        // Adaptive settle profile (CU-A1/A2): MJ-Explorer defaults, config-overridable.
+        params.AppProfile = this.buildAppProfile(config);
+
         // Browser config
         if (
             config.viewportWidth ||
@@ -452,6 +457,35 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         };
 
         return params;
+    }
+
+    /**
+     * MJ Explorer defaults for the app-neutral settle loop (CU-A1/A2), overridable
+     * per test via `config.appProfile`. This is where MJ-specific signals live —
+     * the Layer-1 engine never names them.
+     *
+     * - Readiness beacon: `[data-mj-ready="true"]`, which MJExplorer's shell sets
+     *   on `<html>` when the active route's NotifyLoadComplete fires (CU-A2).
+     * - Busy markers: MJ's loading component (`mj-loading` / `.mj-loading`),
+     *   merged with the engine's app-neutral `[aria-busy]` / `[role=progressbar]`.
+     */
+    private buildAppProfile(config: ComputerUseTestConfig): AppProfile {
+        const profile = new AppProfile();
+        const cfg = config.appProfile;
+
+        profile.ReadinessBeacon = cfg?.readinessBeacon ?? '[data-mj-ready="true"]';
+        profile.BusyMarkers = cfg?.busyMarkers ?? ['mj-loading', '.mj-loading'];
+
+        if (cfg?.settle) {
+            const settle = new SettleConfig();
+            if (cfg.settle.maxWaitMs != null) settle.MaxWaitMs = cfg.settle.maxWaitMs;
+            if (cfg.settle.pollMs != null) settle.PollMs = cfg.settle.pollMs;
+            if (cfg.settle.networkIdleCapMs != null) settle.NetworkIdleCapMs = cfg.settle.networkIdleCapMs;
+            if (cfg.settle.minWaitMs != null) settle.MinWaitMs = cfg.settle.minWaitMs;
+            profile.Settle = settle;
+        }
+
+        return profile;
     }
 
     /**

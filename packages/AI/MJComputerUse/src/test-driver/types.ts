@@ -167,6 +167,27 @@ export interface ComputerUseTestConfig {
      * so that auth state persists between tests in the same worker.
      */
     browserSession?: string;
+
+    /**
+     * App-specific readiness/busy signals for the adaptive settle loop
+     * (CU-A1/A2). Optional — the driver applies MJ-Explorer-sensible defaults (a
+     * `[data-mj-ready="true"]` readiness beacon and MJ loading-spinner markers)
+     * when omitted. Provide to override when the target app under test isn't MJ
+     * Explorer, or to tune settle timing.
+     */
+    appProfile?: {
+        /** CSS selector for the app's readiness beacon (polled first; wins over heuristics). */
+        readinessBeacon?: string;
+        /** Additional busy-marker CSS selectors (merged with the engine's app-neutral defaults). */
+        busyMarkers?: string[];
+        /** Settle-loop timing overrides. */
+        settle?: {
+            maxWaitMs?: number;
+            pollMs?: number;
+            networkIdleCapMs?: number;
+            minWaitMs?: number;
+        };
+    };
 }
 
 // ─── Input Definition (TestEntity.InputDefinition JSON) ───────────
