@@ -1,0 +1,183 @@
+name: Integration Tier
+
+# Deterministic integration tier — the in-process cache / RunQuery / RLS / engine suites
+# (packages/MJServer/integration-test-scripts/run-all.ts) against a fresh SQL Server, on
+# every PR that touches server code or the integration metadata.
+#
+# HOST-BASED lane (no Docker regression images). This PR gate provisions the DB directly on
+# the runner: a throwaway SQL Server container, THIS branch's locally-built `mj` CLI applies
+# the committed migrations, then `mj sync push` reconciles the committed metadata, and the
+# aggregator runs in-process against it. No AssociationDB, no live CodeGen, no MJAPI/Explorer:
+#
+#   * The DETERMINISTIC suites touch only core __mj entities. `mj migrate` applies the
+#     committed CodeGen_Run_*.sql migrations AND the repeatable R__RefreshMetadata, which
+#     together provision every core view / proc / EntityField row — so no live `mj codegen`
+#     pass is needed. (Running one here would also mask the exact metadata-vs-migration drift
+#     that the separate "Test metadata sync push" gate exists to catch.)
+#   * AssociationDB is only required by the Predictive Studio tier, which is gated OFF here.
+#   * `mj sync push --dir=metadata` pushes the default metadata dir — which includes the inert
+#     "Integration Test" TestType (metadata/test-types/). A SECOND push then applies the sibling
+#     `metadata-optional/integration-test/` root, which holds the actual test-only records — the
+#     IT01–IT23 Tests, the integration suite, AND the RLS security principals (users + scoped role +
+#     grant). It is kept out of `metadata/` so those synthetic accounts never reach a production DB
+#     (R2). Order matters: this root after metadata (the IT records @lookup the TestType by name), and
+#     its own directoryOrder (tests → test-suites → roles → entity-permissions → users) resolves
+#     every @lookup ref.
+#   * The gated tiers all SKIP cleanly here: Predictive Studio (PS_INTEGRATION unset),
+#     Live Model (RUN_AGENT_TESTS unset), and the client suite (no live MJAPI reachable).
+#
+# The migrate/sync CORRECTNESS gate is a SEPARATE workflow ("Test metadata sync push"): here
+# migrate + sync are the aggregator's SETUP, not its system-under-test.
+#
+# This host-based lane is the sole CI home for the integration tier. The earlier container-based
+# lane (a reusable that provisioned via the Docker regression stack's db-setup) was removed along
+# with the unused browser/Computer-Use regression wiring — this repo does not run that stack in CI.
+
+on:
+  pull_request:
+    branches: [next]
+    paths:
+      - 'package-lock.json'
+      - 'packages/**'
+      - 'migrations/**'
+      # All integration test/suite/type metadata AND the RLS fixtures now live under this one
+      # optional sibling root (kept out of the default-pushed metadata/ tree — R2).
+      - 'metadata-optional/**'
+      - 'mj.config.cjs'
+      - 'tsconfig*'
+      - 'turbo.json'
+      - '.github/workflows/integration.yml'
+  # Full backstop: every merge into next runs the gate, so a filter-missed break (paths are a
+  # heuristic; migrations + runtime @RegisterClass wiring can couple files no filter foresees)
+  # can never merge silently and red the next PR (R3, mirrors test.yml).
+  push:
+    branches: [next]
+  workflow_dispatch:
+
+# Cancel superseded PR runs for the same ref. EXCEPTION: push (merge to next) events get a
+# per-commit group and are NEVER cancelled — every merge's backstop must run to completion
+# (github.ref is refs/heads/next for every merge, so a shared group would let a later merge
+# kill an earlier one's backstop). Mirrors test.yml.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
+jobs:
+  integration-sqlserver:
+    name: Integration (SQL Server, deterministic)
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    # Both the committed mj.config.cjs and the aggregator's own config layer read DB creds
+    # from these env vars (LoadDbConfig falls back to DB_* when mj.config has no
+    # databaseSettings block — which the repo-root config does not).
+    env:
+      DB_HOST: localhost
+      DB_DATABASE: test
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # ── Fresh SQL Server (same provisioning the migrate/sync gate uses) ─────────────────
+      - name: Create docker network
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      # Poll until SQL Server actually answers a query, rather than a blind sleep. A cold
+      # container that merely started (but is still doing recovery/tempdb setup) will accept
+      # a connection yet stall the first heavy transaction — which is what tripped the sync
+      # push's 15s request timeout. Waiting for a real `SELECT 1` before migrate/sync ensures
+      # those run against a warm server. ~60s budget (30 × 2s); fails the step if never ready.
+      - name: Wait for SQL Server to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            echo "Waiting for SQL Server... (attempt $i/30)"
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
+
+      - name: Create SQL database
+        run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Build the graph the aggregator imports: testing-integration (+ its deps, which cover
+      # core/core-entities/sqlserver-dataprovider/graphql-dataprovider/predictive-studio/
+      # scheduling-engine/aiengine/ai-agents/actions/record-set-processor), open-app-engine
+      # (open-app-teardown-tests.ts imports it directly, and it is NOT a testing-integration
+      # dep), and the mj CLI (migrate + sync push). --filter skips the Angular/Explorer half
+      # of the monorepo this lane never touches. Built once; every step below reuses it.
+      - name: Build integration graph + CLI
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/open-app-engine
+
+      # Provision the DB (aggregator SETUP): apply the committed migrations — which include the
+      # committed CodeGen output and the repeatable R__RefreshMetadata that refreshes every core
+      # view/proc/EntityField — then reconcile the committed metadata against that schema.
+      - name: Migrate — apply committed migrations to the fresh DB
+        env:
+          # Headroom over mssql's 15s default for the first heavy workload on a cold server.
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: node packages/MJCLI/bin/run.js migrate
+
+      - name: Sync push — reconcile committed metadata (mj sync push --ci)
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+
+      # The optional integration root holds the actual test-only records — the IT01–IT23 Tests, the
+      # integration suite, AND the RLS security principals (users + scoped role + entity-permission
+      # grant). (The inert "Integration Test" TestType itself lives in metadata/ and came in with the
+      # main push above.) This root is deliberately kept OUT of the default-pushed metadata/ tree so
+      # those synthetic accounts never reach a production DB (R2). Push it AFTER the main metadata push
+      # (the IT records @lookup the TestType by name); its own directoryOrder (tests → test-suites →
+      # roles → entity-permissions → users) resolves every @lookup ref in order. Without this the
+      # RLS8/9/10 checks skip-as-pass, so the gate stays green either way — but pushing here keeps them exercised.
+      - name: Sync push — seed the optional integration metadata + RLS fixtures
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'   # same cold-runner headroom as the main push above
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
+
+      # Assert the fixtures actually landed. `mj sync push` can, in principle, exit 0 without
+      # seeding (e.g. a silent no-op); if the 3 @integration.test principals are absent, the
+      # deterministic RLS8/9/10 checks skip-as-pass and the tier's strongest coverage silently
+      # stops running while the gate stays green. Fail loudly here instead (R2 follow-up).
+      - name: Verify RLS integration fixtures were seeded
+        run: |
+          COUNT=$(docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -d test -h -1 -W \
+            -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM __mj.[User] WHERE Email LIKE '%@integration.test';")
+          COUNT=$(echo "$COUNT" | tr -d '[:space:]')
+          echo "Seeded @integration.test fixture users: ${COUNT}/3"
+          if [ "${COUNT:-0}" -lt 3 ]; then
+            echo "::error::RLS integration fixtures were not seeded (found ${COUNT}/3 @integration.test users). The fixtures sync push may have exited 0 without seeding — the deterministic RLS8/9/10 checks would silently skip-as-pass. Re-run: mj sync push --dir=metadata-optional/integration-test" >&2
+            exit 1
+          fi
+
+      # The deterministic aggregator: run-all.ts spawns each suite via `npx tsx` and gates the
+      # job on its 0/1/2 exit contract (0 = all passed/skipped, 1 = failures, 2 = bootstrap
+      # error). PS_INTEGRATION / RUN_AGENT_TESTS are deliberately unset (no token cost /
+      # flakiness); no MJAPI is up, so the client suite SKIPs.
+      - name: Run integration aggregator
+        run: npm run test:integration

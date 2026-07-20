@@ -95,7 +95,7 @@ export function RouteForMediaItem(item: MediaItem): MediaRenderRoute {
   imports: [CommonModule, MJMediaPlayerComponent, MJStorageMediaPlayerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './realtime-media-surface.component.html',
-  styleUrls: ['./realtime-media-surface.component.scss'],
+  styleUrls: ['./realtime-media-surface.component.css'],
 })
 export class RealtimeMediaSurfaceComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   /** The shared media state engine (set by the channel's BindSurface before first CD). */

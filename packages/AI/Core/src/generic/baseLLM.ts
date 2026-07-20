@@ -248,15 +248,28 @@ export abstract class BaseLLM extends BaseModel {
                             }
                         }
                     } catch (streamError) {
-                        // If there's an error in the for-await loop, log and continue
-                        console.error("Error processing stream chunks:", streamError);
+                        // A failure part-way through the stream means the content we accumulated is
+                        // TRUNCATED. Historically this was logged and swallowed, and the response was
+                        // then finalized as a SUCCESS — so a dropped connection, a provider fault, or
+                        // an abort mid-response silently produced a partial answer that the caller was
+                        // told was complete. That is data corruption, and it affected every provider.
+                        //
+                        // Cancellation is the one case we deliberately let through to
+                        // finalizeStreamingResponse: providers differ on whether an abort throws here
+                        // or simply ends iteration (Anthropic's stream returns silently), so they own
+                        // that decision and return a cancelled result of their own shape. Everything
+                        // else is a genuine failure and must surface as one.
+                        if (!params.cancellationToken?.aborted) {
+                            throw streamError;
+                        }
+                        console.error("Stream aborted while processing chunks:", streamError);
                     }
-                    
+
                     // Stream complete, call OnContent one last time with isComplete=true
                     if (params.streamingCallbacks?.OnContent) {
                         params.streamingCallbacks.OnContent('', true);
                     }
-                    
+
                     // Create final result object using provider-specific implementation
                     const endTime = new Date();
                     const result = this.finalizeStreamingResponse(

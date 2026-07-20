@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT12 - AI Skills Engine, Governance and SKILL Markdown",
+    "Description": "Deterministic (no LLM) end-to-end coverage of the AI Skills feature. AIEngineBase.GetSkillsForAgent resolution: the three-layer gate (agent AcceptsSkills None/All/Limited × skill Status × per-agent grant Status). The v5.45 double activation gate: GetAutoActivatableSkillsForAgent (self-activation needs Auto on BOTH AISkill.ActivationMode and AIAgent.SkillActivationMode; both default RequestedOnly; the requested path stays ungated), plus the persisted DB default and the Limited×Auto grant intersection. The v5.45 observability round-trip: AIAgentRun.PlanMode + AIAgentRunStep.Skills (AgentSkillInvocation[] JSON via the typed accessor). Skill permissions: the AISkillPermission grantee-exclusivity validator (exactly one of UserID/RoleID) and the GetSkillsForAgent(agent, user) filter (owner-override, closed-once-rows-exist, open-by-default). GetSkillActionIDs/GetSkillSubAgentIDs bundle resolution. SkillImportExportService SKILL.md round-trip (export → re-import by name; unknown names warn non-fatally). The AISkill.ExportMarkdown/ImportMarkdown Remote Operations. Creates + deletes its own skills/junction/grant/permission/run fixtures; references (never mutates) one Action + two Agents.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Skill resolution, the double activation gate, observability round-trip, permission filtering, bundle resolution, and the SKILL.md + remote-op round-trips all behave as specified."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "ai-skills"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "80D310B4-20C3-4063-A2BE-B0F66DA14C73"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T18:39:00.144Z",
+    "checksum": "69d7c810d2ba052a75922a291367e26ab97f0c9886ab2b9894bde3ed895679cb"
+  }
+}

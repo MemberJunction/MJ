@@ -10,6 +10,10 @@ const mockPull = vi.hoisted(() => vi.fn());
 const mockEmbeddings = vi.hoisted(() => vi.fn());
 const mockShow = vi.hoisted(() => vi.fn());
 
+// Records the config every Ollama client is constructed with, so tests can assert that a
+// per-request client carrying the caller's cancellation token (via Config.fetch) was built.
+const mockOllamaConfigs = vi.hoisted(() => [] as Array<Record<string, unknown> | undefined>);
+
 vi.mock('ollama', () => {
   return {
     Ollama: class MockOllama {
@@ -19,7 +23,9 @@ vi.mock('ollama', () => {
       pull = mockPull;
       embeddings = mockEmbeddings;
       show = mockShow;
-      constructor(_opts?: Record<string, unknown>) {}
+      constructor(opts?: Record<string, unknown>) {
+        mockOllamaConfigs.push(opts);
+      }
     },
     ChatRequest: class {},
     ChatResponse: class {},
@@ -44,6 +50,7 @@ vi.mock('@memberjunction/ai', () => {
     public SetAdditionalSettings(settings: Record<string, unknown>) {
       this._additionalSettings = { ...this._additionalSettings, ...settings };
     }
+    protected resetStreamingState() {}
     protected initializeThinkingStreamState() {}
     protected processStreamChunkWithThinking(content: string) { return content; }
     protected extractThinkingFromContent(content: string) {
@@ -459,6 +466,124 @@ describe('OllamaLLM', () => {
 
     it('ClassifyText should throw', async () => {
       await expect(llm.ClassifyText({} as never)).rejects.toThrow();
+    });
+  });
+
+  /* ---- cancellation (ChatParams.cancellationToken) ---- */
+  describe('cancellation', () => {
+    type ChatResultLike = { success: boolean; statusText: string; exception: unknown };
+
+    const buildParams = (token?: AbortSignal) => ({
+      model: 'llama3',
+      messages: [{ role: 'user', content: 'hello' }],
+      cancellationToken: token,
+    });
+
+    const callNonStreaming = (token?: AbortSignal): Promise<ChatResultLike> =>
+      (llm as unknown as Record<string, (p: unknown) => Promise<ChatResultLike>>)['nonStreamingChatCompletion'](buildParams(token));
+
+    const callCreateStream = (token?: AbortSignal): Promise<unknown> =>
+      (llm as unknown as Record<string, (p: unknown) => Promise<unknown>>)['createStreamingRequest'](buildParams(token));
+
+    /** The Config.fetch supplied to the most recently constructed Ollama client, if any. */
+    const lastConfigFetch = (): ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined => {
+      const config = mockOllamaConfigs[mockOllamaConfigs.length - 1];
+      return config?.['fetch'] as ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined;
+    };
+
+    beforeEach(() => {
+      mockOllamaConfigs.length = 0;
+      mockChat.mockResolvedValue({ message: { content: 'hi' }, done: true, prompt_eval_count: 1, eval_count: 1 });
+    });
+
+    it('builds a per-request client whose fetch carries the cancellation token (non-streaming)', async () => {
+      const controller = new AbortController();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}'));
+
+      await callNonStreaming(controller.signal);
+
+      const configFetch = lastConfigFetch();
+      expect(configFetch).toBeTypeOf('function');
+
+      await configFetch!('http://localhost:11434/api/chat', { method: 'POST' });
+      expect(fetchSpy.mock.calls[0][1]?.signal).toBe(controller.signal);
+      fetchSpy.mockRestore();
+    });
+
+    it('builds a per-request client whose fetch carries the cancellation token (streaming)', async () => {
+      const controller = new AbortController();
+      await callCreateStream(controller.signal);
+      expect(lastConfigFetch()).toBeTypeOf('function');
+    });
+
+    it('reuses the shared client (no custom fetch) when no token is supplied', async () => {
+      await callNonStreaming(undefined);
+      expect(mockOllamaConfigs).toHaveLength(0);
+    });
+
+    it('returns a cancelled ChatResult without calling the SDK when pre-aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      const result = await callNonStreaming(controller.signal);
+
+      expect(mockChat).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('Cancelled');
+    });
+
+    it('maps a mid-flight AbortError to a cancelled ChatResult', async () => {
+      const abortError = new Error('The operation was aborted');
+      abortError.name = 'AbortError';
+      mockChat.mockRejectedValueOnce(abortError);
+
+      const result = await callNonStreaming(new AbortController().signal);
+
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('Cancelled');
+      expect(result.exception).toBe(abortError);
+    });
+
+    it('still reports non-cancellation failures as normal errors', async () => {
+      mockChat.mockRejectedValueOnce(new Error('connection refused'));
+
+      const result = await callNonStreaming(undefined);
+
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('Error');
+    });
+
+    it('finalizeStreamingResponse reports cancellation when the stream was aborted mid-flight', () => {
+      const controller = new AbortController();
+      (llm as unknown as Record<string, AbortSignal | null>)['_streamingCancellationToken'] = controller.signal;
+      controller.abort();
+
+      const fn = (llm as unknown as Record<string, (...a: unknown[]) => ChatResultLike>)['finalizeStreamingResponse'].bind(llm);
+      const result = fn('partial text', null, null);
+
+      expect(result.success).toBe(false);
+      expect(result.statusText).toBe('Cancelled');
+    });
+
+    it('combineSignals aborts when EITHER the caller token or the SDK signal fires', () => {
+      const combine = (llm as unknown as Record<string, (a: AbortSignal, b?: AbortSignal | null) => AbortSignal>)['combineSignals'].bind(llm);
+
+      const caller = new AbortController();
+      const sdk = new AbortController();
+      const combined = combine(caller.signal, sdk.signal);
+      expect(combined.aborted).toBe(false);
+      sdk.abort();
+      expect(combined.aborted).toBe(true);
+
+      const caller2 = new AbortController();
+      const sdk2 = new AbortController();
+      const combined2 = combine(caller2.signal, sdk2.signal);
+      caller2.abort();
+      expect(combined2.aborted).toBe(true);
+
+      // With no SDK signal the caller's token is passed straight through
+      const caller3 = new AbortController();
+      expect(combine(caller3.signal, undefined)).toBe(caller3.signal);
     });
   });
 });
