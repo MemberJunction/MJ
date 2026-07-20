@@ -1,0 +1,69 @@
+[
+  {
+    "fields": {
+      "Name": "Conversation Summary",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/conversation-summary.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "Cross-turn conversation compaction prompt: folds the prior running summary plus the raw message delta into a new durable summary (gist + sequence-numbered timeline markers + high-fidelity user requests + open items) persisted on ConversationDetail.SummaryOfEarlierConversation."
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "34E1C717-99EE-47D1-92EE-F4E47FE0A020"
+          },
+          "sync": {
+            "lastModified": "2026-07-13T17:19:49.276Z",
+            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "0296E1AB-ED5D-4A75-A78F-9B12729483A4"
+          },
+          "sync": {
+            "lastModified": "2026-07-13T17:19:49.292Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "2034CAFB-888B-4EC3-A608-10C327D9F485"
+          },
+          "sync": {
+            "lastModified": "2026-07-13T17:19:49.306Z",
+            "checksum": "51e11c64188d53b523f7f3c7d8685ef215875a0117e00a7b40818a425c9cc82a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "36E507A2-A147-4BFA-91C1-73EF0D55E762"
+    },
+    "sync": {
+      "lastModified": "2026-07-13T17:19:49.235Z",
+      "checksum": "efaef5f1f60bb595b428231b28a2bb713b5aad06f2fdd2d35c1182398b73f410"
+    }
+  }
+]
