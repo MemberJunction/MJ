@@ -239,11 +239,12 @@ The `summarizeRange` retrieval tool (§5.3) likewise records an `AIAgentRunStep`
 
 ### 3.4 Migration checklist (single file, `migrations/v5/`)
 
-> **Implemented:** `migrations/v5/V202607151500__v5.49.x__Agent_Conversation_Compaction.sql`
-> *(renamed twice: from `V202606012156__v5.40.x` after merging `next` — the old timestamp was
-> out-of-order vs. `next`'s v5.47.x migrations — then renumbered to v5.49.x post-5.48 release,
-> commit `2cf0213185`; the re-added StepType CHECK also now includes `'Plan'` and `'Skill'`,
-> which `next` added in v5.44.)*
+> **Implemented:** `migrations/v5/V202607201104__v5.49.x__Agent_Conversation_Compaction.sql`
+> *(renumbered three times as `next` advanced under the open PR: from `V202606012156__v5.40.x`
+> after merging `next` — the old timestamp was out-of-order vs. `next`'s v5.47.x migrations —
+> then to v5.49.x post-5.48 release (commit `2cf0213185`), then to `V202607201104` after
+> `next`'s `V202607191254` FK-index backfill leapfrogged the previous timestamp; the re-added
+> StepType CHECK also now includes `'Plan'` and `'Skill'`, which `next` added in v5.44.)*
 
 - `ALTER TABLE ConversationDetail ADD Sequence INT NULL, SummaryPromptRunID UNIQUEIDENTIFIER NULL` (single consolidated ALTER).
 - Backfill `Sequence` (§3.1).
@@ -388,7 +389,7 @@ call sites) so the SQL filter and the in-memory projection cannot drift.
 > **STATUS: ALL PHASES SHIPPED (2026-07-13).** Implementation notes below record where
 > the build deliberately refined the sketch; the sections above remain the design rationale.
 
-1. **Migration** ✅ — `V202607151500__v5.49.x__Agent_Conversation_Compaction.sql`:
+1. **Migration** ✅ — `V202607201104__v5.49.x__Agent_Conversation_Compaction.sql`:
    `Sequence` (+ backfill wrapped in `DISABLE TRIGGER trgUpdateConversationDetail` so the
    ordinal assignment doesn't stamp UpdatedAt on every historical row + AFTER INSERT
    trigger), `SummaryPromptRunID`, composite index
@@ -400,7 +401,7 @@ call sites) so the SQL filter and the in-memory projection cannot drift.
    incl. `'Plan'`/`'Skill'`), and a hand-authored corrective tail (Sequence
    `AllowUpdateAPI=0` — trigger-owned ordinal; 12 `ExtendedType='Code'` restores the
    generated category sweep had nulled).
-   PostgreSQL variant `migrations-pg/v5/V202607151500__v5.49.x__Agent_Conversation_Compaction.pg.sql`,
+   PostgreSQL variant `migrations-pg/v5/V202607201104__v5.49.x__Agent_Conversation_Compaction.pg.sql`,
    produced in the PR-review round via the pg-migrate-v2 split-and-regenerate pipeline:
    SQLConverter for the mechanical sections + hand-authored PL/pgSQL trigger — BEFORE
    ROW with a per-conversation `pg_advisory_xact_lock` as the UPDLOCK/HOLDLOCK analog
