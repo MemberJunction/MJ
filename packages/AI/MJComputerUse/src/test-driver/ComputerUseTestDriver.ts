@@ -422,6 +422,9 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         if (config.screenshotHistoryDepth != null) {
             params.ScreenshotHistoryDepth = config.screenshotHistoryDepth;
         }
+        // Element-grounded perception (CU-A4): opt-in per test/suite; default off
+        // (coordinate mode) until baked in across the suite.
+        params.ElementGrounding = config.elementGrounding ?? false;
 
         // Adaptive settle profile (CU-A1/A2): MJ-Explorer defaults, config-overridable.
         params.AppProfile = this.buildAppProfile(config);

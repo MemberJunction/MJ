@@ -10,7 +10,7 @@
  * - OnStagnation: only when heuristics detect potential stuckness
  */
 
-import { BrowserAction, ActionExecutionResult, BrowserDiagnosticEvent } from './browser.js';
+import { BrowserAction, ActionExecutionResult, BrowserDiagnosticEvent, InteractiveElement } from './browser.js';
 import { ToolCallRecord } from './tools.js';
 import { ComputerUseError } from './errors.js';
 import { SettleReason } from './app-profile.js';
@@ -180,6 +180,13 @@ export class StepRecord {
     public SettleReason: SettleReason = 'none';
     /** Browser diagnostics captured during this step (console errors, failed requests, crashes) — CU-A7. */
     public Diagnostics: BrowserDiagnosticEvent[] = [];
+    /**
+     * Interactive elements the extractor found this step when element grounding
+     * is on (CU-A4) — role/name/selector/bbox for each. Empty when grounding is
+     * off. The raw material that makes ClickElement/TypeIntoElement traces
+     * replayable and self-healable (CU-C1).
+     */
+    public InteractiveElements: InteractiveElement[] = [];
     /** Time spent capturing (and hashing) the screenshot. */
     public ScreenshotMs: number = 0;
     /** Time spent in the controller LLM call. */

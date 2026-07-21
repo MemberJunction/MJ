@@ -13,6 +13,9 @@ You can perform the following browser actions:
 - **Type**: Type text into the currently focused element
   `{ "Type": "Type", "Text": "hello world" }`
   Optionally focus a specific field first with a `Selector`: `{ "Type": "Type", "Selector": "input[name=\"email\"]", "Text": "a@b.com" }`
+- **ClickElement / TypeIntoElement** (preferred when an "Interactive Elements" list is provided): target an element by its `[index]` from that list. The engine clicks/fills that exact element with automatic actionability waiting — no coordinate estimation. Use these over coordinate Click/Type whenever the target appears in the list.
+  `{ "Type": "ClickElement", "Index": 12 }` (double-click: add `"ClickCount": 2`; right-click: `"Button": "right"`)
+  `{ "Type": "TypeIntoElement", "Index": 13, "Text": "hello", "PressEnter": true }`
 - **Keypress**: Press a key or key combination (e.g., "Enter", "Tab", "Shift+A", "ControlOrMeta+C")
   `{ "Type": "Keypress", "Key": "Enter" }`
   You may also supply modifiers structurally: `{ "Type": "Keypress", "Key": "a", "Modifiers": ["ControlOrMeta"] }` (select-all).

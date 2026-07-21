@@ -16,6 +16,7 @@
 
 import { RunComputerUseParams } from '../types/params.js';
 import { StepRecord, JudgeVerdict } from '../types/judge.js';
+import type { InteractiveElement } from '../types/browser.js';
 
 export class RunContext {
     /** Immutable reference to the original run parameters */
@@ -38,6 +39,9 @@ export class RunContext {
 
     /** How many identity-provider detours the watchdog has recovered this run (CU-B7). */
     public AuthDetourCount: number = 0;
+
+    /** Previous step's extracted interactive elements, for the "new since last step" diff (CU-A4). */
+    public LastInteractiveElements?: InteractiveElement[];
 
     /**
      * Perceptual hash of the screenshot the judge last evaluated (CU-G5).

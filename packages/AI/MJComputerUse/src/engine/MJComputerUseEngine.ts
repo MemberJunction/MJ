@@ -242,6 +242,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 judgeFeedback: request.JudgeFeedback,
                 loopEvidence: request.LoopEvidence,
                 diagnostics: request.Diagnostics,
+                interactiveElements: request.InteractiveElements,
                 currentUrl: request.CurrentUrl,
                 stepNumber: request.StepNumber,
                 maxSteps: request.MaxSteps,

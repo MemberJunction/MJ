@@ -53,6 +53,14 @@ export class ControllerPromptRequest {
     public Diagnostics?: string;
 
     /**
+     * Serialized interactive-element list for this step (CU-A4), when element
+     * grounding is on — `[12] button "Save"` / `[13] textbox "Name" (empty)`.
+     * The controller targets these by index via ClickElement/TypeIntoElement.
+     * Empty/undefined in coordinate/vision mode.
+     */
+    public InteractiveElements?: string;
+
+    /**
      * Cancellation signal for the controller LLM call (CU-B8). When the engine's
      * `Stop()` aborts it, an in-flight prompt returns promptly (Layer 2 threads
      * it into `AIPromptParams.cancellationToken`) instead of holding a worker

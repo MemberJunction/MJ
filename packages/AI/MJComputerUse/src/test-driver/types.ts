@@ -206,6 +206,16 @@ export interface ComputerUseTestConfig {
     };
 
     /**
+     * Element-grounded perception (CU-A4). When true, each step the engine
+     * extracts the page's interactive elements into an indexed list, renders it
+     * into the controller prompt, and lets the controller act by index
+     * (ClickElement/TypeIntoElement) with locator actionability auto-wait instead
+     * of estimating coordinates. Default false (coordinate/vision mode) until
+     * baked in across the suite.
+     */
+    elementGrounding?: boolean;
+
+    /**
      * Failure-artifact trace policy (CU-F4). When enabled, the run records a
      * Playwright trace (DOM snapshots + network + console) viewable at
      * trace.playwright.dev, retained per this policy as a `File` TestRunOutput:

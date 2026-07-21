@@ -60,6 +60,13 @@ The browser reported the following errors, which may explain a blank, broken, or
 Factor these in — e.g. a failed script/chunk load or a failed API request means the page did not render, not that you clicked the wrong thing.
 {% endif %}
 
+{% if interactiveElements %}
+## Interactive Elements (this page)
+Each line is `[index] role "name"`. A `*` marks an element new since the previous step; `|SCROLL|` marks a scrollable container.
+{{ interactiveElements }}
+**Prefer targeting these by index** — `{ "Type": "ClickElement", "Index": 12 }` or `{ "Type": "TypeIntoElement", "Index": 13, "Text": "…" }` — over estimating coordinates. Index targeting waits for the element and clicks it precisely. Fall back to coordinate Click only for elements not in this list (e.g. canvas/custom-rendered surfaces).
+{% endif %}
+
 {% if previousStepSummary %}
 ## Previous Actions
 {{ previousStepSummary }}

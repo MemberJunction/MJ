@@ -62,6 +62,7 @@ import { resolveSettleExit } from './settle-decision.js';
 import { computeStateSignature, detectLoop } from './loop-detection.js';
 import { evaluateAuthDetour } from './auth-detour.js';
 import { CancellationError, abortableDelay } from './cancellation.js';
+import { serializeInteractiveElements } from './element-serializer.js';
 import { formatDiagnosticsDigest } from './diagnostics-digest.js';
 import {
     JudgeContext,
@@ -856,8 +857,15 @@ export class ComputerUseEngine {
             step.ScreenshotMs = performance.now() - screenshotStart;
             this.log(`Step ${stepNumber} — screenshot captured (${Math.round(screenshot.length / 1024)}KB base64)`);
 
+            // 2b. Element-grounded perception (CU-A4): extract the interactive
+            //     elements, record them on the step (raw material for replayable
+            //     traces), and serialize an indexed list for the controller so it
+            //     can act by index instead of estimating coordinates.
+            const elementList = await this.perceiveInteractiveElements(context, step);
+
             // 3. Build controller request + call controller LLM (timed — CU-F1)
             const request = this.buildControllerRequest(context, stepNumber);
+            request.InteractiveElements = elementList;
             const llmStart = performance.now();
             const response = await this.executeControllerWithRetry(request);
             step.LlmMs = performance.now() - llmStart;
@@ -1030,6 +1038,38 @@ export class ComputerUseEngine {
         const screenshot = await this.browserAdapter.CaptureScreenshot();
         context.AddScreenshot(screenshot);
         return screenshot;
+    }
+
+    // ─── Element-Grounded Perception (CU-A4) ───────────────
+
+    /**
+     * When element grounding is enabled, extract the page's interactive elements,
+     * record them on the step (raw material for replayable traces), and return
+     * the serialized indexed list for the controller prompt (with `*` markers on
+     * elements new since the previous step). Returns undefined when grounding is
+     * off or nothing was found — the controller then works in coordinate mode.
+     * Never throws: an extractor failure degrades to coordinate mode.
+     */
+    private async perceiveInteractiveElements(
+        context: RunContext,
+        step: StepRecord
+    ): Promise<string | undefined> {
+        if (!context.Params.ElementGrounding) {
+            return undefined;
+        }
+        try {
+            const elements = await this.browserAdapter.ExtractInteractiveElements();
+            step.InteractiveElements = elements;
+            const serialized = serializeInteractiveElements(elements, context.LastInteractiveElements);
+            context.LastInteractiveElements = elements;
+            if (elements.length > 0) {
+                this.log(`Step ${step.StepNumber} — element grounding: ${elements.length} interactive elements`);
+            }
+            return elements.length > 0 ? serialized : undefined;
+        } catch (error) {
+            this.logError('Interactive-element extraction failed (falling back to coordinate mode)', error);
+            return undefined;
+        }
     }
 
     // ─── Settle Loop (CU-A1/A2) ────────────────────────────
@@ -1794,6 +1834,7 @@ export class ComputerUseEngine {
         sections.push(this.renderJudgeFeedbackSection(request.JudgeFeedback));
         sections.push(this.renderLoopEvidenceSection(request.LoopEvidence));
         sections.push(this.renderDiagnosticsSection(request.Diagnostics));
+        sections.push(this.renderInteractiveElementsSection(request.InteractiveElements));
         sections.push(this.renderPreviousStepsSection(request.PreviousStepSummary));
 
         return sections.filter(Boolean).join('\n\n');
@@ -1836,6 +1877,12 @@ export class ComputerUseEngine {
         if (!diagnostics) return '';
 
         return `## Browser Diagnostics (previous step)\nThe browser reported the following errors, which may explain a blank, broken, or unexpected page:\n${diagnostics}\nFactor these in — e.g. a failed script/chunk load or a failed API request means the page did not render, not that you clicked the wrong thing.`;
+    }
+
+    private renderInteractiveElementsSection(elementList: string | undefined): string {
+        if (!elementList) return '';
+
+        return `## Interactive Elements (this page)\nEach line is \`[index] role "name"\`. A \`*\` marks an element new since the previous step; \`|SCROLL|\` marks a scrollable container.\n${elementList}\n**Prefer targeting these by index** — \`{ "Type": "ClickElement", "Index": 12 }\` or \`{ "Type": "TypeIntoElement", "Index": 13, "Text": "…" }\` — over estimating coordinates. Index targeting waits for the element and clicks it precisely. Fall back to coordinate Click only for elements not in this list (e.g. canvas/custom-rendered surfaces).`;
     }
 
     private renderPreviousStepsSection(summary: string | undefined): string {

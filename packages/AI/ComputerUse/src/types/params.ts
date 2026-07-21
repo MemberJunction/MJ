@@ -188,4 +188,14 @@ export class RunComputerUseParams {
      * the run outcome.
      */
     public TracePath?: string;
+
+    /**
+     * Element-grounded perception (CU-A4). When true, each step the engine
+     * extracts the page's interactive elements into a stable indexed list,
+     * renders it into the controller prompt, and lets the controller act by
+     * index (ClickElement/TypeIntoElement) with locator-based actionability
+     * auto-wait instead of estimating coordinates. Default off (coordinate/
+     * vision mode) so the change is opt-in per test/suite until baked in.
+     */
+    public ElementGrounding?: boolean;
 }
