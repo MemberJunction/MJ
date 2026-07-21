@@ -116,6 +116,8 @@ Item IDs use the `DR-` prefix (Docker Regression). Themes: **A** resource isolat
 
 **Risks / open questions.** Limits must be sized against real hosts (CI runners vary); too-tight SQL memory slows the codegen phase — mitigate by making limits `.env.test`-interpolated with sane defaults, and by DR-B1 removing most SQL-heavy work from the hot path.
 
+**Wave 0 status — LANDED.** All six services in `docker-compose.test.yml` now carry an `.env.test`-tunable `mem_limit`: sqlserver 4g + the internal `MSSQL_MEMORY_LIMIT_MB=3584` (+ `MSSQL_PID=Developer`), mjapi 10g, mjexplorer 512m, test-runner 7g (3 workers × ~1.5g + 2g), db-setup + form-generator 6g. Ceilings not reservations. **Deferred:** tempdb-on-tmpfs + telemetry-off (no supported mssql image env for either) and cpuset pinning (optional per plan). Verified via `docker compose config`.
+
 #### DR-A2 — Browser fleet off the app host (browser grid)
 
 **Problem.** N Chromium instances (~700 MB–1 GB peak each per Browserbase's published sizing) run inside the same container — and the same host — as the app under test. Browser memory growth is the leading suspect for the unattributed 19 GB decline; a browser leak takes the whole runner (and run) down with it. The observed model of every mature vendor is per-browser isolation (QA Wolf: one container per test; Browserless: "add more containers behind a load balancer rather than increasing CONCURRENT").
@@ -138,6 +140,8 @@ Item IDs use the `DR-` prefix (Docker Regression). Themes: **A** resource isolat
 **Expected impact.** Cheap, near-zero-risk removal of a documented degradation mechanism.
 
 **Risks / open questions.** `ipc: host` widens the isolation boundary — acceptable for a test stack; document it.
+
+**Wave 0 status — LANDED.** test-runner (the only Chromium-hosting service until DR-A2) gains `init: true` + `ipc: host`; `shm_size: 4g` kept as defense if ipc is ever removed. The cross-server compose hosts no Chromium — unchanged. Verified via `docker compose config`.
 
 #### DR-A4 — Worker-count auto-derivation from real memory budgets
 
@@ -247,6 +251,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 **Expected impact.** Cuts context transfer by ~4+ GB per build ×4 images; makes builds reproducible; source edits stop invalidating dependency installs. The single highest ratio of benefit to effort in the whole plan.
 
 **Risks / open questions.** Verify nothing currently depends on a host `dist/` being copied in (it shouldn't — images run their own builds).
+
+**Wave 0 status — LANDED.** Root `.dockerignore` created (excludes `.git`, `node_modules`, `**/dist`, `**/.turbo`, `**/.angular`, `test-results`, workbench workspace, `.env*`, logs; keeps `.docker-generated`). All four regression Dockerfiles reordered: a manifests-only stage derives a pure `package.json` skeleton (303 manifests) so `npm ci` (BuildKit cache-mounted on `/root/.npm`) is keyed only on manifest content; sources land after install, data (`metadata/`/`migrations/`/`Demos/`) after compile. Verified: `buildx --check` clean ×4; manifests stage built + inspected (303 package.json, 0 stray files); context probe shows exactly 10,489 source files reach the image (matches host). No workspace package has install-time lifecycle scripts (verified), so manifest-only install is safe. `docker/MJAPI` (same context root) already manifest-first — compatible.
 
 #### DR-C2 — One shared builder, thin per-service images
 
@@ -436,6 +442,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 
 **Risks / open questions.** Live key probes cost fractions of a cent and can false-negative on provider blips — make them warn-by-default, fail with `--strict`/CI mode.
 
+**Wave 0 status — container-side gate LANDED; host-side gate deferred to Wave 1.** `preflight-checks.cjs` now exits 78 (EX_CONFIG) on any gating failure and the entrypoint aborts on it (was ignored). Gating set: MJAPI health (strict 2xx) + GraphQL-via-nginx (lenient, 401 proves routing) + socat + nginx static (strict) + **DB suite-membership assertion** (resolves the suite, asserts `COUNT(__mj.TestSuiteTest active)` ≥ the metadata member count parsed from the matching `test-suites/*.json` — the baseline-collision tripwire; falls back to non-empty when no metadata file, skipped in bacpac mode) + auth material (TEST_UID/PWD) + ≥1 AI key. Auth0-domain bug fixed (`AUTH0_DOMAIN` only, no client-id-as-hostname) and demoted to advisory. `PREFLIGHT_SOFT=1` restores advisory mode. Pure helpers exported + `require.main` guard → 10/10 unit assertions; integration exits 78/0 as designed. **Deferred to Wave 1:** the host-side gate (`mj test regression preflight` before compose — ports free, images exist, `.env.test` present, live key probe), the cgroup memory-vs-workers arithmetic (**DR-A4**), and the first-page Playwright smoke.
+
 #### DR-E2 — A single env contract; kill silent-empties and dead knobs
 
 **Problem.** Every sensitive var interpolates via `${VAR:-}` to a silent empty (`docker-compose.test.yml:125-127,188-194`); a missing `.env.test` silently drops `--env-file`; **`MAX_RETRIES` is absent from every compose `environment:` block** — the documented knob physically cannot reach the container, so Mode A is hardcoded to 2 retries and remote mode to 0 (`test-runner-entrypoint.sh:196`, `test-runner-remote-entrypoint.sh:128-133`); only two AI vendor keys are forwardable at all; `AUTH0_CLIENTID`/`AUTH0_CLIENT_ID`/build-arg spelling skew; worker defaults differ 3-vs-4 across five files; `DB_TRUST_SERVER_CERTIFICATE` is set but ignored by `lib/db.cjs`.
@@ -446,6 +454,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 
 **Risks / open questions.** Generated override files must land in the scratch/run dir, not the repo; keep the raw compose usable by hand with documented `--env-file`.
 
+**Wave 0 status — MAX_RETRIES unblock LANDED; full env-contract deferred to Wave 1.** `MAX_RETRIES` declared in the test-runner compose `environment:` block (was read by the entrypoint but absent everywhere — the knob physically couldn't reach the container); CLI `up` gains `--retries` (min 0 — `0` valid + the point) and `--workers` (min 1), forwarded as env for compose interpolation, guarded `!== undefined` so `--retries 0` isn't dropped. Verified: `MAX_RETRIES=5` renders "5", default "2"; both flags in the oclif manifest; MJCLI builds. **Deferred to Wave 1:** the single table-driven env contract, generic `AI_VENDOR_API_KEY__*` forwarding (removing the two-vendor ceiling), the one worker/retry constants module across modes, AUTH0 spelling unification, and the effective-config banner. Remote mode still hardcodes 0 retries until DR-E5 (Wave 3).
+
 #### DR-E3 — Secrets hygiene
 
 **Problem.** `.env.test` contains live-looking Gemini/Anthropic keys and the test password in plaintext (gitignored, but its own header calls it a "template" — one `git add -f` from leaking); keys duplicate root `.env` and drift; `.env.test.example` is referenced by three docs and **does not exist**; `auth-bootstrap.cjs:27-28` contains hardcoded fallback credentials, one of which is *wrong* vs `.env.test` (`computerpassword2!` vs `computerusepassword2!`) — a missing env var silently attempts a wrong password 3× instead of failing fast.
@@ -455,6 +465,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 **Expected impact.** Real keys stop living in files; wrong-password loops become config errors at second 5.
 
 **Risks / open questions.** None material.
+
+**Wave 0 status — LANDED (example + fallback deletion); key rotation + mandatory-`env:` deferred.** `.env.test.example` restored (placeholders only, git-negation added so `.env.*` doesn't swallow it; documents `env:VAR` indirection; corrects the false "compose auto-reads .env.test" header — it's the CLI's `--env-file`). `auth-bootstrap.cjs`'s hardcoded credential fallbacks deleted (the password fallback was even WRONG vs `.env.test`), replaced by a fail-fast guard that exits 1 before launching Chromium when creds are absent. Verified: guard exits 1 w/o a browser; no credential literals in code; example committable + secret-free. **Deferred:** rotating the live keys in the gitignored `.env.test`, and making `env:` indirection mandatory (preflight-fail on literal keys).
 
 #### DR-E4 — Auth bootstrap hardening (infra side)
 
@@ -486,6 +498,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 
 **Risks / open questions.** None — the healthcheck already exists in a sibling file.
 
+**Wave 0 status — LANDED.** mjexplorer gains the standalone compose's healthcheck (`curl -fsS http://localhost:4200/`; nginx:alpine ships curl — verified) and the runner's dependency flips from `service_started` to `service_healthy` (`required: false` preserved for remote mode). The explicit warm-up's other two goals need no redundant Playwright launch (Simplicity-First): end-to-end readiness is already gated by the DR-E1 preflight's `graphqlProxy`/`nginxStatic` checks, and MJAPI server-cache priming happens in the existing single-login auth bootstrap's page load — both before test #1. Making the auth bootstrap a hard gate is DR-E4 (Wave 1). Verified via `docker compose config`.
+
 ---
 
 ### Theme F — CLI & Operator UX
@@ -509,6 +523,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 **Expected impact.** Mode A becomes CI-usable; detached and attached runs both leave a complete console record; "docker logs is the only monitor" ends.
 
 **Risks / open questions.** `compose run` bypasses `depends_on` gating — the CLI must sequence the up-then-run itself (it now can, and gains per-phase timing as a bonus — the first step toward DR-F7's phase inversion).
+
+**Wave 0 status — entrypoint `tee` slice LANDED; up-then-run + exit-code propagation deferred to Wave 1.** Both entrypoints `exec > >(tee -a "$RUN_DIR/runner.log") 2>&1` right after RUN_DIR creation, so a detached (`up -d`) or crashed/OOM-killed run leaves a console record on the bind mount (not only in `docker logs`). Output before RUN_DIR (socat/metadata/preflight) stays in docker logs. Verified: `bash -n` + the tee idiom captures stdout+stderr while still echoing. **Deferred to Wave 1:** the host-side half — restructuring Mode A as `up -d` infra + `compose run --rm test-runner` with piped stdio, CLI tee to `$RUN_ID/console.log`, and verbatim exit-code propagation with distinct codes (needs DR-F1 host-minted RUN_ID first).
 
 #### DR-F3 — `status`, `logs`, `stop`
 
@@ -663,8 +679,8 @@ Cross-plan note for capacity math: once the CU plan's replay-first tier lands, ~
 
 ## 6. Recommended Sequencing
 
-**Wave 0 — stop the bleeding (independent, small, immediate):**
-DR-C1 (`.dockerignore` + layer order) · DR-A1 (resource limits + SQL cap) · DR-A3 (`init:`/ipc) · DR-E2's `MAX_RETRIES` compose fix + `--retries` flag · DR-E1's container-side gate teeth (exit-nonzero + entrypoint abort + Auth0-probe fix + DB suite-member assertion) · DR-E6 (Explorer healthcheck + warm-up) · DR-F2's entrypoint `tee` · DR-E3 (credential-fallback deletion, `.env.test.example`). Nothing here depends on anything else; together they eliminate the OOM configuration class, the silent-stale-suite class, and the unturnable-retry knob.
+**Wave 0 — stop the bleeding (independent, small, immediate): ✅ LANDED (2026-07-21).**
+DR-C1 (`.dockerignore` + layer order) · DR-A1 (resource limits + SQL cap) · DR-A3 (`init:`/ipc) · DR-E2's `MAX_RETRIES` compose fix + `--retries` flag · DR-E1's container-side gate teeth (exit-nonzero + entrypoint abort + Auth0-probe fix + DB suite-member assertion) · DR-E6 (Explorer healthcheck + warm-up) · DR-F2's entrypoint `tee` · DR-E3 (credential-fallback deletion, `.env.test.example`). Nothing here depends on anything else; together they eliminate the OOM configuration class, the silent-stale-suite class, and the unturnable-retry knob. All eight shipped as one commit each (see per-item "Wave 0 status" blocks in §4 for what landed vs. deferred to Wave 1). Not yet done from this wave's spirit: DR-E1's host-side gate + DR-A4 arithmetic and DR-F2's up-then-run/exit-code propagation both moved to Wave 1 (they need the host-minted RUN_ID / cgroup reads that are Wave-1 foundations).
 
 **Wave 1 — run ownership & incremental truth:**
 DR-F1 (RUN_ID) → DR-F2 (up-then-run + exit codes) → DR-D5 (JSONL + partials + signal handlers) → DR-F3 (status/logs/stop) → DR-F4 (rerun-failures) → DR-G4 (supervisor rewrite) → DR-G2 (per-attempt artifacts + timeline). D5 unblocks F3/F4 and all of Theme G; F1/F2 unblock everything host-side. DR-G7 docs pass rides along.
