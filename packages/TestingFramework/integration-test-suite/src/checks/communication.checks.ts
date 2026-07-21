@@ -184,8 +184,18 @@ export const CommunicationChecks: NamedCheck[] = [
             // Exactly one audit row was written for this send (tracked for CM3 + teardown)
             await settle(300);
             const logs = await findMarkedLogs(ctx);
-            AssertEqual(logs.length, 1, 'exactly one Communication Log audit row for the dry-run send');
-            f.LogIds.push(logs[0].ID);
+            // When the environment-credentials attempt is rejected at the provider preflight,
+            // that FIRST attempt already wrote its own (Failed) audit row before the documented
+            // dummy-credential retry — so the marker can legitimately match two rows. The
+            // delivery-state invariant is about COMPLETE rows: exactly one, ever.
+            const completeLogs = logs.filter(l => l.Status === 'Complete');
+            AssertEqual(completeLogs.length, 1, 'exactly one COMPLETE Communication Log audit row for the dry-run send');
+            if (credentialMode === 'dummy') {
+                Assert(logs.length <= 2, `at most the Failed preflight row + the Complete dry-run row may exist (got ${logs.length})`);
+            } else {
+                AssertEqual(logs.length, 1, 'exactly one audit row when environment credentials worked first try');
+            }
+            for (const l of logs) { f.LogIds.push(l.ID); }
             if (logs[0].CommunicationRunID) {
                 f.RunIds.push(logs[0].CommunicationRunID);
             }
@@ -203,8 +213,8 @@ export const CommunicationChecks: NamedCheck[] = [
             Assert(f.DryRunResultSuccess === true && f.DryRunResultMarked === true, 'CM2 recorded a successful DryRun-marked send (ordered bundle)');
 
             const logs = await findMarkedLogs(ctx);
-            AssertEqual(logs.length, 1, 'still exactly one audit row for the marker (no duplicate delivery state)');
-            const log = logs[0];
+            AssertEqual(logs.filter(l => l.Status === 'Complete').length, 1, 'still exactly one COMPLETE audit row for the marker (no duplicate delivery state)');
+            const log = logs.find(l => l.Status === 'Complete')!; // the semantic assertions below are about the COMPLETED dry-run row, not a preflight-Failed sibling
 
             AssertEqual(log.Status, 'Complete', 'log row completed the audited lifecycle');
             AssertEqual(log.Direction, 'Sending', 'log row direction');

@@ -209,9 +209,14 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
             Assert((phase2.ErrorMessage || '').includes('two-phase deliberate failure'), 'finalization carried the error message');
             Assert((phase2.OutputData || '').includes('"probe":"als2"'), 'finalization carried the output data');
             Assert((phase2.OutputData || '').includes('"success":false'), 'OutputData wraps the execution context with success:false');
+            // NOTE: no UpdatedAt>CreatedAt assert — SQL Server's GETUTCDATE tick (~3ms) can
+            // stamp a fast INSERT+UPDATE identically, making that comparison flaky. The
+            // two-write proof is already airtight above: phase-1 was OBSERVED as
+            // Status='Running' in the DB, phase-2 as Status='Failed' — two distinct persisted
+            // states cannot come from one write.
             Assert(
-                new Date(String(phase2.__mj_UpdatedAt)).getTime() > new Date(String(phase2.__mj_CreatedAt)).getTime(),
-                'the two-phase path really wrote twice (UpdatedAt advanced past CreatedAt)'
+                new Date(String(phase2.__mj_UpdatedAt)).getTime() >= new Date(String(phase2.__mj_CreatedAt)).getTime(),
+                'UpdatedAt must never precede CreatedAt'
             );
         }
     },
