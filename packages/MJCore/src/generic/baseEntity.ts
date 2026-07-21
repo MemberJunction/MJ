@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
@@ -14,7 +14,13 @@ import { z } from 'zod';
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
  * used properties from the entity field metadata.
+ *
+ * Marked `@OptionalKeyedSpecialization()`: hydration probes the ClassFactory with a
+ * `'<Entity>.<Field>'` key for EVERY field so that a per-field subclass CAN be registered, but
+ * none ever has been in practice — falling back to `EntityField` itself is the designed common
+ * case, not a resolution failure, so the factory must not warn about it.
  */
+@OptionalKeyedSpecialization()
 export class EntityField {
     /**
      * Static object containing the value ranges for various SQL number types. 

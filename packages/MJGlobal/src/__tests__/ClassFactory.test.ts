@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ClassFactory, ClassRegistration } from '../ClassFactory';
+import { OptionalKeyedSpecialization, ClassIsOptionalKeyedSpecialization } from '../OptionalKeyedSpecialization';
 
 // ---- Test class hierarchies ----
 
@@ -852,6 +853,72 @@ describe('ClassFactory', () => {
     it('the async surface honors the marker too', async () => {
       await expect(factory.CreateInstanceAsync<MarkedBase>(MarkedBase, 'no-such-key')).rejects.toThrow(/MarkedBase/);
       const result = await factory.TryCreateInstanceAsync<MarkedBase>(MarkedBase, 'no-such-key');
+      expect(result.Resolved).toBe(false);
+      expect(result.Instance).toBeNull();
+    });
+  });
+
+  describe('@OptionalKeyedSpecialization — designed keyed fallback (EntityField-style probes)', () => {
+    /**
+     * The EntityField shape: keyed lookups are "specialize if registered" probes, base fallback
+     * is the designed common case. The marker must silence the fallback diagnostic WITHOUT
+     * changing resolution behavior.
+     */
+    @OptionalKeyedSpecialization()
+    class ProbedBase {
+      Kind = 'probed-base';
+    }
+    class ProbedSub extends ProbedBase {
+      override Kind = 'probed-sub';
+    }
+    /** Identical shape, NO marker — the control that proves the marker is what silences it. */
+    class UnmarkedTwin {
+      Kind = 'unmarked';
+    }
+
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+    });
+
+    it('keyed miss on a MARKED base falls back silently — no warning at all', () => {
+      const result = factory.TryCreateInstance<ProbedBase>(ProbedBase, 'Some Entity.SomeField');
+      expect(result.Resolved).toBe(false);
+      expect(result.Instance).toBeInstanceOf(ProbedBase);
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('control: the identical keyed miss on an UNMARKED base still warns (instrumentation intact)', () => {
+      factory.TryCreateInstance<UnmarkedTwin>(UnmarkedTwin, 'Some Entity.SomeField');
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('a registered keyed subclass on a marked base still resolves — the marker only mutes reporting', () => {
+      factory.Register(ProbedBase, ProbedSub, 'Some Entity.Special', 0, true);
+      const result = factory.TryCreateInstance<ProbedBase>(ProbedBase, 'Some Entity.Special');
+      expect(result.Resolved).toBe(true);
+      expect(result.Instance).toBeInstanceOf(ProbedSub);
+    });
+
+    it('subclasses do NOT inherit the marker (own-property semantics, mirroring @RequiresSubclass)', () => {
+      expect(ClassIsOptionalKeyedSpecialization(ProbedBase)).toBe(true);
+      expect(ClassIsOptionalKeyedSpecialization(ProbedSub)).toBe(false);
+      expect(ClassIsOptionalKeyedSpecialization(UnmarkedTwin)).toBe(false);
+      expect(ClassIsOptionalKeyedSpecialization(null)).toBe(false);
+    });
+
+    it('the marker never weakens @RequiresSubclass — a base carrying BOTH still hard-errors', () => {
+      // Nonsensical combination, but defensive: RequiresSubclass must win.
+      @OptionalKeyedSpecialization()
+      class BothMarked {
+        public static readonly RequiresSubclass = true;
+      }
+      const result = factory.TryCreateInstance<BothMarked>(BothMarked, 'missing');
       expect(result.Resolved).toBe(false);
       expect(result.Instance).toBeNull();
     });

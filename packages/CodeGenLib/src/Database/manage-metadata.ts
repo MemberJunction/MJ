@@ -3958,23 +3958,37 @@ export class ManageMetadataBase {
          if (newEntityFields.length > 0) {
             const transaction = await pool.beginTransaction();
             try {
-               // wrap in a transaction so we get all of it or none of it
+               // wrap in a transaction so we get all of it or none of it.
+               // [Large Schema Series] Batch the per-field INSERTs. Previously this
+               // issued one LogSQLAndExecute — a DB round-trip AND a synchronous
+               // migration-log append — PER field, i.e. ~40k on a 2,000-table
+               // install (~37s). Collect each row's INSERT SQL (unchanged, conflict
+               // guards intact) and flush in chunks through LogSQLBatchAndExecute,
+               // which terminates + joins the statements and sends each chunk as a
+               // single round-trip + single log append while preserving the exact
+               // per-row SQL and the replayable migration-file output. Both dialects.
+               // Batch size is configurable via `metadataInsertBatchSize` (default 250).
+               const CHUNK_SIZE = configInfo.metadataInsertBatchSize ?? 250;
+               const inserts: string[] = [];
                for (let i = 0; i < newEntityFields.length; ++i) {
                   const n = newEntityFields[i];
                   if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
                      // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities
                      // that would have been created violate rules - such as not having an ID column, etc.
                      const newEntityFieldUUID = this.createNewUUID();
-                     const sSQLInsert = this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n);
-                     try {
-                        await this.LogSQLAndExecute(pool, sSQLInsert, `SQL text to insert new entity field`);
-                        // if we get here, we're okay, otherwise we have an exception, which we want as it blows up transaction
-                     }
-                     catch (e) {
-                        // this is here so we can catch the error for debug. We want the transaction to die
-                        logError(`Error inserting new entity field. SQL: \n${sSQLInsert}`);
-                        throw e;
-                     }
+                     inserts.push(this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n));
+                  }
+               }
+               for (let i = 0; i < inserts.length; i += CHUNK_SIZE) {
+                  const chunk = inserts.slice(i, i + CHUNK_SIZE);
+                  try {
+                     await this.LogSQLBatchAndExecute(pool, chunk, `SQL text to insert ${chunk.length} new entity field(s)`);
+                     // an error blows up the transaction (all-or-nothing), which is what we want
+                  }
+                  catch (e) {
+                     // catch for debug context, then let the transaction die
+                     logError(`Error inserting new entity field batch (rows ${i}..${i + chunk.length}).`);
+                     throw e;
                   }
                }
                await transaction.commit();
@@ -5385,6 +5399,21 @@ export class ManageMetadataBase {
       let errorCount = 0;
       const total = entities.length;
 
+      // Pre-group fields by EntityID once — O(total fields) — instead of a per-entity linear scan
+      // of the full pooled array inside processEntityAdvancedGeneration (which was O(entities × fields),
+      // and drops to the slow UUID-compare path on SQL Server upper-case IDs). Keyed on the normalized
+      // UUID (trim + lowercase) to match UUIDsEqual's comparison semantics regardless of casing.
+      const fieldsByEntity = new Map<string, any[]>();
+      for (const f of allFields) {
+         const key = String(f.EntityID ?? '').trim().toLowerCase();
+         const arr = fieldsByEntity.get(key);
+         if (arr) {
+            arr.push(f);
+         } else {
+            fieldsByEntity.set(key, [f]);
+         }
+      }
+
       // Process in batches
       for (let i = 0; i < total; i += batchSize) {
          const batch = entities.slice(i, i + batchSize);
@@ -5396,7 +5425,7 @@ export class ManageMetadataBase {
             batch.map(entity => {
                CodeGenReporter.Instance.flagEntity(entity.Name, 'modified');
                return CodeGenReporter.Instance.entityPhase(entity.Name, 'advancedGeneration',
-                  () => this.processEntityAdvancedGeneration(pool, entity, allFields, ag, currentUser),
+                  () => this.processEntityAdvancedGeneration(pool, entity, fieldsByEntity, ag, currentUser),
                );
             })
          );
@@ -5413,6 +5442,15 @@ export class ManageMetadataBase {
 
          const pct = Math.round((processedCount / total) * 100);
          updateSpinner(`Advanced generation: ${processedCount}/${total} entities (${pct}%)${errorCount > 0 ? ` — ${errorCount} error(s)` : ''}`);
+
+         // Credential circuit tripped (e.g. keyless / mis-credentialed env) — stop issuing further
+         // AI calls; the remaining entities would only produce doomed round-trips. One clear message
+         // was already logged when the circuit opened.
+         if (ag.AICircuitOpen) {
+            const skipped = total - processedCount;
+            updateSpinner(`Advanced generation: AI credential circuit open — skipping remaining ${skipped} entit${skipped === 1 ? 'y' : 'ies'} (check AI credentials).`);
+            break;
+         }
       }
 
       return errorCount === 0;
@@ -5422,20 +5460,26 @@ export class ManageMetadataBase {
     * Process advanced generation for a single entity
     * @param pool Database connection pool
     * @param entity Entity to process
-    * @param allFields All fields for all entities (will be filtered for this entity)
+    * @param fieldsByEntity Fields grouped by normalized EntityID (built once by the batch driver)
     * @param ag AdvancedGeneration instance
     * @param currentUser User context
     */
    protected async processEntityAdvancedGeneration(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      allFields: any[],
+      fieldsByEntity: Map<string, any[]>,
       ag: AdvancedGeneration,
       currentUser: UserInfo
    ): Promise<void> {
       try {
-         // Filter fields for this entity (client-side filtering)
-         const fields = allFields.filter((f: any) => UUIDsEqual(f.EntityID, entity.ID));
+         // Credential circuit tripped earlier this run — skip cleanly (no LLM call, no error log).
+         if (ag.AICircuitOpen) {
+            return;
+         }
+
+         // Fields for this entity — O(1) lookup into the pre-grouped map (keyed on the normalized
+         // EntityID) instead of a linear scan of the full pooled array.
+         const fields = fieldsByEntity.get(String(entity.ID ?? '').trim().toLowerCase()) ?? [];
 
          // Determine if this is a new entity (for DefaultForNewUser decision)
          const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);
