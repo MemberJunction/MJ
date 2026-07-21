@@ -67,6 +67,12 @@ export class ControllerPromptRequest {
     public Hints?: string[];
 
     /**
+     * Current date (YYYY-MM-DD) injected into the prompt (CU-E3) so the model can
+     * reason about "today"/relative dates without hallucinating one.
+     */
+    public CurrentDate?: string;
+
+    /**
      * Cancellation signal for the controller LLM call (CU-B8). When the engine's
      * `Stop()` aborts it, an in-flight prompt returns promptly (Layer 2 threads
      * it into `AIPromptParams.cancellationToken`) instead of holding a worker

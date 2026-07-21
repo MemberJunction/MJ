@@ -1290,6 +1290,7 @@ export class ComputerUseEngine {
         request.MaxSteps = context.Params.MaxSteps;
         request.CurrentUrl = context.CurrentUrl;
         request.Hints = context.Params.Hints;   // per-test UI hints (CU-E5)
+        request.CurrentDate = new Date().toISOString().slice(0, 10);   // current date (CU-E3)
         // Thread the cancellation signal so an in-flight controller call aborts
         // promptly on Stop() (CU-B8); consumed by Layer 2, not template data.
         request.Signal = this.abortController.signal;
@@ -1872,6 +1873,7 @@ export class ComputerUseEngine {
 
         // Application context first — it's the most general signal, sets the
         // stage before per-step/per-tool-specific guidance.
+        sections.push(this.renderCurrentDateSection(request.CurrentDate));
         sections.push(this.renderApplicationContextSection(request.ApplicationContext));
         sections.push(this.renderHintsSection(request.Hints));
         sections.push(this.renderToolDefinitionsSection(request.ToolDefinitions));
@@ -1894,6 +1896,11 @@ export class ComputerUseEngine {
         if (!hints || hints.length === 0) return '';
         const list = hints.map(h => `- ${h}`).join('\n');
         return `## Hints\nThe following hints about this task's UI may save you steps:\n${list}`;
+    }
+
+    private renderCurrentDateSection(currentDate: string | undefined): string {
+        if (!currentDate) return '';
+        return `## Current Date\nToday is ${currentDate}. Use this for any relative-date reasoning; do not guess the date.`;
     }
 
     private renderToolDefinitionsSection(tools: ControllerPromptRequest['ToolDefinitions']): string {

@@ -21,6 +21,7 @@ You are testing the application described below. Use this context to navigate ef
 ## Current State
 - Step: {{ stepNumber }} of {{ maxSteps }}
 - Current URL: {{ currentUrl }}
+{% if currentDate %}- Today's date: {{ currentDate }} (use for relative-date reasoning; do not guess){% endif %}
 
 ## Coordinate System
 The screenshot uses a **normalized 1000x1000 coordinate space**. All X coordinates range from 0 (left edge) to 1000 (right edge), and all Y coordinates range from 0 (top edge) to 1000 (bottom edge). When specifying click positions, always use this 0-1000 range for both axes.
