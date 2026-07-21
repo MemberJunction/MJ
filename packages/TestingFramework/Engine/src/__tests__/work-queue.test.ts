@@ -114,6 +114,28 @@ describe('drainQueue', () => {
         expect(runsByWorker[2]).toBeUndefined();
     });
 
+    it('stops dispatching new items once the wall-clock deadline passes (DR-D4)', async () => {
+        const src = items('a', 'b', 'c', 'd', 'e');
+        let clock = 1000;
+        const now = () => clock;
+        const ran: string[] = [];
+        // Deadline at 1002. Each completed item advances the clock by 1ms; after
+        // two items the clock reaches the deadline and dispatch stops.
+        const rows = await drainQueue(src, 1, async (item) => {
+            ran.push(item.testId);
+            clock += 1;
+            return [item.testId];
+        }, { deadline: 1002, now });
+        expect(ran).toEqual(['a', 'b']); // c, d, e left un-run (graceful partial)
+        expect(rows.sort()).toEqual(['a', 'b']);
+    });
+
+    it('runs the whole queue when the deadline is never reached', async () => {
+        const src = items('a', 'b', 'c');
+        const rows = await drainQueue(src, 1, async (item) => [item.testId], { deadline: 1e15, now: () => 1000 });
+        expect(rows.sort()).toEqual(['a', 'b', 'c']);
+    });
+
     it('staggers worker starts by workerIndex * staggerMs', async () => {
         // Measured at onWorkerStart (fires after the stagger wait, before the
         // drain loop) — not at runItem, since a fast worker 0 can drain the whole

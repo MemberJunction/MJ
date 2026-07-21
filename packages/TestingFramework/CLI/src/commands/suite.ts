@@ -200,8 +200,10 @@ export class SuiteCommand {
                 maxRetries: flags.maxRetries,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
                 onTestComplete: resultsSink?.onTestComplete,
+                onTestStart: resultsSink?.onTestStart,
                 selectedTestIds,
                 healthStatePath,
+                maxSuiteDurationMs: flags.maxSuiteDuration != null ? flags.maxSuiteDuration * 1000 : undefined,
             }, contextUser);
 
             this.spinner.stop();

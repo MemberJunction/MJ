@@ -104,6 +104,12 @@ export interface SuiteFlags extends CommonFlags {
      * `rerun-failures` and ad-hoc selection. Unresolved names warn (non-fatal).
      */
     tests?: string;
+    /**
+     * Suite wall-clock budget in SECONDS (DR-D4). Once elapsed, dispatch of new
+     * tests stops and the run finalizes gracefully with partial results. Overrides
+     * TestSuite.MaxExecutionTimeMS; unset ⇒ that column (or unbounded).
+     */
+    maxSuiteDuration?: number;
 }
 
 /**

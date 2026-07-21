@@ -230,6 +230,32 @@ export interface SuiteRunOptions extends TestRunOptions {
    * the worker loop and swallows any error it throws.
    */
   onTestComplete?: (result: TestRunResult) => void;
+
+  /**
+   * Fired when a worker DISPATCHES a test — before execution, once per test
+   * (not per retry) (DR-D4 heartbeat). Lets the sink record in-flight tests so
+   * `status` can show what each worker is running and surface a test that never
+   * completes (a wedged worker) instead of it being invisible. Cheap + non-throwing.
+   */
+  onTestStart?: (info: TestStartInfo) => void;
+
+  /**
+   * Suite wall-clock budget in ms (DR-D4, `--max-suite-duration`). Once elapsed,
+   * the runner stops dispatching NEW tests and finalizes gracefully with partial
+   * results; the in-flight test still finishes. Falls back to
+   * `TestSuite.MaxExecutionTimeMS` when unset; no budget ⇒ unbounded (historical).
+   */
+  maxSuiteDurationMs?: number;
+}
+
+/** Heartbeat payload emitted when a worker picks up a test (DR-D4). */
+export interface TestStartInfo {
+  testId: string;
+  testName: string;
+  /** Zero-based worker index (undefined for sequential runs). */
+  workerIndex?: number;
+  /** ISO timestamp the worker began this test. */
+  startedAt: string;
 }
 
 /**

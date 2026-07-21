@@ -21,7 +21,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { TestRunResult } from '@memberjunction/testing-engine-base';
+import { TestRunResult, TestStartInfo } from '@memberjunction/testing-engine-base';
 
 /** Terminal snapshot state for `results.partial.json`. */
 export type PartialStatus = 'Running' | 'Completed' | 'Cancelled' | 'Crashed';
@@ -56,6 +56,8 @@ interface PartialTestRow {
 
 export class IncrementalResultsSink {
     private readonly completed: TestRunResult[] = [];
+    /** Tests a worker has dispatched but not yet completed (DR-D4 heartbeat). */
+    private readonly inFlight = new Map<string, TestStartInfo>();
     private finalized = false;
 
     private constructor(
@@ -84,11 +86,26 @@ export class IncrementalResultsSink {
     }
 
     /**
+     * Engine `onTestStart` hook (DR-D4). Records the test as in-flight so the
+     * partial snapshot — and thus `status` — shows what each worker is running,
+     * and a test that never completes (a wedged worker) stays visible.
+     */
+    readonly onTestStart = (info: TestStartInfo): void => {
+        this.inFlight.set(info.testId, info);
+        try {
+            this.writePartial('Running');
+        } catch {
+            /* best-effort */
+        }
+    };
+
+    /**
      * Engine `onTestComplete` hook. Cheap + guarded: a disk hiccup here must
      * never disrupt the run, so every write is best-effort.
      */
     readonly onTestComplete = (result: TestRunResult): void => {
         this.completed.push(result);
+        this.inFlight.delete(result.testId);
         try {
             this.appendAttemptLines(result);
             this.writePartial('Running');
@@ -182,6 +199,7 @@ export class IncrementalResultsSink {
             completed: this.completed.length,
             counts,
             tests,
+            inFlight: [...this.inFlight.values()],
         };
 
         const tmp = `${this.partialPath}.tmp`;

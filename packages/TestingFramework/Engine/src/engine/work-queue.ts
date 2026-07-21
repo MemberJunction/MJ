@@ -84,6 +84,15 @@ export interface DrainOptions {
      * non-empty queue could stall. Absent ⇒ no admission control.
      */
     admit?: (workerIndex: number) => Promise<'proceed' | 'exit'>;
+    /**
+     * Suite wall-clock deadline as an epoch-ms timestamp (DR-D4). Once reached,
+     * workers stop taking NEW items and drain out; the in-flight test finishes
+     * and remaining tests are simply left un-run (a graceful partial finish, as
+     * a crash would leave them). Injectable clock via {@link DrainOptions.now}.
+     */
+    deadline?: number;
+    /** Clock source (injected for tests). Default `Date.now`. */
+    now?: () => number;
 }
 
 /**
@@ -117,8 +126,13 @@ export async function drainQueue<R>(
         if (staggerMs > 0 && workerIndex > 0) {
             await new Promise(resolve => setTimeout(resolve, workerIndex * staggerMs));
         }
+        const now = opts.now ?? Date.now;
         opts.onWorkerStart?.(workerIndex, effectiveWorkers);
         for (;;) {
+            // DR-D4: stop dispatching once the suite wall-clock budget is spent.
+            if (opts.deadline !== undefined && now() >= opts.deadline) {
+                break;
+            }
             // DR-D3: consult the load gate BEFORE taking an item, so a shed worker
             // never abandons work it already pulled.
             if (opts.admit && (await opts.admit(workerIndex)) === 'exit') {

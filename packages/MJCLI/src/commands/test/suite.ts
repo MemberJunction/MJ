@@ -70,6 +70,13 @@ export default class TestSuite extends Command {
         'resolved against the suite; unknown names are skipped with a warning. Used ' +
         'by `test regression rerun-failures` and for ad-hoc selection.',
     }),
+    'max-suite-duration': Flags.integer({
+      description:
+        'Suite wall-clock budget in SECONDS (DR-D4). Once elapsed, dispatch of new ' +
+        'tests stops and the run finalizes gracefully with partial results (the ' +
+        'in-flight test still finishes). Overrides the suite\'s MaxExecutionTimeMS. ' +
+        'Guarantees the run terminates even if individual tests hang.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -93,6 +100,7 @@ export default class TestSuite extends Command {
         maxRetries: flags['max-retries'],
         oraclesModule: flags['oracles-module'],
         tests: flags.tests,
+        maxSuiteDuration: flags['max-suite-duration'],
       });
 
     } catch (error) {

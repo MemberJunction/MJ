@@ -114,4 +114,20 @@ describe('IncrementalResultsSink (DR-D5)', () => {
         sink.onTestComplete(mkResult({ testId: 't1', testName: 'A' }));
         expect(sink.completedCount).toBe(1);
     });
+
+    // DR-D4: in-flight tracking makes a running (or wedged) worker visible in the
+    // partial snapshot that `status` reads.
+    it('tracks in-flight tests via onTestStart and clears them on completion', () => {
+        const sink = IncrementalResultsSink.forOutput(out, 'S')!;
+        sink.onTestStart({ testId: 't1', testName: 'Alpha', workerIndex: 0, startedAt: '2026-07-21T00:00:00Z' });
+        sink.onTestStart({ testId: 't2', testName: 'Beta', workerIndex: 1, startedAt: '2026-07-21T00:00:01Z' });
+        let p = readPartial();
+        expect(p.inFlight.map((i: { testId: string }) => i.testId).sort()).toEqual(['t1', 't2']);
+
+        sink.onTestComplete(mkResult({ testId: 't1', testName: 'Alpha', workerIndex: 0 }));
+        p = readPartial();
+        // t1 completed → only t2 (still running, potentially wedged) remains in-flight.
+        expect(p.inFlight.map((i: { testId: string }) => i.testId)).toEqual(['t2']);
+        expect(p.inFlight[0]).toMatchObject({ testName: 'Beta', workerIndex: 1 });
+    });
 });

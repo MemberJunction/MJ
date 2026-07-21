@@ -23,7 +23,7 @@ import {
 } from '@memberjunction/core-entities';
 import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
-import { BaseTestDriver } from '../drivers/BaseTestDriver';
+import { BaseTestDriver, DEFAULT_TEST_TIMEOUT_MS } from '../drivers/BaseTestDriver';
 import { IOracle } from '../oracles/IOracle';
 import { SchemaValidatorOracle } from '../oracles/SchemaValidatorOracle';
 import { TraceValidatorOracle } from '../oracles/TraceValidatorOracle';
@@ -52,6 +52,7 @@ import { RetryBudget, buildSuiteRetryPolicy, computeSuiteRetryBudget, fixedRetri
 import { classifyFailure } from './failure-classifier';
 import { WorkItem, seedWorkItems, drainQueue } from './work-queue';
 import { AdmissionController, readHealthState } from './admission';
+import { resolveWatchdogMs, withWatchdog } from './watchdog';
 import * as fs from 'node:fs';
 
 /**
@@ -379,6 +380,15 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 this.log(`Suite retry budget: ${retryBudget} extra attempt(s) across ${tests.length} tests (max ${options.maxRetries}/test, 0 for deterministic failures)`);
             }
 
+            // DR-D4: suite wall-clock budget. Option override wins; else the
+            // TestSuite.MaxExecutionTimeMS column; else unbounded (historical).
+            const maxSuiteMs = options.maxSuiteDurationMs
+                ?? (suite.MaxExecutionTimeMS != null && suite.MaxExecutionTimeMS > 0 ? suite.MaxExecutionTimeMS : undefined);
+            const suiteDeadline = maxSuiteMs && maxSuiteMs > 0 ? startTime + maxSuiteMs : undefined;
+            if (suiteDeadline) {
+                this.log(`Suite wall-clock budget: ${Math.round(maxSuiteMs! / 1000)}s — dispatch stops after that, in-flight tests finish`);
+            }
+
             const suiteDrivers = await this.resolveSuiteDrivers(tests, contextUser);
 
             let testResults: TestRunResult[] = [];
@@ -389,9 +399,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
                 // Execute tests — parallel or sequential
                 if (options.parallel && tests.length > 1) {
-                    testResults = await this.runTestsParallel(tests, options, contextUser, suiteRun, suiteVariablesJson, suiteContext);
+                    testResults = await this.runTestsParallel(tests, options, contextUser, suiteRun, suiteVariablesJson, suiteContext, suiteDeadline);
                 } else {
-                    testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext);
+                    testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext, suiteDeadline);
                 }
             } finally {
                 for (const driver of suiteDrivers) {
@@ -454,17 +464,25 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         contextUser: UserInfo,
         suiteRunId: string,
         suiteVariablesJson: string | null,
-        suiteContext?: Record<string, unknown>
+        suiteContext?: Record<string, unknown>,
+        deadline?: number
     ): Promise<TestRunResult[]> {
         const testResults: TestRunResult[] = [];
         let testSequence = 1;
 
         for (const test of tests) {
+            // DR-D4: honor the suite wall-clock budget between tests.
+            if (deadline !== undefined && Date.now() >= deadline) {
+                this.log(`Suite wall-clock budget reached — stopping after ${testResults.length}/${tests.length} tests`);
+                break;
+            }
+
             if (testSequence > 1 && options.delayBetweenTests && options.delayBetweenTests > 0) {
                 this.log(`Waiting ${options.delayBetweenTests}ms before next test...`, options.verbose);
                 await new Promise(resolve => setTimeout(resolve, options.delayBetweenTests));
             }
 
+            options.onTestStart?.({ testId: test.ID, testName: test.Name, startedAt: new Date().toISOString() });
             try {
                 const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRunId, testSequence, suiteVariablesJson, undefined, suiteContext);
                 const arr = Array.isArray(result) ? result : [result];
@@ -595,7 +613,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         contextUser: UserInfo,
         suiteRun: MJTestSuiteRunEntity,
         suiteVariablesJson: string | null,
-        suiteContext?: Record<string, unknown>
+        suiteContext?: Record<string, unknown>,
+        deadline?: number
     ): Promise<TestRunResult[]> {
         const maxWorkers = Math.min(options.maxParallel ?? 4, tests.length);
         this.log(`Starting parallel execution: ${tests.length} tests across ${maxWorkers} workers`);
@@ -626,6 +645,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 staggerMs: 2500,
                 onWorkerStart: (wi, count) => this.log(`Worker ${wi + 1}/${count} starting`),
                 admit: admissionController ? (wi) => admissionController.admit(wi) : undefined,
+                deadline,
             }
         );
 
@@ -656,6 +676,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             return [];
         }
         const rows: TestRunResult[] = [];
+        // DR-D4 heartbeat: announce dispatch so the sink can track in-flight tests
+        // and a never-completing (wedged) test stays visible in `status`.
+        options.onTestStart?.({ testId: item.testId, testName: item.testName, workerIndex, startedAt: new Date().toISOString() });
         try {
             this.log(`[Worker ${workerIndex + 1}] Running: ${test.Name}`, options.verbose);
             const result = await this.runTestWithSuiteVariables(
@@ -1355,18 +1378,45 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         // not throw; this catch is the safety net for a buggy/edge-case driver.
         this.log(`Executing test via ${testType.DriverClass}`, options.verbose);
         let driverResult: DriverExecutionResult;
+        // DR-D4: the engine owns a watchdog set to the driver's OWN effective
+        // timeout + grace, so a driver whose promise never settles (crashed
+        // browser, hung network) can't wedge this worker forever. On fire we
+        // synthesize a classified `infra` Error and move on; the abandoned
+        // promise is handled inside withWatchdog so a late settlement can't crash
+        // the process. (Recycling the worker's browser awaits DR-A2's grid.)
+        const watchdogMs = resolveWatchdogMs(this.computeEffectiveTimeoutMs(test));
         try {
-            driverResult = await driver.Execute({
-                test,
-                testRun,
-                contextUser,
-                options: enhancedOptions,
-                oracleRegistry: this._oracleRegistry,
-                resolvedVariables,
-                workerIndex,
-                suiteContext,
-                fixtures
-            });
+            const outcome = await withWatchdog(
+                driver.Execute({
+                    test,
+                    testRun,
+                    contextUser,
+                    options: enhancedOptions,
+                    oracleRegistry: this._oracleRegistry,
+                    resolvedVariables,
+                    workerIndex,
+                    suiteContext,
+                    fixtures
+                }),
+                watchdogMs,
+                { onTimeout: () => this.logError(`Watchdog fired: ${testType.DriverClass} did not settle within ${watchdogMs}ms for "${test.Name}" — abandoning (zombie may continue in background)`) }
+            );
+            if (outcome.timedOut) {
+                driverResult = {
+                    targetType: testType.Name,
+                    targetLogId: testRun.ID,
+                    status: 'Error',
+                    score: 0,
+                    oracleResults: [],
+                    passedChecks: 0,
+                    failedChecks: 0,
+                    totalChecks: 0,
+                    errorMessage: `Watchdog fired: driver did not settle within ${watchdogMs}ms (effective timeout + grace)`,
+                    failureClass: 'infra'
+                };
+            } else {
+                driverResult = outcome.value!;
+            }
         } catch (execErr) {
             const message = (execErr as Error)?.message ?? 'Unknown error thrown from driver.Execute';
             this.logError(`Driver ${testType.DriverClass} threw from Execute — recording TestRun as Error`, execErr as Error);
@@ -1463,6 +1513,30 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         this.log(`Test completed: ${result.status} (Score: ${result.score})`, options.verbose);
         return result;
+    }
+
+    /**
+     * The driver's effective per-test timeout (DR-D4), mirroring
+     * `BaseTestDriver.getEffectiveTimeout`'s priority so the engine watchdog
+     * fires only AFTER the driver should have returned:
+     *   Configuration JSON `maxExecutionTime` → `Test.MaxExecutionTimeMS` → default.
+     * @private
+     */
+    private computeEffectiveTimeoutMs(test: MJTestEntity): number {
+        if (test.Configuration) {
+            try {
+                const config = JSON.parse(test.Configuration);
+                if (typeof config?.maxExecutionTime === 'number' && config.maxExecutionTime > 0) {
+                    return config.maxExecutionTime;
+                }
+            } catch {
+                /* malformed Configuration — fall through to the entity field / default */
+            }
+        }
+        if (test.MaxExecutionTimeMS != null && test.MaxExecutionTimeMS > 0) {
+            return test.MaxExecutionTimeMS;
+        }
+        return DEFAULT_TEST_TIMEOUT_MS;
     }
 
     /**
