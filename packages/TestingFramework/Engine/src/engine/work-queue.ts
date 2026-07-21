@@ -76,6 +76,14 @@ export interface DrainOptions {
     staggerMs?: number;
     /** Fired as each worker begins draining (for logging). */
     onWorkerStart?: (workerIndex: number, workerCount: number) => void;
+    /**
+     * Load-aware admission gate (DR-D3), consulted before each item is taken.
+     * `'proceed'` → take the next item; `'exit'` → this worker sheds and stops
+     * pulling (its already-collected results are kept). The gate must guarantee
+     * at least one worker never sheds (see {@link admissionDecision}), or a
+     * non-empty queue could stall. Absent ⇒ no admission control.
+     */
+    admit?: (workerIndex: number) => Promise<'proceed' | 'exit'>;
 }
 
 /**
@@ -110,8 +118,16 @@ export async function drainQueue<R>(
             await new Promise(resolve => setTimeout(resolve, workerIndex * staggerMs));
         }
         opts.onWorkerStart?.(workerIndex, effectiveWorkers);
-        let item: WorkItem | undefined;
-        while ((item = queue.shift()) !== undefined) {
+        for (;;) {
+            // DR-D3: consult the load gate BEFORE taking an item, so a shed worker
+            // never abandons work it already pulled.
+            if (opts.admit && (await opts.admit(workerIndex)) === 'exit') {
+                break;
+            }
+            const item = queue.shift();
+            if (item === undefined) {
+                break;
+            }
             try {
                 const rows = await runItem(item, workerIndex);
                 collected.push(...rows);

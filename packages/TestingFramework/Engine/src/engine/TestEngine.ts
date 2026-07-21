@@ -51,6 +51,8 @@ import { runWithRetries, RetryPolicy } from './retry';
 import { RetryBudget, buildSuiteRetryPolicy, computeSuiteRetryBudget, fixedRetries } from './retry-policy';
 import { classifyFailure } from './failure-classifier';
 import { WorkItem, seedWorkItems, drainQueue } from './work-queue';
+import { AdmissionController, readHealthState } from './admission';
+import * as fs from 'node:fs';
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -605,6 +607,15 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         // wired yet, so longest-first currently degrades to suite order.
         const seeded = seedWorkItems(items, options.seedOrder ?? 'suite');
 
+        // DR-D3: load-aware admission. When the CLI wired a health-state path,
+        // build a gate that sheds workers when degraded / pauses when critical.
+        const admissionController = options.healthStatePath
+            ? new AdmissionController({
+                readHealth: () => readHealthState(options.healthStatePath!, fs.readFileSync),
+                log: (msg) => this.log(msg),
+            })
+            : undefined;
+
         const allResults = await drainQueue<TestRunResult>(
             seeded,
             maxWorkers,
@@ -614,6 +625,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             {
                 staggerMs: 2500,
                 onWorkerStart: (wi, count) => this.log(`Worker ${wi + 1}/${count} starting`),
+                admit: admissionController ? (wi) => admissionController.admit(wi) : undefined,
             }
         );
 

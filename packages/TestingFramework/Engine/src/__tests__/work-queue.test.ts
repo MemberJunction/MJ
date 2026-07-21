@@ -98,6 +98,22 @@ describe('drainQueue', () => {
         expect(rows.sort()).toEqual(['a', 'c']);
     });
 
+    it('sheds workers via the admit gate but worker 0 still drains the whole queue (DR-D3)', async () => {
+        const src = items('a', 'b', 'c', 'd', 'e', 'f');
+        const runsByWorker: Record<number, number> = {};
+        // Gate: worker 0 always proceeds; workers ≥1 shed immediately (degraded).
+        const admit = async (wi: number): Promise<'proceed' | 'exit'> => (wi === 0 ? 'proceed' : 'exit');
+        const rows = await drainQueue(src, 3, async (item, wi) => {
+            runsByWorker[wi] = (runsByWorker[wi] ?? 0) + 1;
+            return [item.testId];
+        }, { admit });
+        // Every item ran, all on worker 0 — the non-shedding drainer.
+        expect(rows.sort()).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+        expect(runsByWorker[0]).toBe(6);
+        expect(runsByWorker[1]).toBeUndefined();
+        expect(runsByWorker[2]).toBeUndefined();
+    });
+
     it('staggers worker starts by workerIndex * staggerMs', async () => {
         // Measured at onWorkerStart (fires after the stagger wait, before the
         // drain loop) — not at runItem, since a fast worker 0 can drain the whole

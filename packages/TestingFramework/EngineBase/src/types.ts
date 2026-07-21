@@ -172,6 +172,15 @@ export interface SuiteRunOptions extends TestRunOptions {
   seedOrder?: SeedOrder;
 
   /**
+   * Path to the DR-G4 supervisor's `health-state.json` (DR-D3). When set, the
+   * parallel work queue consults it before each dispatch: sheds workers when the
+   * host is `degraded`, pauses when `critical`. Absent (or file missing) ⇒ no
+   * admission control — the run proceeds at full concurrency. Typically derived
+   * from the `--output` run directory by the CLI.
+   */
+  healthStatePath?: string;
+
+  /**
    * Stop on first failure
    */
   failFast?: boolean;

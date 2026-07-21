@@ -14,6 +14,7 @@ import { parseVariableFlags } from '../utils/variable-parser';
 import { loadOraclesModule } from '../utils/oracle-module-loader';
 import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
 import { IncrementalResultsSink } from '../utils/incremental-results';
+import * as path from 'node:path';
 
 /**
  * Suite command - Execute a test suite
@@ -170,6 +171,14 @@ export class SuiteCommand {
                 this.installCrashHandlers(resultsSink);
             }
 
+            // DR-D3: the DR-G4 supervisor writes health-state.json into the same
+            // run directory as --output. Point the engine's admission gate at it
+            // so a degrading host can shed/pause dispatch. Absent --output ⇒ no
+            // admission control (ad-hoc console runs proceed at full concurrency).
+            const healthStatePath = flags.output
+                ? path.join(path.dirname(path.resolve(flags.output)), 'health-state.json')
+                : undefined;
+
             // Execute suite
             const flakyMsg = flags.flakyCheck && flags.flakyCheck > 1
                 ? ` (flaky-check: each test ×${flags.flakyCheck})`
@@ -192,6 +201,7 @@ export class SuiteCommand {
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
                 onTestComplete: resultsSink?.onTestComplete,
                 selectedTestIds,
+                healthStatePath,
             }, contextUser);
 
             this.spinner.stop();
