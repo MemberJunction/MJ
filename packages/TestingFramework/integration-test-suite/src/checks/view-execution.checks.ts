@@ -515,7 +515,85 @@ const V13: NamedCheck = {
     },
 };
 
-export const ViewExecutionChecks: NamedCheck[] = [V1, V2, V3, V4, V9, V10, V11, V12, V13];
+
+const V6: NamedCheck = {
+    Id: 'view-execution.V6',
+    Name: 'V6: SortState → OrderByClause — multi-column round-trip incl. legacy numeric 1/2 directions (pure compile)',
+    Fn: async (ctx: IntegrationCheckContext) => {
+        const entity = ctx.Provider.EntityByName(ENTITY);
+        Assert(entity != null, `entity '${ENTITY}' not found in metadata`);
+        const view = await ctx.Provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', ctx.User);
+        Assert(view.NewRecord(), 'could not initialize a new MJ: User Views object');
+        view.EntityID = entity!.ID;
+
+        view.SortState = JSON.stringify([
+            { field: 'Sequence', direction: 'desc' },
+            { field: 'Name', direction: 'asc' },
+        ]);
+        AssertEqual(view.OrderByClause, 'Sequence DESC, Name', 'multi-column: desc suffixed, asc bare, comma-joined in order');
+
+        // Legacy numeric direction codes (1=asc, 2=desc) still present in old view metadata.
+        view.SortState = JSON.stringify([{ field: 'Name', direction: 2 }, { field: 'Sequence', direction: 1 }]);
+        AssertEqual(view.OrderByClause, 'Name DESC, Sequence', 'legacy 1/2 numeric directions map to asc/desc');
+
+        view.SortState = JSON.stringify([]);
+        AssertEqual(view.OrderByClause, '', 'empty SortState (and no GridState) → empty ORDER BY');
+    },
+};
+
+const V7: NamedCheck = {
+    Id: 'view-execution.V7',
+    Name: 'V7: GridState.sortSettings legacy fallback — used only when SortState is empty',
+    Fn: async (ctx: IntegrationCheckContext) => {
+        const entity = ctx.Provider.EntityByName(ENTITY);
+        const view = await ctx.Provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', ctx.User);
+        Assert(view.NewRecord(), 'could not initialize a new MJ: User Views object');
+        view.EntityID = entity!.ID;
+
+        // Pre-SortState views stored sort only in GridState.sortSettings — the fallback path.
+        view.GridState = JSON.stringify({ sortSettings: [{ field: 'Sequence', dir: 'desc' }] }); // GridState uses `dir`, not SortState's `direction`
+        Assert(view.OrderByClause.trim().length > 0 && /Sequence/.test(view.OrderByClause) && /DESC/i.test(view.OrderByClause),
+            `GridState fallback must produce a Sequence DESC order (got "${view.OrderByClause}")`);
+
+        // SortState, when present, WINS over GridState — the fallback must not merge.
+        view.SortState = JSON.stringify([{ field: 'Name', direction: 'asc' }]);
+        AssertEqual(view.OrderByClause, 'Name', 'a non-empty SortState overrides the GridState fallback entirely');
+    },
+};
+
+const V8: NamedCheck = {
+    Id: 'view-execution.V8',
+    Name: 'V8: a SAVED view executed by ViewID ≡ the equivalent dynamic ExtraFilter+OrderBy (no compile/render drift)',
+    RequiresMutation: true,
+    Fn: async (ctx: IntegrationCheckContext) => {
+        const u = await getUniverse(ctx.User);
+        const entity = ctx.Provider.EntityByName(ENTITY);
+        const view = await ctx.Provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', ctx.User);
+        Assert(view.NewRecord(), 'could not initialize a new MJ: User Views object');
+        view.Name = `it-v8-saved-view ${Date.now().toString(36)} (mj-integration-test — safe to delete)`;
+        view.EntityID = entity!.ID;
+        view.UserID = ctx.User.ID;
+        view.WhereClause = u.SubsetFilter;
+        view.SortState = JSON.stringify([{ field: 'Name', direction: 'asc' }]);
+        Assert(await view.Save(), `V8 saved-view create failed: ${view.LatestResult?.CompleteMessage}`);
+        try {
+            const byView = await new RunView().RunView<UniverseRow & { Name: string }>(
+                { ViewID: view.ID, Fields: ['ID', 'Name'], IgnoreMaxRows: true, ResultType: 'simple' }, ctx.User);
+            requireSuccess(byView, 'V8 saved-view execution');
+            const dynamic = await new RunView().RunView<UniverseRow & { Name: string }>(
+                { EntityName: ENTITY, Fields: ['ID', 'Name'], ExtraFilter: u.SubsetFilter, OrderBy: 'Name', IgnoreMaxRows: true, ResultType: 'simple' }, ctx.User);
+            requireSuccess(dynamic, 'V8 dynamic equivalent');
+            Assert(byView.Results.length > 0, 'V8 would be vacuous on an empty subset');
+            assertSameIdSet(idSet(byView.Results), idSet(dynamic.Results), 'V8: saved-view rows ≡ dynamic-filter rows');
+            AssertEqual(byView.Results.map((r) => normId(r.ID)).join('|'), dynamic.Results.map((r) => normId(r.ID)).join('|'),
+                'V8: the saved SortState orders identically to the dynamic OrderBy');
+        } finally {
+            await view.Delete();
+        }
+    },
+};
+
+export const ViewExecutionChecks: NamedCheck[] = [V1, V2, V3, V4, V6, V7, V8, V9, V10, V11, V12, V13];
 
 for (const check of ViewExecutionChecks) {
     IntegrationCheckRegistry.Instance.Register(check);
