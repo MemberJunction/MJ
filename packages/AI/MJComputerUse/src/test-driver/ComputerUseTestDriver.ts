@@ -196,6 +196,11 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             if (applicationContext) {
                 runParams.ApplicationContext = applicationContext;
             }
+            // Rubric judging (CU-D1): thread the test's authored validation
+            // criteria into the in-run judge so Done is derived per-criterion.
+            if (expected.judgeValidationCriteria && expected.judgeValidationCriteria.length > 0) {
+                runParams.ValidationCriteria = expected.judgeValidationCriteria;
+            }
 
             // Failure-artifact tracing (CU-F4): when the policy calls for capture,
             // point the engine at a temp trace file for this run. The engine writes

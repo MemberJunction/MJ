@@ -14,6 +14,7 @@ import { BaseJudge } from './BaseJudge.js';
 import { JudgeContext, JudgeVerdict } from '../types/judge.js';
 import { JudgePromptRequest, JudgePromptResponse } from '../types/controller.js';
 import { DEFAULT_JUDGE_PROMPT } from '../prompts/default-judge.js';
+import { evaluateRubric, CriterionVerdict } from './rubric.js';
 
 /**
  * Callback type for executing judge prompts.
@@ -63,6 +64,7 @@ export class LLMJudge extends BaseJudge {
         request.StepSummary = this.buildStepSummary(context);
         request.CurrentUrl = context.CurrentUrl;
         request.Diagnostics = context.CurrentDiagnosticsDigest || undefined;
+        request.ValidationCriteria = context.ValidationCriteria;
         request.Signal = context.Signal;
         return request;
     }
@@ -100,13 +102,14 @@ export class LLMJudge extends BaseJudge {
 
         try {
             const parsed = JSON.parse(jsonStr) as JudgeParsedResponse;
-            return this.CreateVerdict(
+            const verdict = this.CreateVerdict(
                 parsed.done ?? false,
                 typeof parsed.confidence === 'number' ? parsed.confidence : 0,
                 parsed.reason ?? 'No reason provided',
                 parsed.feedback ?? '',
                 parsed.impossible ?? false,
             );
+            return this.applyRubric(verdict, parsed.criteria);
         } catch {
             return this.CreateVerdict(
                 false,
@@ -115,6 +118,38 @@ export class LLMJudge extends BaseJudge {
                 'Judge could not evaluate — response was malformed JSON',
             );
         }
+    }
+
+    /**
+     * When the judge returned per-criterion rubric verdicts (CU-D1), override
+     * the scalar Done/Confidence with the binary rubric derivation: Done =
+     * all-criteria-met, Confidence = coverage, Reason lists any unmet criteria.
+     * A missing/empty `criteria` array leaves the scalar verdict untouched
+     * (no rubric was supplied, or the judge didn't return one).
+     */
+    private applyRubric(
+        verdict: JudgeVerdict,
+        rawCriteria: JudgeParsedResponse['criteria']
+    ): JudgeVerdict {
+        if (!Array.isArray(rawCriteria) || rawCriteria.length === 0) {
+            return verdict;
+        }
+        const criteria: CriterionVerdict[] = rawCriteria.map(c => ({
+            criterion: String(c.criterion ?? ''),
+            met: c.met === true,
+            evidence: String(c.evidence ?? ''),
+        }));
+        const rubric = evaluateRubric(criteria);
+        verdict.CriteriaVerdicts = criteria;
+        // Impossible stays the model's call; the rubric governs Done/coverage.
+        if (!verdict.Impossible) {
+            verdict.Done = rubric.done;
+        }
+        verdict.Confidence = rubric.coverage;
+        verdict.Reason = rubric.done
+            ? `All ${rubric.total} criteria met. ${verdict.Reason}`.trim()
+            : `${rubric.metCount}/${rubric.total} criteria met; unmet: ${rubric.unmet.join('; ')}`;
+        return verdict;
     }
 
     /**
@@ -163,4 +198,6 @@ interface JudgeParsedResponse {
     confidence?: number;
     reason?: string;
     feedback?: string;
+    /** Per-criterion rubric verdicts (CU-D1), when a rubric was supplied. */
+    criteria?: Array<{ criterion?: string; met?: boolean; evidence?: string }>;
 }

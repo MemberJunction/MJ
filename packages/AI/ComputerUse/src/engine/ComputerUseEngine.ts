@@ -1615,6 +1615,7 @@ export class ComputerUseEngine {
         judgeContext.CurrentUrl = context.CurrentUrl;
         judgeContext.ControllerRequestedJudgement = controllerRequestedJudgement;
         judgeContext.CurrentDiagnosticsDigest = currentDiagnosticsDigest;
+        judgeContext.ValidationCriteria = context.Params.ValidationCriteria;   // rubric judging (CU-D1)
         judgeContext.Signal = this.abortController.signal;   // abort in-flight judge call on Stop() (CU-B8)
 
         return this.judge.Evaluate(judgeContext);
@@ -1946,13 +1947,22 @@ export class ComputerUseEngine {
             .replace(/\{\{currentUrl\}\}/g, request.CurrentUrl)
             .replace(/\{\{stepSummary\}\}/g, request.StepSummary);
 
-        // Append the current step's browser-diagnostics digest (CU-A7) so the
-        // judge can explain an infrastructure state instead of guessing. The
-        // generic prompt has no {{diagnostics}} slot, so this is appended.
-        if (request.Diagnostics) {
-            return `${rendered}\n\n## Browser Diagnostics (current step)\nThe browser reported the following errors this step — use them to explain the visible state instead of guessing:\n${request.Diagnostics}`;
+        const sections = [rendered];
+
+        // Rubric (CU-D1): when the run supplied validation criteria, ask the judge
+        // for a binary per-criterion verdict. Done is then derived as
+        // all-criteria-met (the generic prompt has no {{criteria}} slot).
+        if (request.ValidationCriteria && request.ValidationCriteria.length > 0) {
+            const list = request.ValidationCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
+            sections.push(`## Validation Criteria\nEvaluate the end-state against EACH criterion below. In your JSON response, include a "criteria" array of \`{ "criterion": "<text>", "met": true|false, "evidence": "<what you observed>" }\` — one entry per criterion. The goal is "done" only when EVERY criterion is met.\n${list}`);
         }
-        return rendered;
+
+        // Append the current step's browser-diagnostics digest (CU-A7) so the
+        // judge can explain an infrastructure state instead of guessing.
+        if (request.Diagnostics) {
+            sections.push(`## Browser Diagnostics (current step)\nThe browser reported the following errors this step — use them to explain the visible state instead of guessing:\n${request.Diagnostics}`);
+        }
+        return sections.join('\n\n');
     }
 
     // ═══════════════════════════════════════════════════════════

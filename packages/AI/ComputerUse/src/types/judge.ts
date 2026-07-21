@@ -11,6 +11,7 @@
  */
 
 import { BrowserAction, ActionExecutionResult, BrowserDiagnosticEvent, InteractiveElement } from './browser.js';
+import type { CriterionVerdict } from '../judge/rubric.js';
 import { ToolCallRecord } from './tools.js';
 import { ComputerUseError } from './errors.js';
 import { SettleReason } from './app-profile.js';
@@ -53,6 +54,14 @@ export class JudgeContext {
     public CurrentDiagnosticsDigest: string = '';
 
     /**
+     * Validation-criteria rubric for this run (CU-D1) — the test's authored
+     * pass criteria. When present, the judge returns a per-criterion verdict and
+     * `Done` is derived as all-criteria-met. Empty → the judge uses its scalar
+     * assessment of the goal.
+     */
+    public ValidationCriteria?: string[];
+
+    /**
      * Cancellation signal (CU-B8), passed through to the judge prompt request so
      * an in-flight judge LLM call aborts promptly when the run is stopped.
      */
@@ -80,6 +89,13 @@ export class JudgeVerdict {
     public Reason: string = '';
     /** Suggested next action for the Controller (optional guidance) */
     public SuggestedNextAction?: string;
+    /**
+     * Per-criterion verdicts when the run supplied a validation-criteria rubric
+     * (CU-D1). When present, `Done` is derived as all-criteria-met and the
+     * evidence strings feed triage + CU-C5 postcondition distillation. Empty
+     * when no rubric was supplied (the scalar verdict stands).
+     */
+    public CriteriaVerdicts?: CriterionVerdict[];
 }
 
 // ─── Judge Frequency ───────────────────────────────────────

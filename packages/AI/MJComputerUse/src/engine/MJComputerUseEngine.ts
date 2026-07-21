@@ -302,6 +302,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 maxSteps: request.MaxSteps,
                 currentUrl: request.CurrentUrl,
                 diagnostics: request.Diagnostics,
+                validationCriteria: request.ValidationCriteria,
             }, request.Signal);
 
             if (!result.success) {

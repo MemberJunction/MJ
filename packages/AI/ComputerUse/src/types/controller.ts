@@ -193,6 +193,13 @@ export class JudgePromptRequest {
     public Diagnostics?: string;
 
     /**
+     * Validation-criteria rubric for the run (CU-D1). When present, the judge is
+     * asked for a per-criterion `{criterion, met, evidence}` verdict and `Done`
+     * is derived as all-criteria-met.
+     */
+    public ValidationCriteria?: string[];
+
+    /**
      * Cancellation signal for the judge LLM call (CU-B8) — see
      * {@link ControllerPromptRequest.Signal}. Threaded into
      * `AIPromptParams.cancellationToken` by Layer 2; not template data.

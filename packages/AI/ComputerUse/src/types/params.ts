@@ -206,4 +206,12 @@ export class RunComputerUseParams {
      * mid-batch route change, a page-changing action, or this cap. Default 4.
      */
     public MaxActionsPerStep?: number;
+
+    /**
+     * Validation-criteria rubric for the run (CU-D1) — the test's authored pass
+     * criteria. Threaded into the judge, which returns a per-criterion verdict;
+     * `Done` is then derived as all-criteria-met (binary decisions are more
+     * stable than a scalar-confidence cliff). Empty → scalar judging.
+     */
+    public ValidationCriteria?: string[];
 }
