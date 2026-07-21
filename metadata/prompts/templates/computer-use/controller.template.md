@@ -76,6 +76,14 @@ Each line is `[index] role "name"`. A `*` marks an element new since the previou
 **Prefer targeting these by index** — `{ "Type": "ClickElement", "Index": 12 }` or `{ "Type": "TypeIntoElement", "Index": 13, "Text": "…" }` — over estimating coordinates. Index targeting waits for the element and clicks it precisely. Fall back to coordinate Click only for elements not in this list (e.g. canvas/custom-rendered surfaces).
 {% endif %}
 
+{% if memory or plan %}
+## Your Tracked State (from the previous step)
+{% if memory %}Memory (your durable notes):
+{{ memory }}
+{% endif %}{% if plan %}Plan (your checklist — update the current item):
+{{ plan }}
+{% endif %}{% endif %}
+
 {% if previousStepSummary %}
 ## Previous Actions
 {{ previousStepSummary }}

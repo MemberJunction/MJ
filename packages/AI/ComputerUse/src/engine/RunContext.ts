@@ -43,6 +43,10 @@ export class RunContext {
     /** Previous step's extracted interactive elements, for the "new since last step" diff (CU-A4). */
     public LastInteractiveElements?: InteractiveElement[];
 
+    /** Controller's durable memory + plan from the previous step, echoed into the next prompt (CU-E2). */
+    public LastMemory?: string;
+    public LastPlan?: string;
+
     /**
      * Perceptual hash of the screenshot the judge last evaluated (CU-G5).
      * Used to skip re-judging an unchanged visible state.

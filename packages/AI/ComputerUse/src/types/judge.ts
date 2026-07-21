@@ -209,6 +209,10 @@ export class StepRecord {
      * next step's summary so the controller knows exactly what did NOT run.
      */
     public BatchStopReason?: string;
+    /** Controller self-tracked state emitted this step (CU-E2): outcome eval, durable memory, plan checklist. */
+    public Evaluation?: string;
+    public Memory?: string;
+    public Plan?: string;
     /** Time spent capturing (and hashing) the screenshot. */
     public ScreenshotMs: number = 0;
     /** Time spent in the controller LLM call. */

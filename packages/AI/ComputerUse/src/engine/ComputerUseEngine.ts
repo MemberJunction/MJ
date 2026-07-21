@@ -890,6 +890,14 @@ export class ComputerUseEngine {
             step.ControllerReasoning = response.Reasoning;
             step.ActionsRequested = response.Actions;
 
+            // Self-tracked agent state (CU-E2): record it, and carry Memory/Plan
+            // forward so the next prompt echoes them (history stays self-describing).
+            step.Evaluation = response.Evaluation;
+            step.Memory = response.Memory;
+            step.Plan = response.Plan;
+            if (response.Memory !== undefined) context.LastMemory = response.Memory;
+            if (response.Plan !== undefined) context.LastPlan = response.Plan;
+
             // A step that asks for judgement is a deliberate checkpoint, not an
             // empty/stuck step — record it so the main loop's empty-step abort
             // does not misfire (CU-B3).
@@ -1291,6 +1299,8 @@ export class ComputerUseEngine {
         request.CurrentUrl = context.CurrentUrl;
         request.Hints = context.Params.Hints;   // per-test UI hints (CU-E5)
         request.CurrentDate = new Date().toISOString().slice(0, 10);   // current date (CU-E3)
+        request.Memory = context.LastMemory;   // echo self-tracked state (CU-E2)
+        request.Plan = context.LastPlan;
         // Thread the cancellation signal so an in-flight controller call aborts
         // promptly on Stop() (CU-B8); consumed by Layer 2, not template data.
         request.Signal = this.abortController.signal;
@@ -1878,6 +1888,7 @@ export class ComputerUseEngine {
         sections.push(this.renderHintsSection(request.Hints));
         sections.push(this.renderToolDefinitionsSection(request.ToolDefinitions));
         sections.push(this.renderFormLoginSection(request.FormLoginCredentials));
+        sections.push(this.renderAgentStateSection(request.Memory, request.Plan));
         sections.push(this.renderJudgeFeedbackSection(request.JudgeFeedback));
         sections.push(this.renderLoopEvidenceSection(request.LoopEvidence));
         sections.push(this.renderDiagnosticsSection(request.Diagnostics));
@@ -1901,6 +1912,14 @@ export class ComputerUseEngine {
     private renderCurrentDateSection(currentDate: string | undefined): string {
         if (!currentDate) return '';
         return `## Current Date\nToday is ${currentDate}. Use this for any relative-date reasoning; do not guess the date.`;
+    }
+
+    private renderAgentStateSection(memory: string | undefined, plan: string | undefined): string {
+        const parts: string[] = [];
+        if (memory) parts.push(`Memory (your durable notes):\n${memory}`);
+        if (plan) parts.push(`Plan (your checklist — update the current item):\n${plan}`);
+        if (parts.length === 0) return '';
+        return `## Your Tracked State (from the previous step)\n${parts.join('\n\n')}`;
     }
 
     private renderToolDefinitionsSection(tools: ControllerPromptRequest['ToolDefinitions']): string {

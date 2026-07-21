@@ -201,6 +201,26 @@ That should work.`;
             }
         });
 
+        it('should parse self-tracked state: evaluation/memory/plan (CU-E2)', () => {
+            const input = JSON.stringify({
+                reasoning: 'r', actions: [],
+                evaluation: 'the field filled',
+                memory: 'user id is 42',
+                plan: ['1.[x] open', '2.[>] search'],
+            });
+            const res = ResponseParser.ParseControllerResponse(input);
+            expect(res.Evaluation).toBe('the field filled');
+            expect(res.Memory).toBe('user id is 42');
+            expect(res.Plan).toBe('1.[x] open\n2.[>] search'); // array joined by newlines
+        });
+
+        it('should leave E2 state undefined when absent or blank', () => {
+            const res = ResponseParser.ParseControllerResponse(JSON.stringify({ reasoning: 'r', actions: [], memory: '  ' }));
+            expect(res.Evaluation).toBeUndefined();
+            expect(res.Memory).toBeUndefined();
+            expect(res.Plan).toBeUndefined();
+        });
+
         it('should default Click button to left when unrecognized', () => {
             const actions = parseActions([
                 { Type: 'Click', X: 0, Y: 0, Button: 'invalid_button' },

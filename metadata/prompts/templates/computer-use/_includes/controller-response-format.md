@@ -5,6 +5,9 @@ Respond with ONLY a JSON object (no other text):
 ```json
 {
   "reasoning": "Brief explanation of what you see and what you plan to do",
+  "evaluation": "Did my PREVIOUS action work? e.g. 'The Name field now shows the text I typed — success'",
+  "memory": "Durable notes to carry forward (<=200 chars): key facts, IDs, what you've tried",
+  "plan": "Short checklist with the CURRENT item marked, e.g. '1.[x] open Data Explorer  2.[>] search Members  3.[ ] open first record'",
   "actions": [
     { "Type": "Click", "BoundingBox": { "XMin": 420, "YMin": 270, "XMax": 580, "YMax": 330 } }
   ],
@@ -12,6 +15,8 @@ Respond with ONLY a JSON object (no other text):
   "requestJudgement": false
 }
 ```
+
+The `evaluation`, `memory`, and `plan` fields are **optional but recommended** — they are echoed back to you next step so you don't lose track. Use `evaluation` to self-check the last action's result (do not assume it worked); keep `memory` short and durable; update the `plan` checklist's current-item marker as you progress.
 
 **When you believe the goal is accomplished or a major milestone is reached:**
 ```json

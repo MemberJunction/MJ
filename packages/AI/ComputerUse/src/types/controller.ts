@@ -73,6 +73,13 @@ export class ControllerPromptRequest {
     public CurrentDate?: string;
 
     /**
+     * The controller's durable memory + plan from the PREVIOUS step (CU-E2),
+     * echoed back so history is self-describing and intent isn't re-derived.
+     */
+    public Memory?: string;
+    public Plan?: string;
+
+    /**
      * Cancellation signal for the controller LLM call (CU-B8). When the engine's
      * `Stop()` aborts it, an in-flight prompt returns promptly (Layer 2 threads
      * it into `AIPromptParams.cancellationToken`) instead of holding a worker
@@ -160,6 +167,19 @@ export class ControllerPromptResponse {
      * the goal has been accomplished or needs confirmation of progress.
      */
     public RequestJudgement?: boolean;
+
+    /**
+     * Self-tracked agent state (CU-E2), all optional & parser-tolerant:
+     * - `Evaluation` — did the PREVIOUS step's action achieve its intent
+     *   (self-verification; pairs with Rule 11 / CU-E3).
+     * - `Memory` — durable notes the model carries forward (≤~200 chars).
+     * - `Plan` — a short checklist with the current item marked.
+     * `Memory` and `Plan` are echoed back into the next prompt so history is
+     * self-describing and the model stops re-deriving intent every step.
+     */
+    public Evaluation?: string;
+    public Memory?: string;
+    public Plan?: string;
 
     /** Raw text response from the LLM (for debugging/logging) */
     public RawResponse: string = '';

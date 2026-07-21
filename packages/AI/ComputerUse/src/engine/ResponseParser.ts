@@ -41,6 +41,9 @@ interface RawControllerResponse {
     actions?: RawAction[];
     toolCalls?: RawToolCall[];
     requestJudgement?: boolean;
+    evaluation?: unknown;
+    memory?: unknown;
+    plan?: unknown;
 }
 
 interface RawAction {
@@ -75,6 +78,10 @@ export class ResponseParser {
             response.Actions = ResponseParser.parseActions(parsed.actions ?? []);
             response.ToolCalls = ResponseParser.parseToolCalls(parsed.toolCalls ?? []);
             response.RequestJudgement = parsed.requestJudgement ?? false;
+            // Self-tracked agent state (CU-E2) — optional, tolerant of absence.
+            response.Evaluation = ResponseParser.toStateString(parsed.evaluation);
+            response.Memory = ResponseParser.toStateString(parsed.memory);
+            response.Plan = ResponseParser.toStateString(parsed.plan);
         } catch {
             response.Reasoning = `JSON parse error on: ${jsonStr.slice(0, 200)}`;
         }
@@ -281,6 +288,25 @@ export class ResponseParser {
         if (value === 'right') return 'right';
         if (value === 'middle') return 'middle';
         return 'left';
+    }
+
+    /**
+     * Coerce a self-tracked-state value (CU-E2) into a trimmed non-empty string,
+     * or undefined. Tolerant: a string is used as-is; an array is joined by
+     * newlines (a checklist); any other object is JSON-stringified.
+     */
+    private static toStateString(value: unknown): string | undefined {
+        if (value == null) return undefined;
+        let text: string;
+        if (typeof value === 'string') {
+            text = value;
+        } else if (Array.isArray(value)) {
+            text = value.map(v => (typeof v === 'string' ? v : JSON.stringify(v))).join('\n');
+        } else {
+            text = JSON.stringify(value);
+        }
+        const trimmed = text.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
     }
 
     /** Coerce a raw selector value into a trimmed non-empty string, or undefined (CU-A6). */
