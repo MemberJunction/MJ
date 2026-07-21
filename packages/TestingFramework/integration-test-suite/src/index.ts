@@ -71,3 +71,4 @@ export * from './checks/agent-rag-search.checks';
 export * from './checks/agent-wire-callback.checks';
 export * from './checks/view-security.checks';
 export * from './checks/ai-providers.checks';
+export * from './checks/app-behavioral.checks';
