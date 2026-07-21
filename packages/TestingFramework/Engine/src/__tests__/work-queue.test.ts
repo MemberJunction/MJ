@@ -114,6 +114,20 @@ describe('drainQueue', () => {
         expect(runsByWorker[2]).toBeUndefined();
     });
 
+    it('aborts EVERY worker (incl. worker 0) when shouldAbort trips (DR-D7)', async () => {
+        const src = items('a', 'b', 'c', 'd', 'e', 'f');
+        const ran: string[] = [];
+        let aborted = false;
+        const rows = await drainQueue(src, 2, async (item) => {
+            ran.push(item.testId);
+            if (ran.length >= 2) aborted = true; // trip after 2 dispatches
+            return [item.testId];
+        }, { shouldAbort: () => aborted });
+        // Only the first couple ran; the breaker halted the whole pool.
+        expect(ran.length).toBeLessThanOrEqual(3);
+        expect(rows.length).toBe(ran.length);
+    });
+
     it('stops dispatching new items once the wall-clock deadline passes (DR-D4)', async () => {
         const src = items('a', 'b', 'c', 'd', 'e');
         let clock = 1000;

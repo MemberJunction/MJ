@@ -53,6 +53,7 @@ import { classifyFailure } from './failure-classifier';
 import { WorkItem, seedWorkItems, drainQueue } from './work-queue';
 import { AdmissionController, readHealthState } from './admission';
 import { resolveWatchdogMs, withWatchdog } from './watchdog';
+import { CircuitBreaker, defaultMaxFailures } from './circuit-breaker';
 import * as fs from 'node:fs';
 
 /**
@@ -103,6 +104,14 @@ export class TestEngine extends BaseSingleton<TestEngine> {
      * lifecycle as `_suiteFixtures`), so each run gets a fresh budget.
      */
     private _suiteRetry = new Map<string, { budget: RetryBudget; requestedMax: number }>();
+
+    /**
+     * Per-suite-run circuit breaker (DR-D7), keyed by SuiteRunID. Present only
+     * when `options.circuitBreaker.enabled`. Fed every final outcome via
+     * `finalizeTestResult`; the dispatch gate polls its `tripped` state to abort
+     * a doomed run. Same lifecycle as `_suiteFixtures` / `_suiteRetry`.
+     */
+    private _suiteBreaker = new Map<string, CircuitBreaker>();
 
     /**
      * Get singleton instance
@@ -389,9 +398,24 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 this.log(`Suite wall-clock budget: ${Math.round(maxSuiteMs! / 1000)}s — dispatch stops after that, in-flight tests finish`);
             }
 
+            // DR-D7: opt-in circuit breaker — abort a doomed run early rather than
+            // burning hours on a degrading host or a broken deploy.
+            const cbOpts = options.circuitBreaker;
+            if (cbOpts?.enabled) {
+                const maxFailures = cbOpts.maxFailures ?? defaultMaxFailures(tests.length);
+                this._suiteBreaker.set(suiteRun.ID, new CircuitBreaker({
+                    windowSize: cbOpts.windowSize,
+                    envFailureThreshold: cbOpts.envFailureThreshold,
+                    maxFailures,
+                }));
+                this.log(`Circuit breaker armed: abort on ${maxFailures} total failures, or an env-class failure window`);
+            }
+
             const suiteDrivers = await this.resolveSuiteDrivers(tests, contextUser);
 
             let testResults: TestRunResult[] = [];
+            let aborted = false;
+            let abortReason: string | undefined;
             try {
                 for (const driver of suiteDrivers) {
                     await driver.SetupSuite(fixtures, contextUser);
@@ -403,6 +427,14 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 } else {
                     testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext, suiteDeadline);
                 }
+
+                // DR-D7: capture the breaker verdict BEFORE the finally deletes it.
+                const verdict = this._suiteBreaker.get(suiteRun.ID)?.verdict;
+                if (verdict?.tripped) {
+                    aborted = true;
+                    abortReason = `Circuit breaker (${verdict.reason}): ${verdict.detail}`;
+                    this.logError(`Suite ABORTED early by circuit breaker — ${abortReason}`);
+                }
             } finally {
                 for (const driver of suiteDrivers) {
                     try {
@@ -413,6 +445,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 }
                 this._suiteFixtures.delete(suiteRun.ID);
                 this._suiteRetry.delete(suiteRun.ID);
+                this._suiteBreaker.delete(suiteRun.ID);
                 // Update TestSuiteRun entity with results (guaranteed even on a SetupSuite throw)
                 await this.updateSuiteRun(suiteRun, testResults, startTime);
             }
@@ -428,7 +461,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 suiteRunId: suiteRun.ID,
                 suiteId: suite.ID,
                 suiteName: suite.Name,
-                status: suiteRun.Status as 'Completed' | 'Failed' | 'Cancelled' | 'Pending' | 'Running',
+                // DR-D7: an aborted run reports as Cancelled (stopped early), with
+                // the reason surfaced so the CLI can exit distinctly (DR-F2).
+                status: aborted ? 'Cancelled' : (suiteRun.Status as 'Completed' | 'Failed' | 'Cancelled' | 'Pending' | 'Running'),
                 passedTests,
                 failedTests,
                 flakyTests,
@@ -438,7 +473,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 durationMs: Date.now() - startTime,
                 totalCost: testResults.reduce((sum, r) => sum + r.totalCost, 0),
                 startedAt: suiteRun.StartedAt!,
-                completedAt: suiteRun.CompletedAt!
+                completedAt: suiteRun.CompletedAt!,
+                aborted: aborted || undefined,
+                abortReason,
             };
 
             this.log(
@@ -471,6 +508,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         let testSequence = 1;
 
         for (const test of tests) {
+            // DR-D7: a tripped circuit breaker aborts the run early.
+            if (this._suiteBreaker.get(suiteRunId)?.tripped) {
+                this.log(`Circuit breaker tripped — stopping after ${testResults.length}/${tests.length} tests`);
+                break;
+            }
             // DR-D4: honor the suite wall-clock budget between tests.
             if (deadline !== undefined && Date.now() >= deadline) {
                 this.log(`Suite wall-clock budget reached — stopping after ${testResults.length}/${tests.length} tests`);
@@ -487,14 +529,14 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRunId, testSequence, suiteVariablesJson, undefined, suiteContext);
                 const arr = Array.isArray(result) ? result : [result];
                 for (const r of arr) {
-                    this.finalizeTestResult(r, undefined, testSequence, options);
+                    this.finalizeTestResult(r, undefined, testSequence, options, suiteRunId);
                     testResults.push(r);
                 }
             } catch (error) {
-                // DR-D5: synthesize + emit instead of dropping (see executeParallelWorker).
+                // DR-D5: synthesize + emit instead of dropping (see runQueuedItem).
                 this.logError(`Test failed in suite: ${test.Name}`, error as Error);
                 const errResult = this.synthesizeErrorResult(test, error as Error, suiteRunId, testSequence, undefined);
-                this.finalizeTestResult(errResult, undefined, testSequence, options);
+                this.finalizeTestResult(errResult, undefined, testSequence, options, suiteRunId);
                 testResults.push(errResult);
             } finally {
                 testSequence++;
@@ -517,7 +559,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         result: TestRunResult,
         workerIndex: number | undefined,
         sequence: number,
-        options: SuiteRunOptions
+        options: SuiteRunOptions,
+        suiteRunId: string
     ): void {
         if (result.workerIndex === undefined && workerIndex !== undefined) {
             result.workerIndex = workerIndex;
@@ -525,6 +568,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         if (result.sequence === undefined) {
             result.sequence = sequence;
         }
+        // DR-D7: feed the final outcome to the circuit breaker (if armed).
+        this._suiteBreaker.get(suiteRunId)?.record(result);
         try {
             options.onTestComplete?.(result);
         } catch (hookErr) {
@@ -646,6 +691,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 onWorkerStart: (wi, count) => this.log(`Worker ${wi + 1}/${count} starting`),
                 admit: admissionController ? (wi) => admissionController.admit(wi) : undefined,
                 deadline,
+                shouldAbort: () => this._suiteBreaker.get(suiteRun.ID)?.tripped ?? false,
             }
         );
 
@@ -686,13 +732,13 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             );
             const arr = Array.isArray(result) ? result : [result];
             for (const r of arr) {
-                this.finalizeTestResult(r, workerIndex, item.sequence, options);
+                this.finalizeTestResult(r, workerIndex, item.sequence, options, suiteRunId);
                 rows.push(r);
             }
         } catch (error) {
             this.logError(`[Worker ${workerIndex + 1}] Test failed: ${test.Name}`, error as Error);
             const errResult = this.synthesizeErrorResult(test, error as Error, suiteRunId, item.sequence, workerIndex);
-            this.finalizeTestResult(errResult, workerIndex, item.sequence, options);
+            this.finalizeTestResult(errResult, workerIndex, item.sequence, options, suiteRunId);
             rows.push(errResult);
         }
         return rows;

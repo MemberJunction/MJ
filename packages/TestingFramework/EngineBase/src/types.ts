@@ -246,6 +246,26 @@ export interface SuiteRunOptions extends TestRunOptions {
    * `TestSuite.MaxExecutionTimeMS` when unset; no budget ⇒ unbounded (historical).
    */
   maxSuiteDurationMs?: number;
+
+  /**
+   * Suite circuit breaker (DR-D7). Aborts a doomed run early instead of burning
+   * hours: a sliding window of environment-class failures (degrading host) or a
+   * plain failure cap (broken deploy). Opt-in — omitted/`enabled:false` ⇒ off
+   * (default). Recommended on for CI.
+   */
+  circuitBreaker?: CircuitBreakerOptions;
+}
+
+/** Circuit-breaker configuration passed through {@link SuiteRunOptions} (DR-D7). */
+export interface CircuitBreakerOptions {
+  /** Master switch. Default false (off). */
+  enabled?: boolean;
+  /** Sliding-window size for the environment tier. Default 10. */
+  windowSize?: number;
+  /** Fraction of the window that must be env-class failures to trip. Default 0.6. */
+  envFailureThreshold?: number;
+  /** Total failures (any category) that trip the run. Default max(10, ceil(0.25 × suiteSize)). */
+  maxFailures?: number;
 }
 
 /** Heartbeat payload emitted when a worker picks up a test (DR-D4). */
@@ -562,6 +582,16 @@ export interface TestSuiteRunResult {
    * Resolved variables that were provided at suite run level
    */
   resolvedVariables?: ResolvedTestVariables;
+
+  /**
+   * True when the run was cut short by the circuit breaker (DR-D7) rather than
+   * dispatching every test. `status` is `Cancelled`; `abortReason` explains why.
+   * Lets the CLI exit with a distinct code (DR-F2) and reports say so.
+   */
+  aborted?: boolean;
+
+  /** Human-readable reason for an aborted run (DR-D7). */
+  abortReason?: string;
 }
 
 /**

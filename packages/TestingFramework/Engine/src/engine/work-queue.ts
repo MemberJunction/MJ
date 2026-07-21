@@ -93,6 +93,12 @@ export interface DrainOptions {
     deadline?: number;
     /** Clock source (injected for tests). Default `Date.now`. */
     now?: () => number;
+    /**
+     * Circuit-breaker abort (DR-D7), polled before each dispatch. When it returns
+     * true, EVERY worker (including worker 0, unlike the {@link admit} floor) stops
+     * taking new items — the whole run aborts with partial results.
+     */
+    shouldAbort?: () => boolean;
 }
 
 /**
@@ -129,6 +135,10 @@ export async function drainQueue<R>(
         const now = opts.now ?? Date.now;
         opts.onWorkerStart?.(workerIndex, effectiveWorkers);
         for (;;) {
+            // DR-D7: a tripped circuit breaker aborts EVERY worker.
+            if (opts.shouldAbort?.()) {
+                break;
+            }
             // DR-D4: stop dispatching once the suite wall-clock budget is spent.
             if (opts.deadline !== undefined && now() >= opts.deadline) {
                 break;

@@ -110,6 +110,16 @@ export interface SuiteFlags extends CommonFlags {
      * TestSuite.MaxExecutionTimeMS; unset ⇒ that column (or unbounded).
      */
     maxSuiteDuration?: number;
+    /**
+     * Enable the circuit breaker (DR-D7): abort a doomed run early on a window of
+     * environment-class failures or a total failure cap. Default off.
+     */
+    circuitBreaker?: boolean;
+    /**
+     * Total-failure cap for the circuit breaker (any category). Default
+     * max(10, 25% of the suite). Only meaningful with --circuit-breaker.
+     */
+    maxFailures?: number;
 }
 
 /**

@@ -204,11 +204,15 @@ export class SuiteCommand {
                 selectedTestIds,
                 healthStatePath,
                 maxSuiteDurationMs: flags.maxSuiteDuration != null ? flags.maxSuiteDuration * 1000 : undefined,
+                circuitBreaker: flags.circuitBreaker ? { enabled: true, maxFailures: flags.maxFailures } : undefined,
             }, contextUser);
 
             this.spinner.stop();
-            // DR-D5: normal completion — stamp the partial snapshot terminal.
-            resultsSink?.finalize('Completed');
+            // DR-D5/D7: stamp the partial terminal — Cancelled if the breaker aborted.
+            if (result.aborted) {
+                console.error(`\n⚠️  Suite aborted early: ${result.abortReason ?? 'circuit breaker tripped'}`);
+            }
+            resultsSink?.finalize(result.aborted ? 'Cancelled' : 'Completed');
 
             // If --flaky-check was used, compute per-test variance and report flaky tests.
             // The engine returns multiple results per test (one per iteration); we group by
