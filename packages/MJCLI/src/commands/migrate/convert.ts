@@ -383,19 +383,29 @@ export default class MigrateConvert extends Command {
       this.error(err instanceof Error ? err.message : String(err));
     }
 
+    // Only the LATEST baseline feeds the cross-file BIT registry. A baseline is a full
+    // cumulative schema snapshot, so the newest one already contains every current
+    // table's BIT columns; older baselines only add stale/dropped columns. Collecting
+    // from ALL baselines both (a) bloats the registry with dead entries and (b) — since
+    // it is passed to the sqlglot subprocess as the MJ_EXTRA_BIT_COLS *environment
+    // variable* — pushes past the OS single-arg/env limit (Linux MAX_ARG_STRLEN, 128 KB)
+    // once enough baselines accumulate, making every spawn fail with `spawn E2BIG`.
+    // (Threshold first crossed at v5.46: 5 baselines = 4060 entries ≈ 134 KB. Latest
+    // baseline alone ≈ 1023 entries ≈ 34 KB.)
     const baselines = fs
       .readdirSync(sourceDir)
       .filter((f) => /^B\d.*\.sql$/.test(f) && !f.endsWith('.pg.sql') && !f.endsWith('.pg-only.sql'))
       .sort();
+    const latestBaseline = baselines.at(-1);
     const bitColumns: string[] = [];
-    for (const b of baselines) {
+    if (latestBaseline) {
       try {
-        const cols = await probe.collectBitColumns(fs.readFileSync(path.join(sourceDir, b), 'utf8'));
-        bitColumns.push(...cols);
+        const cols = await probe.collectBitColumns(fs.readFileSync(path.join(sourceDir, latestBaseline), 'utf8'));
+        bitColumns.push(...new Set(cols));
       } catch (err) {
         // A baseline that fails bit-column collection degrades 1/0→TRUE/FALSE
         // coercion for tables it declares — warn loudly, don't proceed silently.
-        this.warn(`Bit-column collection failed for ${b}: ${err instanceof Error ? err.message : String(err)}`);
+        this.warn(`Bit-column collection failed for ${latestBaseline}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
     return new MJPostgresTranspiler({ extraBitColumns: bitColumns });
@@ -412,7 +422,7 @@ export default class MigrateConvert extends Command {
    * matching `import type` at the top is erased at runtime, so it does not defeat the deferral.
    */
   private async buildBaker(transpiler: MJPostgresTranspiler, schema: string): Promise<IncrementalBaker> {
-    const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform } = await import('@memberjunction/codegen-lib');
+    const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform, configInfo } = await import('@memberjunction/codegen-lib');
 
     if (dbPlatform() !== 'postgresql') {
       this.error('--bake-codegen requires DB_PLATFORM=postgresql with PG_* connection env (the working DB CodeGen objects are captured from).');
@@ -449,6 +459,17 @@ export default class MigrateConvert extends Command {
           skipExecution: false, // execute → keep the working DB current for later migrations
         });
         return { sql: r.sql ?? '', permissionsSQL: r.permissionsSQL ?? '' };
+      },
+      // The full CodeGen entity set — mirrors sql_codegen.ts's baseline filter
+      // (`IncludeInAPI`, minus configured excludeSchemas). Per-object guards
+      // (VirtualEntity / AllowCreate|Update|DeleteAPI / spXGenerated) live inside
+      // generateSingleEntitySQLToSeparateFiles, so this only gates at the entity level.
+      // Provider order is name-sorted (PostProcessEntityMetadata), matching a full run.
+      listBakeableEntities: async () => {
+        const excluded = new Set((configInfo.excludeSchemas ?? []).map((s: string) => s.toLowerCase()));
+        return ds.provider.Entities
+          .filter((e) => e.IncludeInAPI && !excluded.has(e.SchemaName.toLowerCase()))
+          .map((e) => e.Name);
       },
     };
     return new IncrementalBaker({ transpiler, db, schema });

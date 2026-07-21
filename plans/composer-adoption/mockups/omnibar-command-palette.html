@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MJ Omnibar — Command Palette Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+/* ─── MJ design-token snapshot (from _tokens.scss) ─────────────────────── */
+:root{
+  --mj-color-brand-50:#e6f3f9;--mj-color-brand-100:#b3dbed;--mj-color-brand-300:#4dabd5;
+  --mj-color-brand-400:#2699cc;--mj-color-brand-500:#0076b6;--mj-color-brand-600:#006aa3;
+  --mj-color-brand-900:#092340;
+  --mj-color-neutral-0:#ffffff;--mj-color-neutral-50:#f8fafc;--mj-color-neutral-100:#f1f5f9;
+  --mj-color-neutral-200:#e2e8f0;--mj-color-neutral-300:#cbd5e1;--mj-color-neutral-400:#94a3b8;
+  --mj-color-neutral-500:#64748b;--mj-color-neutral-600:#475569;--mj-color-neutral-700:#334155;
+  --mj-color-neutral-800:#1e293b;--mj-color-neutral-900:#0f172a;--mj-color-neutral-950:#020617;
+  --mj-bg-page:var(--mj-color-neutral-50);--mj-bg-surface:var(--mj-color-neutral-0);
+  --mj-bg-surface-elevated:var(--mj-color-neutral-0);--mj-bg-surface-card:var(--mj-color-neutral-50);
+  --mj-bg-surface-sunken:var(--mj-color-neutral-100);--mj-bg-surface-hover:var(--mj-color-neutral-100);
+  --mj-bg-overlay:rgba(15,23,42,.5);
+  --mj-text-primary:var(--mj-color-neutral-800);--mj-text-secondary:var(--mj-color-neutral-600);
+  --mj-text-muted:var(--mj-color-neutral-500);--mj-text-inverse:var(--mj-color-neutral-0);
+  --mj-border-default:var(--mj-color-neutral-200);--mj-border-subtle:var(--mj-color-neutral-100);
+  --mj-border-strong:var(--mj-color-neutral-300);--mj-border-focus:var(--mj-color-brand-500);
+  --mj-brand-primary:var(--mj-color-brand-500);--mj-brand-primary-hover:var(--mj-color-brand-600);
+  --mj-status-success:#22c55e;--mj-status-warning:#f59e0b;
+  --mj-radius-md:8px;--mj-radius-lg:12px;--mj-radius-full:999px;
+  --mj-shadow-lg:0 20px 60px rgba(2,6,23,.28);
+}
+[data-theme="dark"]{
+  --mj-bg-page:var(--mj-color-neutral-900);--mj-bg-surface:var(--mj-color-neutral-800);
+  --mj-bg-surface-elevated:var(--mj-color-neutral-700);--mj-bg-surface-card:#253347;
+  --mj-bg-surface-sunken:var(--mj-color-neutral-950);--mj-bg-surface-hover:var(--mj-color-neutral-600);
+  --mj-bg-overlay:rgba(0,0,0,.7);
+  --mj-text-primary:var(--mj-color-neutral-100);--mj-text-secondary:var(--mj-color-neutral-300);
+  --mj-text-muted:var(--mj-color-neutral-400);--mj-text-inverse:var(--mj-color-neutral-900);
+  --mj-border-default:var(--mj-color-neutral-700);--mj-border-subtle:var(--mj-color-neutral-800);
+  --mj-border-strong:var(--mj-color-neutral-600);--mj-border-focus:var(--mj-color-brand-400);
+  --mj-brand-primary:var(--mj-color-brand-400);--mj-brand-primary-hover:var(--mj-color-brand-300);
+  --mj-shadow-lg:0 24px 70px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--mj-bg-page);color:var(--mj-text-primary);height:100vh;overflow:hidden}
+
+/* ─── Design-thesis banner ─────────────────────────────────────────────── */
+.thesis{background:var(--mj-color-brand-900);color:#dbeafe;padding:10px 20px;font-size:12.5px;line-height:1.5;display:flex;gap:14px;align-items:center}
+.thesis b{color:#fff}
+.thesis .controls{margin-left:auto;display:flex;gap:8px;flex-shrink:0}
+.thesis button{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer}
+.thesis button:hover{background:rgba(255,255,255,.22)}
+
+/* ─── Mock Explorer shell chrome ───────────────────────────────────────── */
+.shell-header{display:flex;align-items:center;gap:18px;padding:0 18px;height:52px;background:var(--mj-bg-surface);border-bottom:1px solid var(--mj-border-default)}
+.mj-mark{font-weight:800;font-size:19px;color:var(--mj-brand-primary);letter-spacing:-1px}
+.shell-nav{display:flex;gap:4px}
+.shell-nav a{display:flex;align-items:center;gap:7px;padding:7px 13px;border-radius:8px;font-size:13.5px;color:var(--mj-text-secondary);text-decoration:none}
+.shell-nav a.active{background:color-mix(in srgb,var(--mj-brand-primary) 12%,transparent);color:var(--mj-brand-primary);font-weight:600}
+.shell-search{margin-left:auto;display:flex;align-items:center;gap:10px;width:340px;padding:8px 12px;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);border-radius:10px;color:var(--mj-text-muted);font-size:13px;cursor:pointer}
+.shell-search:hover{border-color:var(--mj-border-strong)}
+.shell-search kbd{margin-left:auto}
+kbd{font-family:inherit;font-size:10.5px;font-weight:600;color:var(--mj-text-muted);background:var(--mj-bg-surface);border:1px solid var(--mj-border-strong);border-bottom-width:2px;border-radius:5px;padding:1.5px 6px}
+.shell-body{padding:26px;filter:none;transition:filter .15s}
+body.palette-open .shell-body,body.palette-open .shell-header{filter:blur(1.5px)}
+.ghost-card{background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:12px;height:120px;margin-bottom:14px;opacity:.6}
+.ghost-row{display:flex;gap:14px}.ghost-row .ghost-card{flex:1}
+
+/* ─── The command palette ──────────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:var(--mj-bg-overlay);display:none;z-index:100}
+body.palette-open .overlay{display:block}
+.palette{position:fixed;left:50%;top:96px;transform:translateX(-50%);width:min(680px,92vw);background:var(--mj-bg-surface-elevated);border:1px solid var(--mj-border-default);border-radius:16px;box-shadow:var(--mj-shadow-lg);z-index:101;display:none;overflow:hidden}
+body.palette-open .palette{display:block;animation:pop .13s ease-out}
+@keyframes pop{from{opacity:0;transform:translateX(-50%) scale(.985) translateY(-4px)}to{opacity:1;transform:translateX(-50%) scale(1)}}
+.pal-input-row{display:flex;align-items:center;gap:12px;padding:15px 18px;border-bottom:1px solid var(--mj-border-subtle)}
+.pal-input-row .lead{color:var(--mj-text-muted);font-size:15px;width:18px;text-align:center}
+.pal-input-row .lead.trigger{color:var(--mj-brand-primary)}
+#pal-input{flex:1;border:none;outline:none;background:transparent;font-size:16px;color:var(--mj-text-primary);font-family:inherit}
+#pal-input::placeholder{color:var(--mj-text-muted)}
+.mode-badge{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 9px;border-radius:var(--mj-radius-full);background:color-mix(in srgb,var(--mj-brand-primary) 14%,transparent);color:var(--mj-brand-primary);white-space:nowrap}
+.scopes{display:flex;gap:6px;padding:9px 18px;border-bottom:1px solid var(--mj-border-subtle)}
+.scope{font-size:11px;padding:3px 10px;border-radius:var(--mj-radius-full);border:1px solid var(--mj-border-default);color:var(--mj-text-secondary);cursor:pointer;background:transparent}
+.scope.on{background:color-mix(in srgb,var(--mj-brand-primary) 12%,transparent);border-color:var(--mj-brand-primary);color:var(--mj-brand-primary);font-weight:600}
+.pal-body{max-height:430px;overflow-y:auto;padding:6px 0}
+.group-label{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--mj-text-muted);padding:10px 18px 5px}
+.row{display:flex;align-items:center;gap:12px;padding:9px 18px;cursor:pointer}
+.row.sel{background:color-mix(in srgb,var(--mj-brand-primary) 9%,transparent);box-shadow:inset 3px 0 0 var(--mj-brand-primary)}
+.row .ric{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;background:var(--mj-bg-surface-sunken);color:var(--mj-text-secondary)}
+.row.sel .ric{background:color-mix(in srgb,var(--mj-brand-primary) 16%,transparent);color:var(--mj-brand-primary)}
+.row .rmain{flex:1;min-width:0}
+.row .rname{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .rname em{font-style:normal;color:var(--mj-brand-primary);font-weight:700}
+.row .rsub{font-size:11.5px;color:var(--mj-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.row .raux{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.rtype{font-size:10px;font-weight:600;padding:2px 8px;border-radius:var(--mj-radius-full);background:var(--mj-bg-surface-sunken);color:var(--mj-text-muted)}
+.score{width:52px;height:4px;border-radius:2px;background:var(--mj-bg-surface-sunken);overflow:hidden}
+.score i{display:block;height:100%;background:var(--mj-brand-primary)}
+.row .go{font-size:11px;color:var(--mj-text-muted);opacity:0;display:flex;gap:6px;align-items:center}
+.row.sel .go{opacity:1}
+.hintbar{display:flex;gap:8px;padding:12px 18px;flex-wrap:wrap}
+.hint-chip{display:flex;align-items:center;gap:9px;padding:9px 13px;border:1px dashed var(--mj-border-strong);border-radius:10px;cursor:pointer;background:transparent}
+.hint-chip:hover{border-color:var(--mj-brand-primary);background:color-mix(in srgb,var(--mj-brand-primary) 6%,transparent)}
+.hint-chip b{font-family:ui-monospace,monospace;color:var(--mj-brand-primary);font-size:14px}
+.hint-chip span{font-size:12px;color:var(--mj-text-secondary)}
+.empty-note{padding:18px;text-align:center;color:var(--mj-text-muted);font-size:13px}
+.pal-foot{display:flex;align-items:center;gap:16px;padding:10px 18px;border-top:1px solid var(--mj-border-subtle);background:var(--mj-bg-surface-card);font-size:11.5px;color:var(--mj-text-muted)}
+.pal-foot .k{display:flex;align-items:center;gap:5px}
+.pal-foot .reg{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:10.5px}
+.pal-foot .reg i{color:var(--mj-brand-primary)}
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--mj-color-brand-900);color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;display:none;z-index:200;box-shadow:var(--mj-shadow-lg)}
+.toast b{color:#7dd3fc}
+</style>
+</head>
+<body class="palette-open">
+
+<div class="thesis">
+  <i class="fa-solid fa-terminal"></i>
+  <div><b>H1 — Unified Command Palette.</b> One Ctrl+K surface replaces the header search, the Ctrl+/ app palette, and the legacy search popup — built on the ComposerTriggerProvider registry. <b>Plain text</b> = cross-source search · <b>#</b> jump to record · <b>/</b> commands &amp; apps · <b>@</b> agents. Type in the box to try each mode.</div>
+  <div class="controls">
+    <button onclick="setMode('')">Empty</button>
+    <button onclick="setMode('renewal')">Search</button>
+    <button onclick="setMode('#mem')">#Records</button>
+    <button onclick="setMode('/sk')">/Commands</button>
+    <button onclick="setMode('@')">@Agents</button>
+    <button onclick="toggleTheme()"><i class="fa-solid fa-circle-half-stroke"></i> Theme</button>
+  </div>
+</div>
+
+<!-- Mock Explorer chrome behind the palette -->
+<header class="shell-header">
+  <span class="mj-mark">MJ</span>
+  <nav class="shell-nav">
+    <a><i class="fa-solid fa-house"></i> Home</a>
+    <a class="active"><i class="fa-solid fa-comments"></i> Conversations</a>
+    <a><i class="fa-solid fa-folder-open"></i> Collections</a>
+    <a><i class="fa-solid fa-list-check"></i> Tasks</a>
+  </nav>
+  <div class="shell-search" onclick="openPalette()">
+    <i class="fa-solid fa-magnifying-glass"></i> Search everything... <kbd>Ctrl+K</kbd>
+  </div>
+</header>
+<main class="shell-body">
+  <div class="ghost-row"><div class="ghost-card"></div><div class="ghost-card"></div></div>
+  <div class="ghost-card" style="height:300px"></div>
+</main>
+
+<div class="overlay" onclick="closePalette()"></div>
+
+<div class="palette" role="dialog" aria-label="Command palette">
+  <div class="pal-input-row">
+    <span class="lead" id="pal-lead"><i class="fa-solid fa-magnifying-glass"></i></span>
+    <input id="pal-input" placeholder="Search everything — or type #, /, @ …" autocomplete="off" spellcheck="false">
+    <span class="mode-badge" id="mode-badge">Global Search</span>
+    <kbd>esc</kbd>
+  </div>
+  <div class="scopes" id="scopes" style="display:none">
+    <button class="scope on">All sources</button><button class="scope">Knowledge Hub</button>
+    <button class="scope">Membership</button><button class="scope">Finance docs</button>
+  </div>
+  <div class="pal-body" id="pal-body"></div>
+  <div class="pal-foot">
+    <span class="k"><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+    <span class="k"><kbd>↵</kbd> open</span>
+    <span class="k"><kbd>tab</kbd> scope</span>
+    <span class="reg"><i class="fa-solid fa-plug"></i> 4 trigger providers registered — extensible via <b style="font-family:monospace">@RegisterClass(ComposerTriggerProvider)</b></span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── Mock datasets (realistic MJ data) ────────────────────────────────── */
+const RECENTS=[
+ {icon:'fa-clock-rotate-left',name:'renewal risk by chapter',sub:'Recent search · 2 hours ago',type:'Search'},
+ {icon:'fa-clock-rotate-left',name:'lapsed members Q2',sub:'Recent search · yesterday',type:'Search'},
+ {icon:'fa-wand-magic-sparkles',name:'Skills Studio',sub:'Recent app · yesterday',type:'App'},
+ {icon:'fa-chart-line',name:'Predictive Studio',sub:'Recent app · 2 days ago',type:'App'}];
+const SEARCH=[
+ {g:'Records',icon:'fa-id-card',name:'Amanda Reyes — <em>Renewal</em> 2026',sub:'Membership Renewals · Status: At Risk · Chapter: Northeast',type:'Record',score:.94},
+ {g:'Records',icon:'fa-id-card',name:'Chapter <em>renewal</em> summary — Northeast',sub:'Queries · owner: amith@bluecypress.io',type:'Query',score:.88},
+ {g:'Records',icon:'fa-robot',name:'<em>Renewal</em> Outreach Agent',sub:'AI Agents · Active · last run 26m ago',type:'Agent',score:.81},
+ {g:'Files',icon:'fa-file-pdf',name:'2026 <em>Renewal</em> Playbook.pdf',sub:'Storage · Knowledge Hub / Membership · 2.1 MB',type:'File',score:.77},
+ {g:'Content',icon:'fa-file-lines',name:'Why members lapse: 2025 retention post-mortem',sub:'Content Items · matched: “renewal window outreach cadence”',type:'Content',score:.69}];
+const RECORDS=[
+ {g:'Entities',icon:'fa-table',name:'<em>Mem</em>bership Renewals',sub:'Entity · 12,408 rows · continue typing to search records →',type:'Entity'},
+ {g:'Entities',icon:'fa-table',name:'<em>Mem</em>bers',sub:'Entity · 48,112 rows',type:'Entity'},
+ {g:'Matching records',icon:'fa-id-card',name:'Amanda Reyes — Renewal 2026',sub:'Membership Renewals · At Risk',type:'Record'},
+ {g:'Matching records',icon:'fa-id-card',name:'Marcus Chen — Renewal 2026',sub:'Membership Renewals · Renewed May 12',type:'Record'},
+ {g:'Matching records',icon:'fa-id-card',name:'Priya Natarajan — Renewal 2026',sub:'Membership Renewals · Grace period',type:'Record'}];
+const COMMANDS=[
+ {g:'Apps',icon:'fa-wand-magic-sparkles',name:'Open <em>Sk</em>ills Studio',sub:'Switch app',type:'App',kbd:'↵'},
+ {g:'Apps',icon:'fa-diagram-project',name:'Open Record Process Studio',sub:'Switch app',type:'App'},
+ {g:'Actions',icon:'fa-bolt',name:'Create <em>Sk</em>ill…',sub:'MJ: AI Skills · new record',type:'Action'},
+ {g:'Actions',icon:'fa-business-time',name:'New Routine…',sub:'Opens the routine editor',type:'Action'},
+ {g:'Navigation',icon:'fa-gear',name:'Settings → AI Model Management',sub:'Explorer navigation',type:'Nav'}];
+const AGENTS=[
+ {icon:'fa-leaf',name:'Sage',sub:'General assistant · opens chat pre-addressed',type:'Agent'},
+ {icon:'fa-database',name:'Query Builder',sub:'Data & SQL specialist',type:'Agent'},
+ {icon:'fa-magnifying-glass-chart',name:'Research Agent',sub:'Deep multi-step research',type:'Agent'},
+ {icon:'fa-bullhorn',name:'Marketing Agent',sub:'Campaigns & content',type:'Agent'},
+ {icon:'fa-hammer',name:'Skill Smith',sub:'Authors new skills',type:'Agent'}];
+
+let sel=0, rows=[];
+const $=id=>document.getElementById(id);
+
+function rowHtml(r,i){
+ return `<div class="row ${i===sel?'sel':''}" data-i="${i}" onmouseenter="sel=${i};paint()" onclick="go()">
+   <span class="ric"><i class="fa-solid ${r.icon}"></i></span>
+   <span class="rmain"><span class="rname">${r.name}</span><span class="rsub">${r.sub}</span></span>
+   <span class="raux">${r.score?`<span class="score"><i style="width:${r.score*100}%"></i></span>`:''}
+     <span class="rtype">${r.type}</span><span class="go">open <kbd>↵</kbd></span></span></div>`;
+}
+function grouped(list){
+ let html='',lastG=null;
+ list.forEach((r,i)=>{if(r.g&&r.g!==lastG){html+=`<div class="group-label">${r.g}</div>`;lastG=r.g}html+=rowHtml(r,i)});
+ return html;
+}
+function render(){
+ const v=$('pal-input').value, body=$('pal-body'), badge=$('mode-badge'), lead=$('pal-lead'), scopes=$('scopes');
+ scopes.style.display='none'; lead.className='lead';
+ if(v.startsWith('#')){rows=RECORDS;badge.textContent='Jump to Record';lead.className='lead trigger';lead.innerHTML='<b style="font-family:monospace">#</b>';body.innerHTML=grouped(rows)}
+ else if(v.startsWith('/')){rows=COMMANDS;badge.textContent='Commands';lead.className='lead trigger';lead.innerHTML='<b style="font-family:monospace">/</b>';body.innerHTML=grouped(rows)}
+ else if(v.startsWith('@')){rows=AGENTS;badge.textContent='Talk to an Agent';lead.className='lead trigger';lead.innerHTML='<b style="font-family:monospace">@</b>';body.innerHTML=grouped(rows)}
+ else if(v.trim().length>0){rows=SEARCH;badge.textContent='Global Search';lead.innerHTML='<i class="fa-solid fa-magnifying-glass"></i>';scopes.style.display='flex';
+   body.innerHTML=grouped(rows)+`<div class="group-label"></div><div class="row ${sel===rows.length?'sel':''}" data-i="${rows.length}" onclick="go()"><span class="ric"><i class="fa-solid fa-arrow-right"></i></span><span class="rmain"><span class="rname">See all results for “${v}”</span><span class="rsub">Opens the full Search Results workspace with scopes &amp; relevance controls</span></span><span class="raux"><span class="go">open <kbd>↵</kbd></span></span></div>`}
+ else{rows=RECENTS;badge.textContent='Recents';lead.innerHTML='<i class="fa-solid fa-magnifying-glass"></i>';
+   body.innerHTML=`<div class="hintbar">
+     <div class="hint-chip" onclick="setMode('#')"><b>#</b><span>Jump to a record</span></div>
+     <div class="hint-chip" onclick="setMode('/')"><b>/</b><span>Commands &amp; apps</span></div>
+     <div class="hint-chip" onclick="setMode('@')"><b>@</b><span>Talk to an agent</span></div>
+   </div><div class="group-label">Recent</div>`+RECENTS.map((r,i)=>rowHtml(r,i)).join('')}
+ if(sel>=rows.length+((!v.startsWith('#')&&!v.startsWith('/')&&!v.startsWith('@')&&v.trim())?1:0))sel=0;
+ paint();
+}
+function paint(){document.querySelectorAll('.row').forEach(r=>r.classList.toggle('sel',+r.dataset.i===sel))}
+function setMode(v){openPalette();const inp=$('pal-input');inp.value=v;sel=0;render();inp.focus();inp.setSelectionRange(v.length,v.length)}
+function go(){
+ const v=$('pal-input').value;let msg;
+ const r=rows[Math.min(sel,rows.length-1)];
+ if(v.startsWith('#'))msg=`NavigationService.OpenEntityRecord(<b>'${r.sub.split('·')[0].trim()||'Membership Renewals'}'</b>, …)`;
+ else if(v.startsWith('/'))msg=`Command executed: <b>${r.name.replace(/<[^>]+>/g,'')}</b>`;
+ else if(v.startsWith('@'))msg=`Opening Conversations pre-addressed to <b>@${r.name}</b>`;
+ else if(sel>=rows.length)msg=`NavigationService.OpenSearch(<b>'${v}'</b>) — full results tab`;
+ else msg=`Opening <b>${r.name.replace(/<[^>]+>/g,'')}</b> (${r.type})`;
+ const t=$('toast');t.innerHTML='<i class="fa-solid fa-location-arrow"></i> '+msg;t.style.display='block';
+ clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2600);
+}
+function openPalette(){document.body.classList.add('palette-open');setTimeout(()=>$('pal-input').focus(),30)}
+function closePalette(){document.body.classList.remove('palette-open')}
+function toggleTheme(){const h=document.documentElement;h.dataset.theme=h.dataset.theme==='light'?'dark':'light'}
+
+$('pal-input').addEventListener('input',()=>{sel=0;render()});
+document.addEventListener('keydown',e=>{
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette();return}
+ if(!document.body.classList.contains('palette-open'))return;
+ const extra=(!$('pal-input').value.match(/^[#/@]/)&&$('pal-input').value.trim())?1:0;
+ if(e.key==='ArrowDown'){e.preventDefault();sel=Math.min(sel+1,rows.length-1+extra);paint()}
+ else if(e.key==='ArrowUp'){e.preventDefault();sel=Math.max(sel-1,0);paint()}
+ else if(e.key==='Enter'){e.preventDefault();go()}
+ else if(e.key==='Escape'){closePalette()}
+});
+render();$('pal-input').focus();
+</script>
+</body>
+</html>

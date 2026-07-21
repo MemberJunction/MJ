@@ -104,15 +104,74 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
     return '';
   }
 
+  /** Quote a string literal for safe inline use in a screened WHERE fragment (single-quote escaped). */
+  protected quoteLiteral(value: string): string {
+    return `'${value.replace(/'/g, "''")}'`;
+  }
+
+  /**
+   * Render the optional structured incremental lower-bound ({@link ExternalViewParams.incrementalSince})
+   * into a dialect WHERE fragment — `<quotedField> >= <literal>` — using THIS driver's own identifier
+   * quoting, so an incremental-sync caller never hand-writes dialect SQL. Inclusive (`>=`). Returns
+   * undefined when no incremental bound was supplied.
+   */
+  protected buildIncrementalPredicate(params: ExternalViewParams): string | undefined {
+    if (!params.incrementalSince) {
+      return undefined;
+    }
+    return `${this.quoteIdent(params.incrementalSince.Field)} >= ${this.formatIncrementalLiteral(params.incrementalSince.Value)}`;
+  }
+
+  /**
+   * Format the incremental bound value as a dialect SQL literal. Default: a plain single-quoted string —
+   * SQL Server / PostgreSQL / Snowflake implicitly parse an ISO-8601 timestamp string, so no wrapping is
+   * needed. Dialects whose default parser rejects the ISO `T`/`Z` form override this (e.g. the Oracle
+   * driver wraps an ISO timestamp in `TO_TIMESTAMP` with a matching format mask).
+   */
+  protected formatIncrementalLiteral(value: string): string {
+    return this.quoteLiteral(value);
+  }
+
+  /**
+   * The effective WHERE body: the caller's screened {@link ExternalViewParams.filter} combined (ANDed)
+   * with the driver-rendered incremental predicate. Either, both, or neither may be present. The
+   * caller's filter is screened by {@link buildSelectSql}; the incremental predicate is driver-built
+   * from a quoted identifier + escaped literal, so it needs no screening.
+   */
+  protected effectiveWhere(params: ExternalViewParams): string | undefined {
+    const incremental = this.buildIncrementalPredicate(params);
+    // Normalize a blank filter to undefined FIRST: `''`/whitespace is falsy but NOT nullish, so a naive
+    // `params.filter ?? incremental` would return `''` and silently DROP the incremental bound (and emit
+    // an empty `WHERE`). Treat a blank filter as "no filter".
+    const filter = params.filter && params.filter.trim().length > 0 ? params.filter : undefined;
+    if (filter && incremental) {
+      return `(${filter}) AND ${incremental}`;
+    }
+    return filter ?? incremental;
+  }
+
+  /**
+   * Build the `COUNT(*)` SQL for a paginated view — honoring BOTH the caller's `filter` AND the structured
+   * `incrementalSince` bound via {@link effectiveWhere}, so `totalRowCount` is consistent with the rows the
+   * matching SELECT returns. Centralized here (rather than each driver hand-rolling `WHERE ${params.filter}`)
+   * so a driver can't forget the incremental bound. The `cnt` alias reads back per-dialect case (Oracle /
+   * Snowflake uppercase it to `CNT`).
+   */
+  protected buildCountSql(target: string, params: ExternalViewParams): string {
+    const where = this.effectiveWhere(params);
+    return `SELECT COUNT(*) AS cnt FROM ${target}${where ? ` WHERE ${where}` : ''}`;
+  }
+
   /**
    * Build a parameter-free SELECT. The projection + filter are dialect-agnostic; ordering/paging is
    * delegated to {@link orderAndPageClause} (and an optional {@link selectTopClause}). The `filter`
    * and `orderBy` are dialect fragments — the same contract as MJ RunView's `ExtraFilter`/`OrderBy` —
    * and are re-screened HERE at the driver boundary ({@link screenReadOnlyClause}) before
-   * interpolation: defense in depth, NOT relying on an upstream caller having screened them.
+   * interpolation: defense in depth, NOT relying on an upstream caller having screened them. A
+   * structured {@link ExternalViewParams.incrementalSince} is ANDed in via {@link effectiveWhere}.
    */
   protected buildSelectSql(target: string, params: ExternalViewParams): string {
-    if (params.filter) {
+    if (params.filter && params.filter.trim().length > 0) {
       this.screenReadOnlyClause(params.filter, 'where');
     }
     if (params.orderBy) {
@@ -120,9 +179,10 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
     }
     const projection = params.fields?.length ? params.fields.map((f) => this.quoteIdent(f)).join(', ') : '*';
     const effectiveParams = this.applyDefaultOrderBy(params);
+    const where = this.effectiveWhere(params);
     let sql = `SELECT ${this.selectTopClause(effectiveParams)}${projection} FROM ${target}`;
-    if (params.filter) {
-      sql += ` WHERE ${params.filter}`;
+    if (where) {
+      sql += ` WHERE ${where}`;
     }
     sql += this.orderAndPageClause(effectiveParams);
     return sql;

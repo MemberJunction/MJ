@@ -436,7 +436,10 @@ export const getUserPayload = async (
     const token = bearerToken.replace('Bearer ', '');
 
     if (!token) {
-      console.warn('No token to validate');
+      // No log here — an anonymous/unauthenticated request is routine (a health check, a
+      // CORS preflight-adjacent probe, a client that hasn't finished its auth handshake
+      // yet), not exceptional. `createUnifiedAuthMiddleware`'s catch block below is the
+      // single place that decides how (and whether) to log this — same as `TokenExpiredError`.
       throw new AuthenticationError('Missing token');
     }
 
@@ -512,12 +515,24 @@ export const getUserPayload = async (
 
     return { userRecord: sessionUser, email: sessionUser.Email, sessionId };
   } catch (error) {
-    console.error(error);
+    // An anonymous request presenting no credentials at all (a health check, a CORS
+    // preflight-adjacent probe, a client mid-handshake) is routine, same as an expired
+    // long-lived session — neither is a bug worth a raw console dump here. Both still
+    // propagate (audited below, in the "missing token" case) so the single call site
+    // that actually decides final logging/response policy — createUnifiedAuthMiddleware's
+    // catch block — sees the real error instead of a generic, indistinguishable one.
+    const isMissingToken = error instanceof Error && error.message === 'Missing token';
+    if (!(error instanceof TokenExpiredError) && !isMissingToken) {
+      console.error(error);
+    }
     if (error instanceof TokenExpiredError) {
       throw error; // expected for long-lived sessions; not a failure worth auditing
     }
     // Best-effort failure audit (token scanning / brute-force signal). Never blocks auth.
     void auditLoginFailure(bearerToken, error, requestContext, requestDomain);
+    if (isMissingToken) {
+      throw error; // preserve the original message — see comment above
+    }
     throw new AuthenticationError('Unable to authenticate user');
   }
 };
@@ -632,6 +647,17 @@ export function createUnifiedAuthMiddleware(
         });
         return;
       }
+      // An unauthenticated request presenting no credentials at all is routine (health
+      // checks, CORS preflight-adjacent probes, a client mid-handshake) — same category as
+      // TokenExpiredError above, not a bug to surface with a full stack trace. Anything else
+      // (a malformed/tampered token, an invalid system API key) is still logged in full below,
+      // since those ARE worth a human's attention. Checked by message rather than
+      // `instanceof AuthenticationError` — `type-graphql`'s class can resolve to a distinct
+      // copy across module/bundler boundaries, where `instanceof` silently never matches.
+      if (error instanceof Error && error.message === 'Missing token') {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
       console.error('Auth error:', error);
       res.status(401).json({ error: 'Authentication failed' });
     }
@@ -705,7 +731,12 @@ async function createPerRequestProviders(
     { provider: p, type: 'Read-Write' }
   ];
 
-  if (!isPostgres) {
+  if (isPostgres) {
+    const rp = await tryCreateReadOnlyPostgresProvider();
+    if (rp) {
+      providers.push({ provider: rp, type: 'Read-Only' });
+    }
+  } else {
     const rp = await tryCreateReadOnlyProvider(dataSources);
     if (rp) {
       providers.push({ provider: rp, type: 'Read-Only' });
@@ -746,6 +777,46 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   }
 
   return pgProvider;
+}
+
+/**
+ * Attempts to create a read-only PostgreSQL provider using DB_READ_ONLY_USERNAME/PASSWORD.
+ * Shares the connection pool from the primary provider. Returns null if no read-only credentials are configured.
+ */
+async function tryCreateReadOnlyPostgresProvider(): Promise<DatabaseProviderBase | null> {
+  const roUser = process.env.PG_READ_ONLY_USERNAME || process.env.DB_READ_ONLY_USERNAME;
+  const roPass = process.env.PG_READ_ONLY_PASSWORD || process.env.DB_READ_ONLY_PASSWORD;
+  if (!roUser || !roPass) {
+    return null;
+  }
+
+  try {
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
+    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
+    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
+
+    const roProvider = new PostgreSQLDataProvider();
+    const roConfig = new PostgreSQLProviderConfigData(
+      { Host: pgHost, Port: pgPort, Database: pgDatabase, User: roUser, Password: roPass },
+      mj_core_schema,
+      0,
+      undefined,
+      undefined,
+      false,
+    );
+
+    const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (share primary provider's PG pool with the read-only provider)
+    if (primaryProvider?.DatabaseConnection) {
+      await roProvider.ConfigWithSharedPool(roConfig, primaryProvider.DatabaseConnection);
+    } else {
+      await roProvider.Config(roConfig);
+    }
+
+    return roProvider;
+  } catch (_err) {
+    return null;
+  }
 }
 
 /**

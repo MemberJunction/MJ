@@ -10,6 +10,7 @@ import {
   ExternalQueryParameter,
   ExternalQueryResult,
   ExternalRow,
+  parseIso8601AsUtc,
 } from '@memberjunction/external-data-sources';
 import { MongoFilterTranslator } from './MongoFilterTranslator';
 
@@ -167,7 +168,13 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
         const db = await this.getConnection(dataSource, contextUser);
         const config = this.parseConnectionConfig<MongoConnectionConfig>(dataSource);
         const coll = db.collection(params.objectName);
-        const filter = MongoFilterTranslator.Translate(params.filter, { caseInsensitiveLike: config.caseInsensitiveLike });
+        let filter = MongoFilterTranslator.Translate(params.filter, { caseInsensitiveLike: config.caseInsensitiveLike });
+        if (params.incrementalSince) {
+          // Structured incremental lower-bound (>=). Coerce the watermark to the type Mongo will match
+          // (an ISO string would never $gte-match a BSON Date field), then AND it with any caller filter.
+          const incremental = { [params.incrementalSince.Field]: { $gte: this.coerceIncrementalValue(params.incrementalSince.Value) } };
+          filter = Object.keys(filter).length ? { $and: [filter, incremental] } : incremental;
+        }
         const options: FindOptions = {};
         if (params.fields?.length) options.projection = this.buildProjection(params.fields);
         if (params.orderBy) {
@@ -319,6 +326,22 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
       if (field) sort[field] = dir && dir.toUpperCase() === 'DESC' ? -1 : 1;
     }
     return sort;
+  }
+
+  /**
+   * Coerce a watermark string into the value Mongo will `$gte`-match: an ISO-8601 date-time → `Date`
+   * (a zoneless one interpreted as UTC, never server-local), a finite numeric → number, else the string
+   * verbatim. `Number.isFinite` (not `!isNaN`) so `'Infinity'`/`'NaN'` stay strings rather than becoming
+   * numeric bounds.
+   */
+  private coerceIncrementalValue(value: string): unknown {
+    const d = parseIso8601AsUtc(value);
+    if (d) return d;
+    if (value.trim() !== '') {
+      const n = Number(value);
+      if (Number.isFinite(n)) return n;
+    }
+    return value;
   }
 
   /** Infer column descriptors by sampling documents (union of fields, type from first non-null value). */

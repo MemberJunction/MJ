@@ -47,6 +47,18 @@ export abstract class PSResourceBase extends BaseResourceComponent {
   /** True until the engine resolves; gates the panel host so `[engine]` is never bound before it's ready. */
   public isLoading = true;
 
+  /**
+   * Set when {@link loadSection} fails to resolve the engine. The section templates render a "couldn't
+   * load" banner with a Try-again button ({@link retryLoad}) instead of silently showing empty panels, so
+   * a failed load is honest rather than indistinguishable from a genuinely-empty studio.
+   */
+  public loadError: string | null = null;
+
+  /** Public door label for templates (the error banner title). Mirrors the protected {@link SectionLabel}. */
+  public get sectionTitle(): string {
+    return this.SectionLabel;
+  }
+
   /** Stable section identifier for agent context + (subclass) titling. */
   protected abstract readonly SectionKey: string;
 
@@ -68,6 +80,7 @@ export abstract class PSResourceBase extends BaseResourceComponent {
    */
   protected async loadSection(): Promise<void> {
     this.isLoading = true;
+    this.loadError = null;
     try {
       const provider = this.ProviderToUse;
       this.engine = <PredictiveStudioEngine>(
@@ -75,15 +88,20 @@ export abstract class PSResourceBase extends BaseResourceComponent {
       );
       await this.engine.Config(false, provider.CurrentUser ?? undefined, provider);
       this.publishAgentContext();
+      this.registerAgentTools();
     } catch (err) {
-      LogError(
-        `Predictive Studio (${this.SectionKey}) failed to load engine: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      this.loadError = err instanceof Error ? err.message : String(err);
+      LogError(`Predictive Studio (${this.SectionKey}) failed to load engine: ${this.loadError}`);
     } finally {
       this.isLoading = false;
       this.cdr.detectChanges();
       this.NotifyLoadComplete();
     }
+  }
+
+  /** Retry the engine load after a failure — bound to the error banner's "Try again" button. */
+  public retryLoad(): void {
+    void this.loadSection();
   }
 
   /**
@@ -106,6 +124,16 @@ export abstract class PSResourceBase extends BaseResourceComponent {
   /** Hook for subclasses to contribute section-specific agent-context fields. Default: none. */
   protected extraAgentContext(): Record<string, unknown> {
     return {};
+  }
+
+  /**
+   * Hook for subclasses to register the door's agent client tools once, after the engine loads. Default:
+   * none. 🔒 Predictive Studio surfaces are **read / navigate-only to the agent** — overrides expose ONLY
+   * section-switch / open / review / export / open-copilot tools; NEVER train, publish, delete,
+   * score, "save scores", or "send to a list" (which write records). See {@link ../predictive-studio-agent-context}.
+   */
+  protected registerAgentTools(): void {
+    /* no tools by default */
   }
 
   async GetResourceDisplayName(_data: ResourceData): Promise<string> {

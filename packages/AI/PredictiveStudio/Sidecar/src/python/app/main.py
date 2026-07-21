@@ -13,7 +13,7 @@ Endpoints:
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -491,38 +491,99 @@ def predict(req: PredictRequest) -> PredictResponse:
     # authoritative signal — a regressor never has it, and a classifier always does.
     label_classes = getattr(estimator, "mj_label_classes_", None)
     is_classification = label_classes is not None
-    predictions = _build_predictions(estimator, X, is_classification, label_classes)
+    # The transformed matrix X is aligned to the fitted output columns; those names align with a linear
+    # model's coef_ for per-record contributions (P1-5). Absent/mismatched → contributions degrade to None.
+    output_cols = list(req.fitted_preprocessing.get("output_columns") or [])
+    predictions = _build_predictions(estimator, X, is_classification, label_classes, output_cols)
     return PredictResponse(predictions=predictions)
+
+
+def _linear_coef_row(estimator: Any) -> Optional[np.ndarray]:
+    """The single coefficient vector for a linear model, or None when per-row attribution isn't exact.
+
+    Returns the 1-D ``coef_`` for regression (Ridge) or binary classification (LogisticRegression,
+    ``coef_`` shape ``(1, n)``). Returns None for tree/ensemble models (no ``coef_``) and for multiclass
+    (``coef_`` shape ``(k, n)``, k>1) — those fall back to global importance rather than a dishonest guess.
+    """
+    if not hasattr(estimator, "coef_"):
+        return None
+    coef = np.asarray(estimator.coef_, dtype=float)
+    if coef.ndim == 1:
+        return coef
+    if coef.ndim == 2 and coef.shape[0] == 1:
+        return coef[0]
+    return None
+
+
+def _row_contributions(
+    estimator: Any, X: np.ndarray, feature_names: List[str], top_k: int = 5
+) -> List[Optional[List[Dict[str, Any]]]]:
+    """Top signed per-record feature contributions for a LINEAR model (P1-5), else all-None.
+
+    For a linear model the exact contribution of feature j to row i's output is ``coef[j] * X[i, j]``
+    (the log-odds contribution for classification, the value contribution for regression). We rank by
+    magnitude and return the top ``top_k`` non-negligible ones per row. Any shape mismatch or unexpected
+    estimator yields ``[None, ...]`` so /predict never fails because of the explanation layer — the score
+    path is unaffected and the UI falls back to global importance.
+    """
+    n_rows = int(X.shape[0]) if hasattr(X, "shape") and X.ndim >= 1 else 0
+    try:
+        coef = _linear_coef_row(estimator)
+        if coef is None or X.ndim != 2 or X.shape[1] != coef.shape[0] or len(feature_names) != coef.shape[0]:
+            return [None] * n_rows
+        out: List[Optional[List[Dict[str, Any]]]] = []
+        for i in range(n_rows):
+            contrib = coef * np.asarray(X[i], dtype=float)
+            order = np.argsort(-np.abs(contrib))[:top_k]
+            row = [
+                {"feature": feature_names[j], "value": float(contrib[j])}
+                for j in order
+                if abs(float(contrib[j])) > 1e-9
+            ]
+            out.append(row or None)
+        return out
+    except Exception:  # never let the explanation layer break scoring
+        return [None] * n_rows
 
 
 def _build_predictions(
     estimator: Any,
     X: np.ndarray,
     is_classification: bool,
-    label_classes: List[str] = None,
+    label_classes: Optional[List[str]] = None,
+    feature_names: Optional[List[str]] = None,
 ) -> List[Prediction]:
     """Build one :class:`Prediction` per transformed row, in input order.
 
     Regression rows carry only a numeric ``score``. Classification rows decode the
     estimator's encoded integer prediction back to its original string ``class``
     (via ``label_classes``) and attach the positive-class/predicted-class score.
+    Each row also carries its top signed feature contributions when the model
+    supports exact per-row attribution (linear models); None otherwise (P1-5).
     """
     if X.shape[0] == 0:
         return []
+    contribs = _row_contributions(estimator, X, feature_names or [])
     if is_classification:
         # estimator.classes_ are the encoded ints [0..n-1]; map idx -> string label.
         encoded_labels = estimator.predict(X)
         scores = _positive_scores(estimator, X)
         return [
-            _classification_prediction(scores, encoded_labels, label_classes, i)
+            _classification_prediction(scores, encoded_labels, label_classes, i, contribs[i])
             for i in range(X.shape[0])
         ]
     values = np.asarray(estimator.predict(X), dtype=float)
-    return [Prediction(score=float(values[i])) for i in range(X.shape[0])]
+    return [
+        Prediction(score=float(values[i]), contributions=contribs[i]) for i in range(X.shape[0])
+    ]
 
 
 def _classification_prediction(
-    scores: np.ndarray, encoded_labels: np.ndarray, label_classes: List[str], i: int
+    scores: np.ndarray,
+    encoded_labels: np.ndarray,
+    label_classes: List[str],
+    i: int,
+    contributions: Optional[List[Dict[str, Any]]] = None,
 ) -> Prediction:
     """Assemble the i-th classification :class:`Prediction` (decoded label + score).
 
@@ -549,4 +610,4 @@ def _classification_prediction(
         score = float(scores[i][0])
     else:
         score = float(np.ravel(scores)[i])
-    return Prediction(score=score, **{"class": label})
+    return Prediction(score=score, contributions=contributions, **{"class": label})

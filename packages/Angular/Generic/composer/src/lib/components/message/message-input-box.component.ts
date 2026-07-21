@@ -59,6 +59,8 @@ export class MessageInputBoxComponent {
   /** Current Plan Mode toggle state (renders the button in its active state). */
   @Input() planModeActive: boolean = false;
 
+  /** Composer lost focus — hosts persist drafts on this. */
+  @Output() blurred = new EventEmitter<void>();
   @Output() textSubmitted = new EventEmitter<string>();
   @Output() valueChange = new EventEmitter<string>();
   @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
@@ -190,6 +192,16 @@ export class MessageInputBoxComponent {
   /**
    * Public method to focus the input programmatically
    */
+  /** Inserts a resolved mention chip + space and focuses (see MentionEditorComponent.InsertMention). */
+  InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
+    return this.mentionEditor?.InsertMention(suggestion, focus) ?? false;
+  }
+
+  /** Focus with the caret at the end of content (see MentionEditorComponent.FocusCaretAtEnd). */
+  FocusCaretAtEnd(): boolean {
+    return this.mentionEditor?.FocusCaretAtEnd() ?? false;
+  }
+
   focus(): void {
     const editor = this.mentionEditor?.editorRef?.nativeElement;
     if (editor) {

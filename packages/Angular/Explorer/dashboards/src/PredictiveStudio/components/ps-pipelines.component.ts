@@ -5,15 +5,17 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJMLTrainingPipelineEntity, PredictiveStudioTrainModelOperation } from '@memberjunction/core-entities';
-import type {
-  SourceBinding,
-  FeatureStepGraph,
-  FeatureStep,
-  FeatureStepKind,
-  AsOfStrategy,
-  LeakageGuard,
-  ValidationStrategy,
-  ProblemType,
+import {
+  DOMINANCE_THRESHOLD_DEFAULT,
+  parseDenyList,
+  type SourceBinding,
+  type FeatureStepGraph,
+  type FeatureStep,
+  type FeatureStepKind,
+  type AsOfStrategy,
+  type LeakageGuard,
+  type ValidationStrategy,
+  type ProblemType,
 } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 
@@ -88,7 +90,7 @@ const PS_PIPELINES_STARTER_PROMPT =
   selector: 'ps-pipelines',
   imports: [CommonModule, MJButtonDirective],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-pipelines.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-pipelines.component.css'],
   template: `
     <div class="ps-panel ps-pipelines" data-testid="ps-pipelines-panel">
       @if (pipelines.length === 0) {
@@ -106,17 +108,19 @@ const PS_PIPELINES_STARTER_PROMPT =
           </button>
         </div>
       } @else {
-        <!-- Pipeline picker + toolbar -->
-        <div class="pl-bar" data-testid="ps-pipelines-picker">
+        <!-- Pipeline picker (its own scrollable row) -->
+        <div class="pl-picker" data-testid="ps-pipelines-picker">
           @for (p of pipelines; track p.ID) {
             <button class="pl-pill" [class.on]="isSelectedPipeline(p)"
-              data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)">
-              <i class="fa-solid fa-diagram-project"></i> {{ p.Name }}
+              data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)" [title]="p.Name">
+              <i class="fa-solid fa-diagram-project"></i> <span class="pl-pill-name">{{ p.Name }}</span>
               <span class="ps-badge" [class]="statusClass(p.Status)">{{ p.Status }}</span>
             </button>
           }
-          <span class="ps-spacer"></span>
-          @if (dirty) { <span class="ps-tag amber" data-testid="ps-pipelines-dirty"><i class="fa-solid fa-pen"></i> Unsaved</span> }
+        </div>
+
+        <!-- Toolbar for the selected pipeline (its own row) -->
+        <div class="pl-toolbar">
           <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-save" [disabled]="!dirty || busy" (click)="save()">
             <i class="fa-solid fa-floppy-disk"></i> Save
           </button>
@@ -129,6 +133,8 @@ const PS_PIPELINES_STARTER_PROMPT =
           <button mjButton variant="secondary" size="sm" (click)="refine()">
             <i class="fa-solid fa-wand-magic-sparkles"></i> Agent
           </button>
+          <span class="ps-spacer"></span>
+          @if (dirty) { <span class="ps-tag amber" data-testid="ps-pipelines-dirty"><i class="fa-solid fa-pen"></i> Unsaved</span> }
         </div>
 
         <div class="builder">
@@ -330,7 +336,7 @@ export class PSPipelinesComponent implements OnInit {
   public editProblemType: ProblemType = 'classification';
   public editAlgorithmId = '';
   public editHyperparams = '{}';
-  public editLeakage: LeakageGuard = { DenyFields: [], SingleFeatureDominanceThreshold: 0.6 };
+  public editLeakage: LeakageGuard = { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT };
   public editAsOf: AsOfStrategy = { Mode: 'none' };
   public editValidation: ValidationStrategy = { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 };
 
@@ -366,7 +372,7 @@ export class PSPipelinesComponent implements OnInit {
     this.editProblemType = (p.ProblemType as ProblemType) ?? 'classification';
     this.editAlgorithmId = p.AlgorithmID ?? '';
     this.editHyperparams = p.Hyperparameters ?? '{}';
-    this.editLeakage = this.parse<LeakageGuard>(p.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: 0.6 });
+    this.editLeakage = this.parse<LeakageGuard>(p.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT });
     this.editAsOf = this.parse<AsOfStrategy>(p.AsOfStrategy, { Mode: 'none' });
     this.editValidation = this.parse<ValidationStrategy>(p.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 });
     this.stepSeq = this.editSteps.length;
@@ -621,7 +627,13 @@ export class PSPipelinesComponent implements OnInit {
   // ---- leakage / as-of / validation editing ----
 
   public get denyText(): string { return this.editLeakage.DenyFields.join(', '); }
-  public setDeny(text: string): void { this.editLeakage.DenyFields = text.split(',').map((c) => c.trim()).filter(Boolean); this.dirty = true; }
+  /**
+   * Parse the deny-field input. Uses the shared `parseDenyList` so a pasted
+   * bracketed list ("[CheckInTime, Status]") yields clean column names rather than
+   * "[CheckInTime" / "Status]" — entries which match no column and therefore leave
+   * the most dangerous columns silently unguarded. The server re-validates on save.
+   */
+  public setDeny(text: string): void { this.editLeakage.DenyFields = parseDenyList(text); this.dirty = true; }
   public setThreshold(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editLeakage.SingleFeatureDominanceThreshold = n; this.dirty = true; } }
   public setAsOfMode(v: string): void { this.editAsOf = { ...this.editAsOf, Mode: v as AsOfStrategy['Mode'] }; this.dirty = true; }
   public setAsOfColumn(v: string): void { this.editAsOf.Column = v; this.dirty = true; }

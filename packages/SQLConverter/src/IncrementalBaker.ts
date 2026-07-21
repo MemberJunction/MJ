@@ -41,6 +41,13 @@ export interface BakerWorkingDB {
    * working DB (keeping the DB current for later migrations), and return the captured SQL.
    */
   captureEntity(entityDisplayName: string): Promise<CapturedEntitySQL>;
+  /**
+   * Every entity CodeGen generates objects for, in generation order — the full set
+   * `mj codegen` would process (`IncludeInAPI`, minus excluded schemas). A baseline has
+   * NO CodeGen banners, so `MigrationSplitter.extractAffectedEntities` yields `[]`; baking
+   * a baseline instead captures native CodeGen for THIS full set (see `bakeMigration`).
+   */
+  listBakeableEntities(): Promise<string[]>;
 }
 
 export interface IncrementalBakerOptions {
@@ -73,6 +80,12 @@ export interface BakedMigrationResult {
 const DEFAULT_SCHEMA = '__mj';
 const CODEGEN_SECTION_HEADER = '-- ===================== CodeGen (native PG, baked) =====================';
 
+/** A baseline migration (`B<timestamp>__…`) — a full from-scratch schema snapshot. Mirrors the
+ *  `/^B\d/` test in MigrationConverter's statement-mode baseline handling. */
+function isBaselineFile(fileName: string): boolean {
+  return /^B\d/.test(fileName);
+}
+
 export class IncrementalBaker {
   private readonly schema: string;
 
@@ -94,6 +107,16 @@ export class IncrementalBaker {
    * Known limitation — a new-entity migration's `ALTER COLUMN` preamble CASCADE-drops dependent
    * metadata views (e.g. `vwApplicationSettings`) that per-entity capture doesn't restore, which
    * corrupts the metadata load mid-sequence; prefer the re-bake path for a full set.
+   *
+   * BASELINE mode (`fileName` is a `B…` baseline): a baseline is a full from-scratch snapshot with
+   * NO CodeGen banners, so the banner-derived `affectedEntities` is empty and the "apply the hand
+   * body then capture" flow can't bootstrap (the metadata views the provider reads don't exist on
+   * an empty DB). Instead the working DB is PRE-SEEDED to the baseline end-state by the caller
+   * (v5.x baseline + AST-transpiled deltas → all metadata views present), so we DON'T re-apply the
+   * hand body (its tables already exist) — we capture native CodeGen for the FULL entity set and
+   * pair it with the file's transpiled hand body. The 5 hand utility functions still surface as
+   * gaps (`needs-hand-authoring`); they aren't referenced by base views/sprocs, so the capture is
+   * complete regardless and the caller authors them into the final `.pg.sql`.
    */
   async bakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
     const conv = await convertMigration(ssSql, fileName, {
@@ -119,6 +142,13 @@ export class IncrementalBaker {
       }
       const captured = await this.captureEntities(entities);
       return { ...base, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
+    }
+
+    if (isBaselineFile(fileName)) {
+      await this.opts.db.refreshMetadata(); // read the pre-seeded metadata
+      const allEntities = await this.opts.db.listBakeableEntities();
+      const captured = await this.captureEntities(allEntities);
+      return { ...base, affectedEntities: allEntities, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
     }
 
     if (handBody) {

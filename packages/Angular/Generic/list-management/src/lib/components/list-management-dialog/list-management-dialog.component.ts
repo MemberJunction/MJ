@@ -43,9 +43,23 @@ import {
 })
 export class ListManagementDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   /**
-   * Configuration for the dialog
+   * Configuration for the dialog.
+   *
+   * Initialization is deliberately order-independent with {@link visible}:
+   * Angular assigns inputs in template attribute order, so a host binding
+   * `[visible]` before `[config]` would otherwise open the dialog while
+   * `config` is still undefined — `loadData()` would bail silently and the
+   * dialog would render permanently empty.
    */
-  @Input() config!: ListManagementDialogConfig;
+  @Input()
+  get config(): ListManagementDialogConfig {
+    return this._config;
+  }
+  set config(value: ListManagementDialogConfig) {
+    this._config = value;
+    this.tryInitialize();
+  }
+  private _config!: ListManagementDialogConfig;
 
   /**
    * Controls dialog visibility
@@ -56,11 +70,23 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
   }
   set visible(value: boolean) {
     if (value && !this._visible) {
-      this.initializeDialog();
+      this._pendingInit = true;
     }
     this._visible = value;
+    this.tryInitialize();
   }
   private _visible = false;
+
+  /** Set on each closed→open transition; cleared once init actually runs (requires config). */
+  private _pendingInit = false;
+
+  /** Runs initialization once per open, as soon as BOTH visible and config are available. */
+  private tryInitialize(): void {
+    if (this._pendingInit && this._visible && this._config) {
+      this._pendingInit = false;
+      void this.initializeDialog();
+    }
+  }
 
   /**
    * Emitted when dialog is closed with results
@@ -188,6 +214,10 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
    * Initialize dialog when opened
    */
   private async initializeDialog(): Promise<void> {
+    // Per ListManagementService's multi-provider contract: thread this
+    // component's Provider input into the (root-injected) service. Null is
+    // fine — the service falls back to the global provider.
+    this.listService.Provider = this.Provider;
     this.resetState();
     await this.loadData();
   }
@@ -510,7 +540,8 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
       action: 'apply',
       added: [],
       removed: [],
-      newListsCreated: this.newlyCreatedLists
+      newListsCreated: this.newlyCreatedLists,
+      summary: { added: 0, removed: 0, skipped: 0, failed: 0 }
     };
 
     try {
@@ -521,6 +552,9 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
           this.config.recordIds,
           true // Skip duplicates
         );
+        result.summary!.added += addResult.success;
+        result.summary!.skipped += addResult.skipped;
+        result.summary!.failed += addResult.failed;
 
         for (const listId of this.addedToLists) {
           const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
@@ -540,6 +574,8 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
           [...this.removedFromLists],
           this.config.recordIds
         );
+        result.summary!.removed += removeResult.success;
+        result.summary!.failed += removeResult.failed;
 
         for (const listId of this.removedFromLists) {
           const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));

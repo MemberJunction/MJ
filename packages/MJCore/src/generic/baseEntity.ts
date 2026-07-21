@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
@@ -14,7 +14,13 @@ import { z } from 'zod';
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
  * used properties from the entity field metadata.
+ *
+ * Marked `@OptionalKeyedSpecialization()`: hydration probes the ClassFactory with a
+ * `'<Entity>.<Field>'` key for EVERY field so that a per-field subclass CAN be registered, but
+ * none ever has been in practice — falling back to `EntityField` itself is the designed common
+ * case, not a resolution failure, so the factory must not warn about it.
  */
+@OptionalKeyedSpecialization()
 export class EntityField {
     /**
      * Static object containing the value ranges for various SQL number types. 
@@ -2536,18 +2542,30 @@ export abstract class BaseEntity<T = unknown> {
                         else {
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
-                                if (success && results) {
-                                    const transItem = results.find(r => r.Transaction.BaseEntity === this);
-                                    if (transItem) {
-                                        this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
-                                    }
-                                    else {
-                                        // should never get here, but if we do, we need to throw an error
-                                        throw new Error('Transaction group did not return a result for the entity object');
-                                    }
+                                const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
+                                if (transItem) {
+                                    this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                 }
                                 else {
-                                    throw error; // push this to the catch block below and that will add to the result history
+                                    // The transaction group failed / rolled back, OR (should never happen) reported success
+                                    // without a result for this entity. Either way, RECORD the failure on ResultHistory rather
+                                    // than throwing. This handler runs ASYNCHRONOUSLY — after Save() has already returned true and
+                                    // its enclosing try/catch has unwound — so a throw here has no catch to reach: rxjs routes a
+                                    // throwing next-handler to reportUnhandledError, which re-throws it on a fresh tick, producing
+                                    // an uncaughtException that exits the whole host process (MJServer only guards
+                                    // unhandledRejection). The transaction has already rolled back and Submit() returns false; the
+                                    // caller's error handling still runs. Mirrors the Delete() transaction-group-failure path below.
+                                    const err = error ?? (success ? new Error('Transaction group did not return a result for the entity object') : undefined);
+                                    if (currentResultCount === this.ResultHistory.length) {
+                                        // no new result was recorded elsewhere, so add one here (mirrors Save()'s own catch block)
+                                        newResult.Success = false;
+                                        newResult.Type = saveSubType ?? (this.IsSaved ? 'update' : 'create');
+                                        newResult.Message = err?.message ?? (err != null ? String(err) : 'Transaction group failed');
+                                        newResult.Errors = err?.Errors || [];
+                                        newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                        newResult.EndedAt = new Date();
+                                        this.RegisterResultHistoryEntry(newResult);
+                                    }
                                 }
                             });
                             return true;
@@ -3278,14 +3296,24 @@ export abstract class BaseEntity<T = unknown> {
                                 this.NewRecord(); // will trigger a new record event here too
                             }
                             else {
-                                // transaction failed, so we need to add a new result to the history here
-                                newResult.Success = false;
-                                newResult.Type = 'delete'
-                                newResult.Message = error && error.message? error.message : error;
-                                newResult.Errors = error.Errors || [];
-                                newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
-                                newResult.EndedAt = new Date();
-                                this.RegisterResultHistoryEntry(newResult);
+                                // Transaction group failed / rolled back. RECORD the failure instead of
+                                // letting this async handler throw — exactly like the Save() subscriber above.
+                                // `error` may be UNDEFINED: the GraphQL-client transaction group signals
+                                // failure by RETURNING failed result items (no thrown error), so the old
+                                // `error.Errors` was a TypeError, which rxjs re-throws on a fresh tick as an
+                                // uncaughtException that exits the host process. Treat `error` as
+                                // possibly-absent, and guard on currentResultCount so a provider that already
+                                // recorded the failure (real providers do, before the notification fires)
+                                // isn't double-recorded.
+                                if (currentResultCount === this.ResultHistory.length) {
+                                    newResult.Success = false;
+                                    newResult.Type = 'delete';
+                                    newResult.Message = error?.message ?? (error != null ? String(error) : 'Transaction group failed');
+                                    newResult.Errors = error?.Errors || [];
+                                    newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                    newResult.EndedAt = new Date();
+                                    this.RegisterResultHistoryEntry(newResult);
+                                }
                             }
                         });
                     }

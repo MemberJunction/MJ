@@ -1247,8 +1247,10 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         return;
       }
 
-      // Load lists, categories, and item counts in parallel
-      const [listsResult, categoriesResult, detailsResult] = await rv.RunViews([
+      // Load lists and categories in parallel; item counts follow as a
+      // batched set of count_only queries (index-seek COUNTs server-side)
+      // instead of transferring every membership row to the client.
+      const [listsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Lists',
           ExtraFilter: `UserID = '${userId}'`,
@@ -1259,11 +1261,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
           EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'MJ: List Details',
-          ExtraFilter: `ListID IN (SELECT ID FROM __mj.List WHERE UserID = '${userId}')`,
-          ResultType: 'simple'
         }
       ]);
 
@@ -1274,7 +1271,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
       const lists = listsResult.Results as MJListEntity[];
       this.categories = categoriesResult.Results as MJListCategoryEntity[];
-      const details = detailsResult.Results as Array<{ ListID: string }>;
 
       // Build category map
       this.categoryMap.clear();
@@ -1282,11 +1278,17 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         this.categoryMap.set(cat.ID, cat);
       }
 
-      // Count items per list
+      // Count items per list — one batched round trip
       const itemCounts = new Map<string, number>();
-      for (const detail of details) {
-        const count = itemCounts.get(detail.ListID) || 0;
-        itemCounts.set(detail.ListID, count + 1);
+      if (lists.length > 0) {
+        const countResults = await rv.RunViews(lists.map(list => ({
+          EntityName: 'MJ: List Details',
+          ExtraFilter: `ListID = '${list.ID}'`,
+          ResultType: 'count_only' as const
+        })));
+        countResults.forEach((res, idx) => {
+          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+        });
       }
 
       // Build entity info

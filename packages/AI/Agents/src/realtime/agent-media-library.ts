@@ -80,7 +80,7 @@ export async function resolveAgentMediaCollectionID(
     }
     const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<MJAIAgentEntity>(
-        { EntityName: 'AI Agents', ExtraFilter: `ID='${agentID}'`, ResultType: 'entity_object' },
+        { EntityName: 'MJ: AI Agents', ExtraFilter: `ID='${agentID}'`, ResultType: 'entity_object' },
         contextUser,
     );
     if (!result.Success || result.Results.length === 0) {

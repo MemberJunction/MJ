@@ -18,6 +18,7 @@
  */
 
 import { ObjectId } from 'mongodb';
+import { parseIso8601AsUtc } from '@memberjunction/external-data-sources';
 
 type MongoFilter = Record<string, unknown>;
 type Primitive = string | number | boolean | null;
@@ -153,8 +154,8 @@ class Parser {
       const value = this.parseValue();
       return MongoFilterTranslator.Comparison(field, t.value, value);
     }
-    if (this.isKw('IN')) { this.next(); return { [field]: { $in: this.parseValueList().map(v => MongoFilterTranslator.CoerceObjectId(field, v)) } }; }
-    if (this.isKw('NOT')) { this.next(); if (!this.isKw('IN')) throw new Error("Expected IN after NOT."); this.next(); return { [field]: { $nin: this.parseValueList().map(v => MongoFilterTranslator.CoerceObjectId(field, v)) } }; }
+    if (this.isKw('IN')) { this.next(); return { [field]: { $in: this.parseValueList().map(v => MongoFilterTranslator.CoerceTemporal(MongoFilterTranslator.CoerceObjectId(field, v))) } }; }
+    if (this.isKw('NOT')) { this.next(); if (!this.isKw('IN')) throw new Error("Expected IN after NOT."); this.next(); return { [field]: { $nin: this.parseValueList().map(v => MongoFilterTranslator.CoerceTemporal(MongoFilterTranslator.CoerceObjectId(field, v))) } }; }
     if (this.isKw('IS')) {
       this.next();
       const negated = this.isKw('NOT');
@@ -202,7 +203,7 @@ export class MongoFilterTranslator {
   }
 
   public static Comparison(field: string, op: string, value: Primitive): MongoFilter {
-    const v = MongoFilterTranslator.CoerceObjectId(field, value);
+    const v = MongoFilterTranslator.CoerceTemporal(MongoFilterTranslator.CoerceObjectId(field, value));
     switch (op) {
       case '=': return { [field]: { $eq: v } };
       case '!=': return { [field]: { $ne: v } };
@@ -224,6 +225,30 @@ export class MongoFilterTranslator {
   public static CoerceObjectId(field: string, value: unknown): unknown {
     if (field === '_id' && typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value)) {
       return new ObjectId(value);
+    }
+    return value;
+  }
+
+  /**
+   * Coerce an ISO-8601 date-time string literal to a `Date` so range/equality comparisons match Mongo's
+   * native `Date`-typed fields (BSON compares across types by a fixed order, so a string never matches a
+   * `Date`). Without this, an incremental-sync watermark predicate like `updatedAt >= '2026-03-01T…Z'`
+   * silently matched ZERO documents.
+   *
+   * BEHAVIOR CHANGE / deliberate trade-off: a field that actually STORES an ISO-looking STRING no longer
+   * matches such a predicate — `field >= '<iso>'` previously compared string↔string lexicographically, and
+   * now the literal is a `Date` (which never equals a stored string). This is the mirror of the bug being
+   * fixed; native `Date` fields are far more common and a watermark predicate needs `Date` semantics, so a
+   * source that genuinely stores ISO strings must compare via `RunNativeQuery` (the escape hatch). A
+   * ZONELESS ISO string is interpreted as UTC (via {@link parseIso8601AsUtc}), never server-local. Date-only
+   * (`'2026-03-01'`) and non-temporal strings pass through unchanged.
+   */
+  public static CoerceTemporal(value: unknown): unknown {
+    if (typeof value === 'string') {
+      const d = parseIso8601AsUtc(value);
+      if (d) {
+        return d;
+      }
     }
     return value;
   }

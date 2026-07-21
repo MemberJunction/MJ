@@ -640,6 +640,13 @@ export class MagicLinkService {
    * a single atomic operation. Returns true ONLY when this call updated the row
    * (won the race); concurrent redemptions of a single-use link see 0 rows.
    *
+   * Dialect-aware: SQL Server uses an `OUTPUT`-into-table-variable win-detect;
+   * PostgreSQL uses `UPDATE … WHERE … RETURNING` (the WHERE guard is itself the
+   * atomic single-use gate). The platform is read from the provider itself
+   * (`PlatformKey`), not from process env, so this is correct even under a
+   * non-default per-connection provider. The invite ID always binds as a
+   * parameter (`@p0` / `$1`), never interpolated.
+   *
    * Fail-closed: any DB error returns false and the redemption is rejected.
    */
   private async consumeInvite(invite: MJMagicLinkInviteEntity, provider: DatabaseProviderBase, contextUser: UserInfo): Promise<boolean> {
@@ -649,9 +656,12 @@ export class MagicLinkService {
         LogError(`[MagicLink] Entity metadata for '${INVITE_ENTITY}' not found; cannot consume invite.`);
         return false;
       }
-      const table = `[${entityInfo.SchemaName}].[${entityInfo.BaseTable}]`;
-      // OUTPUT returns one row iff the WHERE matched — the atomic single-use gate.
-      const sql = buildConsumeInviteSQL(table);
+      const isPg = provider.PlatformKey === 'postgresql';
+      // PG identifiers are auto-quoted by PostgreSQLDataProvider.ExecuteSQL, so
+      // pass the bare `schema.table`; SQL Server takes the bracket-quoted form.
+      const table = isPg ? `${entityInfo.SchemaName}.${entityInfo.BaseTable}` : `[${entityInfo.SchemaName}].[${entityInfo.BaseTable}]`;
+      // OUTPUT/RETURNING yields one row iff the WHERE matched — the atomic single-use gate.
+      const sql = buildConsumeInviteSQL(table, isPg ? 'postgresql' : 'sqlserver');
       const rows = await provider.ExecuteSQL<{ ID: string }>(sql, [invite.ID], { isMutation: true }, contextUser);
       return Array.isArray(rows) && rows.length === 1;
     } catch (e) {

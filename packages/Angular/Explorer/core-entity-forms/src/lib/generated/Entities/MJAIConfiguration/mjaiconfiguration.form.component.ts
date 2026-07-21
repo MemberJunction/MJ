@@ -27,7 +27,8 @@ export class MJAIConfigurationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
-            { sectionKey: 'mJAIConfigurations', sectionName: 'AI Configurations', isExpanded: false }
+            { sectionKey: 'mJAIConfigurations', sectionName: 'AI Configurations', isExpanded: false },
+            { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false }
         ]);
     }
 }

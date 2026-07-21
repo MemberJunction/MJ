@@ -281,8 +281,37 @@ export class GetDataAccessToken {
     TokenUses: TokenUseLog[];
 }
 const __accessTokens: GetDataAccessToken[] = [];
-const __defaultTokenLifeSpan = 1000 * 60 * 5; // 5 minutes  
+const __defaultTokenLifeSpan = 1000 * 60 * 5; // 5 minutes
+
+/**
+ * Removes every token whose `ExpiresAt` has already passed (and its `TokenUses`
+ * log along with it). Without this sweep `__accessTokens` grows forever — nothing
+ * else in this module ever removes an expired token, `deleteAccessToken()` has no
+ * production caller (tokens are consumed implicitly via short-lived `GetData`
+ * calls, never explicitly released by the requesting system), and `isTokenValid()`
+ * only checks the expiry timestamp without pruning it. Called from
+ * `registerAccessToken()` — the natural "allocation" moment — so the array
+ * self-bounds to roughly "tokens registered within one lifespan window" instead
+ * of growing with total lifetime registrations (Memory Leak Audit Round 7,
+ * Critical finding).
+ * @param now injectable for tests; defaults to the real current time
+ */
+export function pruneExpiredTokens(now: Date = new Date()): void {
+    for (let i = __accessTokens.length - 1; i >= 0; i--) {
+        if (__accessTokens[i].ExpiresAt <= now) {
+            __accessTokens.splice(i, 1);
+        }
+    }
+}
+
+/** Number of tokens currently tracked (post-sweep, at last mutation). Exposed for tests/diagnostics. */
+export function getAccessTokenCount(): number {
+    return __accessTokens.length;
+}
+
 export function registerAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: any): GetDataAccessToken {
+    pruneExpiredTokens();
+
     const tokenToUse = token || uuidv4();
 
     if (tokenExists(tokenToUse)) {

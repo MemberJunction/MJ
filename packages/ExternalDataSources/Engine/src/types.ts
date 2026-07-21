@@ -49,6 +49,15 @@ export interface ExternalViewParams {
   maxRows?: number;
   /** Zero-based row offset for pagination. */
   offset?: number;
+  /**
+   * Structured incremental lower-bound: return only rows where `Field >= Value` (INCLUSIVE). The driver
+   * renders this to its own dialect — SQL drivers to a quoted `WHERE <Field> >= <literal>` using their own
+   * identifier quoting, MongoDB to `{ <Field>: { $gte: <coerced> } }` — so an incremental-sync caller
+   * NEVER writes dialect SQL. Combined (ANDed) with {@link filter} when both are present. Inclusive by
+   * design so a caller can re-read the watermark boundary and rely on downstream dedup rather than risk
+   * skipping a row whose sub-second timestamp truncates to the saved value.
+   */
+  incrementalSince?: { Field: string; Value: string };
 }
 
 /** Result of a driver RunView call. */

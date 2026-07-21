@@ -11,11 +11,12 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (5 classes)
+// @memberjunction/ai-realtime-client (6 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
+    HuggingFaceRealtimeClient,
     OpenAIRealtimeClient,
     xAIRealtimeClient,
 } from '@memberjunction/ai-realtime-client';
@@ -26,7 +27,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (404 classes)
+// @memberjunction/core-entities (405 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -356,6 +357,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
@@ -564,7 +566,7 @@ import {
     FileBrowserResource,
 } from '@memberjunction/ng-file-storage';
 
-// @memberjunction/ng-explorer-core (9 classes)
+// @memberjunction/ng-explorer-core (13 classes)
 import {
     ArtifactResource,
     ChatConversationsResource,
@@ -572,6 +574,10 @@ import {
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
+    OmnibarAgentProvider,
+    OmnibarCommandProvider,
+    OmnibarRecordProvider,
+    OmnibarSearchProvider,
     QueryResource,
     SearchResultsResource,
     UserViewResource,
@@ -586,6 +592,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
+    HuggingFaceRealtimeClient,
     OpenAIRealtimeClient,
     xAIRealtimeClient,
     SimpleVectorDatabase,
@@ -918,6 +925,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
+    MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
@@ -1078,6 +1086,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
+    OmnibarAgentProvider,
+    OmnibarCommandProvider,
+    OmnibarRecordProvider,
+    OmnibarSearchProvider,
     QueryResource,
     SearchResultsResource,
     UserViewResource,
@@ -1087,7 +1099,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 498;
+export const CLASS_REGISTRATIONS_COUNT = 504;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
