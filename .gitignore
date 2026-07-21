@@ -91,6 +91,10 @@ Thumbs.db
 
 *.env
 .env.*
+# DR-E3: the regression env TEMPLATE is placeholders-only and MUST be committed
+# (the compose header + QUICKSTART + REGRESSION_TESTING all point to it). The
+# real secrets file docker/regression/.env.test stays ignored (see above).
+!docker/regression/.env.test.example
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt

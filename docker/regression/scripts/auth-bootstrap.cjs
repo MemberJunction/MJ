@@ -24,8 +24,14 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 
 const BASE = process.env.AUTH_BOOTSTRAP_URL || 'http://localhost:4200';
-const USER = process.env.MJ_TEST_VAR_authUsername || process.env.TEST_UID || 'computeruse@bluecypress.io';
-const PWD = process.env.MJ_TEST_VAR_authPassword || process.env.TEST_PWD || 'computerpassword2!';
+// DR-E3: NO hardcoded credential fallbacks. The previous defaults
+// ('computeruse@bluecypress.io' / 'computerpassword2!') were a real hazard —
+// the password fallback was even WRONG vs .env.test ('computerpassword2!' vs
+// 'computerusepassword2!'), so a missing env var silently attempted a wrong
+// password 3× instead of failing fast. Creds come from the environment only;
+// the guard below fails fast when they're absent.
+const USER = process.env.MJ_TEST_VAR_authUsername || process.env.TEST_UID;
+const PWD = process.env.MJ_TEST_VAR_authPassword || process.env.TEST_PWD;
 const OUT = process.env.MJ_TEST_AUTH_STATE_FILE || '/tmp/mj-auth-state.json';
 const ATTEMPTS = parseInt(process.env.AUTH_BOOTSTRAP_ATTEMPTS || '3', 10);
 
@@ -116,6 +122,15 @@ async function attemptLogin(browser) {
 }
 
 (async () => {
+  // DR-E3: fail fast on missing credentials instead of launching Chromium and
+  // attempting a login with `undefined` creds ATTEMPTS times. In full mode the
+  // DR-E1 preflight gate already hard-aborts the run when TEST_UID/TEST_PWD are
+  // empty; this is the script-level guard for any other invocation path.
+  if (!USER || !PWD) {
+    const missing = [!USER && 'authUsername/TEST_UID', !PWD && 'authPassword/TEST_PWD'].filter(Boolean).join(', ');
+    log(`FAILED — no credentials in the environment (${missing}). Set them in .env.test (see .env.test.example).`);
+    process.exit(1);
+  }
   log(`base=${BASE} user=${USER} out=${OUT}`);
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   let ok = false;
