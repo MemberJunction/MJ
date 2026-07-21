@@ -203,6 +203,8 @@ Item IDs use the `DR-` prefix (Docker Regression). Themes: **A** resource isolat
 
 **Risks / open questions.** A kept volume across migration changes must be invalidated by the DR-B1 hash check (it is, by construction).
 
+**Wave 3 status — LANDED.** Named volume `mssql-data` (explicitly `mj-regression-mssql-data`) mounted at `/var/opt/mssql`; the DB no longer lives in the container writable layer. CLI `down` FLIPPED to keep-by-default: `--volumes`/`-v` wipes, `--keep-volumes` kept as a hidden no-op for compat, and an in-progress guard reads the DR-D5 partial and refuses (exit 1) to tear down a `Running` run unless `--force`/`-f`. Verified: `docker compose config` shows the volume declared + mounted (`read`/`target: /var/opt/mssql`); `down --help` shows the flipped flags; MJCLI 426 tests green. Takes effect on the next stack lifecycle (the running stack was left untouched). ARCHITECTURE.md §5 reconciliation rides with DR-G7.
+
 #### DR-B3 — Kill the double-codegen at the root
 
 **Problem.** `mj codegen` must run twice: pass 1 registers entities and adds `__mj_*` columns but does not populate their special-date EntityField metadata in-pass; without pass 2, every write to demo entities fails at runtime (`db-setup-entrypoint.sh:103-125`). The form-generator has the same two-pass ritual (`form-gen-entrypoint.sh:44-58`). REGRESSION_TESTING.md:747 claims this is already fixed — it is not.
@@ -228,6 +230,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 
 **Risks / open questions.** mj-sync changes have blast radius beyond this stack — items 2/3 should land as general MetadataSync features with their own tests.
 
+**Wave 3 status — item 4 (no-write-back) LANDED; items 1/2/3 deferred (product-wide).** New `mj sync push --no-write-back` (additive, default off) suppresses primaryKey/sync file stamping at BOTH write sites in `PushService` (inline + deferred deletion-flush); wired into all six runner-entrypoint pushes + db-setup's three. Verified END-TO-END against the live regression DB (localhost:11433): a forced record diff pushed with vs without the flag produced the same DB `Updated 1` but rewrote the source file only WITHOUT it — the "perpetual git dirt" is gone; metadata-sync 261 tests green. **Deferred (product-wide, exactly per this risk note):** item 1 (the `TestSuiteTest` seed is baked into a 162k-line release baseline — a regeneratable release artifact, fragile to hand-edit), item 2 (natural-key upsert in mj-sync core — the existing `lookupFields` is pull-time FK→`@lookup` resolution, NOT push-time matching, so this is a genuine core feature needing its own tests), item 3 (per-record savepoints). `clear-baseline-suite-members.cjs` therefore stays until 1/2 land.
+
 #### DR-B5 — All metadata pushes from the live mount; db-setup becomes schema-only
 
 **Problem.** db-setup pushes `applications` + `prompts` from its **baked** metadata copy; the runner pushes `applications` (again), `tests`, `test-suites` from the **live** host mount (`db-setup-entrypoint.sh:127-143`, `test-runner-entrypoint.sh:49-93`). Editing a test JSON takes effect on next `up`; editing a prompt silently does nothing until a db-setup image rebuild — same tree, opposite behaviors, no warning. The RW mount lets root-owned sync stamps pollute the repo.
@@ -237,6 +241,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 **Expected impact.** Ends the prompt-staleness trap and the repo pollution; makes DR-B1 snapshots metadata-independent by construction.
 
 **Risks / open questions.** Push ordering (prompts before suite start) adds ~tens of seconds to runner startup — trivial next to what DR-B1 saves.
+
+**Wave 3 status — :ro mount + live prompt freshness LANDED; schema-only push-removal deferred to DR-B1.** Host metadata now mounted `:ro` (safe post-DR-B4 since every runner push is `--no-write-back`; a stray write now fails loudly instead of polluting). The runner pushes `prompts` from the LIVE mount every run — editing a prompt takes effect on the next `up` instead of needing a db-setup image rebuild (the staleness trap, killed). Verified against the live DB: the runner prompts push upserts 446 records with ZERO repo churn; `docker compose config` shows `/app/metadata` `read_only: true`; both entrypoints pass `bash -n`. **Deferred to DR-B1:** removing db-setup's now-redundant applications + prompts pushes (truly schema-only) — needs a db-setup rerun to verify and only matters for snapshot metadata-independence; meanwhile the runner's live pushes run after db-setup and win, so db-setup's baked pushes are harmless redundancy.
 
 ---
 
@@ -718,8 +724,17 @@ DR-F1 (RUN_ID) → DR-F2 (up-then-run + exit codes) → DR-D5 (JSONL + partials 
 **Wave 2 — scheduler intelligence (depends on Wave 1's data): ✅ LANDED (2026-07-21).**
 DR-D1 (work queue) → DR-D2 (classified deferred retries; stopgap regex classifier until CU taxonomy lands) → DR-D3 (admission control, fed by G4) → DR-D4 (watchdog) → DR-D7 (circuit breakers) → DR-D8 (attempt lineage + retry-aware compare) → DR-D9 (dead knobs). D1 is the keystone; everything else in the wave attaches to its dispatch point. All seven shipped as one commit each — the whole of Theme D now composes on one seam: `drainQueue` (D1) is drained by N workers, gated per-dispatch by admission (D3) + circuit breaker (D7) + wall-clock deadline (D4) + failFast (D9), with each attempt watchdog-bounded (D4) and each failure classified → budgeted-retried (D2) and persisted into the file lineage that `compare` now reads retry-aware (D8). See the per-item "Wave 2 status" blocks in §4 (Theme D) for what landed vs. deferred. Carried forward: DR-D2's separate reduced-concurrency retry PHASE (the one-result-per-test sink contract), DR-D8's DB schema columns + typed stamping + DB-mode `IsFinalAttempt` filter + results.json `Tags` (all need a CodeGen cycle — blocked here by rule 2b), DR-D4's watchdog-fired browser recycle (needs DR-A2), and DR-D7's distinct per-outcome exit code (with DR-F2). DR-D6 (resumable runs), DR-D10 (sharding), DR-D11 (concurrency classes) remain in Wave 3+ (they depend on DR-D8's DB marker / DR-A2 / DR-G6).
 
-**Wave 3 — lifecycle simplification:**
+**Wave 3 — lifecycle simplification: 🟡 PARTIAL (3 of 8 landed + live-verified, 2026-07-21).**
 DR-B4 (baseline root fix — can start anytime, lands here for the mj-sync work) → DR-B5 (push consolidation + `:ro` mount) → DR-B1/B2 (snapshot/restore + named volume; B5 is a precondition so snapshots are metadata-independent) → DR-B3 (single-pass codegen) → DR-E5 (entrypoint consolidation) → DR-C4 (bake/mount policy) → DR-C5 (`.docker-generated` fingerprint).
+
+**Landed + verified against the live `mj-regression` SQL Server (one commit each; see per-item "Wave 3 status" blocks):** DR-B4 (item 4 — `mj sync push --no-write-back`, kills the repo git-pollution), DR-B2 (named DB volume + `down` keep-by-default + in-progress guard), DR-B5 (`:ro` metadata mount + live prompt freshness). These three eliminate the working-tree pollution class, the ephemeral-DB-loss-on-`down` class, and the prompt-staleness trap — the localized, product-safe, live-verifiable core of Theme B.
+
+**Deferred, with rationale (each is heavier than the config/TypeScript wins above):**
+- **DR-B4 items 1/2/3** — product-wide MetadataSync / release-baseline changes needing their own tests + owner coordination (the item's own risk note says so). The `--no-write-back` half stands alone; the workaround script stays until the natural-key-upsert / baseline-seed root fix lands.
+- **DR-B1 (snapshot/restore)** — the marquee cold-start win (~6 min → ~30 s), but full verification (hash-match → RESTORE vs full rebuild) requires multiple db-setup cycles that churn/destroy the live DB; the BACKUP/RESTORE *mechanics* are provable via `sqlcmd` to a scratch DB, but the load-bearing entrypoint integration wants a deliberate, disruptive verification pass. DR-B2's named volume (done) is its precondition; DR-B5's live-push (done) makes its snapshots metadata-independent.
+- **DR-B3 (single-pass codegen)** — the fix lives in CodeGenLib, outside this stack (product-wide; coordinate with owners).
+- **DR-E5 (entrypoint consolidation)** — a high-risk merge of three load-bearing entrypoints; needs a full-run verification and is the compatibility path DR-F7 depends on staying intact.
+- **DR-C4 / DR-C5 (bake-vs-mount policy · `.docker-generated` fingerprint)** — build/image-orchestration changes whose verification needs slow image rebuilds.
 
 **Wave 4 — build & distribution:**
 DR-C2 (shared builder; benefits from C1 and the B-wave's clarified image responsibilities) → DR-C3 (runtime Explorer) → DR-C6 (published runner base) → DR-F7 (path hardening + phase inversion).
