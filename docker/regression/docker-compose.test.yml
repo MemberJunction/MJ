@@ -214,6 +214,13 @@ services:
       BASE_URL: "http://mjexplorer:4200"
       API_URL: "http://mjapi:4000"
       MAX_PARALLEL_WORKERS: "${MAX_PARALLEL_WORKERS:-3}"
+      # DR-E2: MAX_RETRIES was read by test-runner-entrypoint.sh (RETRIES=
+      # ${MAX_RETRIES:-2}) but was ABSENT from every compose environment block —
+      # the documented retry knob physically could not reach the container, so
+      # full mode was hardcoded to 2. Declaring it here makes `--retries` (CLI)
+      # and MAX_RETRIES (env) actually take effect. Prerequisite for DR-D2's
+      # retry-policy experimentation.
+      MAX_RETRIES: "${MAX_RETRIES:-2}"
       # Optional archive flow — when ARCHIVE_DB_DATABASE is set, the entrypoint
       # generates a transient mj.config.cjs from the ARCHIVE_DB_* vars below,
       # pulls the suite run + children, and pushes them to that destination MJ

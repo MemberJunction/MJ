@@ -32,6 +32,17 @@ export default class TestRegressionUp extends Command {
       default: false,
     }),
     suite: Flags.string({ description: 'Test suite to run (TEST_SUITE_NAME). Use with --bacpac + --metadata.' }),
+    retries: Flags.integer({
+      min: 0,
+      description: 'Extra attempts per failing test (MAX_RETRIES). 0 disables retries. Default 2. ' +
+        'Retrying deterministic failures under the conditions that produced them is the ' +
+        'single largest waste in the suite — set 0 when re-running known-failing tests.',
+    }),
+    workers: Flags.integer({
+      min: 1,
+      description: 'Parallel workers (MAX_PARALLEL_WORKERS). Default 3. Size against runner memory — ' +
+        'each browser worker needs ~1.5g; 4 workers OOM\'d the default-memory host.',
+    }),
     metadata: Flags.string({ description: 'Directory of your test + test-suite metadata (pushed before the run). Requires --bacpac.' }),
     image: Flags.string({ description: '(external) Published agentic-test-runner image. Default: ' + AGENTIC_TEST_RUNNER_IMAGE + '.' }),
     'explorer-image': Flags.string({ description: '(external bacpac) Published Explorer image (prerequisite). Default: memberjunction/explorer:latest.' }),
@@ -72,6 +83,11 @@ export default class TestRegressionUp extends Command {
       }
     }
     if (flags.suite) { childEnv.TEST_SUITE_NAME = flags.suite as string; this.log(`  Suite: ${flags.suite}`); }
+    // DR-E2: forward the sizing knobs as env for compose interpolation. Guard on
+    // `!== undefined` — `--retries 0` is valid and falsy (it's the whole point:
+    // disable retries when re-running known failures).
+    if (flags.retries !== undefined) { childEnv.MAX_RETRIES = String(flags.retries); this.log(`  Retries: ${flags.retries}`); }
+    if (flags.workers !== undefined) { childEnv.MAX_PARALLEL_WORKERS = String(flags.workers); this.log(`  Workers: ${flags.workers}`); }
 
     const composeArgs = dockerComposeArgs('full', ['up'], overlays);
     if (flags.detach) composeArgs.push('-d');
