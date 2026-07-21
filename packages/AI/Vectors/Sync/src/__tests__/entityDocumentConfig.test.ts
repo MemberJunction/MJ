@@ -21,6 +21,8 @@ vi.mock('@memberjunction/global', () => {
     // No-op decorator factory — classes in the ai-vector-sync module graph declare
     // `@RequiresSubclass()`; the mock must expose it or module init throws on the missing export.
     RequiresSubclass: () => (_target: unknown) => {},
+    // Same story for OptionalKeyedSpecialization (baseEntity marks EntityField with it, B47).
+    OptionalKeyedSpecialization: () => (_target: unknown) => {},
     MJGlobal: { Instance: { ClassFactory: { GetRegistration: vi.fn() } } },
     UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
     BaseSingleton: MockBaseSingleton,
