@@ -1,7 +1,7 @@
 /**
  * runquery-features.checks.ts — the 'runquery-features' bundle (QF1–QF10).
  *
- * Covers "0e. runquery-features" from plans/integration-test-expansion/test-catalog.md:
+ * Covers "0e. runquery-features" from packages/TestingFramework/integration-test-suite/docs/test-catalog.md:
  * the RunQuery FEATURE SURFACE that the sibling `runquery-cache` bundle does NOT exercise —
  * the ad-hoc-SQL contract, MaxRows/StartRow paging + the TotalRowCount/PageNumber/PageSize
  * contract, and the CacheKey/CacheHit result fields — PLUS two guard checks that PIN the two
@@ -227,7 +227,14 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
             Assert(miss.Success, `cache miss run must succeed: ${miss.ErrorMessage}`);
             Assert(miss.CacheHit !== true, 'the first CacheLocal run is a miss, not a hit');
 
-            const hit = await rq.RunQuery({ QueryID: PageQuery.ID, CacheLocal: true, Parameters: { scope: 'qf7' } }, ctx.User);
+            // The slot write is FIRE-AND-FORGET (providerBase's SetRunQueryResult is not
+            // awaited) — poll briefly for the hit instead of racing the write (review class 2;
+            // green today only because the in-memory storage wins the microtask race).
+            let hit = await rq.RunQuery({ QueryID: PageQuery.ID, CacheLocal: true, Parameters: { scope: 'qf7' } }, ctx.User);
+            for (let i = 0; i < 10 && hit.CacheHit !== true; i++) {
+                await new Promise(r => setTimeout(r, 150));
+                hit = await rq.RunQuery({ QueryID: PageQuery.ID, CacheLocal: true, Parameters: { scope: 'qf7' } }, ctx.User);
+            }
             Assert(hit.Success, `cache hit run must succeed: ${hit.ErrorMessage}`);
             AssertEqual(hit.CacheHit, true, 'the second identical CacheLocal run must be served from the slot');
             AssertEqual(hit.ExecutionTime, 0, 'a cache-served result reports ExecutionTime 0');
@@ -275,6 +282,13 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
                 { QueryID: resolved.ID, Parameters: { since: inject, agentIds: [] } },
                 ctx.User
             );
+            // POSITIVE CONTROL (review): a benign `since` + empty agentIds must SUCCEED —
+            // otherwise "attack failed" could just mean "query is broken", not "injection
+            // contained". Post metadata-push the seeded SQL uses {{ since | sqlDate }}, so
+            // the containment mechanism matches the check name again.
+            const benign = await rq.RunQuery({ QueryID: resolved.ID, Parameters: { since: '2020-01-01', agentIds: [] } }, ctx.User);
+            Assert(benign.Success, `benign since must run clean (got: ${benign.ErrorMessage}) — without this control the attack assertion is unattributable`);
+
             Assert(
                 !attack.Success,
                 'the malicious `since` must be rejected (validation or sqlDate) — a successful run would mean the injection reached the SQL'

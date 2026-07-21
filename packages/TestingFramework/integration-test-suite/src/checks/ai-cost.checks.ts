@@ -1,6 +1,6 @@
 /**
  * ai-cost.checks.ts — the 'ai-cost' bundle (AC1–AC6): cost/pricing metadata integrity for the
- * AI stack, per plans/integration-test-expansion/test-catalog.md Domain 4 (the deterministic,
+ * AI stack, per packages/TestingFramework/integration-test-suite/docs/test-catalog.md Domain 4 (the deterministic,
  * read-only siblings of the mutation-tier AI1 rollup check).
  *
  * TRANSPORT: **CLIENT-CAPABLE** (recommend client-first). Everything here reads through

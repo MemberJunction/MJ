@@ -172,7 +172,11 @@ export async function CheckSi1_RemoteOpChannelIsolation(ctx: IntegrationCheckCon
         return;
     }
 
-    skipNote('SI1', 'progress events carried neither Handle nor Total — cannot discriminate channels; result-routing leg (a) passed');
+    // Review P2: on the client transport, discriminator-less progress means channel
+    // ISOLATION cannot be proven — and isolation is this check's entire point. That is a
+    // payload REGRESSION (Total is emitted today via ArraySource.TotalRowCount), not an
+    // environment gap: fail loudly instead of degrading to result-routing-only.
+    throw new Error('SI1: progress events carried neither Handle nor Total — channel isolation cannot be proven (progress-payload regression)');
 }
 
 /**

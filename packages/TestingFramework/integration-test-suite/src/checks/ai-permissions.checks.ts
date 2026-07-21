@@ -327,6 +327,15 @@ export const AiPermissionsChecks: NamedCheck[] = [
         Id: 'ai-permissions.APM6',
         Name: 'APM6: DENY — the seeded no-grant user is EMPTY on the closed path inventory surfaces (GetUserResources / GetResourcePermissions)',
         Fn: async (ctx): Promise<void> => {
+            // VACUITY GUARD (adversarial review): with ZERO rows in both grant tables, EVERY
+            // principal's closed-path inventory is empty — the emptiness assertions below
+            // would pass without proving principal filtering. Skip loudly until a grant exists.
+            const grantRows = (AIEngineBase.Instance.AgentPermissions?.length ?? 0) + (AIEngineBase.Instance.SkillPermissions?.length ?? 0);
+            if (grantRows === 0) {
+                console.warn('  ⚠ ai-permissions.APM6 SKIPPED — zero grant rows table-wide; emptiness would be vacuous. Seed any one grant to arm this check.');
+                return;
+            }
+
             // PE5/PE6/PE7 pin CheckPermission/GetEffectivePermissions; this pins the two
             // INVENTORY surfaces the Sharing Center actually renders: a principal with zero
             // grants must see an empty "shared with me" inventory (GetUserResources → []), and a

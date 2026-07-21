@@ -225,6 +225,9 @@ export interface EntityWritesFixture {
     CategoryIds: string[];
     /** Every `MJ: Lists` row the bundle created, in creation order. */
     ListIds: string[];
+    /** EW9's conversation fixtures (details swept before conversations). */
+    ConversationIds?: string[];
+    ConversationDetailIds?: string[];
 }
 
 /**

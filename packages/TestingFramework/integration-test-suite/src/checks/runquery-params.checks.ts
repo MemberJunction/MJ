@@ -1,6 +1,6 @@
 /**
  * runquery-params.checks.ts — the 'runquery-params' bundle (QP1–QP10): parameter-permutation
- * coverage for catalog queries, per plans/integration-test-expansion/test-catalog.md §0d.
+ * coverage for catalog queries, per packages/TestingFramework/integration-test-suite/docs/test-catalog.md §0d.
  *
  * READ-ONLY by construction — no fixtures, no lifecycle, zero DB writes. Candidates are resolved
  * DYNAMICALLY from `QueryEngine.Instance.Queries` (via the shared classification exported by
@@ -30,7 +30,7 @@
  * neutralized — either rejected by validation or literal-matched (row count identical to an
  * equally-nonsensical benign literal), NEVER a broadened result set.
  */
-import type { MJQueryParameterEntity } from '@memberjunction/core-entities';
+import type { MJConversationDetailEntity, MJConversationEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { NormalizeUUID } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -463,6 +463,10 @@ export const RunQueryParamsChecks: NamedCheck[] = [
     {
         Id: 'runquery-params.QP7',
         Name: 'QP7: the 0-truthiness trap — optional number param = 0 behaves as omitted (clause skipped, documented)',
+        // KNOWN LIMITS (review): with the current feedback queries, a wrongly-truthy 0 adds
+        // 'UserRating >= 0' — a NO-OP on a 1-10 column — so row counts cannot distinguish the
+        // outcomes even with data. This check PINS the documented current behavior (B58); a
+        // discriminating variant needs a param whose 0-clause meaningfully filters.
         Fn: async (ctx): Promise<void> => {
             const optional = allOptionalQueries(await LoadCatalog(ctx));
             const cases = optional.flatMap(cls => cls.Params.filter(p => p.Type === 'number').map(p => ({ Cls: cls, Param: p })));
@@ -642,4 +646,46 @@ for (const check of RunQueryParamsChecks) {
     IntegrationCheckRegistry.Instance.Register(check);
 }
 
-// Deliberately NO RegisterLifecycle — this bundle is read-only: nothing to create, nothing to tear down.
+// Lifecycle (added after adversarial review): the two all-optional feedback queries carry a
+// hard `WHERE UserRating IS NOT NULL`, and this deployment has ZERO rated details — so the
+// QP2/QP3 widening assertions and parts of QP9 were vacuous (0-row baselines can never
+// narrow). Setup seeds one tagged conversation with three RATED details so the baselines are
+// non-empty; Teardown sweeps FK-ordered. The rest of the bundle remains read-only.
+const qpFixture: { conversationId?: string; detailIds: string[] } = { detailIds: [] };
+
+IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-params', {
+    Setup: async (ctx: IntegrationCheckContext) => {
+        try {
+            const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+            conversation.NewRecord();
+            conversation.Name = 'QP rated-feedback fixture (mj-integration-test — safe to delete)';
+            conversation.UserID = ctx.User.ID;
+            if (!(await conversation.Save())) {
+                console.warn(`  ⚠ runquery-params Setup: conversation fixture failed (${conversation.LatestResult?.CompleteMessage}) — QP2/QP3 run against whatever data exists`);
+                return;
+            }
+            qpFixture.conversationId = conversation.ID;
+            for (const rating of [2, 5, 9]) {
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+                detail.NewRecord();
+                detail.ConversationID = conversation.ID;
+                detail.Role = 'AI';
+                detail.Message = `rated fixture ${rating} (mj-integration-test — safe to delete)`;
+                detail.Status = 'Complete';
+                detail.UserRating = rating;
+                if (await detail.Save()) { qpFixture.detailIds.push(detail.ID); }
+            }
+        } catch (e) {
+            console.warn(`  ⚠ runquery-params Setup degraded: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    },
+    Teardown: async (ctx: IntegrationCheckContext) => {
+        for (const id of qpFixture.detailIds) {
+            try { const e = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User); if (await e.Load(id)) { await e.Delete(); } } catch { /* best effort */ }
+        }
+        if (qpFixture.conversationId) {
+            try { const e = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User); if (await e.Load(qpFixture.conversationId)) { await e.Delete(); } } catch { /* best effort */ }
+        }
+        qpFixture.conversationId = undefined; qpFixture.detailIds = [];
+    }
+});

@@ -39,7 +39,7 @@
  * fixtures (key + scope rules + usage logs) self-clean in the check's own try/finally,
  * mirroring the `api-keys` bundle's AK3.
  */
-import { RunView, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
+import { Metadata, RunView, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
 import type { RunViewParams, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLTransactionGroup } from '@memberjunction/graphql-dataprovider';
@@ -53,6 +53,21 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, TransactionGroupsFixture } from '@memberjunction/testing-integration';
+
+/**
+ * Resolve the REAL GraphQL wire provider (adversarial review F1): under `mj test` the
+ * driver's ctx.Provider is a `new Metadata()` FACADE (BaseTestDriver.Provider fallback),
+ * never a GraphQLDataProvider instance — gating on `ctx.Provider instanceof` made the
+ * SEC1 pin (TG5) and TG1's wire-impl leg silently skip forever. The facade DELEGATES to
+ * the process-global provider, so the honest resolution is: ctx.Provider when it IS the
+ * wire, else the global. On the client transport a missing wire is a FAILURE (wiring
+ * regression), not a skip.
+ */
+function resolveWireProvider(ctx: IntegrationCheckContext): GraphQLDataProvider | null {
+    if (ctx.Provider instanceof GraphQLDataProvider) { return ctx.Provider; }
+    const globalProvider = Metadata.Provider;
+    return globalProvider instanceof GraphQLDataProvider ? (globalProvider as GraphQLDataProvider) : null;
+}
 
 const CATEGORY_ENTITY = 'MJ: Action Categories';
 const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
@@ -128,7 +143,11 @@ export const TransactionGroupsChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const tg = await ctx.Provider.CreateTransactionGroup();
             Assert(tg instanceof TransactionGroupBase, 'CreateTransactionGroup must return a TransactionGroupBase');
-            if (ctx.Provider instanceof GraphQLDataProvider) {
+            const wireForImpl = resolveWireProvider(ctx);
+            if (wireForImpl) {
+                // ctx.Provider may be the driver's Metadata facade — the FACADE delegates
+                // CreateTransactionGroup to the wire provider, so the impl assertion applies
+                // whenever a wire exists in the process (review F1).
                 Assert(tg instanceof GraphQLTransactionGroup,
                     'the client provider must hand back its WIRE implementation (GraphQLTransactionGroup), not some other transport');
             }
@@ -241,13 +260,15 @@ export const TransactionGroupsChecks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             const f = fx(ctx);
-            if (!(ctx.Provider instanceof GraphQLDataProvider)) {
-                // Genuine environment gap, not a soft skip: the scope ceiling only exists on the
-                // wire (userPayload.apiKeyHash), so an in-process server run has nothing to attack.
-                console.log('      → SKIP-AS-PASS: server transport (no MJAPI wire) — the API-key scope gate only exists over the wire; run this bundle on the client transport to exercise the SEC1 pin');
-                return;
+            const wire = resolveWireProvider(ctx);
+            if (!wire) {
+                // IT47 declares transport 'client' — if no GraphQL wire is resolvable IN a
+                // client-transport run, that is a WIRING REGRESSION and this security pin
+                // must go RED, not silently skip (review F1: the pin skipped forever under
+                // the driver's Metadata-facade Provider).
+                throw new Error('TG5: no GraphQLDataProvider resolvable in a client-transport run — the SEC1 pin cannot execute (wiring regression)');
             }
-            const url = ctx.Provider.ConfigData.URL;
+            const url = wire.ConfigData.URL;
 
             // ---- mint a RESTRICTED user API key over the wire: allow view:run, DENY entity:create.
             // The explicit deny makes the pin independent of the deployment's defaultBehaviorNoScopes:

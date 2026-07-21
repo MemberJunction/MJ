@@ -1,6 +1,6 @@
 /**
  * view-execution.checks.ts — the 'view-execution' bundle: the DETERMINISTIC tier of
- * "Domain 11 — Viewing System" from plans/integration-test-expansion/test-catalog.md.
+ * "Domain 11 — Viewing System" from packages/TestingFramework/integration-test-suite/docs/test-catalog.md.
  *
  * TRANSPORT: CLIENT-FIRST. Every data leg runs through `RunView` on the configured
  * GraphQLDataProvider — i.e. over the real GraphQL wire to a live MJAPI — because that is

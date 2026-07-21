@@ -229,18 +229,30 @@ for (const check of SearchChecks) {
 IntegrationCheckRegistry.Instance.RegisterLifecycle('search', {
     Setup: async () => { /* stateless bundle — nothing to create */ },
     Teardown: async (ctx: IntegrationCheckContext) => {
-        try {
-            const leftovers = await new RunView().RunView<MJSearchExecutionLogEntity>({
-                EntityName: 'MJ: Search Execution Logs',
-                ExtraFilter: `Query LIKE '${LOG_QUERY_PREFIX}%'`,
-                ResultType: 'entity_object',
-                BypassCache: true
-            }, ctx.User);
-            for (const row of leftovers.Results ?? []) {
-                await row.Delete().catch(() => undefined);
+        // The audit row this sweeps is written by SearchEngine.logSearchExecution FIRE-AND-
+        // FORGET (SearchEngine.ts:446, unawaited) — a single synchronous sweep can run before
+        // the write commits and leak the row (adversarial review F1). Bounded re-sweep: poll
+        // until a pass finds zero rows (or 5 attempts × 300ms), so the late write is caught.
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const leftovers = await new RunView().RunView<MJSearchExecutionLogEntity>(
+                {
+                    EntityName: 'MJ: Search Execution Logs',
+                    ExtraFilter: `Query LIKE '${LOG_QUERY_PREFIX}%'`,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                ctx.User,
+            );
+            const rows = leftovers.Success ? (leftovers.Results ?? []) : [];
+            if (rows.length === 0 && attempt > 0) { break; }
+            for (const row of rows) {
+                // BaseEntity.Delete() returns false on logical failure (never throws) — check it.
+                const ok = await row.Delete();
+                if (!ok) { console.error(`search teardown: failed to delete log row ${row.ID}: ${row.LatestResult?.CompleteMessage}`); }
             }
-        } catch (e) {
-            console.error(`search teardown warning: ${e instanceof Error ? e.message : String(e)}`);
+            if (rows.length === 0) { break; }
+            await new Promise(r => setTimeout(r, 300));
         }
+
     }
 });

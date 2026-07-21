@@ -1,6 +1,6 @@
 /**
  * runview-matrix.checks.ts — the 'runview-matrix' bundle: "Domain 0a — every RunViewParams
- * feature, swept across all entities" from plans/integration-test-expansion/test-catalog.md.
+ * feature, swept across all entities" from packages/TestingFramework/integration-test-suite/docs/test-catalog.md.
  *
  * Check logic for the core sweeps (RVM1–RVM4) is COPIED from the standalone rig
  * rigs/runview-matrix-tests.ts (which remains in place), adapted to the registry contract:
@@ -684,7 +684,10 @@ async function discoverSearchTarget(ctx: IntegrationCheckContext): Promise<Searc
 /** Discover an entity with NO configured search surface at all (the documented no-op leg). */
 function findNoSearchEntity(ctx: IntegrationCheckContext): EntityInfo | undefined {
     return sweepEntities(ctx).find(e =>
-        !sweepSkip(e) && !e.FullTextSearchEnabled && !e.Fields.some(f => f.IncludeInUserSearchAPI) && countMemo.get(normId(e.Name)) !== undefined,
+        // NON-EMPTY required: on an empty entity the no-op leg's AssertEqual(0,0) passes
+        // whether or not the search term was ignored (adversarial review). > 0 makes the
+        // equality genuinely discriminate "term ignored" from "term applied".
+        !sweepSkip(e) && !e.FullTextSearchEnabled && !e.Fields.some(f => f.IncludeInUserSearchAPI) && (countMemo.get(normId(e.Name)) ?? 0) > 0,
     );
 }
 
@@ -720,6 +723,7 @@ const RVM9: NamedCheck = {
             { EntityName: noSearch.Name, UserSearchString: 'zzz-no-such-term-anywhere', ResultType: 'count_only' }, ctx.User,
         );
         requireSuccess(noop, `RVM9 no-op search on ${noSearch.Name}`);
+        Assert(expected !== undefined && expected > 0, 'RVM9 no-op leg needs a non-empty no-search entity to be discriminating');
         AssertEqual(noop.TotalRowCount, expected,
             `RVM9 pinned behavior: UserSearchString on a no-search-fields entity ('${noSearch.Name}') is a documented no-op — count must equal the unfiltered count`);
         console.log(`      → no-op leg: '${noSearch.Name}' ignored the search term (count ${noop.TotalRowCount})`);
@@ -767,6 +771,11 @@ const RVM11: NamedCheck = {
         const target = await discoverUserViewMaxRowsTarget(ctx);
         if (!target) {
             console.warn('      ⚠ RVM11 SKIPPED — no entity in this deployment has a BINDING UserViewMaxRows cap (cap set AND total rows > cap ≤ 5000).');
+            // KNOWN COVERAGE GAP (adversarial review): standard deployments never carry a
+            // BINDING UserViewMaxRows, so this skip is effectively permanent — the
+            // IgnoreMaxRows override is NOT exercised read-only. A mutation-gated variant
+            // (temporarily set+restore UserViewMaxRows on a fixture-safe entity) is the
+            // designed follow-up; barred tonight (no mutation of existing product rows).
             return;
         }
         const { Entity: entity, Total: total } = target;

@@ -63,6 +63,8 @@ export const TemplatesChecks: NamedCheck[] = [
             const engine = TemplateEngineServer.Instance;
             const t = engineTemplate(ctx);
             const content = t.GetHighestPriorityContent('Text');
+            Assert(content != null, 'template content must resolve (attribution guard — review P2)');
+            Assert(content != null, 'template content must resolve (attribution guard — review P2)');
             Assert(content != null, 'fixture template has no Text content in the engine cache');
 
             const data = { name: 'World', count: 3 };

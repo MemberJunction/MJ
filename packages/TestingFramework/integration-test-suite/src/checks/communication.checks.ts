@@ -174,6 +174,17 @@ export const CommunicationChecks: NamedCheck[] = [
                     f.ProviderName!, f.MessageTypeName!, buildDryRunMessage(f), undefined, false, DUMMY_CREDENTIALS[f.ProviderName!] ?? {},
                 );
             }
+            // Adversarial review C1: some providers (MS Graph) RETURN Success:false on missing
+            // credentials instead of throwing — the catch above never fires for them. Gate the
+            // dummy retry on the RESULT too, so provider selection order can't flip this check
+            // into a false failure.
+            if (result && !result.Success && credentialMode !== 'dummy') {
+                credentialMode = 'dummy';
+                console.log(`      → environment-credential attempt returned failure (${result.Error}); retrying with dummy credentials`);
+                result = await engine.SendSingleMessage(
+                    f.ProviderName!, f.MessageTypeName!, buildDryRunMessage(f), undefined, false, DUMMY_CREDENTIALS[f.ProviderName!] ?? {},
+                );
+            }
 
             Assert(result.Success, `dry-run send failed: ${result.Error}`);
             AssertEqual(result.DryRun, true, 'result is explicitly DryRun-marked');
@@ -182,16 +193,21 @@ export const CommunicationChecks: NamedCheck[] = [
             f.DryRunResultMarked = result.DryRun === true;
 
             // Exactly one audit row was written for this send (tracked for CM3 + teardown)
-            await settle(300);
-            const logs = await findMarkedLogs(ctx);
+            // Bounded poll (adversarial review P1): a fixed settle raced the audit write under
+            // aggregator load — poll for a COMPLETE marker row up to ~5s instead.
+            let logs = await findMarkedLogs(ctx);
+            for (let i = 0; i < 16 && !logs.some(l => l.Status === 'Complete'); i++) {
+                await settle(300);
+                logs = await findMarkedLogs(ctx);
+            }
             // When the environment-credentials attempt is rejected at the provider preflight,
-            // that FIRST attempt already wrote its own (Failed) audit row before the documented
+            // that FIRST attempt already wrote its own audit row (Status 'Pending' — StartLog ran, the provider threw before the status update) ahead of the documented
             // dummy-credential retry — so the marker can legitimately match two rows. The
             // delivery-state invariant is about COMPLETE rows: exactly one, ever.
             const completeLogs = logs.filter(l => l.Status === 'Complete');
             AssertEqual(completeLogs.length, 1, 'exactly one COMPLETE Communication Log audit row for the dry-run send');
             if (credentialMode === 'dummy') {
-                Assert(logs.length <= 2, `at most the Failed preflight row + the Complete dry-run row may exist (got ${logs.length})`);
+                Assert(logs.length <= 2, `at most the Pending preflight row + the Complete dry-run row may exist (got ${logs.length})`);
             } else {
                 AssertEqual(logs.length, 1, 'exactly one audit row when environment credentials worked first try');
             }
@@ -281,7 +297,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('communication', {
         // Select the FIRST Active, sendable provider from live metadata whose class resolves on
         // the ClassFactory and that exposes at least one message type. Discovery-only: nothing is
         // created here, so there is nothing to tear down when no provider qualifies.
-        const candidates = engine.Providers.filter((p) => p.Status === 'Active' && p.SupportsSending);
+        // Sorted for DETERMINISTIC selection (review C1): the backing RunView has no OrderBy,
+        // so natural order could flip which provider this bundle exercises between runs.
+        const candidates = engine.Providers.filter((p) => p.Status === 'Active' && p.SupportsSending)
+            .sort((a, b) => a.Name.localeCompare(b.Name));
         if (candidates.length === 0) {
             fixture.SkipReason = 'no Active+SupportsSending Communication Provider rows in metadata';
             return;

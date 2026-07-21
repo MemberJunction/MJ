@@ -1,7 +1,7 @@
 # Extended Agents Integration Test Sub-Suite — Proposal v2 (real models, structural determinism)
 
 **Status:** DRAFT v2 for Amith's review (2026-07-21). **Supersedes v1** (the scripted `ItTestLLM` stand-in-driver design — preserved in this file's git history) per direction change: **no new/fake/custom driver — test agents are configured purely via metadata to use REAL drivers and REAL models (Gemini, OpenAI, Cerebras, etc.), API keys assumed present in the test system's `.env`.**
-**Parent plan:** [README.md](README.md) · Catalog: [test-catalog.md](test-catalog.md) Domain 4
+**Parent plan:** [README.md](README.md) · Catalog: [test-catalog.md](../../packages/TestingFramework/integration-test-suite/docs/test-catalog.md) Domain 4 · Shipped-suite docs: [integration-test-suite/docs/](../../packages/TestingFramework/integration-test-suite/docs/README.md) (this proposal moves there as `agents-suite.md` when the build lands)
 **Scope:** a new family of agent-framework integration bundles covering the advanced behaviors — long-conversation compaction, tool-result carry-forward, artifact interrogation, payload guards, skills/plan-mode, memory guards, RAG/search — via **purpose-built test agents seeded in `metadata-optional/`** (never polluting the base system) plus **structural checks over the shipped agents** (Query Builder, Sage, Research Agent). Determinism = **process-level/structural assertions over framework observables**, never model prose. Explicitly **NOT** in scope: LLM-as-judge / output-quality evals (§11).
 
 ---

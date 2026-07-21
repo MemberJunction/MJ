@@ -1,7 +1,7 @@
 /**
  * runview-features.checks.ts — the 'runview-features' bundle: "Domain 0b — cross-feature
  * interaction & edge cases (targeted, not swept)" from
- * plans/integration-test-expansion/test-catalog.md.
+ * packages/TestingFramework/integration-test-suite/docs/test-catalog.md.
  *
  * TRANSPORT: CLIENT-FIRST. Every leg runs through `RunView` on the configured provider —
  * with the client bootstrap that is the GraphQLDataProvider over the real GraphQL wire to a

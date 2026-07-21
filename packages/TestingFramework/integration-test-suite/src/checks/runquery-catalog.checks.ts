@@ -342,7 +342,7 @@ export const RunQueryCatalogChecks: NamedCheck[] = [
                     offenders.push(`${queryLabel(cls)} failed with an EMPTY ErrorMessage — not a clear failure`);
                     continue;
                 }
-                if (!/required|missing|parameter|validation|template/i.test(result.ErrorMessage)) {
+                if (!/required|missing/i.test(result.ErrorMessage)) {
                     offenders.push(`${queryLabel(cls)} failed but the message doesn't identify a parameter problem: ` +
                         `"${result.ErrorMessage.slice(0, 160)}"`);
                     continue;

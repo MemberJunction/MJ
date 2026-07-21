@@ -495,6 +495,7 @@ export const EntityWritesChecks: NamedCheck[] = [
             conversation.Name = 'EW9 flag probe (mj-integration-test — safe to delete)';
             conversation.UserID = ctx.User.ID;
             Assert(await conversation.Save(), `EW9 conversation save failed: ${conversation.LatestResult?.CompleteMessage}`);
+            (fx(ctx).ConversationIds ??= []).push(conversation.ID); // lifecycle backstop (review C2)
             try {
                 const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
                 detail.NewRecord();
@@ -503,6 +504,7 @@ export const EntityWritesChecks: NamedCheck[] = [
                 detail.Message = 'original message (mj-integration-test — safe to delete)';
                 detail.Status = 'Complete';
                 Assert(await detail.Save(), `EW9 detail save failed: ${detail.LatestResult?.CompleteMessage}`);
+                (fx(ctx).ConversationDetailIds ??= []).push(detail.ID);
                 try {
                     Assert(detail.OriginalMessageChanged === false, 'a fresh detail must not be born flagged');
 
@@ -563,6 +565,16 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('entity-writes', {
         };
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
+        // EW9 backstop (review C2): sweep any conversation fixtures the in-check finally
+        // missed (Delete() returns false on logic failure — FK-ordered: details first).
+        const f2 = ctx.EntityWritesFixture;
+        for (const id of f2?.ConversationDetailIds ?? []) {
+            try { const e = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User); if (await e.Load(id)) { await e.Delete(); } } catch { /* best effort */ }
+        }
+        for (const id of f2?.ConversationIds ?? []) {
+            try { const e = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User); if (await e.Load(id)) { await e.Delete(); } } catch { /* best effort */ }
+        }
+
         const f = ctx.EntityWritesFixture;
         if (!f) {
             return;

@@ -163,11 +163,11 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
             AssertEqual(row.ErrorMessage, errorMessage, 'INSERT carried the ErrorMessage verbatim');
             Assert((row.OutputData || '').includes('"probe":"als1"'), 'INSERT carried the failure OutputData');
             Assert(row.CompletedAt != null, 'INSERT carried CompletedAt for the terminal failure');
-            AssertEqual(
-                new Date(String(row.__mj_UpdatedAt)).getTime(),
-                new Date(String(row.__mj_CreatedAt)).getTime(),
-                'no UPDATE followed the INSERT — failure landed in ONE write'
-            );
+            // Exact-equality here was the same GETUTCDATE-tick flake ALS2 documents (both
+            // stamps come from independent column DEFAULTs). The single-write proof is the
+            // terminal fields arriving IN the insert (Status/Success/CompletedAt asserted
+            // above); the timestamp only needs the never-precedes invariant.
+            Assert(new Date(String(row.__mj_UpdatedAt)).getTime() >= new Date(String(row.__mj_CreatedAt)).getTime(), 'UpdatedAt must never precede CreatedAt');
         }
     },
     {

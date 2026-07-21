@@ -198,6 +198,24 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
                 console.warn(`  ⚠ ESI2: gate message lost over the wire (got "${message.slice(0, 120)}") — see bug register`);
             }
 
+
+            // POSITIVE CONTROL (review P1): toggling IsGlobal=true on a saved tag with NO scope
+
+            // rows must SUCCEED — proving the refusal above is attributable to the scope rows,
+
+            // not to a blanket update-time IsGlobal block.
+
+            const freeTag = await createTag(ctx, 'esi2-free', false);
+
+            const freeToggle = await ctx.Provider.GetEntityObject<MJTagEntity>(TAG_ENTITY, ctx.User);
+
+            Assert(await freeToggle.Load(freeTag.ID), 'could not reload control tag');
+
+            freeToggle.IsGlobal = true;
+
+            Assert(await freeToggle.Save(), `control: IsGlobal toggle on a scope-free tag must SAVE (got: ${freeToggle.LatestResult?.CompleteMessage})`);
+
+
             // The refused UPDATE must not have partially landed.
             const rows = await runRows<{ ID: string; IsGlobal: boolean }>({
                 EntityName: TAG_ENTITY, ExtraFilter: `ID='${scopedTag.ID}'`, Fields: ['ID', 'IsGlobal'], ResultType: 'simple'
