@@ -98,6 +98,12 @@ export interface SuiteFlags extends CommonFlags {
      * (LLM-driven) suites where transient failures should not fail the run.
      */
     maxRetries?: number;
+    /**
+     * Restrict the run to specific tests by NAME (comma-separated). Resolved to
+     * IDs against the engine and applied as selectedTestIds — used by
+     * `rerun-failures` and ad-hoc selection. Unresolved names warn (non-fatal).
+     */
+    tests?: string;
 }
 
 /**

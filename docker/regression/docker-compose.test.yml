@@ -283,6 +283,10 @@ services:
       # so it owns the run's output dir (test-results/<RUN_ID>/) from launch;
       # the entrypoint falls back to a container-minted id for direct `docker run`.
       RUN_ID: "${RUN_ID:-}"
+      # DR-F4: comma-separated test NAMES to restrict the run to (rerun-failures /
+      # ad-hoc selection). Empty = run the whole suite. Passed through to
+      # `mj test suite --tests`.
+      TEST_NAME_FILTER: "${TEST_NAME_FILTER:-}"
     # DR-A1: sized for the default MAX_PARALLEL_WORKERS=3 as
     # workers × ~1.5g (Chromium peak, per Browserbase sizing) + 2g (node CLI,
     # mj sync, report generation). Raise together with the worker count —

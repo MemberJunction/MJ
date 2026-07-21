@@ -243,6 +243,14 @@ if [ -n "${ORACLES_MODULE:-}" ]; then
     fi
 fi
 
+# DR-F4: restrict the run to specific test names (rerun-failures / ad-hoc
+# selection). Empty = whole suite.
+TESTS_ARGS=()
+if [ -n "${TEST_NAME_FILTER:-}" ]; then
+    TESTS_ARGS=(--tests "$TEST_NAME_FILTER")
+    echo "  Restricting to tests: $TEST_NAME_FILTER"
+fi
+
 set +e
 npx mj test suite --name "${SUITE_NAME}" \
     --format json \
@@ -250,7 +258,8 @@ npx mj test suite --name "${SUITE_NAME}" \
     --parallel \
     --max-parallel "$WORKERS" \
     --max-retries "$RETRIES" \
-    "${ORACLES_ARGS[@]}"
+    "${ORACLES_ARGS[@]}" \
+    "${TESTS_ARGS[@]}"
 EXIT_CODE=$?
 set -e
 

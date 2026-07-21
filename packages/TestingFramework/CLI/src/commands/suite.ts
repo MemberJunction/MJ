@@ -133,6 +133,31 @@ export class SuiteCommand {
                 process.exit(1);
             }
 
+            // DR-F4: restrict the run to specific tests by NAME (rerun-failures /
+            // ad-hoc selection). Resolve names → IDs against the engine; the engine
+            // filters on selectedTestIds. Unresolved names warn (non-fatal); an
+            // all-miss is fatal (the caller expected those tests to run).
+            let selectedTestIds: string[] | undefined;
+            if (flags.tests && flags.tests.trim()) {
+                const names = flags.tests.split(',').map(s => s.trim()).filter(Boolean);
+                const ids: string[] = [];
+                const missing: string[] = [];
+                for (const nm of names) {
+                    const t = engine.GetTestByName(nm);
+                    if (t) ids.push(t.ID);
+                    else missing.push(nm);
+                }
+                if (missing.length > 0) {
+                    console.warn(`Warning: ${missing.length} --tests name(s) not found and skipped: ${missing.join(', ')}`);
+                }
+                if (ids.length === 0) {
+                    console.error(OutputFormatter.formatError(`None of the --tests names resolved to a known test: ${names.join(', ')}`));
+                    process.exit(1);
+                }
+                selectedTestIds = ids;
+                console.log(`Restricting run to ${ids.length} selected test(s) via --tests.`);
+            }
+
             // Parse variables from --var flags
             // Note: Suite variables apply to all tests - type conversion happens per-test
             const variables = parseVariableFlags(flags.var);
@@ -166,6 +191,7 @@ export class SuiteCommand {
                 maxRetries: flags.maxRetries,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
                 onTestComplete: resultsSink?.onTestComplete,
+                selectedTestIds,
             }, contextUser);
 
             this.spinner.stop();

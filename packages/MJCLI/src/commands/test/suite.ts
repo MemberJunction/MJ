@@ -64,6 +64,12 @@ export default class TestSuite extends Command {
         'Each export is registered on the engine before the suite runs — used by non-MJ ' +
         'adopters to plug app-specific oracle types without modifying TestingFramework.',
     }),
+    tests: Flags.string({
+      description:
+        'Restrict the run to specific tests by NAME (comma-separated). Names are ' +
+        'resolved against the suite; unknown names are skipped with a warning. Used ' +
+        'by `test regression rerun-failures` and for ad-hoc selection.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -86,6 +92,7 @@ export default class TestSuite extends Command {
         flakyCheck: flags['flaky-check'],
         maxRetries: flags['max-retries'],
         oraclesModule: flags['oracles-module'],
+        tests: flags.tests,
       });
 
     } catch (error) {
