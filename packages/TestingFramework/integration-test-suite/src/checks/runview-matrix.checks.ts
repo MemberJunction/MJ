@@ -56,6 +56,7 @@
  *         rows are not self-cleanable. Flagged as a product-code suspicion instead.
  */
 import { RunView, CompositeKey, EntityFieldTSType, IsKeysetPaginationOrderableType } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type {
     EntityInfo,
     EntityFieldInfo,
@@ -512,7 +513,7 @@ const RVM5: NamedCheck = {
         const ascIds = asc.Results.map(r => normId(r.ID)).join('|');
         const descIds = desc.Results.map(r => normId(r.ID)).reverse().join('|');
         AssertEqual(descIds, ascIds, `RVM5 DESC (with PK tie-break) must be the exact reversal of ASC on ${entity.Name}`);
-        Assert(asc.Results[0].ID !== desc.Results[0].ID || count === 1, 'RVM5 ASC and DESC produced identical leading rows — order did not actually differ');
+        Assert(!UUIDsEqual(asc.Results[0].ID, desc.Results[0].ID) || count === 1, 'RVM5 ASC and DESC produced identical leading rows — order did not actually differ');
         console.log(`      → ${entity.Name}.${field.Name}: ${count} rows, ASC monotonic, DESC == exact reversal`);
     },
 };

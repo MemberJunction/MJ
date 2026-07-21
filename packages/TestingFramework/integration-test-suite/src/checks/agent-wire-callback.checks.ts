@@ -40,7 +40,7 @@ function wireClient(provider: IMetadataProvider): GraphQLAIClient | undefined {
     if (provider instanceof GraphQLDataProvider) {
         return new GraphQLAIClient(provider);
     }
-    const globalProvider = Metadata.Provider;
+    const globalProvider = Metadata.Provider; // global-provider-ok: integration client bootstrap installs the GraphQLDataProvider as the process global; the wire path deliberately resolves it
     if (globalProvider instanceof GraphQLDataProvider) {
         return new GraphQLAIClient(globalProvider);
     }

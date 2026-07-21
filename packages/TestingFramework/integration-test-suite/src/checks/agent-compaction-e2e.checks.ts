@@ -30,6 +30,7 @@
  */
 import { RunView } from '@memberjunction/core';
 import { ConversationEngine, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentRunner, ConversationCompactionManager } from '@memberjunction/ai-agents';
@@ -57,7 +58,7 @@ async function resolveAgent(ctx: IntegrationCheckContext, name: string): Promise
 }
 
 function loopAgentType(agent: MJAIAgentEntityExtended): MJAIAgentTypeEntity | null {
-  return AIEngine.Instance.AgentTypes.find((t) => t.ID === agent.TypeID) ?? null;
+  return AIEngine.Instance.AgentTypes.find((t) => UUIDsEqual(t.ID, agent.TypeID)) ?? null;
 }
 
 /** Fabricate a stored conversation with N detail rows of a given size (fabricate-then-observe). */

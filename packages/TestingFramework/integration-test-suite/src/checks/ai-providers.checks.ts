@@ -113,7 +113,7 @@ export const AiProvidersChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             await AIEngineBase.Instance.Config(false, ctx.User);
             const resolver = new DefaultAgentResolver();
-            const provider = Metadata.Provider;
+            const provider = Metadata.Provider; // global-provider-ok: integration test script — single-provider process by design
 
             // Chain baseline (no explicit id): must land on a real Active agent — the seeded
             // global default or the code-const Sage safety net. Never null on a stock install.

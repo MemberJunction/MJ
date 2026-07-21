@@ -65,7 +65,7 @@ import { NamedCheck, IntegrationCheckContext, TransactionGroupsFixture } from '@
  */
 function resolveWireProvider(ctx: IntegrationCheckContext): GraphQLDataProvider | null {
     if (ctx.Provider instanceof GraphQLDataProvider) { return ctx.Provider; }
-    const globalProvider = Metadata.Provider;
+    const globalProvider = Metadata.Provider; // global-provider-ok: resolves the wire provider for the client-transport SEC pin; single-provider test process
     return globalProvider instanceof GraphQLDataProvider ? (globalProvider as GraphQLDataProvider) : null;
 }
 
