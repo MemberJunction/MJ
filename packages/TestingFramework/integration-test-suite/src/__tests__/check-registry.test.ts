@@ -33,6 +33,9 @@ import { AgentCompactionE2EChecks } from '../checks/agent-compaction-e2e.checks'
 import { AgentMemoryGuardsChecks } from '../checks/agent-memory-guards.checks';
 import { AgentRagSearchChecks } from '../checks/agent-rag-search.checks';
 import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
+import { ViewSecurityChecks } from '../checks/view-security.checks';
+import { AiProvidersChecks } from '../checks/ai-providers.checks';
+import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -115,6 +118,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-memory-guards', AgentMemoryGuardsChecks, 5],
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
+        ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
+        ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
+        ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
