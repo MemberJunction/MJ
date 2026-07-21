@@ -120,4 +120,13 @@ export class ComputerUseResult {
      * Carries per-step hit/healed/diverged outcomes for the UI-drift report.
      */
     public Replay?: ReplayInfo;
+
+    /**
+     * Compact structured memo of why a non-passing run failed (CU-B6), set only
+     * on non-`Completed` terminals. The driver's retry policy feeds it back as
+     * {@link RunComputerUseParams.PreviousAttemptSummary} so a retry is
+     * non-blind ("previous attempt failed because X; avoid Y"). Undefined on a
+     * clean pass.
+     */
+    public FailureMemo?: string;
 }

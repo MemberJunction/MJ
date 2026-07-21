@@ -153,6 +153,9 @@ describe('ComputerUseEngine.Replay (CU-C2)', () => {
         expect(result.Replay?.Steps).toHaveLength(1);           // fail-fast: step 2 never ran
         expect(result.Replay?.Steps[0].Outcome).toBe('diverged');
         expect(result.Replay?.Steps[0].Detail).toContain('precondition');
+        // CU-B6: a non-passing terminal carries a retry memo.
+        expect(result.FailureMemo).toBeTruthy();
+        expect(result.FailureMemo).toContain('Failed');
     });
 
     it('diverges when a postcondition URL does not match', async () => {

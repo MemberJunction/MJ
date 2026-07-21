@@ -248,6 +248,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 diagnostics: request.Diagnostics,
                 interactiveElements: request.InteractiveElements,
                 hints: request.Hints,
+                previousAttemptSummary: request.PreviousAttemptSummary,
                 currentDate: request.CurrentDate,
                 memory: request.Memory,
                 plan: request.Plan,

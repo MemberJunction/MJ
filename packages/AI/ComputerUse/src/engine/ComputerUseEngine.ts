@@ -80,6 +80,8 @@ import { executeGoalPostconditions } from './postcondition.js';
 import { evaluatePreludeLanding } from './prelude.js';
 import { makeJudgeCacheKey, JudgeVerdictCache } from './judge-cache.js';
 import { hashGoal } from './trace-recorder.js';
+import { buildFailureMemo } from './failure-memo.js';
+import type { ComputerUseFailureReason } from '../types/results.js';
 import { ComputerUseTrace, ReplayInfo, ReplayStepResult, TraceStep, TraceAction, TraceTarget } from '../types/trace.js';
 import {
     JudgeContext,
@@ -823,8 +825,7 @@ export class ComputerUseEngine {
                         // A truthful early verdict beats 20 more wasted steps.
                         this.log(`Step ${stepNumber} — loop persisted ${loopTrips} trips (${loop.kind}); terminating as Failed/LoopDetected (CU-B1)`);
                         const verdict = await this.forceFinalJudge(context, stepNumber, lastVerdict);
-                        const result = this.buildResult(context, 'Failed', false, verdict);
-                        result.FailureReason = 'LoopDetected';
+                        const result = this.buildResult(context, 'Failed', false, verdict, 'LoopDetected');
                         this.onRunComplete(result);
                         return result;
                     }
@@ -933,8 +934,7 @@ export class ComputerUseEngine {
         if (decision.shouldTerminate) {
             this.logError(`Step ${stepNumber} — auth detour #${context.AuthDetourCount} to ${currentUrl}; exceeded MaxDetours (${authCfg.MaxDetours}). Terminating as Failed/AuthDetour — an infrastructure/session fault, not an agent failure (CU-B7)`);
             const verdict = await this.forceFinalJudge(context, stepNumber, lastVerdict);
-            const result = this.buildResult(context, 'Failed', false, verdict);
-            result.FailureReason = 'AuthDetour';
+            const result = this.buildResult(context, 'Failed', false, verdict, 'AuthDetour');
             this.onRunComplete(result);
             return { result, recoveryMs: 0 };
         }
@@ -1834,6 +1834,7 @@ export class ComputerUseEngine {
         request.MaxSteps = context.Params.MaxSteps;
         request.CurrentUrl = context.CurrentUrl;
         request.Hints = context.Params.Hints;   // per-test UI hints (CU-E5)
+        request.PreviousAttemptSummary = context.Params.PreviousAttemptSummary;   // non-blind retry (CU-B6)
         request.CurrentDate = new Date().toISOString().slice(0, 10);   // current date (CU-E3)
         request.Memory = context.LastMemory;   // echo self-tracked state (CU-E2)
         request.Plan = context.LastPlan;
@@ -2445,6 +2446,7 @@ export class ComputerUseEngine {
         // stage before per-step/per-tool-specific guidance.
         sections.push(this.renderCurrentDateSection(request.CurrentDate));
         sections.push(this.renderApplicationContextSection(request.ApplicationContext));
+        sections.push(this.renderPreviousAttemptSection(request.PreviousAttemptSummary));
         sections.push(this.renderHintsSection(request.Hints));
         sections.push(this.renderToolDefinitionsSection(request.ToolDefinitions));
         sections.push(this.renderFormLoginSection(request.FormLoginCredentials));
@@ -2467,6 +2469,11 @@ export class ComputerUseEngine {
         if (!hints || hints.length === 0) return '';
         const list = hints.map(h => `- ${h}`).join('\n');
         return `## Hints\nThe following hints about this task's UI may save you steps:\n${list}`;
+    }
+
+    private renderPreviousAttemptSection(summary: string | undefined): string {
+        if (!summary || !summary.trim()) return '';
+        return `## Previous Attempt (learn from it)\nA prior attempt at this exact goal failed:\n${summary.trim()}\nDo NOT repeat the approach that failed — try a different element, route, or strategy.`;
     }
 
     private renderCurrentDateSection(currentDate: string | undefined): string {
@@ -2570,7 +2577,8 @@ export class ComputerUseEngine {
         context: RunContext,
         status: ComputerUseResult['Status'],
         success: boolean,
-        lastVerdict?: JudgeVerdict
+        lastVerdict?: JudgeVerdict,
+        failureReason?: ComputerUseFailureReason
     ): ComputerUseResult {
         const result = new ComputerUseResult();
         result.Status = status;
@@ -2582,6 +2590,26 @@ export class ComputerUseEngine {
         result.FinalScreenshot = context.CurrentScreenshot;
         result.FinalJudgeVerdict = lastVerdict;
         result.AuthDetourCount = context.AuthDetourCount;
+        if (failureReason) {
+            result.FailureReason = failureReason;
+        }
+        // Non-blind-retry memo (CU-B6): on any non-passing terminal, distill a
+        // compact "why it failed / what to avoid" the driver's retry policy can
+        // feed back as PreviousAttemptSummary.
+        if (!success) {
+            const memo = buildFailureMemo({
+                status,
+                failureReason,
+                finalUrl: result.FinalUrl,
+                recentUrls: context.StepHistory.slice(-4).map(s => s.UrlAfter || s.Url),
+                judgeReason: lastVerdict?.Reason,
+                judgeFeedback: lastVerdict?.Feedback,
+                loopEvidence: context.LoopEvidence,
+            });
+            if (memo) {
+                result.FailureMemo = memo;
+            }
+        }
         return result;
     }
 

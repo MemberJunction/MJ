@@ -11,6 +11,13 @@ The following hints about this task's UI may save you steps:
 {% endfor %}
 {% endif %}
 
+{% if previousAttemptSummary %}
+## Previous Attempt (learn from it)
+A prior attempt at this exact goal failed:
+{{ previousAttemptSummary }}
+Do NOT repeat the approach that failed — try a different element, route, or strategy.
+{% endif %}
+
 {% if applicationContext %}
 ## Application Context
 You are testing the application described below. Use this context to navigate efficiently — do NOT waste steps rediscovering these facts.

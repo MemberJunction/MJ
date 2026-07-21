@@ -67,6 +67,13 @@ export class ControllerPromptRequest {
     public Hints?: string[];
 
     /**
+     * A memo from a PRIOR failed attempt at this goal (CU-B6) so a retry is
+     * non-blind ("previous attempt failed because X; avoid Y"). Empty/undefined
+     * on the first attempt.
+     */
+    public PreviousAttemptSummary?: string;
+
+    /**
      * Current date (YYYY-MM-DD) injected into the prompt (CU-E3) so the model can
      * reason about "today"/relative dates without hallucinating one.
      */

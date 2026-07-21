@@ -269,4 +269,13 @@ export class RunComputerUseParams {
      * best-effort (cold-boot-safe). Omit to cold-boot as before.
      */
     public ContextSeed?: ContextSeed;
+
+    /**
+     * A memo from a PRIOR failed attempt at this goal (CU-B6), injected into the
+     * controller prompt so a retry is non-blind ("previous attempt failed
+     * because X; avoid Y"). Typically the {@link ComputerUseResult.FailureMemo}
+     * from the last attempt, fed back by the driver's retry policy. Omit on the
+     * first attempt.
+     */
+    public PreviousAttemptSummary?: string;
 }
