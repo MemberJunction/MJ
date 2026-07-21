@@ -18,9 +18,9 @@
  * mutation — purely read-and-observe. Read the name from the selector config when present.
  */
 import { Metadata } from '@memberjunction/core';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const DEFAULT_DATASET = 'MJ_Metadata';
 

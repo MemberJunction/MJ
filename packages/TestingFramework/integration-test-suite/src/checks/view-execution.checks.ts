@@ -43,9 +43,9 @@
 import { RunView, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, EntityInfo, RunViewResult, AggregateResult } from '@memberjunction/core';
 import type { MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 /** The entity every data leg reads: stable, read-only, single-column uniqueidentifier PK, many rows. */
 const ENTITY = 'MJ: Entity Fields';

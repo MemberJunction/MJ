@@ -18,10 +18,10 @@ import { RunView, BaseEntity, CompositeKey, Metadata, EntityPermissionType } fro
 import type { UserInfo } from '@memberjunction/core';
 import type { MJEntityEntity, MJUserSettingEntity, MJUserViewEntity, MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { Assert, AssertEqual, AssertRowShape, AssertKeysInclude, RowKeys } from '../test-runner';
-import { UniqueFilter } from '../instrumented-cache';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck } from '../check';
+import { Assert, AssertEqual, AssertRowShape, AssertKeysInclude, RowKeys } from '@memberjunction/testing-integration';
+import { UniqueFilter } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck } from '@memberjunction/testing-integration';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';

@@ -15,10 +15,10 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { Assert, AssertEqual, settle } from '../test-runner';
-import { verifyPromptRun, verifyAgentRun } from '../ai-verify';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
+import { verifyPromptRun, verifyAgentRun } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const CONCURRENCY = Number(process.env.CONCURRENCY ?? 5);
 const SETTLE_MS = Number(process.env.AGENT_SETTLE_MS ?? 3000);

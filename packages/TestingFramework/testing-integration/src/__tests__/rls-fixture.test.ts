@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { LocalCacheManager } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, EntityInfo, RunViewParams } from '@memberjunction/core';
-import { discoverRlsFixture } from '../checks/rls-isolation.checks';
+import { discoverRlsFixture } from '../rls-fixture';
 
 /** Build a mock UserInfo with just the fields discovery touches. */
 function user(id: string, email: string): UserInfo {

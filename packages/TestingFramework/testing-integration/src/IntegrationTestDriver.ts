@@ -48,7 +48,7 @@ import { IntegrationCheckRegistry } from './check-registry';
 import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
 import { TestOutcome, writeOutcomesFile } from './test-runner';
-import { discoverRlsFixture } from './checks/rls-isolation.checks';
+import { discoverRlsFixture } from './rls-fixture';
 
 const TARGET_TYPE = 'Integration Check Bundle';
 /** Bundles that run against the GraphQL client transport (everything else: SQL server). */
@@ -213,7 +213,11 @@ export class IntegrationTestDriver extends BaseTestDriver {
     ): Promise<void> {
         const bundle = IntegrationCheckRegistry.Instance.GetBundle(bundleType);
         if (bundle.length === 0) {
-            const message = `Unknown integration check bundle '${bundleType}'`;
+            const message = `Unknown integration check bundle '${bundleType}'. ` +
+                `Check bundles register via import side effects — MJ's own bundles live in the private ` +
+                `@memberjunction/integration-test-suite package, loaded through mj.config.cjs ` +
+                `\`testing.checkModules\` (or the --checks-module flag). If this bundle should exist, ` +
+                `verify that config key is present, the module is built, and the bundle name matches.`;
             oracleResults.push({ oracleType: bundleType, passed: false, score: 0, message, details: { DurationMs: 0 } });
             outcomes.push({ Name: bundleType, Passed: false, DurationMs: 0, Error: message });
             this.logToTestRun(context, 'error', `✗ ${message}`);

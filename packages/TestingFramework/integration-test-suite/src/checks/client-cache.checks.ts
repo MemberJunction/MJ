@@ -15,10 +15,10 @@
 import { RunView, RunQuery, BaseEntity, Metadata } from '@memberjunction/core';
 import type { AggregateExpression } from '@memberjunction/core';
 import type { MJUserSettingEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual, AssertRowShape, RowKeys } from '../test-runner';
-import { UniqueFilter } from '../instrumented-cache';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck } from '../check';
+import { Assert, AssertEqual, AssertRowShape, RowKeys } from '@memberjunction/testing-integration';
+import { UniqueFilter } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck } from '@memberjunction/testing-integration';
 
 const ENTITY = 'MJ: Entities';
 const SMALL_ENTITY = 'MJ: Query Categories';

@@ -40,10 +40,10 @@ import {
 // The sidecar request/response contracts live in the Core package (the engine consumes them and, per
 // CLAUDE.md rule 5, does NOT re-export them) — import them directly from their defining package.
 import type { PredictRequest, PredictResponse } from '@memberjunction/predictive-studio-core';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
-import type { PredictiveStudioFixture } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import type { PredictiveStudioFixture } from '@memberjunction/testing-integration';
 
 /** Whether the live-sidecar / trained-model legs run (mirrors RUN_AGENT_TESTS on the AI tier). */
 const PS_LIVE = process.env.PS_INTEGRATION === '1';

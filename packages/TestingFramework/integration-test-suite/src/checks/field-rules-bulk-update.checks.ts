@@ -21,9 +21,9 @@ import { MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { RecordSetProcessor, FieldRulesProcessor } from '@memberjunction/record-set-processor';
 import { ArraySource } from '@memberjunction/record-set-processor-base';
 import type { FieldRuleSet } from '@memberjunction/global';
-import { Assert, AssertEqual, settle } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const ENTITY = 'MJ: Action Categories';
 const PREFIX = 'mj-frbu-test';

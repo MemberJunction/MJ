@@ -17,9 +17,9 @@
  */
 import { RunView, LocalCacheManager } from '@memberjunction/core';
 import type { RunViewParams, AggregateExpression, IMetadataProvider } from '@memberjunction/core';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const DEFAULT_AGG_ENTITY = 'MJ: User Settings';
 

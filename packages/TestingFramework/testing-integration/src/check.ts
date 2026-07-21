@@ -11,6 +11,8 @@ import type { UserInfo, IMetadataProvider, RowLevelSecurityFilterInfo } from '@m
 import type {
     MJQueryEntity,
     MJQueryCategoryEntity,
+    MJConversationEntity,
+    MJConversationDetailEntity,
     MJRecordProcessEntity,
     MJScheduledJobEntity,
     MJTemplateEntity,
@@ -278,6 +280,24 @@ export interface PermissionEngineFixture {
 }
 
 /** The bootstrapped, run-scoped real provider stack handed to every check. */
+/**
+ * Accumulator fixture for the `conversation-compaction` bundle (CC1–CC10, graduated from
+ * conversation-compaction-tests.ts / PR #2732). Unlike the create-up-front fixtures above,
+ * compaction fixtures are created INSIDE the ordered checks (CC1 creates the conversation the
+ * CC2–CC7 window checks then reuse), so the lifecycle's job is accumulation + guaranteed
+ * FK-ordered teardown (steps → runs → details → conversations), not up-front setup.
+ * `AgentRuns`/`Steps` are typed as BaseEntity-compatible records via their entity interfaces'
+ * Delete surface only — the bundle stores the extended AI entities it created.
+ */
+export interface ConversationCompactionFixture {
+    /** Conversation + ordered detail rows, per fixture conversation created by a check. */
+    Conversations: Array<{ Conversation: MJConversationEntity; Details: MJConversationDetailEntity[] }>;
+    /** Tagged MJ: AI Agent Runs fixture rows (deleted before conversations). */
+    AgentRuns: Array<{ Delete(): Promise<boolean> }>;
+    /** Tagged MJ: AI Agent Run Steps fixture rows (deleted first). */
+    Steps: Array<{ Delete(): Promise<boolean> }>;
+}
+
 export interface IntegrationCheckContext {
     /** Resolved context user threaded from the engine (server) or bootstrap. */
     User: UserInfo;
@@ -319,6 +339,8 @@ export interface IntegrationCheckContext {
     UserRoutinesFixture?: UserRoutinesFixture;
     /** Shared fixture for the `permission-engine` bundle's mutation checks (PE11/PE12) only. */
     PermissionEngineFixture?: PermissionEngineFixture;
+    /** Accumulator fixture for the `conversation-compaction` bundle (created by checks, torn down by lifecycle). */
+    CompactionFixture?: ConversationCompactionFixture;
     /**
      * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
      * set by the driver/script before each bundle runs. Bundles read their own keys

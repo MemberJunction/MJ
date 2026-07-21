@@ -79,10 +79,10 @@ import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { PermissionEngine } from '@memberjunction/core-entities';
 import type { MJPermissionDomainEntity, MJAIAgentEntity, MJAISkillEntity, MJAISkillPermissionEntity } from '@memberjunction/core-entities';
 import { AIEngineBase, AIAgentPermissionHelper, AISkillPermissionHelper } from '@memberjunction/ai-engine-base';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { IsTierEnabled } from '../tiers';
-import { NamedCheck, IntegrationCheckContext, PermissionEngineFixture } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { IsTierEnabled } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext, PermissionEngineFixture } from '@memberjunction/testing-integration';
 
 /** Tag on every throwaway row this bundle creates, so a stranded fixture is identifiable. */
 const TEST_TAG = '(mj-integration-test — safe to delete)';

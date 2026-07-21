@@ -37,9 +37,9 @@
 import type { EntityInfo, EntityFieldInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { RunView } from '@memberjunction/core';
 import type sql from 'mssql';
-import { Assert } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import type { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 /**
  * MC6 ratchet ceiling — the number of core-schema columns that today carry no MS_Description.

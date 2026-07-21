@@ -16,9 +16,9 @@ import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { ListSource, ProcessCursor } from '@memberjunction/record-set-processor-base';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
 const MEMBER_COUNT = 25;

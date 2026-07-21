@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { IntegrationCheckRegistry } from '../check-registry';
-import type { NamedCheck, IntegrationCheckContext } from '../check';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { ServerCacheChecks } from '../checks/server-cache.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
@@ -18,6 +18,7 @@ import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
+import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -90,7 +91,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
-        ['user-routines', UserRoutinesChecks, 16]
+        ['user-routines', UserRoutinesChecks, 16],
+        ['conversation-compaction', ConversationCompactionChecks, 12] // CC1-CC10 graduated from PR #2732's dispatcher + CC11 loader-parity & CC12 concurrent-Sequence (coverage-study recs 3/4), 2026-07-20
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {

@@ -16,10 +16,10 @@
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
-import { Assert } from '../test-runner';
-import { verifyPromptRun } from '../ai-verify';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert } from '@memberjunction/testing-integration';
+import { verifyPromptRun } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 export const PromptRunnerChecks: NamedCheck[] = [
     {

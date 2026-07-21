@@ -1,8 +1,40 @@
 # Proposal — Integration Testing as a Proper Framework
 
-**Status:** awaiting review
+**Status:** ✅ **EXECUTED 2026-07-20**
 **Author:** drafted overnight 2026-07-20, for review in the AM
-**Decision needed:** approve / amend the target structure before the next phase begins
+
+## As-built deviations from the proposal below
+
+The split shipped as proposed (§3.1: framework-only `@memberjunction/testing-integration`,
+private `@memberjunction/integration-test-suite` at `packages/TestingFramework/integration-test-suite/`),
+with four deliberate deviations:
+
+1. **Single entry path — no dev runner** (Amith's call). §3.2's proposed `npm run it <bundle>`
+   dev runner and the run-all move were dropped: the tsx dispatchers AND `run-all.ts` are simply
+   gone. `mj test` is the only way to invoke the catalog (`npm run test:integration` =
+   `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"`; per-bundle loop =
+   `mj test run --name "<IT record name>"`).
+2. **The loading seam is config, not dependency**: the published CLI side-effect-imports the
+   private suite package at `mj test` startup via `mj.config.cjs`
+   `testing: { checkModules: ['@memberjunction/integration-test-suite'] }` (ad-hoc:
+   `--checks-module`). External adopters point `checkModules` at their own check packages —
+   which also covers §3.3's "deployment extension point" without embedded JS.
+3. **The special rigs** (cross-server, agent-memory, runview-matrix, the ten `ps-*` flows —
+   answering open question §5.2 — plus `lib/harness.ts` / `lib/ai-bootstrap.ts`) moved to
+   `packages/TestingFramework/integration-test-suite/rigs/` as standalone tsx scripts, NOT
+   catalog entry paths.
+4. **Sibling parity is two-way** as §3.2 anticipated (bundle ↔ IT record + suite membership),
+   but the run-all-membership assertion became a **checkModules config assertion** (run-all no
+   longer exists) — `sibling-parity.test.ts` fails the build if `mj.config.cjs` stops loading
+   the suite package.
+
+`metadata-optional/integration-test/` remains load-bearing: every environment must seed the IT
+records once (`npx mj sync push --dir=metadata-optional/integration-test`) or `mj test` has
+nothing to dispatch.
+
+---
+
+*Original proposal follows, unchanged.*
 
 ---
 

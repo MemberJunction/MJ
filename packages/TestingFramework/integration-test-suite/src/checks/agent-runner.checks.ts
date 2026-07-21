@@ -18,10 +18,10 @@
  */
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { Assert, settle } from '../test-runner';
-import { verifyAgentRun } from '../ai-verify';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, settle } from '@memberjunction/testing-integration';
+import { verifyAgentRun } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const SETTLE_MS = Number(process.env.AGENT_SETTLE_MS ?? 3000);
 

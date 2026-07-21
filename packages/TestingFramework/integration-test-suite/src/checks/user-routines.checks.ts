@@ -25,10 +25,10 @@ import {
     IsRoutineDue,
     BuildDueRoutineFilter,
 } from '@memberjunction/scheduling-engine';
-import { Assert, AssertEqual } from '../test-runner';
-import { verifyActionLog } from '../ai-verify';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext, UserRoutinesFixture } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { verifyActionLog } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext, UserRoutinesFixture } from '@memberjunction/testing-integration';
 
 const TAG = '(mj-integration-test — safe to delete)';
 const HOURLY = '0 0 * * * *';

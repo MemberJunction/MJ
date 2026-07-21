@@ -16,9 +16,9 @@
 import { RunView } from '@memberjunction/core';
 import { MJRecordProcessEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
-import { Assert, AssertEqual, settle } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const RP_NAME = 'mj-integration-test-record-process (safe to delete)';
 

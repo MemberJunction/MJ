@@ -22,9 +22,9 @@
 import { RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { MJApplicationEntity_IDefaultNavItem, MJApplicationEntity_IAgentSettings } from '@memberjunction/core-entities';
-import { Assert } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 /** Row shape for the applications read (narrow projection — read-only, simple result type). */
 interface AppRow {

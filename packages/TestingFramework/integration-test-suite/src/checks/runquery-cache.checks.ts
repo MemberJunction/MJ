@@ -18,9 +18,10 @@ import { RunView, RunQuery, Metadata, UserInfo } from '@memberjunction/core';
 import type { IRunQueryProvider, RunQueryResult } from '@memberjunction/core';
 import { QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryCategoryEntity, MJQueryEntity, MJQueryEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext, RunQueryFixtures } from '../check';
+import { UUIDsEqual } from '@memberjunction/global';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext, RunQueryFixtures } from '@memberjunction/testing-integration';
 
 /** All fixture-mutated settings share this prefix so teardown can sweep leftovers. */
 export const RUNQUERY_SETTING_PREFIX = 'mj.integrationtest.rq';
@@ -426,8 +427,8 @@ export const RunQueryCacheChecks: NamedCheck[] = [
                 // then take each query's CANONICAL CategoryPath from the engine (guarantees the
                 // format resolveQuery compares against, rather than hand-assembling '/Name/').
                 await QueryEngine.Instance.Config(true, ctx.User);
-                const engineA = QueryEngine.Instance.Queries.find(q => q.ID === queryA!.ID);
-                const engineB = QueryEngine.Instance.Queries.find(q => q.ID === queryB!.ID);
+                const engineA = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, queryA!.ID));
+                const engineB = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, queryB!.ID));
                 Assert(!!engineA && !!engineB, 'both collide queries must resolve in the QueryEngine after refresh');
                 Assert(engineA!.CategoryPath !== engineB!.CategoryPath,
                     `precondition: the two categories must yield distinct paths (both='${engineA!.CategoryPath}')`);
@@ -495,7 +496,7 @@ export const RunQueryCacheChecks: NamedCheck[] = [
                 Assert(await bridge.Save(), `query-entity bridge save failed: ${bridge.LatestResult?.CompleteMessage}`);
 
                 await QueryEngine.Instance.Config(true, ctx.User);
-                const engineQ = QueryEngine.Instance.Queries.find(q => q.ID === query!.ID);
+                const engineQ = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, query!.ID));
                 Assert(!!engineQ, 'perm fixture query must resolve in the QueryEngine after refresh');
 
                 // ANTI-VACUITY preconditions — this pins the PARITY GAP, not a generic deny:

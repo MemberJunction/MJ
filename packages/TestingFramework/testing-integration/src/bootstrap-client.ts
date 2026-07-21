@@ -22,6 +22,7 @@ import { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import { LoadEnv, LoadClientConfig } from './config';
 import {
     assertOwnsProcess,
+    getActiveIntegrationStorage,
     preflightMJAPI,
     getActiveIntegrationClientBootstrap,
     _setActiveStorage,
@@ -42,14 +43,27 @@ export async function bootstrapIntegrationClient(): Promise<IntegrationClientCon
         return existing;
     }
     LoadEnv();
-    assertOwnsProcess();
+    // Under `mj test` the CLI installs the instrumented cache as this process's FIRST caller
+    // (installInstrumentedCacheFirst, before its own provider spins up). That pre-claimed,
+    // INSTRUMENTED cache satisfies the ownership invariant — every cache read/write is already
+    // counted — so reuse it rather than refusing. Only a cache initialized by someone ELSE
+    // (e.g. co-hosted inside a live MJAPI) is grounds for refusal.
+    const preInstalled = getActiveIntegrationStorage();
+    if (!preInstalled) {
+        assertOwnsProcess();
+    }
     const client = LoadClientConfig();
     // Preflight BEFORE mutating cache/provider state — a dead MJAPI fails fast and clearly.
     await preflightMJAPI(client.Url, client.MJAPIKey);
 
-    const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
-    await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: false });
-    _setActiveStorage(storage);
+    let storage: InstrumentedLocalStorageProvider;
+    if (preInstalled) {
+        storage = preInstalled;
+    } else {
+        storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
+        await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: false });
+        _setActiveStorage(storage);
+    }
 
     const config = new GraphQLProviderConfigData(
         '',                 // JWT token — unused; the system API key authenticates us

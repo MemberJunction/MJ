@@ -64,9 +64,9 @@
 import { RunView, Metadata, CacheCategory } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJUserSettingEntity, MJUserViewEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import type { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const ENTITY = 'MJ: User Settings';
 const TAG = 'mj.cachegauntlet';

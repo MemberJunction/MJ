@@ -17,9 +17,9 @@
 import { RunView } from '@memberjunction/core';
 import { MJAPIKeyEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity } from '@memberjunction/core-entities';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const TEST_LABEL = 'mj-integration-test-key (safe to delete)';
 

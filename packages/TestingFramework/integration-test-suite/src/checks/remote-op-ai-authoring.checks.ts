@@ -17,9 +17,9 @@ import { join } from 'path';
 import { readFileSync, mkdtempSync } from 'fs';
 import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { RemoteOperationGeneratorBase } from '@memberjunction/codegen-lib';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const OP_KEY = 'Test.AIAuthoredCount';
 const INPUT_DEF = 'export interface AIAuthoredCountInput {\n    /** The entity to count rows of. */\n    entityName: string;\n}';

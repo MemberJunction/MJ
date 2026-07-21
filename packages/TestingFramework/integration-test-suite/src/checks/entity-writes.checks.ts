@@ -36,9 +36,9 @@ import { RunView, CompositeKey, ProviderBase, EntitySaveOptions } from '@memberj
 import type { UserInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJActionCategoryEntity, MJListEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext, EntityWritesFixture } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext, EntityWritesFixture } from '@memberjunction/testing-integration';
 
 const CATEGORY_ENTITY = 'MJ: Action Categories';
 const LIST_ENTITY = 'MJ: Lists';

@@ -34,10 +34,10 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { SkillImportExportService, SkillMarkdownConverter } from '@memberjunction/ai-agents';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
-import type { AiSkillsFixture } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import type { AiSkillsFixture } from '@memberjunction/testing-integration';
 import type { IMetadataProvider } from '@memberjunction/core';
 
 const TAG = '(mj-integration-test — safe to delete)';

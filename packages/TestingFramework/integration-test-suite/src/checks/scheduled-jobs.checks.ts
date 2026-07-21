@@ -15,9 +15,9 @@
 import { RunView } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { SchedulingEngine } from '@memberjunction/scheduling-engine';
-import { Assert, AssertEqual, settle } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 const TERMINAL = new Set(['Completed', 'Failed', 'Cancelled']);
 const JOB_NAME = 'mj-integration-test-job (safe to delete)';

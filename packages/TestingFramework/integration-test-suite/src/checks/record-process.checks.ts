@@ -15,9 +15,9 @@ import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { RecordSetProcessor, FunctionRecordProcessor } from '@memberjunction/record-set-processor';
 import { ArraySource } from '@memberjunction/record-set-processor-base';
-import { Assert, AssertEqual, settle } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 async function fetchRows(entity: string, filter: string, user: UserInfo): Promise<Record<string, unknown>[]> {
     const r = await new RunView().RunView({ EntityName: entity, ExtraFilter: filter, ResultType: 'simple', BypassCache: true }, user);

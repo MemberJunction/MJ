@@ -18,9 +18,9 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseProviderBase } from '@memberjunction/core';
 import { RemoveAppEntityMetadata } from '@memberjunction/open-app-engine';
-import { Assert, AssertEqual } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext, OpenAppTeardownFixture } from '../check';
+import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { NamedCheck, IntegrationCheckContext, OpenAppTeardownFixture } from '@memberjunction/testing-integration';
 
 const MJ_SCHEMA = '__mj';
 
