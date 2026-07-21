@@ -12,6 +12,7 @@ export * from './types/params.js';
 export * from './types/results.js';
 export * from './types/controller.js';
 export * from './types/app-profile.js';
+export * from './types/trace.js';
 
 // ─── Browser Adapter Exports ───────────────────────────────
 export * from './browser/BaseBrowserAdapter.js';
@@ -38,6 +39,7 @@ export * from './prompts/default-controller.js';
 export * from './engine/RunContext.js';
 export * from './engine/ResponseParser.js';
 export * from './engine/ComputerUseEngine.js';
+export * from './engine/trace-url.js';
 
 // ─── Tool Exports ──────────────────────────────────────────
 export * from './tools/ToolProvider.js';
