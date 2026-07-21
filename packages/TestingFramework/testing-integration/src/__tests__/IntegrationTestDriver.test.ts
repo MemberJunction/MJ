@@ -84,7 +84,8 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitmut.M']);
     });
 
-    it("a live-model Test without RUN_AGENT_TESTS skip-passes with a single 'gate' oracle", async () => {
+    it("a live-model Test with RUN_AGENT_TESTS=0 skip-passes with a single 'gate' oracle (explicit opt-out)", async () => {
+        process.env.RUN_AGENT_TESTS = '0';
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ tier: 'live-model', checks: [{ type: 'unitpass' }] }));
         expect(result.status).toBe('Passed');
@@ -93,8 +94,8 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults[0].message).toContain('RUN_AGENT_TESTS');
     });
 
-    it('a live-model Test with RUN_AGENT_TESTS=1 actually runs its checks', async () => {
-        process.env.RUN_AGENT_TESTS = '1';
+    it('a live-model Test runs its checks BY DEFAULT (no env var — the 2026-07-20 inversion)', async () => {
+        delete process.env.RUN_AGENT_TESTS;
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ tier: 'live-model', checks: [{ type: 'unitpass' }] }));
         expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitpass.A', 'unitpass.B']);
