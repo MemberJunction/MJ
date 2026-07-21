@@ -77,6 +77,7 @@ import {
 import type { GuardResult } from './replay-step.js';
 import { reresolveTarget, shouldAcceptHeal, isSelectorHealable } from './heal-decision.js';
 import { executeGoalPostconditions } from './postcondition.js';
+import { evaluatePreludeLanding } from './prelude.js';
 import { makeJudgeCacheKey, JudgeVerdictCache } from './judge-cache.js';
 import { hashGoal } from './trace-recorder.js';
 import { ComputerUseTrace, ReplayInfo, ReplayStepResult, TraceStep, TraceAction, TraceTarget } from '../types/trace.js';
@@ -171,6 +172,7 @@ export class ComputerUseEngine {
             if (params.StartUrl) {
                 this.log(`Navigated to start URL: ${context.CurrentUrl}`);
             }
+            await this.runPrelude(context);
             result = await this.executeMainLoop(context);
             return result;
         } catch (error) {
@@ -579,6 +581,65 @@ export class ComputerUseEngine {
 
         await this.browserAdapter.Navigate(params.StartUrl);
         context.CurrentUrl = this.browserAdapter.CurrentUrl;
+    }
+
+    // ─── Deterministic Prelude (CU-C6) ─────────────────────
+
+    /**
+     * Run the scripted deterministic prelude (CU-C6) before the agentic loop:
+     * execute each recorded action straight through the adapter (nav guard +
+     * auth via {@link executeSingleBrowserAction}), zero LLM. Then verify it
+     * reached the declared landing. Best-effort: a landing miss is logged as a
+     * warning and the run proceeds (the agentic loop + judge can still recover);
+     * the driver inspects the log to decide policy. Never throws.
+     */
+    private async runPrelude(context: RunContext): Promise<void> {
+        const prelude = context.Params.Prelude;
+        if (!prelude || prelude.Actions.length === 0) {
+            return;
+        }
+        this.log(`Running deterministic prelude — ${prelude.Actions.length} scripted actions (zero LLM, CU-C6)`);
+        try {
+            for (const action of prelude.Actions) {
+                this.ensureNotCancelled();
+                const result = await this.executeSingleBrowserAction(action, context);
+                if (!result.Success) {
+                    this.logError(`Prelude action ${action.Type} failed: ${result.Error ?? 'unknown'}`);
+                }
+            }
+            context.CurrentUrl = this.browserAdapter.CurrentUrl;
+            await this.verifyPreludeLanding(prelude, context);
+        } catch (error) {
+            if (error instanceof CancellationError) {
+                throw error;
+            }
+            this.logError('Prelude execution failed (continuing to the agentic loop)', error);
+        }
+    }
+
+    /** Verify the prelude reached its declared landing (selector visible / URL matched). */
+    private async verifyPreludeLanding(
+        prelude: NonNullable<RunComputerUseParams['Prelude']>,
+        context: RunContext
+    ): Promise<void> {
+        const hasSelector = prelude.ExpectSelector !== undefined;
+        const hasUrl = prelude.ExpectUrlPattern !== undefined;
+        if (!hasSelector && !hasUrl) {
+            return;
+        }
+        const volatile = context.Params.AppProfile?.Loop?.VolatileParams ?? [];
+        const selectorVisible = hasSelector
+            ? await this.waitForTargetVisible(prelude.ExpectSelector!, ComputerUseEngine.REPLAY_PRECONDITION_TIMEOUT_MS)
+            : false;
+        const urlMatched = hasUrl
+            ? traceUrlMatches(prelude.ExpectUrlPattern!, this.browserAdapter.CurrentUrl, volatile)
+            : false;
+        const landing = evaluatePreludeLanding({ hasSelector, selectorVisible, hasUrl, urlMatched });
+        if (!landing.landed) {
+            this.logError(`Prelude landing check failed — ${landing.reason} (agent will start from the current page; CU-C6)`);
+        } else {
+            this.log('Prelude landed as expected (CU-C6)');
+        }
     }
 
     // ═══════════════════════════════════════════════════════════

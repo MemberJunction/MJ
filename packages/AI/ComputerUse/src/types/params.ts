@@ -14,6 +14,7 @@
 
 import { ComputerUseAuthConfig } from './auth.js';
 import { BrowserConfig } from './browser.js';
+import type { BrowserAction } from './browser.js';
 import { ComputerUseTool } from './tools.js';
 import type { JudgeFrequency } from './judge.js';
 import type { AppProfile } from './app-profile.js';
@@ -43,6 +44,28 @@ export class ModelConfig {
         this.Model = model;
         this.DriverClass = driverClass;
     }
+}
+
+// ─── Deterministic Prelude (CU-C6) ─────────────────────────
+/**
+ * A scripted, deterministic prelude run BEFORE the agentic loop (CU-C6) — the
+ * "get to the feature under test" navigation that is permanently known and must
+ * never be LLM-derived every run. Actions execute straight through the adapter
+ * (nav guard + auth honored), consuming zero LLM budget. This removes the
+ * app-switcher-hunt archetype and several wasted steps from every test.
+ *
+ * App-agnostic: the actions + landing checks are opaque data the caller supplies
+ * from test metadata. Tests whose SUBJECT is navigation keep the agentic path
+ * (no prelude). Deep-link entry is handled by {@link RunComputerUseParams.StartUrl}
+ * itself; the prelude covers multi-step scripted setup beyond a single URL.
+ */
+export class RunPrelude {
+    /** Ordered deterministic actions run before the agentic loop (zero LLM). */
+    public Actions: BrowserAction[] = [];
+    /** Optional: a selector the prelude must reach — verifies it landed. */
+    public ExpectSelector?: string;
+    /** Optional: a URL pattern the prelude must reach — verifies it landed. */
+    public ExpectUrlPattern?: string;
 }
 
 // ─── Run Parameters ────────────────────────────────────────
@@ -231,4 +254,11 @@ export class RunComputerUseParams {
      * the LLM tier.
      */
     public VariableValues?: Record<string, string>;
+
+    /**
+     * Deterministic prelude (CU-C6): scripted navigation run before the agentic
+     * loop to reach the feature under test, zero LLM. Omit for tests that begin
+     * at {@link StartUrl}, or whose subject IS navigation.
+     */
+    public Prelude?: RunPrelude;
 }
