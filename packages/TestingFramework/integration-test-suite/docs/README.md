@@ -39,7 +39,7 @@ the docs note where).
 The extended live-model agents family — carry-forward, payload guards, artifact tools,
 plan-mode/skills loop legs, compaction e2e, memory guards, RAG/search (~65 checks across 10
 proposed bundles) — is specified in
-[plans/integration-test-expansion/agents-extended-suite-proposal.md](../../../../plans/integration-test-expansion/agents-extended-suite-proposal.md).
+[plans/integration-test-expansion/agents-suite.md](agents-suite.md).
 It lives there while under review/build and **will move into this folder as `agents-suite.md`
 when the build lands**.
 
