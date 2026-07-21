@@ -176,6 +176,22 @@ services:
       - "${MJ_REGRESSION_EXPLORER_PORT:-4200}:4200"
     # DR-A1: static nginx needs almost nothing.
     mem_limit: "${MJ_REGRESSION_EXPLORER_MEM_LIMIT:-512m}"
+    # DR-E6: gate the runner on nginx actually SERVING, not just its process
+    # existing. Previously the runner depended on `service_started`, so test #1
+    # was the de-facto smoke test for whether the Explorer bundle was being
+    # served — a cold-start "Loading workspace…" stall came out of that test's
+    # step budget. This healthcheck (mirrored from docker-compose.bacpac-
+    # standalone.yml; nginx:alpine ships curl) lets the runner wait for a real
+    # 2xx. End-to-end readiness (authenticated GraphQL through the proxy) and
+    # MJAPI cache priming are already covered downstream by the DR-E1 preflight
+    # gate's GraphQL-via-nginx probe and the single-login auth bootstrap's
+    # page load, both of which run before test #1.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4200/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
 
   test-runner:
     # In "full" → Mode A (local MJ stack). In "remote-target" → Modes B/C/D
@@ -193,8 +209,11 @@ services:
       mjapi:
         condition: service_healthy
         required: false
+      # DR-E6: was `service_started` (nginx process exists). Now gate on the
+      # healthcheck above so the runner starts only once the Explorer bundle is
+      # actually served.
       mjexplorer:
-        condition: service_started
+        condition: service_healthy
         required: false
     # Make the host machine reachable from inside the container as
     # `host.docker.internal` on every platform. Auto-set on Docker Desktop
