@@ -962,6 +962,21 @@
             "lastModified": "2026-07-21T14:29:29.113Z",
             "checksum": "4d0df2547b32c9e2c09eac7a0ab83197d41b92b2fc63b13acca3636789e919d2"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CD1B0205-30A3-4C61-BF68-86A9153FD3DB"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T17:00:43.506Z",
+            "checksum": "cca8635d3caea633ae50889f69a1cbfd137c8f0acaeeb1aa345a52d121da36cb"
+          }
         }
       ]
     },

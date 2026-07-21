@@ -68,3 +68,4 @@ export * from './checks/agent-plan-mode.checks';
 export * from './checks/agent-compaction-e2e.checks';
 export * from './checks/agent-memory-guards.checks';
 export * from './checks/agent-rag-search.checks';
+export * from './checks/agent-wire-callback.checks';

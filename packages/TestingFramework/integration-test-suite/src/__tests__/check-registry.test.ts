@@ -32,6 +32,7 @@ import { AgentPlanModeChecks } from '../checks/agent-plan-mode.checks';
 import { AgentCompactionE2EChecks } from '../checks/agent-compaction-e2e.checks';
 import { AgentMemoryGuardsChecks } from '../checks/agent-memory-guards.checks';
 import { AgentRagSearchChecks } from '../checks/agent-rag-search.checks';
+import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -113,6 +114,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
         ['agent-memory-guards', AgentMemoryGuardsChecks, 5],
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
+        ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
