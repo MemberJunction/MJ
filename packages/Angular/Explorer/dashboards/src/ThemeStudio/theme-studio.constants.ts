@@ -3,7 +3,7 @@
  * @module ThemeStudio
  */
 
-import { DerivedTheme, hexToOKLCH, oklchToHex, ThemeSeeds } from '@memberjunction/theme-engine';
+import { ContrastCheck, DerivedTheme, hexToOKLCH, oklchToHex, ThemeSeeds } from '@memberjunction/theme-engine';
 
 /**
  * The seeded, built-in MemberJunction theme (created by migration
@@ -198,3 +198,57 @@ export const THEME_RECIPES: ThemeRecipe[] = [
     },
   },
 ];
+
+/** Parse a persisted Overrides JSON map: trims keys, drops blanks, coerces values to strings. */
+export function parseOverridesJson(json: string | null): Record<string, string> {
+  if (!json) return {};
+  try {
+    const obj = JSON.parse(json) as Record<string, string>;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (k.trim()) out[k.trim()] = String(v);
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Pick the WORST of the light/dark text-on-primary contrast checks (Q1#3) — a failing
+ * dark pair must not hide while previewing light. A failing mode always beats a passing
+ * one; between two of the same outcome, lower ratio wins.
+ */
+export function pickWorstOnPrimary(
+  light: ContrastCheck | undefined,
+  dark: ContrastCheck | undefined,
+): { check: ContrastCheck; mode: 'light' | 'dark' } | undefined {
+  if (!light || !dark) {
+    const only = light ?? dark;
+    return only ? { check: only, mode: light ? 'light' : 'dark' } : undefined;
+  }
+  if (light.passes !== dark.passes) {
+    return light.passes ? { check: dark, mode: 'dark' } : { check: light, mode: 'light' };
+  }
+  return light.ratio <= dark.ratio ? { check: light, mode: 'light' } : { check: dark, mode: 'dark' };
+}
+
+/** Inline custom-CSS validation (Q3#6): @import removal notice + unknown --mj-* names. */
+export function buildCssWarnings(css: string, knownTokens: ReadonlySet<string>): string[] {
+  const warnings: string[] = [];
+  if (/@import\b/i.test(css)) {
+    warnings.push('@import is not supported and is removed on save.');
+  }
+  const unknown = new Set<string>();
+  for (const match of css.matchAll(/--mj-[a-zA-Z0-9-]+/g)) {
+    if (!knownTokens.has(match[0])) unknown.add(match[0]);
+  }
+  if (unknown.size > 0) {
+    const list = Array.from(unknown);
+    const shown = list.slice(0, 4).join(', ');
+    warnings.push(
+      `Unknown token${list.length > 1 ? 's' : ''}: ${shown}${list.length > 4 ? ` (+${list.length - 4} more)` : ''} — check the token browser for exact names.`,
+    );
+  }
+  return warnings;
+}

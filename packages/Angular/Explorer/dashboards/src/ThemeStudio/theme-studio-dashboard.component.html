@@ -84,10 +84,14 @@
     <!-- Stage: preview (primary) + slide panel -->
     <div #stage class="ts-stage" [class.collapsed]="panelCollapsed">
 
-      <!-- New-theme preset gallery (Q1#2): pick a personality before tuning seeds. -->
+      <!-- New-theme preset gallery (Q1#2): pick a personality before tuning seeds.
+           Deliberately NOT mj-dialog (conscious exception): the gallery is positioned
+           within the stage so the preview stays visible behind it, while mj-dialog is
+           a viewport-centered overlay. Focus lands on the dialog when it opens and
+           the document-level Escape handler closes it. -->
       @if (presetGalleryOpen) {
         <div class="gal-backdrop" (click)="closePresetGallery()"></div>
-        <div class="gal" role="dialog" aria-modal="true" aria-label="Start a new theme">
+        <div #galDialog class="gal" role="dialog" aria-modal="true" aria-label="Start a new theme" tabindex="-1">
           <h2>Start a new theme</h2>
           <p class="gal-sub">Pick a personality first — everything derives from a few seeds, so you can tune it all after.</p>
           <div class="gal-grid">
@@ -139,7 +143,8 @@
                       <span class="mx-nav">
                         @for (item of mockNavItems; track item; let i = $index) {
                           <b [class.on]="mockNav === i" tabindex="0" role="button"
-                             (click)="mockNav = i" (keydown.enter)="mockNav = i">{{ item }}</b>
+                             (click)="mockNav = i" (keydown.enter)="mockNav = i"
+                             (keydown.space)="mockNav = i; $event.preventDefault()">{{ item }}</b>
                         }
                       </span>
                       <span class="mx-search" tabindex="0"><i class="fa-solid fa-magnifying-glass"></i> Search everything…</span>
@@ -159,10 +164,11 @@
                         </div>
                       </div>
                       <div class="mx-toolbar">
-                        <span class="mx-tabs">
+                        <span class="mx-tabs" role="tablist">
                           @for (t of mockTabs; track t; let i = $index) {
                             <i [class.on]="mockTab === i" tabindex="0" role="tab" [attr.aria-selected]="mockTab === i"
-                               (click)="mockTab = i" (keydown.enter)="mockTab = i">{{ t }}</i>
+                               (click)="mockTab = i" (keydown.enter)="mockTab = i"
+                               (keydown.space)="mockTab = i; $event.preventDefault()">{{ t }}</i>
                           }
                         </span>
                       </div>
@@ -217,10 +223,12 @@
                         <div class="mx-row">
                           <span class="mx-swch" [class.off]="!mockSwitchA" role="switch" tabindex="0"
                                 [attr.aria-checked]="mockSwitchA" aria-label="Toggle switch"
-                                (click)="mockSwitchA = !mockSwitchA" (keydown.enter)="mockSwitchA = !mockSwitchA"></span>
+                                (click)="mockSwitchA = !mockSwitchA" (keydown.enter)="mockSwitchA = !mockSwitchA"
+                                (keydown.space)="mockSwitchA = !mockSwitchA; $event.preventDefault()"></span>
                           <span class="mx-swch" [class.off]="!mockSwitchB" role="switch" tabindex="0"
                                 [attr.aria-checked]="mockSwitchB" aria-label="Toggle auto-renew"
-                                (click)="mockSwitchB = !mockSwitchB" (keydown.enter)="mockSwitchB = !mockSwitchB"></span>
+                                (click)="mockSwitchB = !mockSwitchB" (keydown.enter)="mockSwitchB = !mockSwitchB"
+                                (keydown.space)="mockSwitchB = !mockSwitchB; $event.preventDefault()"></span>
                           <span class="mx-lbl">Auto-renew</span>
                         </div>
                       </div>
@@ -243,7 +251,8 @@
                           <b class="on" tabindex="0"><i class="fa-solid fa-house"></i> Overview</b>
                           <b tabindex="0"><i class="fa-solid fa-users"></i> Members</b>
                           <b tabindex="0" role="button" [attr.aria-expanded]="mockAccordionOpen"
-                             (click)="mockAccordionOpen = !mockAccordionOpen" (keydown.enter)="mockAccordionOpen = !mockAccordionOpen">
+                             (click)="mockAccordionOpen = !mockAccordionOpen" (keydown.enter)="mockAccordionOpen = !mockAccordionOpen"
+                             (keydown.space)="mockAccordionOpen = !mockAccordionOpen; $event.preventDefault()">
                             <i class="fa-solid" [class.fa-chevron-down]="mockAccordionOpen" [class.fa-chevron-right]="!mockAccordionOpen"></i> Reports
                           </b>
                           @if (mockAccordionOpen) {
@@ -445,9 +454,8 @@
               <div class="row">
                 <div class="lab">{{ rs.recipe.name }}<small>{{ rs.recipe.description }}</small></div>
                 <div class="ctl">
-                  <button type="button" class="recipe-toggle" [class.on]="rs.on" role="switch"
-                          [attr.aria-checked]="rs.on" [attr.aria-label]="'Toggle ' + rs.recipe.name"
-                          (click)="toggleRecipe(rs.recipe)"><i></i></button>
+                  <mj-switch [ngModel]="rs.on" (ngModelChange)="toggleRecipe(rs.recipe)"
+                             [attr.aria-label]="'Toggle ' + rs.recipe.name"></mj-switch>
                 </div>
               </div>
             }

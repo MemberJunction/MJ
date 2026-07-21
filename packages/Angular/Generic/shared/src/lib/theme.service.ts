@@ -311,8 +311,12 @@ export class ThemeService {
      * to localStorage so the pre-paint script restores the attribute on next load.
      *
      * @param id id of a brand theme registered via {@link RegisterBrandTheme}.
+     * @param options.persist pass `false` for session-only overlays backed by Blob URLs
+     * (e.g. Theme Studio's draft workspace preview) — a Blob URL doesn't survive a
+     * reload, so persisting its id would leave the pre-paint script pointing at a
+     * dangling overlay and clobber the user's real persisted selection. Defaults true.
      */
-    public async ApplyBrandOverlay(id: string): Promise<void> {
+    public async ApplyBrandOverlay(id: string, options?: { persist?: boolean }): Promise<void> {
         const def = this.brandRegistry.get(id);
         if (!def || !def.CssUrl) {
             console.warn(`ApplyBrandOverlay: no registered brand theme "${id}" with CSS.`);
@@ -321,6 +325,9 @@ export class ThemeService {
         this._brandOverlayId = id;
         await this.loadThemeCss(def);
         document.documentElement.setAttribute('data-theme-overlay', id);
+        if (options?.persist === false) {
+            return;
+        }
         try {
             window.localStorage.setItem(PRELOAD_OVERLAY_KEY, id);
         } catch (e) {
