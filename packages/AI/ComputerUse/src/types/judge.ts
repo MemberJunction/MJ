@@ -51,6 +51,12 @@ export class JudgeContext {
      * state (blank page = `ChunkLoadError`) instead of hallucinating a reason. '' when clean.
      */
     public CurrentDiagnosticsDigest: string = '';
+
+    /**
+     * Cancellation signal (CU-B8), passed through to the judge prompt request so
+     * an in-flight judge LLM call aborts promptly when the run is stopped.
+     */
+    public Signal?: AbortSignal;
 }
 
 // ─── Judge Verdict ─────────────────────────────────────────

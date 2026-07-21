@@ -61,6 +61,7 @@ import type { SettleReason } from '../types/app-profile.js';
 import { resolveSettleExit } from './settle-decision.js';
 import { computeStateSignature, detectLoop } from './loop-detection.js';
 import { evaluateAuthDetour } from './auth-detour.js';
+import { CancellationError, abortableDelay } from './cancellation.js';
 import { formatDiagnosticsDigest } from './diagnostics-digest.js';
 import {
     JudgeContext,
@@ -89,8 +90,14 @@ export class ComputerUseEngine {
     protected authHandler: AuthHandler;
     protected toolProvider: ToolProvider;
 
-    /** Whether Stop() has been called — checked at the top of each step */
+    /** Whether Stop() has been called — checked at the top of each step and at
+     *  the finer-grained checkpoints inside a step (CU-B8). */
     protected cancelled: boolean = false;
+
+    /** Aborted by Stop() (CU-B8) so in-flight LLM calls and settle/backoff
+     *  delays return promptly instead of holding a worker slot to step's end.
+     *  Recreated per Run() so a reused engine instance starts un-aborted. */
+    private abortController: AbortController = new AbortController();
 
     /** Whether this engine owns its browser adapter lifecycle (Launch/Close) */
     private _ownsAdapter: boolean = true;
@@ -125,6 +132,7 @@ export class ComputerUseEngine {
      */
     public async Run(params: RunComputerUseParams): Promise<ComputerUseResult> {
         this.cancelled = false;
+        this.abortController = new AbortController();
         this.activeParams = params;
         const context = new RunContext(params);
 
@@ -165,12 +173,27 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Request cancellation of a running run.
-     * The engine checks this flag at the top of each step.
-     * Cancellation is cooperative — the current step will finish.
+     * Request cancellation of a running run. Cooperative: sets the flag the
+     * engine's checkpoints observe AND aborts the shared signal so in-flight LLM
+     * calls and settle/backoff delays return promptly (CU-B8). The run unwinds
+     * to a `Cancelled` result within seconds — at the next checkpoint — rather
+     * than running the current step to completion.
      */
     public Stop(): void {
         this.cancelled = true;
+        this.abortController.abort();
+    }
+
+    /**
+     * Cooperative-cancellation checkpoint (CU-B8): throw {@link CancellationError}
+     * if the run has been stopped. Placed after each long await (settle, LLM,
+     * actions, judge) so the step unwinds promptly; the main loop maps the throw
+     * to a single clean `Cancelled` status.
+     */
+    private ensureNotCancelled(): void {
+        if (this.cancelled) {
+            throw new CancellationError();
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -482,8 +505,19 @@ export class ComputerUseEngine {
                 return result;
             }
 
-            // Execute one step
-            const step = await this.executeSingleStep(context, stepNumber);
+            // Execute one step. A Stop() mid-step unwinds as a CancellationError
+            // (CU-B8) — catch it here and return a single clean Cancelled result
+            // rather than letting it surface as an infrastructure Error.
+            let step: StepRecord;
+            try {
+                step = await this.executeSingleStep(context, stepNumber);
+            } catch (error) {
+                if (error instanceof CancellationError) {
+                    this.log('Run cancelled mid-step (CU-B8) — returning Cancelled');
+                    return this.buildResult(context, 'Cancelled', false, lastVerdict);
+                }
+                throw error;
+            }
             cumulativeSettleMs += step.SettleMs;
             context.AddStep(step);
             this.onStepComplete(step, context.Params);
@@ -769,6 +803,10 @@ export class ComputerUseEngine {
                 this.log(`Step ${stepNumber} — page settled in ${Math.round(settle.ms)}ms (${settle.reason})`);
             }
 
+            // Cancellation checkpoint (CU-B8): a Stop() during settle already
+            // broke the poll delay — bail before paying for screenshot + LLM.
+            this.ensureNotCancelled();
+
             // 2. Capture screenshot + perceptual hash (CU-F6)
             const screenshotStart = performance.now();
             const screenshot = await this.captureScreenshot(context);
@@ -795,6 +833,10 @@ export class ComputerUseEngine {
             }
 
             this.logControllerResponse(stepNumber, response);
+
+            // Cancellation checkpoint (CU-B8): if Stop() aborted the controller
+            // call, don't execute its (now-stale, possibly empty) actions.
+            this.ensureNotCancelled();
 
             // 4. Execute tool calls + browser actions (timed — CU-F1); record post-action URL (CU-A8)
             const actionStart = performance.now();
@@ -835,6 +877,9 @@ export class ComputerUseEngine {
             }
 
             if (runJudge) {
+                // Cancellation checkpoint (CU-B8): don't start a judge LLM call
+                // for a run that's already been stopped.
+                this.ensureNotCancelled();
                 if (controllerRequestedJudgement) {
                     this.log(`Step ${stepNumber} — evaluating judge (controller request)`);
                 }
@@ -848,6 +893,11 @@ export class ComputerUseEngine {
                 }
             }
         } catch (error) {
+            // Cancellation is control flow, not a step failure — let it unwind to
+            // the main loop, which maps it to a clean Cancelled status (CU-B8).
+            if (error instanceof CancellationError) {
+                throw error;
+            }
             step.Error = this.wrapError(error, stepNumber);
             this.logError(`Step ${stepNumber} — step failed`, error);
         }
@@ -951,8 +1001,9 @@ export class ComputerUseEngine {
      *
      * The engine is app-agnostic: beacon and extra busy markers come from the
      * {@link AppProfile} the caller supplies; the engine only adds its own
-     * app-neutral markers and knows how to poll. Never throws — a probe failure
-     * degrades to "keep waiting until budget".
+     * app-neutral markers and knows how to poll. A probe failure degrades to
+     * "keep waiting until budget"; the only throw is a {@link CancellationError}
+     * when the run is stopped mid-settle (CU-B8), which unwinds to Cancelled.
      */
     private async settleBeforePerception(context: RunContext): Promise<{ ms: number; reason: SettleReason }> {
         const start = performance.now();
@@ -979,6 +1030,11 @@ export class ComputerUseEngine {
         let sawBusy = false;
 
         while (performance.now() - start < cfg.MaxWaitMs) {
+            // Cancellation checkpoint (CU-B8): Stop() makes the poll delay below
+            // resolve instantly, so without this the loop would busy-spin until
+            // MaxWaitMs. Throw to unwind straight to a Cancelled result.
+            this.ensureNotCancelled();
+
             // 1. Readiness beacon (CU-A2) — the declared, deterministic signal.
             const beaconPresent = beacon ? (await this.safeQuery(beacon)).Exists : false;
             // 2. Busy markers — any present-and-visible marker means still loading.
@@ -1044,7 +1100,10 @@ export class ComputerUseEngine {
     }
 
     private delay(ms: number): Promise<void> {
-        return new Promise<void>(resolve => setTimeout(resolve, ms));
+        // Abortable (CU-B8): a cancelled run's pending settle poll / retry
+        // backoff resolves early instead of holding the worker slot; the caller's
+        // next ensureNotCancelled() checkpoint turns that into a clean Cancelled.
+        return abortableDelay(ms, this.abortController.signal);
     }
 
     // ─── Coordinate Scaling ────────────────────────────────
@@ -1126,6 +1185,9 @@ export class ComputerUseEngine {
         request.StepNumber = stepNumber;
         request.MaxSteps = context.Params.MaxSteps;
         request.CurrentUrl = context.CurrentUrl;
+        // Thread the cancellation signal so an in-flight controller call aborts
+        // promptly on Stop() (CU-B8); consumed by Layer 2, not template data.
+        request.Signal = this.abortController.signal;
 
         // Include tool definitions if any tools are registered
         if (this.toolProvider.HasTools) {
@@ -1202,6 +1264,10 @@ export class ComputerUseEngine {
         let lastError: unknown;
 
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            // Cancellation checkpoint (CU-B8): don't retry a controller call for a
+            // run that's been stopped — the aborted signal makes the call return
+            // fast, and this unwinds before another (pointless) attempt.
+            this.ensureNotCancelled();
             try {
                 const response = await this.executeControllerPrompt(request);
 
@@ -1299,6 +1365,9 @@ export class ComputerUseEngine {
         const results: ActionExecutionResult[] = [];
 
         for (const action of actions) {
+            // Cancellation checkpoint (CU-B8): stop between actions so a Stop()
+            // during a multi-action step releases the slot without running the rest.
+            this.ensureNotCancelled();
             const result = await this.executeSingleBrowserAction(action, context);
             results.push(result);
         }
@@ -1418,6 +1487,7 @@ export class ComputerUseEngine {
         judgeContext.CurrentUrl = context.CurrentUrl;
         judgeContext.ControllerRequestedJudgement = controllerRequestedJudgement;
         judgeContext.CurrentDiagnosticsDigest = currentDiagnosticsDigest;
+        judgeContext.Signal = this.abortController.signal;   // abort in-flight judge call on Stop() (CU-B8)
 
         return this.judge.Evaluate(judgeContext);
     }

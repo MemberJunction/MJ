@@ -248,7 +248,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 formLoginCredentials: request.FormLoginCredentials,
                 previousStepSummary: request.PreviousStepSummary,
                 applicationContext: request.ApplicationContext,
-            });
+            }, request.Signal);
 
             if (!result.success) {
                 this.logError(`AIPromptRunner failed: ${result.errorMessage ?? 'unknown error'}`);
@@ -301,7 +301,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 maxSteps: request.MaxSteps,
                 currentUrl: request.CurrentUrl,
                 diagnostics: request.Diagnostics,
-            });
+            }, request.Signal);
 
             if (!result.success) {
                 const response = new JudgePromptResponse();
@@ -485,7 +485,8 @@ export class MJComputerUseEngine extends ComputerUseEngine {
      */
     private async executePromptViaRunner(
         promptEntity: MJAIPromptEntityExtended,
-        data: Record<string, unknown>
+        data: Record<string, unknown>,
+        signal?: AbortSignal
     ) {
         // Extract screenshot fields — these go as image messages, not template data
         const currentScreenshot = data.currentScreenshot as string | undefined;
@@ -505,6 +506,11 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         params.contextUser = this.contextUser;
         params.agentRunId = this.agentRunId;
         params.attemptJSONRepair = true;
+        // Cancellation (CU-B8): let engine.Stop() abort an in-flight LLM call so a
+        // cancelled run releases its worker slot in seconds instead of at step end.
+        if (signal) {
+            params.cancellationToken = signal;
+        }
 
         if (conversationMessages.length > 0) {
             params.conversationMessages = conversationMessages;

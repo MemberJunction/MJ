@@ -52,6 +52,15 @@ export class ControllerPromptRequest {
      */
     public Diagnostics?: string;
 
+    /**
+     * Cancellation signal for the controller LLM call (CU-B8). When the engine's
+     * `Stop()` aborts it, an in-flight prompt returns promptly (Layer 2 threads
+     * it into `AIPromptParams.cancellationToken`) instead of holding a worker
+     * slot for the rest of a 30s+ call. Not template data — consumed by the
+     * prompt executor only.
+     */
+    public Signal?: AbortSignal;
+
     /** Current URL the browser is on */
     public CurrentUrl: string = '';
 
@@ -174,6 +183,13 @@ export class JudgePromptRequest {
      * state (a blank page = `ChunkLoadError`) instead of hallucinating a reason.
      */
     public Diagnostics?: string;
+
+    /**
+     * Cancellation signal for the judge LLM call (CU-B8) — see
+     * {@link ControllerPromptRequest.Signal}. Threaded into
+     * `AIPromptParams.cancellationToken` by Layer 2; not template data.
+     */
+    public Signal?: AbortSignal;
 }
 
 /**
