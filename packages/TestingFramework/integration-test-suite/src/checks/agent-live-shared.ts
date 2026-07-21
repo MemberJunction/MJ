@@ -47,12 +47,19 @@ export interface AgentInvoker {
 /** Build a server-in-process agent invoker bound to the run-scoped provider + its CurrentUser. */
 export function makeAIClient(provider: IMetadataProvider): AgentInvoker {
     return {
-        RunAIAgent: (params: ExecuteAgentParams) =>
-            new AgentRunner(provider).RunAgent({
+        RunAIAgent: (params: ExecuteAgentParams) => {
+            // base-agent stamps AIAgentRun.ConversationID from params.data.conversationId
+            // (base-agent.ts:7893), while carry-forward reads the top-level params.conversationId
+            // (:5714) — so a conversation-linked run must carry it in BOTH places.
+            const convId = (params as { conversationId?: string }).conversationId;
+            const data = convId ? { ...(params.data ?? {}), conversationId: convId } : params.data;
+            return new AgentRunner(provider).RunAgent({
                 ...params,
+                data,
                 contextUser: params.contextUser ?? provider.CurrentUser,
                 provider,
-            }),
+            });
+        },
     };
 }
 

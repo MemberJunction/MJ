@@ -78,7 +78,7 @@ export interface AgentRunVerification {
  * TargetLogID — Prompt steps → AI Prompt Runs, Actions/Tool steps → Action Execution Logs, Sub-Agent steps
  * → child AI Agent Runs (recursively). `expectSuccess` asserts the run reached 'Completed'.
  */
-export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true): Promise<AgentRunVerification> {
+export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true, opts: { skipActionLogs?: boolean } = {}): Promise<AgentRunVerification> {
     const run = await fetchById('MJ: AI Agent Runs', agentRunID, user);
     const status = String(run.Status);
     // The actual "stuck at Running" guard: a finalized run is anything except still-Running.
@@ -118,6 +118,10 @@ export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectS
             await verifyPromptRun(target, user);
             promptRunsVerified++;
         } else if (step.StepType === 'Actions' || step.StepType === 'Tool') {
+            // Action Execution Logs are written by the fire-and-forget queue and can land
+            // arbitrarily late relative to a run handle returning (esp. server-in-process).
+            // Callers that only care about run/step terminality pass skipActionLogs.
+            if (opts.skipActionLogs) { continue; }
             await verifyActionLog(target, user);
             actionLogsVerified++;
         } else if (step.StepType === 'Sub-Agent') {
