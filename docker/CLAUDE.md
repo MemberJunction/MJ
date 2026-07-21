@@ -18,8 +18,15 @@ This directory contains Docker configurations for MemberJunction. When working w
 - Five-container stack: `sqlserver` → `db-setup` (one-shot init) → `mjapi` → `mjexplorer` (nginx) → `test-runner` (Playwright + Chromium). An opt-in `form-generator` service (`profile: gen-forms`) re-runs codegen for Angular entity forms.
 - Project name `mj-regression`, host ports `11433` (SQL) and `14000` (API) to avoid conflicts with workbench
 - Database is **ephemeral** — wiped between runs via `docker compose down -v`
-- Tests are defined as MJ metadata in `metadata/tests/regression/` (25 Computer Use tests)
-- Test runs are persisted as **per-run folders** in `docker/regression/test-results/run-{TIMESTAMP}/` containing `results.json`, `report.md`, `report.html`, `preflight.json`, `diagnostics.json`, and `screenshots/` — runs never overwrite each other
+- Tests are defined as MJ metadata in `metadata/tests/regression/`
+- The run id is **host-minted** by the CLI (`run-<utc>`, DR-F1) and passed to compose as `RUN_ID`, so the host owns `test-results/<RUN_ID>/` from launch
+- Test runs are persisted as **per-run folders** in `docker/regression/test-results/<RUN_ID>/` — runs never overwrite each other. Contents:
+  - `results.json` — final full per-test results (written at the end)
+  - `results.jsonl` — **one line per attempt, written as each test finishes** (DR-D5) — crash-safe truth; `results.partial.json` is an atomic snapshot with a `Running`/`Cancelled`/`Crashed`/`Completed` status
+  - `summary.json` — compact machine summary for CI gates (counts, passRate, failure categories, env-quality) (DR-G2)
+  - `report.md` / `report.html`, `screenshots/`, `preflight.json`
+  - `diagnostics.ndjson` + `health-state.json` — health supervisor log + last state (DR-G4)
+  - `console.log` (attached runs) — teed host-side runner output (DR-F2)
 - A `latest` symlink in `test-results/` always points at the most recent run
 - The `test-metadata/` subdirectory holds Docker-only metadata (e.g., the `computeruse@bluecypress.io` test user with UI + Integration roles) — kept separate from repo-level `metadata/` so it's never pushed to a developer's local DB
 - **All non-trivial JavaScript lives in [`docker/regression/scripts/`](regression/scripts/)** — DB ops, metadata patches, screenshot extraction, report generators. Entrypoint scripts (`db-setup-entrypoint.sh`, `test-runner-entrypoint.sh`, `form-gen-entrypoint.sh`) are thin bash orchestrators that invoke `node scripts/<name>.cjs`. The shared mssql config lives in [`scripts/lib/db.cjs`](regression/scripts/lib/db.cjs).
@@ -27,11 +34,19 @@ This directory contains Docker configurations for MemberJunction. When working w
 **Common commands** (run from repo root):
 ```bash
 mj test regression build                              # Build all images
-mj test regression up                                 # Run the suite (creates a new run-* folder)
+mj test regression up                                 # Run the suite (mints RUN_ID; up-then-run; exit code = suite verdict)
+mj test regression status [--watch]                   # Progress + pass/fail/flaky + container health (from results.partial.json)
+mj test regression logs [service] -f                  # Tail stack logs
+mj test regression rerun-failures [--run ID]          # Re-run only the prior run's failures (2 workers, 0 retries)
+mj test regression stop                               # Pause the stack, keep the DB (inspectable; use down to wipe)
 mj test regression down                               # Tear down stack and wipe DB
 mj test regression compare                            # Compare the two most recent runs
 mj test regression remote --target=<name-or-path>     # Run against a remote URL (Mode B/C/D)
 ```
+
+**Attached `up` is now foreground-and-exit** (DR-F2): it starts infrastructure detached (`up -d --wait`), then runs the test-runner in the foreground so the shell gets the suite's exit code (plain `up` used to swallow it and block forever). The stack is **left running** afterward — use `stop`/`down`. `--detach` and `--bacpac` keep the classic single `up`.
+
+**Sizing/retry knobs**: `up --workers N --retries N` (also `MAX_PARALLEL_WORKERS` / `MAX_RETRIES` env). `MAX_RETRIES` now actually reaches the container (DR-E2) — it previously could not. Per-service `mem_limit`s are `.env.test`-tunable (DR-A1).
 
 **Comparing runs:**
 - `mj test regression compare` invokes `mj test compare --from-json docker/regression/test-results`
