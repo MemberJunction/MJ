@@ -48,6 +48,17 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      # DR-A1: cap SQL Server *internally*. On Linux it otherwise allocates up
+      # to ~80% of HOST RAM and competes freely with the 8GB-heap API and N
+      # Chromium instances — the substrate of the observed exit-137 OOM. SQL
+      # must be told its budget via env/mssql-conf; the cgroup ceiling alone
+      # would get it OOM-killed instead of made frugal. 3584MB sits under the
+      # 4g mem_limit below, leaving headroom for non-buffer-pool allocations.
+      MSSQL_MEMORY_LIMIT_MB: "${MJ_REGRESSION_SQL_MEM_MB:-3584}"
+      MSSQL_PID: Developer
+    # DR-A1: external ceiling (cgroup). All limits are .env.test-tunable; these
+    # are ceilings, not reservations — safe on smaller hosts.
+    mem_limit: "${MJ_REGRESSION_SQL_MEM_LIMIT:-4g}"
     ports:
       - "11433:1433"
     healthcheck:
@@ -69,6 +80,8 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+    # DR-A1: bounds the migrate + codegen×2 window (node processes).
+    mem_limit: "${MJ_REGRESSION_SETUP_MEM_LIMIT:-6g}"
 
   # Form generator — opt-in service (profile: gen-forms) that runs codegen
   # against a temporary DB and writes Angular entity-form components to a
@@ -87,6 +100,8 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+    # DR-A1: same codegen workload as db-setup, same bound.
+    mem_limit: "${MJ_REGRESSION_SETUP_MEM_LIMIT:-6g}"
     entrypoint: ["/bin/bash", "/app/form-gen-entrypoint.sh"]
     volumes:
       - ./form-gen-entrypoint.sh:/app/form-gen-entrypoint.sh:ro
@@ -129,6 +144,8 @@ services:
       NODE_ENV: test
     ports:
       - "14000:4000"
+    # DR-A1: 8GB node heap (see Dockerfile.api CMD) + native/RSS overhead.
+    mem_limit: "${MJ_REGRESSION_API_MEM_LIMIT:-10g}"
     # Auto-restart if MJAPI crashes (e.g. OOM under heavy regression load)
     # so the suite can continue rather than fail every remaining test.
     restart: on-failure:5
@@ -157,6 +174,8 @@ services:
       # and the headless test-runner reaches it over the internal network
       # (mjexplorer:4200 via socat), so this only affects human browser access.
       - "${MJ_REGRESSION_EXPLORER_PORT:-4200}:4200"
+    # DR-A1: static nginx needs almost nothing.
+    mem_limit: "${MJ_REGRESSION_EXPLORER_MEM_LIMIT:-512m}"
 
   test-runner:
     # In "full" → Mode A (local MJ stack). In "remote-target" → Modes B/C/D
@@ -234,6 +253,11 @@ services:
       TEST_RUNNER_MODE: "${TEST_RUNNER_MODE:-full}"
       TARGET_PROFILE_NAME: "${TARGET_PROFILE_NAME:-}"
       TARGET_PROFILE_KIND: "${TARGET_PROFILE_KIND:-}"
+    # DR-A1: sized for the default MAX_PARALLEL_WORKERS=3 as
+    # workers × ~1.5g (Chromium peak, per Browserbase sizing) + 2g (node CLI,
+    # mj sync, report generation). Raise together with the worker count —
+    # DR-A4 (Wave 2) adds the in-container workers-vs-memory clamp.
+    mem_limit: "${MJ_REGRESSION_RUNNER_MEM_LIMIT:-7g}"
     shm_size: '4gb'
     # Compose interpolates ${TEST_RUNNER_ENTRYPOINT} at parse time using the
     # host env (defaulting to the full-stack script). Both scripts are bind-
