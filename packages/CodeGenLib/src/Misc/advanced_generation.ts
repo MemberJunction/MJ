@@ -117,6 +117,13 @@ export class AdvancedGeneration {
     private _metadata: Metadata;
     private _promptRunner: AIPromptRunner;
 
+    /** Consecutive AI credential/authentication failures this run; trips the circuit breaker. */
+    private _consecutiveAuthFailures = 0;
+    /** Once tripped, remaining advanced-generation LLM calls are skipped for the rest of this run. */
+    private _aiCircuitOpen = false;
+    /** Open the circuit after this many consecutive credential/authentication failures. */
+    private static readonly AUTH_FAILURE_CIRCUIT_THRESHOLD = 3;
+
     constructor() {
         this._metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         this._promptRunner = new AIPromptRunner();
@@ -124,6 +131,62 @@ export class AdvancedGeneration {
 
     public get enabled(): boolean {
         return configInfo.advancedGeneration?.enableAdvancedGeneration ?? false;
+    }
+
+    /**
+     * True once repeated AI credential/authentication failures have tripped the circuit breaker for
+     * this run. Callers should stop issuing advanced-generation calls when this is set, so a keyless
+     * or mis-credentialed environment fails fast — logging one clear message and skipping the rest —
+     * instead of attempting (and swallowing) a doomed LLM call for every entity. State is per-run: a
+     * fresh AdvancedGeneration instance is created each codegen run.
+     */
+    public get AICircuitOpen(): boolean {
+        return this._aiCircuitOpen;
+    }
+
+    /** Classify a failure as an AI credential / authentication problem (vs a content or transient error). */
+    private isCredentialError(err: unknown): boolean {
+        const msg = (err instanceof Error ? err.message : String(err ?? '')).toLowerCase();
+        return (
+            msg.includes('credential') ||
+            msg.includes('unauthorized') ||
+            msg.includes('authentication') ||
+            msg.includes('permission denied') ||
+            msg.includes('access denied') ||
+            msg.includes('invalid api key') ||
+            msg.includes('api key not') ||
+            msg.includes('invalid_grant') ||
+            msg.includes('401') ||
+            msg.includes('403')
+        );
+    }
+
+    /**
+     * True when a RETURNED result (not a throw) represents a credential/auth failure. `AIPromptRunner`
+     * does NOT throw for these — provider drivers catch internally and return `{ success:false }` with
+     * `chatResult.errorInfo.errorType = 'Authentication' | 'NoCredentials'` (and STOP failover) — so the
+     * circuit breaker must inspect the RESULT, not only the `catch` block.
+     */
+    private isCredentialFailureResult(result: AIPromptRunResult<unknown>): boolean {
+        if (result.success) {
+            return false;
+        }
+        const errorType = result.chatResult?.errorInfo?.errorType;
+        if (errorType === 'Authentication' || errorType === 'NoCredentials') {
+            return true;
+        }
+        // Fallback for providers that don't populate errorInfo but carry a message
+        // (e.g. "Invalid Vertex AI credentials").
+        return this.isCredentialError(result.errorMessage);
+    }
+
+    /** Increment the consecutive-failure counter and open the AI circuit once the threshold is reached. */
+    private recordAuthFailure(detail: unknown): void {
+        this._consecutiveAuthFailures++;
+        if (this._consecutiveAuthFailures >= AdvancedGeneration.AUTH_FAILURE_CIRCUIT_THRESHOLD && !this._aiCircuitOpen) {
+            this._aiCircuitOpen = true;
+            LogError(`AdvancedGeneration: opening AI circuit after ${this._consecutiveAuthFailures} consecutive credential/authentication failures (${detail}) — remaining entities will skip AI enrichment this run. Check the AI provider credentials (e.g. Vertex AI) or set advancedGeneration.enableAdvancedGeneration=false.`);
+        }
     }
 
     public features(): AdvancedGenerationFeature[] | undefined {
@@ -159,10 +222,23 @@ export class AdvancedGeneration {
     private async executePrompt<T>(
         params: AIPromptParams
     ): Promise<AIPromptRunResult<T>> {
+        // Defense-in-depth: once the credential circuit is open, skip the round-trip entirely.
+        // Callers should also gate on AICircuitOpen so an open circuit produces no call and no log.
+        if (this._aiCircuitOpen) {
+            throw new Error('AdvancedGeneration: AI credential circuit is open — skipping this LLM call after repeated authentication failures this run.');
+        }
         const startMs = Date.now();
         const promptName = params.prompt?.Name ?? 'unknown';
         try {
             const result = await this._promptRunner.ExecutePrompt<T>(params);
+            // Credential/auth failures come back as a RETURNED result (success:false), NOT a throw —
+            // provider drivers catch internally and stop failover for NoCredentials/Authentication. Detect
+            // them on the result and trip the breaker; only a genuinely successful call clears the counter.
+            if (result.success) {
+                this._consecutiveAuthFailures = 0;
+            } else if (this.isCredentialFailureResult(result)) {
+                this.recordAuthFailure(result.errorMessage ?? result.chatResult?.errorInfo?.errorType ?? 'credential failure');
+            }
             // Resilience: some models return the JSON payload as a raw string rather
             // than a parsed object (and Warn-mode validation lets it through with
             // success=true). If we got a string, try to recover a structured object
@@ -191,6 +267,11 @@ export class AdvancedGeneration {
             });
             return result;
         } catch (error) {
+            // A THROWN (rather than returned) credential/auth failure — trip the breaker here too,
+            // as a safety net for providers/paths that do throw.
+            if (this.isCredentialError(error)) {
+                this.recordAuthFailure(error);
+            }
             LogError(`AdvancedGeneration:Prompt execution failed: ${error}`);
             throw error;
         }

@@ -897,6 +897,8 @@ export abstract class BaseIntegrationConnector {
                     objectName: obj.Name, total, error: msg, durationMs: Date.now() - objStart,
                 }));
                 skipped++;
+                // U11 — determinate discovery progress: a skipped object still advances the bar.
+                try { options?.OnProgress?.(succeeded + skipped, total); } catch { /* progress must never break introspection */ }
                 // A real rate-limit failure cuts the in-flight cap (AIMD); a plain describe error does not.
                 return { ok: false, throttled: this.ExtractRetryAfterMs(err) !== undefined };
             }
@@ -923,10 +925,13 @@ export abstract class BaseIntegrationConnector {
                     Precision: f.Precision ?? null,
                     Scale: f.Scale ?? null,
                     DefaultValue: f.DefaultValue ?? null,
-                    IsPrimaryKey: f.IsPrimaryKey ?? false,
+                    // U1 — propagate `undefined` (source had no opinion), never coerce to false:
+                    // `?? false` here turned a sample's SILENCE into a hard "not a PK/FK" that the
+                    // persist overlay then treated as a Discovered opinion, wiping declared flags.
+                    IsPrimaryKey: f.IsPrimaryKey,
                     IsUniqueKey: f.IsUniqueKey,
                     IsReadOnly: f.IsReadOnly,
-                    IsForeignKey: f.IsForeignKey ?? false,
+                    IsForeignKey: f.IsForeignKey,
                     ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                 })),
                 // Honest PK selection: only IsPrimaryKey=true fields qualify (an object can have several
@@ -942,6 +947,8 @@ export abstract class BaseIntegrationConnector {
             if (done % 100 === 0 || done === total) {
                 console.log(`[IntrospectSchema] progress: ${done}/${total} (ok=${succeeded}, skipped=${skipped}) — ${((Date.now() - startMs) / 1000).toFixed(1)}s elapsed`);
             }
+            // U11 — determinate discovery progress (scanned of total) for the caller's progress bar.
+            try { options?.OnProgress?.(done, total); } catch { /* progress must never break introspection */ }
             return { ok: true, throttled: false };
         };
 

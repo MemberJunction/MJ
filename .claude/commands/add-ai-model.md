@@ -48,11 +48,11 @@ You are a metadata specialist for MemberJunction. Your task is to add a new AI m
    - Confirm the vendor name matches exactly (e.g., "Anthropic", "OpenAI", "Google")
    - If vendor doesn't exist, you'll need to add it first (see "Adding New Vendors" section)
 
-5. **UUIDs Are Generated Automatically**
-   - **DO NOT generate UUIDs** for new records
-   - **DO NOT include `primaryKey` or `sync` sections** for new records
-   - The `mj-sync push` command will automatically generate UUIDs and sync metadata
-   - Only include `primaryKey` and `sync` when editing existing records
+5. **UUIDs: CLI `uuidgen` for primaryKey — NEVER include `sync`**
+   - **Include a `primaryKey`** on each new record (model, vendor rows, cost rows) with a UUID generated at the CLI via `uuidgen` — never invent/infer a UUID
+   - **DO NOT include `sync` sections** for new records — they are populated when the build engineer runs `mj sync push` at release time
+   - **DO NOT hand-author a `*__Metadata_Sync.sql` migration** — one consolidated sync migration is generated per release from a clean DB at the last released version (see `metadata/CLAUDE.md` rule 1b)
+   - Only include `sync` when editing existing records (preserve what's there)
 
 6. **Determine Rankings**
    - **PowerRank** (1-21+): Model capability level
@@ -114,7 +114,7 @@ Rules of thumb:
 
 ## Metadata JSON Template
 
-**IMPORTANT**: For new records, DO NOT include `primaryKey` or `sync` sections. These are generated automatically by mj-sync.
+**IMPORTANT**: For new records, include a `primaryKey` with a CLI-`uuidgen` UUID but DO NOT include a `sync` section (populated by the release-time `mj sync push`). Do not author a Metadata_Sync migration.
 
 ```json
 {
@@ -324,8 +324,8 @@ Before setting SupportsEffortLevel in metadata:
 
 ## Key Rules
 
-1. **DO NOT include `primaryKey` or `sync` sections** for new records - mj-sync generates these automatically
-2. **DO NOT generate UUIDs** for new records - mj-sync handles this
+1. **Include `primaryKey` with a CLI-`uuidgen` UUID; DO NOT include `sync` sections** for new records - sync blocks are written back by the release-time `mj sync push`
+2. **Generate UUIDs only via CLI `uuidgen`** - never invent/infer them; no per-PR Metadata_Sync migrations
 3. **Use @lookup syntax** for foreign key references: `@lookup:EntityName.FieldName=Value`
 4. **Use @parent:ID** for referencing the parent model's ID in related entities
 5. **Validate naming convention** before adding to metadata (see Naming Conventions section)

@@ -13,6 +13,7 @@ import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import type { PredictRequest, PredictResponse } from '@memberjunction/predictive-studio-core';
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
+import { MLSidecarProvider } from '../sidecar-provider';
 
 import type { IMLModelLoader, ISidecarPredictor } from './types';
 
@@ -49,14 +50,20 @@ export class RunViewMLModelLoader implements IMLModelLoader {
  * {@link ISidecarPredictor} backed by the self-managing {@link MLSidecar} client.
  * Lazily starts the sidecar on first use (managed or remote mode is decided by
  * `MLSidecar` from options/env), then warm-caches the connection for the run.
+ * Defaults to the process-shared {@link MLSidecarProvider} instance rather than
+ * constructing a private `MLSidecar` — see that class's doc comment for why a
+ * per-instance sidecar leaked a Python child process per action run. Tests (and
+ * callers that genuinely need an isolated sidecar) can still inject their own via
+ * the constructor parameter.
  */
 export class MJSidecarPredictor implements ISidecarPredictor {
   private started = false;
 
   /**
-   * @param sidecar an `MLSidecar` instance (managed or remote)
+   * @param sidecar an `MLSidecar` instance (managed or remote); defaults to the
+   *   shared, process-lifetime instance from {@link MLSidecarProvider}
    */
-  constructor(private readonly sidecar: MLSidecar = new MLSidecar()) {}
+  constructor(private readonly sidecar: MLSidecar = MLSidecarProvider.Instance.GetSidecar()) {}
 
   /** @inheritdoc */
   public async predict(req: PredictRequest): Promise<PredictResponse> {

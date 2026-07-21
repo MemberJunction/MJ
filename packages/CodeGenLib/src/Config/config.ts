@@ -632,6 +632,22 @@ const configInfoSchema = z.object({
   ]).default('mj_generatedentities'),
 
   verboseOutput: z.boolean().optional().default(false),
+
+  /**
+   * Number of metadata `INSERT` statements CodeGen joins into a single batched
+   * round-trip when syncing newly-discovered entity fields into the metadata
+   * tables (`createNewEntityFieldsFromSchema`). Each row's INSERT SQL is
+   * unchanged and conflict-guarded; this knob only controls how many are
+   * terminated, joined, and sent — plus logged to the migration file — per DB
+   * round-trip.
+   *
+   * Larger values mean fewer round-trips but a larger SQL string per batch;
+   * smaller values trade throughput for smaller batches. These are independent
+   * statements (not a multi-row `VALUES`), so no SQL Server row/parameter limit
+   * bounds the value. Defaults to 250, a good balance on large-schema installs
+   * (thousands of tables). Applies to both SQL Server and PostgreSQL.
+   */
+  metadataInsertBatchSize: z.coerce.number().int().positive().default(250),
 });
 
 /**
@@ -1083,14 +1099,26 @@ export function getSettingValue(settingName: string, defaultValue?: any): any {
 }
 
 /**
- * Checks if automatic indexing of foreign keys is enabled
- * @returns True if auto-indexing is enabled, false otherwise
+ * Checks if automatic indexing of foreign keys is enabled.
+ *
+ * **Defaults to `true` when the `auto_index_foreign_keys` setting is absent.**
+ * Config *absence* must be the safe choice here: neither SQL Server nor PostgreSQL
+ * auto-indexes FK columns, yet MJ leans on them heavily — generated base views join
+ * FK relationships, `RunView` filters on them, and CodeGen emits cascade-delete logic
+ * that walks children by FK. A missing FK index therefore degrades silently and is
+ * very hard for a customer to diagnose (it looks like "MJ is slow", not "an index is
+ * missing"), whereas a surplus index is cheap and trivially reversible (`DROP INDEX`).
+ *
+ * This previously defaulted to `false`, which meant any deployment that never set the
+ * setting explicitly — including distribution installs — generated no FK indexes at all.
+ *
+ * @returns True if auto-indexing is enabled (the default), false only if explicitly disabled
  */
 export function autoIndexForeignKeys(): boolean {
   const keyName = 'auto_index_foreign_keys';
   const setting = getSetting(keyName);
   if (setting) return <boolean>setting.value;
-  else return false;
+  else return true;
 }
 
 /**

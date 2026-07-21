@@ -17,7 +17,8 @@ vi.mock('@mistralai/mistralai', () => ({
 
 // Mock @memberjunction/global
 vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: Function) => target
+    RegisterClass: () => (target: Function) => target,
+    ToJSONSafe: (v: unknown) => (v == null ? null : JSON.parse(JSON.stringify(v)))
 }));
 
 // Mock @memberjunction/ai
@@ -491,6 +492,97 @@ describe('MistralLLM', () => {
             };
             const result = callMethod(chunk);
             expect(result.usage).toBeDefined();
+        });
+    });
+
+    describe('cancellation (ChatParams.cancellationToken)', () => {
+        type ChatResultLike = { success: boolean; statusText: string | null; exception: unknown };
+
+        const okResponse = {
+            id: 'x',
+            object: 'chat.completion',
+            model: 'mistral-small',
+            created: 1,
+            choices: [{ message: { content: 'hi' }, finishReason: 'stop', index: 0 }],
+            usage: { promptTokens: 5, completionTokens: 3 }
+        };
+
+        const buildParams = (token?: AbortSignal) => ({
+            model: 'mistral-small',
+            messages: [{ role: 'user', content: 'hello' }],
+            cancellationToken: token
+        });
+
+        const callNonStreaming = (token?: AbortSignal): Promise<ChatResultLike> =>
+            (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'](buildParams(token));
+
+        const callCreateStream = (token?: AbortSignal): Promise<unknown> =>
+            (instance as ReturnType<typeof Object.create>)['createStreamingRequest'](buildParams(token));
+
+        it('passes the token to the SDK as the fetch signal (non-streaming)', async () => {
+            const controller = new AbortController();
+            mockComplete.mockResolvedValue(okResponse);
+
+            await callNonStreaming(controller.signal);
+
+            expect(mockComplete.mock.calls[0][1]).toEqual({ signal: controller.signal });
+        });
+
+        it('passes no request options when there is no token', async () => {
+            mockComplete.mockResolvedValue(okResponse);
+
+            await callNonStreaming(undefined);
+
+            expect(mockComplete.mock.calls[0][1]).toBeUndefined();
+        });
+
+        it('passes the token to the SDK as the fetch signal (streaming)', async () => {
+            const controller = new AbortController();
+            mockStream.mockResolvedValue({});
+
+            await callCreateStream(controller.signal);
+
+            expect(mockStream.mock.calls[0][1]).toEqual({ signal: controller.signal });
+        });
+
+        it('returns a cancelled ChatResult without calling the SDK when pre-aborted', async () => {
+            const controller = new AbortController();
+            controller.abort();
+
+            const result = await callNonStreaming(controller.signal);
+
+            expect(mockComplete).not.toHaveBeenCalled();
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('Cancelled');
+        });
+
+        it('maps the SDK RequestAbortedError to a cancelled ChatResult', async () => {
+            const abortError = new Error('Request aborted by client');
+            abortError.name = 'RequestAbortedError';
+            mockComplete.mockRejectedValue(abortError);
+
+            const result = await callNonStreaming(new AbortController().signal);
+
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('Cancelled');
+            expect(result.exception).toBe(abortError);
+        });
+
+        it('still throws non-cancellation errors (unchanged behavior)', async () => {
+            mockComplete.mockRejectedValue(new Error('boom'));
+
+            await expect(callNonStreaming(undefined)).rejects.toThrow('boom');
+        });
+
+        it('finalizeStreamingResponse reports cancellation when the stream was aborted mid-flight', () => {
+            const controller = new AbortController();
+            (instance as ReturnType<typeof Object.create>)['_streamingCancellationToken'] = controller.signal;
+            controller.abort();
+
+            const result: ChatResultLike = (instance as ReturnType<typeof Object.create>)['finalizeStreamingResponse']('partial', null, null);
+
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('Cancelled');
         });
     });
 });
