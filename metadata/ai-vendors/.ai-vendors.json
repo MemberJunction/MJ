@@ -400,5 +400,15 @@
       "lastModified": "2026-07-14T20:47:45.483Z",
       "checksum": "e7bf0c3675e8726bbbf78a0eccad0cd7cb823b75692cee1ffc6581b0450730f8"
     }
+  },
+  {
+    "fields": {
+      "Name": "Thinking Machines Lab",
+      "Description": "Thinking Machines Lab is Mira Murati's AI research startup, founded by former OpenAI leadership. Ships the Inkling open-weights frontier model (975B total / 41B active MoE, Apache 2.0) and operates the Tinker direct API. Represents the first major U.S. open-weights frontier release of 2026 (July 15, 2026). Direct API endpoint uses OpenAI-compatible request/response shape; models are also available via OpenRouter under the `thinkingmachines/` namespace.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "101611B7-B8BE-410D-825E-DD81574EAE13"
+    }
   }
 ]
