@@ -67,6 +67,14 @@ services:
       timeout: 5s
       retries: 15
       start_period: 30s
+    # DR-B2: persist the DB on a NAMED volume instead of the container's writable
+    # layer, so a plain `down` (or `stop`) keeps it — the DB survives for
+    # inspection/resume and accidental data loss ends. `mj test regression down`
+    # now keeps this by default (`--volumes` to wipe). The DR-B1 snapshot hash
+    # invalidates it when migrations/codegen change, so a kept volume can't go
+    # stale across schema changes.
+    volumes:
+      - mssql-data:/var/opt/mssql
 
   db-setup:
     profiles: ["full"]
@@ -323,3 +331,10 @@ services:
       - ./targets:/app/docker/regression/targets:ro
       - ../../metadata:/app/metadata
       - ./test-metadata:/app/test-metadata:ro
+
+# DR-B2: named volume for the SQL Server data dir. Explicitly named so it's
+# easy to find (`docker volume ls`) and inspect, and so its lifecycle is
+# decoupled from the container — `down` keeps it by default now.
+volumes:
+  mssql-data:
+    name: mj-regression-mssql-data
