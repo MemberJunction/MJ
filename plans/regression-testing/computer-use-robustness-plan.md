@@ -320,6 +320,8 @@ Escalation ladder (config block `abortOn: { navLoop, stagnantSteps, ... }`):
 
 **Risks / open questions.** Memory must stay compact (prompt budget); the plan-pinning interacts with CU-E2's structured output — design them as one contract.
 
+**Wave 4 status — LANDED (part 3: non-blind-retry memo); parts 1–2 (RunMemory ledger + reflection call) deferred as measurement-gated.** Pure, unit-tested `failure-memo.ts` — `buildFailureMemo` distills a compact (≤500-char) "why it failed / what to avoid": terminal status + `FailureReason`, final path, judge reason/feedback (deduped), loop evidence as "avoid repeating", and a deduped recent-path trail. Emitted by the engine's single terminal funnel `buildResult()` on ANY non-passing status (which now also takes `failureReason`, centralizing `FailureReason` + memo). `RunComputerUseParams.PreviousAttemptSummary` → rendered as a "## Previous Attempt" section in the Layer-1 default controller AND (avoiding the A7/B1 named-field trap) the Layer-2 `controller.template.md` `{% if previousAttemptSummary %}` block via a new data mapping — so a retry is non-blind. Part 3's "production + consumption per-test scope" is exactly this; the driver's capture-memo→feed-to-retry glue is the sibling retry policy. **Deferred:** the `RunMemory` structured ledger (part 1) and the reflection LLM call after K looped steps (part 2) — both measurement-gated (build them only if Wave 1–3 loop control proves insufficient) and part 2 needs a cheap-model seam; the CU-E2 `plan`/`memory` structured-output fields already carry the lightweight version of the ledger forward each step. 9 tests. E7 gate green.
+
 #### CU-B7. Auth-detour watchdog: recognize and recover the Auth0 consent bounce as an infrastructure event
 
 **Problem.** 13/44 failures bounced through `https://dev-…auth0.com/u/consent?...` mid-run (§3.1): session invalidation dumps the agent to `/`, it re-logs-in through consent (~10+ steps), lands at Home, and repeats — labeled "navigation loop" by the heuristics. The agent is being graded on recovering from an infrastructure event the harness caused (single-login storageState not surviving whatever invalidates the session).
@@ -355,6 +357,8 @@ Alternative sub-option: browser-use's folded design — no second model, but a `
 **Expected impact.** Smaller per-step prompts, more directed behavior, partial-credit reporting; enables the two-model economics of CU-E6.
 
 **Risks / open questions.** Plans can be wrong — the re-plan triggers must be reliable (CU-B1/B6 provide them). Deferred until Waves 2–3 have landed; measure whether loop control alone suffices first.
+
+**Wave 4 status — DEFERRED (measurement-gated, by design); folded design already shipped via CU-E2.** This item is explicitly conditional: "measure whether loop control alone suffices first," and the recommended starting point is the FOLDED design — "a `plan_update`/`current_plan_item` checklist in the actor's structured output," which **already landed as CU-E2** (the controller emits `evaluation`/`memory`/`plan` and they're echoed forward each step). The TRUE two-model planner/actor split is to be built "only if oscillation persists" — a determination that requires loop metrics from actual suite runs, which don't exist yet (Waves 0–3 built the engine; the 380-test suite hasn't been executed against it). Building the two-model split now would contradict the plan's own gating and Simplicity-First. Revisit once CU-B1/F1 loop + oscillation telemetry from real runs is in hand; if it shows the folded design insufficient, promote to the two-model split (which also unlocks CU-E6's two-model economics).
 
 ---
 
@@ -471,6 +475,8 @@ mabl's confidence gate applies: a low-confidence heal (ambiguous target) should 
 **Expected impact.** Preserves exploration value at ~10% of its former cost; drift findings become a scheduled deliverable instead of an accident.
 
 **Risks / open questions.** Canary flake noise must not gate CI — canary results report separately (pairs with the sibling plan's quarantine lane).
+
+**Wave 4 status — LANDED (the drift-diff report, pure); force-LLM-tier dispatch + scheduling deferred.** `engine/trace-diff.ts` — `diffTraces(recorded, fresh)` compares a canary LLM-tier run's fresh derivation against its stored trace and reports drift keyed on SEMANTICS not raw selectors: a same-role+name selector change is minor `selector-drift` (what CU-C3 heals, NOT counted meaningful), while a changed role/name / action method / per-step URL, or an added/removed step, is `meaningfulDrift`. So a suite-wide `meaningfulDrift` spike after a merge is the real "this PR changed the UI" signal, un-muddied by routine selector churn. This is the plan's designated "drift-diff report ... here." 6 tests, E7 gate green. **Deferred:** the per-test `force LLM tier` flag's DISPATCH (lands with the CU-C2 driver tier-dispatch) and the canary SCHEDULING — which N% of tests get the LLM-tier mix on which runs (sibling plan's run-profile scheduling + quarantine lane).
 
 ---
 
@@ -835,6 +841,8 @@ CU-C1 (recording — consumes A4's resolved elements) → CU-C2 (replay tier) �
 
 **Wave 4 — Refinements gated on measurement.**
 CU-B9 (planner/actor — only if Wave 1–2 loop metrics say oscillation persists), CU-B6 full reflection (the memo/ledger parts land earlier with B1/F5), CU-C7 (canary set ⇄ run-profile scheduling), advanced D6 ensembles, scoped cache invalidation (C4 refinement).
+
+**Wave 4 status — the two NON-gated mechanisms LANDED; the measurement-gated refinements deferred BY DESIGN.** Shipped: **CU-C7** the pure drift-diff report (the plan's designated "here" deliverable) and **CU-B6 part 3** the non-blind-retry failure memo + `PreviousAttemptSummary` injection (explicitly "per-test scope, this plan"). Deferred, because Wave 4 is "gated on measurement" and no suite runs exist yet (Waves 0–3 built the engine; the 380-test suite hasn't been executed against it): **CU-B9** two-model planner/actor (conditional "only if oscillation persists"; the folded design already shipped via CU-E2), **CU-B6 parts 1–2** (RunMemory ledger + reflection call), **advanced D6 ensembles** (the constant Impossible quorum suffices until data shows verdict-flapping — adding a k-vote knob now would be speculative config), **scoped cache invalidation** (needs build-diff data — gated on `appBuildHash`, Open Question #2), and the canary **scheduling** + force-LLM-tier dispatch (sibling run-profile scheduling / the deferred C2 driver dispatch). These become actionable once real run telemetry (loop/oscillation rates, verdict-flap counts, per-test heal rates) exists to justify each refinement.
 
 Dependency spine: **A3 → A1/A2/A4 → C1–C5**, with **F1/F6** feeding B1/B4/D3/F5 and **D1 → C5**. Everything in Wave 0 is dependency-free.
 
