@@ -1173,6 +1173,10 @@ export class ComputerUseEngine {
                 scaled.Button = action.Button;
                 scaled.ClickCount = action.ClickCount;
                 scaled.BoundingBox = this.scaleBoundingBox(action.BoundingBox, scaleX, scaleY);
+                // Pass through the DOM-targeting fields (CU-A6): when Selector is
+                // set the adapter ignores X/Y, and Modifiers apply on both paths.
+                scaled.Selector = action.Selector;
+                scaled.Modifiers = action.Modifiers;
                 return scaled;
             }
 
@@ -1180,6 +1184,7 @@ export class ComputerUseEngine {
                 const scaled = new ScrollAction();
                 scaled.DeltaX = Math.round(action.DeltaX * scaleX);
                 scaled.DeltaY = Math.round(action.DeltaY * scaleY);
+                scaled.Selector = action.Selector;   // CU-A6: preserve scroll-into-view target
                 return scaled;
             }
 

@@ -31,6 +31,7 @@ import {
     RefreshAction,
     DragAction,
 } from '../types/browser.js';
+import type { KeyModifier } from '../types/browser.js';
 
 /** Shape of the raw JSON we expect from the controller LLM */
 interface RawControllerResponse {
@@ -112,18 +113,22 @@ export class ResponseParser {
                 action.BoundingBox = ResponseParser.parseBoundingBox(raw.BoundingBox ?? raw.boundingBox);
                 action.Button = ResponseParser.toClickButton(raw.Button ?? raw.button);
                 action.ClickCount = ResponseParser.toNumber(raw.ClickCount ?? raw.clickCount, 1);
+                action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
+                action.Modifiers = ResponseParser.toKeyModifiers(raw.Modifiers ?? raw.modifiers);
                 return action;
             }
 
             case 'Type': {
                 const action = new TypeAction();
                 action.Text = String(raw.Text ?? raw.text ?? '');
+                action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
                 return action;
             }
 
             case 'Keypress': {
                 const action = new KeypressAction();
                 action.Key = String(raw.Key ?? raw.key ?? '');
+                action.Modifiers = ResponseParser.toKeyModifiers(raw.Modifiers ?? raw.modifiers);
                 return action;
             }
 
@@ -143,6 +148,7 @@ export class ResponseParser {
                 const action = new ScrollAction();
                 action.DeltaY = ResponseParser.toNumber(raw.DeltaY ?? raw.deltaY, 0);
                 action.DeltaX = ResponseParser.toNumber(raw.DeltaX ?? raw.deltaX, 0);
+                action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
                 return action;
             }
 
@@ -152,6 +158,7 @@ export class ResponseParser {
                     raw.DurationMs ?? raw.durationMs ?? raw.ms,
                     1000
                 );
+                action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
                 return action;
             }
 
@@ -255,6 +262,47 @@ export class ResponseParser {
         if (value === 'right') return 'right';
         if (value === 'middle') return 'middle';
         return 'left';
+    }
+
+    /** Coerce a raw selector value into a trimmed non-empty string, or undefined (CU-A6). */
+    private static toSelector(value: unknown): string | undefined {
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed.length > 0) {
+                return trimmed;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Coerce a raw modifiers value into a `KeyModifier[]`, or undefined (CU-A6).
+     * Accepts an array or a single string; keeps only recognized modifier names
+     * (case-insensitively normalized to the canonical spelling).
+     */
+    private static toKeyModifiers(value: unknown): KeyModifier[] | undefined {
+        const raw = Array.isArray(value) ? value : (value != null ? [value] : []);
+        const canonical: Record<string, KeyModifier> = {
+            shift: 'Shift',
+            control: 'Control',
+            ctrl: 'Control',
+            alt: 'Alt',
+            option: 'Alt',
+            meta: 'Meta',
+            cmd: 'Meta',
+            command: 'Meta',
+            controlormeta: 'ControlOrMeta',
+        };
+        const modifiers: KeyModifier[] = [];
+        for (const entry of raw) {
+            if (typeof entry === 'string') {
+                const mapped = canonical[entry.trim().toLowerCase()];
+                if (mapped && !modifiers.includes(mapped)) {
+                    modifiers.push(mapped);
+                }
+            }
+        }
+        return modifiers.length > 0 ? modifiers : undefined;
     }
 
     /**

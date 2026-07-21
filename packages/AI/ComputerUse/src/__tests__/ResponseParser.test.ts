@@ -161,6 +161,46 @@ That should work.`;
             }
         });
 
+        it('should parse Selector + Modifiers on Click (CU-A6)', () => {
+            const actions = parseActions([
+                { Type: 'Click', Selector: 'button:has-text("Save")', Modifiers: ['Shift', 'ControlOrMeta'] },
+            ]);
+            expect(actions).toHaveLength(1);
+            if (actions[0].Type === 'Click') {
+                expect(actions[0].Selector).toBe('button:has-text("Save")');
+                expect(actions[0].Modifiers).toEqual(['Shift', 'ControlOrMeta']);
+            }
+        });
+
+        it('should parse Selector on Type/Scroll/Wait and normalize modifier aliases (CU-A6)', () => {
+            const [type, scroll, wait, keypress] = parseActions([
+                { Type: 'Type', Selector: 'input[name="email"]', Text: 'a@b.com' },
+                { Type: 'Scroll', selector: 'tr:has-text("Total")' },
+                { Type: 'Wait', Selector: '.record-form' },
+                { Type: 'Keypress', Key: 'a', modifiers: ['ctrl', 'cmd'] },
+            ]);
+            if (type.Type === 'Type') expect(type.Selector).toBe('input[name="email"]');
+            if (scroll.Type === 'Scroll') expect(scroll.Selector).toBe('tr:has-text("Total")');
+            if (wait.Type === 'Wait') expect(wait.Selector).toBe('.record-form');
+            // 'ctrl' -> Control, 'cmd' -> Meta (alias normalization)
+            if (keypress.Type === 'Keypress') expect(keypress.Modifiers).toEqual(['Control', 'Meta']);
+        });
+
+        it('should leave Selector/Modifiers undefined when absent or empty/invalid (CU-A6)', () => {
+            const [plainClick, blankSelector] = parseActions([
+                { Type: 'Click', X: 1, Y: 2 },
+                { Type: 'Click', X: 1, Y: 2, Selector: '   ', Modifiers: ['bogus'] },
+            ]);
+            if (plainClick.Type === 'Click') {
+                expect(plainClick.Selector).toBeUndefined();
+                expect(plainClick.Modifiers).toBeUndefined();
+            }
+            if (blankSelector.Type === 'Click') {
+                expect(blankSelector.Selector).toBeUndefined();
+                expect(blankSelector.Modifiers).toBeUndefined();
+            }
+        });
+
         it('should default Click button to left when unrecognized', () => {
             const actions = parseActions([
                 { Type: 'Click', X: 0, Y: 0, Button: 'invalid_button' },
