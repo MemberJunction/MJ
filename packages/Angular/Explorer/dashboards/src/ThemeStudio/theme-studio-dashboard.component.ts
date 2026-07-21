@@ -22,8 +22,8 @@ import {
   ViewChild,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RunView } from '@memberjunction/core';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard, ThemeService } from '@memberjunction/ng-shared';
 import { MJThemeEntity, ResourceData } from '@memberjunction/core-entities';
 import {
@@ -513,7 +513,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
 
   public async selectTheme(item: ThemeListItem): Promise<void> {
     this.themePickerOpen = false;
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entity = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
     if (!(await entity.Load(item.id))) {
       this.cdRef.detectChanges();
@@ -569,7 +569,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     // No change, unsaved draft, or built-in → nothing to persist now.
     if (this.currentName === this.nameBackup || !this.currentThemeId || this.isBuiltInSelected) return;
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entity = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
       if (!(await entity.Load(this.currentThemeId))) return;
       entity.Name = this.currentName;
@@ -643,7 +643,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     }
     this.saving = true;
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entity = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
       if (this.currentThemeId) {
         await entity.Load(this.currentThemeId);
@@ -659,7 +659,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
       if (await entity.Save()) {
         const wasNew = !this.currentThemeId;
         this.currentThemeId = entity.ID;
-        if (this.themeService.BrandOverlayId === entity.ID || (!wasNew && entity.IsDefault)) {
+        if (UUIDsEqual(this.themeService.BrandOverlayId, entity.ID) || (!wasNew && entity.IsDefault)) {
           await this.applyLive();
         }
         await this.loadData();
@@ -688,7 +688,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
    */
   private async setDefaultById(id: string): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const rv = new RunView();
       const others = await rv.RunView<MJThemeEntity>({
         EntityName: 'MJ: Themes',

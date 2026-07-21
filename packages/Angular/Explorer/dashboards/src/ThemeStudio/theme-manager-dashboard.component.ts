@@ -8,7 +8,7 @@
 
 import { ChangeDetectorRef, Component, OnDestroy } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard, ThemeService } from '@memberjunction/ng-shared';
 import { MJThemeEntity, ResourceData } from '@memberjunction/core-entities';
@@ -116,7 +116,7 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
   /** Apply this theme to the current user's workspace now and remember it as their choice. */
   public async applyToMe(row: ThemeRow): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entity = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
       if (!(await entity.Load(row.id))) return;
       this.themeService.RegisterBrandTheme({ id: entity.ID, name: entity.Name, seeds: entity.Seeds, overrides: entity.Overrides, customCss: entity.CustomCSS });
@@ -133,7 +133,7 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
   /** Make this the single org-wide default and apply it to the running app immediately. */
   public async setDefault(row: ThemeRow): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const rv = new RunView();
       const others = await rv.RunView<MJThemeEntity>({
         EntityName: 'MJ: Themes',
@@ -173,7 +173,7 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
 
   public async duplicate(row: ThemeRow): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const src = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
       if (!(await src.Load(row.id))) return;
       const copy = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
@@ -203,7 +203,7 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
       return;
     }
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entity = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
       if (!(await entity.Load(row.id))) return;
       if (await entity.Delete()) {
