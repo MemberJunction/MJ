@@ -8,11 +8,11 @@
  */
 
 import sql from 'mssql';
-import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DatabaseProviderBase, Metadata, SetProvider, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { minimatch } from 'minimatch';
 
@@ -95,7 +95,10 @@ async function initializeSqlServerProvider(config: MJConfig): Promise<DatabasePr
     config.mjCoreSchema || '__mj'
   );
 
-  const sqlProvider = await setupSQLServerClient(providerConfig);
+  // CLI-style process ⇒ 'task' entry-point default: no engine pre-warm, engines lazy-load
+  // on first touch. MJ_STARTUP_MODE or mj.config.cjs startup.mode can override.
+  const startupMode = ResolveStartupMode({ configValue: config.startup?.mode, defaultMode: 'task' });
+  const sqlProvider = await setupSQLServerClient(providerConfig, { mode: startupMode.mode });
   globalProvider = sqlProvider as unknown as DatabaseProviderBase;
   return globalProvider;
 }
@@ -103,7 +106,7 @@ async function initializeSqlServerProvider(config: MJConfig): Promise<DatabasePr
 async function initializePostgresProvider(config: MJConfig): Promise<DatabaseProviderBase> {
   // Dynamic imports so SQL-Server-only environments never resolve pg/PG provider
   const pg = (await import('pg')).default;
-  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } =
+  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData, MJPostgresTypes } =
     await import('@memberjunction/postgresql-dataprovider');
 
   const coreSchema = config.mjCoreSchema || '__mj';
@@ -115,6 +118,8 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
     database: config.dbDatabase,
     max: 10,
     min: 1,
+    // NUMERIC/BIGINT → JS numbers, same parsers the provider's own pool uses
+    types: MJPostgresTypes,
     // Mirror the SQL Server path: honor the configured per-request timeout as the
     // PG per-statement timeout when set (pg defaults to no statement timeout).
     ...(config.dbRequestTimeout ? { statement_timeout: Number(config.dbRequestTimeout) } : {}),
@@ -150,6 +155,16 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
   globalProvider = provider;
 
   await refreshUserCacheFromPG(pgPool, coreSchema);
+
+  // Run MJ startup with the same 'task' entry-point default as the SQL Server path
+  // (where setupSQLServerClient runs this internally). Previously the PG path skipped
+  // Startup() entirely — adding it initializes LocalCacheManager and makes an
+  // MJ_STARTUP_MODE=full opt-up actually pre-warm engines on PG too.
+  const startupMode = ResolveStartupMode({ configValue: config.startup?.mode, defaultMode: 'task' });
+  const sysUser = UserCache.Instance.GetSystemUser();
+  const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+  await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: startupMode.mode });
+
   return provider;
 }
 

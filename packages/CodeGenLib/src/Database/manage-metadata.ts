@@ -5399,6 +5399,21 @@ export class ManageMetadataBase {
       let errorCount = 0;
       const total = entities.length;
 
+      // Pre-group fields by EntityID once — O(total fields) — instead of a per-entity linear scan
+      // of the full pooled array inside processEntityAdvancedGeneration (which was O(entities × fields),
+      // and drops to the slow UUID-compare path on SQL Server upper-case IDs). Keyed on the normalized
+      // UUID (trim + lowercase) to match UUIDsEqual's comparison semantics regardless of casing.
+      const fieldsByEntity = new Map<string, any[]>();
+      for (const f of allFields) {
+         const key = String(f.EntityID ?? '').trim().toLowerCase();
+         const arr = fieldsByEntity.get(key);
+         if (arr) {
+            arr.push(f);
+         } else {
+            fieldsByEntity.set(key, [f]);
+         }
+      }
+
       // Process in batches
       for (let i = 0; i < total; i += batchSize) {
          const batch = entities.slice(i, i + batchSize);
@@ -5410,7 +5425,7 @@ export class ManageMetadataBase {
             batch.map(entity => {
                CodeGenReporter.Instance.flagEntity(entity.Name, 'modified');
                return CodeGenReporter.Instance.entityPhase(entity.Name, 'advancedGeneration',
-                  () => this.processEntityAdvancedGeneration(pool, entity, allFields, ag, currentUser),
+                  () => this.processEntityAdvancedGeneration(pool, entity, fieldsByEntity, ag, currentUser),
                );
             })
          );
@@ -5427,6 +5442,15 @@ export class ManageMetadataBase {
 
          const pct = Math.round((processedCount / total) * 100);
          updateSpinner(`Advanced generation: ${processedCount}/${total} entities (${pct}%)${errorCount > 0 ? ` — ${errorCount} error(s)` : ''}`);
+
+         // Credential circuit tripped (e.g. keyless / mis-credentialed env) — stop issuing further
+         // AI calls; the remaining entities would only produce doomed round-trips. One clear message
+         // was already logged when the circuit opened.
+         if (ag.AICircuitOpen) {
+            const skipped = total - processedCount;
+            updateSpinner(`Advanced generation: AI credential circuit open — skipping remaining ${skipped} entit${skipped === 1 ? 'y' : 'ies'} (check AI credentials).`);
+            break;
+         }
       }
 
       return errorCount === 0;
@@ -5436,20 +5460,26 @@ export class ManageMetadataBase {
     * Process advanced generation for a single entity
     * @param pool Database connection pool
     * @param entity Entity to process
-    * @param allFields All fields for all entities (will be filtered for this entity)
+    * @param fieldsByEntity Fields grouped by normalized EntityID (built once by the batch driver)
     * @param ag AdvancedGeneration instance
     * @param currentUser User context
     */
    protected async processEntityAdvancedGeneration(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      allFields: any[],
+      fieldsByEntity: Map<string, any[]>,
       ag: AdvancedGeneration,
       currentUser: UserInfo
    ): Promise<void> {
       try {
-         // Filter fields for this entity (client-side filtering)
-         const fields = allFields.filter((f: any) => UUIDsEqual(f.EntityID, entity.ID));
+         // Credential circuit tripped earlier this run — skip cleanly (no LLM call, no error log).
+         if (ag.AICircuitOpen) {
+            return;
+         }
+
+         // Fields for this entity — O(1) lookup into the pre-grouped map (keyed on the normalized
+         // EntityID) instead of a linear scan of the full pooled array.
+         const fields = fieldsByEntity.get(String(entity.ID ?? '').trim().toLowerCase()) ?? [];
 
          // Determine if this is a new entity (for DefaultForNewUser decision)
          const isNewEntity = ManageMetadataBase.newEntityList.includes(entity.Name);

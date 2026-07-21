@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, CodeNameFromString } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, CodeNameFromString, ResolveStartupMode } from '@memberjunction/core';
 import {
     CodeGenDatabaseProvider,
     CRUDType,
@@ -10,7 +10,7 @@ import {
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { RegisterClass } from '@memberjunction/global';
 import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
-import { dbDatabase, mj_core_schema } from '../../../Config/config';
+import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
 import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import {
@@ -63,7 +63,10 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         startSpinner('Initializing database connection...');
         const pool = await MSSQLConnection();
         const config = new SQLServerProviderConfigData(pool, mj_core_schema());
-        const provider: SQLServerDataProvider = await setupSQLServerClient(config);
+        // CodeGen is a short-lived process ⇒ 'task' entry-point default: skip engine
+        // pre-warm; MJ_STARTUP_MODE or mj.config.cjs startup.mode can override
+        const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'task' });
+        const provider: SQLServerDataProvider = await setupSQLServerClient(config, { mode: startupMode.mode });
         const conn = new SQLServerCodeGenConnection(pool);
 
         // `getSqlConfig()` returns the config that was built lazily by

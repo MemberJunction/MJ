@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, SetProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -110,6 +110,13 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         if (!currentUser) {
             throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
         }
+
+        // Run MJ startup with the same 'task' entry-point default as the SQL Server path
+        // (where setupSQLServerClient runs this internally). Previously the PG path skipped
+        // Startup() entirely — adding it initializes LocalCacheManager and makes an
+        // MJ_STARTUP_MODE=full opt-up actually pre-warm engines on PG too.
+        const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'task' });
+        await StartupManager.Instance.Startup(false, currentUser, provider, { mode: startupMode.mode });
 
         const connectionInfo = `${pgConfig.Host}:${pgConfig.Port ?? 5432}/${pgConfig.Database}`;
         succeedSpinner('PostgreSQL connection initialized: ' + connectionInfo);
