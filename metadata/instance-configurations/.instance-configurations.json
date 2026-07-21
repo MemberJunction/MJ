@@ -142,5 +142,61 @@
       "lastModified": "2026-04-11T04:11:23.345Z",
       "checksum": "d4eb43de527d6d1f898038a7185bfcdf4b03352351b94f3bc775831b2e489908"
     }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.Notifications.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Show Notifications Bell",
+      "Description": "Display the notifications bell and unread-count badge in the Explorer header (desktop and mobile).",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "27610CF8-9303-4DDD-B962-D7FC4B7DE477"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.AppSwitcher.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Show App Switcher",
+      "Description": "Display the app switcher in the Explorer header (also the add/configure-apps entry point).",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "9F30B9D3-7384-486B-BBC3-04890BF23ECD"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.AppNav.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Show App Navigation",
+      "Description": "Display the active app's navigation strip in the Explorer header and the mobile navigation drawer.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "92C44CCC-A7CA-41B7-913E-26E68605CBB8"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.UpdateToasts.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Shell",
+      "DisplayName": "Show Update Notifications",
+      "Description": "Display the service-worker update toast when a new application version is available.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "BD22E144-2192-4562-A994-87954BCF234B"
+    }
   }
 ]
