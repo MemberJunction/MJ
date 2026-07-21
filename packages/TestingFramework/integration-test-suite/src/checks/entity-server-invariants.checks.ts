@@ -40,14 +40,23 @@
  * these fixtures are deterministic on servers with or without a local embedding model.
  */
 import { RunView, EntitySaveOptions } from '@memberjunction/core';
-import type { BaseEntity, RunViewParams, UserInfo } from '@memberjunction/core';
+import type { BaseEntity, RunViewParams, UserInfo, ValidationErrorInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
+    ArtifactMetadataEngine,
+    MJArtifactTypeEntity,
+    MJConversationDetailAttachmentEntity,
+    MJDuplicateRunEntity,
+    MJApplicationEntity,
     MJSearchScopeEntity,
     MJSearchScopePermissionEntity,
     MJTagEntity,
     MJTagScopeEntity,
-    MJTagSynonymEntity
+    MJTagSynonymEntity,
+    MJTemplateContentEntity,
+    MJTemplateEntity,
+    MJTemplateParamEntity,
+    MJVectorIndexEntity
 } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -58,7 +67,32 @@ const SCOPE_ENTITY = 'MJ: Tag Scopes';
 const SYNONYM_ENTITY = 'MJ: Tag Synonyms';
 const SEARCH_SCOPE_ENTITY = 'MJ: Search Scopes';
 const SEARCH_SCOPE_PERM_ENTITY = 'MJ: Search Scope Permissions';
+const TEMPLATE_ENTITY = 'MJ: Templates';
+const TEMPLATE_CONTENT_ENTITY = 'MJ: Template Contents';
+const TEMPLATE_PARAM_ENTITY = 'MJ: Template Params';
+const TEMPLATE_CONTENT_TYPE_ENTITY = 'MJ: Template Content Types';
+const VECTOR_INDEX_ENTITY = 'MJ: Vector Indexes';
+const APPLICATION_ENTITY = 'MJ: Applications';
+const DUPLICATE_RUN_ENTITY = 'MJ: Duplicate Runs';
+const ATTACHMENT_ENTITY = 'MJ: Conversation Detail Attachments';
 const FIXTURE_TAG = '(mj-integration-test — safe to delete)';
+
+/**
+ * Minimal capability interfaces for the higher-priority `*EntityServer` subclasses' otherwise
+ * private/protected invariant methods. Runtime objects handed back by `GetEntityObject` ARE the
+ * server subclasses (ClassFactory resolves the `@RegisterClass` registration loaded process-wide by
+ * `mj test`), so these methods exist at runtime; TS `private`/`protected` is erased. Each check that
+ * casts to one of these FIRST guards `typeof fn === 'function'` and skip-as-passes loudly when the
+ * server subclass is not registered in the current process — so a client-only bootstrap can never
+ * turn "wrong entity object" into a false failure (the same attribution discipline ESI1–ESI4 use).
+ */
+interface SanitizeIndexNameCapable { sanitizeIndexName(name: string): string; }
+interface ApplicationSlugCapable {
+    generateSlugFromName(name: string): string;
+    ensureUniqueSlug(baseSlug: string): Promise<string>;
+}
+interface NormalizeThresholdCapable { normalizeThreshold(value: number | null | undefined, fallback: number): number; }
+interface MimeGateCapable { checkMimeRegistered(): Promise<ValidationErrorInfo | null>; }
 
 /** Module-scoped fixture — resolved IDs + FK-safe teardown accumulators (children before parents). */
 interface EntityServerInvariantsFixture {

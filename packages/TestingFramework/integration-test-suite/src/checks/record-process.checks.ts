@@ -13,8 +13,9 @@
  */
 import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
-import { RecordSetProcessor, FunctionRecordProcessor } from '@memberjunction/record-set-processor';
+import { RecordSetProcessor, FunctionRecordProcessor, NoOpTracker } from '@memberjunction/record-set-processor';
 import { ArraySource } from '@memberjunction/record-set-processor-base';
+import type { IProcessRunTracker, ProcessCursor, RecordRef, RunCounts, RunHandle } from '@memberjunction/record-set-processor-base';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -34,6 +35,49 @@ async function resolveEntityID(user: UserInfo): Promise<string> {
     const entityID = (entResult.Results?.[0] as { ID?: string } | undefined)?.ID;
     Assert(!!entityID, `Could not resolve an entity ID (got ${entResult.Results?.length ?? 0} rows)`);
     return entityID!;
+}
+
+/**
+ * A DB-free {@link IProcessRunTracker} for the AP-series engine-seam checks. It persists nothing,
+ * but (a) captures the cursor + counts handed to it at every checkpoint, (b) can request a graceful
+ * pause once a target processed-count is reached (`pauseAtProcessed`), and (c) can replay a resume
+ * cursor (`resumeCursor`). This lets AP1/AP11 exercise the engine's REAL cursor round-trip and
+ * pause handshake — `RecordSetProcessor.Instance.Process` over a real `ArraySource` + real
+ * `FunctionRecordProcessor` — with zero external dependencies and nothing to tear down.
+ */
+class InMemoryRunTracker implements IProcessRunTracker {
+    /** Every (cursor, counts) pair seen at a checkpoint, in order. */
+    public readonly Checkpoints: Array<{ cursor: ProcessCursor; counts: RunCounts }> = [];
+    /** The cursor from the most recent checkpoint (the resume point when paused). */
+    public LastCursor: ProcessCursor | undefined;
+
+    constructor(private readonly opts: { resumeCursor?: ProcessCursor; pauseAtProcessed?: number } = {}) {}
+
+    public async BeginRun(): Promise<RunHandle> {
+        return {};
+    }
+    public async RecordResult(): Promise<void> {
+        // no-op — per-record detail persistence is out of scope for these engine-seam checks
+    }
+    public async Checkpoint(_handle: RunHandle, cursor: ProcessCursor, counts: RunCounts): Promise<boolean> {
+        this.Checkpoints.push({ cursor: { ...cursor }, counts: { ...counts } });
+        this.LastCursor = { ...cursor };
+        if (this.opts.pauseAtProcessed != null && counts.Processed >= this.opts.pauseAtProcessed) {
+            return false; // request a graceful pause at this checkpoint
+        }
+        return true;
+    }
+    public async CompleteRun(): Promise<void> {
+        // no-op
+    }
+    public async LoadResumeCursor(): Promise<ProcessCursor | undefined> {
+        return this.opts.resumeCursor;
+    }
+}
+
+/** Builds `count` fresh in-memory record refs tagged with `prefix` (e.g. `rp-halt-0`). */
+function makeRecordRefs(entityID: string, prefix: string, count: number): RecordRef[] {
+    return Array.from({ length: count }, (_, n) => ({ EntityID: entityID, RecordID: `${prefix}-${n}` }));
 }
 
 export const RecordProcessChecks: NamedCheck[] = [
