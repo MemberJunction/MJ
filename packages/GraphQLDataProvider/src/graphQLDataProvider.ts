@@ -1170,6 +1170,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || '',
                     ResultType: item.params.ResultType || 'simple',
+                    // Aggregates were silently OMITTED from this input map (B40's true root
+                    // cause): the schema accepted them, the server could compute them, the
+                    // response could carry them — but the request never asked. Every layer
+                    // downstream looked correct while the caller got Success with no aggregates.
+                    Aggregates: item.params.Aggregates ?? null,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -1187,6 +1192,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             status
                             maxUpdatedAt
                             rowCount
+                            aggregateResults {
+                                expression
+                                alias
+                                value
+                                error
+                            }
                             errorMessage
                             Results {
                                 PrimaryKey {
@@ -1223,6 +1234,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     rowCount?: number;
                     errorMessage?: string;
                     Results?: Array<{ PrimaryKey: Array<{ FieldName: string; Value: string }>; EntityID: string; Data: string }>;
+                    aggregateResults?: Array<{ expression: string; alias: string; value?: string; error?: string }>;
                     differentialData?: {
                         updatedRows: Array<{ PrimaryKey: Array<{ FieldName: string; Value: string }>; EntityID: string; Data: string }>;
                         deletedRecordIDs: string[];
@@ -1272,6 +1284,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         return data as T;
                     });
 
+                    // Aggregates ride the stale reply (B40). The resolver JSON-stringifies each
+                    // value to preserve its type across GraphQL; parse it back so consumers get
+                    // the native number/string the AggregateResult contract declares.
+                    const aggregateResults = result.aggregateResults?.map(a => ({
+                        expression: a.expression,
+                        alias: a.alias,
+                        value: a.value !== undefined && a.value !== null ? JSON.parse(a.value) : null,
+                        error: a.error,
+                    }));
+
                     return {
                         viewIndex: result.viewIndex,
                         status: result.status as 'current' | 'stale' | 'differential' | 'error',
@@ -1279,6 +1301,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         maxUpdatedAt: result.maxUpdatedAt,
                         rowCount: result.rowCount,
                         errorMessage: result.errorMessage,
+                        aggregateResults,
                     };
                 }
 

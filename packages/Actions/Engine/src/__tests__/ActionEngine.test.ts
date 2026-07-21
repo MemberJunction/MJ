@@ -86,6 +86,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     // Real RequiresSubclass decorator — imported transitively through the ActionEngine
     // module graph; the mocked module must re-export it or the suite fails to load.
     RequiresSubclass: (await importOriginal<typeof import('@memberjunction/global')>()).RequiresSubclass,
+    // Same story for OptionalKeyedSpecialization (baseEntity.ts marks EntityField with it, B47).
+    OptionalKeyedSpecialization: (await importOriginal<typeof import('@memberjunction/global')>()).OptionalKeyedSpecialization,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,

@@ -23,6 +23,13 @@ export interface MJConfig {
 
     // Testing CLI specific settings
     testing?: {
+        /**
+         * Module specifiers side-effect-imported before `mj test` resolves any integration
+         * bundle — each import registers its check bundles on the IntegrationCheckRegistry.
+         * In this repo: ['@memberjunction/integration-test-suite'] (the private content
+         * package the published CLI must not depend on). See utils/check-module-loader.ts.
+         */
+        checkModules?: string[];
         defaultEnvironment?: string;
         defaultFormat?: 'console' | 'json' | 'markdown';
         failFast?: boolean;
