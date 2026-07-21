@@ -1,18 +1,20 @@
-# Extended Agents Integration Test Sub-Suite — Proposal
+# Extended Agents Integration Test Sub-Suite — Proposal v2 (real models, structural determinism)
 
-**Status:** DRAFT for Amith's review (2026-07-21) · Author: Claude (research pass on `an-dev-35`)
-**Parent plan:** [README.md](README.md) (integration-test expansion) · Catalog: [test-catalog.md](test-catalog.md) Domain 4
-**Scope:** a new family of **deterministic** agent-framework bundles — the advanced behaviors (compaction, carry-forward, artifact tools, payload guards, skills/plan-mode, memory guards, RAG/search) — powered by a **scripted stand-in LLM driver** and a **purpose-built test-agent roster** seeded via `metadata-optional/`. Explicitly **NOT** in scope: LLM-as-judge / output-quality evals (deferred, §11).
+**Status:** DRAFT v2 for Amith's review (2026-07-21). **Supersedes v1** (the scripted `ItTestLLM` stand-in-driver design — preserved in this file's git history) per direction change: **no new/fake/custom driver — test agents are configured purely via metadata to use REAL drivers and REAL models (Gemini, OpenAI, Cerebras, etc.), API keys assumed present in the test system's `.env`.**
+**Parent plan:** [README.md](README.md) · Catalog: [test-catalog.md](test-catalog.md) Domain 4
+**Scope:** a new family of agent-framework integration bundles covering the advanced behaviors — long-conversation compaction, tool-result carry-forward, artifact interrogation, payload guards, skills/plan-mode, memory guards, RAG/search — via **purpose-built test agents seeded in `metadata-optional/`** (never polluting the base system) plus **structural checks over the shipped agents** (Query Builder, Sage, Research Agent). Determinism = **process-level/structural assertions over framework observables**, never model prose. Explicitly **NOT** in scope: LLM-as-judge / output-quality evals (§11).
 
 ---
 
 ## 1. Executive summary
 
-The agent framework's most valuable machinery — the loop's step lineage, cross-turn compaction, tool-result carry-forward, sub-agent payload scoping, skill activation, plan-mode gating, memory-write guards, artifact interrogation — is today tested only at the edges: unit tests mock the loop, and the two loop-touching integration bundles either avoid the LLM entirely (`conversation-compaction` CC1–CC12 exercises the *assembly* layer with hand-fabricated runs) or cost tokens and are non-deterministic (`agent-runner`, live-model tier). **The whole middle — "does the real loop, run end-to-end, do what the design docs say?" — has zero deterministic coverage.**
+The agent framework's most valuable machinery — loop step lineage, cross-turn compaction, tool-result carry-forward, sub-agent payload scoping, skill activation, plan-mode gating, memory-write guards, artifact interrogation, agent-facing search — has no end-to-end integration coverage: unit tests mock the loop; `conversation-compaction` CC1–CC12 exercises only the *assembly* layer with hand-fabricated runs; `agent-runner` AR1 is a single live smoke.
 
-One investment unlocks all of it: a **scripted `@RegisterClass(BaseLLM, 'ItTestLLM')` driver** (already named by the catalog's `agent-loop-standin` foundational enabler at [test-catalog.md:150-165](test-catalog.md) — "register a scripted `@RegisterClass(BaseLLM,'ItTestLLM')` driver + fixture model row → converts live-only invariants to DET" — and [README.md §3 principle 5](README.md); AI9–AI11 depend on it; grep-verified **unbuilt** — the only `TestLLM` in the tree is a non-exported unit-test local in `packages/AI/Core/src/__tests__/baseLLM.test.ts:8`) that replays check-authored `LoopAgentResponse` JSON turn-by-turn. Because `BaseAgent`, `AIPromptRunner`, the payload manager, the skill/plan gates, and the compaction manager are all deterministic code — the only entropy is the model — replacing the model with a script makes **the entire agent loop byte-deterministic**, including token accounting (the driver reports scripted usage numbers).
+**Ground rules (Amith):** real drivers, real models, metadata-only configuration, no credential gymnastics — and still **deterministic-correctness** testing. The resolution: the *model* is nondeterministic but the *framework* is not. Every check asserts state the framework produces deterministically — `AIAgentRunStep` types/ordering/`Skills` provenance, `AIAgentRun.Status`/`PlanMode`, `MJ: AI Agent Requests` rows, payload-violation records in step `OutputData`, **`AIPromptRun.Messages`** (the byte-exact prompt each turn actually received), artifact-tool extractions (pure code over checked-in assets), and arithmetic identities over real token counts. Model prose is **never** asserted.
 
-This proposal specifies: the driver design (§3), a 12-agent test roster declared in `metadata-optional/integration-test/ai/` (§4, extending the seeded-principal precedent of `it-rls-*@integration.test`), checked-in **test asset files** (JSON/CSV/XML/MD/PDF/PNG) for artifact interrogation (§4.4), and **nine new bundles (66 checks)** with per-check assertions and the failure each would catch (§5–§10). Everything is self-cleaning and LLM-free — eligible for the blocking deterministic tier under the `mutation-by-design` precedent set by IT30.
+This is already an in-repo precedent: the **agent-memory rig** (`packages/TestingFramework/integration-test-suite/rigs/agent-memory-tests.ts`) runs live Sage and asserts only deterministic transitions — its own header: *"The SPECIFIC memories are nondeterministic (LLM), so every assertion is at the PROCESS level"* — with marker-string isolation and self-cleaning `finally`. This proposal generalizes that pattern into registered bundles and adds two disciplines: a **two-phase compliance/assertion protocol with bounded retries** (§3.3) so residual model flake is surfaced honestly (never skip-as-pass, never vacuous), and **fabricate-then-observe** (§3.4) — hand-create prior persisted state, then spend exactly ONE live turn observing the framework's reaction.
+
+Deliverables: a 13-agent metadata-seeded roster whose **prompts are a first-class engineering surface** (imperative single-action scripts + the framework's own `OutputType='object'`/`ValidationBehavior='Strict'`/`MaxRetries` structured-output ladder, §3.2); **multi-vendor model bindings as both resilience AND a test target** (failover is itself checked, §3.5); checked-in artifact asset files + expected-value MANIFEST (§4.4); and **ten bundles (~65 checks)** (§5–§10), each stating the failure it catches and why it cannot pass vacuously. Tier: **live-model — ON by default** since the 2026-07-20 gate inversion (`tiers.ts:7`); CI pins `RUN_AGENT_TESTS=0`, so these run locally/nightly, not in the PR gate (§3.6). A handful of engine-level checks need no LLM and join the blocking deterministic tier. Honest cost: **well under $1 per full run** on Flash/nano-class models (§3.5).
 
 ---
 
@@ -20,292 +22,308 @@ This proposal specifies: the driver design (§3), a 12-agent test roster declare
 
 | Existing asset | What it covers | What it deliberately does NOT cover |
 |---|---|---|
-| `conversation-compaction` bundle CC1–CC12 (`packages/TestingFramework/integration-test-suite/src/checks/conversation-compaction.checks.ts`, IT30) | Sequence trigger; `GetAgentContextWindow` boundary selection/recursion/exclusion; retrieval tools paging stored history; single-INSERT Compaction step; **CC10** carry-forward *loader* (DB fallback, cache precedence, agent-scoped both directions); `AssembleContextWindow` parity; concurrent sequence assignment | The compaction **manager's LLM leg is always mocked/hand-set** — no end-to-end "run fires a real compaction pass" coverage; no pre-turn live-message collapse; no budget-knob resolution against real metadata |
-| `ai-skills` bundle AS1–AS21 (`.../checks/ai-skills.checks.ts`, IT12) | ALL data-layer gates: availability (None/All/Limited), double-activation-gate math, permission validators, SKILL.md round-trip; AS10 *hand-fabricates* PlanMode + `Skills` JSON persistence | Nothing that requires the **loop actually running**: real `Skill` step emission, runtime skill demotion, plan pause/resume/reject |
-| `agent-runner` + `prompt-runner` bundles (IT17/IT16, live-model tier) | Real LLM smoke of agent/prompt execution; ON by default locally, `RUN_AGENT_TESTS=0` in CI | Deterministic assertions — outputs vary run to run |
-| Unit tests in `packages/AI/Agents/src/__tests__/` | `prior-turn-tool-results.test.ts` (carry-forward units), skill-step / plan-mode-gate logic units, `agent-pre-execution-rag.test.ts` (mocked) | The seams between them; **PayloadManager guard-enforcement methods have ZERO unit tests** (verified — see §7) |
-| `packages/SearchEngine/src/__tests__/` (PM-01–PM-10 etc.) | Mocked RRF/permission/provider logic | **Zero TestingFramework search coverage** (grep-verified) — no live-DB SearchEngine check exists |
-
-Net: the deterministic integration tier currently proves the agent framework's *storage and metadata* layers. This sub-suite proves its *behavior*.
-
----
-
-## 3. The keystone — `ItTestLLM` deterministic driver (the catalog's `agent-loop-standin` enabler)
-
-### 3.1 Why it works
-
-- **The contract is small.** `BaseLLM` (`packages/AI/Core/src/generic/baseLLM.ts:37`): a concrete driver must implement `nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult>` (:160) — the only method that matters here — plus throw-stubs for `ClassifyText`/`SummarizeText` (:162-163) and the three streaming abstracts (unreached with `SupportsStreaming=false`, :169 default). `ChatResult.data = { choices:[{message:{role:'assistant',content}}], usage }` (shape reference: `baseLLM.test.ts:15-19`). `AIPromptRunner` instantiates drivers with `MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey)` (`packages/AI/Prompts/src/AIPromptRunner.ts:3513`), where `driverClass = modelVendor.DriverClass || model.DriverClass` (:3480,3492).
-- **Credential gate must be satisfied.** Model selection drops candidates with no resolvable credential (`AIPromptRunner.ts:2660-2683`, `unavailableReason: 'No credentials configured…'`). The cheap satisfier: `AI_VENDOR_API_KEY__ITTESTLLM=dummy` in the test process env (prefix from `packages/AI/Core/src/generic/apiKeyDictionary.ts:25`); the driver ignores the ctor `apiKey` value.
-- **The loop's expected response shape is fully typed.** `LoopAgentResponse` (`packages/AI/Agents/src/agent-types/loop-agent-response-type.ts`) — `taskComplete`, `message`, `payloadChangeRequest`, `scratchpad`, `artifactToolCalls`, `conversationToolCalls`, `memoryWrites`, and `nextStep.type ∈ 'Actions'|'ClientTools'|'Sub-Agent'|'Chat'|'Retry'|'ForEach'|'While'|'Pipeline'|'Skill'|'Plan'`. `LoopAgentType.DetermineNextStep` (`agent-types/loop-agent-type.ts:144`) parses it via `parseJSONResponse` (`base-agent-type.ts:291`) — the driver must emit a **raw JSON string, no code fences/prose** (the parser + retry feedback explicitly reject markdown). A check authors these objects directly; the driver serializes them as the assistant message.
-- **Token accounting becomes assertable.** The driver returns scripted `promptTokens`/`completionTokens` in `ChatResult.data.usage`, so `AIPromptRun` cost/rollup checks (catalog AI7-adjacent) get exact expected numbers.
-
-### 3.2 Design
-
-**Class:** `ItTestLLM extends BaseLLM`, `@RegisterClass(BaseLLM, 'ItTestLLM')` (the exact registration the catalog names at `test-catalog.md:151`).
-
-**Scripting seam — two mechanisms, phased.**
-
-*Phase 1 (primary): in-process script register.* Agent bundles run **server-transport, in-process** (verified: `IntegrationTestDriver.ts` `CLIENT_BUNDLES` at :55 lists only `client-cache`/`rls-isolation-client`/`remote-op-wire-progress`; everything else — including today's `agent-runner` — executes the check body in the same process as AIEngine/`BaseAgent`). So the check and the driver share a heap, and the cleanest channel is a static register the check populates before calling `AgentRunner.RunAgent`:
-
-```ts
-ItTestLLM.SetScript('IT: Payload Parent', {   // keyed by agent name (or agent ID / '*' default)
-  turns: [
-    { expect: { contains: '__PROBE_A' },      // optional guard: assert prompt content before answering
-      usage: { prompt: 1200, completion: 80 },
-      response: { /* LoopAgentResponse */ } },
-    { response: { taskComplete: true, message: 'done' } }
-  ],
-  onExhausted: 'fail'                          // never loop silently past the script
-});
-```
-
-On each `ChatCompletion` the driver: (1) resolves the script for the calling agent (agent identity travels in the prompt params/messages; fallback key `'*'`); (2) derives the turn index by counting prior **assistant** messages in `params.messages` (a pure function of the transcript — correct across retries, and per-agent because each agent's prompt has its own transcript; parent and child replay **independent scripts** under their own keys); (3) if `expect` is present and unmatched, returns a scripted *failure* `ChatResult` naming the mismatch — turning "wrong prompt assembled" into a first-class, debuggable check failure instead of a hang; (4) emits `turns[i].response` as a raw-JSON assistant message with the scripted usage. Bundle `Teardown` calls `ItTestLLM.ClearScripts()`.
-
-*Phase 2 (transport-agnostic option): in-message sentinel.* When runs later execute inside a **separate MJAPI process** (client transport over `RunAIAgentResolver`), the register isn't reachable from the check. Fallback: embed the script as a `[[MJ_SCRIPTED_LLM v1]]{…}` block in the run's first user message, which the driver parses from `params.messages`. Caveat: a compaction pass can fold the sentinel behind the boundary in long conversations (→ Q4); the register has no such issue, which is another reason it's the Phase-1 primary.
-
-**Leak prevention (README §7 risk: "Stand-in LLM must be registered carefully"):**
-1. The driver **throws** when no script is registered/found for the call — it can never silently answer a real prompt.
-2. It additionally refuses unless `MJ_INTEGRATION_TEST=1` is set in its process (same env the suite already requires, `INTEGRATION_TESTING_QUICKSTART`), an environmental second fuse.
-3. The seeded model row (§4.1) is a test-named model bound only to test prompts — never referenced by production agents, and `metadata-optional/` keeps it out of default pushes.
-
-**Where the class lives / process visibility (decides Phase-1 transport):**
-- **Phase 1 — server transport.** Register the driver inside `@memberjunction/integration-test-suite` (the private check package — imported by the bundle module so the decorator fires). `mj test` loads that package via the `mj.config.cjs` `testing.checkModules` seam ([framework-restructure-proposal.md](framework-restructure-proposal.md) as-built deviation 2), i.e. the `@RegisterClass` executes in the same process that runs `BaseAgent`. Zero production exposure — the private package never ships, and no MJAPI manifest edit is needed.
-- **Phase 2 — client transport** (the doctrine's end-state): drive runs over GraphQL via `RunAIAgentResolver` (which already accepts `planMode` + `requestedSkillIDs`). That requires the driver registered **inside MJAPI** (server-bootstrap / class-registrations-manifest territory). Recommended: a tiny `@memberjunction/ai-scripted-driver` package MJAPI loads **only when `MJ_INTEGRATION_TEST=1`** (config-gated, mirroring the checkModules seam — a legitimate CLAUDE.md rule-8 category-5 runtime plugin, not a bare dynamic import). This is a security-relevant server change → explicit human sign-off per README §3a. Until decided, agent bundles run server-transport, sequenced before any client bundle (suite ordering invariant, `.integration-suite.json`).
-
-**Model pinning.** Fixture `AI Model` "IT: Scripted Model" + Active `AIModelVendor` row, both carrying `DriverClass='ItTestLLM'` + an `APIName`; each roster prompt gets an `MJ: AI Prompt Models` binding to it (credential-priority rung 2 in `resolveCredentialForExecution`, `AIPromptRunner.ts:416-483`), so selection deterministically lands on the scripted model without touching PowerRank games or production models.
-
-### 3.3 What the driver deliberately does NOT do
-
-No fuzzing, no generation, no "smart" behavior. It is a replay head. Anything requiring actual language competence (summarization quality, plan quality, reasoning) stays in the live-model tier or the deferred eval track (§11).
+| `conversation-compaction` CC1–CC12 (`packages/TestingFramework/integration-test-suite/src/checks/conversation-compaction.checks.ts`, IT30, deterministic tier) | Sequence trigger; `GetAgentContextWindow` boundary selection/recursion/exclusion; retrieval tools paging stored history; single-INSERT Compaction step; **CC10** carry-forward *loader* (DB fallback, cache precedence, agent-scoping both directions); `AssembleContextWindow` parity; concurrent sequence assignment | Everything requiring a real turn: no run ever *fires* a compaction pass; no prompt ever *receives* a carried-forward replay |
+| `ai-skills` AS1–AS21 (`.../checks/ai-skills.checks.ts`, IT12) | ALL data-layer gates: availability (None/All/Limited), double-activation-gate math, permission validators, SKILL.md round-trip; AS10 *hand-fabricates* `PlanMode` + `Skills` JSON persistence | Real `Skill` step emission, runtime demotion, plan pause/resume/reject — the loop legs |
+| `agent-runner` AR1 / `prompt-runner` PR1 (IT17/IT16, live-model) | Live smoke: one agent + one prompt run reach terminal, verified by the deep verifiers `verifyAgentRun`/`verifyPromptRun` (`testing-integration/src/ai-verify.ts`) | Any advanced behavior. Housekeeping: PR1's header claims RUN_AGENT_TESTS gating but its `NamedCheck` doesn't set `RequiresLiveModel` (AR1 does, `agent-runner.checks.ts:63`) — fix when this family lands |
+| **`rigs/agent-memory-tests.ts`** (standalone rig, live-model, client transport) | **The precedent this proposal generalizes**: live Sage runs → only deterministic transitions asserted (≥1 `MJ: AI Agent Notes` Provisional→Active→injected, `AccessCount` bump), marker-isolated, robust to "the LLM may not emit a write this run" by running a few convos and asserting ≥1 | It's a rig — no IT record/suite membership; one memory phase only (no guard-pipeline coverage) |
+| Unit tests (`packages/AI/Agents/src/__tests__/`) | carry-forward units (`prior-turn-tool-results.test.ts`), skill-step/plan-gate logic units, mocked pre-execution RAG | The seams; **PayloadManager guard enforcement: ZERO unit AND zero integration coverage** (grep-verified) |
+| `packages/SearchEngine/src/__tests__/` | Mocked RRF/permission/provider logic | **Zero TestingFramework search coverage** (grep-verified) |
 
 ---
 
-## 4. Test fixtures in `metadata-optional/integration-test/` (mj-synced, never polluting base metadata)
+## 3. Determinism strategy — structural correctness over real models
 
-Extends the seeded-principal precedent (`users/.integration-test-users.json` → `it-rls-a/b@integration.test`, `it-nogrant@integration.test`; role `Integration Test: RLS Scoped Reader` documented "Safe to delete"). All new records: `uuidgen` primary keys, no `sync` blocks on authoring, names prefixed `IT:` and descriptions carrying the standard "(mj-integration-test — safe to delete)" tag. New subtree added to the root `.mj-sync.json` `directoryOrder`:
+### 3.1 The observable surface (deterministic even when the model isn't)
+
+| Observable | Where | What it proves |
+|---|---|---|
+| Step lineage | `AIAgentRunStep.StepType/Status/CompletedAt/TargetLogID` ordering | loop sequencing; terminality (the `ai-verify.ts:96` invariant); pause/resume linkage |
+| Run state | `AIAgentRun.Status/PlanMode/TotalTokensUsed/ErrorMessage/ResumingAgentRunID` | terminal correctness, gate stamping, resume chains |
+| **The assembled prompt** | `AIPromptRun.Messages` → `MJAIPromptRunEntityExtended.ParseMessagesData()` | byte-exact proof of what a turn *received*: carry-forward reference vs. full dump, payload strip, skill instructions, `<retrieved_context>`, artifact manifest — **the single most valuable observable in this suite** |
+| Guard outcomes | `payloadValidation.upstreamMergeViolations`/`blockedOperations` in Sub-Agent step `OutputData` (`base-agent.ts:8303`); `FinalPayloadValidationMessages` (:4405); Memory-Write step dispositions | enforcement + auditability in one assertion |
+| HITL surface | `MJ: AI Agent Requests` rows (`Status`, `OriginatingAgentRunStepID`); Chat-shaped terminal steps | plan-mode pause/approve/reject mechanics |
+| Skills provenance | `AIAgentRunStep.Skills` JSON; dropped-request system notes | activation audit trail |
+| Compaction persistence | boundary `ConversationDetail.SummaryOfEarlierConversation` (asserted non-null, never content-asserted) + `SummaryPromptRunID`; Compaction step `OutputData`; window shape from `GetAgentContextWindow` | cross-turn compaction machinery |
+| Tool results | `_ARTIFACT_TOOL_RESULTS` / injected tool messages; action step `OutputData` | extraction correctness — pure code over checked-in assets, byte-deterministic even when invocation is model-driven |
+| Arithmetic identities | run totals = Σ child `AIPromptRun` totals; `AccessCount` deltas; sequence monotonicity | cost rollup / injection proof — exact math over nondeterministic magnitudes |
+
+### 3.2 Prompts as a design surface (engineering compliance up)
+
+Each test agent's prompt is an **imperative single-action script**, not an open task: *"You are a test agent. On your first response you MUST return `nextStep.type='Actions'` calling `Calculate Expression` with `expression` exactly `'6*7'`. On your second response you MUST return `taskComplete=true`. Never do anything else."* Reliability levers — all ordinary metadata on the `MJ: AI Prompts` row (fields verified in `packages/MJCoreEntities/src/generated/entity_subclasses.ts`):
+
+- **Framework-enforced structured output**: `OutputType='object'` + `OutputExample` + `ValidationBehavior='Strict'` + `MaxRetries` (:7163–7193) — the runner's own Strict-retry ladder re-asks on malformed/non-conforming JSON, so structural compliance is *enforced by the framework*, not hoped for.
+- **`Temperature`/`TopP`** on the prompt row (:6616–6621), pinned to 0/low where the vendor supports it.
+- **Small decision space**: each agent gets exactly one action / one sub-agent / one artifact, so the instructed call is the only sensible move.
+- **Loop format**: the Loop system prompt already demands raw-JSON `LoopAgentResponse` (`packages/AI/Agents/src/agent-types/loop-agent-response-type.ts` — `taskComplete`, `payloadChangeRequest`, `artifactToolCalls`, `conversationToolCalls`, `memoryWrites`, `nextStep.type ∈ …|'Skill'|'Plan'`); test prompts restate the exact `nextStep` object expected.
+
+### 3.3 Two-phase assertion + bounded retry policy (flake handled honestly)
+
+Every live check separates **compliance** from **correctness**:
+
+1. **Phase P — precondition (model compliance):** did the model take the instructed action? Proven from positive artifacts (the Actions/Sub-Agent/Skill/Plan step exists; the persisted raw response contains the attempted path/tool/skill name). **On P-failure:** re-run the whole scenario with a fresh marker, up to **2 retries (3 attempts total)**. Still non-compliant → the check **FAILS loudly with a `model-noncompliance:` message** — never skip-as-pass (plugs into the parent plan's A1 honest-status work; chronic noncompliance is a prompt bug to fix, not flake to absorb).
+2. **Phase A — assertion (framework correctness):** given P held, assert the machinery. **Never retried** — one observation of wrong framework behavior is a genuine failure.
+
+**Anti-vacuity rule:** a guard assertion may only run after P proved the guarded behavior was *attempted* — "no violation recorded" can never pass when no violation was tried.
+
+### 3.4 Fabricate-then-observe (one live turn per scenario)
+
+The framework reads persisted state, so checks **hand-fabricate prior state in the DB** (the CC1–CC12 fixture technique) and spend exactly one live turn observing the reaction:
+
+- **Carry-forward:** fabricate a settled prior root run (`AwaitingFeedback`) + Tool steps with known/oversized `OutputData` (exactly what CC10 fabricates), run one real turn, assert the injected replay in that turn's `AIPromptRun.Messages`. This is how the 100k-cap check works with real models — no live action produces 100k on demand.
+- **Compaction:** fabricate a long `ConversationDetail` history + tight seeded budget knobs, run one real turn, assert the post-turn pass persisted the boundary summary and the *next* window folds to [summary, tail].
+
+This collapses multi-turn scenarios to single live calls — cheaper, faster, and far less compliance surface.
+
+### 3.5 Model/vendor strategy — metadata-pinned real models; failover is a test target
+
+Every roster prompt carries `MJ: AI Prompt Models` bindings (credential-priority rung 2 in `resolveCredentialForExecution`, `packages/AI/Prompts/src/AIPromptRunner.ts:416-483`; driver resolution `modelVendor.DriverClass || model.DriverClass`, instantiated via `ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey)` at :3513, keys resolved by the standard `GetAIAPIKey`/`.env` path — **zero test-specific credential machinery**). Registered real driver classes (grep-verified in `packages/AI/Providers/*/src/models/*.ts`): `OpenAILLM`, `CerebrasLLM`, `GroqLLM`, `AnthropicLLM`, `xAILLM`, `MistralLLM`, `FireworksLLM`, … (`GeminiLLM` is the DriverClass on the Gemini model rows in `metadata/ai-models/.ai-models.json`; provider package at `packages/AI/Providers/Gemini` [VERIFY exact registration file — a naming-pattern grep missed it]).
+
+| Rank | Model (existing rows in `metadata/ai-models/.ai-models.json`) | Driver | Role |
+|---|---|---|---|
+| Primary | **Gemini 2.5 Flash-Lite** (or Gemini 3 Flash) | `GeminiLLM` | fast, near-free, strong JSON compliance |
+| Secondary | **GPT 4.1 Nano** / **GPT 5-nano** | `OpenAILLM` | vendor-diversity failover |
+| Tertiary | Cerebras/Groq-served open-weight rows | `CerebrasLLM`/`GroqLLM` | latency floor, third-vendor resilience |
+
+Two consequences, both deliberate:
+- **Resilience:** a vendor outage degrades to the next binding instead of failing the suite — and because assertions are structural, **swapping models never rewrites a check**.
+- **Failover chains are a first-class test target** (catalog AI9's spirit, with real vendors): a check deactivates the primary binding in-fixture and asserts the run completed on the secondary — the winning model/vendor is persisted on the `AIPromptRun`, so the assertion is structural — with no double-billing in the rollup identity. See AL7.
+
+**Honest cost estimate:** ~48 live checks × ~2–3 model calls × (≈2–4k in + ≈0.2–0.5k out) tokens ≈ **0.3–0.7M input / 40–80k output per full run** → cents at Flash-Lite/nano pricing. The shipped-agent bundle (§5b — Query Builder/Sage/Research Agent are heavier, multi-step, on their own configured models) adds a few tens of larger calls. **Conservative ceiling: < $1 per full-suite run; worst-case compliance retries ×3 still low single-digit dollars.** Negligible at local/nightly cadence.
+
+### 3.6 Tier placement and its implications
+
+All loop-running bundles are **live-model tier** (`RequiresLiveModel: true`), joined to the **"Integration Tests — Live Model"** suite. Per the 2026-07-20 gate inversion (`testing-integration/src/tiers.ts:7-11`) the tier is **ON by default — opt out with `RUN_AGENT_TESTS=0`** (invoking the live suite is already an explicit act; the old double-opt-in was removed). So: every local/nightly `mj test suite "Integration Tests — Live Model"` run exercises the whole family with `.env` keys; **CI pins `RUN_AGENT_TESTS=0`** (no credentials, no flake budget), leaving the PR gate unaffected. Stated plainly: agent-behavior regressions surface on dev machines and nightly runs, not per-PR — acceptable because the deterministic PR gate still holds the assembly/data layers (CC/AS bundles), and a scheduled keyed CI lane can adopt the live suite later (Q3). The LLM-free checks below (CE1, RS1–RS3/RS7) are ordinary deterministic-tier members.
+
+---
+
+## 4. Test fixtures in `metadata-optional/integration-test/` (mj-synced; base system never polluted)
+
+Extends the seeded-principal precedent (`users/.integration-test-users.json` → `it-rls-a/b@integration.test`, `it-nogrant@integration.test`; role `Integration Test: RLS Scoped Reader`, "Safe to delete"). All new records: `uuidgen` primary keys, no `sync` blocks at authoring, `IT:`-prefixed names, descriptions tagged "(mj-integration-test — safe to delete)". New `ai/` subtree in the root `.mj-sync.json` `directoryOrder`:
 
 ```
 metadata-optional/integration-test/
 ├── ai/
-│   ├── vendors/.it-vendor.json              # "IT: Scripted Vendor" (Inference Provider)
-│   ├── models/.it-scripted-model.json       # "IT: Scripted Model" → DriverClass 'ItTestLLM' (shape mirrors metadata/ai-models/.ai-models.json)
-│   ├── prompt-categories/ + prompts/        # one Loop-format prompt per roster agent, each pinned via MJ: AI Prompt Models → IT: Scripted Model
-│   │   └── templates/*.md                   # @file: prompt bodies (minimal — the script drives behavior, not the prompt)
+│   ├── prompt-categories/ + prompts/        # one Loop-format prompt per roster agent — the §3.2 design surface
+│   │   └── templates/*.md                   # @file: imperative single-action prompt bodies
+│   │   (each prompt: OutputType='object' + OutputExample + ValidationBehavior='Strict' + Temperature 0
+│   │    + MJ: AI Prompt Models bindings to the §3.5 ladder — @lookup by model Name)
 │   ├── agent-categories/.it-agent-category.json
-│   ├── agents/.it-*.json                    # the roster (§4.2), TypeID=@lookup Loop, wired to prompts + actions
-│   ├── skills/.it-probe-skill.json          # one Active skill bundling one harmless action (mirror ai-skills fixture semantics)
-│   ├── search/.it-search-scope.json         # scope + Search Scope Providers/Entities rows for §10
+│   ├── agents/.it-*.json                    # roster (§4.2): TypeID=@lookup Loop, prompts, actions, sub-agent wiring
+│   ├── skills/.it-probe-skill.json          # one Active skill bundling one harmless action
+│   ├── search/.it-search-scope.json         # scope + provider/entity rows for §10
 │   └── artifact-assets/                     # PLAIN FILES, not entity records (§4.4)
 │       ├── sample.json  sample.csv  sample.xml  sample.md
 │       ├── sample.pdf   sample.png  sample.bin
-│       └── MANIFEST.json                    # expected values: row counts, sha256s, page count, node values
+│       └── MANIFEST.json                    # expected values: headers, row counts, sha256s, page count, node values
 ```
 
-### 4.1 Why metadata-seed the model/agents but runtime-create conversations/artifacts
+**No test model/vendor rows and no test drivers** — the roster binds to *production* model rows by `@lookup` name; the only AI metadata created is prompts/bindings/agents/skill/scope, all IT-prefixed and removable in one sweep.
 
-- **Agents, prompts, model, vendor, skill, scope** are *definitions* — stable IDs let checks `@lookup` them and let `mj sync push --dir=metadata-optional/integration-test` provision any environment in one step (exactly how the RLS principals work). Runtime creation of an agent graph per run would re-test mj-sync, not the loop.
-- **Conversations, ConversationDetails, Artifacts/Versions, AIAgentRuns** are *run products* — created by bundle `Setup`/checks and FK-order-deleted by `Teardown` (the `conversation-compaction` accumulator-fixture pattern, `ConversationCompactionFixture` in `packages/TestingFramework/testing-integration/src/check.ts:292`).
-- **Artifact content**: text types inline in `ArtifactVersion.Content` (`ContentMode='Text'`); binary types (PDF/PNG/bin) as `data:<mime>;base64,` URLs in `Content` — `ArtifactToolManager`'s `ExtractBase64FromDataUrl` decodes these, avoiding an MJStorage/FileID dependency in the fixture entirely.
+### 4.1 Seed vs. runtime split
 
-### 4.2 The test-agent roster
+- **Definitions** (agents, prompts, bindings, skill, scope) are mj-synced — stable IDs, one-command provisioning (`npx mj sync push --dir=metadata-optional/integration-test`), the RLS-principal pattern. Runtime creation of the agent graph per run would re-test mj-sync, not the loop.
+- **Run products** (Conversations/Details, Artifacts/Versions, AIAgentRuns/Steps, notes) are created by bundle `Setup`/checks with a per-run **marker string** (the rig's isolation technique) and FK-order-deleted in `Teardown` (the `ConversationCompactionFixture` accumulator pattern, `testing-integration/src/check.ts:292`).
+- **Artifact content:** text types inline in `ArtifactVersion.Content`; binary (PDF/PNG/bin) as `data:<mime>;base64,` URLs in `Content` — `ArtifactToolManager`'s `ExtractBase64FromDataUrl` decodes these; no MJStorage/FileID dependency.
 
-| Agent (all `Type=Loop`, `Status=Active`, category `IT: Integration Test`) | Distinctive metadata | Powers (bundle) |
+### 4.2 The test-agent roster (13 agents, `Type=Loop`, `Status=Active`, category `IT: Integration Test`)
+
+| Agent | Distinctive metadata | Powers |
 |---|---|---|
-| **IT: Echo Agent** | bare minimum; no actions/sub-agents | `agent-loop-standin` — smoke, terminal lineage, cost |
-| **IT: Tool Loop Agent** | granted one harmless action — reuse **Calculate Expression** (the `user-routines` fixture precedent, `UserRoutinesFixture.CalcActionID`) | `agent-loop-standin` action steps; `agent-carry-forward` |
-| **IT: Payload Parent** | `PayloadDownstreamPaths=["customer.*"]`, `PayloadUpstreamPaths=["analysis.*:add,update"]`, child = IT: Payload Child | `agent-payload-guards` |
-| **IT: Payload Child** | sub-agent (ParentID=Payload Parent); scripted to emit both allowed and violating `payloadChangeRequest`s | `agent-payload-guards` |
-| **IT: Payload Scoped Child** | `PayloadScope='/analysis'` | `agent-payload-guards` scope slice/reverse |
-| **IT: Self-Write Restricted Agent** | `PayloadSelfWritePaths=["notes.*"]` | `agent-payload-guards` self-write |
-| **IT: Plan Agent** | `SupportsPlanMode=true` (planMode per-request) | `agent-plan-mode` |
-| **IT: Always-Plan Agent** | `RequirePlanMode=true` | `agent-plan-mode` forced gate |
-| **IT: Skill Probe Agent** | `AcceptsSkills='Limited'` + grant to IT: Probe Skill; `SkillActivationMode='RequestedOnly'` | `agent-skills-loop` |
-| **IT: Artifact Reader Agent** | plain loop agent; artifacts attached per-run | `agent-artifact-tools` |
-| **IT: Compaction Agent** | explicit tight budget knobs (Agent-level compaction fields) so a scripted multi-turn convo crosses `TriggerTokens` deterministically | `agent-compaction-e2e` |
-| **IT: Memory Writer Agent** | `AllowMemoryWrite=true`, note-type restriction set | `agent-memory-guards` |
-| **IT: Search Agent** | `SearchScopeAccess='Assigned'` + assignment to IT: Search Scope; granted `__Scoped_Search` | `agent-rag-search` |
+| **IT: Echo Agent** | bare minimum; prompt: `taskComplete` immediately | `agent-loop-live` smoke/lineage/cost |
+| **IT: Tool Loop Agent** | one action — **Calculate Expression** (the `user-routines` fixture precedent, `UserRoutinesFixture.CalcActionID`) | action steps; carry-forward observing turns |
+| **IT: Failover Agent** | same prompt shape; primary model binding deliberately deactivatable in-fixture | AL7 failover chain |
+| **IT: Payload Parent** | `PayloadDownstreamPaths=["customer.*"]`, `PayloadUpstreamPaths=["analysis.*:add,update"]` | `agent-payload-guards` |
+| **IT: Payload Child** | sub-agent; prompt: MUST return `payloadChangeRequest` writing `analysis.result` AND `secret.leak` | violation attempts |
+| **IT: Payload Scoped Child** | `PayloadScope='/analysis'` | scope slice/reverse |
+| **IT: Self-Write Restricted** | `PayloadSelfWritePaths=["notes.*"]`; prompt writes `notes.a` + `config.b` | self-write guard |
+| **IT: Plan Agent** | `SupportsPlanMode=true` | per-request plan gate |
+| **IT: Always-Plan Agent** | `RequirePlanMode=true` | forced gate |
+| **IT: Skill Probe Agent** | `AcceptsSkills='Limited'` + grant to IT: Probe Skill; `SkillActivationMode='RequestedOnly'` | `agent-skills-live` |
+| **IT: Artifact Reader** | prompt: MUST call the named artifact tool with given args, then stop | `agent-artifact-tools` |
+| **IT: Compaction Agent** | tight agent-level compaction budget knobs | `agent-compaction-e2e` |
+| **IT: Memory Writer** | `AllowMemoryWrite=true` + note-type restriction; prompt: MUST emit the listed `memoryWrites` | `agent-memory-guards` |
+| **IT: Search Agent** | `SearchScopeAccess='Assigned'` + IT scope; granted `__Scoped_Search` | `agent-rag-search` live legs |
 
-### 4.3 Seeded principals reuse
+Permission-negative legs reuse `it-nogrant@integration.test` / `it-rls-*` (resolve-by-email, `check.ts:54`) rather than minting users.
 
-Payload/skills/search permission-negative checks reuse `it-nogrant@integration.test` (no roles) and the `it-rls-*` pair rather than minting new users — the `RlsFixture` resolver in `testing-integration/src/check.ts:54` already shows the resolve-by-email pattern.
+### 4.4 Asset files + MANIFEST
 
-### 4.4 Test asset files + MANIFEST
-
-`MANIFEST.json` is the single source of expected values (headers, row counts, sha256, page count, JSON node values, XML sentinel strings) so checks never hardcode duplicated constants. Assets are tiny (<20KB each), text-layer PDF (generated once, checked in), 1×1-style PNG. **Known product gaps the assets deliberately expose** (from the artifact-tool research, §8): XML has *no* type-specific library (falls to `TextToolLibrary` grep) and images have *no* metadata extraction (only `GenericBinaryToolLibrary` sha256/size) — the checks assert what exists today and the gaps go to Amith as product questions (Q7).
+`MANIFEST.json` is the single source of expected values (headers, row counts, sha256s, page count, node values, sentinel strings) so checks never duplicate constants. Assets tiny (<20KB), text-layer PDF (generated once, checked in), deterministic PNG. Known product gaps the assets deliberately expose (verified): **no XMLToolLibrary** (XML falls to `TextToolLibrary` grep) and **no image metadata extraction** (only `GenericBinaryToolLibrary` sha256/size) → Q6.
 
 ---
 
-## 5. Bundle `agent-loop-standin` (AL1–AL8) — the scripted loop foundation
+## 5. Bundle `agent-loop-live` (AL1–AL7) — the live loop foundation
 
-Named to match the catalog's Domain-4 bundle (`test-catalog.md:150`); absorbs AI9–AI11. **Transport:** server (Phase 1). **Tier:** deterministic (mutation-by-design, self-cleaning — IT30 precedent). **Fixture:** accumulator (`AgentRuns`/`Steps`/`Conversations` + created PromptRun IDs), FK-ordered teardown. Assertion bodies **reuse the existing deep verifiers** `verifyAgentRun`/`verifyPromptRun` in `packages/TestingFramework/testing-integration/src/ai-verify.ts` — the same ones live AR1/PR1 use — so the deterministic and live tiers assert identical invariants.
+**Tier:** live-model. **Fixture:** accumulator + marker, FK-ordered teardown. Bodies reuse `verifyAgentRun`/`verifyPromptRun` (`testing-integration/src/ai-verify.ts`) so this family and AR1/PR1 assert identical invariants.
 
-| ID | Assertion (one line) | Failure it catches |
+| ID | Structural assertion | Failure it catches |
 |---|---|---|
-| AL1 | `ItTestLLM` resolves via ClassFactory from the seeded model's `DriverClass` and answers a bare prompt run | driver registration / metadata→ClassFactory seam broken (the `mj app` ERR_MODULE class of bug) |
-| AL2 | Echo Agent run reaches `Status='Completed'`; **every** `AIAgentRunStep` terminal with `CompletedAt` set (catalog **AI10** verbatim, `ai-verify.ts:96` invariant) | steps left dangling `Running` — the orphan-step regression class |
-| AL3 | Two-turn Tool Loop run: step sequence is exactly Prompt→Actions→Prompt→(terminal), `StepType`/`TargetLogID` lineage intact | loop mis-sequencing, missing action-step linkage |
-| AL4 | `AIAgentRun.TotalTokensUsed`/cost equals the sum of scripted usage numbers; child `AIPromptRun`s roll up to the run (catalog AI7 seam) | cost double-billing or dropped rollup |
-| AL5 | Script emits malformed JSON turn 1, valid turn 2 → runner retries per validation config then succeeds (catalog **AI11**) | Strict-retry ladder regression in `AIPromptRunner` (:972,1004) |
-| AL6 | Script emits `nextStep.type='Chat'` → run pauses `AwaitingFeedback` with the Chat-shaped terminal step; conversation detail written | HITL pause path broken (prereq for plan-mode + carry-forward bundles) |
-| AL7 | Scripted `expect.contains` on turn 2 proves the actions' output was injected into turn 2's prompt (assert independently via `AIPromptRun.Messages` → `MJAIPromptRunEntityExtended.ParseMessagesData()`) | action results silently dropped from context |
-| AL8 | A deliberately failing scripted run (`onExhausted:'fail'`) lands `Status='Failed'` + `ErrorMessage` populated, still all steps terminal | failure path leaves runs/steps inconsistent |
+| AL1 | IT: Echo run → `Status='Completed'`, **every** step terminal with `CompletedAt` (catalog AI10, `ai-verify.ts:96`) | orphan `Running` steps |
+| AL2 | IT: Tool Loop run → step sequence contains Prompt→Actions(`TargetLogID` set)→Prompt→terminal in order; P-artifact: the Actions step with the instructed action name | loop mis-sequencing, action-linkage loss |
+| AL3 | Post-action `AIPromptRun.Messages` contains the action's output (`42` for `'6*7'` — deterministic *action* output, not model output) | action results dropped from context |
+| AL4 | Cost-rollup identity: `AIAgentRun.TotalTokensUsed` = Σ child `AIPromptRun` totals; all counts > 0 (exact arithmetic over nondeterministic magnitudes) | double-billing / dropped rollup (catalog AI7 seam) |
+| AL5 | Chat pause: instructed `Chat` step → run lands `AwaitingFeedback`, Chat-shaped terminal step + conversation detail written | HITL pause path broken (prereq for §9) |
+| AL6 | Failure path: agent whose only action is deactivated in-fixture → run terminates non-`Completed`, `ErrorMessage` populated, steps still terminal | failure leaving runs/steps inconsistent |
+| AL7 | **Failover chain (real vendors):** primary binding deactivated in-fixture → run completes on the secondary (persisted `AIPromptRun` model/vendor = the secondary binding), rollup identity still holds | failover ladder silently broken / double-billing on failover (catalog AI9, real-vendor form) |
 
-`AIPromptRun.Messages` (persisted assembled messages) is the **universal deterministic observable** this whole suite leans on — established here, reused everywhere.
+*Deferred from v1 (impossible without a scripted model, by design):* forced-malformed-JSON Strict-retry ladder (v1 AL5 / catalog AI11 — you cannot reliably instruct a real model to emit invalid JSON; belongs in a fault-injection unit test in `packages/AI/Prompts`) and exact scripted token-count equality (v1 AL4 — replaced by the AL4 rollup identity).
 
-*Housekeeping found while researching:* `prompt-runner.checks.ts` PR1's header says "gated by RUN_AGENT_TESTS" but the `NamedCheck` does **not** set `RequiresLiveModel: true` (unlike AR1 at `agent-runner.checks.ts:63`) — a gating discrepancy to fix when this bundle lands.
+## 5b. Bundle `shipped-agents-live` (SA1–SA4) — the real shipped agents as standard live members
 
----
+Per direction: the shipped agents are themselves standard live-tier test subjects, asserted structurally (never on content). Names verified in `metadata/agents/`: **Sage** (`.sage-agent.json`), **Query Builder** (`.query-builder-agent.json`, sub-agent **Query Strategist**), **Research Agent** (`.research-agent.json`, sub-agents **Database/File/Web Research Agent**, **Research Report Writer**) — all `Type=Loop`, `Status=Active`.
 
-## 6. Bundle `agent-carry-forward` (CF1–CF6) — tool-result carry-forward end-to-end
-
-Machinery (verified): `packages/AI/Agents/src/prior-turn-tool-result-cache.ts` (BaseSingleton, `MJLruCache` 500/30min, key `NormalizeUUID(conversationId)::NormalizeUUID(agentId)`, empty-array = valid negative cache), `tool-result-format.ts`, injection in `base-agent.ts` (single transient user message, `metadata.messageType='tool-result'`, `expirationTurns:2`, per-result 500-char compact, `maxStandaloneToolResultChars=100000` cap with omitted-for-size markers), populated in `finalizeAgentRun` only at `depth===0 && Status∈{Completed,AwaitingFeedback}`. CC10 already covers the *loader*; this bundle covers the **prompt-visible behavior** CC10 cannot.
-
-| ID | Assertion | Failure it catches |
+| ID | Structural assertion | Failure it catches |
 |---|---|---|
-| CF1 | Turn-2 run (same conversation+agent) — `AIPromptRun.Messages` contains exactly ONE injected message with the "Tool results from your previous turn (still valid — reuse instead of re-calling):" header and the compacted (≤500-char) result, NOT the full payload | the optimization silently regressing to full re-dump (token blow-up) or to nothing (agent re-calls tools) |
-| CF2 | A >100k combined prior-turn result set is size-capped: injected message carries truncation + omitted-for-size markers, total under cap | unbounded context growth |
-| CF3 | Cold cache (evict via a fresh process/`Clear`) → DB-fallback path (2 RunViews over prior settled root run + its Tool steps' `OutputData`) produces the identical injected message as the cache-hit path (byte-compare) | cache/DB divergence — stale or differently-shaped replay |
-| CF4 | Same conversation, **different agent** → NO injected message (key scoping); same agent in a *different* conversation → NO injection | cross-agent / cross-conversation tool-result leakage |
-| CF5 | Prior run that ended `Failed` → no carry-forward (only settled statuses populate) | replaying results from a failed run |
-| CF6 | The injected message expires per `expirationTurns:2` — absent from turn-4's `AIPromptRun.Messages` when not refreshed | transient message immortality (context bloat) |
+| SA1 | Sage: bounded instructed task → terminal run, all steps terminal, rollup identity holds (`verifyAgentRun` deep pass) | flagship-agent wiring rot (prompts/actions/model bindings drift) |
+| SA2 | Query Builder: trivially-scoped instructed task → run completes; if it delegated, the Sub-Agent step for Query Strategist links a child run that is itself step-terminal | parent↔sub-agent lineage breakage on a shipped hierarchy |
+| SA3 | Research Agent: narrowly-bounded task ("answer from the provided text only" — no web) → terminal run; any sub-agent runs linked + terminal; no orphan steps across the whole tree | multi-sub-agent tree termination/linkage regressions |
+| SA4 | All three: `ConversationID`/details written when run with a conversation; artifacts (if `ArtifactCreationMode` fires) linked, not orphaned | conversation/artifact plumbing drift on real agents |
 
----
+Smoke-depth by design — shipped prompts aren't imperative test scripts, so P-compliance is looser and assertions stick to what ANY successful run must satisfy. Deeper shipped-agent behavior stays with the Computer-Use suite (and the deferred eval track).
+
+## 6. Bundle `agent-carry-forward` (CF1–CF6) — fabricate-then-observe
+
+Machinery (verified): `packages/AI/Agents/src/prior-turn-tool-result-cache.ts` (BaseSingleton, `MJLruCache` 500/30min, key `NormalizeUUID(conversationId)::NormalizeUUID(agentId)`, empty-array negative cache), `tool-result-format.ts`, injection in `base-agent.ts` — ONE transient user message (`metadata.messageType='tool-result'`, `expirationTurns:2`, per-result 500-char compact, `maxStandaloneToolResultChars=100000` cap + omitted-for-size markers, header "Tool results from your previous turn (still valid — reuse instead of re-calling):"), populated in `finalizeAgentRun` only at `depth===0 && Status∈{Completed,AwaitingFeedback}`. CC10 covers the *loader*; this bundle proves the **prompt-visible behavior**, fabricating the prior turn (§3.4) so only the observing turn is live.
+
+| ID | Structural assertion | Failure it catches |
+|---|---|---|
+| CF1 | Fabricated settled prior run + Tool steps with known `OutputData` → one live turn: its `AIPromptRun.Messages` contains exactly ONE injected message with the carry-forward header and the ≤500-char compacted result — NOT the full payload | regression to full re-dump (token blow-up) or to nothing (agent re-calls tools) |
+| CF2 | Fabricated >100k combined prior results → injected message size-capped with truncation/omitted-for-size markers | unbounded context growth |
+| CF3 | Cache-cold vs. cache-warm observing turns produce byte-identical injected messages (DB fallback ≡ cache) | cache/DB divergence — stale or differently-shaped replay |
+| CF4 | Same conversation + different agent, and same agent + different conversation → NO injected message | cross-agent / cross-conversation tool-result leakage |
+| CF5 | Fabricated prior run `Status='Failed'` → no injection (settled statuses only) | replaying results from failed runs |
+| CF6 | Injected message absent after expiry (`expirationTurns:2`): observe turn 1 (present) vs. turn 3 (absent) | transient message immortality (context bloat) |
 
 ## 7. Bundle `agent-payload-guards` (PG1–PG9) — sub-agent payload scoping
 
-Machinery (verified): `PayloadManager` (`packages/AI/Agents/src/PayloadManager.ts:159`) + `base-agent.ts`. Fields on `AIAgentEntity`: `PayloadDownstreamPaths`/`PayloadUpstreamPaths` (NOT-null, default `["*"]`, dot-notation + per-op suffix `path:add,update`), `PayloadSelfReadPaths`/`PayloadSelfWritePaths` (nullable → **unrestricted by default**, `getDefaultPayloadSelfWritePaths` returns `undefined`, base-agent.ts:8735/8953), `PayloadScope` (slash path; `applyPayloadScope` PayloadManager.ts:1692, missing path = **hard Critical failure** — the one fail-closed guard, base-agent.ts:9294). Downstream extraction silently strips (base-agent.ts:9241); upstream merge blocks disallowed ops into `blockedOperations[]`, persisted as `payloadValidation.upstreamMergeViolations` **inside `AIAgentRunStep.OutputData`** (base-agent.ts:8303) — the per-step deterministic observable. **These enforcement methods have zero unit AND zero integration coverage today (grep-verified) — this bundle is the highest-value payload work.**
+Machinery (verified): `PayloadManager` (`packages/AI/Agents/src/PayloadManager.ts:159`); `AIAgentEntity.PayloadDownstreamPaths`/`PayloadUpstreamPaths` (default `["*"]`, dot-paths + `:add,update` op suffixes); nullable `PayloadSelfWritePaths` (**unrestricted default**, `base-agent.ts:8735/8953`); `PayloadScope` (`applyPayloadScope` :1692; missing path = hard Critical failure, `base-agent.ts:9294` — the one fail-closed guard). Downstream extraction silently strips (:9241); upstream merge blocks into `blockedOperations`, persisted as `payloadValidation.upstreamMergeViolations` in the Sub-Agent step's `OutputData` (:8303). **Zero existing unit or integration coverage — the highest-value bundle in this proposal.** P-artifact for every guard check: the child's persisted raw response contains the attempted path — "nothing blocked" cannot pass when nothing was tried.
 
-| ID | Assertion | Failure it catches |
+| ID | Structural assertion | Failure it catches |
 |---|---|---|
-| PG1 | Parent (`Downstream=["customer.*"]`) invokes child; child's `AIPromptRun.Messages` payload contains `customer.*` only — sibling keys stripped | downstream leak of parent state into sub-agents |
-| PG2 | Child's scripted `payloadChangeRequest` writes an allowed `analysis.*` path AND a disallowed `secret.*` path → parent payload gains only `analysis.*`; the Sub-Agent step's `OutputData.payloadValidation.upstreamMergeViolations` names `secret.*` with op + reason | violation merged silently, or blocked-but-unlogged (unauditable) |
-| PG3 | Op-suffix enforcement: `Upstream=["analysis.*:add,update"]` → child's scripted **delete** on `analysis.x` is blocked and recorded | per-operation suffix regression (delete sneaking through an add/update grant) |
-| PG4 | `PayloadUpstreamPaths=[]` (empty array) → ALL child changes ignored + the "No upstream paths specified" warning recorded (PayloadManager.ts:257) | empty-grant treated as all-grant |
-| PG5 | Scoped child (`PayloadScope='/analysis'`): child sees ONLY the subtree (as payload root); its writes land back under `/analysis` via `reversePayloadScope` (PayloadManager.ts:1729) | scope slice/unslice asymmetry corrupting the parent payload |
-| PG6 | `PayloadScope` naming a missing path → run **fails hard** with the "Critical: Failed to extract payload scope" message (base-agent.ts:9294) — pinned as the intended fail-closed contract | accidental softening of the one fail-closed guard |
-| PG7 | Self-write: default agent (null paths) may write anywhere (pin fail-open contract); `IT: Self-Write Restricted` (`["notes.*"]`) writing `config.x` is blocked + recorded | default flipping closed (breaks all agents) or restriction not enforcing |
-| PG8 | Failed child run → NO upstream merge occurs at all | merging partial state from failed sub-agents |
-| PG9 | BREAK ATTEMPT — malformed `PayloadDownstreamPaths` JSON currently **fails open to `["*"]`**: pin whichever behavior Amith rules (Q6); check documents + enforces the ruling | silent behavior drift on a security-adjacent default |
+| PG1 | Child's `AIPromptRun.Messages` payload contains `customer.*` only — sibling keys stripped (downstream filter) | parent-state leak into sub-agents |
+| PG2 | Child attempts `analysis.result` + `secret.leak` → parent payload gains only `analysis.*`; step `OutputData.payloadValidation.upstreamMergeViolations` names `secret.leak` with op + reason | violation merged silently, or blocked-but-unlogged (unauditable) |
+| PG3 | Instructed **delete** on `analysis.x` under an `:add,update` grant → blocked + recorded | per-op suffix regression (delete sneaking through) |
+| PG4 | `PayloadUpstreamPaths=[]` variant → ALL child changes ignored + "No upstream paths specified" warning (`PayloadManager.ts:257`) | empty-grant treated as all-grant |
+| PG5 | Scoped child sees ONLY the `/analysis` subtree as its payload root (its prompt Messages prove it); writes land back under `/analysis` (`reversePayloadScope` :1729) | scope slice/unslice asymmetry corrupting the parent payload |
+| PG6 | `PayloadScope` naming a missing path → hard fail with the "Critical: Failed to extract payload scope" message — pinned fail-closed contract | softening of the one fail-closed guard |
+| PG7 | Default (null paths) agent writes anywhere (pin fail-open contract); IT: Self-Write Restricted: `config.b` blocked + recorded, `notes.a` lands | default flipping closed (breaks all agents) / restriction not enforcing |
+| PG8 | Child run forced to fail (deactivated action) → NO upstream merge at all | merging partial state from failed sub-agents |
+| PG9 | BREAK ATTEMPT — malformed `PayloadDownstreamPaths` JSON currently fails **open** to `["*"]`; check pins whichever behavior Amith rules (Q4) | silent drift on a security-adjacent default |
 
-*Flag for Amith (product asymmetry, not a check):* the related-agent (non-child) mapping path (~base-agent.ts:10435) builds its summary **without** attaching `upstreamMergeViolations` — related-agent violations may surface only as generic warnings. → Q6.
+*Flag (verified product asymmetry, not a check):* the related-agent mapping path (~`base-agent.ts:10435`) builds its summary **without** attaching `upstreamMergeViolations` — related-agent violations surface only as generic warnings → Q4c.
 
----
+## 8. Bundle `agent-artifact-tools` (AT1–AT9) — interrogation across artifact types
 
-## 8. Bundle `agent-artifact-tools` (AT1–AT10) — artifact interrogation across types
+Machinery (verified): per-type `BaseArtifactToolLibrary` subclasses resolved via ClassFactory from `ArtifactType.ToolLibraryClass`, orchestrated by `ArtifactToolManager` (`packages/AI/Agents/src/ArtifactToolManager.ts` — alpha IDs, manifest, `CompositeArtifactToolLibrary`, exception-wrapped dispatch :498, >50k text externalization). Agent invokes via `LoopAgentResponse.artifactToolCalls`; results injected next turn via `_ARTIFACT_TOOL_RESULTS`. Libraries: JSON (`json_path/keys/search`), CSV (`get_columns/get_rows/search`), PDF (pdfjs: `get_page_count/get_text/search_text/get_metadata`), Text/MD (`grep`), `GenericBinaryToolLibrary` (`sizeBytes`+`sha256`). **Key insight: extraction is pure code over checked-in assets — results are byte-deterministic even though invocation is model-driven.** P-artifact per check: the tool call recorded with the instructed tool+args.
 
-Machinery (verified): per-type `BaseArtifactToolLibrary` subclasses resolved via ClassFactory from `ArtifactType.ToolLibraryClass`, orchestrated by `ArtifactToolManager` (`packages/AI/Agents/src/ArtifactToolManager.ts` — alpha IDs, manifest, `CompositeArtifactToolLibrary` leaf-first inheritance, exception-wrapped dispatch at :498, >50k text externalization). Agent invokes via `LoopAgentResponse.artifactToolCalls`; results injected next turn via `_ARTIFACT_TOOL_RESULTS`. Libraries: JSON (`json_path/keys/search/iterate`), CSV (`get_columns/get_rows/search`), PDF (pdfjs-dist: `get_page_count/get_text/search_text/get_metadata`), Excel/Docx/Text, `GenericBinaryToolLibrary` (`get_metadata` → sizeBytes + sha256). Fixture: `Setup` creates Artifact/ArtifactVersion rows from `artifact-assets/` (§4.4), attaches to the run's conversation via `MJ: Conversation Detail Artifacts`.
-
-| ID | Assertion (expected values from `MANIFEST.json`) | Failure it catches |
+| ID | Structural assertion (expected values from MANIFEST.json) | Failure it catches |
 |---|---|---|
-| AT1 | Manifest injection: turn-1 prompt (`AIPromptRun.Messages`) lists all attached artifacts with alpha IDs | `gatherConversationArtifacts` → manifest seam broken (agent blind to artifacts) |
-| AT2 | CSV: scripted `get_columns` → next-turn `_ARTIFACT_TOOL_RESULTS` carries exact headers + `rowCount===N`; `get_rows{start,count}` paging returns known cell values | CSV parser / paging regression |
-| AT3 | JSON: `json_path("a.0.b")` returns the known value; `json_keys("")` returns the exact top-level key set; `json_search` finds the sentinel | JSON navigation regression |
-| AT4 | PDF: `get_page_count === N`; `search_text` finds the seeded phrase with page number; `get_metadata.title/author` match | pdfjs extraction regression (incl. dependency-upgrade breakage) |
-| AT5 | Markdown/Text: `grep` returns the exact match count + line for a sentinel regex | text library regression |
-| AT6 | XML (today's contract): falls to `TextToolLibrary` — `grep` for an element sentinel works; **no** `xpath` tool exists (assert absent from the tool manifest, pinning the current surface) | undocumented surface drift; keeps Q7 honest |
-| AT7 | PNG via `GenericBinaryToolLibrary.get_metadata`: `sizeBytes` + `sha256` equal MANIFEST values (the universal deterministic binary anchor) | binary content corruption anywhere in the artifact store→decode→tool chain |
-| AT8 | Malformed artifact (truncated JSON) → tool dispatch returns a **structured error result** (exception-wrapped, :498), run continues to a scripted terminal | one bad artifact crashing the whole run |
-| AT9 | Name-instead-of-alphaID tolerance + sole-artifact default resolve behave as coded | LLM-ergonomics fallbacks silently removed |
-| AT10 | >50k text artifact is externalized (`ShouldExternalizeContent`) — manifest advertises tools-only, full content NOT inlined in the prompt | context blow-up from large artifacts |
+| AT1 | Turn-1 `AIPromptRun.Messages` lists all attached artifacts with alpha IDs | agent blind to artifacts (manifest seam) |
+| AT2 | CSV `get_columns`/`get_rows`: exact headers, `rowCount===N`, known cell values in `_ARTIFACT_TOOL_RESULTS` | CSV parser/paging regression |
+| AT3 | JSON `json_path`/`json_keys`: known node value + exact top-level key set | JSON navigation regression |
+| AT4 | PDF: `get_page_count===N`; `search_text` finds the seeded phrase w/ page number; metadata title/author match | pdfjs extraction regression (incl. dependency upgrades) |
+| AT5 | MD/Text `grep`: exact match count + line for a sentinel regex | text library regression |
+| AT6 | XML (today's contract): `grep` via `TextToolLibrary` works; NO xpath tool in the manifest — pins the current surface honestly | undocumented surface drift; keeps Q6 honest |
+| AT7 | PNG `get_metadata`: `sizeBytes`+`sha256` equal MANIFEST values (the universal binary anchor) | binary corruption anywhere in the store→decode→tool chain |
+| AT8 | Truncated-JSON artifact → structured error result (:498); run continues to terminal | one bad artifact crashing the whole run |
+| AT9 | >50k text artifact externalized (`ShouldExternalizeContent`): manifest advertises tools-only; content NOT inlined in the prompt | context blow-up from large artifacts |
 
----
+## 9. Bundles `agent-skills-live` (SL1–SL5), `agent-plan-mode` (PM1–PM6), `agent-compaction-e2e` (CE1–CE9), `agent-memory-guards` (MG1–MG5)
 
-## 9. Bundles `agent-skills-loop` (SL1–SL5), `agent-plan-mode` (PM1–PM6), `agent-compaction-e2e` (CE1–CE10), `agent-memory-guards` (MG1–MG5)
+### 9.1 `agent-skills-live` — what AS1–AS21 cannot reach
 
-### 9.1 `agent-skills-loop` — what AS1–AS21 cannot reach (loop required)
+Entry: `RunAIAgentResolver` / `ExecuteAgentParams.requestedSkillIDs`; `preActivateRequestedSkills` (`base-agent.ts:11449`, root-only, drops unentitled + `notifyDroppedSkillRequests` system note); `validateSkillNextStep` (:4181) demotes hallucinated/`RequestedOnly` self-activations to Retry.
 
-| ID | Assertion | Failure it catches |
+| ID | Structural assertion | Failure it catches |
 |---|---|---|
-| SL1 | Run IT: Skill Probe with `requestedSkillIDs=[ProbeSkill]` → loop emits a real `StepType='Skill'` step whose `AIAgentRunStep.Skills` provenance records the requested-activation (from `preActivateRequestedSkills`, base-agent.ts:11449, root-only) | activation happens but leaves no audit trail, or never happens |
-| SL2 | `requestedSkillIDs` including an unentitled skill (use `it-nogrant`) → dropped + the `notifyDroppedSkillRequests` system note present; run proceeds | silent grant escalation OR hard-fail on a droppable request |
-| SL3 | Script emits `nextStep.type='Skill'` naming a **nonexistent** skill → `validateSkillNextStep` (:4181) demotes to Retry (step recorded as such) | hallucinated-skill activation |
-| SL4 | Script self-activates a `RequestedOnly` skill (not requested) → demoted (double activation gate honored **at runtime**, complementing AS-gate math) | ActivationMode enforced in metadata but not in the loop |
-| SL5 | Post-activation turn's prompt (Messages) contains the skill Instructions appended + widened tool surface | activation recorded but not actually applied |
+| SL1 | Run with `requestedSkillIDs=[ProbeSkill]` → real `StepType='Skill'` step with `AIAgentRunStep.Skills` provenance recording the requested activation | activation without audit trail, or none |
+| SL2 | Request including an unentitled skill → dropped + system note present; run proceeds | silent grant escalation / hard-fail on droppable |
+| SL3 | Instructed `nextStep='Skill'` naming a nonexistent skill (P-artifact: raw response contains it) → demoted-to-Retry step recorded | hallucinated-skill activation |
+| SL4 | Instructed self-activation of the `RequestedOnly` skill un-requested → demoted (runtime leg of the double gate, complementing AS math) | ActivationMode enforced in metadata only |
+| SL5 | Post-activation turn's `AIPromptRun.Messages` contains the skill Instructions + widened tool surface | activation recorded but not applied |
 
 ### 9.2 `agent-plan-mode` — pause/approve/reject via the entity-driven resume
 
-Resume is entity-driven: `MJAIAgentRequestEntityServer.Save()` on `Requested→{Approved,Rejected,Responded}` fire-and-forget spawns `resumeAgent()`, which re-injects `planMode` **only** for Plan-step resumes and links `ResumingAgentRunID` — checks poll for that link.
+`resolvePlanModeGate` (:8074): active = `depth===0 && (RequirePlanMode || (SupportsPlanMode && planMode))`; `validateNextStep` (:3800) demotes Actions/Sub-Agent→Retry until approved; `executePlanStep` (:11762) emits the Plan step + `MJ: AI Agent Requests` row (`Status='Requested'`, `OriginatingAgentRunStepID`) + Chat-shaped pause. Resume is **entity-driven**: `MJAIAgentRequestEntityServer.Save()` on `Requested→{Approved,Rejected,Responded}` spawns `resumeAgent()` (re-injects planMode only for Plan-step resumes; links `ResumingAgentRunID` — checks poll for it). Plan *content* is model prose — never asserted; only the machinery.
 
-| ID | Assertion | Failure it catches |
+| ID | Structural assertion | Failure it catches |
 |---|---|---|
-| PM1 | IT: Plan Agent with `planMode=true` → script's Plan turn produces a `StepType='Plan'` step + an `MJ: AI Agent Requests` row (`Status='Requested'`, `OriginatingAgentRunStepID`=plan step) + Chat-shaped terminal pause (`executePlanStep`, :11762); `AIAgentRun.PlanMode` stamped | plan gate produces no auditable pause |
-| PM2 | Pre-approval scripted `nextStep='Actions'` → demoted to Retry by `validateNextStep` (:3800) — the gate actually blocks work | agent doing work before human approval (the whole point of plan mode) |
-| PM3 | Approve the request (entity save as context user) → resumed run (`ResumingAgentRunID` linked) executes Actions normally to scripted completion | approval not resuming, or resuming without releasing the gate |
-| PM4 | Reject → resumed run has the gate **re-engaged** (next scripted Actions demoted again; must re-Plan) | rejection treated as approval |
-| PM5 | IT: Always-Plan (`RequirePlanMode=true`) gates even with `planMode=false` (`resolvePlanModeGate` :8074: `depth===0 && (RequirePlanMode || (SupportsPlanMode && planMode))`) | mandatory-plan agents bypassable per-request |
-| PM6 | Post-approval scripted `nextStep='Skill'` → demoted to Retry (:4161) — skill activations legal only pre-approval | plan-scope widening after human sign-off |
+| PM1 | `planMode=true` run → `StepType='Plan'` step + Requested request row + pause; `AIAgentRun.PlanMode` stamped | no auditable pause |
+| PM2 | Instructed Actions pre-approval (P-artifact: raw response) → demoted to Retry — the gate blocks work | work before human approval (the whole point of plan mode) |
+| PM3 | Approve via entity save → resumed run (`ResumingAgentRunID` linked) executes Actions to completion | approval not resuming / not releasing the gate |
+| PM4 | Reject → resumed run's next instructed Actions demoted again (gate re-engaged; must re-Plan) | rejection treated as approval |
+| PM5 | IT: Always-Plan gates even with `planMode=false` | mandatory plan bypassable per-request |
+| PM6 | Post-approval instructed `nextStep='Skill'` → demoted (:4161) — skill activations legal only pre-approval | plan-scope widening after human sign-off |
 
-### 9.3 `agent-compaction-e2e` — the ten verified gaps beyond CC1–CC12
+### 9.3 `agent-compaction-e2e` — beyond CC1–CC12, fabricate-then-observe
 
-Mechanism facts to encode: trigger = token budget (`TriggerTokens = floor(MaxTokens × trigger%)`); knobs resolve Agent → AgentType → model → defaults **75/30 via `||`** in `resolveCompactionBudget` (incl. clamp-to-model and target≥trigger clamp); boundary never index 0 nor the newest row; `SUMMARY_RESERVE=1500`, `MIN_GAIN=500`, `MIN_MESSAGES=4`; per-conversation re-entrancy guard; post-turn fire-and-forget on settled statuses; summary written to the boundary `ConversationDetail.SummaryOfEarlierConversation` + `SummaryPromptRunID` (no new rows). The **summary text itself is scripted** — the compaction pass's LLM call routes to `ScriptedTestLLM` too (the "Summarize Conversation Range" prompt gets pinned to the IT model in the fixture), so even the summary content is byte-assertable.
+Facts (verified): trigger = `TriggerTokens = floor(MaxTokens × trigger%)`; knobs resolve Agent→AgentType→defaults **75/30 via `||`** in `resolveCompactionBudget` (+ clamp-to-model, target≥trigger); `SUMMARY_RESERVE=1500`, `MIN_GAIN=500`, `MIN_MESSAGES=4`; post-turn fire-and-forget on settled statuses; summary → boundary `ConversationDetail.SummaryOfEarlierConversation` + `SummaryPromptRunID` (no new rows). Summary *text* is real-model output — asserted only non-null/non-empty.
 
-| ID | Assertion | Failure it catches |
+| ID | Structural assertion | Failure it catches |
 |---|---|---|
-| CE1 | Budget-knob precedence: Agent-level knobs beat AgentType beat defaults through `resolveCompactionBudget` against REAL metadata; clamps applied (needs NO LLM at all) | precedence flip (`||` vs `??` class bug) mis-sizing every window |
-| CE2 | First real end-to-end pass: scripted long convo crosses TriggerTokens → boundary row gains scripted summary + `SummaryPromptRunID`; next window = [summary, tail] | compaction never firing / firing without persisting |
-| CE3 | **Multi-compaction recursion**: pass 2 folds prior-summary+delta only; new higher-sequence boundary wins; old summary deselected by `GetAgentContextWindow` | recursive re-summarizing the full history (cost) or losing the baseline |
-| CE4 | Compaction + carry-forward co-firing in `finalizeAgentRun`: both fire on one settle; `ExcludeDetailIds` vs carry-forward capture don't cannibalize each other; agent-B in the shared convo unaffected | the two post-turn machines corrupting each other's inputs |
-| CE5 | **Post-compaction retrieval round-trip**: next turn's window is [summary, tail]; scripted `conversationToolCalls` pages an exact pre-boundary row back in (visible in the following `AIPromptRun.Messages`) | "compacted = lost" — the RLM retrieval promise broken |
-| CE6 | `applyCompactionToLiveMessages` (base-agent.ts:13765) collapses the in-flight message array pre-turn — **currently ZERO coverage** | live-turn window diverging from the persisted window |
-| CE7 | `checkPreTurnCompaction` gating: explicit-budget-only (BoundedBy), depth-0 only, under-trigger skip | pre-turn compaction firing for sub-agents / un-budgeted agents |
-| CE8 | Failed pass records a `success=false` Compaction step; the quiet-no-op branch records NO step | silent failures, or step spam on no-ops |
-| CE9 | `topUpRunTokenTotalsAfterPostTurnCompaction`: fresh-Load path vs resumed `AwaitingFeedback` runs both account the summary prompt's tokens exactly once | token totals drifting on resume |
-| CE10 | Churn/unsatisfiable-budget guards land `SkippedReason`/`Warnings` in the real step `OutputData` | guard outcomes invisible to operators |
+| CE1 | **(deterministic tier — no LLM)** budget-knob precedence Agent→AgentType→defaults + clamps via `resolveCompactionBudget` against real seeded metadata | `||`-precedence flip (`||` vs `??` class bug) mis-sizing every window |
+| CE2 | Fabricated long history + tight knobs + one live turn → boundary row gains non-empty summary + `SummaryPromptRunID`; next `GetAgentContextWindow` = [summary, tail] | compaction never firing / not persisting |
+| CE3 | Second pass over fabricated delta → new higher-sequence boundary wins; old boundary deselected (multi-compaction recursion) | recursive full-history re-summarizing (cost) or baseline loss |
+| CE4 | Compaction + carry-forward co-fire on one settle in `finalizeAgentRun`; each machine's output intact; agent-B in the shared convo unaffected | the two post-turn machines corrupting each other's inputs |
+| CE5 | Post-compaction retrieval: instructed `conversationToolCalls` page-back of a known pre-boundary sequence (P-artifact: the call) → next `AIPromptRun.Messages` contains the exact stored message | "compacted = lost" — the RLM retrieval promise broken |
+| CE6 | Failed pass (compaction prompt's model binding deactivated in-fixture) → `success=false` Compaction step; quiet no-op branch records NO step | silent failures / step spam on no-ops |
+| CE7 | `topUpRunTokenTotalsAfterPostTurnCompaction`: run totals increase by exactly the summary prompt run's totals, once (fresh vs. resumed `AwaitingFeedback` paths) | token drift on resume |
+| CE8 | Churn/unsatisfiable-budget guards land `SkippedReason`/`Warnings` in real step `OutputData` | guard outcomes invisible to operators |
+| CE9 | Pre-turn gating: no pass fires for sub-agents / un-budgeted agents / under-trigger (fabricated variants of `checkPreTurnCompaction`) | pre-turn compaction firing where it must not |
 
-### 9.4 `agent-memory-guards` — the 6-stage memoryWrites pipeline (AGENT_MEMORY_GUIDE §3)
+*Deferred:* deep in-run live-message-collapse shape assertions (`applyCompactionToLiveMessages`, `base-agent.ts:13765`) — forcing mid-run collapse with a real model is slow/flaky; better served at unit level. Noted as a coverage gap.
 
-Each stage observable via the `'Memory Write'` Tool step's disposition in `OutputData`: MG1 type restriction (disallowed note type rejected+recorded); MG2 per-run cap (6 scripted writes → 5 land, 6th disposition=capped); MG3 scope clamp never-broadens (User-scoped agent writing Global → clamped, recorded); MG4 idempotency (identical write twice in one run → one note); MG5 provenance + Provisional status + TTL fields on the created `MJ: AI Agent Notes` row. *(Near-dup embedding stage @0.85 is fail-open and embedding-dependent — deferred to the gated tier per §10's embedding caveat.)* Failure class: an agent silently exceeding memory-write policy — the exact abuse the guard pipeline exists for.
+### 9.4 `agent-memory-guards` — the 6-stage memoryWrites pipeline (AGENT_MEMORY_GUIDE)
+
+Generalizes the rig's Phase A/B/C into a registered bundle and adds the **guard** legs the rig skips. Prompt instructs exact `memoryWrites` arrays; P-artifact: the Memory Write tool step with the instructed writes. **MG1** disallowed note type → rejected + disposition recorded in the step `OutputData`; **MG2** per-run cap (6 instructed → 5 land, 6th disposition `capped`); **MG3** scope clamp never-broadens (User-scoped agent writing Global → clamped, recorded); **MG4** same-run idempotency (identical write twice → one note); **MG5** provenance + `Provisional` status + TTL fields on the created `MJ: AI Agent Notes` rows (marker-isolated, rig-style cleanup). *Near-dup embedding stage (0.85, fail-open) deferred — embedding-dependent.* Failure class: agents silently exceeding memory-write policy — the guards' whole purpose.
+
+## 10. Bundle `agent-rag-search` (RS1–RS7) — deterministic engine core + live agent legs
+
+Verified: agents consume search via the `__Scoped_Search` action (`packages/Actions/CoreActions/src/custom/search/scoped-search.action.ts`, enforcing `AIAgent.SearchScopeAccess` All/Assigned/None) → `SearchEngine.Search` (`packages/SearchEngine/src/generic/SearchEngine.ts`: provider fan-out → RRF → permission safety-net → `SearchExecutionLog`), and pre-execution RAG (`packages/AI/Agents/src/agent-pre-execution-rag.ts`) injecting a `<retrieved_context>` system message. The keyword path (`EntitySearchProvider` LIKE over `AllowUserSearchAPI=true` entities, ≥3-char `MIN_TERM_LENGTH`, `NoopReRanker`) is fully deterministic. Fixture: sentinel-token records + the seeded IT scope; teardown includes best-effort `SearchExecutionLog` rows.
+
+| ID | Tier | Structural assertion | Failure it catches |
+|---|---|---|---|
+| RS1 | DET | `SearchEngine.Search(sentinel, [IT scope])` returns exactly the seeded record IDs; `SourceCounts` correct | fan-out/fusion dropping deterministic hits |
+| RS2 | DET | Scope `ExtraFilter` excludes the out-of-filter seeded record | scope constraints unapplied |
+| RS3 | DET | `it-nogrant` search over an RLS-protected corpus → zero protected rows (live-DB proof complementing mocked PM-01–PM-10) | cross-user search leakage — highest-severity search bug |
+| RS7 | DET | Sub-3-char query short-circuits; no provider fan-out logged | MIN_TERM_LENGTH guard regression |
+| RS4 | LIVE | IT: Search Agent instructed `__Scoped_Search` (P-artifact: action step) → structured results injected next turn, matching RS1's set | agent action path diverging from engine path |
+| RS5 | LIVE | `SearchScopeAccess='None'` variant → `ACCESS_DENIED` from the action; run continues to terminal | access-level enforcement regression |
+| RS6 | LIVE | Agent with a `Phase='PreExecution'` RAG row → turn-1 `AIPromptRun.Messages` contains `<retrieved_context>` with the sentinel record | RAG injection silently absent (agent flying blind) |
+
+*Deferred:* semantic/vector legs — `LocalEmbedding` is key-free but cold-downloads HF weights (network/CPU); hosted embeddings make ranked assertions nondeterministic infrastructure. The keyword contract above is what's worth gating.
 
 ---
 
-## 10. Bundle `agent-rag-search` (RS1–RS7) — search/RAG for agents, deterministic paths only
+## 11. Explicitly deferred (with reasons)
 
-Verified: agents consume search via (a) the `__Scoped_Search` action (`packages/Actions/CoreActions/src/custom/search/scoped-search.action.ts`, enforcing `AIAgent.SearchScopeAccess` All/Assigned/None) → `SearchEngine.Search` (`packages/SearchEngine/src/generic/SearchEngine.ts`: provider fan-out → RRF → permission safety-net → enrich → `SearchExecutionLog`), and (b) pre-execution RAG (`packages/AI/Agents/src/agent-pre-execution-rag.ts`) injecting a `<retrieved_context>` system message. **The fully deterministic path is keyword**: `EntitySearchProvider` LIKE over `AllowUserSearchAPI=true` entities (≥3-char `MIN_TERM_LENGTH`), `NoopReRanker`, no embeddings. Fixture: sentinel-token records in a searchable entity + the seeded IT: Search Scope; teardown includes the engine's best-effort `SearchExecutionLog` rows.
-
-| ID | Assertion | Failure it catches |
-|---|---|---|
-| RS1 | `SearchEngine.Search(sentinel, [IT scope])` returns exactly the seeded record IDs with `SourceCounts.Entity` correct | provider fan-out / fusion dropping deterministic hits |
-| RS2 | Scope `ExtraFilter` (Nunjucks-rendered with `SearchContext`) excludes the out-of-filter seeded record | scope constraints not applied |
-| RS3 | Permission safety-net: `it-nogrant` search over an RLS-protected corpus returns zero protected rows (`filterByPermissions` late gate; complements mocked PM-01–PM-10 with a live-DB proof) | cross-user search leakage — the highest-severity search bug |
-| RS4 | IT: Search Agent (Assigned) via scripted `__Scoped_Search` action step gets structured results injected next turn; results match RS1's set | agent-facing action path diverging from engine path |
-| RS5 | `SearchScopeAccess='None'` agent → `ACCESS_DENIED` error code from the action, run continues to scripted terminal | access-level enforcement regression |
-| RS6 | Pre-execution RAG: agent with an active `Phase='PreExecution'` row gets the `<retrieved_context>` system message in turn-1 `AIPromptRun.Messages`, containing the sentinel record | RAG injection silently absent (agent flying blind) |
-| RS7 | Sub-3-char query short-circuits (MIN_TERM_LENGTH guard) — empty result, no provider fan-out logged | guard regression causing table-scan-ish LIKE storms |
-
-**Embedding caveat:** `LocalEmbedding` (`@RegisterClass(BaseEmbeddings,'LocalEmbedding')`) is deterministic and key-free, **but** lazily downloads model weights from HuggingFace on cold cache — network-dependent, CPU-heavy. Semantic/vector RS checks therefore go to a **gated follow-on** (env `RUN_EMBEDDING_TESTS=1` or warm-cache-detected skip-as-Skipped), not the blocking tier.
-
----
-
-## 11. Explicitly deferred
-
-1. **LLM-as-judge / quality evals** (Amith's explicit exclusion): plan quality, summary faithfulness, reasoning quality, retrieval relevance beyond exact-match — a future eval track, likely on the Testing Framework's AI-verify substrate.
-2. **Live multi-vendor failover ladders** (catalog AI9's live leg), real `resumeAgent()` continuation semantics under a live model — stays live-model tier.
-3. **Semantic/vector RAG end-to-end** (embedding caveat above) and the near-dup memory stage.
-4. **Product gaps discovered, not tested around**: XMLToolLibrary (XPath), image metadata/OCR extraction, scanned-PDF OCR fallback — build-or-decline decisions for Amith (Q7), then checks follow.
+1. **LLM-as-judge / output-quality evals** (Amith's exclusion): plan quality, summary faithfulness, retrieval relevance beyond exact-match, shipped-agent answer quality — a future eval track.
+2. **Real-model-impossible checks** (each redirected, not badly redesigned): forced-malformed-JSON Strict-retry ladder → fault-injection unit test in `packages/AI/Prompts`; exact token equality → AL4 rollup identity; mid-run live-message-collapse deep shapes → unit level.
+3. **Semantic/vector RAG + the near-dup memory stage** — embedding infrastructure (§10, §9.4).
+4. **Product gaps discovered, not tested around:** XMLToolLibrary (XPath), image metadata/OCR, scanned-PDF OCR — build-or-decline (Q6), checks follow.
 
 ## 12. Phasing & effort
 
-| Phase | Contents | Effort | Depends on |
+| Phase | Contents | Effort | Notes |
 |---|---|---|---|
-| **A** | `ItTestLLM` driver + `ai/` metadata subtree (model/vendor/prompts/roster) + `agent-loop-standin` (AL1–AL8) + IT31 record/suite membership | **M** | nothing (server transport) |
-| **B** | `agent-payload-guards` (PG1–PG9) + `agent-carry-forward` (CF1–CF6) | **M** | A |
-| **C** | `agent-plan-mode` (PM1–PM6) + `agent-skills-loop` (SL1–SL5) | **M** | A |
-| **D** | `agent-artifact-tools` (AT1–AT10, incl. asset files) + `agent-memory-guards` (MG1–MG5) | **M** | A |
-| **E** | `agent-compaction-e2e` (CE1–CE10) + `agent-rag-search` (RS1–RS7) | **M/L** | A (CE4 also B) |
-| **F** | Client-transport migration of the family via MJAPI-registered driver (§3.2 Phase 2) — rides the parent plan's A8 | **M** | A8 + Q2 sign-off |
+| **A** | `ai/` metadata subtree (prompts+bindings+roster core) + `agent-loop-live` (AL1–AL7) + IT31 in the Live Model suite; prompt-reliability tuning loop | **M** | proves §3.2/§3.3 on the simplest bundle |
+| **B** | `agent-payload-guards` (PG1–PG9) + `agent-carry-forward` (CF1–CF6) | **M** | highest value; CF is fabricate-then-observe (≈1 live call/check) |
+| **C** | `agent-plan-mode` (PM1–PM6) + `agent-skills-live` (SL1–SL5) + `shipped-agents-live` (SA1–SA4) | **M** | rides AL5's pause plumbing |
+| **D** | `agent-artifact-tools` (AT1–AT9, incl. asset files) + `agent-memory-guards` (MG1–MG5, generalizing the rig) | **M** | |
+| **E** | `agent-compaction-e2e` (CE1–CE9) + `agent-rag-search` (RS1–RS7, split-tier) | **M/L** | CE1 + RS1–3/7 join the deterministic suite |
 
-Each phase lands with **both siblings** per the parity rule: the bundle in `integration-test-suite/src/checks/` + an `.IT3x-*.json` record joined to "Integration Tests — Deterministic" (client-members-last ordering respected), new fixture interfaces added to `check.ts`, and the folder README table updated. 66 checks total across 9 bundles → a large step toward the parent plan's 300-check target, concentrated on its least-covered domain.
+Each phase lands **both siblings** per the parity rule (bundle in `integration-test-suite/src/checks/` + an `.IT3x-*.json` record joined to the right suite — live bundles to **"Integration Tests — Live Model"**; the DET checks to the deterministic suite, client-members-last ordering respected), new fixture interfaces in `check.ts`, README table updates. **~65 checks across 10 bundles** (≈48 live + ≈17 DET/fabricated-leaning), **< $1 per full run** at §3.5 pricing — a large step toward the parent plan's 300-check target, concentrated on its least-covered domain.
 
 ## 13. Open questions for Amith
 
-1. **Q1 — Deterministic-tier placement:** these bundles are mutation-by-design but self-cleaning and LLM-free (IT30 precedent). Confirm they join the blocking deterministic suite rather than the mutation gate.
-2. **Q2 — Driver-in-MJAPI:** approve (or decline) the `MJ_INTEGRATION_TEST=1`-gated registration of `ScriptedTestLLM` inside MJAPI for Phase F client transport (a real server-surface decision per README §3a). Until then the family is a documented server-transport exception.
-3. **Q3 — Roster size:** 12 agents is the fully-factored roster; happy to collapse (e.g., one payload family agent with per-check metadata mutation) if seed-footprint matters more than per-check isolation.
-4. **Q4 — Phase-2 scripting seam:** the Phase-1 in-process register sidesteps compaction entirely, but the client-transport future needs the in-message sentinel (or a DB-record script channel) — and a compaction pass can fold a sentinel behind the boundary in long conversations. Preference between sentinel-with-tail-retention-guarantee vs. a small `MJ: Tests`-adjacent script record the MJAPI-side driver reads?
-5. **Q5 — Compaction knob surface:** CE1 pins Agent→AgentType→default precedence including the `||` (not `??`) semantics — pin as contract, or is `||`-on-zero a bug to fix first?
-6. **Q6 — Payload guard rulings needed before PG9/PG7 pin:** (a) malformed path-JSON fails **open** to `["*"]` — intended? (b) self-write default-unrestricted — intended? (c) the related-agent path's missing `upstreamMergeViolations` attachment (~base-agent.ts:10435) — bug or by-design?
-7. **Q7 — Artifact-type product gaps:** build `XMLToolLibrary` (XPath/node queries) and an image `get_metadata` (dimensions/format) so AT6/AT7 can graduate from "pin the gap" to real extraction checks? (OCR is a bigger question, fine to defer.)
-8. **Q8 — Search fixture entity:** seed sentinel rows into an existing `AllowUserSearchAPI` entity (lowest infra, small pollution risk) vs. flipping the flag on a dedicated throwaway entity in the fixture (cleaner, heavier)?
+1. **Q1 — Compliance-failure semantics:** confirm §3.3 — bounded (≤2) scenario retries on model-noncompliance, then a loud FAIL (never skip-as-pass). Or a distinct `Skipped`/`Inconclusive` status once the parent plan's A1 lands?
+2. **Q2 — Model ladder:** confirm Gemini Flash-Lite primary / GPT-nano secondary / Cerebras-or-Groq tertiary (all existing metadata rows + shipped drivers), or name your preferred trio. Any vendor NOT to burn test tokens on?
+3. **Q3 — Nightly keyed lane:** with CI pinning `RUN_AGENT_TESTS=0`, want a scheduled keyed CI job running "Integration Tests — Live Model", or is local/nightly-dev cadence enough for now?
+4. **Q4 — Payload guard rulings (needed before pinning):** (a) malformed path-JSON fails **open** to `["*"]` — intended? (b) self-write default-unrestricted — intended? (c) related-agent path missing `upstreamMergeViolations` attachment (~`base-agent.ts:10435`) — bug or by-design?
+5. **Q5 — Compaction `||` semantics:** CE1 pins Agent→AgentType→default precedence including `||`-on-zero — pin as contract, or fix to `??` first?
+6. **Q6 — Artifact-type product gaps:** build `XMLToolLibrary` (XPath/node queries) + image `get_metadata` (dimensions/format) so AT6/AT7 graduate from gap-pinning to real extraction checks? OCR defer?
+7. **Q7 — Search fixture entity:** seed sentinel rows into an existing `AllowUserSearchAPI=true` entity (lowest infra, small pollution risk) vs. a dedicated throwaway searchable entity in the fixture (cleaner, heavier)?
+8. **Q8 — Transport:** the memory rig runs client transport (GraphQL → live MJAPI via `GraphQLAIClient.RunAIAgent`); registered bundles today default server-in-process. Adopt client transport for this family from day one (doctrine-aligned; `RunAIAgentResolver` already accepts `planMode`+`requestedSkillIDs`), accepting the MJAPI-running prerequisite — or start server-side and migrate under Workstream M?
 
 ---
-*Every code claim above was verified against the working tree on 2026-07-20/21 — primary sources: `packages/AI/Agents/src/{base-agent.ts, PayloadManager.ts, prior-turn-tool-result-cache.ts, ArtifactToolManager.ts, agent-types/loop-agent-response-type.ts, agent-pre-execution-rag.ts}`, `packages/AI/Core/src/generic/baseLLM.ts`, `packages/AI/Prompts/src/AIPromptRunner.ts`, `packages/SearchEngine/src/generic/SearchEngine.ts`, `packages/Actions/CoreActions/src/custom/search/scoped-search.action.ts`, `packages/TestingFramework/{testing-integration/src/*, integration-test-suite/src/checks/*}`, `metadata-optional/integration-test/**`, and the guides (`AGENT_SKILLS_AND_PLAN_MODE_GUIDE`, `AGENT_MEMORY_GUIDE`, `SEARCH_SCOPES_AND_RAG_GUIDE`) + `plans/agent-conversation-compaction.md`.*
+*Every code claim verified against the working tree 2026-07-20/21 (items marked [VERIFY] pending a final look) — primary sources: `packages/AI/Agents/src/{base-agent.ts, PayloadManager.ts, prior-turn-tool-result-cache.ts, ArtifactToolManager.ts, agent-types/loop-agent-response-type.ts, agent-pre-execution-rag.ts}`, `packages/AI/Prompts/src/AIPromptRunner.ts`, `packages/AI/Providers/*`, `packages/SearchEngine/src/generic/SearchEngine.ts`, `packages/Actions/CoreActions/src/custom/search/scoped-search.action.ts`, `packages/MJCoreEntities/src/generated/entity_subclasses.ts` (AIPrompt `Temperature`:6616, `OutputType/OutputExample/ValidationBehavior/MaxRetries`:7163–7193), `packages/TestingFramework/{testing-integration/src/{tiers.ts, ai-verify.ts, check.ts, IntegrationTestDriver.ts}, integration-test-suite/{src/checks/*, rigs/agent-memory-tests.ts}}`, `metadata/ai-models/.ai-models.json`, `metadata/agents/{.sage-agent.json, .query-builder-agent.json, .research-agent.json}`, `metadata-optional/integration-test/**`, guides (`AGENT_SKILLS_AND_PLAN_MODE_GUIDE`, `AGENT_MEMORY_GUIDE`, `SEARCH_SCOPES_AND_RAG_GUIDE`) + `plans/agent-conversation-compaction.md`.*
