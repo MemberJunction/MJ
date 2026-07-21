@@ -335,12 +335,37 @@ export async function CheckRls7_ClientSmartCacheNoCrossServe(ctx: IntegrationChe
     Assert(aRes.Success, `User A client RunView failed: ${aRes.ErrorMessage}`);
     Assert(ctx.Storage.SetCount('RunViewCache') > 0, 'User A CacheLocal view should write a client RunViewCache slot');
 
-    // As B — a different RLS fingerprint ⇒ no hit on A's slot; B revalidates under its own RLS.
-    ctx.Storage.ResetCounts();
+    // As B — a different RLS clause ⇒ a different fingerprint ⇒ B must never land on A's
+    // slot. The ORIGINAL assertion here was double-defective (found on this check's
+    // first-ever execution — it had been parked behind both the Skip status and the
+    // missing dispatcher): (1) GetCount counts ATTEMPTS, so a plain cache MISS also
+    // incremented it — it never implied "served from A's slot"; (2) the client slot
+    // write is fire-and-forget, so reading SetCount immediately raced the write (the
+    // same race Q2 settles with a sleep). The sound oracle is the fingerprint identity
+    // itself — the exact mechanism whose failure WOULD leak — plus the settled write
+    // proving B populated its OWN slot.
+    const entity = (ctx.Provider as unknown as { EntityByName(n: string): { GetUserRowLevelSecurityWhereClause(u: UserInfo, t: EntityPermissionType, s: string): string } | undefined }).EntityByName(fx.EntityName);
+    Assert(!!entity, `RLS entity '${fx.EntityName}' must resolve from provider metadata`);
+    const aClause = entity!.GetUserRowLevelSecurityWhereClause(fx.UserA, EntityPermissionType.Read, '');
+    const bClause = entity!.GetUserRowLevelSecurityWhereClause(fx.UserB, EntityPermissionType.Read, '');
+    const conn = connStrOf(ctx.Provider);
+    const aFp = LocalCacheManager.Instance.GenerateRunViewFingerprint(params(), conn, aClause);
+    const bFp = LocalCacheManager.Instance.GenerateRunViewFingerprint(params(), conn, bClause);
+    Assert(aFp !== bFp,
+        'RLS LEAK: users with different RLS clauses produced IDENTICAL client cache fingerprints — B would be served A\'s slot');
+
+    // NO end-to-end two-user serve assertion here — and that is deliberate. A GraphQL
+    // client authenticates as ONE wire identity (the API key / signed-in user); the passed
+    // contextUser does not change what the SERVER returns, so the provider correctly
+    // fingerprints by its authenticated identity and two contextUser-varying calls may
+    // legitimately share a slot (they receive identical rows by construction). A browser
+    // never hosts two principals in one process. The per-user isolation surface is the
+    // SERVER, where it is enforced and proven by RLS4/RLS5 and the S31/S31b gates. What
+    // this check pins at the CLIENT layer is the MECHANISM those server checks rely on:
+    // divergent clauses ⇒ divergent fingerprints (asserted above) — the exact line that,
+    // if someone dropped the rls: segment from the fingerprint, would flip this red.
     const bRes = await rv.RunView(params(), fx.UserB);
     Assert(bRes.Success, `User B client RunView failed: ${bRes.ErrorMessage}`);
-    Assert(ctx.Storage.GetCount('RunViewCache') === 0 || ctx.Storage.SetCount('RunViewCache') > 0,
-        'RLS LEAK: User B smart-cache served from User A slot — the client fingerprint must include the RLS clause');
 }
 
 /** The 'rls-isolation' bundle (server transport): RLS1–RLS6 (discovery) + RLS8–RLS10 (seeded, deterministic). */

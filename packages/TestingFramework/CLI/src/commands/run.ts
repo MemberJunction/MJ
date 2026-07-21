@@ -99,8 +99,9 @@ export class RunCommand {
             let test;
 
             if (testId) {
-                // Run specific test by ID
-                test = engine.GetTestByID(testId);
+                // Run specific test by ID — with a NAME fallback on ID-miss (a test name is
+                // never a valid ID, so this is unambiguous; parity with `mj test suite`).
+                test = engine.GetTestByID(testId) ?? engine.GetTestByName(testId);
                 if (!test) {
                     console.error(OutputFormatter.formatError(`Test not found: ${testId}`));
                     process.exit(1);

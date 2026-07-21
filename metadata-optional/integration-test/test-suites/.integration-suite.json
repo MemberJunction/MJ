@@ -304,14 +304,14 @@
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
             "Sequence": 20,
-            "Status": "Skip"
+            "Status": "Active"
           },
           "primaryKey": {
             "ID": "096429CB-F5BF-4DFF-A2C9-916E75BC6355"
           },
           "sync": {
-            "lastModified": "2026-07-21T00:04:38.370Z",
-            "checksum": "99308393d4bcac30219abbe9d59bd640543a5678d8c8b67c290c3d00e230aac5"
+            "lastModified": "2026-07-21T01:19:22.242Z",
+            "checksum": "5785ec37f956cc3a812413dc085fc5309235758596d513af9653459a574b7f61"
           }
         },
         {
@@ -319,14 +319,14 @@
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT15 - Remote Operations Over-The-Wire Progress",
             "Sequence": 21,
-            "Status": "Skip"
+            "Status": "Active"
           },
           "primaryKey": {
             "ID": "42A5263E-E55F-40C6-85C9-0864CE17F09A"
           },
           "sync": {
-            "lastModified": "2026-07-21T00:04:38.384Z",
-            "checksum": "202af775e1f6964368181d2f1bc045f42b381d1b9f2d504ea58daabef3fb6ab6"
+            "lastModified": "2026-07-21T01:19:22.258Z",
+            "checksum": "3985a64d893cfb1848682e742f177f57f661a931483819be4bdd9d1b59e4d497"
           }
         },
         {
@@ -334,14 +334,14 @@
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT23 - RLS Client Smart-Cache Isolation",
             "Sequence": 22,
-            "Status": "Skip"
+            "Status": "Active"
           },
           "primaryKey": {
             "ID": "DCF3FFDC-5304-423F-B8F2-F55EB7DB2B30"
           },
           "sync": {
-            "lastModified": "2026-07-21T00:04:38.393Z",
-            "checksum": "35eac6c85f31c3b6233b10ae8b6a48289afcd6cccf6da3ce9a400dc745c7b3b0"
+            "lastModified": "2026-07-21T01:19:22.268Z",
+            "checksum": "1bd152cc90cfe9c7b469cf63003b347f873885cb40eeed521e6f96d5870d16f7"
           }
         },
         {

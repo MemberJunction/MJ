@@ -17,10 +17,10 @@
  * a few convos and asserts ≥1 note formed (robust), then asserts the deterministic invariants
  * on whatever formed. Self-cleaning: every note carrying the run's marker is deleted in `finally`.
  *
- * GATED: live-model tier — only runs when RUN_AGENT_TESTS=1 (real LLM calls, needs credentials).
+ * LIVE-MODEL tier — ON by default; disable with RUN_AGENT_TESTS=0 (real LLM calls, needs credentials).
  * PREREQUISITE: MJAPI running; a memory-enabled Sage agent + a Memory Manager agent seeded.
  *
- * USAGE:  RUN_AGENT_TESTS=1 npx tsx packages/MJServer/integration-test-scripts/agent-memory-tests.ts
+ * USAGE:  npx tsx packages/TestingFramework/integration-test-suite/rigs/agent-memory-tests.ts
  * Exit: 0 = passed, 1 = failures, 2 = bootstrap/connectivity error, 3 = skipped (gate off).
  */
 import { bootstrapIntegrationClient } from '@memberjunction/testing-integration/client';
@@ -69,8 +69,8 @@ async function runAgent(client: GraphQLAIClient, agent: AIAgentEntity, message: 
 }
 
 async function main(): Promise<void> {
-    if (process.env.RUN_AGENT_TESTS !== '1') {
-        log('SKIPPED — live-model tier. Set RUN_AGENT_TESTS=1 to run (real LLM calls).');
+    if (process.env.RUN_AGENT_TESTS === '0') {
+        log('SKIPPED — live-model tier explicitly disabled (RUN_AGENT_TESTS=0).');
         process.exit(3);
     }
     await bootstrapIntegrationClient();

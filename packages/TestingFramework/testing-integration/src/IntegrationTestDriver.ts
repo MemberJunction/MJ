@@ -177,7 +177,17 @@ export class IntegrationTestDriver extends BaseTestDriver {
             }
         } catch (bootErr) {
             clearTimeout(timer);
-            return this.buildErrorResult(context, startTime, `Bootstrap failed: ${(bootErr as Error).message}`);
+            const msg = (bootErr as Error).message ?? String(bootErr);
+            // ENVIRONMENT GAP, not a product defect: client-transport bundles need a live MJAPI.
+            // When the preflight says the server is simply absent (CI runs no MJAPI), skip-as-pass
+            // loudly — the same contract the old per-bundle tsx dispatchers honored with exit 0.
+            // Any OTHER bootstrap failure (bad credentials, cache ownership, config) stays a
+            // hard error.
+            if (transport === 'client' && /MJAPI is not reachable/i.test(msg)) {
+                return this.buildSkipResult(context, startTime,
+                    `SKIPPED (environment gap): ${msg} Client-transport checks need a live MJAPI; start it and re-run for full coverage.`);
+            }
+            return this.buildErrorResult(context, startTime, `Bootstrap failed: ${msg}`);
         }
         clearTimeout(timer);
 
