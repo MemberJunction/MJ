@@ -613,6 +613,16 @@ const configInfoSchema = z.object({
      */
     ssl: z.union([z.boolean(), z.record(z.string(), z.unknown())]).optional(),
   }).optional(),
+  /**
+   * Startup mode for engine pre-warm during CodeGen's provider bootstrap: 'full'
+   * pre-warms all @RegisterForStartup engines; 'task' (CodeGen's entry-point default)
+   * skips pre-warm — engines lazy-load on first touch. Because mj.config.cjs is shared
+   * by every process in a repo, the MJ_STARTUP_MODE env var overrides this per
+   * invocation (highest precedence).
+   */
+  startup: z.object({
+    mode: z.enum(['full', 'task']).optional(),
+  }).optional(),
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
