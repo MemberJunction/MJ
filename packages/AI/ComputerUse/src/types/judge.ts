@@ -187,6 +187,12 @@ export class StepRecord {
      * replayable and self-healable (CU-C1).
      */
     public InteractiveElements: InteractiveElement[] = [];
+    /**
+     * Set when a multi-action batch stopped before running every requested action
+     * (CU-B5) — e.g. "executed 3/5 actions, stopped: url-changed". Surfaced to the
+     * next step's summary so the controller knows exactly what did NOT run.
+     */
+    public BatchStopReason?: string;
     /** Time spent capturing (and hashing) the screenshot. */
     public ScreenshotMs: number = 0;
     /** Time spent in the controller LLM call. */

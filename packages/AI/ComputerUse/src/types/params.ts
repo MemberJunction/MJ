@@ -198,4 +198,12 @@ export class RunComputerUseParams {
      * vision mode) so the change is opt-in per test/suite until baked in.
      */
     public ElementGrounding?: boolean;
+
+    /**
+     * Max browser actions the engine executes per step before stopping the batch
+     * (CU-B5). The controller may emit a coherent sequence (fill → Tab → fill →
+     * Enter); the engine runs them in order but halts on a failed action, a
+     * mid-batch route change, a page-changing action, or this cap. Default 4.
+     */
+    public MaxActionsPerStep?: number;
 }

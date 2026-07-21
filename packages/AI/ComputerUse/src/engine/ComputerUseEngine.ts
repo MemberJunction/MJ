@@ -63,6 +63,7 @@ import { computeStateSignature, detectLoop } from './loop-detection.js';
 import { evaluateAuthDetour } from './auth-detour.js';
 import { CancellationError, abortableDelay } from './cancellation.js';
 import { serializeInteractiveElements } from './element-serializer.js';
+import { evaluateBatchStop, DEFAULT_MAX_ACTIONS_PER_BATCH } from './batch-control.js';
 import { formatDiagnosticsDigest } from './diagnostics-digest.js';
 import {
     JudgeContext,
@@ -1018,7 +1019,7 @@ export class ComputerUseEngine {
         const scaledActions = this.scaleActionsToViewport(response.Actions);
 
         // Execute browser actions
-        step.ActionResults = await this.executeBrowserActions(scaledActions, context);
+        step.ActionResults = await this.executeBrowserActions(scaledActions, context, step);
         const failedActions = step.ActionResults.filter(r => !r.Success);
         if (failedActions.length > 0) {
             for (const failed of failedActions) {
@@ -1446,16 +1447,40 @@ export class ComputerUseEngine {
      */
     private async executeBrowserActions(
         actions: BrowserAction[],
-        context: RunContext
+        context: RunContext,
+        step: StepRecord
     ): Promise<ActionExecutionResult[]> {
         const results: ActionExecutionResult[] = [];
+        const maxActions = context.Params.MaxActionsPerStep ?? DEFAULT_MAX_ACTIONS_PER_BATCH;
 
         for (const action of actions) {
             // Cancellation checkpoint (CU-B8): stop between actions so a Stop()
             // during a multi-action step releases the slot without running the rest.
             this.ensureNotCancelled();
+
+            const urlBefore = this.browserAdapter.CurrentUrl;
             const result = await this.executeSingleBrowserAction(action, context);
             results.push(result);
+
+            // Batch guards (CU-B5): after each action decide whether the rest of
+            // the batch should still run. Stops on a failed action (so a queued
+            // Type can't fire into the wrong place), a mid-batch route change, a
+            // page-changing action, or the per-step cap. Partial results are kept
+            // and the reason is surfaced to the next step's summary.
+            const urlChanged = this.browserAdapter.CurrentUrl !== urlBefore;
+            const stop = evaluateBatchStop({
+                actionType: action.Type,
+                success: result.Success,
+                urlChanged,
+                executedCount: results.length,
+                maxActions,
+            });
+            if (stop && results.length < actions.length) {
+                const skipped = actions.length - results.length;
+                step.BatchStopReason = `executed ${results.length}/${actions.length} actions, stopped: ${stop}`;
+                this.log(`Step ${step.StepNumber} — ${step.BatchStopReason} (${skipped} not run)`);
+                break;
+            }
         }
 
         return results;

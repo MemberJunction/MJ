@@ -159,6 +159,12 @@ export class RunContext {
             parts.push(`Tool ${tc.ToolName}: ${resultText}`);
         }
 
+        // Batch stop note (CU-B5): tell the controller exactly what did NOT run
+        // when a multi-action batch halted early, so it can re-issue the rest.
+        if (step.BatchStopReason) {
+            parts.push(`[BATCH: ${step.BatchStopReason}]`);
+        }
+
         if (step.Error) {
             parts.push(`[ERROR: ${step.Error.Message}]`);
         }
