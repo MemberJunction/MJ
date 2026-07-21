@@ -1285,7 +1285,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.uploadingMessage = '';
     this.intentCheckMessage = null;
 
-    this.isArtifactPaneMaximized = false;
+    // Reset width along with the flag — otherwise a pane maximized in the
+    // previous conversation leaves artifactPaneWidth at 100, and the next
+    // artifact opens overflowing the viewport (chat area still visible)
+    if (this.isArtifactPaneMaximized) {
+      this.isArtifactPaneMaximized = false;
+      this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
+    }
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
