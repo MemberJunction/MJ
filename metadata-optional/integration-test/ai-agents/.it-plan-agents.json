@@ -1,0 +1,120 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Plan Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Plan-capable agent (SupportsPlanMode=true): gated per-request via ExecuteAgentParams.planMode. Carries Calculate Expression so there is real work for the plan gate to block/release. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 5,
+      "SupportsPlanMode": true
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Plan Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "564F3897-2B21-4A3E-B578-93C6432851C0"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.991Z",
+            "checksum": "7347878accd7f30ac583b0127ea5500693a71d035cd3ddfe055a6f1f2f05320c"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Calculate Expression",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2742EF34-A27C-445B-B7F9-8BBBFD657297"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.961Z",
+            "checksum": "287e7118d0b949eb25c66afd1abdb58887a12ccc56d2bd01a09915269bc70629"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C61D3938-3CDB-4769-9C8F-01BCAFA0C591"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:41.918Z",
+      "checksum": "0a658f77e8770d7f31770f6be1545a995587c75023a823e373ab67425b9fd268"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Always-Plan Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Mandatory-plan agent (RequirePlanMode=true): every root run must present a Plan step regardless of the per-request flag. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 5,
+      "RequirePlanMode": true
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Always-Plan Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B807BDF3-EA7C-4A56-9F51-5B2440111313"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:42.000Z",
+            "checksum": "803021ada615d32ff1b4acf6df0ba367adfa8a1a789bdd806c8cb3146e6eb3e0"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Calculate Expression",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "872CF7D9-1D6F-42CD-AACC-043CFE5621C1"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.974Z",
+            "checksum": "287e7118d0b949eb25c66afd1abdb58887a12ccc56d2bd01a09915269bc70629"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "22DB9224-0801-4EE1-B4E8-4FA1D30C1B02"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:41.936Z",
+      "checksum": "9e758db9cf59185c440752ed971bf711069f8ef679a7c836e48c96e5174c835e"
+    }
+  }
+]

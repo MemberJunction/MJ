@@ -7,7 +7,8 @@
  */
 
 import { Injectable } from '@angular/core';
-import { LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
+import { MJThemeEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -80,6 +81,7 @@ export class WorkspaceInitializerService {
       // 2. Load metadata and validate user
       await SharedService.RefreshData(true);
       await this.themeService.Initialize();
+      await this.applyDefaultBrandTheme();
       // This service runs the one-time app login flow and is wiring up the global
       // Metadata.Provider via setupGraphQLClient above. There is no per-component
       // provider scope here.
@@ -180,6 +182,58 @@ export class WorkspaceInitializerService {
       userMessage: 'An unexpected error occurred. Please try again.',
       shouldRetry: false
     };
+  }
+
+  /**
+   * Org theming bootstrap: after metadata + ThemeService are ready, apply
+   * the brand theme the user last chose (a starred theme they swapped to), falling back
+   * to the org default. Derives the overlay via the theme engine and applies it always-on
+   * (under the user's light/dark choice). Non-fatal — a missing Theme entity (older DBs)
+   * or no theme simply leaves the stock MJ theme in place.
+   */
+  private async applyDefaultBrandTheme(): Promise<void> {
+    try {
+      const rv = new RunView();
+      // Prefer the user's last-applied brand theme; fall back to the org default.
+      const selectedId = this.themeService.GetSelectedBrandThemeId();
+      let result = await rv.RunView<MJThemeEntity>({
+        EntityName: 'MJ: Themes',
+        ExtraFilter: selectedId ? `ID = '${selectedId}' AND Status = 'Active'` : "IsDefault = 1 AND Status = 'Active'",
+        MaxRows: 1,
+        ResultType: 'entity_object',
+      });
+      let theme = result.Success ? result.Results?.[0] : undefined;
+      // User's selection is gone/inactive — fall back to the org default.
+      if (!theme && selectedId) {
+        result = await rv.RunView<MJThemeEntity>({
+          EntityName: 'MJ: Themes',
+          ExtraFilter: "IsDefault = 1 AND Status = 'Active'",
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        });
+        theme = result.Success ? result.Results?.[0] : undefined;
+      }
+      if (!theme) {
+        return;
+      }
+      this.themeService.RegisterBrandTheme({
+        id: theme.ID,
+        name: theme.Name,
+        seeds: theme.Seeds,
+        description: theme.Description ?? undefined,
+        overrides: theme.Overrides ?? undefined,
+        customCss: theme.CustomCSS ?? undefined,
+        logos: {
+          lightMarkURL: theme.LightMarkURL ?? undefined,
+          darkMarkURL: theme.DarkMarkURL ?? undefined,
+          wordmarkURL: theme.WordmarkURL ?? undefined,
+          monochromeURL: theme.MonochromeURL ?? undefined,
+        },
+      });
+      await this.themeService.ApplyBrandOverlay(theme.ID);
+    } catch (err) {
+      LogStatus(`Org brand theme bootstrap skipped: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   /**

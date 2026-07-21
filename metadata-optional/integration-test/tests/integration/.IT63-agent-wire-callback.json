@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT63 - Agent Wire Callback (fire-and-forget)",
+    "Description": "The one over-the-wire agent bundle: fire-and-forget RunAIAgent resolves via the WebSocket completion callback with a settled run (WC1), and onProgress fires with at least one streaming progress event (WC2). Exercises the browser/headless-WS follow-up callback path the rest of the family (server-in-process) does not. 2 checks WC1-WC2, live-model.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The one over-the-wire agent bundle: fire-and-forget RunAIAgent resolves via the WebSocket completion callback with a settled run (WC1), and onProgress fires with at least one streaming progress event (WC2). Exercises the browser/headless-WS follow-up callback path the rest of the family (server-in-process) does not. 2 checks WC1-WC2, live-model."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "agent-wire-callback"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "404E1B00-D32E-4C70-8F67-BFE723623C23"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T17:00:43.464Z",
+    "checksum": "16c81b4e600f9f5f6d1a05dbe0e954791af8ceb3056eec512e1b0636efdb4c67"
+  }
+}

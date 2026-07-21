@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT42 - Communication DryRun",
+    "Description": "Communication DryRun end-to-end via the real engine: provider inventory + GetProvider error contract, DryRun send (full pipeline, transport never contacted) with DryRun-marked result + exactly one audit row, audit semantics (MessageContent.DryRun true, never mistakable for delivery), previewOnly distinctness (no mark, zero rows). 4 checks (CM1-CM4), self-cleaning marker-tagged logs. Requires the new provider-level DryRun seam.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Communication DryRun end-to-end via the real engine: provider inventory + GetProvider error contract, DryRun send (full pipeline, transport never contacted) with DryRun-marked result + exactly one audit row, audit semantics (MessageContent.DryRun true, never mistakable for delivery), previewOnly distinctness (no mark, zero rows). 4 checks (CM1-CM4), self-cleaning marker-tagged logs. Requires the n"
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "communication"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "BDB978EE-B702-48BC-A670-69380ABD0119"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:49:20.597Z",
+    "checksum": "c12bfcf9efb94edba74f8359ca86aa43412e2de6df93b479b672d94052390360"
+  }
+}

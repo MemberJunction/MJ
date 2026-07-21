@@ -492,6 +492,11 @@ export class ComponentRunner {
             throw new Error('Utilities not found - exposeMJUtilities may have failed');
           }
           
+          // The test harness renders components in isolation without the MJExplorer
+          // chrome, so there are no `--mj-*` theme tokens on the page to bridge from.
+          // Use the base defaults (SetupStyles) for deterministic, theme-independent
+          // tests; SetupStyles now includes the full contract (primaryActive, link/
+          // linkHover, chartPalette) so bridged fields still resolve here.
           const styles = SetupStyles();
 
           if (debug) {

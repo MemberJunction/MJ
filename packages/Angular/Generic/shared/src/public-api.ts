@@ -9,6 +9,9 @@ export * from './lib/module';
 export * from './lib/recent-access.service';
 export * from './lib/theme.service';
 
+// Theming constants
+export * from './lib/ag-grid-theme-params';
+
 // Components
 export * from './lib/loading/loading.component';
 

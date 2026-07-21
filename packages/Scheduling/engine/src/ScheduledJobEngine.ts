@@ -1491,7 +1491,23 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
-     * Create a queued job run for later execution
+     * Record a queue event for a job whose lock is held (`ConcurrencyMode='Queue'`).
+     *
+     * IMPORTANT — terminal-on-creation semantics (bug-register B8 fix):
+     * This engine has NO drainer: nothing ever picks a queued run back up and executes
+     * it when the lock frees. The original implementation wrote `Status='Running'`,
+     * which produced runs that stayed 'Running' FOREVER (they looked like live
+     * executions to monitoring, stats, and the orphan sweep — the sweep couldn't even
+     * reach them because they were never in `inflightJobPromises`). Until real queue
+     * draining is designed and built, the queue event is recorded as an immediately
+     * TERMINAL run: `Status='Cancelled'`, `Success=false`, `CompletedAt` set, with an
+     * `ErrorMessage` explaining why. `QueuedAt` still records when the queue event
+     * happened, so the observability intent of Queue mode is preserved — no run is
+     * silently lost, and no run is ever orphaned in 'Running'.
+     *
+     * When a drainer is implemented, revisit: the run should then be created in a
+     * pending state the drainer owns, and this comment + the scheduling-concurrency
+     * integration check (SC2) that pins this contract must be updated together.
      * @private
      */
     private async createQueuedJobRun(
@@ -1505,14 +1521,32 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             contextUser
         );
 
+        const now = new Date();
         run.ScheduledJobID = job.ID;
         run.ExecutedByUserID = contextUser.ID;
-        run.Status = 'Running';
-        run.QueuedAt = new Date();
-        run.StartedAt = new Date();
+        run.QueuedAt = now;
+        run.StartedAt = now;
+        // Terminal on creation — see the method doc above (B8). A 'Running' status here
+        // would orphan the row forever because no drainer exists to complete it.
+        run.Status = 'Cancelled';
+        run.Success = false;
+        run.CompletedAt = now;
+        run.ErrorMessage =
+            `Job was due while its lock was held by another execution (ConcurrencyMode=Queue). ` +
+            `Deferred execution is not yet implemented, so this queue event is recorded as a ` +
+            `terminal Cancelled run instead of being left orphaned in 'Running'. The job will ` +
+            `run again at its next scheduled time.`;
 
-        await run.Save();
-        this.log(`Queued job ${job.Name} for later execution (Run ID: ${run.ID})`);
+        const saved = await run.Save();
+        if (!saved) {
+            this.logError(
+                `Failed to persist queued-run record for job ${job.Name}: ` +
+                `${run.LatestResult?.CompleteMessage ?? 'unknown'}`,
+                null
+            );
+        } else {
+            this.log(`Recorded queue event for job ${job.Name} (Run ID: ${run.ID}, terminal Cancelled — no drainer yet)`);
+        }
         return run;
     }
 

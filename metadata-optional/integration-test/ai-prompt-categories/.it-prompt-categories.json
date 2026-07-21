@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Integration Test",
+      "Description": "Prompts for the extended agents integration suite (mj-integration-test — safe to delete)"
+    },
+    "primaryKey": {
+      "ID": "7A4B5D89-28E0-4037-ADA4-C6FD399246AA"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:39.771Z",
+      "checksum": "c440dceadec106f2a018fa844543d54b2764db47c342d0da68628ad7efd4f2b3"
+    }
+  }
+]

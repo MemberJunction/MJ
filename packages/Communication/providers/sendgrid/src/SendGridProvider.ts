@@ -142,6 +142,18 @@ export class SendGridProvider extends BaseCommunicationProvider {
             msg.sendAt = unitTime;
         }
 
+        // DRY RUN: full pipeline ran (credential resolution/validation + complete SendGrid
+        // payload construction above) — stop at the transport boundary, never calling SendGrid.
+        if (message.DryRun) {
+            LogStatus(`[DryRun] SendGrid: payload constructed for ${msg.to} — external send skipped`);
+            return {
+                Message: message,
+                Success: true,
+                Error: '',
+                DryRun: true
+            };
+        }
+
         try {
             const result = await sgMail.send(msg);
             if (result && result.length > 0 && result[0].statusCode >= 200 && result[0].statusCode < 300) {

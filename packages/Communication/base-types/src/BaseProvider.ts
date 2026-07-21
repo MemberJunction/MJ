@@ -107,6 +107,22 @@ export class Message {
      */
     public Headers?: Record<string, string>;
 
+    /**
+     * Optional. When true, the send is a DRY RUN: the engine and the provider execute their FULL
+     * pipeline — validation, credential resolution, addressing, template resolution/rendering and
+     * provider-specific payload construction — but the provider MUST NOT contact its external
+     * service (no email/SMS/push/API call leaves the process). The operation returns success with
+     * the result's `DryRun` flag set to true so callers can distinguish a rehearsed send from a
+     * real one, and the Communication Log written for the send carries a `DryRun: true` marker in
+     * its MessageContent JSON.
+     *
+     * Distinct from the engine's `previewOnly` parameter: `previewOnly` stops right after template
+     * processing (the provider is never invoked and no Communication Log is written), while
+     * `DryRun` exercises the provider's preflight + payload construction AND the audit-log
+     * lifecycle, stopping only at the external transport boundary.
+     */
+    public DryRun?: boolean;
+
     constructor(copyFrom?: Message) {
         // copy all properties from the message to us, used for copying a message
         if (copyFrom){
@@ -146,6 +162,12 @@ export class MessageResult {
     public Message: ProcessedMessage;
     public Success: boolean;
     public Error: string;
+    /**
+     * True when this result was produced by a dry-run send (`Message.DryRun` was true): the
+     * provider ran its full preflight + payload construction and reported success WITHOUT
+     * contacting its external service. Absent/false for real sends.
+     */
+    public DryRun?: boolean;
 };
 
 export type BaseMessageResult = {
