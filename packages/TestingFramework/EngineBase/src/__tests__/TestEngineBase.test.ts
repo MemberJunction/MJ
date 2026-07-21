@@ -114,6 +114,29 @@ describe('TestEngineBase', () => {
     it('should return empty array when no suite tests loaded', () => {
       expect(engine.GetTestsForSuite('suite-123')).toEqual([]);
     });
+
+    // DR-D9: the O(n) rewrite must preserve behavior — only this suite's tests,
+    // sorted by Sequence, dropping join rows whose test doesn't exist.
+    it('returns only the suite members, ordered by sequence', () => {
+      const inject = engine as unknown as {
+        _tests: Array<{ ID: string; Name: string }>;
+        _testSuiteTests: Array<{ SuiteID: string; TestID: string; Sequence: number }>;
+      };
+      inject._tests = [
+        { ID: 'a', Name: 'A' },
+        { ID: 'b', Name: 'B' },
+        { ID: 'c', Name: 'C' },
+        { ID: 'x', Name: 'OtherSuite' },
+      ];
+      inject._testSuiteTests = [
+        { SuiteID: 's1', TestID: 'c', Sequence: 3 },
+        { SuiteID: 's1', TestID: 'a', Sequence: 1 },
+        { SuiteID: 's1', TestID: 'b', Sequence: 2 },
+        { SuiteID: 's2', TestID: 'x', Sequence: 1 }, // other suite — excluded
+        { SuiteID: 's1', TestID: 'ghost', Sequence: 4 }, // no matching test — dropped
+      ];
+      expect(engine.GetTestsForSuite('s1').map(t => t.Name)).toEqual(['A', 'B', 'C']);
+    });
   });
 
   describe('GetActiveTests', () => {

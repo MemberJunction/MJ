@@ -198,6 +198,9 @@ export class SuiteCommand {
                 parallel: integrationSerial ? false : flags.parallel,
                 maxParallel: integrationSerial ? 1 : flags.maxParallel,
                 maxRetries: flags.maxRetries,
+                // DR-D9: forward failFast — config-loader set it but it was never
+                // passed to the engine, so the knob did nothing.
+                failFast: flags.failFast,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
                 onTestComplete: resultsSink?.onTestComplete,
                 onTestStart: resultsSink?.onTestStart,
@@ -205,6 +208,11 @@ export class SuiteCommand {
                 healthStatePath,
                 maxSuiteDurationMs: flags.maxSuiteDuration != null ? flags.maxSuiteDuration * 1000 : undefined,
                 circuitBreaker: flags.circuitBreaker ? { enabled: true, maxFailures: flags.maxFailures } : undefined,
+                // DR-D9: forward the (previously dead) --sequence flag. "1,3,5" →
+                // run only the tests at those suite positions (engine-supported).
+                sequence: flags.sequence
+                    ? flags.sequence.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !Number.isNaN(n))
+                    : undefined,
             }, contextUser);
 
             this.spinner.stop();

@@ -114,6 +114,24 @@ describe('drainQueue', () => {
         expect(runsByWorker[2]).toBeUndefined();
     });
 
+    it('honors interDispatchDelayMs between items without dropping work (DR-D9)', async () => {
+        vi.useFakeTimers();
+        try {
+            const src = items('a', 'b', 'c');
+            const ran: string[] = [];
+            const promise = drainQueue(src, 1, async (item) => {
+                ran.push(item.testId);
+                return [item.testId];
+            }, { interDispatchDelayMs: 1000 });
+            await vi.runAllTimersAsync();
+            const rows = await promise;
+            expect(ran).toEqual(['a', 'b', 'c']); // all ran, in order, none dropped
+            expect(rows.sort()).toEqual(['a', 'b', 'c']);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('aborts EVERY worker (incl. worker 0) when shouldAbort trips (DR-D7)', async () => {
         const src = items('a', 'b', 'c', 'd', 'e', 'f');
         const ran: string[] = [];

@@ -89,6 +89,17 @@ export default class TestSuite extends Command {
         'Total-failure cap (any category) for --circuit-breaker. Default ' +
         'max(10, 25% of the suite). Ignored without --circuit-breaker.',
     }),
+    'fail-fast': Flags.boolean({
+      description:
+        'Stop dispatching new tests on the first hard failure (drains in-flight, ' +
+        'then finalizes with partial results). Default off.',
+      default: false,
+    }),
+    sequence: Flags.string({
+      description:
+        'Run only the tests at these 1-based suite positions (comma-separated, ' +
+        'e.g. "1,3,5"). Applied by the engine\'s sequence filter.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -115,6 +126,8 @@ export default class TestSuite extends Command {
         maxSuiteDuration: flags['max-suite-duration'],
         circuitBreaker: flags['circuit-breaker'],
         maxFailures: flags['max-failures'],
+        failFast: flags['fail-fast'],
+        sequence: flags.sequence,
       });
 
     } catch (error) {

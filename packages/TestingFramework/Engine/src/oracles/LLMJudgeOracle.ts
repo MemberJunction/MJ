@@ -103,10 +103,11 @@ Respond in JSON format:
                 };
             }
 
-            // Find the LLM Judge prompt from AIEngine
-            const judgePrompt = AIEngine.Instance.Prompts.find(p =>
-                p.Name === 'Test LLM Judge' || p.Name.toLowerCase().includes('llm judge')
-            );
+            // DR-D9: exact-name lookup. The fuzzy `.includes('llm judge')` fallback
+            // could bind to an unrelated prompt (e.g. a project's own "Custom LLM
+            // Judge"); the contract — and this oracle's error message — is the exact
+            // name 'Test LLM Judge'.
+            const judgePrompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Test LLM Judge');
 
             if (!judgePrompt) {
                 return {

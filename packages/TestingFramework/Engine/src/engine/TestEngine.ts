@@ -47,7 +47,7 @@ import {
     getMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
-import { runWithRetries, RetryPolicy } from './retry';
+import { runWithRetries, RetryPolicy, isRetriableFailure } from './retry';
 import { RetryBudget, buildSuiteRetryPolicy, computeSuiteRetryBudget, fixedRetries } from './retry-policy';
 import { classifyFailure } from './failure-classifier';
 import { WorkItem, seedWorkItems, drainQueue } from './work-queue';
@@ -112,6 +112,13 @@ export class TestEngine extends BaseSingleton<TestEngine> {
      * a doomed run. Same lifecycle as `_suiteFixtures` / `_suiteRetry`.
      */
     private _suiteBreaker = new Map<string, CircuitBreaker>();
+
+    /**
+     * SuiteRunIDs whose `failFast` has tripped (DR-D9) — set on the first hard
+     * failure when `options.failFast` is on, polled by the dispatch gate to drain
+     * the run. `failFast` used to be declared but never read.
+     */
+    private _suiteFailFast = new Set<string>();
 
     /**
      * Get singleton instance
@@ -446,6 +453,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 this._suiteFixtures.delete(suiteRun.ID);
                 this._suiteRetry.delete(suiteRun.ID);
                 this._suiteBreaker.delete(suiteRun.ID);
+                this._suiteFailFast.delete(suiteRun.ID);
                 // Update TestSuiteRun entity with results (guaranteed even on a SetupSuite throw)
                 await this.updateSuiteRun(suiteRun, testResults, startTime);
             }
@@ -508,9 +516,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         let testSequence = 1;
 
         for (const test of tests) {
-            // DR-D7: a tripped circuit breaker aborts the run early.
-            if (this._suiteBreaker.get(suiteRunId)?.tripped) {
-                this.log(`Circuit breaker tripped — stopping after ${testResults.length}/${tests.length} tests`);
+            // DR-D7/D9: a tripped circuit breaker or failFast aborts the run early.
+            if (this._suiteBreaker.get(suiteRunId)?.tripped || this._suiteFailFast.has(suiteRunId)) {
+                this.log(`Dispatch halted (breaker/failFast) — stopping after ${testResults.length}/${tests.length} tests`);
                 break;
             }
             // DR-D4: honor the suite wall-clock budget between tests.
@@ -570,6 +578,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         }
         // DR-D7: feed the final outcome to the circuit breaker (if armed).
         this._suiteBreaker.get(suiteRunId)?.record(result);
+        // DR-D9: failFast — drain the run on the first hard (non-flaky) failure.
+        if (options.failFast && isRetriableFailure(result) && !this._suiteFailFast.has(suiteRunId)) {
+            this._suiteFailFast.add(suiteRunId);
+            this.log(`failFast: "${result.testName}" ${result.status} — stopping dispatch of remaining tests`);
+        }
         try {
             options.onTestComplete?.(result);
         } catch (hookErr) {
@@ -691,7 +704,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 onWorkerStart: (wi, count) => this.log(`Worker ${wi + 1}/${count} starting`),
                 admit: admissionController ? (wi) => admissionController.admit(wi) : undefined,
                 deadline,
-                shouldAbort: () => this._suiteBreaker.get(suiteRun.ID)?.tripped ?? false,
+                shouldAbort: () => (this._suiteBreaker.get(suiteRun.ID)?.tripped ?? false) || this._suiteFailFast.has(suiteRun.ID),
+                interDispatchDelayMs: options.delayBetweenTests,
             }
         );
 
@@ -855,7 +869,18 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
-     * Get or create test driver instance.
+     * Get or create the test driver instance for a type.
+     *
+     * ONE instance per TypeID is intentionally shared across all parallel workers
+     * (and across suites) — SetupSuite/TeardownSuite fire on this shared instance,
+     * so it must stay the same one throughout a run. Per-worker/per-run state is
+     * therefore NOT keyed here (DR-D9): drivers MUST be stateless per run and take
+     * everything they need from the per-`Execute` `DriverExecutionContext` —
+     * `workerIndex` (to key browser resources in the HeadlessBrowserEngine
+     * singleton), `fixtures`, `resolvedVariables`, `testRun`. A driver that stashes
+     * per-run data on `this` would race across concurrent workers; keying the
+     * cache by workerIndex instead would break the shared SetupSuite instance, so
+     * statelessness is the contract, not per-worker instances.
      * @private
      */
     private async getDriver(testType: MJTestTypeEntity, contextUser: UserInfo): Promise<BaseTestDriver> {

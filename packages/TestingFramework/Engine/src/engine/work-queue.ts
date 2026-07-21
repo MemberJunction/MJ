@@ -99,6 +99,13 @@ export interface DrainOptions {
      * taking new items — the whole run aborts with partial results.
      */
     shouldAbort?: () => boolean;
+    /**
+     * Delay (ms) each worker waits AFTER finishing an item before taking the next
+     * (DR-D9). Honors `delayBetweenTests` in parallel mode too (it was silently
+     * ignored — only the sequential path respected it), e.g. to space out logins.
+     * Default 0.
+     */
+    interDispatchDelayMs?: number;
 }
 
 /**
@@ -158,6 +165,10 @@ export async function drainQueue<R>(
             } catch {
                 /* runItem is expected to catch its own errors; this is a backstop
                    so a stray rejection can't strand the rest of the queue. */
+            }
+            // DR-D9: honor delayBetweenTests in parallel too (was sequential-only).
+            if (opts.interDispatchDelayMs && opts.interDispatchDelayMs > 0) {
+                await new Promise(resolve => setTimeout(resolve, opts.interDispatchDelayMs));
             }
         }
     };
