@@ -53,6 +53,7 @@ import {
     ClickAction,
     ScrollAction,
     ElementInfo,
+    InteractiveElement,
 } from '../types/browser.js';
 import type { BrowserAction } from '../types/browser.js';
 import { ComputerUseAuthConfig } from '../types/auth.js';
@@ -74,8 +75,8 @@ import {
     targetSelector,
 } from './replay-step.js';
 import type { GuardResult } from './replay-step.js';
-import { ComputerUseTrace, ReplayInfo, ReplayStepResult } from '../types/trace.js';
-import type { TraceStep } from '../types/trace.js';
+import { reresolveTarget, shouldAcceptHeal, isSelectorHealable } from './heal-decision.js';
+import { ComputerUseTrace, ReplayInfo, ReplayStepResult, TraceStep, TraceAction, TraceTarget } from '../types/trace.js';
 import {
     JudgeContext,
     JudgeVerdict,
@@ -333,23 +334,21 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Self-heal seam for a diverged replay step (CU-C3). Called when a step's
-     * precondition/action/postcondition failed during {@link Replay}. A subclass
-     * with an LLM controller overrides this to re-resolve the drifted target
-     * from a fresh element list + the step's recorded instruction, execute the
-     * healed action, rewrite the trace step in place, and update `step`
-     * accordingly — returning `true` on success. The base implementation cannot
-     * heal (no re-derivation at this layer) and returns `false`, so the step
-     * diverges and the run falls back to the LLM tier.
+     * Focused LLM disambiguation seam for a heal (CU-C3, leg 1b). Called ONLY
+     * when the deterministic role+name re-resolution is ambiguous (multiple
+     * candidates) or failed. A subclass with an LLM controller overrides this to
+     * ask a cheap model "given these elements + this instruction, which index is
+     * the intended target?" and return `{ index, confidence }`. The base layer
+     * has no model, so it returns confidence 0 (no disambiguation) — heal then
+     * only succeeds on the deterministic path.
      */
-    protected async healReplayStep(
-        _trace: ComputerUseTrace,
-        _stepIndex: number,
-        _context: RunContext,
-        _step: StepRecord,
-        _reason: string
-    ): Promise<boolean> {
-        return false;
+    protected async healTargetViaLLM(_request: {
+        instruction: string;
+        goal: string;
+        elements: InteractiveElement[];
+        recorded: TraceTarget;
+    }): Promise<{ index?: number; confidence: number }> {
+        return { confidence: 0 };
     }
 
     /**
@@ -1033,6 +1032,123 @@ export class ComputerUseEngine {
             this.log(`Replay step ${index + 1} diverged — ${reason}`);
         }
         return { result, step };
+    }
+
+    /**
+     * Self-heal a diverged replay step (CU-C3) — leg 1 of the ladder. Only
+     * SELECTOR drift is healable here: re-resolve the recorded target's role+name
+     * against a fresh element list (deterministic, no LLM), escalating an
+     * ambiguous case to the {@link healTargetViaLLM} seam. mabl's gate applies —
+     * a low-confidence match fails rather than guesses. On a confident match it
+     * executes the corrected action, verifies the postcondition still holds, and
+     * rewrites the trace step's selector in place (cache rewrite), returning
+     * true. Flow drift (a failed postcondition) is NOT selector-healable — it
+     * returns false so the run falls back to the LLM tier (leg 2, re-derivation,
+     * owned by the driver's retry policy).
+     */
+    protected async healReplayStep(
+        trace: ComputerUseTrace,
+        stepIndex: number,
+        context: RunContext,
+        step: StepRecord,
+        reason: string
+    ): Promise<boolean> {
+        const traceStep = trace.Steps[stepIndex];
+        const recorded = traceStep.Action.Target;
+        if (!recorded || !isSelectorHealable(reason)) {
+            return false;   // navigate/keypress (no target) or flow drift → re-derive territory
+        }
+
+        let elements: InteractiveElement[];
+        try {
+            elements = await this.browserAdapter.ExtractInteractiveElements();
+        } catch {
+            return false;
+        }
+        if (elements.length === 0) {
+            return false;
+        }
+
+        const resolution = await this.resolveHealSelector(traceStep, context, recorded, elements);
+        if (!resolution || !shouldAcceptHeal(resolution.confidence) || !resolution.selector) {
+            this.log(`Replay step ${stepIndex + 1} heal declined — ${resolution?.reason ?? 'no candidate'} (a wrong cached click is worse than a slow one)`);
+            return false;
+        }
+
+        const executed = await this.executeHealedAction(traceStep, resolution.selector, context, step);
+        if (!executed) {
+            return false;
+        }
+
+        const volatile = context.Params.AppProfile?.Loop?.VolatileParams ?? [];
+        const post = await this.replayPostcondition(traceStep, volatile);
+        if (!post.pass) {
+            return false;
+        }
+
+        // Cache rewrite: persist the healed selector into the trace step in place.
+        if (traceStep.Action.Target) {
+            traceStep.Action.Target.Selector = resolution.selector;
+        }
+        this.log(`Replay step ${stepIndex + 1} healed — re-resolved target (${resolution.reason}); trace rewritten`);
+        return true;
+    }
+
+    /**
+     * Resolve the healed selector: deterministic role+name re-resolution first,
+     * escalating an ambiguous/failed match to the focused LLM seam.
+     */
+    private async resolveHealSelector(
+        traceStep: TraceStep,
+        context: RunContext,
+        recorded: TraceTarget,
+        elements: InteractiveElement[]
+    ): Promise<{ selector?: string; confidence: number; reason: string } | undefined> {
+        const deterministic = reresolveTarget(recorded, elements);
+        if (shouldAcceptHeal(deterministic.confidence)) {
+            return deterministic;
+        }
+        const llm = await this.healTargetViaLLM({
+            instruction: traceStep.Instruction,
+            goal: context.Params.Goal,
+            elements,
+            recorded,
+        });
+        if (llm.index !== undefined && shouldAcceptHeal(llm.confidence)) {
+            const el = elements.find(e => e.Index === llm.index);
+            if (el) {
+                return { selector: el.Selector, confidence: llm.confidence, reason: 'LLM disambiguation' };
+            }
+        }
+        return deterministic;   // best available (below the gate) — caller declines it
+    }
+
+    /** Execute the corrected action (recorded action with the healed selector). */
+    private async executeHealedAction(
+        traceStep: TraceStep,
+        selector: string,
+        context: RunContext,
+        step: StepRecord
+    ): Promise<boolean> {
+        const healedAction = Object.assign(new TraceAction(), traceStep.Action);
+        healedAction.Target = Object.assign(new TraceTarget(), traceStep.Action.Target ?? {}, { Selector: selector });
+        const healedStep = Object.assign(new TraceStep(), traceStep, { Action: healedAction });
+
+        const actions = planReplayActions(healedStep, context.Params.VariableValues ?? {});
+        if (actions.length === 0) {
+            return false;
+        }
+        step.ActionsRequested = actions;
+        step.ActionResults = [];
+        for (const action of actions) {
+            this.ensureNotCancelled();
+            const r = await this.executeSingleBrowserAction(action, context);
+            step.ActionResults.push(r);
+            if (!r.Success) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Evaluate a replay step's precondition against the live page (bounded wait). */

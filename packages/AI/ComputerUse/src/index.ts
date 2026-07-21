@@ -43,6 +43,7 @@ export * from './engine/trace-url.js';
 export * from './engine/trace-recorder.js';
 export * from './engine/trace-keying.js';
 export * from './engine/replay-step.js';
+export * from './engine/heal-decision.js';
 
 // ─── Tool Exports ──────────────────────────────────────────
 export * from './tools/ToolProvider.js';
