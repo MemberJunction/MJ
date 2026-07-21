@@ -202,6 +202,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             if (expected.judgeValidationCriteria && expected.judgeValidationCriteria.length > 0) {
                 runParams.ValidationCriteria = expected.judgeValidationCriteria;
             }
+            // Per-test UI hints (CU-E5): inject after the goal in the controller prompt.
+            if (input.hints && input.hints.length > 0) {
+                runParams.Hints = input.hints;
+            }
 
             // Failure-artifact tracing (CU-F4): when the policy calls for capture,
             // point the engine at a temp trace file for this run. The engine writes

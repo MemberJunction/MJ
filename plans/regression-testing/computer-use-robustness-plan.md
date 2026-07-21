@@ -600,6 +600,8 @@ mabl's confidence gate applies: a low-confidence heal (ambiguous target) should 
 
 **Risks / open questions.** Hints can mask real usability bugs — pair each hint with a linked issue where the hint compensates for a defect.
 
+**Wave 2 status — LANDED.** Optional `hints?: string[]` on `ComputerUseTestInput`, threaded `RunComputerUseParams.Hints` → `ControllerPromptRequest.Hints` → rendered as a `## Hints` section right after the goal, in BOTH the Layer-1 default prompt (`renderHintsSection`) and the Layer-2 `controller.template.md` `{% if hints %}` block fed by the new `hints` data mapping (A7/B1 named-field trap avoided). Driver sets `runParams.Hints` from `input.hints`. Trivial glue — no new pure logic to unit-test; E7 leak-gate green. Tests: ComputerUse 311; MJComputerUse 148.
+
 #### CU-E6. Determinism and model pinning: per-test generation knobs, one vendor per run, record what ran
 
 **Problem.** Both prompts carry a 5-entry failover chain spanning Gemini → Anthropic → OpenAI; under rate limits one run can mix model families across steps — different action policies *and* judge verdict distributions between an attempt and its retry, invisibly (`executionConfig` records intent, not the serving model). There is no per-test temperature/effort/model knob at all — `ModelConfig` is `{Vendor, Model, DriverClass}` (params.ts:28-43); tuning requires editing the shared metadata prompt for every consumer. Prompt resolution is case-sensitive exact-match (`p.Name === ref.PromptName`, MJComputerUseEngine.ts:369,394) contra the repo's own EntityByName convention.

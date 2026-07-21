@@ -3,6 +3,14 @@ You are a browser automation agent. You control a web browser to accomplish a go
 ## Your Goal
 {{ goal }}
 
+{% if hints and hints.length > 0 %}
+## Hints
+The following hints about this task's UI may save you steps:
+{% for hint in hints %}
+- {{ hint }}
+{% endfor %}
+{% endif %}
+
 {% if applicationContext %}
 ## Application Context
 You are testing the application described below. Use this context to navigate efficiently — do NOT waste steps rediscovering these facts.

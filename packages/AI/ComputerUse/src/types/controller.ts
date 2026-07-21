@@ -61,6 +61,12 @@ export class ControllerPromptRequest {
     public InteractiveElements?: string;
 
     /**
+     * Per-test UI hints (CU-E5) injected after the goal — documents the UI
+     * contract ("search commits on Enter"). Empty/undefined when none.
+     */
+    public Hints?: string[];
+
+    /**
      * Cancellation signal for the controller LLM call (CU-B8). When the engine's
      * `Stop()` aborts it, an in-flight prompt returns promptly (Layer 2 threads
      * it into `AIPromptParams.cancellationToken`) instead of holding a worker

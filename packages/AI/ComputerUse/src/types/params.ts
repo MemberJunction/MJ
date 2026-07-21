@@ -214,4 +214,11 @@ export class RunComputerUseParams {
      * stable than a scalar-confidence cliff). Empty → scalar judging.
      */
     public ValidationCriteria?: string[];
+
+    /**
+     * Per-test UI hints (CU-E5) injected after the goal in the controller prompt
+     * — e.g. "the filter panel opens via the funnel icon". Documentation of the
+     * UI contract harvested from failure triage; empty when none.
+     */
+    public Hints?: string[];
 }

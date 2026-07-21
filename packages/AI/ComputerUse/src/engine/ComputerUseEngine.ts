@@ -1289,6 +1289,7 @@ export class ComputerUseEngine {
         request.StepNumber = stepNumber;
         request.MaxSteps = context.Params.MaxSteps;
         request.CurrentUrl = context.CurrentUrl;
+        request.Hints = context.Params.Hints;   // per-test UI hints (CU-E5)
         // Thread the cancellation signal so an in-flight controller call aborts
         // promptly on Stop() (CU-B8); consumed by Layer 2, not template data.
         request.Signal = this.abortController.signal;
@@ -1872,6 +1873,7 @@ export class ComputerUseEngine {
         // Application context first — it's the most general signal, sets the
         // stage before per-step/per-tool-specific guidance.
         sections.push(this.renderApplicationContextSection(request.ApplicationContext));
+        sections.push(this.renderHintsSection(request.Hints));
         sections.push(this.renderToolDefinitionsSection(request.ToolDefinitions));
         sections.push(this.renderFormLoginSection(request.FormLoginCredentials));
         sections.push(this.renderJudgeFeedbackSection(request.JudgeFeedback));
@@ -1886,6 +1888,12 @@ export class ComputerUseEngine {
     private renderApplicationContextSection(context: string | undefined): string {
         if (!context || !context.trim()) return '';
         return `## Application Context\nYou are testing the application described below. Use this context to navigate efficiently — do NOT waste steps rediscovering these facts.\n\n${context.trim()}`;
+    }
+
+    private renderHintsSection(hints: string[] | undefined): string {
+        if (!hints || hints.length === 0) return '';
+        const list = hints.map(h => `- ${h}`).join('\n');
+        return `## Hints\nThe following hints about this task's UI may save you steps:\n${list}`;
     }
 
     private renderToolDefinitionsSection(tools: ControllerPromptRequest['ToolDefinitions']): string {

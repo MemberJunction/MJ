@@ -238,6 +238,15 @@ export interface ComputerUseTestInput {
     /** Natural-language goal for the agent to accomplish (required) */
     goal: string;
 
+    /**
+     * Optional per-test UI hints injected after the goal (CU-E5) — e.g. "the
+     * filter panel opens via the funnel icon", "search commits on Enter".
+     * Documents the UI contract; harvested from failure triage. When a hint goes
+     * stale that is itself a finding — pair each with a linked issue where it
+     * compensates for a real defect.
+     */
+    hints?: string[];
+
     /** Starting URL to navigate to */
     startUrl?: string;
 
