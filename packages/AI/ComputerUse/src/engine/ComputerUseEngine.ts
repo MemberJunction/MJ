@@ -64,6 +64,7 @@ import { evaluateAuthDetour } from './auth-detour.js';
 import { CancellationError, abortableDelay } from './cancellation.js';
 import { serializeInteractiveElements } from './element-serializer.js';
 import { evaluateBatchStop, DEFAULT_MAX_ACTIONS_PER_BATCH } from './batch-control.js';
+import { gateImpossibleVerdict, DEFAULT_IMPOSSIBLE_QUORUM } from './terminal-verdict.js';
 import { formatDiagnosticsDigest } from './diagnostics-digest.js';
 import {
     JudgeContext,
@@ -517,6 +518,8 @@ export class ComputerUseEngine {
         const loopCfg = context.Params.AppProfile?.Loop ?? new LoopConfig();
         const stateSignatures: string[] = [];
         let loopTrips = 0;
+        // Terminal-verdict guard (CU-D6): concurring Impossible verdicts needed before we accept one.
+        let impossibleCount = 0;
 
         for (let stepNumber = 1; stepNumber <= context.Params.MaxSteps; stepNumber++) {
             // Check cancellation
@@ -590,9 +593,23 @@ export class ComputerUseEngine {
                     return result;
                 }
 
-                // If the judge says the goal is impossible, stop immediately
-                if (step.JudgeVerdict.Impossible) {
-                    this.log(`Step ${stepNumber} — judge determined the goal is impossible: ${step.JudgeVerdict.Reason}`);
+                // Impossible guard (CU-D6): don't end on a single sample. Require a
+                // quorum of concurring Impossible verdicts across ≥2 steps, and never
+                // accept Impossible while the page is still loading (settle gave up as
+                // 'budget') — a boot screen is not evidence the goal is impossible.
+                const impossibleGate = gateImpossibleVerdict({
+                    impossible: step.JudgeVerdict.Impossible,
+                    pageLoading: step.SettleReason === 'budget',
+                    priorCount: impossibleCount,
+                    quorum: DEFAULT_IMPOSSIBLE_QUORUM,
+                });
+                impossibleCount = impossibleGate.newCount;
+                if (impossibleGate.suppressed) {
+                    this.log(`Step ${stepNumber} — judge said impossible but the page is still loading; not accepting it (CU-D6)`);
+                } else if (step.JudgeVerdict.Impossible && !impossibleGate.accept) {
+                    this.log(`Step ${stepNumber} — impossible verdict ${impossibleCount}/${DEFAULT_IMPOSSIBLE_QUORUM}; need a concurring verdict before ending (CU-D6)`);
+                } else if (impossibleGate.accept) {
+                    this.log(`Step ${stepNumber} — goal confirmed impossible (${impossibleCount} concurring verdicts): ${step.JudgeVerdict.Reason}`);
                     const result = this.buildResult(context, 'Impossible', false, lastVerdict);
                     this.onRunComplete(result);
                     return result;
