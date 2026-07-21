@@ -47,7 +47,9 @@ import {
     getMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
-import { runWithRetries } from './retry';
+import { runWithRetries, RetryPolicy } from './retry';
+import { RetryBudget, buildSuiteRetryPolicy, computeSuiteRetryBudget, fixedRetries } from './retry-policy';
+import { classifyFailure } from './failure-classifier';
 import { WorkItem, seedWorkItems, drainQueue } from './work-queue';
 
 /**
@@ -89,6 +91,15 @@ export class TestEngine extends BaseSingleton<TestEngine> {
      * key prevents one suite run's fixtures from leaking into another.
      */
     private _suiteFixtures = new Map<string, SuiteFixtureContext>();
+
+    /**
+     * Per-suite-run retry policy inputs (DR-D2), keyed by SuiteRunID. The shared
+     * {@link RetryBudget} caps total extra attempts across ALL tests/workers of
+     * the run at ceil(0.15 × suiteSize); `requestedMax` is the operator's
+     * per-test ceiling. Set in `RunSuite`, removed in its `finally` (same
+     * lifecycle as `_suiteFixtures`), so each run gets a fresh budget.
+     */
+    private _suiteRetry = new Map<string, { budget: RetryBudget; requestedMax: number }>();
 
     /**
      * Get singleton instance
@@ -355,6 +366,17 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // best-effort (it logs and never rethrows, so cleanup can't fail the suite).
             const fixtures: SuiteFixtureContext = { SuiteRunID: suiteRun.ID, Data: {}, CreatedRecords: [] };
             this._suiteFixtures.set(suiteRun.ID, fixtures);
+
+            // DR-D2: one shared retry budget for the whole run. ceil(0.15 × N)
+            // total extra attempts across every test/worker, so a degraded host
+            // can't trigger a retry storm (the recheck burned 34 retries on 44
+            // tests). Deterministic failures additionally get 0 retries by class.
+            const retryBudget = computeSuiteRetryBudget(tests.length);
+            this._suiteRetry.set(suiteRun.ID, { budget: new RetryBudget(retryBudget), requestedMax: options.maxRetries ?? 0 });
+            if ((options.maxRetries ?? 0) > 0) {
+                this.log(`Suite retry budget: ${retryBudget} extra attempt(s) across ${tests.length} tests (max ${options.maxRetries}/test, 0 for deterministic failures)`);
+            }
+
             const suiteDrivers = await this.resolveSuiteDrivers(tests, contextUser);
 
             let testResults: TestRunResult[] = [];
@@ -378,6 +400,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                     }
                 }
                 this._suiteFixtures.delete(suiteRun.ID);
+                this._suiteRetry.delete(suiteRun.ID);
                 // Update TestSuiteRun entity with results (guaranteed even on a SetupSuite throw)
                 await this.updateSuiteRun(suiteRun, testResults, startTime);
             }
@@ -674,14 +697,26 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         // transient non-determinism in LLM-driven targets. A test that fails then
         // passes is marked `flaky` so the flakiness is reported, never masked.
         // Retries get a fresh start time so each attempt's duration is its own.
-        const maxRetries = options.maxRetries ?? 0;
+        //
+        // DR-D2: the retry decision is a CLASSIFIED, BUDGETED policy — deterministic
+        // failures (impossible/app-error) get 0 retries, env/transient classes get
+        // the operator's ceiling, all bounded by the run's shared budget with
+        // exponential backoff. The standalone/repeat paths never reach here.
+        const retryCfg = this._suiteRetry.get(suiteRunId);
+        const policy: RetryPolicy = retryCfg
+            ? buildSuiteRetryPolicy({
+                budget: retryCfg.budget,
+                requestedMax: retryCfg.requestedMax,
+                onBudgetExhausted: (r) => this.log(`[retry] suite retry budget exhausted — accepting "${r.testName}" (${r.failureCategory ?? 'unknown'}) first-shot`),
+            })
+            : fixedRetries(options.maxRetries ?? 0);
         const result = await runWithRetries(
             (attempt) => this.runSingleTestIteration(
                 test, suiteRunId, suiteTestSequence, options, contextUser,
                 attempt === 1 ? startTime : Date.now(), tags, suiteVariablesJson, workerIndex, suiteContext
             ),
-            maxRetries,
-            (nextAttempt, last) => this.log(`[retry] "${test.Name}" was ${last.status} on attempt ${nextAttempt - 1}/${maxRetries + 1} — retrying`)
+            policy,
+            (nextAttempt, last) => this.log(`[retry] "${test.Name}" was ${last.status} (${last.failureCategory ?? 'unknown'}) on attempt ${nextAttempt - 1} — retrying`)
         );
         if (result.flaky) {
             this.log(`[retry] "${test.Name}" PASSED on attempt ${result.attempts} — marking flaky`);
@@ -1392,6 +1427,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             errorMessage: driverResult.errorMessage,
             resolvedVariables
         };
+
+        // DR-D2: classify a non-passing result once, here, so the retry policy,
+        // the incremental JSONL, and `compare` all read the same category. Prefer
+        // the driver's own `failureClass` (CU-F5); regex-classify as a stopgap.
+        result.failureCategory = classifyFailure(result, driverResult.failureClass);
 
         // Add sequence if this is a repeated test iteration
         if (sequence && sequence > 1) {

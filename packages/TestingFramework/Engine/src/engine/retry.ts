@@ -1,13 +1,18 @@
 /**
- * Retry-on-failure helper for non-deterministic test targets.
+ * Retry-on-failure loop for non-deterministic test targets.
  *
  * LLM-driven tests (e.g. Computer Use browser automation) can fail transiently —
- * a timeout, a navigation loop, the agent giving up — yet pass cleanly on a re-run.
- * `runWithRetries` re-runs a FAILED test up to `maxRetries` extra times and accepts
- * the first passing attempt (pass-if-any). A test that fails then passes is marked
- * `flaky` so the non-determinism is surfaced in reporting, never silently masked.
+ * a timeout, a navigation loop, the agent giving up — yet pass cleanly on a
+ * re-run. `runWithRetries` re-runs a FAILED test and accepts the first passing
+ * attempt (pass-if-any). A test that fails then passes is marked `flaky` so the
+ * non-determinism is surfaced in reporting, never silently masked.
  *
- * Pure (no engine/DB coupling) so the retry policy is unit-testable in isolation.
+ * DR-D2 turned the retry decision into an injected {@link RetryPolicy}: instead
+ * of a blind fixed count, the suite policy classifies the failure and consults a
+ * shared suite budget, so deterministic failures (`impossible`/`app-error`) are
+ * not retried at all and the suite can't burn 34 retries on 44 tests. This file
+ * stays pure (no engine/DB coupling) so the loop is unit-testable in isolation;
+ * the policy construction lives in `retry-policy.ts`.
  */
 import { TestRunResult, PriorAttemptSummary } from '@memberjunction/testing-engine-base';
 
@@ -19,19 +24,38 @@ export function isRetriableFailure(result: TestRunResult): boolean {
     return result.status === 'Failed' || result.status === 'Error' || result.status === 'Timeout';
 }
 
+/** A policy's verdict for one retry decision. */
+export interface RetryDecision {
+    /** Whether to run another attempt. */
+    retry: boolean;
+    /** Optional delay (ms) to wait before that attempt (backoff + jitter). */
+    backoffMs?: number;
+}
+
 /**
- * Run a test (via `runOnce`) with up to `maxRetries` extra attempts on failure.
+ * Decides whether a failed attempt should be retried.
+ * @param lastResult    The result of the most recent attempt (always retriable
+ *                      when the policy is consulted).
+ * @param attemptsSoFar How many attempts have already run (≥1).
+ */
+export type RetryPolicy = (lastResult: TestRunResult, attemptsSoFar: number) => RetryDecision;
+
+/** Absolute backstop so a buggy policy can never loop forever. */
+const HARD_ATTEMPT_CAP = 50;
+
+/**
+ * Run a test (via `runOnce`) with retries governed by `policy`.
  *
  * @param runOnce     Executes one attempt. Receives the 1-based attempt number so the
  *                    caller can stamp a fresh start time / iteration per attempt.
- * @param maxRetries  Extra attempts allowed after the first. 0 disables retries.
+ * @param policy      Decides after each failure whether to retry and how long to wait.
  * @param onBeforeRetry Optional hook fired just before each retry (for logging).
  * @returns The final result: the first passing attempt if any, else the last failure.
  *          `attempts` is the total runs; `flaky` is true when it failed then passed.
  */
 export async function runWithRetries(
     runOnce: (attempt: number) => Promise<TestRunResult>,
-    maxRetries: number,
+    policy: RetryPolicy,
     onBeforeRetry?: (nextAttempt: number, lastResult: TestRunResult) => void
 ): Promise<TestRunResult> {
     let result = await runOnce(1);
@@ -40,10 +64,17 @@ export async function runWithRetries(
     // so flakiness (the suite's #1 signal) is diagnosable from the final result.
     const priorAttempts: PriorAttemptSummary[] = [];
 
-    while (maxRetries > 0 && attempts - 1 < maxRetries && isRetriableFailure(result)) {
+    while (isRetriableFailure(result) && attempts < HARD_ATTEMPT_CAP) {
+        const decision = policy(result, attempts);
+        if (!decision.retry) {
+            break;
+        }
         priorAttempts.push(summarizeAttempt(result, attempts));
         const nextAttempt = attempts + 1;
         onBeforeRetry?.(nextAttempt, result);
+        if (decision.backoffMs && decision.backoffMs > 0) {
+            await new Promise(resolve => setTimeout(resolve, decision.backoffMs));
+        }
         result = await runOnce(nextAttempt);
         attempts = nextAttempt;
 

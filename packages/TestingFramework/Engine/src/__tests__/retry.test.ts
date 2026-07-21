@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TestRunResult } from '@memberjunction/testing-engine-base';
 import { isRetriableFailure, runWithRetries } from '../engine/retry';
+import { fixedRetries } from '../engine/retry-policy';
 
 // Minimal TestRunResult factory — only `status` matters for the retry policy.
 function makeResult(status: TestRunResult['status']): TestRunResult {
@@ -39,7 +40,7 @@ describe('isRetriableFailure', () => {
 describe('runWithRetries', () => {
     it('passes on the first attempt → no retry, attempts=1, not flaky', async () => {
         const { fn } = sequence('Passed');
-        const r = await runWithRetries(fn, 2);
+        const r = await runWithRetries(fn, fixedRetries(2));
         expect(r.status).toBe('Passed');
         expect(r.attempts).toBe(1);
         expect(r.flaky).toBe(false);
@@ -48,7 +49,7 @@ describe('runWithRetries', () => {
 
     it('maxRetries=0 never retries, even on failure', async () => {
         const { fn } = sequence('Failed');
-        const r = await runWithRetries(fn, 0);
+        const r = await runWithRetries(fn, fixedRetries(0));
         expect(r.status).toBe('Failed');
         expect(r.attempts).toBe(1);
         expect(r.flaky).toBe(false);
@@ -57,7 +58,7 @@ describe('runWithRetries', () => {
 
     it('fails then passes → flaky=true, returns the passing result', async () => {
         const { fn } = sequence('Failed', 'Passed');
-        const r = await runWithRetries(fn, 2);
+        const r = await runWithRetries(fn, fixedRetries(2));
         expect(r.status).toBe('Passed');
         expect(r.flaky).toBe(true);
         expect(r.attempts).toBe(2);
@@ -66,7 +67,7 @@ describe('runWithRetries', () => {
 
     it('exhausts all retries on persistent failure → not flaky, last failure returned', async () => {
         const { fn } = sequence('Failed', 'Error', 'Timeout');
-        const r = await runWithRetries(fn, 2);
+        const r = await runWithRetries(fn, fixedRetries(2));
         expect(isRetriableFailure(r)).toBe(true);
         expect(r.status).toBe('Timeout'); // the last attempt's status
         expect(r.flaky).toBe(false);
@@ -76,7 +77,7 @@ describe('runWithRetries', () => {
 
     it('stops retrying as soon as it passes (does not use remaining budget)', async () => {
         const { fn } = sequence('Failed', 'Passed', 'Failed');
-        const r = await runWithRetries(fn, 5);
+        const r = await runWithRetries(fn, fixedRetries(5));
         expect(r.status).toBe('Passed');
         expect(r.attempts).toBe(2);
         expect(fn).toHaveBeenCalledTimes(2);
@@ -84,14 +85,14 @@ describe('runWithRetries', () => {
 
     it('passes each attempt number to runOnce (for fresh start times)', async () => {
         const { fn, calls } = sequence('Failed', 'Failed', 'Passed');
-        await runWithRetries(fn, 3);
+        await runWithRetries(fn, fixedRetries(3));
         expect(calls).toEqual([1, 2, 3]);
     });
 
     it('fires onBeforeRetry once per retry with the prior failing result', async () => {
         const { fn } = sequence('Failed', 'Failed', 'Passed');
         const onBeforeRetry = vi.fn();
-        await runWithRetries(fn, 3, onBeforeRetry);
+        await runWithRetries(fn, fixedRetries(3), onBeforeRetry);
         expect(onBeforeRetry).toHaveBeenCalledTimes(2);
         expect(onBeforeRetry.mock.calls[0][0]).toBe(2); // nextAttempt
         expect(onBeforeRetry.mock.calls[0][1].status).toBe('Failed'); // lastResult
@@ -100,13 +101,13 @@ describe('runWithRetries', () => {
     // CU-F3: superseded attempts must be preserved for flake diagnosis.
     it('does not set priorAttempts when the first attempt passes', async () => {
         const { fn } = sequence('Passed');
-        const r = await runWithRetries(fn, 2);
+        const r = await runWithRetries(fn, fixedRetries(2));
         expect(r.priorAttempts).toBeUndefined();
     });
 
     it('preserves each superseded failure on a flaky pass', async () => {
         const { fn } = sequence('Failed', 'Error', 'Passed');
-        const r = await runWithRetries(fn, 3);
+        const r = await runWithRetries(fn, fixedRetries(3));
         expect(r.status).toBe('Passed');
         expect(r.flaky).toBe(true);
         expect(r.priorAttempts).toHaveLength(2);
@@ -116,7 +117,7 @@ describe('runWithRetries', () => {
 
     it('preserves all superseded attempts when retries are exhausted', async () => {
         const { fn } = sequence('Failed', 'Error', 'Timeout');
-        const r = await runWithRetries(fn, 2);
+        const r = await runWithRetries(fn, fixedRetries(2));
         expect(r.status).toBe('Timeout'); // final attempt, returned as the result
         // The two attempts BEFORE the final one are preserved; the final is `r` itself.
         expect(r.priorAttempts?.map(a => a.status)).toEqual(['Failed', 'Error']);
@@ -124,7 +125,7 @@ describe('runWithRetries', () => {
 
     it('summaries carry the diagnostic score of each attempt', async () => {
         const { fn } = sequence('Failed', 'Passed');
-        const r = await runWithRetries(fn, 2);
+        const r = await runWithRetries(fn, fixedRetries(2));
         expect(r.priorAttempts?.[0]).toMatchObject({ attempt: 1, status: 'Failed', score: 0 });
     });
 });

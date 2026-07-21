@@ -285,6 +285,32 @@ export interface PriorAttemptSummary {
   errorMessage?: string;
 }
 
+/**
+ * Normalized failure taxonomy the retry scheduler keys policy on (DR-D2).
+ * Drivers may emit their own free-form `failureClass`; the engine normalizes it
+ * (or regex-classifies the judge/error message as a stopgap) into one of these:
+ * - `timeout`     — the run exceeded its time budget.
+ * - `nav-loop`    — the agent looped / repeated the same action or page.
+ * - `blank-page`  — a blank/empty/non-rendering page (a.k.a. stuck-page).
+ * - `app-error`   — deterministic app fault: 500, uncaught exception, missing
+ *                   bundle/key, empty dataset. Retrying is pure waste → 0 retries.
+ * - `auth-detour` — an unexpected login/auth redirect (usually transient).
+ * - `assertion`   — an oracle/assertion said the output was wrong.
+ * - `impossible`  — the target judged the task infeasible / gave up → 0 retries.
+ * - `infra`       — network/connection/browser-crash below the app.
+ * - `unknown`     — could not be classified.
+ */
+export type FailureCategory =
+  | 'timeout'
+  | 'nav-loop'
+  | 'blank-page'
+  | 'app-error'
+  | 'auth-detour'
+  | 'assertion'
+  | 'impossible'
+  | 'infra'
+  | 'unknown';
+
 export interface TestRunResult {
   /**
    * Test Run ID
@@ -411,6 +437,15 @@ export interface TestRunResult {
    * "poisoned worker" analysis in reporting (DR-G2).
    */
   workerIndex?: number;
+
+  /**
+   * Normalized failure classification (DR-D2), present only for non-passing
+   * results. Sourced from the driver's `failureClass` when it sets one, else
+   * regex-classified from the judge/error message. The retry scheduler keys
+   * policy on it (`impossible`/`app-error` → 0 retries); reporting and `compare`
+   * tally by it. See {@link FailureCategory}.
+   */
+  failureCategory?: FailureCategory;
 }
 
 /**
