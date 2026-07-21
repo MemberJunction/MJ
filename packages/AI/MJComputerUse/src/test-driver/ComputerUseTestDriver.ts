@@ -92,6 +92,8 @@ import type {
 import { GoalCompletionOracle } from './oracles/GoalCompletionOracle.js';
 import { UrlMatchOracle } from './oracles/UrlMatchOracle.js';
 import { StepCountOracle } from './oracles/StepCountOracle.js';
+import { NoConsoleErrorsOracle } from './oracles/NoConsoleErrorsOracle.js';
+import { DomAssertOracle } from './oracles/DomAssertOracle.js';
 import { isOracleAdvisory, partitionGatingOracles } from './oracle-scoring.js';
 import { classifyFailure, FailureSignals } from './classify-failure.js';
 import { ArtifactRetentionPolicy, shouldCaptureArtifact, shouldRetainArtifact } from './artifact-retention.js';
@@ -128,6 +130,9 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         ['goal-completion', new GoalCompletionOracle()],
         ['url-match', new UrlMatchOracle()],
         ['step-count', new StepCountOracle()],
+        // Deterministic oracles (CU-D2): pass/fail without the LLM judge.
+        ['no-console-errors', new NoConsoleErrorsOracle()],
+        ['dom-assert', new DomAssertOracle()],
     ]);
 
     /**
@@ -837,6 +842,16 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         // classifier and for at-a-glance triage of the raw output.
         if (result.FailureReason) {
             output.failureReason = result.FailureReason;
+        }
+
+        // Final-step interactive elements (CU-A4 recording) exposed as a recorded
+        // postcondition for the dom-assert oracle (CU-D2). Present only when
+        // element grounding was on; role/name/selector per element.
+        const lastElements = result.Steps.length > 0
+            ? result.Steps[result.Steps.length - 1].InteractiveElements
+            : undefined;
+        if (lastElements && lastElements.length > 0) {
+            output.interactiveElements = lastElements.map(e => ({ role: e.Role, name: e.Name, selector: e.Selector }));
         }
 
         // Include judge verdict if available
