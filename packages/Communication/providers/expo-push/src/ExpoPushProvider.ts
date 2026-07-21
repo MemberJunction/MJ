@@ -192,6 +192,19 @@ export class ExpoPushProvider extends BaseCommunicationProvider {
         data: this.extractData(message)
       };
 
+      // DRY RUN: full pipeline ran (credential resolution + complete Expo payload and
+      // headers construction) — stop at the transport boundary, never calling the Expo Push API.
+      if (message.DryRun) {
+        this.buildHeaders(creds); // exercise header construction (the last preflight step) too
+        LogStatus(`[DryRun] Expo Push: payload constructed for ${payload.to} — external send skipped`);
+        return {
+          Message: message,
+          Success: true,
+          Error: '',
+          DryRun: true
+        };
+      }
+
       const response = await fetch(Config.EXPO_PUSH_API_URL, {
         method: 'POST',
         headers: this.buildHeaders(creds),

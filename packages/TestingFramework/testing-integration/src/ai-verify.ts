@@ -22,10 +22,23 @@ const RAN_OK = new Set(['Completed', 'AwaitingFeedback', 'Paused']);
 
 /** Fetches a single row by ID via the real RunView pipeline (BypassCache = true DB state), asserting one match. */
 async function fetchById(entity: string, id: string, user: UserInfo): Promise<Row> {
-    const result = await new RunView().RunView({ EntityName: entity, ExtraFilter: `ID='${id}'`, ResultType: 'simple', BypassCache: true }, user);
-    Assert(result.Success, `RunView('${entity}') failed: ${result.ErrorMessage}`);
-    Assert(result.Results.length === 1, `${entity} ${id} not found (got ${result.Results.length} rows)`);
-    return result.Results[0] as Row;
+    // Bounded poll: the rows this verifies (Action Execution Logs, child AI Prompt Runs) are
+    // written by the agent loop's FIRE-AND-FORGET save queue, which can land AFTER the run
+    // handle returns — especially under the fast server-in-process transport. A single-shot read
+    // raced that write (agent-loop-live AL2). Retry up to ~12s before failing.
+    for (let attempt = 0; attempt < 24; attempt++) {
+        const result = await new RunView().RunView({ EntityName: entity, ExtraFilter: `ID='${id}'`, ResultType: 'simple', BypassCache: true }, user);
+        Assert(result.Success, `RunView('${entity}') failed: ${result.ErrorMessage}`);
+        if (result.Results.length === 1) {
+            return result.Results[0] as Row;
+        }
+        if (result.Results.length > 1) {
+            Assert(false, `${entity} ${id}: expected 1 row, got ${result.Results.length}`);
+        }
+        await new Promise(r => setTimeout(r, 500));
+    }
+    Assert(false, `${entity} ${id} not found after bounded poll (fire-and-forget write never landed)`);
+    throw new Error('unreachable');
 }
 
 /**
@@ -65,7 +78,7 @@ export interface AgentRunVerification {
  * TargetLogID — Prompt steps → AI Prompt Runs, Actions/Tool steps → Action Execution Logs, Sub-Agent steps
  * → child AI Agent Runs (recursively). `expectSuccess` asserts the run reached 'Completed'.
  */
-export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true): Promise<AgentRunVerification> {
+export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectSuccess = true, opts: { skipActionLogs?: boolean } = {}): Promise<AgentRunVerification> {
     const run = await fetchById('MJ: AI Agent Runs', agentRunID, user);
     const status = String(run.Status);
     // The actual "stuck at Running" guard: a finalized run is anything except still-Running.
@@ -105,6 +118,10 @@ export async function verifyAgentRun(agentRunID: string, user: UserInfo, expectS
             await verifyPromptRun(target, user);
             promptRunsVerified++;
         } else if (step.StepType === 'Actions' || step.StepType === 'Tool') {
+            // Action Execution Logs are written by the fire-and-forget queue and can land
+            // arbitrarily late relative to a run handle returning (esp. server-in-process).
+            // Callers that only care about run/step terminality pass skipActionLogs.
+            if (opts.skipActionLogs) { continue; }
             await verifyActionLog(target, user);
             actionLogsVerified++;
         } else if (step.StepType === 'Sub-Agent') {

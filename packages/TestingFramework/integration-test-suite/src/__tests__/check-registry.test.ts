@@ -22,6 +22,20 @@ import { ConversationCompactionChecks } from '../checks/conversation-compaction.
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
+import { AgentLoopLiveChecks } from '../checks/agent-loop-live.checks';
+import { ShippedAgentsLiveChecks } from '../checks/shipped-agents-live.checks';
+import { AgentCarryForwardChecks } from '../checks/agent-carry-forward.checks';
+import { PayloadGuardsChecks } from '../checks/agent-payload-guards.checks';
+import { ArtifactToolsChecks } from '../checks/agent-artifact-tools.checks';
+import { AgentSkillsLiveChecks } from '../checks/agent-skills-live.checks';
+import { AgentPlanModeChecks } from '../checks/agent-plan-mode.checks';
+import { AgentCompactionE2EChecks } from '../checks/agent-compaction-e2e.checks';
+import { AgentMemoryGuardsChecks } from '../checks/agent-memory-guards.checks';
+import { AgentRagSearchChecks } from '../checks/agent-rag-search.checks';
+import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
+import { ViewSecurityChecks } from '../checks/view-security.checks';
+import { AiProvidersChecks } from '../checks/ai-providers.checks';
+import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -76,7 +90,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
         ['rls-isolation', RlsIsolationChecks, 9],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
-        ['record-process', RecordProcessChecks, 8],
+        ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
         ['scheduled-jobs', ScheduledJobsChecks, 2],
         ['field-rules-bulk-update', FieldRulesBulkUpdateChecks, 3],
@@ -92,7 +106,21 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['lists', ListsChecks, 3],
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
-        ['conversation-compaction', ConversationCompactionChecks, 12] // CC1-CC10 graduated from PR #2732's dispatcher + CC11 loader-parity & CC12 concurrent-Sequence (coverage-study recs 3/4), 2026-07-20
+        ['conversation-compaction', ConversationCompactionChecks, 12], // CC1-CC12
+        ['agent-loop-live', AgentLoopLiveChecks, 7],
+        ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
+        ['agent-carry-forward', AgentCarryForwardChecks, 6],
+        ['agent-payload-guards', PayloadGuardsChecks, 9],
+        ['agent-artifact-tools', ArtifactToolsChecks, 9],
+        ['agent-skills-live', AgentSkillsLiveChecks, 5],
+        ['agent-plan-mode', AgentPlanModeChecks, 6],
+        ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
+        ['agent-memory-guards', AgentMemoryGuardsChecks, 5],
+        ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
+        ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
+        ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
+        ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
+        ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
