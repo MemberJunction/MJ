@@ -143,22 +143,63 @@ export class ComputerUseEngine {
         this.log(`  JudgeModel: ${params.JudgeModel ? `${params.JudgeModel.Vendor}:${params.JudgeModel.Model}` : '(not set — will use executeJudgePrompt override or heuristics only)'}`);
         this.log(`  Tools: ${params.Tools?.length ?? 0} registered`);
 
+        let result: ComputerUseResult | undefined;
         try {
             this.initializeComponents(params);
             await this.launchBrowser(params);
             this.log('Browser launched');
+            await this.startTracingIfRequested(params);
             await this.runGlobalAuthCallback();
             await this.navigateToStartUrl(params, context);
             if (params.StartUrl) {
                 this.log(`Navigated to start URL: ${context.CurrentUrl}`);
             }
-            return await this.executeMainLoop(context);
+            result = await this.executeMainLoop(context);
+            return result;
         } catch (error) {
             this.logError('Run failed with error', error);
-            return this.buildErrorResult(context, error);
+            result = this.buildErrorResult(context, error);
+            return result;
         } finally {
+            // Stop the trace (if any) BEFORE the context closes, stamping the
+            // path on the result so the caller can retain-or-discard (CU-F4).
+            await this.stopTracingIfRequested(params, result);
             await this.closeBrowser();
             this.log('Browser closed');
+        }
+    }
+
+    /** Start a forensic trace when the caller requested one via TracePath (CU-F4). Best-effort. */
+    private async startTracingIfRequested(params: RunComputerUseParams): Promise<void> {
+        if (!params.TracePath) {
+            return;
+        }
+        try {
+            await this.browserAdapter.StartTracing();
+        } catch (error) {
+            this.logError('Failed to start tracing (continuing without a trace)', error);
+        }
+    }
+
+    /**
+     * Stop a trace started for this run and, if a file was written, stamp its
+     * path on the result. The caller (driver) owns the retain-or-discard policy
+     * (CU-F4) — the engine only produces the artifact. Best-effort: never throws.
+     */
+    private async stopTracingIfRequested(
+        params: RunComputerUseParams,
+        result: ComputerUseResult | undefined
+    ): Promise<void> {
+        if (!params.TracePath) {
+            return;
+        }
+        try {
+            const wrote = await this.browserAdapter.StopTracing(params.TracePath);
+            if (wrote && result) {
+                result.TracePath = params.TracePath;
+            }
+        } catch (error) {
+            this.logError('Failed to stop tracing', error);
         }
     }
 

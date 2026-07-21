@@ -102,6 +102,14 @@ export class ComputerUseResult {
      */
     public AuthDetourCount: number = 0;
 
+    /**
+     * Filesystem path to the forensic trace written for this run (CU-F4), set
+     * only when tracing was requested (via {@link RunComputerUseParams.TracePath})
+     * AND a trace file was actually written. Undefined otherwise. The caller
+     * decides whether to keep it (e.g. retain-on-failure) or delete it.
+     */
+    public TracePath?: string;
+
     /** Error details (populated when Status is 'Error') */
     public Error?: ComputerUseError;
 }

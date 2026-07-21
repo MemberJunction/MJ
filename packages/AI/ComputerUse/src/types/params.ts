@@ -177,4 +177,15 @@ export class RunComputerUseParams {
      * contexts, where the scrub is required so the next test starts clean.
      */
     public EphemeralContext?: boolean;
+
+    /**
+     * When set, the engine records a forensic browser trace (DOM snapshots +
+     * screenshots + network + console) for the whole run and writes it to this
+     * path on completion (CU-F4). The written path is echoed on
+     * {@link ComputerUseResult.TracePath}. Leave unset to skip tracing entirely
+     * (no overhead). The *retain-or-discard* policy is the caller's — the engine
+     * always writes here when set; the caller keeps or deletes the file based on
+     * the run outcome.
+     */
+    public TracePath?: string;
 }

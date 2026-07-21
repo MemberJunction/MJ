@@ -332,6 +332,35 @@ export abstract class BaseBrowserAdapter {
         return [];
     }
 
+    // ─── Failure Artifacts (CU-F4) ─────────────────────────
+
+    /**
+     * Begin recording a forensic trace of the session (DOM snapshots +
+     * screenshots + network + console) for later offline inspection.
+     *
+     * Default implementation is a no-op resolve so adapters that can't produce a
+     * trace (or non-CDP backends) don't break — additive and non-throwing.
+     * Adapters backed by a real browser context (e.g. Playwright) override this
+     * to call `context.tracing.start(...)`. The caller decides *whether* to
+     * capture (and whether to keep the result); the adapter only knows *how*.
+     */
+    public async StartTracing(): Promise<void> {
+        // No-op default — adapters with a traceable context override this.
+    }
+
+    /**
+     * Stop a trace started via {@link StartTracing}, writing it to `path`.
+     * Returns `true` iff a trace file was actually written (so the caller can
+     * decide whether there's an artifact to retain or discard). Default
+     * implementation returns `false` — nothing was traced. Never throws.
+     *
+     * @param path - Filesystem path to write the trace to (e.g. a `.zip`).
+     */
+    public async StopTracing(_path: string): Promise<boolean> {
+        // No-op default — no trace was in progress on this adapter.
+        return false;
+    }
+
     // ─── Utilities ─────────────────────────────────────────
 
     /**

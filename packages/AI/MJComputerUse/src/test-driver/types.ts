@@ -68,6 +68,8 @@ export interface ComputerUseOracleConfig {
  * Configuration for a Computer Use test.
  * Stored as JSON in TestEntity.Configuration.
  */
+import type { ArtifactRetentionPolicy } from './artifact-retention.js';
+
 export interface ComputerUseTestConfig {
     /** Run browser in headless mode (default: true) */
     headless?: boolean;
@@ -202,6 +204,18 @@ export interface ComputerUseTestConfig {
             maxDetours?: number;
         };
     };
+
+    /**
+     * Failure-artifact trace policy (CU-F4). When enabled, the run records a
+     * Playwright trace (DOM snapshots + network + console) viewable at
+     * trace.playwright.dev, retained per this policy as a `File` TestRunOutput:
+     * - `off` (default) — no trace, zero overhead.
+     * - `retain-on-failure` — trace every run, keep it only when the test fails.
+     * - `on` — trace every run, always keep it.
+     * Tracing carries ~5–15% per-run overhead; measure on a smoke test before
+     * enabling suite-wide (hence the default is `off`).
+     */
+    trace?: ArtifactRetentionPolicy;
 }
 
 // ─── Input Definition (TestEntity.InputDefinition JSON) ───────────

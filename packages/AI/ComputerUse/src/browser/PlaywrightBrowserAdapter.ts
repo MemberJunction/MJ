@@ -447,6 +447,30 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         return queryElement(this.page, selector, this.config.ActionTimeoutMs);
     }
 
+    // ─── Failure Artifacts (CU-F4) ─────────────────────────
+
+    public override async StartTracing(): Promise<void> {
+        if (!this.context) {
+            return;
+        }
+        // DOM snapshots + screenshots so the trace viewer can replay the run;
+        // sources omitted (they bloat the zip with app source, of little use here).
+        await this.context.tracing.start({ screenshots: true, snapshots: true });
+    }
+
+    public override async StopTracing(path: string): Promise<boolean> {
+        if (!this.context) {
+            return false;
+        }
+        try {
+            await this.context.tracing.stop({ path });
+            return true;
+        } catch {
+            // Tracing wasn't started, or the write failed — no artifact to retain.
+            return false;
+        }
+    }
+
     // ─── Screencast (CDP live viewport feed) ───────────────
 
     /**

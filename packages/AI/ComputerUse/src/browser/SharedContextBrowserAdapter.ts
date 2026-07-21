@@ -461,6 +461,25 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
         return events;
     }
 
+    // ─── Failure Artifacts (CU-F4) ─────────────────────────
+
+    public override async StartTracing(): Promise<void> {
+        // Per-run start/stop on the shared (pooled) context — Playwright scopes
+        // the trace to this start→stop window, so each test gets its own trace
+        // even though the context outlives the test.
+        await this.sharedContext.tracing.start({ screenshots: true, snapshots: true });
+    }
+
+    public override async StopTracing(path: string): Promise<boolean> {
+        try {
+            await this.sharedContext.tracing.stop({ path });
+            return true;
+        } catch {
+            // Tracing wasn't started, or the write failed — no artifact to retain.
+            return false;
+        }
+    }
+
     /**
      * Attach event listeners to a page to capture console messages,
      * page errors, request failures, and crashes into the diagnostic buffer.

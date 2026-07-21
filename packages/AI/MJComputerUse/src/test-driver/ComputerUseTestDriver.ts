@@ -94,6 +94,10 @@ import { UrlMatchOracle } from './oracles/UrlMatchOracle.js';
 import { StepCountOracle } from './oracles/StepCountOracle.js';
 import { isOracleAdvisory, partitionGatingOracles } from './oracle-scoring.js';
 import { classifyFailure, FailureSignals } from './classify-failure.js';
+import { ArtifactRetentionPolicy, shouldCaptureArtifact, shouldRetainArtifact } from './artifact-retention.js';
+import { promises as fs } from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 /**
  * Test driver for Computer Use browser automation tests.
@@ -193,6 +197,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 runParams.ApplicationContext = applicationContext;
             }
 
+            // Failure-artifact tracing (CU-F4): when the policy calls for capture,
+            // point the engine at a temp trace file for this run. The engine writes
+            // it on completion; retain-or-discard is decided post-run by outcome.
+            // Default 'off' → no TracePath → no trace, no overhead.
+            const tracePolicy: ArtifactRetentionPolicy = config.trace ?? 'off';
+            if (shouldCaptureArtifact(tracePolicy)) {
+                runParams.TracePath = path.join(os.tmpdir(), `mj-cu-trace-${context.testRun.ID}.zip`);
+            }
+
             this.logToTestRun(context, 'info', `Executing Computer Use: goal="${input.goal}", startUrl="${input.startUrl ?? 'none'}"`);
 
             // 3. Execute with timeout. The engine owns the agent-time budget
@@ -239,7 +252,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             // Handle cancellation (engine was stopped via Stop())
             if (result.Status === 'Cancelled') {
                 this.logToTestRun(context, 'warn', 'Test execution was cancelled');
-                return this.buildCancelledResult(result, input, expected, actualOutput, context);
+                return await this.buildCancelledResult(result, input, expected, actualOutput, context, tracePolicy);
             }
 
             // 5. Run oracles
@@ -267,8 +280,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 this.logToTestRun(context, 'info', `Failure class: ${failureClass}`);
             }
 
-            // 7. Build structured outputs (screenshots from each step)
+            // 7. Build structured outputs (screenshots from each step) + retain the
+            //    forensic trace per policy (CU-F4) — kept on failure, discarded on pass.
             const outputs = this.buildOutputs(result);
+            await this.appendTraceArtifact(outputs, result, tracePolicy, status === 'Passed', context);
 
             // 8. Build result
             const driverResult: DriverExecutionResult = {
@@ -910,6 +925,54 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }
 
     /**
+     * Retain (or discard) the run's forensic trace per the CU-F4 policy. The
+     * engine already wrote the trace to `result.TracePath` (when tracing was
+     * requested); here we decide whether to keep it: on retention we inline the
+     * zip as a `File` TestRunOutput (openable at trace.playwright.dev) and then
+     * delete the temp file; on discard we just delete it. No-op when tracing was
+     * off (no `TracePath`). Best-effort — a read/unlink failure is logged, never
+     * fatal to the test result.
+     */
+    private async appendTraceArtifact(
+        outputs: TestRunOutputItem[],
+        result: ComputerUseResult,
+        policy: ArtifactRetentionPolicy,
+        passed: boolean,
+        context: DriverExecutionContext
+    ): Promise<void> {
+        const tracePath = result.TracePath;
+        if (!tracePath) {
+            return; // tracing was off, or no trace file was written
+        }
+        try {
+            if (shouldRetainArtifact(policy, passed)) {
+                const buffer = await fs.readFile(tracePath);
+                outputs.push({
+                    outputTypeName: 'File',
+                    sequence: outputs.length,
+                    name: 'Playwright Trace',
+                    description: 'Forensic browser trace (DOM snapshots + network + console). Open at trace.playwright.dev.',
+                    mimeType: 'application/zip',
+                    inlineData: buffer.toString('base64'),
+                    fileSizeBytes: buffer.byteLength,
+                    metadata: {
+                        finalUrl: result.FinalUrl,
+                        status: result.Status,
+                        failureReason: result.FailureReason,
+                    },
+                });
+                this.logToTestRun(context, 'info', `Retained failure trace (${Math.round(buffer.byteLength / 1024)}KB) as a TestRunOutput (CU-F4)`);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.logToTestRun(context, 'warn', `Failed to retain trace artifact: ${msg}`);
+        } finally {
+            // Always remove the temp trace — retained copies are inlined above.
+            await fs.unlink(tracePath).catch(() => { /* best-effort */ });
+        }
+    }
+
+    /**
      * Build a timeout result with partial data.
      */
     private async buildTimeoutResult(
@@ -946,6 +1009,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             (actualOutput as Record<string, unknown>).failureClass = failureClass;
         }
 
+        // A timeout is a failure for retention purposes — keep the trace (CU-F4).
+        const outputs = this.buildOutputs(result);
+        await this.appendTraceArtifact(outputs, result, config.trace ?? 'off', false, context);
+
         return {
             targetType: 'Computer Use',
             targetLogId: context.testRun.ID,
@@ -960,7 +1027,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             actualOutput,
             durationMs: result.TotalDurationMs,
             errorMessage: `Test execution timed out after ${timeoutMs}ms`,
-            outputs: this.buildOutputs(result),
+            outputs,
             failureClass,
         };
     }
@@ -968,13 +1035,14 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     /**
      * Build a cancellation result when the engine is stopped via Stop().
      */
-    private buildCancelledResult(
+    private async buildCancelledResult(
         result: ComputerUseResult,
         input: ComputerUseTestInput,
         expected: ComputerUseExpectedOutcomes,
         actualOutput: Record<string, unknown>,
-        context: DriverExecutionContext
-    ): DriverExecutionResult {
+        context: DriverExecutionContext,
+        tracePolicy: ArtifactRetentionPolicy
+    ): Promise<DriverExecutionResult> {
         // Classify (CU-F5): normally 'cancelled', unless an app-error/crash was
         // the real cause before the cancel. (beaconConfigured is don't-care here —
         // a 'Cancelled' status resolves before the beacon branch.)
@@ -982,6 +1050,9 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         if (failureClass) {
             (actualOutput as Record<string, unknown>).failureClass = failureClass;
         }
+        // A cancellation is a non-pass — keep the trace (CU-F4).
+        const outputs = this.buildOutputs(result);
+        await this.appendTraceArtifact(outputs, result, tracePolicy, false, context);
         return {
             targetType: 'Computer Use',
             targetLogId: context.testRun.ID,
@@ -996,7 +1067,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             actualOutput,
             durationMs: result.TotalDurationMs,
             errorMessage: `Test execution was cancelled after ${result.TotalSteps} step(s)`,
-            outputs: this.buildOutputs(result),
+            outputs,
             failureClass,
         };
     }
