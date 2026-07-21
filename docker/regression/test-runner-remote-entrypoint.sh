@@ -104,6 +104,11 @@ fi
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
 RUN_DIR="/app/test-results/run-${TIMESTAMP}"
 mkdir -p "$RUN_DIR/screenshots"
+
+# DR-F2: tee everything from here on to the bind-mounted run dir so a detached
+# or crashed run still leaves a console record on disk (not only docker logs).
+exec > >(tee -a "$RUN_DIR/runner.log") 2>&1
+
 echo "Run directory: $RUN_DIR"
 echo ""
 

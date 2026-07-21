@@ -170,6 +170,15 @@ fi
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
 RUN_DIR="/app/test-results/run-${TIMESTAMP}"
 mkdir -p "$RUN_DIR/screenshots"
+
+# DR-F2: tee everything from here on to the bind-mounted run dir, so a detached
+# (`up -d`) or crashed/OOM-killed run still leaves a complete console record on
+# disk — not only in `docker logs` (which a killed run loses). Append (-a) so a
+# resumed run (DR-D6) doesn't truncate the prior log. Output BEFORE this point
+# (socat/metadata/preflight gate) stays in docker logs; capturing the full
+# stdout host-side is DR-F2's Wave-1 half (up-then-run with piped stdio).
+exec > >(tee -a "$RUN_DIR/runner.log") 2>&1
+
 echo "Run directory: $RUN_DIR"
 echo ""
 
