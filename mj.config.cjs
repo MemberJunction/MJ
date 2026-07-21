@@ -24,6 +24,22 @@ module.exports = {
    * Required by CLI tools (mj test, mj sync, etc.) that don't go through the
    * MJServer config merging path. Values are read from .env.
    */
+  /**
+   * ====================
+   * Testing (`mj test`)
+   * ====================
+   *
+   * checkModules: module specifiers side-effect-imported by `mj test run` / `mj test suite`
+   * before any integration bundle resolves — each import registers its check bundles on the
+   * IntegrationCheckRegistry. MJ's own suite lives in the PRIVATE (never published)
+   * @memberjunction/integration-test-suite package, so the published CLI cannot depend on it;
+   * this config key is the sanctioned runtime-plugin seam that loads it in-repo. External
+   * adopters point this at their own check packages.
+   */
+  testing: {
+    checkModules: ['@memberjunction/integration-test-suite'],
+  },
+
   dbHost: process.env.DB_HOST || 'localhost',
   dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
   dbDatabase: process.env.DB_DATABASE,
