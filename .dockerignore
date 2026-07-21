@@ -1,0 +1,46 @@
+# Docker build-context hygiene (DR-C1, docker-regression-reliability-plan).
+#
+# Every image in this repo builds with the repo root as its context
+# (docker/regression/docker-compose.test.yml, docker-compose.cross-server.yml,
+# docker/MJAPI). Without this file each build transferred a multi-GB context —
+# .git (~1.7GB), node_modules (~2.8GB), docker/regression/test-results (~1.9GB)
+# on a working checkout — and `COPY packages/` imported host build state
+# (dist/, nested node_modules, tool caches) into images that run their own
+# clean install + build.
+#
+# Rule of thumb: sources, manifests, metadata, migrations, and demo SQL go in;
+# VCS history, dependencies, build outputs, caches, run artifacts, and secrets
+# stay out.
+#
+# Deliberately NOT excluded: docker/regression/.docker-generated/ — the
+# container-produced codegen overlay that Dockerfile.api / Dockerfile.explorer
+# explicitly COPY (see those files for why).
+
+# ── VCS + CI ────────────────────────────────────────────────────────────────
+.git
+.github
+
+# ── Dependencies — images run their own npm ci ─────────────────────────────
+node_modules
+**/node_modules
+
+# ── Build outputs and tool caches — host state must never leak into images ─
+**/dist
+**/.turbo
+**/.angular
+
+# ── Regression-run artifacts (screenshots/reports; GBs, never COPY'd) ──────
+docker/regression/test-results
+
+# ── Workbench workspace bind-mount (can hold a full second MJ checkout) ────
+docker/workbench/workspace
+
+# ── Secrets / env files — never ship credentials to the build daemon ───────
+.env
+.env.*
+**/.env
+**/.env.*
+
+# ── Local tool state / logs ─────────────────────────────────────────────────
+.playwright-cli
+**/*.log

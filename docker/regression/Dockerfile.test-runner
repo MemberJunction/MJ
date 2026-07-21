@@ -6,7 +6,18 @@
 #   TestingFramework, ComputerUse, MJComputerUse, AI packages, Core, etc.
 #
 # Usage: the docker-compose test stack starts this after mjexplorer is healthy.
+#
+# Layer order (DR-C1): package manifests → npm ci (BuildKit-cached) → sources →
+# build. A source edit no longer invalidates the dependency install.
 
+# ─── Manifests-only stage (see Dockerfile.db-setup for the rationale) ───────
+FROM node:24-slim AS manifests
+WORKDIR /m
+COPY packages/ ./packages/
+RUN find packages -type f ! -name package.json -delete \
+    && find packages -type d -empty -delete
+
+# ─── Runner image ───────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/playwright:v1.58.1-noble
 
 # socat forwards localhost:4200 → mjexplorer:4200 so the browser sees a secure origin
@@ -14,15 +25,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends socat && rm -rf
 
 WORKDIR /app
 
-# Copy package manifests for workspace install
+# Dependencies first: root manifests + the package.json skeleton, then a
+# cache-mounted reproducible install keyed only on manifest content.
 COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+COPY --from=manifests /m/packages/ ./packages/
+RUN --mount=type=cache,target=/root/.npm npm ci
 
-# Copy all packages and metadata (metadata needed at build time for prompt sync)
+# Sources after install (COPY merges over the skeleton; nested node_modules
+# created by npm ci are preserved). Metadata is baked for standalone use —
+# the compose stack bind-mounts the live tree over it at runtime.
 COPY packages/ ./packages/
 COPY metadata/ ./metadata/
-
-# Install dependencies
-RUN npm install
 
 # Build all packages (turbo handles dependency order)
 # --concurrency=2 limits parallel tsc processes to avoid OOM in Docker's memory-constrained environment

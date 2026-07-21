@@ -1,6 +1,17 @@
 # MemberJunction Explorer — Test Environment
 # Multi-stage build: builds Angular AOT app, then serves via nginx.
 # nginx proxies /api/ to mjapi:4000 so the browser never needs to resolve Docker hostnames.
+#
+# Layer order (DR-C1): package manifests → npm ci (BuildKit-cached) → sources →
+# codegen overlay → build. A source edit no longer invalidates the dependency
+# install (which is the most expensive install in the stack).
+
+# ─── Manifests-only stage (see Dockerfile.db-setup for the rationale) ───────
+FROM node:24-slim AS manifests
+WORKDIR /m
+COPY packages/ ./packages/
+RUN find packages -type f ! -name package.json -delete \
+    && find packages -type d -empty -delete
 
 # ─── Stage 1: Build ────────────────────────────────────────────────────────
 FROM node:24-slim AS builder
@@ -13,12 +24,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 
 WORKDIR /app
 
+# Dependencies first: root manifests + the package.json skeleton, then a
+# cache-mounted reproducible install keyed only on manifest content.
 COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+COPY --from=manifests /m/packages/ ./packages/
+RUN --mount=type=cache,target=/root/.npm NODE_OPTIONS=--max-old-space-size=8192 npm ci
+
+# Sources after install (COPY merges over the skeleton; nested node_modules
+# created by npm ci are preserved).
 COPY packages/ ./packages/
 COPY metadata/ ./metadata/
 
 # Overlay generated entity forms produced by the form-generator service.
-# `npm run regression:build` invokes gen-forms before `docker compose build`
+# `mj test regression build` invokes gen-forms before `docker compose build`
 # whenever .docker-generated/ is missing, so by the time these COPYs run the
 # directories always exist with real content:
 #   MJExplorer-forms     → *.form.component.ts (Angular form components)
@@ -28,8 +46,6 @@ COPY docker/regression/.docker-generated/GeneratedEntities/ ./packages/Generated
 
 # Bake-time helpers (gen-environment-ts.cjs lives here)
 COPY docker/regression/scripts/ ./docker/regression/scripts/
-
-RUN NODE_OPTIONS=--max-old-space-size=8192 npm install
 
 # Generate environment.ts — GRAPHQL_URI must be an absolute URL because
 # graphql-request v7+ validates with new URL() which rejects relative paths.
