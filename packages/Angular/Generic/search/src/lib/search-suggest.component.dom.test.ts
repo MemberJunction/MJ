@@ -156,7 +156,7 @@ describe('SearchSuggestComponent (DOM)', () => {
     expect(seeAll).toEqual(['graph']);
   });
 
-  it('emits ClearRecentRequested when the recent-searches "Clear" link is mousedown-clicked', () => {
+  it('emits ClearRecentRequested when the recent-searches "Clear" button is clicked (click, not mousedown — keyboard Enter/Space must work too)', () => {
     const fixture = render({
       IsOpen: true,
       Query: '',
@@ -165,7 +165,12 @@ describe('SearchSuggestComponent (DOM)', () => {
       RecentSearches: [makeRecent('alpha')],
     });
     const cleared = capture(fixture.componentInstance.ClearRecentRequested);
-    (query(fixture, '.suggest-clear-link') as HTMLElement).dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    const clearBtn = query(fixture, '.suggest-clear-link') as HTMLElement;
+    // mousedown alone must NOT clear (it only prevents the input blur)...
+    clearBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(cleared.length).toBe(0);
+    // ...the click (mouse or keyboard-synthesized) is what activates.
+    clearBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(cleared.length).toBe(1);
   });
 

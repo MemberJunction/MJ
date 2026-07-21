@@ -293,7 +293,7 @@
                         <div class="qa-item-name">{{ record.recordName || record.recordId }}</div>
                         <div class="qa-item-meta">{{ record.entityName }}</div>
                       </div>
-                      <span class="qa-item-time">{{ formatRelativeTime(record.latestAt) }}</span>
+                      <span class="qa-item-time">{{ record.relativeTime }}</span>
                     </div>
                   }
                   @if (quickAccessRecentRecords.length === 0) {

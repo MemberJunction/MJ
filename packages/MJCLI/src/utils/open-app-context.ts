@@ -53,7 +53,15 @@ function toMJConfig(config: ResolvedConfig) {
     dbPassword: config.codeGenPassword,
     dbEncrypt: config.dbHost.includes('.database.windows.net') ? 'Y' : 'N',
     dbTrustServerCertificate: config.dbTrustServerCertificate ? 'Y' : 'N',
+    // Plumb the configured request timeout through to the shared provider pool so
+    // long-running `mj app …` operations (e.g. remove dropping a large schema) don't
+    // hit mssql's 15s default. Without this, RequestTimeout only reached the migration
+    // runner and never the pool that executes the schema DROPs.
+    dbRequestTimeout: config.dbRequestTimeout,
     mjCoreSchema: config.coreSchema ?? '__mj',
+    // Pass the startup section through so initializeProvider's mode resolution
+    // (CLI default 'task') can honor an explicit mj.config.cjs startup.mode.
+    startup: config.startup,
   };
 }
 

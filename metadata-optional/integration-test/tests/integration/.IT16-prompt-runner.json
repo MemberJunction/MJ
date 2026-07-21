@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT16 - AIPromptRunner Live Persistence",
+    "Description": "LIVE-MODEL tier (gated by RUN_AGENT_TESTS — real model calls cost tokens). Runs selected Active prompts through the full AIPromptRunner stack (template render → model selection → execution → fire-and-forget AIPromptRun persistence) and verifies each persisted MJ: AI Prompt Runs row finalized correctly: terminal Status, CompletedAt set (the 'stuck at Running' guard), and on success a non-empty Result + timing. The live end-to-end regression guard for the BaseEntitySaveQueue prompt-run path. Skips-as-pass when RUN_AGENT_TESTS is unset.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Each executed prompt persists a terminal AI Prompt Run with CompletedAt set (never stuck at Running)."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "prompt-runner"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "D909219D-9455-4331-98D9-4C5ECEEFB9CB"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T19:15:10.453Z",
+    "checksum": "40f0e572322ac17a224df52b60983dda86b2078e2e3c7a42cceafc61e1bbdfc7"
+  }
+}

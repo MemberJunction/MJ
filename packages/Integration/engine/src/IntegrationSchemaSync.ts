@@ -108,6 +108,53 @@ export function decideBooleanOverlay(
   return { value: discovered, winner: 'Discovered' };
 }
 
+/**
+ * Pure overlay rule for SEMANTIC string attributes (Description, DisplayName, the
+ * IncrementalWatermarkField cursor name) — external-wins-when-present:
+ *
+ *   - The external system RETURNED a non-empty value that differs → Discovered wins (a
+ *     returned source description overrides the metadata folder's).
+ *   - The external system returned the SAME value → no change, Declared credited.
+ *   - The external system was SILENT (null/undefined/empty) → the curated value sticks.
+ *
+ * Distinct from {@link decideBooleanOverlay} only in the empty-string handling: an empty
+ * string from a describe is treated as silence, never as an instruction to blank a curated
+ * value.
+ */
+export function decideSemanticOverlay(
+  declared: string | null | undefined,
+  discovered: string | null | undefined,
+): { value: string | null | undefined; changed: boolean; winner: 'Declared' | 'Discovered' } {
+  const said = typeof discovered === 'string' && discovered.length > 0;
+  if (!said) {
+    return { value: declared, changed: false, winner: 'Declared' };
+  }
+  if (declared === discovered) {
+    return { value: declared, changed: false, winner: 'Declared' };
+  }
+  return { value: discovered, changed: true, winner: 'Discovered' };
+}
+
+/**
+ * U2 — PURE width overlay: a rediscovery's measured width should only ever GROW the persisted catalog
+ * `Length`, never shrink it. RSU widens the physical column but never shrinks it, so shrinking the
+ * catalog `Length` (because this run's sample happened to be narrower than a prior run's) drifts the
+ * two apart — the catalog says `nvarchar(128)` while the column is still `nvarchar(512)` — and a later
+ * apply keyed off the catalog could truncate a value the wider column still holds. Returns the new
+ * length + whether it changed. A null/undefined `srcMaxLength` is "no opinion" → keep the persisted
+ * value (never clears a width to MAX). Large-text types carry their MAX in the Type, not here.
+ */
+export function decideLengthOverlay(
+  existingLength: number | null | undefined,
+  srcMaxLength: number | null | undefined,
+): { Length: number | null | undefined; changed: boolean } {
+  if (srcMaxLength == null) return { Length: existingLength, changed: false };
+  if (existingLength == null || srcMaxLength > existingLength) {
+    return { Length: srcMaxLength, changed: existingLength !== srcMaxLength };
+  }
+  return { Length: existingLength, changed: false };   // never shrink
+}
+
 /** §7 — input for {@link decideAbsentDeactivations}. */
 export interface AbsentDeactivationInput {
   /** Caller requested a deactivating (comprehensive) refresh. */
@@ -468,23 +515,34 @@ export class IntegrationSchemaSync {
     const existing = existingObjects.find((o) => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase());
 
     if (existing) {
-      // Declared row exists. Discovery may enrich (e.g. Description if empty,
-      // IncrementalWatermarkField if newly observed). Curated values win for
-      // everything human-authored; describe wins only for technical/empty slots.
+      // Declared row exists. Overlay rule (external-wins-when-present): when the
+      // EXTERNAL system returns a value for an attribute, that value overrides the curated
+      // metadata; when the external system is SILENT on it, the curated value sticks. This is
+      // the per-attribute overlay precedence — e.g. a source object that
+      // returns a description overrides the metadata folder's description, but an object whose
+      // describe carries none keeps the curated text. (Previously curated non-empty values were
+      // never overwritten; the spec inverts that precedence.)
       let dirty = false;
       const changes: string[] = [];
-      if (!existing.Description && srcObj.Description) {
-        existing.Description = srcObj.Description;
+      const descOverlay = decideSemanticOverlay(existing.Description, srcObj.Description);
+      if (descOverlay.changed) {
+        existing.Description = descOverlay.value ?? null;
         dirty = true;
         changes.push('Description');
       }
-      // §3 metadata refresh: capture the source's watermark field when the stored row has none.
-      // We deliberately do NOT overwrite an already-set value on a later refresh — a watermark
-      // field may have been deliberately chosen/curated, and the "curated values win" invariant
-      // (above) applies. A genuine source-side rename is rare and handled by re-curation, not by
-      // silently clobbering the stored cursor field on every refresh.
-      if (srcObj.IncrementalWatermarkField && !existing.IncrementalWatermarkField) {
-        existing.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
+      const labelOverlay = decideSemanticOverlay(existing.DisplayName, srcObj.ExternalLabel);
+      if (labelOverlay.changed) {
+        existing.DisplayName = labelOverlay.value ?? null;
+        dirty = true;
+        changes.push('DisplayName');
+      }
+      // §3 metadata refresh — same external-wins-when-present rule for the watermark cursor
+      // field: a discovery that REPORTS one overrides the stored value ("prefer new over old
+      // always for the same existing columns"); a silent discovery leaves the
+      // curated choice untouched.
+      const wmOverlay = decideSemanticOverlay(existing.IncrementalWatermarkField, srcObj.IncrementalWatermarkField);
+      if (wmOverlay.changed) {
+        existing.IncrementalWatermarkField = wmOverlay.value ?? null;
         dirty = true;
         changes.push('IncrementalWatermarkField');
       }
@@ -599,10 +657,15 @@ export class IntegrationSchemaSync {
     const winners: FieldMergeLog['AttributeWinners'] = {};
 
     if (existing) {
-      // Declared row exists. Overlay rule:
-      //  - Describe wins for DDL-affecting attributes (Type, AllowsNull, IsRequired, IsPrimaryKey, IsUniqueKey, IsReadOnly).
-      //    Curated values for these can drift from what the live system enforces and cause sync errors.
-      //  - Curated wins for semantic attributes (Description if non-empty, DisplayName, Sequence, Category).
+      // Declared row exists. Overlay rule — external-wins-when-present, per attribute:
+      //  - Describe wins for DDL-affecting attributes (Type, AllowsNull, IsRequired, IsPrimaryKey,
+      //    IsUniqueKey, IsReadOnly) whenever the source states an opinion; `undefined` = no opinion
+      //    and the Declared value sticks (decideBooleanOverlay). Width is the spec's one explicit
+      //    exception: "pick the larger" (decideLengthOverlay — grow-only, never shrink).
+      //  - Semantic attributes (Description, DisplayName) follow the SAME rule: a source that
+      //    RETURNS a value overrides the curated one; a silent source keeps the curated value.
+      // (The worked example — a returned description overrides the metadata
+      //    folder's description; absent, the metadata description stays.)
       //
       // Returned attribute winners surface EXACTLY which source decided each
       // attribute so the caller (progress emitter, UI) can show structural
@@ -627,8 +690,10 @@ export class IntegrationSchemaSync {
       // Length is DDL-affecting (describe wins): seed it so the column is sized
       // nvarchar(N) instead of defaulting to NVARCHAR(MAX) downstream. (Large-text types carry
       // their MAX in the Type itself — 'nvarchar(MAX)' — via MapSourceType, so no length here.)
-      if (srcField.MaxLength != null && existing.Length !== srcField.MaxLength) {
-        existing.Length = srcField.MaxLength;
+      // U2 — describe wins only to GROW the persisted width, never to shrink it (see decideLengthOverlay).
+      const lengthOverlay = decideLengthOverlay(existing.Length, srcField.MaxLength);
+      if (lengthOverlay.changed) {
+        existing.Length = lengthOverlay.Length;
         dirty = true;
       }
       if (existing.AllowsNull !== describedAllowsNull) {
@@ -672,15 +737,20 @@ export class IntegrationSchemaSync {
         dirty = true;
       }
       winners.IsReadOnly = roOverlay.winner;
-      // Description: only fill if missing — curated descriptions outrank
-      // generic describe output. So 'Declared' wins unless the row had
-      // no description at all and discovery has one.
-      if (!existing.Description && srcField.Description) {
-        existing.Description = srcField.Description;
+      // Description / DisplayName — external-wins-when-present: a source that
+      // returns a value overrides the curated one; a silent source keeps the curated value.
+      const fieldDescOverlay = decideSemanticOverlay(existing.Description, srcField.Description);
+      if (fieldDescOverlay.changed) {
+        existing.Description = fieldDescOverlay.value ?? null;
         dirty = true;
         winners.Description = 'Discovered';
       } else if (existing.Description) {
         winners.Description = 'Declared';
+      }
+      const fieldLabelOverlay = decideSemanticOverlay(existing.DisplayName, srcField.Label);
+      if (fieldLabelOverlay.changed) {
+        existing.DisplayName = fieldLabelOverlay.value ?? null;
+        dirty = true;
       }
       // FK metadata overlay: declared wins if already set. Otherwise resolve the
       // discovered ForeignKeyTarget name against sibling objects in this integration
@@ -720,7 +790,10 @@ export class IntegrationSchemaSync {
       // MapSourceType, so no length is set for them here.
       if (srcField.MaxLength != null) field.Length = srcField.MaxLength;
       field.AllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
-      field.IsPrimaryKey = srcField.IsPrimaryKey;
+      // New row: there is no declared value to wipe, so the NOT-NULL column takes the safe
+      // default when the source had no opinion (undefined). The overlay path above is where
+      // undefined MUST stay undefined (U1) — this is creation, not overlay.
+      field.IsPrimaryKey = srcField.IsPrimaryKey ?? false;
       field.IsRequired = srcField.IsRequired;
       field.IsReadOnly = srcField.IsReadOnly ?? false;
       field.IsUniqueKey = srcField.IsUniqueKey ?? false;

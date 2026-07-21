@@ -267,7 +267,7 @@ export class MySQLExternalDataSourceDriver extends BaseSqlExternalDataSourceDriv
     if (params.maxRows == null) {
       return undefined; // only pay for the count when paginating
     }
-    const [rows] = await pool.query(`SELECT COUNT(*) AS cnt FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`);
+    const [rows] = await pool.query(this.buildCountSql(target, params));
     const list = rows as Array<{ cnt: number }>;
     return Number(list[0]?.cnt ?? 0);
   }

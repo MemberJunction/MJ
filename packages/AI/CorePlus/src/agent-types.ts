@@ -593,6 +593,16 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     artifactToolCalls?: { artifactId: string; tool: string; input: Record<string, unknown> }[];
     /**
+     * Conversation-history retrieval tool calls from the agent's response — page exact
+     * stored messages back in by their persisted Sequence handles, or search history.
+     * Processed inline (zero turn cost) alongside artifact tool calls; only honored
+     * when the run has a conversationId.
+     * NOTE: structural duplicate of ConversationToolCall in @memberjunction/ai-agents
+     * (CorePlus sits below Agents and cannot import from it), mirroring how
+     * artifactToolCalls duplicates ArtifactToolCall above.
+     */
+    conversationToolCalls?: { tool: string; input: Record<string, unknown> }[];
+    /**
      * Durable memory writes from the agent's response. Each entry records a
      * fact/preference that persists across runs as a provisional agent note.
      * Processed inline (zero turn cost) alongside artifact tool calls; only
@@ -811,6 +821,16 @@ export type AgentExecutionStreamingCallback = (chunk: {
     stepEntityId?: string;
     /** Model name producing this content (for prompt steps) */
     modelName?: string;
+    /**
+     * Content discriminator for chat-client rendering. `'final-response'` marks chunks
+     * that are deltas of the user-facing final reply — safe for the conversation client
+     * to accumulate and render into the message bubble as they arrive. Chunks WITHOUT a
+     * kind are raw prompt output (e.g. a Loop agent's streamed JSON turn envelope) and
+     * are not rendered by the conversation client. Emitters that compose the final
+     * answer as plain prose (outside the turn envelope) set this on their compose
+     * stream; future kinds (e.g. inter-turn progress narration) extend this union.
+     */
+    kind?: 'final-response';
 }) => void;
 
 /**
@@ -1049,10 +1069,25 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional conversation detail ID to associate with this agent execution.
      * When provided, this value is stored in the ConversationDetailID column within
-     * the to be created AIAgentRun record. This allows for linking the agent run 
+     * the to be created AIAgentRun record. This allows for linking the agent run
      * to a specific conversation detail for tracking and reporting purposes.
      */
     conversationDetailId?: string;
+
+    /**
+     * Optional conversation ID — the PREFERRED input for conversation-driven runs.
+     * All durable cross-turn context features (persistent summary compaction, the
+     * summary-windowed context assembly via `ConversationEngine.AssembleContextWindow`
+     * over `LoadWindowRowsFresh` rows, and conversation-history retrieval tools) are
+     * gated on this being present.
+     * When absent, the agent behaves exactly as before: the caller supplies
+     * `conversationMessages` and only in-turn (per-run) context management applies —
+     * programmatic runs, internal sub-agent invocations, and tests need no change.
+     * When present alongside caller-supplied `conversationMessages`, the supplied
+     * messages win (deliberate override/escape hatch); the id still flows to the run
+     * record and gates the compaction/retrieval features.
+     */
+    conversationId?: string;
 
     /**
      * Optional flag to automatically populate the payload from the last run.
@@ -1612,6 +1647,20 @@ export type AgentChatMessageMetadata = {
     subAgentName?: string;
     /** ID of the sub-agent (only for sub-agent-result messages) */
     subAgentId?: string;
+    /**
+     * `ConversationDetail.Sequence` of the row this message came from. Stamped by
+     * `ConversationEngine.AssembleContextWindow` (kept assignment-compatible with its
+     * locally-defined `ConversationContextMetadata` — that package cannot import this
+     * type without creating a cycle). The symbolic handle for conversation-history
+     * retrieval tools.
+     */
+    sequence?: number;
+    /** ID of the `ConversationDetail` row this message came from (window-assembled messages only) */
+    conversationDetailId?: string;
+    /** True only on the synthetic first message carrying the persisted cross-turn conversation summary */
+    isConversationSummary?: boolean;
+    /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
+    summaryBoundarySequence?: number;
 }
 
 /**

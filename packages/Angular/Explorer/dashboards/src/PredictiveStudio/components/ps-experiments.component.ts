@@ -48,7 +48,7 @@ interface BudgetGaugeVM {
   selector: 'ps-experiments',
   imports: [CommonModule, MJButtonDirective, PSConfirmModalComponent],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-experiments.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-experiments.component.css'],
   template: `
     <div class="ps-panel ps-experiments" data-testid="ps-experiments-panel">
       @if (!session) {

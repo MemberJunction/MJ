@@ -714,27 +714,16 @@ export class ListOperations {
    * delta — we collect failures and surface a `PARTIAL_SUCCESS` result.
    */
   private async applyDeltaMutations(delta: ListDelta): Promise<ApplyResult> {
-    const md = this.metadata();
     let added = 0;
     let removed = 0;
     let failed = 0;
     const errors: string[] = [];
 
-    for (const recordId of delta.ToAdd) {
-      const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', this.contextUser);
-      detail.NewRecord();
-      detail.ListID = delta.TargetListId!;
-      detail.RecordID = recordId;
-      detail.Sequence = 0;
-      const saved = await detail.Save();
-      if (saved) {
-        added++;
-      } else {
-        failed++;
-        const msg = detail.LatestResult?.CompleteMessage ?? 'unknown error';
-        errors.push(`Failed to add '${recordId}': ${msg}`);
-        LogError(`ApplyDelta add failed for list ${delta.TargetListId} record ${recordId}: ${msg}`);
-      }
+    if (delta.ToAdd.length > 0) {
+      const inserted = await this.insertListMembers(delta.TargetListId!, delta.ToAdd);
+      added = inserted.added;
+      failed += inserted.failed;
+      errors.push(...inserted.errors);
     }
 
     if (delta.ToRemove.length > 0) {
@@ -783,14 +772,14 @@ export class ListOperations {
       return recordIds.map((id) => `Lookup failed for '${id}': ${result.ErrorMessage}`);
     }
 
-    for (const detail of result.Results ?? []) {
+    await this.forEachConcurrent(result.Results ?? [], ListOperations.WRITE_CONCURRENCY, async (detail) => {
       const ok = await detail.Delete();
       if (!ok) {
         const msg = detail.LatestResult?.CompleteMessage ?? 'unknown error';
         errors.push(`Failed to remove '${detail.RecordID}': ${msg}`);
         LogError(`ApplyDelta remove failed for list ${targetListId} record ${detail.RecordID}: ${msg}`);
       }
-    }
+    });
     return errors;
   }
 
@@ -981,7 +970,7 @@ export class ListOperations {
     let failed = 0;
     const errors: string[] = [];
 
-    for (const recordId of recordIds) {
+    await this.forEachConcurrent(recordIds, ListOperations.WRITE_CONCURRENCY, async (recordId) => {
       const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', this.contextUser);
       detail.NewRecord();
       detail.ListID = listId;
@@ -996,8 +985,37 @@ export class ListOperations {
         errors.push(`Failed to add '${recordId}': ${msg}`);
         LogError(`insertListMembers list=${listId} record=${recordId}: ${msg}`);
       }
-    }
+    });
     return { added, failed, errors };
+  }
+
+  /**
+   * Max in-flight entity writes for bulk member insert/remove. Concurrency
+   * (rather than a transaction group) is deliberate: it preserves the
+   * per-record error isolation these operations promise — one bad record
+   * fails only itself, never a whole batch.
+   */
+  private static readonly WRITE_CONCURRENCY = 10;
+
+  /**
+   * Runs `worker` over `items` with at most `limit` operations in flight.
+   * Counter/array mutations inside workers are safe — Node is
+   * single-threaded; only the awaits interleave.
+   */
+  private async forEachConcurrent<T>(
+    items: readonly T[],
+    limit: number,
+    worker: (item: T) => Promise<void>,
+  ): Promise<void> {
+    let next = 0;
+    const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (true) {
+        const idx = next++;
+        if (idx >= items.length) return;
+        await worker(items[idx]);
+      }
+    });
+    await Promise.all(lanes);
   }
 
   private metadata(): Metadata {

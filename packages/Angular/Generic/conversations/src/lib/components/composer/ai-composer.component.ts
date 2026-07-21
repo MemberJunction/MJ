@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import {
+import { MentionSuggestion,
   ComposerTriggerProvider,
   MentionEditorComponent,
   MessageInputBoxComponent,
@@ -52,6 +52,7 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
       [enablePlanMode]="enablePlanMode"
       [planModeActive]="planModeActive"
       (textSubmitted)="textSubmitted.emit($event)"
+      (blurred)="blurred.emit()"
       (valueChange)="onInnerValueChange($event)"
       (attachmentsChanged)="attachmentsChanged.emit($event)"
       (attachmentError)="attachmentError.emit($event)"
@@ -153,6 +154,8 @@ export class AiComposerComponent {
 
   // ── Proxied outputs ───────────────────────────────────────────────────────────────
   @Output() textSubmitted = new EventEmitter<string>();
+  /** Composer lost focus — hosts persist drafts on this. */
+  @Output() blurred = new EventEmitter<void>();
   @Output() valueChange = new EventEmitter<string>();
   @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
   @Output() attachmentError = new EventEmitter<string>();
@@ -174,6 +177,16 @@ export class AiComposerComponent {
   }
 
   /** Focus the composer input. */
+  /** Inserts a resolved mention chip + space (see MentionEditorComponent.InsertMention). */
+  public InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
+    return this.inputBox?.InsertMention(suggestion, focus) ?? false;
+  }
+
+  /** Focus with the caret at the end of content. */
+  public FocusCaretAtEnd(): boolean {
+    return this.inputBox?.FocusCaretAtEnd() ?? false;
+  }
+
   public focus(): void {
     this.inputBox?.focus();
   }

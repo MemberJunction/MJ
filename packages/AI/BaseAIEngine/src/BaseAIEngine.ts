@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity,
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
          MJArtifactTypeEntity, MJEntityAIActionEntity, MJVectorDatabaseEntity,
@@ -96,6 +96,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentNoteTypes: MJAIAgentNoteTypeEntity[] = [];
     private _agentNotes: MJAIAgentNoteEntity[] = [];
     private _scopedPromptParts: MJScopedPromptPartEntity[] = [];
+    private _scopedPromptConfigs: MJScopedPromptConfigEntity[] = [];
     private _agentExamples: MJAIAgentExampleEntity[] = [];
     private _agentDataSources: MJAIAgentDataSourceEntity[] = [];
     private _agents: MJAIAgentEntityExtended[] = [];
@@ -213,6 +214,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_scopedPromptParts',
                 EntityName: 'MJ: Scoped Prompt Parts',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_scopedPromptConfigs',
+                EntityName: 'MJ: Scoped Prompt Configs',
                 CacheLocal: true
             },
             {
@@ -867,6 +873,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public get ScopedPromptParts(): MJScopedPromptPartEntity[] {
         return this._scopedPromptParts;
+    }
+
+    /**
+     * All scoped prompt configs (MJ: Scoped Prompt Configs). Cached like ScopedPromptParts;
+     * the run-settings sibling of parts — resolved by scope + overlaid onto AIPromptParams by
+     * the ScopedPromptConfigResolver. See plans/scoped-prompt-components.
+     */
+    public get ScopedPromptConfigs(): MJScopedPromptConfigEntity[] {
+        return this._scopedPromptConfigs;
     }
 
     public get AgentExamples(): MJAIAgentExampleEntity[] {

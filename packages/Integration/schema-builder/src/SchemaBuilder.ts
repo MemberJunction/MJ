@@ -145,9 +145,14 @@ export class SchemaBuilder {
             const existingContent = this.ReadFileIfExists(input.AdditionalSchemaInfoPath);
             const existingConfig = this.SoftFKEmitter.ParseExistingConfig(existingContent);
             const withPKs = this.SoftFKEmitter.MergeSoftPKs(existingConfig, allConfigs);
+            // This run's PK/FK resolution REPLACES the prior run's entries for the
+            // tables it covers (adds new, removes gone) — clear their FKs before the rebuild so
+            // a stale FK never outlives the resolution that once declared it. Clearing happens
+            // even when allSoftFKs is empty (a table that lost every FK ends clear).
+            const cleared = this.SoftFKEmitter.ClearForeignKeysForTables(withPKs, allConfigs);
             const merged = allSoftFKs.length > 0
-                ? this.SoftFKEmitter.MergeSchemaConfig(withPKs, allSoftFKs)
-                : withPKs;
+                ? this.SoftFKEmitter.MergeSchemaConfig(cleared, allSoftFKs)
+                : cleared;
             output.AdditionalSchemaInfoUpdate = this.SoftFKEmitter.EmitConfigFile(
                 input.AdditionalSchemaInfoPath, merged
             );
@@ -235,7 +240,7 @@ export class SchemaBuilder {
     public BuildRSUInput(
         schemaOutput: SchemaBuilderOutput,
         input: SchemaBuilderInput,
-        rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean }
+        rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean; AdditionalSchemaInfoAuthoritative?: boolean }
     ): RSUPipelineInput {
         // Combine all migration file contents into a single SQL block
         const migrationSQL = schemaOutput.MigrationFiles
@@ -258,6 +263,7 @@ export class SchemaBuilder {
             Description: `Integration: ${input.SourceType} — ${affectedTables.join(', ')}`,
             AffectedTables: affectedTables,
             AdditionalSchemaInfo: schemaOutput.AdditionalSchemaInfoUpdate?.Content,
+            AdditionalSchemaInfoAuthoritative: rsuOptions?.AdditionalSchemaInfoAuthoritative,
             MetadataFiles: metadataFiles.length > 0 ? metadataFiles : undefined,
             SkipGitCommit: rsuOptions?.SkipGitCommit,
             SkipRestart: rsuOptions?.SkipRestart,

@@ -263,6 +263,76 @@ describe('PermissionEngine', () => {
         });
     });
 
+    // ────────────────────────────────────────────────────────────────────────────────────
+    // B34: a provider whose method is MISSING (a hollow ClassFactory base-class stub) throws
+    // SYNCHRONOUSLY inside `.map()` — before Promise.allSettled ever sees a promise — which
+    // used to reject the ENTIRE aggregate for every user. The fan-out defers each invocation
+    // into a promise body so a sync throw is isolated exactly like an async rejection.
+    // ────────────────────────────────────────────────────────────────────────────────────
+    describe('fan-out isolation of a hollow (method-less) provider', () => {
+        /** Stands in for the abstract-base stub ClassFactory used to hand back for unknown keys. */
+        const makeHollowProvider = (domainName: string): PermissionProviderBase =>
+            ({ DomainName: domainName } as unknown as PermissionProviderBase);
+
+        const healthyRow = {
+            DomainName: 'Entity Permissions',
+            ResourceType: 'Users',
+            ResourceID: null,
+            GranteeType: 'User' as const,
+            GranteeID: 'U1',
+            Actions: ['Read' as const],
+            Effect: 'Allow' as const,
+        };
+
+        // Built as a plain object rather than via makeMockProvider, because the sharing-facing
+        // methods (GetPermissionsGrantedByUser / GetPermissionsSharedWithUser) are not part of
+        // that helper's override surface and would silently stay undefined.
+        const withHollowAlongsideHealthy = (healthyOverrides: Partial<PermissionProviderBase>) => {
+            const healthy = {
+                ...(makeMockProvider({ DomainName: 'Entity Permissions' }) as unknown as Record<string, unknown>),
+                ...healthyOverrides,
+            } as unknown as PermissionProviderBase;
+            engine._SetProvidersForTesting(
+                new Map<string, PermissionProviderBase>([
+                    ['Entity Permissions', healthy],
+                    ['Hollow Domain', makeHollowProvider('Hollow Domain')],
+                ])
+            );
+            return healthy;
+        };
+
+        it('GetAllUserPermissions resolves instead of rejecting, and healthy domains still contribute', async () => {
+            withHollowAlongsideHealthy({ GetUserResources: vi.fn(async () => [healthyRow]) });
+
+            const all = await engine.GetAllUserPermissions(MOCK_USER);
+
+            expect(all).toHaveLength(1);
+            expect(all[0].DomainName).toBe('Entity Permissions');
+        });
+
+        it('GetPermissionsGrantedByUser is isolated the same way', async () => {
+            withHollowAlongsideHealthy({ GetPermissionsGrantedByUser: vi.fn(async () => [healthyRow]) });
+
+            const rows = await engine.GetPermissionsGrantedByUser(MOCK_USER);
+            expect(rows).toHaveLength(1);
+        });
+
+        it('GetPermissionsSharedWithUser is isolated the same way', async () => {
+            withHollowAlongsideHealthy({ GetPermissionsSharedWithUser: vi.fn(async () => [healthyRow]) });
+
+            const rows = await engine.GetPermissionsSharedWithUser(MOCK_USER);
+            expect(rows).toHaveLength(1);
+        });
+
+        it('a hollow provider as the ONLY provider degrades to an empty aggregate, not a rejection', async () => {
+            engine._SetProvidersForTesting(
+                new Map<string, PermissionProviderBase>([['Hollow Domain', makeHollowProvider('Hollow Domain')]])
+            );
+
+            await expect(engine.GetAllUserPermissions(MOCK_USER)).resolves.toEqual([]);
+        });
+    });
+
     describe('GetResourcePermissions', () => {
         it('returns rows from the matching provider', async () => {
             const rows = [

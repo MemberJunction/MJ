@@ -232,6 +232,21 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
     expect(kept.tsql).toContain('INSERT INTO [__mj].[Entity]');
     expect(kept.tsql).not.toContain('vwTs');
   });
+
+  it('drops auto-generated FK indexes (IDX_AUTO_MJ_FKEY_*) — regenerated collision-safe by codegen', () => {
+    // Two long SS FK-index names truncate to the same 63-char PG identifier → collision. They are
+    // CodeGen output, so drop them here and let native PG codegen re-emit (truncation + hash).
+    const sql = snapshot(
+      'CREATE TABLE [__mj].[T] ([ID] INT);',
+      'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
+      'CREATE INDEX [IDX_AUTO_MJ_FKEY_CommunicationProviderMessageType_CommunicationBaseMessageTypeID] ON [__mj].[CommunicationProviderMessageType] ([CommunicationBaseMessageTypeID]);',
+      'CREATE INDEX [IDX_Custom_HandAuthored] ON [__mj].[T] ([ID]);', // hand-authored → kept
+    );
+    const kept = extractKeptTSQL(sql, 'B202605291452__v5.38.x__Baseline.sql');
+    expect(kept.tsql).not.toContain('IDX_AUTO_MJ_FKEY_');
+    expect(kept.tsql).toContain('IDX_Custom_HandAuthored');
+    expect(kept.droppedObjects.some((o) => o.includes('auto FK'))).toBe(true);
+  });
 });
 
 describe('extractKeptTSQL — entity-registration recovery from the CodeGen block', () => {

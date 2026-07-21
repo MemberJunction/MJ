@@ -163,3 +163,4 @@ export * from './lib/components/realtime/media/media-channel-tools';
 export * from './lib/components/realtime/media/realtime-media-surface.component';
 // Time-aligned Evidence Playback component (recorded session audio synced to the transcript).
 export * from './lib/components/realtime/evidence-playback/realtime-evidence-playback.component';
+export * from './lib/services/composer-draft-store';

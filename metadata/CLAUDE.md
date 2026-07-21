@@ -2,17 +2,27 @@
 
 ## Critical Rules for Metadata Creation
 
-### 1. NEVER Include System-Generated Fields
+### 1. System-Generated Fields: `sync` NEVER, `primaryKey` via CLI uuidgen
 When creating or editing metadata JSON files, **NEVER** include the following fields - they are automatically managed by the MetadataSync tool:
 
-- **primaryKey**: This object (containing ID or other key fields) is auto-generated
-- **sync**: This object (containing lastModified and checksum) is auto-managed
+- **sync**: This object (containing lastModified and checksum) is auto-managed — populated when the build engineer runs `mj sync push` at release time (see "Release-Time Metadata Sync" below). Never author or hand-compute it.
 - **__mj_CreatedAt**: System timestamp
 - **__mj_UpdatedAt**: System timestamp
 - **CreatedAt**: System timestamp
 - **UpdatedAt**: System timestamp
 
-These fields will be automatically added/updated when you run `mj sync push`.
+- **primaryKey**: New records SHOULD include a `primaryKey` with a hardcoded UUID **generated at the CLI with `uuidgen`** (`uuidgen | tr '[:lower:]' '[:upper:]'` for uppercase) so the record gets the same deterministic ID in every environment. Never invent/infer a UUID by hand — always run `uuidgen`.
+
+The `sync` blocks will be automatically added/updated when `mj sync push` runs.
+
+### 1b. Release-Time Metadata Sync — NO Per-PR Metadata_Sync Migrations
+**Do NOT hand-author `*__Metadata_Sync.sql` migrations for metadata changes** (new AI models, prompts, agents, etc.). The release workflow is:
+
+1. PRs contribute ONLY the declarative metadata JSON changes (fields + `@lookup` refs + `uuidgen` primaryKey, no `sync`).
+2. At build time, the build engineer takes all merged PRs on `next` and runs `mj sync push` against a clean DB at the last released version.
+3. That push generates ONE consolidated metadata-sync migration for the release (SQL Server + PostgreSQL) and writes the `sync` blocks back into the JSON files.
+
+Hand-authoring per-PR sync migrations duplicates this step, creates many small migrations instead of one per build, and risks drift from the real push output.
 
 ### 2. File Naming Conventions
 - **Metadata files**: Must match the filePattern in `.mj-sync.json` (typically `.*.json` for dot-prefixed files)
@@ -155,7 +165,8 @@ metadata/
 - Don't include timestamp fields - they're auto-managed
 - Don't forget to set Status fields to "Active"
 - Don't create agent types - use existing "Loop" type
-- Don't include primaryKey or sync objects in any records
+- Don't include `sync` objects in any records; new-record `primaryKey` UUIDs must come from CLI `uuidgen` (see rule 1)
+- Don't hand-author `*__Metadata_Sync.sql` migrations — one consolidated sync migration is generated per release by the build engineer (see rule 1b)
 - `metadata/scheduled-jobs/.memory-cleanup-job.json` is **deprecated as of v5.30.x** — Memory Cleanup Agent has been folded into Memory Manager's consolidation pipeline. Don't author new scheduled jobs that reference it; trigger memory maintenance through the Memory Manager agent instead. See `packages/AI/Agents/README.md` and `specs/001-memory-consolidation/spec.md`.
 
 ### 11. Pushing Metadata with `mj sync push`

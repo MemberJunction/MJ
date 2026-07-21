@@ -37,6 +37,14 @@ export class ConversationEmptyStateComponent {
 
   @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
 
+  /** Draft staged into the composer on mount (see MessageInputComponent.initialDraft). */
+  @Input() initialDraft: string | null = null;
+  @Output() initialDraftApplied = new EventEmitter<void>();
+  /** Forwarded from the inner composer — serialized draft on every value change. */
+  @Output() DraftStateChanged = new EventEmitter<string>();
+  /** Forwarded from the inner composer — persist-drafts save point. */
+  @Output() ComposerBlurred = new EventEmitter<void>();
+
   @Output() messageSent = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
   @Output() sidebarToggleClicked = new EventEmitter<void>();
 
@@ -171,6 +179,18 @@ export class ConversationEmptyStateComponent {
    * Focus the message input programmatically.
    * Called by parent when the user clicks "New Conversation" while already on the empty state.
    */
+  /**
+   * Pre-addresses the composer to an agent as a resolved mention pill (delegates to
+   * MessageInputComponent.InsertAgentMention). Returns false while the input isn't
+   * mounted — callers may retry.
+   */
+  public async InsertAgentMention(agentName: string, focus: boolean = true): Promise<boolean> {
+    if (!this.messageInput) {
+      return false;
+    }
+    return this.messageInput.InsertAgentMention(agentName, focus);
+  }
+
   public FocusInput(): void {
     setTimeout(() => {
       if (this.messageInput) {
