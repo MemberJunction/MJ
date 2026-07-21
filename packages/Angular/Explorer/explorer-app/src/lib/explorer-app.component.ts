@@ -60,16 +60,40 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
 
-  /** Instance Config gate for the floating chat overlay bubble ('Shell.ChatOverlay.Enabled' —
-   *  the pre-existing Shell key seeded for exactly this bubble; its sibling
-   *  'Shell.ChatOverlay.AllowOpenInFullApp' governs the in-bubble "open in full app" affordance). */
-  public get ShowChatOverlay(): boolean {
-    return InstanceConfigEngine.Instance.GetBoolean('Shell.ChatOverlay.Enabled', true);
+  /**
+   * Instance-config chrome flags, resolved once and cached. The getters below are
+   * read by Angular change detection on every pass, so a per-read engine lookup
+   * would run constantly; this resolves the set once (live from fail-open defaults
+   * until InstanceConfigEngine has loaded, then frozen on the first post-load read
+   * so pre-load defaults are never cached over the real values).
+   */
+  private _chromeFlags: { chatOverlay: boolean; updateNotifications: boolean } | null = null;
+  private get chromeFlags(): { chatOverlay: boolean; updateNotifications: boolean } {
+    if (this._chromeFlags) {
+      return this._chromeFlags;
+    }
+    const engine = InstanceConfigEngine.Instance;
+    const flags = {
+      // 'Shell.ChatOverlay.Enabled' is the pre-existing Shell key seeded for exactly
+      // this bubble; sibling 'Shell.ChatOverlay.AllowOpenInFullApp' governs the
+      // in-bubble "open in full app" affordance.
+      chatOverlay: engine.GetBoolean('Shell.ChatOverlay.Enabled', true),
+      updateNotifications: engine.GetBoolean('Shell.UpdateToasts.Enabled', true),
+    };
+    if (engine.Loaded) {
+      this._chromeFlags = flags;
+    }
+    return flags;
   }
 
-  /** Instance Config gate for the service-worker update toast ('Shell.UpdateToasts.Enabled'). */
+  /** Instance Config gate for the floating chat overlay bubble. */
+  public get ShowChatOverlay(): boolean {
+    return this.chromeFlags.chatOverlay;
+  }
+
+  /** Instance Config gate for the service-worker update toast. */
   public get ShowUpdateNotifications(): boolean {
-    return InstanceConfigEngine.Instance.GetBoolean('Shell.UpdateToasts.Enabled', true);
+    return this.chromeFlags.updateNotifications;
   }
 
   /** Component rendered by PreShellGuard (blocks the shell until dismissed) */
