@@ -324,6 +324,9 @@ export class GraphQLAIClient {
                 validateAck: (ack) => ack?.success === true,
                 isCompletionEvent: (parsed) => this.isAgentCompletionEvent(parsed),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
+                // Headless clients (no PushStatusUpdates channel) run synchronously; the resolver
+                // returns the full result inline in the mutation ack rather than over PubSub.
+                extractSyncResult: (ack) => this.extractAgentResultFromAck(ack),
                 onMessage: (parsed) => {
                     this.captureAgentRunId(parsed, runIdRef);
                     if (params.onProgress) this.forwardAgentProgress(parsed, params.onProgress);

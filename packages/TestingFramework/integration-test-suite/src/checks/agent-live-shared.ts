@@ -16,7 +16,7 @@
  */
 import { RunView, CompositeKey } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import { AgentRunner } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /** Every fabricated / run-product row this family creates carries this tag for auditability. */
@@ -32,12 +32,28 @@ export function newMarker(prefix: string): string {
 
 export const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
 
-/** Build a GraphQLAIClient bound to the run-scoped client provider. */
-export function makeAIClient(provider: IMetadataProvider): GraphQLAIClient {
-    // The client suite hands a GraphQLDataProvider as ctx.Provider; bridge the interface to the
-    // concrete client (same pattern the memory rig uses). If this bundle is ever dispatched under
-    // an in-process (server) provider, RunAIAgent will throw — a loud, honest failure, not a silent pass.
-    return new GraphQLAIClient(provider as unknown as GraphQLDataProvider);
+/**
+ * A minimal agent invoker exposing RunAIAgent(params). Backed by SERVER-IN-PROCESS
+ * AgentRunner.RunAgent (transport decision: agent runs go server-side for this family —
+ * the wire RunAIAgent mutation is fire-and-forget over PubSub the headless integration
+ * client cannot consume, and the correlation-heavy checks need a synchronous run handle;
+ * proposal Q8, resolved to server-in-process). The client-wire path is fixed separately
+ * and gets its own dedicated wire bundle.
+ */
+export interface AgentInvoker {
+    RunAIAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult>;
+}
+
+/** Build a server-in-process agent invoker bound to the run-scoped provider + its CurrentUser. */
+export function makeAIClient(provider: IMetadataProvider): AgentInvoker {
+    return {
+        RunAIAgent: (params: ExecuteAgentParams) =>
+            new AgentRunner(provider).RunAgent({
+                ...params,
+                contextUser: params.contextUser ?? provider.CurrentUser,
+                provider,
+            }),
+    };
 }
 
 /** Message-literal typed via the params type so no `@memberjunction/ai` ChatMessage import is needed. */
@@ -57,7 +73,7 @@ export interface WireRunOptions {
 
 /** Run an agent over the wire; returns the ExecuteAgentResult (never throws — errors become success=false). */
 export async function runAgentOverWire(
-    client: GraphQLAIClient,
+    client: AgentInvoker,
     agent: MJAIAgentEntityExtended,
     messages: WireMessages,
     opts: WireRunOptions = {}

@@ -9,7 +9,7 @@
     },
     "Configuration": {
       "tier": "live-model",
-      "transport": "client",
+      "transport": "server",
       "checks": [
         {
           "type": "agent-loop-live"

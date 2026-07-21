@@ -35,11 +35,11 @@
 import { RunView } from '@memberjunction/core';
 import type {
     MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity,
-    MJArtifactVersionEntity, MJConversationDetailArtifactEntity
-} from '@memberjunction/core-entities';
+    MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { ArtifactToolManager } from '@memberjunction/ai-agents';
 import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import type { AgentInvoker } from './_it-live-agent-harness';
+import type { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import {
     resolveClient, newMarker, loadAgentByName, settle,
     readRun, readSteps, readPromptRunsForAgent, deepDeleteRunTrees, deleteMatching, runWithCompliance,
@@ -135,8 +135,9 @@ interface ToolStepResult {
 
 /** Module-level fixture (no IntegrationCheckContext slot — the framework package is not modified). */
 interface ArtifactToolsFixture {
-    Client?: GraphQLAIClient;
+    Client?: AgentInvoker;
     ReaderID: string;
+    Reader?: MJAIAgentEntity;
     EnvironmentID?: string;
     TypeIds: Record<string, string>;
     CreatedRootRunIds: string[];
@@ -215,9 +216,12 @@ async function attachArtifact(
 
 /** Run IT: Artifact Reader from a conversation detail and return the persisted root run ID. */
 async function runReader(fx: ArtifactToolsFixture, conversationDetailId: string): Promise<string | undefined> {
-    if (!fx.Client) return undefined;
-    const result = await fx.Client.RunAIAgentFromConversationDetail(
-        { conversationDetailId, agentId: fx.ReaderID } as unknown as Parameters<GraphQLAIClient['RunAIAgentFromConversationDetail']>[0]
+    if (!fx.Client || !fx.Reader) return undefined;
+    // Server-in-process (Q8): the reader runs against the conversation detail — the artifacts
+    // reach the run via the MJ: Conversation Detail Artifacts junction + conversationDetailId,
+    // exactly as the wire RunAIAgentFromConversationDetail path did, but synchronously.
+    const result = await fx.Client.RunAIAgent(
+        { agent: fx.Reader, conversationDetailId, conversationMessages: [] } as unknown as ExecuteAgentParams
     );
     await settle(2500); // let the fire-and-forget Tool/prompt step saves flush
     const runId = (result as unknown as { agentRun?: { ID?: string } }).agentRun?.ID;
@@ -471,6 +475,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-artifact-tools', {
 
         fixture.Client = client;
         fixture.ReaderID = reader.ID;
+        fixture.Reader = reader;
     },
     Teardown: async (ctx: IntegrationCheckContext) => {
         const fx = fixture;

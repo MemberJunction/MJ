@@ -34,7 +34,7 @@
  */
 import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
-import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import type { AgentInvoker } from './_it-live-agent-harness';
 import {
     resolveClient, newMarker, loadAgentByName, runAgentClient, runIdOf, settle,
     readRun, readSteps, readPromptRunsForAgent, parseStepPayloadChange, parseJsonObject,
@@ -44,7 +44,7 @@ import {
 
 /** Module-level fixture (no IntegrationCheckContext slot — the framework package is not modified). */
 interface PayloadGuardsFixture {
-    Client?: GraphQLAIClient;
+    Client?: AgentInvoker;
     Parent?: MJAIAgentEntity;
     SelfWrite?: MJAIAgentEntity;
     ChildID: string;

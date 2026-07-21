@@ -19,7 +19,7 @@
  *   - FK-ordered deep teardown of every run tree a check spawned.
  */
 import { RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import { AgentRunner } from '@memberjunction/ai-agents';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
@@ -76,12 +76,25 @@ export interface PayloadChangeResultBlob {
     };
 }
 
-/** Resolve the GraphQL client when the bundle is driven over client transport; undefined otherwise. */
-export function resolveClient(provider: IMetadataProvider): GraphQLAIClient | undefined {
-    if (provider instanceof GraphQLDataProvider) {
-        return new GraphQLAIClient(provider);
-    }
-    return undefined;
+/**
+ * A server-in-process agent invoker (transport decision Q8 → server for this family; the
+ * headless client cannot consume the wire RunAIAgent's fire-and-forget PubSub, and the
+ * correlation-heavy checks need a synchronous run handle). Exposes RunAIAgent(params) so
+ * every call site is unchanged. Never undefined now — the run always executes in-process.
+ */
+export interface AgentInvoker {
+    RunAIAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult>;
+}
+
+export function resolveClient(provider: IMetadataProvider): AgentInvoker | undefined {
+    return {
+        RunAIAgent: (params: ExecuteAgentParams) =>
+            new AgentRunner(provider).RunAgent({
+                ...params,
+                contextUser: (params as { contextUser?: unknown }).contextUser ?? provider.CurrentUser,
+                provider,
+            } as ExecuteAgentParams),
+    };
 }
 
 /** A short, collision-resistant marker string embedded in each scenario's payload/messages. */
@@ -105,7 +118,7 @@ export async function loadAgentByName(
 
 /** Run an agent over the wire and return the completed result. Errors are captured, never thrown. */
 export async function runAgentClient(
-    client: GraphQLAIClient,
+    client: AgentInvoker,
     agent: MJAIAgentEntity,
     userMessage: string,
     payload?: Record<string, unknown>
