@@ -165,10 +165,15 @@
       [class.full-width]="!showArtifactPanel"
       [class.hidden]="isArtifactPaneMaximized">
       @if (isLoadingConversation) {
-        <!-- Loading State - Show centered spinner while conversation loads (checked FIRST to prevent empty state flash) -->
-        <div class="conversation-loading-state">
-          <mj-loading text="Loading conversation..." size="large"></mj-loading>
-        </div>
+        <!-- Loading State - checked FIRST to prevent empty state flash. The branch
+             always short-circuits the panes below; showLoadingState only controls
+             whether the built-in spinner renders (hosts with their own loading
+             chrome set it false and get a blank pane instead). -->
+        @if (showLoadingState) {
+          <div class="conversation-loading-state">
+            <mj-loading text="Loading conversation..." size="large"></mj-loading>
+          </div>
+        }
       } @else if ((isNewConversation || !conversationId) && !suppressNewConversationEmptyState) {
         <!-- emptyState slot — when a consumer projects mjChatSlot="emptyState",
              they take over the entire empty-state region (including any send
@@ -225,6 +230,8 @@
                 [disabled]="isProcessing"
                 [enableAttachments]="enableAttachments && allowAttachments"
                 [enableMentions]="allowMentions"
+                [enablePlanMode]="allowPlanMode"
+                [enableRealtime]="allowRealtime"
                 [maxAttachments]="maxAttachments"
                 [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
                 [acceptedFileTypes]="acceptedFileTypes"
@@ -244,6 +251,7 @@
           }
           <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
             <mj-conversation-message-list
+              [showEmptyFill]="showEmptyFill"
               [messages]="messages"
               [conversation]="conversation"
               [currentUser]="currentUser"
@@ -321,6 +329,8 @@
                     [disabled]="isProcessing || isReadOnlyView"
                     [enableAttachments]="enableAttachments && allowAttachments"
                     [enableMentions]="allowMentions"
+                    [enablePlanMode]="allowPlanMode"
+                    [enableRealtime]="allowRealtime"
                     [maxAttachments]="maxAttachments"
                     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
                     [acceptedFileTypes]="acceptedFileTypes"

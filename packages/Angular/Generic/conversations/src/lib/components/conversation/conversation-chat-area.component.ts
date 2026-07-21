@@ -154,6 +154,36 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() allowAttachments = true;
 
+  /**
+   * Host-level cap for the composer's Plan Mode toggle. Defaults true
+   * (current behavior). White-labeled / end-user hosts that don't expose
+   * plan-mode workflows set false to remove the button entirely.
+   */
+  @Input() allowPlanMode = true;
+
+  /**
+   * Host-level cap for the composer's realtime voice-call launcher (and its
+   * options caret). Defaults true (current behavior). Hosts with no voice
+   * experience set false to remove the buttons entirely.
+   */
+  @Input() allowRealtime = true;
+
+  /**
+   * Whether the message list renders its built-in "No messages yet" filler
+   * when a conversation has zero messages. Defaults true. Hosts that render
+   * their own empty-state chrome around the chat area set false.
+   */
+  @Input() showEmptyFill = true;
+
+  /**
+   * Whether the built-in centered loading indicator renders while a
+   * conversation loads. Defaults true. When false the pane stays blank
+   * during the load (the loading branch still short-circuits rendering, so
+   * no premature empty-state flash). Hosts with their own loading chrome
+   * set false.
+   */
+  @Input() showLoadingState = true;
+
   private _isNewConversation: boolean = false;
   @Input()
   set isNewConversation(value: boolean) {

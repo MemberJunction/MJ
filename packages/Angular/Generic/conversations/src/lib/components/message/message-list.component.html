@@ -20,7 +20,7 @@
 
   <ng-container #messageContainer></ng-container>
 
-  @if (messages.length === 0) {
+  @if (messages.length === 0 && showEmptyFill) {
     <mj-empty-state
       class="messages-empty-fill"
       Icon="fa-solid fa-comments"

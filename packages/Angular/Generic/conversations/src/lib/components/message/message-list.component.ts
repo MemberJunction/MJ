@@ -79,6 +79,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public conversation!: MJConversationEntity | null;
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
+  /** Whether the built-in "No messages yet" filler renders for empty conversations. Hosts with their own empty-state chrome set false. */
+  @Input() public showEmptyFill: boolean = true;
   @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
   @Input() public agentRunMap: Map<string, MJAIAgentRunEntityExtended> = new Map();
   @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
