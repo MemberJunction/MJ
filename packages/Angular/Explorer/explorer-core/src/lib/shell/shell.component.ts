@@ -132,6 +132,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   get ShowSearchBar(): boolean {
       return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.Enabled', true);
   }
+  /** Instance Config gate for the notification bell + unread badge (desktop and mobile). */
+  get ShowNotifications(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.Notifications.Enabled', true);
+  }
+  /** Instance Config gate for the app switcher (also the add/configure-apps entry point). */
+  get ShowAppSwitcher(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.AppSwitcher.Enabled', true);
+  }
+  /** Instance Config gate for the app navigation strip (desktop and the mobile drawer). */
+  get ShowAppNav(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.AppNav.Enabled', true);
+  }
   get ShowSearchPreview(): boolean {
       return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
   }

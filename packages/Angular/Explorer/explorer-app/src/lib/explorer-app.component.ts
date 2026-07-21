@@ -25,6 +25,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService, RealtimeSessionService } from '@memberjunction/ng-conversations';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { AppContextSnapshot, ClientToolMetadata } from '@memberjunction/ai-core-plus';
+import { InstanceConfigEngine } from '@memberjunction/core-entities';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
@@ -58,6 +59,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   public isChatRoute = false;
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
+
+  /** Instance Config gate for the floating chat overlay bubble ('Shell.ChatOverlay.Enabled' —
+   *  the pre-existing Shell key seeded for exactly this bubble; its sibling
+   *  'Shell.ChatOverlay.AllowOpenInFullApp' governs the in-bubble "open in full app" affordance). */
+  public get ShowChatOverlay(): boolean {
+    return InstanceConfigEngine.Instance.GetBoolean('Shell.ChatOverlay.Enabled', true);
+  }
+
+  /** Instance Config gate for the service-worker update toast ('Shell.UpdateToasts.Enabled'). */
+  public get ShowUpdateNotifications(): boolean {
+    return InstanceConfigEngine.Instance.GetBoolean('Shell.UpdateToasts.Enabled', true);
+  }
 
   /** Component rendered by PreShellGuard (blocks the shell until dismissed) */
   private _preShellOverlayRef: ComponentRef<unknown> | null = null;
