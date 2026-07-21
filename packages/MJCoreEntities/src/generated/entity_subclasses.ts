@@ -30542,6 +30542,91 @@ export const MJTestSchema = z.object({
 export type MJTestEntityType = z.infer<typeof MJTestSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Themes
+ */
+export const MJThemeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Display name for the theme (unique).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of the theme.`),
+    Seeds: z.string().describe(`
+        * * Field Name: Seeds
+        * * Display Name: Seeds
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Brand seeds as JSON (the ThemeSeeds shape from @memberjunction/theme-engine): primary/accent/tertiary hue anchors, neutralChroma, vibrancy, radius, depth, fontFamily, and an optional vizPalette override. Source of truth — the full token contract is derived from this, not stored.`),
+    LightMarkURL: z.string().nullable().describe(`
+        * * Field Name: LightMarkURL
+        * * Display Name: Light Mode Logo
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Public URL of the logo mark for light surfaces. Logos are variant uploads, never recolored.`),
+    DarkMarkURL: z.string().nullable().describe(`
+        * * Field Name: DarkMarkURL
+        * * Display Name: Dark Mode Logo
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Public URL of the logo mark for dark surfaces. Dark mode swaps to this artwork rather than transforming the light mark.`),
+    WordmarkURL: z.string().nullable().describe(`
+        * * Field Name: WordmarkURL
+        * * Display Name: Wordmark Logo
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Optional public URL of the full wordmark logo.`),
+    MonochromeURL: z.string().nullable().describe(`
+        * * Field Name: MonochromeURL
+        * * Display Name: Monochrome Logo
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Optional public URL of a single-fill monochrome logo variant.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default Theme
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this is the default theme applied when no other is selected. Single-default enforcement is handled at the application layer.`),
+    Status: z.union([z.literal('Active'), z.literal('Draft'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Draft
+    *   * Inactive
+        * * Description: Lifecycle status: Active (available), Inactive (retired), or Draft (in progress, not applied).`),
+    Overrides: z.string().nullable().describe(`
+        * * Field Name: Overrides
+        * * Display Name: Token Overrides
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional advanced token overrides as a JSON object mapping a --mj-* CSS custom property name to a value (e.g. {"--mj-brand-primary-hover":"#0a5cff"}). Applied on top of the seed-derived token contract at load, before CustomCSS. Leave null to use the pure derived theme.`),
+    CustomCSS: z.string().nullable().describe(`
+        * * Field Name: CustomCSS
+        * * Display Name: Custom CSS
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional advanced raw CSS appended to the theme overlay and auto-scoped under [data-theme-overlay="<id>"]. Applied last, after the derived tokens and Overrides. Escape hatch for rules the seed/token model cannot express; leave null for none.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJThemeEntityType = z.infer<typeof MJThemeSchema>;
+
+/**
  * zod schema definition for the entity MJ: User Application Entities
  */
 export const MJUserApplicationEntitySchema = z.object({
@@ -112381,6 +112466,221 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
     */
     get Type(): string {
         return this.Get('Type');
+    }
+}
+
+
+/**
+ * MJ: Themes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Theme
+ * * Base View: vwThemes
+ * * @description A named brand theme. Stores ~8 brand seeds (color hue anchors, neutral character, vibrancy, shape, depth, type, viz palette) as JSON; the full --mj-* design-token contract is derived from the seeds at load. A theme is a brand — light/dark is the user's mode layered under it, so a theme carries no per-mode values.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Themes')
+export class MJThemeEntity extends BaseEntity<MJThemeEntityType> {
+    /**
+    * Loads the MJ: Themes record from the database
+    * @param ID: string - primary key value to load the MJ: Themes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJThemeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Display name for the theme (unique).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of the theme.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Seeds
+    * * Display Name: Seeds
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Brand seeds as JSON (the ThemeSeeds shape from @memberjunction/theme-engine): primary/accent/tertiary hue anchors, neutralChroma, vibrancy, radius, depth, fontFamily, and an optional vizPalette override. Source of truth — the full token contract is derived from this, not stored.
+    */
+    get Seeds(): string {
+        return this.Get('Seeds');
+    }
+    set Seeds(value: string) {
+        this.Set('Seeds', value);
+    }
+
+    /**
+    * * Field Name: LightMarkURL
+    * * Display Name: Light Mode Logo
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Public URL of the logo mark for light surfaces. Logos are variant uploads, never recolored.
+    */
+    get LightMarkURL(): string | null {
+        return this.Get('LightMarkURL');
+    }
+    set LightMarkURL(value: string | null) {
+        this.Set('LightMarkURL', value);
+    }
+
+    /**
+    * * Field Name: DarkMarkURL
+    * * Display Name: Dark Mode Logo
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Public URL of the logo mark for dark surfaces. Dark mode swaps to this artwork rather than transforming the light mark.
+    */
+    get DarkMarkURL(): string | null {
+        return this.Get('DarkMarkURL');
+    }
+    set DarkMarkURL(value: string | null) {
+        this.Set('DarkMarkURL', value);
+    }
+
+    /**
+    * * Field Name: WordmarkURL
+    * * Display Name: Wordmark Logo
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Optional public URL of the full wordmark logo.
+    */
+    get WordmarkURL(): string | null {
+        return this.Get('WordmarkURL');
+    }
+    set WordmarkURL(value: string | null) {
+        this.Set('WordmarkURL', value);
+    }
+
+    /**
+    * * Field Name: MonochromeURL
+    * * Display Name: Monochrome Logo
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Optional public URL of a single-fill monochrome logo variant.
+    */
+    get MonochromeURL(): string | null {
+        return this.Get('MonochromeURL');
+    }
+    set MonochromeURL(value: string | null) {
+        this.Set('MonochromeURL', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default Theme
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this is the default theme applied when no other is selected. Single-default enforcement is handled at the application layer.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Draft
+    *   * Inactive
+    * * Description: Lifecycle status: Active (available), Inactive (retired), or Draft (in progress, not applied).
+    */
+    get Status(): 'Active' | 'Draft' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Draft' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Overrides
+    * * Display Name: Token Overrides
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional advanced token overrides as a JSON object mapping a --mj-* CSS custom property name to a value (e.g. {"--mj-brand-primary-hover":"#0a5cff"}). Applied on top of the seed-derived token contract at load, before CustomCSS. Leave null to use the pure derived theme.
+    */
+    get Overrides(): string | null {
+        return this.Get('Overrides');
+    }
+    set Overrides(value: string | null) {
+        this.Set('Overrides', value);
+    }
+
+    /**
+    * * Field Name: CustomCSS
+    * * Display Name: Custom CSS
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional advanced raw CSS appended to the theme overlay and auto-scoped under [data-theme-overlay="<id>"]. Applied last, after the derived tokens and Overrides. Escape hatch for rules the seed/token model cannot express; leave null for none.
+    */
+    get CustomCSS(): string | null {
+        return this.Get('CustomCSS');
+    }
+    set CustomCSS(value: string | null) {
+        this.Set('CustomCSS', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 

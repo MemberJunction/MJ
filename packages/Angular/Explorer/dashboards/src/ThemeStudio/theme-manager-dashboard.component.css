@@ -41,8 +41,8 @@
 .tm-btn.primary:disabled { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); border-color: var(--mj-border-default); }
 .tm-btn.danger { color: var(--mj-status-error); border-color: color-mix(in srgb, var(--mj-status-error) 45%, transparent); }
 .tm-btn.danger:hover:not(:disabled) { background: var(--mj-status-error-bg); }
-.tm-btn.danger.solid { background: var(--mj-status-error); border-color: var(--mj-status-error); color: #fff; }
-.tm-btn.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--mj-status-error) 85%, #000); }
+.tm-btn.danger.solid { background: var(--mj-status-error); border-color: var(--mj-status-error); color: var(--mj-text-inverse); }
+.tm-btn.danger.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--mj-status-error) 85%, black); }
 
 /* Delete confirmation dialog */
 .tm-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.45); display: grid; place-items: center; padding: 20px; }
@@ -52,5 +52,5 @@
 .tm-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .tm-dialog-actions .tm-btn { padding: 8px 14px; border-radius: 8px; font-size: 13px; }
 
-.tm-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--mj-brand-secondary); color: #fff; padding: 11px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 600; box-shadow: var(--mj-shadow-lg); opacity: 0; pointer-events: none; transition: .25s; z-index: 50; }
+.tm-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--mj-brand-secondary); color: var(--mj-brand-on-secondary); padding: 11px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 600; box-shadow: var(--mj-shadow-lg); opacity: 0; pointer-events: none; transition: .25s; z-index: 50; }
 .tm-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
