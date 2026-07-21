@@ -128,11 +128,20 @@ if [ -n "${EXTRA_METADATA_DIRS:-}" ]; then
     done
 fi
 
-# ─── 4. Pre-flight diagnostics ───────────────────────────────────────────────
-# Probes MJAPI/nginx/socat/Auth0 + records a memory snapshot. Writes to
-# /tmp/preflight.json (we move it into $RUN_DIR after creating it below).
-echo "Running pre-flight diagnostics..."
-node "$SCRIPTS/preflight-checks.cjs" 2>&1
+# ─── 4. Pre-flight gate ──────────────────────────────────────────────────────
+# DR-E1: preflight now GATES the run. It exits non-zero when a gating check
+# fails (MJAPI/nginx/socat unreachable, DB suite membership short of metadata,
+# missing auth material, no AI keys), turning a config mistake into a ~5s abort
+# instead of a hanging run / hours of LLM spend. Set PREFLIGHT_SOFT=1 to
+# restore advisory-only behavior. Writes /tmp/preflight.json (moved into
+# $RUN_DIR after it's created below).
+echo "Running pre-flight gate..."
+if ! node "$SCRIPTS/preflight-checks.cjs" 2>&1; then
+    echo ""
+    echo "  ✗ Pre-flight gate failed — aborting before the suite (no LLM spend)."
+    echo "    Fix the issues above, or re-run with PREFLIGHT_SOFT=1 for advisory mode."
+    exit 78
+fi
 echo ""
 
 # ─── 4b. Archive destination pre-flight ─────────────────────────────────────
