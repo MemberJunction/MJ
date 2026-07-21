@@ -750,18 +750,15 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     agentSessionID: string,
     frame: { DataBase64: string; Width: number; Height: number; SequenceNumber: number },
   ): void {
-    pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-      message: JSON.stringify({
-        resolver: 'RemoteBrowserActionResolver',
-        type: 'RemoteBrowserScreencastFrame',
-        agentSessionID,
-        dataBase64: frame.DataBase64,
-        width: frame.Width,
-        height: frame.Height,
-        seq: frame.SequenceNumber,
-      }),
-      sessionId: userPayload.sessionId,
-    });
+    this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+      resolver: 'RemoteBrowserActionResolver',
+      type: 'RemoteBrowserScreencastFrame',
+      agentSessionID,
+      dataBase64: frame.DataBase64,
+      width: frame.Width,
+      height: frame.Height,
+      seq: frame.SequenceNumber,
+    }), userPayload);
   }
 
   /**
@@ -775,19 +772,16 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * @param chunk The encoded audio chunk.
    */
   private publishAudioChunk(pubSub: PubSubEngine, userPayload: UserPayload, agentSessionID: string, chunk: RemoteBrowserAudioChunk): void {
-    pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-      message: JSON.stringify({
-        resolver: 'RemoteBrowserActionResolver',
-        type: 'RemoteBrowserAudioChunk',
-        agentSessionID,
-        dataBase64: chunk.DataBase64,
-        codec: chunk.Codec,
-        sampleRate: chunk.SampleRate,
-        channels: chunk.Channels,
-        seq: chunk.SequenceNumber,
-      }),
-      sessionId: userPayload.sessionId,
-    });
+    this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+      resolver: 'RemoteBrowserActionResolver',
+      type: 'RemoteBrowserAudioChunk',
+      agentSessionID,
+      dataBase64: chunk.DataBase64,
+      codec: chunk.Codec,
+      sampleRate: chunk.SampleRate,
+      channels: chunk.Channels,
+      seq: chunk.SequenceNumber,
+    }), userPayload);
   }
 
   /**
