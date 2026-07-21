@@ -812,6 +812,156 @@
             "lastModified": "2026-07-02T19:15:23.609Z",
             "checksum": "fa8d05ff1aeb024594774c2059662a885f52725c4097304a804fd5ef7ef19e4e"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT53 - Agent Loop Foundation (live)",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "72ABE4CF-7D84-4182-BC53-255BC7D1F7C1"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T14:29:29.020Z",
+            "checksum": "db3a27ffb84d8a3ac98594aed889e34381ad816b87443ac29a496fa4e69d8e32"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT54 - Shipped Agents (Sage/Query Builder/Research)",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "72EBB4EC-2D4E-4EDD-BC85-CDDCDEC0BD69"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T14:29:29.031Z",
+            "checksum": "5f5b8def1fa702b0d040c0fe8a95dd04bd5fd981f045dbbd02d65510fc2d238c"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT55 - Tool-Result Carry-Forward (live)",
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "237C8312-5498-4BF5-A88A-4A805780034D"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T14:29:29.042Z",
+            "checksum": "ca5ee12bbff9b2b776869870e214cac264fe42b528f1ce10187d330b97c4947e"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT56 - Agent Payload Guards (live)",
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A30B775E-A3A5-491E-8418-02C4C1B8DDA5"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T14:29:29.052Z",
+            "checksum": "c8b90f4fe6d669361805ccaaa4d2d2f229abcaf8ac1ca16d4ceb167c4d7a3353"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT57 - Agent Artifact Tools (live)",
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C293DF53-8893-4A0D-A38B-10447C282A84"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T14:29:29.063Z",
+            "checksum": "46b56813e739aead280be41c6fea1c195ec816b0c01ff2036208a5d81dab7ac8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT58 - Agent Skills (live loop)",
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "346552CF-5CC1-466C-B91D-982060F9D585"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T14:29:29.072Z",
+            "checksum": "548c2eea95bd3d811e16df8d61c3fe6269849971cde530c3d3f508164cdcdb88"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT59 - Agent Plan Mode (live)",
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AA6A2005-4FDD-4F4B-80BD-0C74AB7D7D63"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T14:29:29.081Z",
+            "checksum": "d1747524c03e810532b7ae1940a93b1b85065c86fb24eb20337463f762c510cc"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT60 - Agent Compaction End-to-End",
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "76765FE2-9521-4287-A51A-6ED4509467E1"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T14:29:29.091Z",
+            "checksum": "b9b199df9a7edd39cddfcc8d332045e99072640baf336326d50bddca3fc31b61"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT61 - Agent Memory-Write Guards",
+            "Sequence": 13,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DC6C43B5-EB91-4749-A3B3-76955CAB9601"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T14:29:29.103Z",
+            "checksum": "a13ff89b289a3146faf7f9497a08864e20db3b2b0bc94aed740c7bbcf7489247"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT62 - Agent RAG and Search",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "40C884BC-BB3E-4657-9559-69494CFF637F"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T14:29:29.113Z",
+            "checksum": "4d0df2547b32c9e2c09eac7a0ab83197d41b92b2fc63b13acca3636789e919d2"
+          }
         }
       ]
     },

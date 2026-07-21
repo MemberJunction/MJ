@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT56 - Agent Payload Guards (live)",
+    "Description": "Sub-agent payload guards (highest-value, zero prior coverage): downstream strip, upstream merge block+violation logging, per-op suffix, empty-upstream all-grant, scope slice/reverse, fail-closed missing-scope, self-write default, failed-subagent no-merge, malformed-paths fail-open pin. 9 checks PG1-PG9.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Sub-agent payload guards (highest-value, zero prior coverage): downstream strip, upstream merge block+violation logging, per-op suffix, empty-upstream all-grant, scope slice/reverse, fail-closed missing-scope, self-write default, failed-subagent no-merge, malformed-paths fail-open pin. 9 checks PG1-PG9."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "agent-payload-guards"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "3FFB4F1F-6503-44F2-83D3-AFC1F7B94201"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T14:29:28.890Z",
+    "checksum": "0a843653847d5bc5ed3378d32479e02fdc2c190e3428d58c59cd17fbd53b0d1d"
+  }
+}

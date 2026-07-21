@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT55 - Tool-Result Carry-Forward (live)",
+    "Description": "Tool-result carry-forward (fabricate-then-observe): exactly one injected carry-forward message with header+compacted result, size cap, render stability, cross-agent/conversation no-leak, failed-run no-inject, ineligible-family no-inject. 6 checks CF1-CF6.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Tool-result carry-forward (fabricate-then-observe): exactly one injected carry-forward message with header+compacted result, size cap, render stability, cross-agent/conversation no-leak, failed-run no-inject, ineligible-family no-inject. 6 checks CF1-CF6."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "agent-carry-forward"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "0CEA9257-D176-4830-9A48-1528AE04839A"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T14:29:28.874Z",
+    "checksum": "4e21cfadfc61cb9b94f17b7ec06ca19b110ce89f9612ea99b2686bed5ef82265"
+  }
+}

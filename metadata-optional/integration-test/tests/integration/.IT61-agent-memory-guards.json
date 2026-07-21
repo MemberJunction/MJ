@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT61 - Agent Memory-Write Guards",
+    "Description": "memoryWrites 6-stage guard pipeline: disallowed-type rejected, per-run cap (5), scope clamp never-broadens, same-run idempotency, provenance+Provisional+TTL. 5 checks MG1-MG5, marker-isolated. 5 checks.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "memoryWrites 6-stage guard pipeline: disallowed-type rejected, per-run cap (5), scope clamp never-broadens, same-run idempotency, provenance+Provisional+TTL. 5 checks MG1-MG5, marker-isolated. 5 checks."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-memory-guards"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "41E890BD-3F14-4F33-81B5-D1B2C917BF74"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T14:29:28.962Z",
+    "checksum": "4e8c29c1dc04e70a3c8ced232cef0f9f586a92b4fbf36a3e3106eca756b37720"
+  }
+}

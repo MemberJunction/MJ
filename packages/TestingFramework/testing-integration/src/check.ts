@@ -361,6 +361,104 @@ export interface ConversationCompactionFixture {
     Steps: Array<{ Delete(): Promise<boolean> }>;
 }
 
+/**
+ * Shared fixture for the `agent-skills-live` bundle (SL1–SL5, live-model): the resolved IT: Probe
+ * Skill ID + the run IDs the checks create over real agent runs. Every AI Agent Run the bundle
+ * spawns (initial + any resumed) is accumulated here so teardown can FK-order-delete its steps,
+ * any MJ: AI Agent Requests rows, and the run itself. No skills/agents are mutated — the roster is
+ * seeded metadata, referenced read-only.
+ */
+export interface AgentSkillsLiveFixture {
+    /** Resolved ID of the seeded 'IT: Probe Skill' (RequestedOnly, bundles Calculate Expression). */
+    ProbeSkillID: string;
+    /** Every AI Agent Run this bundle created (initial + resumed), swept child-first in teardown. */
+    CreatedRunIds: string[];
+}
+
+/**
+ * Shared fixture for the `agent-plan-mode` bundle (PM1–PM6, live-model): the run IDs the checks
+ * spawn (initial paused runs AND the entity-driven resumed runs discovered via ResumingAgentRunID)
+ * plus the MJ: AI Agent Requests rows the plan gate creates. Teardown deletes requests → steps →
+ * runs (FK-safe). The plan/always-plan agents themselves are seeded metadata, referenced read-only.
+ */
+export interface AgentPlanModeFixture {
+    /** Every AI Agent Run this bundle created — initial paused runs AND resumed runs. */
+    CreatedRunIds: string[];
+    /** Every MJ: AI Agent Requests row the plan gate created (deleted before the runs they link). */
+    CreatedRequestIds: string[];
+}
+
+/**
+ * Accumulator fixture for the `agent-compaction-e2e` bundle (CE1–CE9): the fabricated conversation
+ * histories (created INSIDE the checks, fabricate-then-observe) + the AI Agent Run IDs the live
+ * turns spawn. Teardown deletes run steps → runs → conversation details → conversations (FK-safe).
+ */
+export interface AgentCompactionE2EFixture {
+    /** Fabricated conversation + ordered detail rows per fixture history a check created. */
+    Conversations: Array<{ Conversation: MJConversationEntity; Details: MJConversationDetailEntity[] }>;
+    /** Every AI Agent Run the live compaction-observing turns created. */
+    CreatedRunIds: string[];
+}
+
+/**
+ * Shared fixture for the `agent-memory-guards` bundle (MG1–MG5, live-model): the per-run marker
+ * string that isolates + cleans up the MJ: AI Agent Notes rows the writes create (the rig's
+ * isolation technique), plus the AI Agent Run IDs. Teardown deletes notes carrying the marker,
+ * then run steps → runs. The IT: Memory Writer agent is seeded metadata, referenced read-only.
+ */
+export interface AgentMemoryGuardsFixture {
+    /** Unique per-run marker embedded in every instructed memory-write content string. */
+    Marker: string;
+    /** Every AI Agent Run this bundle created (swept child-first after the marker notes). */
+    CreatedRunIds: string[];
+}
+
+/**
+ * Shared fixture for the `agent-rag-search` bundle (RS1–RS7, split-tier): the seeded sentinel
+ * MJ: AI Agent Notes rows (the searchable corpus), the resolved IT: Integration Test Scope ID, the
+ * marker/log prefix used for isolation + audit-row sweep, and the AI Agent Run IDs the live legs
+ * spawn. Teardown deletes the seeded notes, the SearchExecutionLog audit rows carrying the prefix,
+ * then run steps → runs.
+ */
+export interface AgentRagSearchFixture {
+    /** Resolved ID of the seeded 'IT: Integration Test Scope' (Database provider, MJ: AI Agent Notes). */
+    ScopeID: string;
+    /** Unique per-run sentinel token embedded in the seeded notes' text (≥3 chars, isolates the corpus). */
+    Marker: string;
+    /** Query prefix stamped on every SearchEngine query so teardown can sweep the audit rows. */
+    LogQueryPrefix: string;
+    /** IDs of ALL sentinel MJ: AI Agent Notes rows created in Setup (in-scope + excluded; deleted in teardown). */
+    SeededNoteIds: string[];
+    /** Subset of SeededNoteIds carrying the IT-SCOPE-EXCLUDED marker (must be filtered out by the scope). */
+    ExcludedNoteIds: string[];
+    /** Every AI Agent Run the live legs (RS4/RS6) created. */
+    CreatedRunIds: string[];
+}
+
+/**
+ * Shared accumulator fixture for the LIVE-MODEL, CLIENT-TRANSPORT agent bundles (`agent-loop-live`,
+ * `shipped-agents-live`, `agent-carry-forward`). Each bundle gets its own instance on its own context
+ * field. Unlike create-up-front fixtures, these accumulate IDs as the ordered checks run real wire
+ * runs + hand-fabricate prior state, then the lifecycle Teardown removes everything FK-ordered:
+ * live runs are purged (AIPromptRuns → AIAgentRunSteps → AIAgentRun), fabricated tool steps + prior
+ * runs deleted, then every ConversationDetail in each fixture conversation, then the conversation.
+ * All rows carry the "(mj-integration-test — safe to delete)" tag. `Marker` isolates this run's rows.
+ */
+export interface AgentLiveFixture {
+    /** Unique per-run marker embedded in fixture names for isolation. */
+    Marker: string;
+    /** Fixture conversation IDs (deleted last; their details are swept first). */
+    ConversationIds: string[];
+    /** ConversationDetail IDs the checks explicitly created (teardown also sweeps run-created details). */
+    ConversationDetailIds: string[];
+    /** AIAgentRun IDs produced by real wire runs — FK-purged (prompt runs → steps → run) in teardown. */
+    LiveRunIds: string[];
+    /** Hand-fabricated prior AIAgentRun IDs (fabricate-then-observe) — deleted after their steps. */
+    FabricatedRunIds: string[];
+    /** Hand-fabricated AIAgentRunStep IDs (the prior-turn Tool steps) — deleted before their runs. */
+    FabricatedStepIds: string[];
+}
+
 export interface IntegrationCheckContext {
     /** Resolved context user threaded from the engine (server) or bootstrap. */
     User: UserInfo;
@@ -406,10 +504,26 @@ export interface IntegrationCheckContext {
     PermissionEngineFixture?: PermissionEngineFixture;
     /** Accumulator fixture for the `conversation-compaction` bundle (created by checks, torn down by lifecycle). */
     CompactionFixture?: ConversationCompactionFixture;
+    /** Shared fixture for the `agent-skills-live` bundle (live-model). */
+    AgentSkillsLiveFixture?: AgentSkillsLiveFixture;
+    /** Shared fixture for the `agent-plan-mode` bundle (live-model). */
+    AgentPlanModeFixture?: AgentPlanModeFixture;
+    /** Accumulator fixture for the `agent-compaction-e2e` bundle (fabricate-then-observe). */
+    AgentCompactionE2EFixture?: AgentCompactionE2EFixture;
+    /** Shared fixture for the `agent-memory-guards` bundle (live-model, marker-isolated). */
+    AgentMemoryGuardsFixture?: AgentMemoryGuardsFixture;
+    /** Shared fixture for the `agent-rag-search` bundle (split-tier: deterministic engine + live agent legs). */
+    AgentRagSearchFixture?: AgentRagSearchFixture;
     /** Shared fixture for the `templates` bundle. */
     TemplatesFixture?: TemplatesFixture;
     /** Shared fixture for the `communication` bundle (DryRun end-to-end). */
     CommunicationFixture?: CommunicationFixture;
+    /** Accumulator fixture for the `agent-loop-live` bundle (live-model, client transport). */
+    AgentLoopLiveFixture?: AgentLiveFixture;
+    /** Accumulator fixture for the `shipped-agents-live` bundle (live-model, client transport). */
+    ShippedAgentsLiveFixture?: AgentLiveFixture;
+    /** Accumulator fixture for the `agent-carry-forward` bundle (live-model, client transport, fabricate-then-observe). */
+    AgentCarryForwardFixture?: AgentLiveFixture;
     /**
      * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
      * set by the driver/script before each bundle runs. Bundles read their own keys
