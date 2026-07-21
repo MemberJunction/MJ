@@ -13,6 +13,8 @@
 export type BrowserAction =
     | ClickAction
     | TypeAction
+    | ClickElementAction
+    | TypeIntoElementAction
     | KeypressAction
     | KeyDownAction
     | KeyUpAction
@@ -72,6 +74,41 @@ export class TypeAction {
      * focused element (existing behavior).
      */
     public Selector?: string;
+}
+
+/**
+ * Click an interactive element by its index in the current step's serialized
+ * element list (CU-A4). The engine resolves the index → the element the
+ * extractor found → a locator-based click with Playwright's native actionability
+ * auto-wait — eliminating the LLM's coordinate-estimation error. `Index` refers
+ * to the `[N]` markers in the element list rendered into this step's prompt.
+ */
+export class ClickElementAction {
+    public readonly Type = 'ClickElement' as const;
+    /** Index of the target in the current step's interactive-element list. */
+    public Index: number = 0;
+    /** Number of clicks (1 = single, 2 = double). */
+    public ClickCount: number = 1;
+    /** Mouse button to use. */
+    public Button: 'left' | 'right' | 'middle' = 'left';
+    /** Optional keyboard modifiers held during the click. */
+    public Modifiers?: KeyModifier[];
+}
+
+/**
+ * Type text into an interactive element by its index in the current step's
+ * serialized element list (CU-A4). The engine resolves the index → the element
+ * → a locator-based fill with actionability auto-wait. `Index` refers to the
+ * `[N]` markers in the element list rendered into this step's prompt.
+ */
+export class TypeIntoElementAction {
+    public readonly Type = 'TypeIntoElement' as const;
+    /** Index of the target field in the current step's interactive-element list. */
+    public Index: number = 0;
+    /** Text to type into the resolved element. */
+    public Text: string = '';
+    /** When true, press Enter after typing (submit-on-enter fields). */
+    public PressEnter: boolean = false;
 }
 
 export class KeypressAction {
@@ -340,6 +377,38 @@ export class ElementInfo {
     public Text: string = '';
     /** The matched element's bounding box, when one is available. */
     public BoundingBox?: BoundingBox;
+}
+
+// ─── Interactive Element (CU-A4 element-grounded perception) ──
+/**
+ * One interactive element discovered by the adapter's extractor for a step —
+ * the unit of element-grounded perception (CU-A4). The extractor assigns a
+ * stable per-snapshot {@link Index}; the controller references it in a
+ * {@link ClickElementAction}/{@link TypeIntoElementAction}, and the engine
+ * resolves index → this element → a locator action with actionability auto-wait.
+ * Also recorded (role/name/selector/bbox) onto the StepRecord as the raw
+ * material that makes recorded traces replayable and self-healable.
+ *
+ * App-agnostic: the extractor derives all of this from the a11y tree + a generic
+ * interactivity probe; nothing here names any specific app.
+ */
+export class InteractiveElement {
+    /** Stable per-snapshot index the controller uses to target this element. */
+    public Index: number = 0;
+    /** ARIA/semantic role (e.g. 'button', 'link', 'textbox', 'checkbox'). */
+    public Role: string = '';
+    /** Accessible name / label / visible text (trimmed, may be empty). */
+    public Name: string = '';
+    /** A selector the adapter can act on to re-resolve this element. */
+    public Selector: string = '';
+    /** Current value for inputs (e.g. '' → rendered as "(empty)"), when applicable. */
+    public Value?: string;
+    /** The element's bounding box in viewport pixels, when available. */
+    public BoundingBox?: BoundingBox;
+    /** True when the element is a scrollable container (rendered with a |SCROLL| marker). */
+    public Scrollable: boolean = false;
+    /** True when the element is disabled/non-interactive. */
+    public Disabled: boolean = false;
 }
 
 // ─── Browser Diagnostics ───────────────────────────────────

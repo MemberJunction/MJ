@@ -22,6 +22,7 @@ import {
     KeyModifier,
     AccessibilityNode,
     ElementInfo,
+    InteractiveElement,
 } from '../types/browser.js';
 import {
     getVisibleText,
@@ -31,6 +32,11 @@ import {
     getAccessibilitySnapshot,
     queryElement,
 } from './page-perception.js';
+import {
+    extractInteractiveElements,
+    clickInteractiveElement,
+    typeIntoInteractiveElement,
+} from './element-extraction.js';
 
 export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
     private sharedContext: BrowserContext;
@@ -227,6 +233,23 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
         return queryElement(this.page, selector, this.config.ActionTimeoutMs);
     }
 
+    /** Last extracted element list, cached so ClickElement/TypeIntoElement can resolve an index (CU-A4). */
+    private lastInteractiveElements: InteractiveElement[] = [];
+
+    public override async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
+        this.lastInteractiveElements = await extractInteractiveElements(this.page);
+        return this.lastInteractiveElements;
+    }
+
+    /** Resolve an index against the last extracted list, or throw a clear error. */
+    private resolveElementByIndex(index: number): InteractiveElement {
+        const element = this.lastInteractiveElements.find(e => e.Index === index);
+        if (!element) {
+            throw new Error(`No interactive element at index ${index} (list has ${this.lastInteractiveElements.length}; re-extract before acting)`);
+        }
+        return element;
+    }
+
     // ─── Action Execution ──────────────────────────────────
 
     public override async ExecuteAction(action: BrowserAction): Promise<ActionExecutionResult> {
@@ -251,6 +274,18 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
 
         switch (action.Type) {
             case 'Click': {
+                // Selector path (CU-A6): click the matched element directly with
+                // actionability auto-wait; coordinates ignored. Mirrors PBA — this
+                // closes the SCBA parity gap so the suite honors Selector clicks.
+                if (action.Selector) {
+                    await page.click(action.Selector, {
+                        button: action.Button,
+                        clickCount: action.ClickCount,
+                        timeout: this.config.ActionTimeoutMs,
+                        ...(action.Modifiers?.length ? { modifiers: action.Modifiers } : {}),
+                    });
+                    break;
+                }
                 let x = action.X;
                 let y = action.Y;
                 if (action.BoundingBox) {
@@ -274,7 +309,30 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 }
                 break;
             }
+            case 'ClickElement':
+                // Element-grounded click (CU-A4): resolve the index to the extracted
+                // element and click its locator with actionability auto-wait.
+                await clickInteractiveElement(
+                    page,
+                    this.resolveElementByIndex(action.Index),
+                    { clickCount: action.ClickCount, button: action.Button, modifiers: action.Modifiers },
+                    this.config.ActionTimeoutMs
+                );
+                break;
+            case 'TypeIntoElement':
+                await typeIntoInteractiveElement(
+                    page,
+                    this.resolveElementByIndex(action.Index),
+                    action.Text,
+                    action.PressEnter,
+                    this.config.ActionTimeoutMs
+                );
+                break;
             case 'Type':
+                // Selector path (CU-A6): focus the matched element first, then type.
+                if (action.Selector) {
+                    await page.locator(action.Selector).focus({ timeout: this.config.ActionTimeoutMs });
+                }
                 await page.keyboard.type(action.Text);
                 break;
             case 'Keypress':
@@ -298,10 +356,21 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 await page.mouse.up({ button: action.Button });
                 break;
             case 'Scroll':
-                await page.mouse.wheel(action.DeltaX, action.DeltaY);
+                // Selector path (CU-A6): bring the matched element into view.
+                if (action.Selector) {
+                    await page.locator(action.Selector).scrollIntoViewIfNeeded({ timeout: this.config.ActionTimeoutMs });
+                } else {
+                    await page.mouse.wheel(action.DeltaX, action.DeltaY);
+                }
                 break;
             case 'Wait':
-                await page.waitForTimeout(action.DurationMs);
+                // Selector path (CU-A6): wait for the element to appear (the preferred
+                // "wait for the thing, not a duration"); bounded by the action timeout.
+                if (action.Selector) {
+                    await page.waitForSelector(action.Selector, { timeout: this.config.ActionTimeoutMs });
+                } else {
+                    await page.waitForTimeout(action.DurationMs);
+                }
                 break;
             case 'Navigate':
                 await page.goto(action.Url, { waitUntil: 'load' });

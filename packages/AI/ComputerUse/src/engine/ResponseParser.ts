@@ -20,6 +20,8 @@ import {
     BoundingBox,
     ClickAction,
     TypeAction,
+    ClickElementAction,
+    TypeIntoElementAction,
     KeypressAction,
     KeyDownAction,
     KeyUpAction,
@@ -122,6 +124,23 @@ export class ResponseParser {
                 const action = new TypeAction();
                 action.Text = String(raw.Text ?? raw.text ?? '');
                 action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
+                return action;
+            }
+
+            case 'ClickElement': {
+                const action = new ClickElementAction();
+                action.Index = ResponseParser.toNumber(raw.Index ?? raw.index, -1);
+                action.ClickCount = ResponseParser.toNumber(raw.ClickCount ?? raw.clickCount, 1);
+                action.Button = ResponseParser.toClickButton(raw.Button ?? raw.button);
+                action.Modifiers = ResponseParser.toKeyModifiers(raw.Modifiers ?? raw.modifiers);
+                return action;
+            }
+
+            case 'TypeIntoElement': {
+                const action = new TypeIntoElementAction();
+                action.Index = ResponseParser.toNumber(raw.Index ?? raw.index, -1);
+                action.Text = String(raw.Text ?? raw.text ?? '');
+                action.PressEnter = (raw.PressEnter ?? raw.pressEnter) === true;
                 return action;
             }
 

@@ -27,6 +27,7 @@ import {
     AudioCaptureChunk,
     AccessibilityNode,
     ElementInfo,
+    InteractiveElement,
     KeyModifier,
 } from '../types/browser.js';
 import { ClassifyConnectEndpoint } from './connect-endpoint.js';
@@ -38,6 +39,11 @@ import {
     getAccessibilitySnapshot,
     queryElement,
 } from './page-perception.js';
+import {
+    extractInteractiveElements,
+    clickInteractiveElement,
+    typeIntoInteractiveElement,
+} from './element-extraction.js';
 
 /**
  * Minimal shape of a CDP `Page.screencastFrame` event payload — only the
@@ -447,6 +453,23 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         return queryElement(this.page, selector, this.config.ActionTimeoutMs);
     }
 
+    /** Last extracted element list, cached so ClickElement/TypeIntoElement can resolve an index (CU-A4). */
+    private lastInteractiveElements: InteractiveElement[] = [];
+
+    public override async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
+        this.lastInteractiveElements = await extractInteractiveElements(this.page);
+        return this.lastInteractiveElements;
+    }
+
+    /** Resolve an index against the last extracted list, or throw a clear error. */
+    private resolveElementByIndex(index: number): InteractiveElement {
+        const element = this.lastInteractiveElements.find(e => e.Index === index);
+        if (!element) {
+            throw new Error(`No interactive element at index ${index} (list has ${this.lastInteractiveElements.length}; re-extract before acting)`);
+        }
+        return element;
+    }
+
     // ─── Failure Artifacts (CU-F4) ─────────────────────────
 
     public override async StartTracing(): Promise<void> {
@@ -723,6 +746,27 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 } else {
                     await page.keyboard.type(action.Text);
                 }
+                break;
+
+            case 'ClickElement':
+                // Element-grounded click (CU-A4): resolve the index to the extracted
+                // element and click its locator with actionability auto-wait.
+                await clickInteractiveElement(
+                    page,
+                    this.resolveElementByIndex(action.Index),
+                    { clickCount: action.ClickCount, button: action.Button, modifiers: action.Modifiers },
+                    this.config.ActionTimeoutMs
+                );
+                break;
+
+            case 'TypeIntoElement':
+                await typeIntoInteractiveElement(
+                    page,
+                    this.resolveElementByIndex(action.Index),
+                    action.Text,
+                    action.PressEnter,
+                    this.config.ActionTimeoutMs
+                );
                 break;
 
             case 'Keypress':

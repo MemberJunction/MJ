@@ -23,6 +23,7 @@ import {
     AudioCaptureChunk,
     AccessibilityNode,
     ElementInfo,
+    InteractiveElement,
     BrowserDiagnosticEvent,
 } from '../types/browser.js';
 
@@ -155,6 +156,22 @@ export abstract class BaseBrowserAdapter {
     public async QueryElement(_selector: string): Promise<ElementInfo> {
         // No-op default — adapters with a live page override this.
         return new ElementInfo();
+    }
+
+    /**
+     * Extract the page's interactive elements (buttons/links/inputs/ARIA roles/
+     * click affordances) as a stable indexed list for element-grounded
+     * perception (CU-A4). The returned indices are what a subsequent
+     * `ClickElement`/`TypeIntoElement` action resolves against, so an adapter
+     * that implements this MUST cache the result to resolve those actions.
+     *
+     * Default returns an empty list so adapters without a live DOM don't break —
+     * element grounding then simply has nothing to offer and the engine falls
+     * back to coordinate actions. Adapters backed by a real page override this.
+     */
+    public async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
+        // No-op default — adapters with a live page override this.
+        return [];
     }
 
     // ─── Screencast (CDP live viewport feed) ───────────────
