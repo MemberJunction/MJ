@@ -334,7 +334,193 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
             AssertEqual(passed.success, true, 'a recognized filter (trim) over the same value must pass');
             AssertEqual(passed.validatedParameters.p, 'anything', 'the trim transformation filter must actually apply');
         }
-    }
+    },
+{
+        Id: 'runquery-features.QF11',
+        Name: 'QF11 (RQ-F1): QueryID ≡ QueryName ≡ Name+CategoryPath resolve to the SAME query; a bogus CategoryPath falls through (documented)',
+        Fn: async (ctx): Promise<void> => {
+            const { PageQuery, Category } = requireFixtures();
+            const rq = new RunQuery();
+            const byId = await rq.RunQuery({ QueryID: PageQuery.ID, MaxRows: 1 }, ctx.User);
+            const byName = await rq.RunQuery({ QueryName: PageQuery.Name, MaxRows: 1 }, ctx.User);
+            const byPath = await rq.RunQuery({ QueryName: PageQuery.Name, CategoryPath: Category.Name, MaxRows: 1 }, ctx.User);
+            for (const [label, r] of [['ID', byId], ['Name', byName], ['Name+CategoryPath', byPath]] as const) {
+                Assert(r.Success, `QF11 resolution by ${label} failed: ${r.ErrorMessage}`);
+                Assert(UUIDsEqual(r.QueryID, PageQuery.ID), `QF11: resolution by ${label} resolved a DIFFERENT query (${r.QueryID})`);
+            }
+            AssertEqual(byId.TotalRowCount, byName.TotalRowCount, 'QF11: identical query ⇒ identical TotalRowCount across resolution modes');
+
+            // Fall-through pin: resolveQuery tries CategoryPath, and when NO query matches the
+            // path it returns matches[0] anyway (the name is unique here, so the query still
+            // runs). That silent fall-through is load-bearing looseness — document it loudly.
+            const bogusPath = await rq.RunQuery({ QueryName: PageQuery.Name, CategoryPath: 'Definitely/Not/A/Real/Path', MaxRows: 1 }, ctx.User);
+            if (bogusPath.Success) {
+                console.warn('  ⚠ QF11: a BOGUS CategoryPath still resolved by bare name (resolveQuery falls through to matches[0]) — documented looseness, candidate for the bug register');
+            }
+        }
+    },
+    {
+        Id: 'runquery-features.QF12',
+        Name: 'QF12 (RQ-F2): two same-named queries — CategoryPath and CategoryID each disambiguate to the right one',
+        Fn: async (ctx): Promise<void> => {
+            const { PageQuery, Category } = requireFixtures();
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            // A CHILD category holding a query with the SAME NAME as the fixture PageQuery.
+            const child = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', ctx.User);
+            child.Name = `QF12 Child ${Date.now()}`;
+            child.ParentID = Category.ID;
+            child.UserID = ctx.User.ID;
+            Assert(await child.Save(), `QF12 child category save: ${child.LatestResult?.CompleteMessage}`);
+            const twin = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            try {
+                twin.Name = PageQuery.Name; // deliberate name collision
+                twin.CategoryID = child.ID;
+                twin.SQL = 'SELECT 1 AS TwinMarker';
+                twin.Status = 'Approved';
+                Assert(await twin.Save(), `QF12 twin query save: ${twin.LatestResult?.CompleteMessage}`);
+                await QueryEngine.Instance.Config(true, ctx.User);
+
+                const rq = new RunQuery();
+                const parentPath = await rq.RunQuery({ QueryName: PageQuery.Name, CategoryPath: Category.Name, MaxRows: 1 }, ctx.User);
+                Assert(parentPath.Success && UUIDsEqual(parentPath.QueryID, PageQuery.ID),
+                    `QF12: CategoryPath='${Category.Name}' must select the parent-category query (got ${parentPath.QueryID})`);
+                const childPath = await rq.RunQuery({ QueryName: PageQuery.Name, CategoryPath: `${Category.Name}/${child.Name}`, MaxRows: 1 }, ctx.User);
+                Assert(childPath.Success && UUIDsEqual(childPath.QueryID, twin.ID),
+                    `QF12: the child CategoryPath must select the twin (got ${childPath.QueryID}; expected ${twin.ID})`);
+                const byCatId = await rq.RunQuery({ QueryName: PageQuery.Name, CategoryID: child.ID, MaxRows: 1 }, ctx.User);
+                Assert(byCatId.Success && UUIDsEqual(byCatId.QueryID, twin.ID),
+                    `QF12: CategoryID disambiguation must select the twin (got ${byCatId.QueryID})`);
+
+                const ambiguous = await rq.RunQuery({ QueryName: PageQuery.Name, MaxRows: 1 }, ctx.User);
+                if (ambiguous.Success) {
+                    console.warn(`  ⚠ QF12: an AMBIGUOUS bare-name resolution silently ran matches[0] (${ambiguous.QueryID}) — documented first-match looseness`);
+                }
+            } finally {
+                await twin.Delete();
+                await child.Delete();
+                await QueryEngine.Instance.Config(true, ctx.User);
+            }
+        }
+    },
+    {
+        Id: 'runquery-features.QF13',
+        Name: "QF13 (RQ-F5): sqlString E2E injection — O'Brien'; DROP through a templated param is escaped, runs clean, executes no DDL",
+        Fn: async (ctx): Promise<void> => {
+            const { Category } = requireFixtures();
+            const schema = ctx.Schema ?? '__mj';
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const q = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            try {
+                q.Name = `QF13 Injection Probe ${Date.now()}`;
+                q.CategoryID = Category.ID;
+                q.SQL = `SELECT COUNT(*) AS Cnt FROM ${schema}.vwEntities WHERE Name = {{ nameParam | sqlString }}`;
+                q.UsesTemplate = true;
+                q.Status = 'Approved';
+                Assert(await q.Save(), `QF13 query save: ${q.LatestResult?.CompleteMessage}`);
+                // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
+                await QueryEngine.Instance.Config(true, ctx.User);
+
+                const rq = new RunQuery();
+                const hostile = `O'Brien'; DROP TABLE ${schema}.Entity; --`;
+                const r = await rq.RunQuery({ QueryID: q.ID, Parameters: { nameParam: hostile } }, ctx.User);
+                Assert(r.Success, `QF13: the escaped hostile literal must run CLEAN (got: ${r.ErrorMessage})`);
+                AssertEqual(Number(r.Results?.[0]?.Cnt ?? -1), 0, 'QF13: no entity is named the hostile literal — count 0 proves it ran as a LITERAL');
+                // The DDL must not have executed: the entities view still answers.
+                const alive = await rq.RunQuery({ SQL: `SELECT COUNT(*) AS Cnt FROM ${schema}.vwEntities` }, ctx.User);
+                Assert(alive.Success && Number(alive.Results?.[0]?.Cnt ?? 0) > 0, 'QF13: vwEntities must still exist and be populated — the injected DROP never ran');
+                // A benign value through the same template works (positive control).
+                const anyName = await rq.RunQuery({ SQL: `SELECT Name FROM ${schema}.vwEntities ORDER BY Name` , MaxRows: 1 }, ctx.User);
+                const realName = String(anyName.Results?.[0]?.Name ?? '');
+                Assert(realName.length > 0, 'QF13: could not discover a real entity name for the positive control');
+                const benign = await rq.RunQuery({ QueryID: q.ID, Parameters: { nameParam: realName } }, ctx.User);
+                Assert(benign.Success && Number(benign.Results?.[0]?.Cnt ?? 0) >= 1, `QF13 positive control: the real entity name '${realName}' matches ≥1 row`);
+            } finally {
+                await q.Delete(); // server subclass removes the auto-extracted Query Parameters
+                await QueryEngine.Instance.Config(true, ctx.User);
+            }
+        }
+    },
+    {
+        Id: 'runquery-features.QF14',
+        Name: "QF14 (RQ-F6): LIKE-wildcard characters (%/_) in a sqlString param stay LITERAL under equality — and no LIKE-escaping filter exists (documented)",
+        Fn: async (ctx): Promise<void> => {
+            const { Category } = requireFixtures();
+            const schema = ctx.Schema ?? '__mj';
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const q = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            try {
+                q.Name = `QF14 Wildcard Probe ${Date.now()}`;
+                q.CategoryID = Category.ID;
+                q.SQL = `SELECT COUNT(*) AS Cnt FROM ${schema}.vwEntities WHERE Name = {{ pat | sqlString }}`;
+                q.UsesTemplate = true;
+                q.Status = 'Approved';
+                Assert(await q.Save(), `QF14 query save: ${q.LatestResult?.CompleteMessage}`);
+                // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
+                await QueryEngine.Instance.Config(true, ctx.User);
+
+                const rq = new RunQuery();
+                // Under '=', % and _ are ordinary characters — 0 matches, no error, no wildcard blowup.
+                const r = await rq.RunQuery({ QueryID: q.ID, Parameters: { pat: '50%_x' } }, ctx.User);
+                Assert(r.Success, `QF14: wildcard-bearing literal must run clean under equality (got: ${r.ErrorMessage})`);
+                AssertEqual(Number(r.Results?.[0]?.Cnt ?? -1), 0, "QF14: '50%_x' matched nothing — the characters stayed literal");
+                // Catalog note: there is no sqlLike escaping filter in RunQuerySQLFilterManager —
+                // a template that interpolates a user value into a LIKE pattern has no built-in
+                // wildcard-escaping. Documented (candidate: add a sqlLike filter).
+                console.warn('  ⚠ QF14: no sqlLike wildcard-escaping filter exists — user values in LIKE patterns wildcard-match by design today');
+            } finally {
+                await q.Delete(); // server subclass removes the auto-extracted Query Parameters
+                await QueryEngine.Instance.Config(true, ctx.User);
+            }
+        }
+    },
+    {
+        Id: 'runquery-features.QF15',
+        Name: 'QF15 (RQ-F7): sqlIdentifier rejects an injection-shaped identifier — clean error result, no DDL, benign identifier passes',
+        Fn: async (ctx): Promise<void> => {
+            const { Category } = requireFixtures();
+            const schema = ctx.Schema ?? '__mj';
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const q = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            try {
+                q.Name = `QF15 Identifier Probe ${Date.now()}`;
+                q.CategoryID = Category.ID;
+                q.SQL = `SELECT {{ col | sqlIdentifier }} FROM ${schema}.vwEntities WHERE 1=0`;
+                q.UsesTemplate = true;
+                q.Status = 'Approved';
+                Assert(await q.Save(), `QF15 query save: ${q.LatestResult?.CompleteMessage}`);
+                // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
+                await QueryEngine.Instance.Config(true, ctx.User);
+
+                const rq = new RunQuery();
+                const hostile = await rq.RunQuery({ QueryID: q.ID, Parameters: { col: `ID]; DROP TABLE ${schema}.Entity; --` } }, ctx.User);
+                AssertEqual(hostile.Success, false, 'QF15: an injection-shaped identifier must be REJECTED (sqlIdentifier throws → clean error result)');
+                Assert((hostile.ErrorMessage ?? '').length > 0, 'QF15: the rejection carries an error message');
+                const alive = await rq.RunQuery({ SQL: `SELECT COUNT(*) AS Cnt FROM ${schema}.vwEntities` }, ctx.User);
+                Assert(alive.Success && Number(alive.Results?.[0]?.Cnt ?? 0) > 0, 'QF15: no DDL executed — vwEntities intact');
+                const benign = await rq.RunQuery({ QueryID: q.ID, Parameters: { col: 'ID' } }, ctx.User);
+                Assert(benign.Success, `QF15 positive control: a plain identifier passes the filter (got: ${benign.ErrorMessage})`);
+            } finally {
+                await q.Delete(); // server subclass removes the auto-extracted Query Parameters
+                await QueryEngine.Instance.Config(true, ctx.User);
+            }
+        }
+    },
+    {
+        Id: 'runquery-features.QF16',
+        Name: 'QF16 (RQ-F13): RunQueries batch — one bad member errors ALONE; the valid member still succeeds (per-item independence)',
+        Fn: async (ctx): Promise<void> => {
+            const { PageQuery } = requireFixtures();
+            const rq = new RunQuery();
+            const results = await rq.RunQueries([
+                { QueryID: PageQuery.ID, MaxRows: 1 },
+                { QueryID: '00000000-0000-0000-0000-00000000dead' }, // unresolvable member
+            ], ctx.User);
+            AssertEqual(results.length, 2, 'QF16: the batch returns one result per member');
+            Assert(results[0].Success, `QF16: the VALID member must succeed despite the bad sibling: ${results[0].ErrorMessage}`);
+            AssertEqual(results[1].Success, false, 'QF16: the unresolvable member must error');
+            Assert(/not found/i.test(results[1].ErrorMessage ?? ''), `QF16: the per-item error names the cause (got "${results[1].ErrorMessage}")`);
+        }
+    },
 ];
 
 for (const check of RunQueryFeatureChecks) {
