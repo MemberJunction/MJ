@@ -9,7 +9,6 @@
  */
 import { RunView } from '@memberjunction/core';
 import { IntegrationCheckRegistry } from '../check-registry';
-import { UniqueFilter } from '../instrumented-cache';
 import { Assert } from '../test-runner';
 
 IntegrationCheckRegistry.Instance.Register({
@@ -18,10 +17,14 @@ IntegrationCheckRegistry.Instance.Register({
     Fn: async (ctx): Promise<void> => {
         ctx.Storage.ResetCounts();
         const rv = new RunView();
-        // A cold, deterministic fingerprint via UniqueFilter forces a cache MISS (one RunViewCache write).
+        // A cold, per-run-unique fingerprint forces a cache MISS (one RunViewCache write).
+        // Column-AGNOSTIC always-true predicate — the rls-isolation bundle documented why:
+        // UniqueFilter('ID', tag) feeds a non-GUID literal to the uniqueidentifier PK and
+        // errors. A pure string-literal comparison is always true and valid for any entity;
+        // the timestamp tag makes each run a distinct cold slot.
         const r = await rv.RunView<{ ID: string }>({
-            EntityName: 'Users',
-            ExtraFilter: UniqueFilter('ID', 'p0-selftest'),
+            EntityName: 'MJ: Users',
+            ExtraFilter: `'p0-selftest-${Date.now()}' <> 'zzz-cache-test-marker'`,
             Fields: ['ID'],
             ResultType: 'simple'
         }, ctx.User);

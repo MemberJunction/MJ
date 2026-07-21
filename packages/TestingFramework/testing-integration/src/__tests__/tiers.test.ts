@@ -15,10 +15,14 @@ describe('IsTierEnabled', () => {
         expect(IsTierEnabled('mutation', { RUN_MUTATION_TESTS: '1' })).toBe(true);
     });
 
-    it('live-model requires RUN_AGENT_TESTS === "1"', () => {
-        expect(IsTierEnabled('live-model', {})).toBe(false);
-        expect(IsTierEnabled('live-model', { RUN_AGENT_TESTS: 'yes' })).toBe(false);
+    it('live-model is ON by default; only an explicit RUN_AGENT_TESTS=0 disables it (2026-07-20 inversion)', () => {
+        // The live-model ITs live in their own suite — invoking them is already explicit,
+        // so a second env opt-in was a confusing double gate. '1' stays enabled for
+        // backward compat with every existing RUN_AGENT_TESTS=1 invocation.
+        expect(IsTierEnabled('live-model', {})).toBe(true);
         expect(IsTierEnabled('live-model', { RUN_AGENT_TESTS: '1' })).toBe(true);
+        expect(IsTierEnabled('live-model', { RUN_AGENT_TESTS: 'yes' })).toBe(true);
+        expect(IsTierEnabled('live-model', { RUN_AGENT_TESTS: '0' })).toBe(false);
     });
 
     it('TIER_ENV_GATE maps each tier to its gate var (deterministic ungated)', () => {
