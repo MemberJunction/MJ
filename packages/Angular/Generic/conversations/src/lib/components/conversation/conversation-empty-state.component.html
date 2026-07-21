@@ -21,7 +21,7 @@
     }
 
     <!-- Suggested Prompts (hidden in overlay mode) -->
-    @if (suggestedPrompts.length > 0) {
+    @if (showSuggestedPrompts && suggestedPrompts.length > 0) {
       <div class="suggested-prompts">
         <div class="prompt-grid">
           @for (prompt of suggestedPrompts; track prompt) {
@@ -73,10 +73,12 @@
     <!-- Footer Tips (hidden in overlay mode) -->
     @if (!overlayMode) {
       <div class="tips-section">
-        <div class="tip-item">
-          <i class="fa-solid fa-at"></i>
-          <span>Use <strong>&#64;AgentName</strong> to directly invoke a specific agent</span>
-        </div>
+        @if (enableMentions) {
+          <div class="tip-item">
+            <i class="fa-solid fa-at"></i>
+            <span>Use <strong>&#64;AgentName</strong> to directly invoke a specific agent</span>
+          </div>
+        }
         <div class="tip-item">
           <i class="fa-solid fa-keyboard"></i>
           <span>Press <strong>Enter</strong> to send, <strong>Shift+Enter</strong> for new line</span>

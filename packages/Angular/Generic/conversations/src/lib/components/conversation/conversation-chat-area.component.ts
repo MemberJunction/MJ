@@ -184,6 +184,27 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() showLoadingState = true;
 
+  // --- Additional host-level feature gates (all default true; false removes the
+  //     affordance entirely). Forwarded to the message list / message items / empty
+  //     state so white-labeled end-user surfaces can pare the chat down through the
+  //     component contract instead of CSS on internal class names. ---
+  /** Show the per-message agent run-detail grid (run ID, step/token counts, $ cost). */
+  @Input() showAgentRunDetails = true;
+  /** Show the per-message reaction buttons (like / comment). */
+  @Input() showReactions = true;
+  /** Show the per-message thumbs rating control on completed AI messages. */
+  @Input() showMessageRating = true;
+  /** Allow pinning messages (per-message pin button, the header pin chip, and the pinned-messages panel). */
+  @Input() allowPinning = true;
+  /** Allow editing the user's own messages (per-message edit button). */
+  @Input() allowMessageEdit = true;
+  /** Allow deleting the user's own messages (per-message delete button). */
+  @Input() allowMessageDelete = true;
+  /** Show the empty-state's built-in suggested-prompt chips (and the @mention tip). */
+  @Input() showSuggestedPrompts = true;
+  /** Show the message list's sticky date header + jump-to-date navigation. */
+  @Input() showDateNavigation = true;
+
   private _isNewConversation: boolean = false;
   @Input()
   set isNewConversation(value: boolean) {

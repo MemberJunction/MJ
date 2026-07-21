@@ -81,6 +81,16 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   /** Whether the built-in "No messages yet" filler renders for empty conversations. Hosts with their own empty-state chrome set false. */
   @Input() public showEmptyFill: boolean = true;
+  /** Whether the sticky date header + jump-to-date dropdown render. */
+  @Input() public showDateNavigation: boolean = true;
+  // Per-message feature gates — forwarded onto each MessageItemComponent instance
+  // (see applyMessageItemFeatureFlags). All default true.
+  @Input() public showAgentRunDetails: boolean = true;
+  @Input() public showReactions: boolean = true;
+  @Input() public showMessageRating: boolean = true;
+  @Input() public allowPinning: boolean = true;
+  @Input() public allowMessageEdit: boolean = true;
+  @Input() public allowMessageDelete: boolean = true;
   @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
   @Input() public agentRunMap: Map<string, MJAIAgentRunEntityExtended> = new Map();
   @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
@@ -433,6 +443,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.userAvatarMap = this.userAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
     instance.messageExtraTemplate = this.messageExtraTemplate;
+    this.applyMessageItemFeatureFlags(instance);
 
     this.applyArtifactsToInstance(instance, message.ID, ref.changeDetectorRef);
 
@@ -444,6 +455,21 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     if (previousMessage && previousMessage.Status !== message.Status) {
       ref.changeDetectorRef.markForCheck();
     }
+  }
+
+  /**
+   * Forward the host-level per-message feature gates onto a MessageItemComponent
+   * instance. These are static host config (not per-message data), so the same
+   * values apply to every message; applied on both the create and in-place-update
+   * paths so a mid-session rebind stays consistent.
+   */
+  private applyMessageItemFeatureFlags(instance: MessageItemComponent): void {
+    instance.showAgentRunDetails = this.showAgentRunDetails;
+    instance.showReactions = this.showReactions;
+    instance.showMessageRating = this.showMessageRating;
+    instance.allowPinning = this.allowPinning;
+    instance.allowMessageEdit = this.allowMessageEdit;
+    instance.allowMessageDelete = this.allowMessageDelete;
   }
 
   /**
@@ -484,6 +510,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.userAvatarMap = this.userAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
     instance.messageExtraTemplate = this.messageExtraTemplate;
+    this.applyMessageItemFeatureFlags(instance);
 
     this.applyArtifactsToInstance(instance, message.ID, componentRef.changeDetectorRef);
 

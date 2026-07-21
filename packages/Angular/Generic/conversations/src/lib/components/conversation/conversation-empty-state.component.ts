@@ -15,6 +15,8 @@ export class ConversationEmptyStateComponent {
   @Input() showSidebarToggle: boolean = false;
   @Input() enableAttachments: boolean = false;
   @Input() enableMentions: boolean = true;
+  /** Show the built-in suggested-prompt chips. Hosts that don't want the default prompt vocabulary set false. */
+  @Input() showSuggestedPrompts: boolean = true;
   @Input() maxAttachments: number = 10;
   @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024;
   @Input() acceptedFileTypes: string = 'image/*';

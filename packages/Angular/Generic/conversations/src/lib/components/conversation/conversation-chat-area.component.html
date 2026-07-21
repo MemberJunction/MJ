@@ -79,7 +79,7 @@
         }
       </div>
       <div class="chat-actions chat-actions-buttons">
-        @if (pinnedMessages.length > 0) {
+        @if (allowPinning && pinnedMessages.length > 0) {
           <button class="pin-chip" [class.active]="showPinsPanel" (click)="showPinsPanel = !showPinsPanel" title="View pinned messages">
             <i class="fas fa-thumbtack"></i>
             <span class="pin-chip-count">{{ pinnedMessages.length }}</span>
@@ -201,6 +201,7 @@
             [showSidebarToggle]="showSidebarToggle"
             [overlayMode]="overlayMode"
             [greeting]="emptyStateConfig?.greeting ?? emptyStateGreeting"
+            [showSuggestedPrompts]="showSuggestedPrompts"
             [enableAttachments]="enableAttachments && allowAttachments"
             [enableMentions]="allowMentions"
             [maxAttachments]="maxAttachments"
@@ -252,6 +253,13 @@
           <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
             <mj-conversation-message-list
               [showEmptyFill]="showEmptyFill"
+              [showDateNavigation]="showDateNavigation"
+              [showAgentRunDetails]="showAgentRunDetails"
+              [showReactions]="showReactions"
+              [showMessageRating]="showMessageRating"
+              [allowPinning]="allowPinning"
+              [allowMessageEdit]="allowMessageEdit"
+              [allowMessageDelete]="allowMessageDelete"
               [messages]="messages"
               [conversation]="conversation"
               [currentUser]="currentUser"
@@ -400,7 +408,7 @@
     </mj-artifact-share-modal>
 
     <!-- Pinned Messages Panel (overlay) -->
-    @if (showPinsPanel) {
+    @if (allowPinning && showPinsPanel) {
       <mj-pinned-messages-panel
         [pinnedMessages]="pinnedMessages"
         (closed)="showPinsPanel = false"

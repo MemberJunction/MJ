@@ -128,6 +128,14 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `showExportButton` | The conversation export button |
 | `showShareButton` | The conversation share button |
 | `showArtifactIndicator` | The artifact indicator |
+| `showAgentRunDetails` | The per-message agent run-detail grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide |
+| `showReactions` | The per-message reaction buttons (like / comment) |
+| `showMessageRating` | The per-message thumbs rating control |
+| `allowPinning` | Message pinning (per-message pin button, header pin chip, pinned-messages panel) |
+| `allowMessageEdit` | The per-message edit button (owner's own messages) |
+| `allowMessageDelete` | The per-message delete button (owner's own messages) |
+| `showSuggestedPrompts` | The empty-state's built-in suggested-prompt chips |
+| `showDateNavigation` | The message list's sticky date header + jump-to-date navigation |
 
 ```html
 <!-- e.g. a minimal, single-agent end-user surface -->
