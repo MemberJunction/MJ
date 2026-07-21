@@ -279,6 +279,66 @@ export interface PermissionEngineFixture {
     CreatedDomainIds: string[];
 }
 
+/**
+ * Shared fixture for the `transaction-groups` bundle (client transport, mutating): the resolved
+ * `MJ: Action Categories` entity ID plus the unique per-run name prefix stamped on every fixture
+ * row. Teardown sweeps ALL categories whose Name starts with the prefix (children before parents),
+ * so even a check that fails mid-transaction — or a pre-fix scope-bypass run that leaked a row —
+ * cannot orphan fixtures. The TG4 API-key fixtures (key + scope rules + usage logs) self-clean
+ * inside the check's own try/finally, mirroring the `api-keys` bundle's AK3.
+ */
+export interface TransactionGroupsFixture {
+    /** `EntityInfo.ID` of `MJ: Action Categories` — the low-risk throwaway fixture entity. */
+    ActionCategoryEntityID: string;
+    /** Unique per-run name prefix stamped on every fixture row (swept by teardown via LIKE). */
+    Prefix: string;
+}
+
+/**
+ * Shared fixture for the `templates` bundle: one throwaway `MJ: Templates` row (+ its Text
+ * `MJ: Template Contents` and the two `MJ: Template Params` created in setup — a required
+ * param and a defaulted param) rendered through the REAL TemplateEngineServer by the ordered
+ * TP checks. Teardown deletes params (including any the render pipeline auto-extracted),
+ * then content, then the template (FK-safe order).
+ */
+export interface TemplatesFixture {
+    /** The throwaway `MJ: Templates` fixture row (Name carries the unique run prefix). */
+    Template: MJTemplateEntity;
+    /** The Text-type `MJ: Template Contents` row holding the fixture template body. */
+    Content: MJTemplateContentEntity;
+    /** The exact template body written to Content.TemplateText (round-trip baseline). */
+    TemplateText: string;
+    /** Unique per-run name for FindTemplate lookups. */
+    TemplateName: string;
+    /** IDs of the `MJ: Template Params` rows created in setup (teardown also sweeps auto-extracted ones). */
+    ParamIds: string[];
+}
+
+/**
+ * Shared fixture for the `communication` bundle (DryRun end-to-end): the Active communication
+ * provider (+ message type) selected from live metadata whose provider class is registered on
+ * the ClassFactory, plus the unique per-run subject marker used to find (and tear down) the
+ * Communication Run/Log audit rows the dry-run send creates. `Provider` is undefined when the
+ * deployment has no usable provider — the checks then skip-as-pass loudly.
+ */
+export interface CommunicationFixture {
+    /** Name of the selected Active provider (undefined ⇒ checks skip-as-pass). */
+    ProviderName?: string;
+    /** Name of the selected provider message type. */
+    MessageTypeName?: string;
+    /** Why no provider was usable (for the skip note), when ProviderName is undefined. */
+    SkipReason?: string;
+    /** Unique per-run subject marker stamped on the dry-run message for audit-row lookup + teardown. */
+    SubjectMarker: string;
+    /** Communication Log IDs discovered/created by the checks (torn down best-effort). */
+    LogIds: string[];
+    /** Communication Run IDs discovered/created by the checks (torn down best-effort, after logs). */
+    RunIds: string[];
+    /** Set by CM2 (the dry-run send) for CM3's audit assertions. */
+    DryRunResultSuccess?: boolean;
+    DryRunResultMarked?: boolean;
+}
+
 /** The bootstrapped, run-scoped real provider stack handed to every check. */
 /**
  * Accumulator fixture for the `conversation-compaction` bundle (CC1–CC10, graduated from
@@ -335,12 +395,18 @@ export interface IntegrationCheckContext {
     OpenAppTeardownFixture?: OpenAppTeardownFixture;
     /** Shared fixture for the `entity-writes` bundle (client transport, mutating). */
     EntityWritesFixture?: EntityWritesFixture;
+    /** Shared fixture for the `transaction-groups` bundle (client transport, mutating). */
+    TransactionGroupsFixture?: TransactionGroupsFixture;
     /** Shared fixture for the `user-routines` bundle. */
     UserRoutinesFixture?: UserRoutinesFixture;
     /** Shared fixture for the `permission-engine` bundle's mutation checks (PE11/PE12) only. */
     PermissionEngineFixture?: PermissionEngineFixture;
     /** Accumulator fixture for the `conversation-compaction` bundle (created by checks, torn down by lifecycle). */
     CompactionFixture?: ConversationCompactionFixture;
+    /** Shared fixture for the `templates` bundle. */
+    TemplatesFixture?: TemplatesFixture;
+    /** Shared fixture for the `communication` bundle (DryRun end-to-end). */
+    CommunicationFixture?: CommunicationFixture;
     /**
      * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
      * set by the driver/script before each bundle runs. Bundles read their own keys
