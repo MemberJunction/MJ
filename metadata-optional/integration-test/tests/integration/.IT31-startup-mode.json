@@ -17,5 +17,12 @@
       ]
     },
     "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F1229933-5A20-4A1A-989E-B057432E1823"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T03:44:42.899Z",
+    "checksum": "a73fca665b4604e3fe67d84ab4d04fcff90c198518a328c6a8debc93dd693713"
   }
 }
