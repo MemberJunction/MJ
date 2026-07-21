@@ -17,6 +17,7 @@
 import { RunComputerUseParams } from '../types/params.js';
 import { StepRecord, JudgeVerdict } from '../types/judge.js';
 import type { InteractiveElement } from '../types/browser.js';
+import { summarizeOlderSteps, DEFAULT_MAX_VERBATIM_STEPS } from './step-digest.js';
 
 export class RunContext {
     /** Immutable reference to the original run parameters */
@@ -129,9 +130,18 @@ export class RunContext {
     public BuildStepSummary(): string {
         if (this.StepHistory.length === 0) return '';
 
-        return this.StepHistory
-            .map(step => this.formatStepSummary(step))
-            .join('\n');
+        // Compaction (CU-E4): keep the most recent N steps verbatim; collapse
+        // older ones into a one-line digest so the summary stays bounded on long
+        // runs (the per-path counts keep the loop signal alive after a step
+        // scrolls out of the verbatim window).
+        const total = this.StepHistory.length;
+        if (total <= DEFAULT_MAX_VERBATIM_STEPS) {
+            return this.StepHistory.map(step => this.formatStepSummary(step)).join('\n');
+        }
+        const splitAt = total - DEFAULT_MAX_VERBATIM_STEPS;
+        const digest = summarizeOlderSteps(this.StepHistory.slice(0, splitAt));
+        const recent = this.StepHistory.slice(splitAt).map(step => this.formatStepSummary(step));
+        return [digest, ...recent].join('\n');
     }
 
     /**
