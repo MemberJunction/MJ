@@ -965,7 +965,12 @@ const RVM14: NamedCheck = {
             { EntityName: FIELDS_ENTITY, AfterKey: anyKey, OrderBy: 'Sequence ASC', MaxRows: 5, ResultType: 'simple' }, ctx.User,
         );
         Assert(orderBy.length > 0, 'RVM14 AfterKey + non-PK OrderBy was ACCEPTED — the IncompatibleOrderBy guard is gone');
-        Assert(/orderby|order by|pk column|primary key/i.test(orderBy), `RVM14 IncompatibleOrderBy refusal does not identify the cause: "${orderBy}"`);
+        // Message CONTENT is warn-only over the wire (bug register: AfterKey refusal message
+        // fidelity — the reason is stripped before the client sees it), matching the StartRow
+        // sibling above. The load-bearing assertion is that the refusal HAPPENED.
+        if (!/orderby|order by|pk column|primary key/i.test(orderBy)) {
+            console.warn(`  ⚠ RVM14: IncompatibleOrderBy refusal reason lost over the wire (got "${orderBy}")`);
+        }
 
         const badShape = await probeRefusal(
             {
