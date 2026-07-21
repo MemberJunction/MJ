@@ -38,6 +38,8 @@ interface AttemptLine {
     durationMs: number;
     workerIndex?: number;
     flaky?: boolean;
+    /** Normalized failure category (DR-D2/D8), on non-passing attempts. */
+    failureCategory?: string;
     error?: string;
     ts: string;
 }
@@ -52,6 +54,7 @@ interface PartialTestRow {
     workerIndex?: number;
     attempts?: number;
     flaky?: boolean;
+    failureCategory?: string;
 }
 
 export class IncrementalResultsSink {
@@ -161,6 +164,7 @@ export class IncrementalResultsSink {
             durationMs: result.durationMs,
             workerIndex: result.workerIndex,
             flaky: result.flaky,
+            failureCategory: result.failureCategory,
             error: result.errorMessage,
             ts: now,
         });
@@ -188,6 +192,7 @@ export class IncrementalResultsSink {
                 workerIndex: r.workerIndex,
                 attempts: r.attempts,
                 flaky: r.flaky,
+                failureCategory: r.failureCategory,
             });
         }
 

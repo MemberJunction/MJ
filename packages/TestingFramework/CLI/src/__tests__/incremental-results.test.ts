@@ -64,6 +64,13 @@ describe('IncrementalResultsSink (DR-D5)', () => {
         expect(lines[0]).toMatchObject({ isFinal: true, status: 'Passed', workerIndex: 0 });
     });
 
+    it('persists the failure category into the lineage (DR-D8)', () => {
+        const sink = IncrementalResultsSink.forOutput(out, 'S')!;
+        sink.onTestComplete(mkResult({ testId: 't1', testName: 'Alpha', status: 'Failed', score: 0, failureCategory: 'infra' }));
+        expect(readJsonl()[0].failureCategory).toBe('infra');
+        expect(readPartial().tests[0].failureCategory).toBe('infra');
+    });
+
     it('expands prior attempts into their own non-final lines', () => {
         const sink = IncrementalResultsSink.forOutput(out, 'S')!;
         sink.onTestComplete(mkResult({
