@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, IsTranscriptContinuation } from '@memberjunction/ai';
 import { BaseRealtimeClient } from '../generic/baseRealtimeClient';
 import {
     OpenAIProtocolWebSocketRealtimeClient,
@@ -80,6 +80,14 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {
      */
     private userTurnTranscribed = false;
 
+    /**
+     * Text of the current user turn's latest streamed caption, used to recognize that a post-pause
+     * caption CONTINUES the same utterance (Grok re-emits the full accumulated text) rather than
+     * starting a new turn. Cleared in {@link onResponseStarted} — once the model replies, the user's
+     * turn is over and a later utterance must never merge into it. Mirrors the server session.
+     */
+    private lastUserTranscript = '';
+
     /** @inheritdoc — used in the shared diagnostics + close messages. */
     protected override get providerDebugLabel(): string {
         return 'xAIRealtimeClient';
@@ -140,11 +148,19 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {
      */
     protected override onUserTranscriptFrame(transcript: string): void {
         if (transcript && transcript.trim().length > 0) {
+            // Two ways this caption REPLACES rather than appends: another already landed in this turn,
+            // OR it continues the previous utterance (the provider re-emits the whole thing with more
+            // words). The second case rescues a mid-sentence pause — the VAD fires speech_started and
+            // clears the flag even though the user never stopped, which would otherwise split one
+            // spoken thought into several growing bubbles. Mirrors the server session exactly so both
+            // topologies collapse the stream identically.
+            const replacesPrevious = this.userTurnTranscribed || IsTranscriptContinuation(this.lastUserTranscript, transcript);
             this.emitTranscript({
                 Role: 'User', Text: transcript, IsFinal: true, Kind: 'normal',
-                ReplacesPrevious: this.userTurnTranscribed,
+                ReplacesPrevious: replacesPrevious,
             });
             this.userTurnTranscribed = true;
+            this.lastUserTranscript = transcript;
         }
     }
 
@@ -156,6 +172,17 @@ export class xAIRealtimeClient extends OpenAIProtocolWebSocketRealtimeClient {
      * interrupted response's busy flag is cleared eagerly (Grok cancels its own turn; clearing
      * now lets a queued tool result fire without waiting on the trailing `response.done`).
      */
+    /**
+     * @inheritdoc
+     *
+     * The model has taken the floor, so the user's turn is definitively over — drop the continuation
+     * anchor. Without this, a later utterance that happened to open with the same words could be
+     * merged into the previous turn instead of appending its own.
+     */
+    protected override onResponseStarted(): void {
+        this.lastUserTranscript = '';
+    }
+
     protected override onSpeechStartedFrame(): void {
         this.userTurnTranscribed = false;
         if (this.responseActive || this.IsAudioPlaying) {

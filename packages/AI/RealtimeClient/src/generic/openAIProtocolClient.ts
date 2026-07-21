@@ -514,6 +514,7 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
             case 'response.created': {
                 this.responseActive = true;
                 this.confirmedResponseActive = true; // a real response is now in flight
+                this.onResponseStarted();
                 // Only a LOCALLY-initiated create (counter-tracked) can be our narration. A VAD /
                 // unsolicited response.created arrives with the counter already at 0 — it must NOT
                 // consume the pending narration kind, or it would mistag a genuine user turn as
@@ -569,6 +570,14 @@ export abstract class OpenAIProtocolRealtimeClient extends BaseRealtimeClient {
                 // Unhandled event types are expected (the provider emits many); no-op.
                 break;
         }
+    }
+
+    /**
+     * Called when the model takes the floor (`response.created`), i.e. the user's turn is definitively
+     * over. Drivers that track per-user-turn transcription state override this to reset it. No-op here.
+     */
+    protected onResponseStarted(): void {
+        // Only streamed-transcription drivers carry per-user-turn state worth clearing.
     }
 
     /** WebRTC-only playback-buffer hooks; websocket transports never receive these frames. */

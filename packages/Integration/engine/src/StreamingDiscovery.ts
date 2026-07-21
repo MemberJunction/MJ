@@ -14,7 +14,7 @@
  *
  * Pure + clock-injectable, so it's deterministically testable. Reuses {@link inferColumnTypeFromSamples}.
  */
-import { inferColumnTypeFromSamples, type InferredColumnType } from './CustomColumnPromotion.js';
+import { inferColumnTypeFromStats, type InferredColumnType } from './CustomColumnPromotion.js';
 
 export interface StreamDiscoveryOptions {
     /** Wall-clock budget; once exceeded, stop and use what was gathered. Default 30s. */
@@ -49,7 +49,13 @@ export interface DiscoveredColumnStat {
     DistinctCapped: boolean;
     /** Bounded sample of observed values (for type inference). */
     SampleValues: unknown[];
-    /** Generously-bounded inferred type (both dialects). */
+    /**
+     * TRUE maximum observed string length across EVERY scanned row (rsuplan "largest string" stat).
+     * Tracked separately from the capped {@link SampleValues} — the sample may miss the widest value,
+     * so string sizing must widen to this, not the sample max.
+     */
+    MaxObservedLength: number;
+    /** Generously-bounded inferred type (both dialects), string width covering {@link MaxObservedLength}. */
     Inferred: InferredColumnType;
 }
 
@@ -85,6 +91,8 @@ interface ColumnAcc {
     samples: unknown[];
     distinct: Set<string>;
     capped: boolean;
+    /** True max String(value).length over ALL rows — O(1) per cell, so it is never sample-capped. */
+    maxLen: number;
 }
 
 /**
@@ -133,7 +141,10 @@ export async function discoverFromStream(
         DistinctNonNull: e.distinct.size,
         DistinctCapped: e.capped,
         SampleValues: e.samples,
-        Inferred: inferColumnTypeFromSamples(e.samples),
+        MaxObservedLength: e.maxLen,
+        // Width from the TRUE observed max, not the capped sample — the rsuplan "largest string"
+        // stat. A wide value in an unsampled row would otherwise silently under-size the column.
+        Inferred: inferColumnTypeFromStats(e.samples, e.maxLen),
     }));
     return { Columns: columns, RowsScanned: totalRows, StoppedReason: stoppedReason, RowSamples: rowSamples };
 }
@@ -148,12 +159,15 @@ function accumulateRecord(
     for (const [key, value] of Object.entries(record)) {
         let e = acc.get(key);
         if (!e) {
-            e = { occurrences: 0, samples: [], distinct: new Set(), capped: false };
+            e = { occurrences: 0, samples: [], distinct: new Set(), capped: false, maxLen: 0 };
             acc.set(key, e);
         }
         if (value === null || value === undefined) continue;
         e.occurrences++;
         if (e.samples.length < sampleCap) e.samples.push(value);
+        // True max width over EVERY row (not just the capped sample) — feeds string sizing.
+        const len = String(value).length;
+        if (len > e.maxLen) e.maxLen = len;
         if (!e.capped) {
             if (e.distinct.size < distinctCap) e.distinct.add(stableValueKey(value));
             else e.capped = true;

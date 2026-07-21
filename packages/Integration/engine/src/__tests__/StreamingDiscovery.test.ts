@@ -10,7 +10,8 @@ function steppedClock(step: number): () => number {
 function col(over: Partial<DiscoveredColumnStat> & { Key: string }): DiscoveredColumnStat {
     return {
         Occurrences: 100, TotalRows: 100, DistinctNonNull: 100, DistinctCapped: false,
-        SampleValues: ['x'], Inferred: { SchemaFieldType: 'string', SqlServerType: 'NVARCHAR(255)', PostgresType: 'VARCHAR(255)', MaxLength: 255 },
+        SampleValues: ['x'], MaxObservedLength: 1,
+        Inferred: { SchemaFieldType: 'string', SqlServerType: 'NVARCHAR(255)', PostgresType: 'VARCHAR(255)', MaxLength: 255 },
         ...over,
     };
 }
@@ -67,6 +68,22 @@ describe('discoverFromStream', () => {
         const rows = Array.from({ length: 20 }, (_, i) => ({ k: `v${i}` }));
         const res = await discoverFromStream(rows, { MaxDistinctTracked: 5 });
         expect(res.Columns[0].DistinctCapped).toBe(true);
+    });
+
+    it('tracks the TRUE max string width across all rows, even when the widest value falls outside the capped sample (rsuplan "largest string" stat)', async () => {
+        // 50 rows; the wide value sits at row 30 — beyond the 5-value sample cap, so the sample
+        // alone would under-size the column. The true-max accumulator must still catch it.
+        const wide = 'w'.repeat(600);
+        const rows = Array.from({ length: 50 }, (_, i) => ({ note: i === 29 ? wide : `short-${i}` }));
+        const res = await discoverFromStream(rows, { SampleValueCap: 5 });
+        const note = res.Columns.find(c => c.Key === 'note')!;
+        // The sample provably missed the wide value…
+        expect(note.SampleValues).toHaveLength(5);
+        expect(note.SampleValues.every(v => String(v).length < 600)).toBe(true);
+        // …but the true max was tracked and the inferred string width covers it.
+        expect(note.MaxObservedLength).toBe(600);
+        expect(note.Inferred.SchemaFieldType).toBe('string');
+        expect(note.Inferred.MaxLength === null || note.Inferred.MaxLength >= 600).toBe(true);
     });
 });
 

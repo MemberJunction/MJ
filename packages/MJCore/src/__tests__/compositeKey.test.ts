@@ -392,6 +392,39 @@ describe('CompositeKey', () => {
     });
   });
 
+  // Regression guard for the integer-PK back-button freeze: a loaded entity holds a raw scalar
+  // PK (number 5) while a URL/tab-derived key is always a string ("5"). Equality must NOT depend
+  // on that JS-type difference, or record-identity checks never converge for integer PKs and the
+  // record view loops forever. UUID PKs (always strings) are unaffected.
+  describe('EqualsKey — scalar type tolerance (integer-PK freeze fix)', () => {
+    it('treats a numeric PK and its string form as equal (loaded number vs URL string)', () => {
+      const loaded = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', 5)]);      // number
+      const fromUrl = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', '5')]);   // string
+      expect(loaded.Equals(fromUrl)).toBe(true);
+      expect(loaded.EqualsKey(fromUrl.KeyValuePairs)).toBe(true);
+      expect(fromUrl.EqualsKey(loaded.KeyValuePairs)).toBe(true);
+    });
+
+    it('still reports different numeric PKs as not equal across types', () => {
+      const a = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', 5)]);
+      const b = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', '6')]);
+      expect(a.Equals(b)).toBe(false);
+    });
+
+    it('preserves case-insensitive UUID equality (string/string path unchanged)', () => {
+      const upper = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890')]);
+      const lower = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890')]);
+      expect(upper.Equals(lower)).toBe(true);
+    });
+
+    it('round-trips a numeric PK through the URL segment and still compares equal', () => {
+      const loaded = CompositeKey.FromKeyValuePairs([new KeyValuePair('ID', 12345)]); // number, as loaded
+      const fromUrl = new CompositeKey();
+      fromUrl.SimpleLoadFromURLSegment(loaded.ToURLSegment());                        // string, as from URL
+      expect(loaded.Equals(fromUrl)).toBe(true);
+    });
+  });
+
   /**
    * Entity-aware URL segment parsing.
    *

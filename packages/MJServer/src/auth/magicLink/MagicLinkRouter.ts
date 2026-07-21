@@ -10,7 +10,7 @@
 
 import { Router, json, urlencoded, type Request, type Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
-import { LogError, LogStatus, type AuthProviderConfig } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, type AuthProviderConfig } from '@memberjunction/core';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
@@ -219,7 +219,7 @@ export function registerMagicLinkAuthProvider(publicUrl: string, config: MagicLi
     }
     const factory = AuthProviderFactory.Instance;
     factory.register(AuthProviderFactory.createProvider(providerConfig));
-    LogStatus(`[MagicLink] Registered auth provider (issuer: ${publicUrl}, jwks: ${providerConfig.jwksUri})`);
+    LogStatusEx({ message: `[MagicLink] Registered auth provider (issuer: ${publicUrl}, jwks: ${providerConfig.jwksUri})`, verboseOnly: true });
   } catch (e) {
     LogError(`[MagicLink] Failed to register auth provider: ${e instanceof Error ? e.message : String(e)}`);
   }

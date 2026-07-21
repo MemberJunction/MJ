@@ -30,6 +30,14 @@
         </span>
       }
 
+      <!-- Edit (owner's completed user messages) — opens the inline editor; the server
+           sets OriginalMessageChanged when the text actually changes on save -->
+      @if (isUserMessage && isConversationOwner && !isEditing && messageStatus === 'Complete') {
+        <span class="message-edit-icon" (click)="onEditClick()" title="Edit message">
+          <i class="fas fa-pen"></i>
+        </span>
+      }
+
       <!-- Time pill - shows for AI messages in all states (in-progress, active, complete, failed) -->
       @if (!isUserMessage && timePillText) {
         <span

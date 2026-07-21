@@ -19,9 +19,11 @@ Several items are added to the watch list (Qwen 3.8-Max-Preview subscription-onl
 
 | Category | Before | After this PR | Delta |
 |---|---|---|---|
-| Total model entries | 170 | 172 | +2 |
-| Active models | ~152 | ~154 | +2 |
+| Total model entries | 172 | 174 | +2 |
+| Active models | 148 | 150 | +2 |
 | Vendors | 29 | 30 | +1 |
+
+> Baseline note: this research was performed against a 170-model `next`. `next` has since gained **Gemini 3.6 Flash** and **Gemini 3.5 Flash-Lite** (PR #3238), so the table above reflects the post-rebase baseline of 172. Counts are exact, not approximate.
 
 Vendors after this PR (30): Anthropic, OpenAI, Google, Vertex AI, Azure, Amazon Bedrock, x.ai, Groq, Cerebras, Mistral AI, Alibaba Cloud, Moonshot AI, Z.AI, MiniMax, DeepSeek, Cohere, NVIDIA, Black Forest Labs, Inception Labs, Fireworks.ai, OpenRouter, LM Studio, LocalEmbeddings, Tasio Labs, Eleven Labs, HeyGen, AssemblyAI, Inworld, HuggingFace, **Thinking Machines Lab** (new).
 
@@ -46,12 +48,13 @@ Vendors after this PR (30): Anthropic, OpenAI, Google, Vertex AI, Azure, Amazon 
 - **Vendors**: Thinking Machines Lab (Model Developer — NEW vendor entry added to `.ai-vendors.json`), OpenRouter as `thinkingmachines/inkling`
 - **API names**: `inkling` (Tinker direct); `thinkingmachines/inkling` (OpenRouter)
 - **Released**: July 15, 2026
-- **Context window**: 1M tokens; 262,144 max output tokens
+- **Context window**: 1M tokens *architecturally*, but **the OpenRouter vendor row carries 524,288** — OpenRouter's endpoints API reports `context_length: 524288` for the sole (Together-backed) endpoint `thinkingmachines/inkling-20260715`, and Tinker offers only 64K/256K options. Per `CLAUDE.md` ("use actual provider limits, not theoretical model capabilities") the row records the served limit. `MaxOutputTokens` is 262,144: OpenRouter reports `max_completion_tokens: null` (no separate cap), so this is the conservative house convention value and sits safely under the 524K context.
 - **Pricing**: OpenRouter at $1.00 input / $4.05 output per 1M tokens (this is the cost record on the model). Direct Tinker API is running a 50% launch-promo at $1.87 input / $0.374 cached-input / $4.68 output — noted in the cost row comments but not recorded as a separate cost record to avoid tying pricing history to a temporary discount.
 - **Capabilities**: Streaming, JSON output, tool calling; multimodal pretraining on 45T tokens (text/image/audio/video); Apache 2.0 open-weights on Hugging Face at launch
 - **Architecture**: 975B total / 41B active MoE
 - **Positioning in inventory**: `PowerRank: 20` (above Kimi K2.6 at 18, below Kimi K3 at 22); `SpeedRank: 6`; `CostRank: 4` (cheaper than K3 at $1 input via OpenRouter)
 - **DriverClass**: `OpenRouterLLM` (via OpenRouter). No direct Tinker driver entry added because no `TinkerLLM` / `ThinkingMachinesLLM` driver class exists in the codebase yet; a subsequent PR can add the direct inference-provider row when native driver support lands.
+- **Other inference providers (not yet added — follow-up)**: Thinking Machines lists Together AI, **Fireworks**, Modal, Databricks, and Baseten as launch inference partners. Fireworks.ai is already an MJ vendor with a working `FireworksLLM` driver (used by Kimi K2/K2.5), so a Fireworks inference row is addable once its model slug and served context are verified. Until then Inkling has a **single** inference path (OpenRouter), which is a single point of failure.
 - **Sources**: [Thinking Machines Inkling announcement](https://thinkingmachines.ai/news/introducing-inkling/), [TechCrunch coverage](https://techcrunch.com/2026/07/15/thinking-machines-amps-up-its-bet-against-one-size-fits-all-ai-with-its-first-open-model-inkling/), [OpenRouter listing](https://openrouter.ai/thinkingmachines/inkling), [Artificial Analysis leaderboard](https://artificialanalysis.ai/models/inkling)
 
 ### Thinking Machines Lab — **NEW VENDOR ADDED to `.ai-vendors.json`**

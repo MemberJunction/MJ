@@ -10,7 +10,7 @@
  */
 
 import { BaseSingleton } from '@memberjunction/global';
-import { LogStatus } from '@memberjunction/core';
+import { LogStatusEx } from '@memberjunction/core';
 import { createPrivateKey, createPublicKey, generateKeyPairSync, createHash, type KeyObject } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import type { MagicLinkJWTClaims } from './types.js';
@@ -69,11 +69,17 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
     } else {
       const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
       priv = privateKey;
-      LogStatus(
-        '[MagicLink] No rsaPrivateKey configured — generated an EPHEMERAL RS256 keypair. ' +
-        'Outstanding magic-link sessions will be invalidated on restart. Set magicLink.rsaPrivateKey ' +
-        '(or MJ_MAGIC_LINK_PRIVATE_KEY) for stable production keys.'
-      );
+      // Verbose-only: on dev boxes with no configured key this fires on EVERY boot, and the
+      // ephemeral fallback is the designed behavior there — not a condition worth a log line in
+      // the default startup output. Deployments that care set the key; operators diagnosing
+      // magic-link session loss can re-run with verbose logging.
+      LogStatusEx({
+        message:
+          '[MagicLink] No rsaPrivateKey configured — generated an EPHEMERAL RS256 keypair. ' +
+          'Outstanding magic-link sessions will be invalidated on restart. Set magicLink.rsaPrivateKey ' +
+          '(or MJ_MAGIC_LINK_PRIVATE_KEY) for stable production keys.',
+        verboseOnly: true
+      });
     }
 
     this.privateKeyPem = priv.export({ type: 'pkcs8', format: 'pem' }) as string;
