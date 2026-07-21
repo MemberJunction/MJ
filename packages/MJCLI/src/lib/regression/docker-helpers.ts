@@ -7,7 +7,7 @@
  * conventions apply across every subcommand.
  */
 import { spawn, type SpawnOptions } from 'node:child_process';
-import { existsSync, mkdirSync, createWriteStream } from 'node:fs';
+import { existsSync, mkdirSync, createWriteStream, readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -56,6 +56,100 @@ export function mintRunId(): string {
 /** Absolute host path to a run's output directory for a given run id (DR-F1). */
 export function runDirFor(runId: string): string {
   return path.resolve(RESULTS_DIR, runId);
+}
+
+/**
+ * Newest `run-*` directory under test-results, or null when none exist
+ * (DR-F3). Picked by mtime so it survives a missing `latest` symlink.
+ */
+export function latestRunDir(): string | null {
+  const base = path.resolve(RESULTS_DIR);
+  if (!existsSync(base)) return null;
+  const runs = readdirSync(base)
+    .filter(n => n.startsWith('run-'))
+    .map(n => path.join(base, n))
+    .filter(p => { try { return statSync(p).isDirectory(); } catch { return false; } });
+  if (runs.length === 0) return null;
+  return runs.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
+}
+
+/**
+ * Resolve which run directory a command targets: an explicit `--run` id (or a
+ * path), else the newest run (DR-F3). Returns null when nothing resolves.
+ */
+export function resolveRunDir(runIdOrPath?: string): string | null {
+  if (runIdOrPath) {
+    const asPath = path.isAbsolute(runIdOrPath) || runIdOrPath.includes('/')
+      ? path.resolve(runIdOrPath)
+      : runDirFor(runIdOrPath);
+    return existsSync(asPath) ? asPath : null;
+  }
+  return latestRunDir();
+}
+
+/** A run's incremental snapshot, normalized from results.partial.json (DR-D5). */
+export interface RunSnapshot {
+  runId: string;
+  status: string;
+  updatedAt?: string;
+  completed: number;
+  counts: { passed: number; failed: number; error: number; timeout: number; skipped: number; flaky: number };
+  tests: Array<{ testId: string; testName: string; status: string; score: number; durationMs: number; workerIndex?: number; attempts?: number; flaky?: boolean }>;
+  source: 'partial' | 'final' | 'none';
+}
+
+/**
+ * Read a run's incremental snapshot (DR-F3). Prefers results.partial.json (the
+ * DR-D5 live snapshot, present mid-run and after a crash); falls back to a
+ * minimal view derived from a completed results.json; returns a `none` snapshot
+ * when neither is parseable. Never throws.
+ */
+export function readRunSnapshot(runDir: string): RunSnapshot {
+  const runId = path.basename(runDir);
+  const empty = { passed: 0, failed: 0, error: 0, timeout: 0, skipped: 0, flaky: 0 };
+  const partialPath = path.join(runDir, 'results.partial.json');
+  if (existsSync(partialPath)) {
+    try {
+      const p = JSON.parse(readFileSync(partialPath, 'utf8'));
+      return {
+        runId,
+        status: p.status ?? 'Unknown',
+        updatedAt: p.updatedAt,
+        completed: p.completed ?? (p.tests?.length ?? 0),
+        counts: { ...empty, ...(p.counts ?? {}) },
+        tests: p.tests ?? [],
+        source: 'partial',
+      };
+    } catch { /* fall through */ }
+  }
+  const finalPath = path.join(runDir, 'results.json');
+  if (existsSync(finalPath)) {
+    try {
+      const f = JSON.parse(readFileSync(finalPath, 'utf8'));
+      const tests = f.testResults ?? [];
+      const counts = { ...empty };
+      for (const t of tests) {
+        if (t.status === 'Passed') counts.passed++;
+        else if (t.status === 'Failed') counts.failed++;
+        else if (t.status === 'Error') counts.error++;
+        else if (t.status === 'Timeout') counts.timeout++;
+        else if (t.status === 'Skipped') counts.skipped++;
+        if (t.flaky) counts.flaky++;
+      }
+      return {
+        runId,
+        status: f.status ?? 'Completed',
+        completed: tests.length,
+        counts,
+        tests: tests.map((t: Record<string, unknown>) => ({
+          testId: t.testId, testName: t.testName, status: t.status, score: t.score,
+          durationMs: t.durationMs, workerIndex: t.workerIndex, attempts: t.attempts, flaky: t.flaky,
+        })),
+        source: 'final',
+      };
+    } catch { /* fall through */ }
+  }
+  return { runId, status: 'Unknown', completed: 0, counts: empty, tests: [], source: 'none' };
 }
 export const LOAD_TARGET_SCRIPT = `${REGRESSION_DIR}/scripts/load-target-profile.cjs`;
 export const GEN_FORMS_SCRIPT = `${REGRESSION_DIR}/gen-forms.sh`;
