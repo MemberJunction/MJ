@@ -26,6 +26,8 @@ import { RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard, ThemeService } from '@memberjunction/ng-shared';
 import { MJThemeEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import {
   ContrastCheck,
   derive,
@@ -36,6 +38,7 @@ import {
   ThemeSeeds,
 } from '@memberjunction/theme-engine';
 import { isBuiltInTheme, MJ_CHROME_SELECTORS } from './theme-studio.constants';
+import { buildThemeStudioAgentContext, resolveThemeByIDOrName, ThemeSummaryRow } from './theme-agent-context';
 
 /** A named starting point that leads with identity, not a blank color picker (16.5). */
 interface ThemePreset {
@@ -105,9 +108,16 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   private nameBackup = '';
   public themePickerOpen = false;
   public saving = false;
-  public statusMessage = '';
-  public toast = '';
-  private toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Toolbar segmented controls (mj-view-toggle options). */
+  public readonly surfaceOptions: ViewToggleOption[] = [
+    { key: 'explorer', label: 'Explorer UI' },
+    { key: 'artifact', label: 'Artifact' },
+  ];
+  public readonly modeOptions: ViewToggleOption[] = [
+    { key: 'light', label: 'Light', icon: 'fa-solid fa-sun' },
+    { key: 'dark', label: 'Dark', icon: 'fa-solid fa-moon' },
+  ];
 
   /** Preview-only branding/density knobs (not part of the seed contract yet). */
   public footerNotice = 'Confidential';
@@ -139,10 +149,12 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     this.themesChangedSub = this.themeService.ThemesChanged$.subscribe(() => {
       this.loadData();
     });
+    this.registerAgentTools();
   }
 
   override ngOnDestroy(): void {
     this.themesChangedSub?.unsubscribe();
+    clearTimeout(this.agentContextTimer);
     super.ngOnDestroy();
   }
 
@@ -172,6 +184,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     } catch {
       this.themes = [];
     }
+    this.publishAgentContext();
     this.cdRef.detectChanges();
   }
 
@@ -221,11 +234,13 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     return this.derived.tokens.light['--mj-brand-secondary'];
   }
 
-  public editViz(index: number, color: string): void {
+  public editViz(index: number, event: Event): void {
+    const color = (event.target as HTMLInputElement).value;
     const arr = [...(this.seeds.vizPalette ?? this.vizColors)];
     arr[index] = color;
     this.seeds.vizPalette = arr;
     this.recompute();
+    this.publishAgentContextDebounced();
   }
 
   public resetViz(): void {
@@ -433,10 +448,23 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   public setPreviewMode(mode: 'light' | 'dark'): void {
     this.previewMode = mode;
     this.applyPreviewVars();
+    this.publishAgentContextDebounced();
+  }
+
+  /** mj-view-toggle (KeyChange) adapter for the light/dark segment. */
+  public onModeToggle(key: string): void {
+    this.setPreviewMode(key === 'dark' ? 'dark' : 'light');
+  }
+
+  /** mj-view-toggle (KeyChange) adapter for the preview-surface chips. */
+  public onSurfaceToggle(key: string): void {
+    this.setView(key === 'artifact' ? 'artifact' : 'explorer');
+    this.publishAgentContextDebounced();
   }
 
   public togglePanel(): void {
     this.panelCollapsed = !this.panelCollapsed;
+    this.publishAgentContextDebounced();
   }
 
   /** Prefer the native Fullscreen API — it promotes the canvas to the browser's top
@@ -509,6 +537,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
 
   public onSeedsChanged(): void {
     this.recompute();
+    this.publishAgentContextDebounced();
   }
 
   public async selectTheme(item: ThemeListItem): Promise<void> {
@@ -529,13 +558,20 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     this.overrideRows = this.overrideRowsFrom(entity.Overrides);
     this.customCss = entity.CustomCSS ?? '';
     this.recompute();
+    this.publishAgentContext();
     // Async continuation under the OnPush resource wrapper: refresh the header pill,
     // editor inputs, and preview now that the loaded theme is in place.
     this.cdRef.detectChanges();
   }
 
   public get currentIsDefault(): boolean {
-    return this.themes.find((t) => t.id === this.currentThemeId)?.isDefault ?? false;
+    const id = this.currentThemeId;
+    return id ? this.themes.find((t) => UUIDsEqual(t.id, id))?.isDefault ?? false : false;
+  }
+
+  /** Whether a picker row is the currently-loaded theme (case-insensitive GUID compare). */
+  public isCurrentTheme(id: string): boolean {
+    return !!this.currentThemeId && UUIDsEqual(id, this.currentThemeId);
   }
 
   /** The protected built-in theme is read-only — editing/saving over it is blocked. */
@@ -578,13 +614,13 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
         this.themeService.NotifyThemesChanged();
         this.notify(`Renamed to "${this.currentName}".`);
       } else {
-        const msg = entity.LatestResult?.Message ?? 'unknown error';
+        const msg = entity.LatestResult?.CompleteMessage ?? 'unknown error';
         this.currentName = this.nameBackup;
-        this.notify(/UQ_Theme_Name|UNIQUE KEY/i.test(msg) ? `A theme named "${entity.Name}" already exists — choose a different name.` : `Rename failed: ${msg}`);
+        this.notify(/UQ_Theme_Name|UNIQUE KEY/i.test(msg) ? `A theme named "${entity.Name}" already exists — choose a different name.` : `Rename failed: ${msg}`, 'error');
       }
     } catch (e) {
       this.currentName = this.nameBackup;
-      this.notify(`Rename failed: ${e instanceof Error ? e.message : String(e)}`);
+      this.notify(`Rename failed: ${e instanceof Error ? e.message : String(e)}`, 'error');
     } finally {
       this.cdRef.detectChanges();
     }
@@ -606,7 +642,8 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   }
 
   public discard(): void {
-    const current = this.themes.find((t) => t.id === this.currentThemeId);
+    const id = this.currentThemeId;
+    const current = id ? this.themes.find((t) => UUIDsEqual(t.id, id)) : undefined;
     if (current) {
       this.selectTheme(current);
     } else {
@@ -646,7 +683,10 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
       const md = this.ProviderToUse;
       const entity = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
       if (this.currentThemeId) {
-        await entity.Load(this.currentThemeId);
+        if (!(await entity.Load(this.currentThemeId))) {
+          this.notify('Could not load the theme to update — it may have been deleted. Refresh and try again.', 'error');
+          return;
+        }
       } else {
         entity.NewRecord();
         entity.Status = 'Active';
@@ -666,11 +706,11 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
         this.themeService.NotifyThemesChanged();
         this.notify(`Saved "${entity.Name}".`);
       } else {
-        this.notify(`Save failed: ${entity.LatestResult?.Message ?? 'unknown error'}`);
+        this.notify(`Save failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error');
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      this.notify(/UQ_Theme_Name|UNIQUE KEY/i.test(msg) ? `A theme named "${name}" already exists — choose a different name.` : `Save failed: ${msg}`);
+      this.notify(/UQ_Theme_Name|UNIQUE KEY/i.test(msg) ? `A theme named "${name}" already exists — choose a different name.` : `Save failed: ${msg}`, 'error');
     } finally {
       this.saving = false;
       this.cdRef.detectChanges();
@@ -698,14 +738,17 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
       if (others.Success) {
         for (const other of others.Results) {
           other.IsDefault = false;
-          await other.Save();
+          if (!(await other.Save())) {
+            this.notify(`Could not clear the previous default "${other.Name}": ${other.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error');
+            return;
+          }
         }
       }
       const entity = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
       if (!(await entity.Load(id))) return;
       entity.IsDefault = true;
       if (!(await entity.Save())) {
-        this.notify(`Could not set default: ${entity.LatestResult?.Message ?? 'unknown error'}`);
+        this.notify(`Could not set default: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error');
         return;
       }
       let seeds: ThemeSeeds;
@@ -720,7 +763,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
       this.themeService.NotifyThemesChanged();
       this.notify(`"${entity.Name}" is now the default and is applied.`);
     } catch (e) {
-      this.notify(`Could not set default: ${e instanceof Error ? e.message : String(e)}`);
+      this.notify(`Could not set default: ${e instanceof Error ? e.message : String(e)}`, 'error');
     } finally {
       this.cdRef.detectChanges();
     }
@@ -752,13 +795,222 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     this.cdRef.detectChanges();
   }
 
-  private notify(message: string): void {
-    this.statusMessage = message;
-    this.toast = message;
-    clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => {
-      this.toast = '';
-      this.cdRef.detectChanges();
-    }, 2400);
+  private notify(message: string, style: 'success' | 'error' | 'info' = 'success'): void {
+    MJNotificationService.Instance.CreateSimpleNotification(message, style, 2500);
+  }
+
+  // ---------------------------------------------------------------
+  // Agent context + tools (read / preview-state / user-scoped only —
+  // see the SAFETY BOUNDARY in theme-agent-context.ts)
+  // ---------------------------------------------------------------
+
+  private agentContextTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private summaryRows(): ThemeSummaryRow[] {
+    return this.themes.map((t) => ({
+      ID: t.id,
+      Name: t.name,
+      Status: 'Active',
+      IsDefault: t.isDefault,
+      BuiltIn: isBuiltInTheme(t.id),
+    }));
+  }
+
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(
+      this,
+      buildThemeStudioAgentContext({
+        Themes: this.summaryRows(),
+        CurrentThemeID: this.currentThemeId,
+        CurrentThemeName: this.currentName,
+        IsBuiltInSelected: this.isBuiltInSelected,
+        PreviewMode: this.previewMode,
+        PreviewSurface: this.activeView,
+        EditorPanelOpen: !this.panelCollapsed,
+        Seeds: this.seeds,
+        OverrideTokenCount: Object.keys(this.overridesMap()).length,
+        HasCustomCss: this.customCss.trim().length > 0,
+        Contrast: this.derived.contrast,
+      })
+    );
+  }
+
+  /** Coalesce slider-drag bursts into one context publish. */
+  private publishAgentContextDebounced(): void {
+    clearTimeout(this.agentContextTimer);
+    this.agentContextTimer = setTimeout(() => this.publishAgentContext(), 300);
+  }
+
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'ListThemes',
+        Description: 'Reload and return the saved brand themes available in the studio.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.loadData();
+          return { Success: true, Data: { ThemeNames: this.themes.map((t) => t.name).slice(0, 25) } };
+        },
+      },
+      {
+        Name: 'SelectTheme',
+        Description: 'Load a saved theme into the editor, referenced by ID or name (partial, case-insensitive match accepted).',
+        ParameterSchema: {
+          type: 'object',
+          properties: { theme: { type: 'string', description: 'The theme ID or name.' } },
+          required: ['theme'],
+        },
+        Handler: async (params) => {
+          const resolved = resolveThemeByIDOrName(this.summaryRows(), params['theme']);
+          if (!resolved.ok) {
+            return { Success: false, ErrorMessage: resolved.error };
+          }
+          const item = this.themes.find((t) => UUIDsEqual(t.id, resolved.value.ID));
+          if (!item) {
+            return { Success: false, ErrorMessage: 'Theme list changed — run ListThemes and retry.' };
+          }
+          await this.selectTheme(item);
+          return { Success: true, Data: { CurrentThemeName: this.currentName } };
+        },
+      },
+      {
+        Name: 'NewTheme',
+        Description: 'Start a fresh, unsaved theme draft from the MJ default seeds (nothing persists until the user saves).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.newTheme();
+          this.cdRef.detectChanges();
+          return { Success: true, Data: { CurrentThemeName: this.currentName } };
+        },
+      },
+      {
+        Name: 'ApplyPreset',
+        Description: `Apply a named starting preset to the in-memory draft. Available presets: ${this.presets.map((p) => p.name).join(', ')}.`,
+        ParameterSchema: {
+          type: 'object',
+          properties: { preset: { type: 'string', description: 'The preset name (partial match accepted).' } },
+          required: ['preset'],
+        },
+        Handler: async (params) => {
+          const ref = typeof params['preset'] === 'string' ? params['preset'].trim().toLowerCase() : '';
+          const preset = this.presets.find((p) => p.name.toLowerCase() === ref)
+            ?? this.presets.find((p) => p.name.toLowerCase().includes(ref));
+          if (!ref || !preset) {
+            return { Success: false, ErrorMessage: `Unknown preset. Available: ${this.presets.map((p) => p.name).join(', ')}.` };
+          }
+          this.applyPreset(preset);
+          this.publishAgentContext();
+          this.cdRef.detectChanges();
+          return { Success: true, Data: { Preset: preset.name } };
+        },
+      },
+      {
+        Name: 'SetSeeds',
+        Description: 'Update one or more brand seeds on the IN-MEMORY draft (preview only — the user saves from the UI). Colors are hex like #0076b6.',
+        ParameterSchema: {
+          type: 'object',
+          properties: {
+            primary: { type: 'string', description: 'Primary brand hex color.' },
+            accent: { type: 'string', description: 'Accent hex color.' },
+            tertiary: { type: 'string', description: 'Tertiary hex color.' },
+            neutralChroma: { type: 'number', description: 'Brand tint in grays, 0–0.08.' },
+            vibrancy: { type: 'number', description: 'Ramp saturation multiplier, 0.5–1.4.' },
+            radius: { type: 'number', description: 'Base corner radius in px, 0–20.' },
+            depth: { type: 'number', description: 'Brand shadow strength, 0–1.' },
+          },
+        },
+        Handler: async (params) => this.handleSetSeeds(params),
+      },
+      {
+        Name: 'SetPreviewMode',
+        Description: "Switch the preview between 'light' and 'dark'.",
+        ParameterSchema: {
+          type: 'object',
+          properties: { mode: { type: 'string', description: "'light' | 'dark'" } },
+          required: ['mode'],
+        },
+        Handler: async (params) => {
+          const mode = params['mode'];
+          if (mode !== 'light' && mode !== 'dark') {
+            return { Success: false, ErrorMessage: "mode must be 'light' or 'dark'." };
+          }
+          this.setPreviewMode(mode);
+          this.cdRef.detectChanges();
+          return { Success: true, Data: { PreviewMode: this.previewMode } };
+        },
+      },
+      {
+        Name: 'SetPreviewSurface',
+        Description: "Switch the preview surface between 'explorer' (chrome style guide) and 'artifact' (generated report).",
+        ParameterSchema: {
+          type: 'object',
+          properties: { surface: { type: 'string', description: "'explorer' | 'artifact'" } },
+          required: ['surface'],
+        },
+        Handler: async (params) => {
+          const surface = params['surface'];
+          if (surface !== 'explorer' && surface !== 'artifact') {
+            return { Success: false, ErrorMessage: "surface must be 'explorer' or 'artifact'." };
+          }
+          this.setView(surface);
+          this.cdRef.detectChanges();
+          return { Success: true, Data: { PreviewSurface: this.activeView } };
+        },
+      },
+      {
+        Name: 'ApplyToMe',
+        Description: "Apply the currently-loaded SAVED theme to the CURRENT USER's workspace (a per-user preference — not the org default). Fails on an unsaved draft.",
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          if (!this.currentThemeId) {
+            return { Success: false, ErrorMessage: 'The draft is unsaved — the user must save it first.' };
+          }
+          await this.applyToMe();
+          return { Success: true, Data: { AppliedThemeName: this.currentName } };
+        },
+      },
+    ]);
+  }
+
+  /** Validate + apply a partial seed update from the agent (clamped to the UI ranges). */
+  private handleSetSeeds(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    const HEX = /^#[0-9a-fA-F]{6}$/;
+    const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+    const next: ThemeSeeds = { ...this.seeds };
+    let changed = 0;
+    for (const key of ['primary', 'accent', 'tertiary'] as const) {
+      const v = params[key];
+      if (v !== undefined) {
+        if (typeof v !== 'string' || !HEX.test(v.trim())) {
+          return { Success: false, ErrorMessage: `${key} must be a 6-digit hex color like #0076b6.` };
+        }
+        next[key] = v.trim().toLowerCase();
+        changed++;
+      }
+    }
+    const numeric: Array<{ key: 'neutralChroma' | 'vibrancy' | 'radius' | 'depth'; lo: number; hi: number }> = [
+      { key: 'neutralChroma', lo: 0, hi: 0.08 },
+      { key: 'vibrancy', lo: 0.5, hi: 1.4 },
+      { key: 'radius', lo: 0, hi: 20 },
+      { key: 'depth', lo: 0, hi: 1 },
+    ];
+    for (const { key, lo, hi } of numeric) {
+      const v = params[key];
+      if (v !== undefined) {
+        if (typeof v !== 'number' || !Number.isFinite(v)) {
+          return { Success: false, ErrorMessage: `${key} must be a number between ${lo} and ${hi}.` };
+        }
+        next[key] = clamp(v, lo, hi);
+        changed++;
+      }
+    }
+    if (changed === 0) {
+      return { Success: false, ErrorMessage: 'Provide at least one seed to change.' };
+    }
+    this.seeds = next;
+    this.recompute();
+    this.publishAgentContext();
+    this.cdRef.detectChanges();
+    return { Success: true, Data: { SeedsChanged: changed, ContrastPasses: this.derived.contrast.passes } };
   }
 }

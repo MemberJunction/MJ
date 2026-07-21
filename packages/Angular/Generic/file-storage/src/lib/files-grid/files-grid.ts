@@ -4,6 +4,7 @@ import { RunView } from '@memberjunction/core';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { SharedService } from '@memberjunction/ng-shared';
+import { MJ_AG_GRID_THEME_PARAMS } from '@memberjunction/ng-shared-generic';
 import {
   ColDef,
   GridReadyEvent,
@@ -78,26 +79,9 @@ export class FilesGridComponent implements OnInit, OnChanges {
   public editFile: MJFileEntity | undefined;
 
   // AG Grid configuration
-  // Themed from the --mj-* token contract so this grid follows light/dark and the
-  // org brand overlay, matching the main entity/query grids.
-  public GridTheme: Theme = themeAlpine.withParams({
-    backgroundColor: 'var(--mj-bg-surface)',
-    foregroundColor: 'var(--mj-text-primary)',
-    textColor: 'var(--mj-text-primary)',
-    borderColor: 'var(--mj-border-default)',
-    chromeBackgroundColor: 'var(--mj-bg-surface-card)',
-    headerBackgroundColor: 'var(--mj-bg-surface-card)',
-    headerTextColor: 'var(--mj-text-secondary)',
-    cellTextColor: 'var(--mj-text-primary)',
-    subtleTextColor: 'var(--mj-text-muted)',
-    dataBackgroundColor: 'var(--mj-bg-surface)',
-    oddRowBackgroundColor: 'var(--mj-bg-surface-card)',
-    rowHoverColor: 'var(--mj-bg-surface-hover, color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface)))',
-    selectedRowBackgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface))',
-    accentColor: 'var(--mj-brand-primary)',
-    borderRadius: 'var(--mj-radius-sm)',
-    browserColorScheme: 'inherit',
-  });
+  // Themed from the shared --mj-* token params so this grid follows light/dark and
+  // the org brand overlay, matching the main entity/query grids.
+  public GridTheme: Theme = themeAlpine.withParams(MJ_AG_GRID_THEME_PARAMS);
   public ColumnDefs: ColDef[] = [];
   public DefaultColDef: ColDef = {
     sortable: true,

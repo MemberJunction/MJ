@@ -19,6 +19,7 @@ import {
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ThemeService, SharedService, ThemeDefinition } from '@memberjunction/ng-shared';
+import type { ThemeSeeds } from '@memberjunction/theme-engine';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { IsOmnibarAvailable, IsOmnibarEnabledForUser, OMNIBAR_USER_SETTING_KEY } from '../omnibar/omnibar-user-setting';
 import { GetOmnibarShortcutLabel } from '../omnibar/omnibar-shortcut';
@@ -240,7 +241,7 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
                         @for (t of StarredThemes; track t.id) {
                             <button type="button"
                                     class="mj-profile__theme"
-                                    [class.mj-profile__theme--active]="t.id === AppliedBrandId"
+                                    [class.mj-profile__theme--active]="IsAppliedBrand(t.id)"
                                     (click)="ApplyStarredTheme(t)">
                                 <div class="mj-profile__theme-swatch mj-profile__brand-swatch">
                                     @for (c of t.swatches; track $index) { <i [style.background]="c"></i> }
@@ -248,7 +249,7 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
                                 <div class="mj-profile__theme-info">
                                     <div class="mj-profile__theme-name">{{ t.name }}</div>
                                 </div>
-                                @if (t.id === AppliedBrandId) {
+                                @if (IsAppliedBrand(t.id)) {
                                     <i class="fa-solid fa-check mj-profile__theme-check"></i>
                                 }
                             </button>
@@ -842,6 +843,12 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
         return this.themeService.BrandOverlayId;
     }
 
+    /** Whether a theme id is the applied brand overlay (case-insensitive GUID compare). */
+    public IsAppliedBrand(id: string): boolean {
+        const active = this.themeService.BrandOverlayId;
+        return !!active && UUIDsEqual(id, active);
+    }
+
     public get PanelTitle(): string {
         switch (this.ActivePanel) {
             case 'photo': return 'Profile photo';
@@ -976,7 +983,7 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
 
     private swatchesFor(seedsJson: string): string[] {
         try {
-            const s = JSON.parse(seedsJson);
+            const s = JSON.parse(seedsJson) as ThemeSeeds;
             return [s.primary, s.accent ?? s.primary, s.tertiary ?? s.accent ?? s.primary];
         } catch {
             return ['#0076b6', '#38a9d9', '#8b5cf6'];

@@ -8,6 +8,7 @@
 
 import { Injectable } from '@angular/core';
 import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
+import { MJThemeEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -195,18 +196,20 @@ export class WorkspaceInitializerService {
       const rv = new RunView();
       // Prefer the user's last-applied brand theme; fall back to the org default.
       const selectedId = this.themeService.GetSelectedBrandThemeId();
-      let result = await rv.RunView({
+      let result = await rv.RunView<MJThemeEntity>({
         EntityName: 'MJ: Themes',
         ExtraFilter: selectedId ? `ID = '${selectedId}' AND Status = 'Active'` : "IsDefault = 1 AND Status = 'Active'",
         MaxRows: 1,
+        ResultType: 'entity_object',
       });
       let theme = result.Success ? result.Results?.[0] : undefined;
       // User's selection is gone/inactive — fall back to the org default.
       if (!theme && selectedId) {
-        result = await rv.RunView({
+        result = await rv.RunView<MJThemeEntity>({
           EntityName: 'MJ: Themes',
           ExtraFilter: "IsDefault = 1 AND Status = 'Active'",
           MaxRows: 1,
+          ResultType: 'entity_object',
         });
         theme = result.Success ? result.Results?.[0] : undefined;
       }

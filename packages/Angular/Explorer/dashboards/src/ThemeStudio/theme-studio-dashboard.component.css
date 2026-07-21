@@ -1,23 +1,13 @@
-/* Theme Studio (v2 layout). Studio chrome uses the live app --mj-* tokens so the tool
-   follows the app theme; the preview canvas uses the derived --mj-* vars pushed inline
-   by applyPreviewVars(). Radius applies app-wide — MJ chrome components (dropdown,
-   input, tab-nav, accordion, …) consume var(--mj-radius-*) — so the Explorer mock (mx-*)
-   uses the radius tokens too, matching the real app. */
+/* Theme Studio (v2 layout). Page chrome comes from the shared trio (mj-page-layout /
+   mj-page-header / mj-page-body) + mjButton / mj-view-toggle; this file styles the
+   theme picker chip (header meta slot), the preview stage + slide-panel editor, and
+   the preview canvas. The studio's own controls use the live app --mj-* tokens; the
+   preview canvas uses the derived --mj-* vars pushed inline by applyPreviewVars().
+   Radius applies app-wide — MJ chrome components consume var(--mj-radius-*) — so the
+   Explorer mock (mx-*) uses the radius tokens too, matching the real app. */
 :host { display: block; width: 100%; height: 100%; }
-.ts-app { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--mj-bg-page); color: var(--mj-text-primary); font-family: var(--mj-font-family); }
 
-/* ---------- page header ---------- */
-.ts-page-header { background: var(--mj-bg-surface); box-shadow: var(--mj-shadow-md); position: relative; z-index: 5; flex-shrink: 0; }
-.ph-row { display: flex; align-items: center; gap: 12px; padding: 0 20px; }
-.ph-row.primary { justify-content: space-between; gap: 16px; padding-top: 12px; padding-bottom: 12px; }
-.ph-titlebar { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.ph-icon { width: 40px; height: 40px; border-radius: 8px; background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary); display: grid; place-items: center; flex-shrink: 0; font-size: 18px; }
-.ph-title { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.2; }
-.ph-sub { margin: 1px 0 0; font-size: 13px; color: var(--mj-text-secondary); }
-.ph-meta { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
-.ph-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.readonly-note { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--mj-text-muted); }
-
+/* ---------- theme picker chip (projected into the header [meta] slot) ---------- */
 .theme-pick-wrap { position: relative; }
 .theme-pick { display: inline-flex; align-items: center; gap: 8px; background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); border-radius: 9px; padding: 5px 6px 5px 10px; color: var(--mj-text-primary); font: inherit; }
 .theme-pick .sw, .theme-menu-item .sw { display: flex; }
@@ -39,30 +29,11 @@
 .theme-menu-item.on { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); }
 .theme-menu-item b { font-size: 13px; font-weight: 600; }
 .theme-menu-new { display: flex; align-items: center; gap: 7px; width: 100%; padding: 8px 9px; margin-top: 4px; border: 0; border-top: 1px solid var(--mj-border-subtle); background: transparent; color: var(--mj-brand-primary); font: inherit; font-weight: 600; cursor: pointer; }
-
-.ph-row.toolbar { justify-content: flex-end; gap: 10px; border-top: 1px solid var(--mj-border-default); padding-top: 9px; padding-bottom: 10px; }
-.chips { display: flex; gap: 6px; margin-right: auto; flex-wrap: wrap; }
-.chips button { font: inherit; font-size: 11.5px; font-weight: 600; color: var(--mj-text-secondary); background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); padding: 5px 12px; border-radius: 20px; cursor: pointer; }
-.chips button:hover { background: var(--mj-bg-surface-hover); }
-.chips button.on { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, transparent); color: var(--mj-brand-primary); }
-.seg { display: inline-flex; align-items: center; background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); border-radius: 9px; padding: 3px; gap: 2px; }
-.seg-lab { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--mj-text-muted); padding: 0 7px 0 8px; }
-.seg button { border: 0; background: transparent; color: var(--mj-text-secondary); font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
-.seg button.on { background: var(--mj-bg-surface); color: var(--mj-text-primary); box-shadow: var(--mj-shadow-sm); }
-.icon-tbtn { width: 34px; height: 34px; border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface); color: var(--mj-text-secondary); border-radius: 9px; display: grid; place-items: center; cursor: pointer; }
-.icon-tbtn:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
-
-.ts-btn { border: 1px solid var(--mj-border-strong); background: var(--mj-bg-surface); color: var(--mj-text-primary); font: inherit; font-size: 13px; font-weight: 600; padding: 8px 13px; border-radius: 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
-.ts-btn:hover:not(:disabled) { background: var(--mj-bg-surface-hover); }
-.ts-btn:disabled { opacity: .5; cursor: default; }
-.ts-btn.primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: var(--mj-brand-on-primary); }
-.ts-btn.primary:hover:not(:disabled) { background: var(--mj-brand-primary-hover); }
-.ts-btn.ghost { border-color: transparent; background: transparent; color: var(--mj-text-secondary); }
-.ts-btn.ghost:hover { background: var(--mj-bg-surface-hover); }
-.ts-btn.tgl.on { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, transparent); color: var(--mj-brand-primary); }
+.readonly-note { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--mj-text-muted); margin-left: 8px; }
+.toolbar-spacer { flex: 1; }
 
 /* ---------- stage ---------- */
-.ts-stage { flex: 1; display: flex; min-height: 0; overflow: hidden; position: relative; }
+.ts-stage { flex: 1; display: flex; min-height: 0; overflow: hidden; position: relative; background: var(--mj-bg-page); }
 .pv-wrap { flex: 1; min-width: 0; overflow: auto; padding: 22px 26px 60px; }
 .pv-inner { max-width: 1240px; margin: 0 auto; }
 
@@ -243,12 +214,10 @@ table.grid td b { color: var(--mj-text-primary); font-weight: 600; }
 .ag-find .fdot { width: 8px; height: 8px; border-radius: 50%; background: var(--mj-brand-primary); flex-shrink: 0; }
 .ag-find .mx-stat { margin-left: auto; flex-shrink: 0; }
 
-/* ---------- fullscreen bar + toast ---------- */
+/* ---------- fullscreen bar ---------- */
 .fs-bar { position: fixed; top: 14px; right: 16px; z-index: 41; display: flex; align-items: center; gap: 8px; }
-.fs-bar .seg, .fs-bar .ts-btn { box-shadow: var(--mj-shadow-lg); }
+.fs-bar mj-view-toggle, .fs-bar button { box-shadow: var(--mj-shadow-lg); }
 .kbd { font-family: var(--mj-font-family-mono); font-size: 10.5px; border: 1px solid var(--mj-border-strong); border-radius: 5px; padding: 1px 5px; color: var(--mj-text-muted); margin-left: 6px; }
-.ts-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--mj-brand-secondary); color: var(--mj-brand-on-secondary); padding: 11px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 600; box-shadow: var(--mj-shadow-lg); opacity: 0; pointer-events: none; transition: .25s; z-index: 50; }
-.ts-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ---------- advanced section ---------- */
 .adv-head { cursor: pointer; user-select: none; }

@@ -5,7 +5,7 @@
 
 /**
  * The seeded, built-in MemberJunction theme (created by migration
- * V202607170002__v5.48.x__Seed_Default_Theme.sql with this stable, hardcoded ID).
+ * V202607202101__v5.49.x__Add_Theme_Entity.sql with this stable, hardcoded ID).
  * It is protected from edit and delete so there is always a safe fallback theme,
  * regardless of what the user does to their own themes. Duplicating it is allowed.
  */

@@ -13,7 +13,7 @@
  * @module @memberjunction/theme-engine
  */
 
-import { parseHex } from './color.js';
+import { mixHex, parseHex } from './color.js';
 import { buildContrastReport, ContrastReport } from './contrast.js';
 import {
   ACCENT_SHAPE,
@@ -78,7 +78,11 @@ function resolveSemantics(
   }
   return {
     '--mj-bg-page': neutral[900], '--mj-bg-surface': neutral[800], '--mj-bg-surface-elevated': neutral[700],
-    '--mj-bg-surface-card': '#253347', '--mj-bg-surface-sunken': neutral[950],
+    // Card sits between surface (800) and elevated (700). The 0.32 weight is calibrated
+    // so MJ's default neutrals reproduce the historical #253347 (ΔE ≈ 0.011); the base
+    // stylesheet's dark block uses the equivalent color-mix(in srgb-linear, 800 68%, 700)
+    // so preview and runtime stay in exact lockstep under a brand overlay.
+    '--mj-bg-surface-card': mixHex(neutral[800], neutral[700], 0.32), '--mj-bg-surface-sunken': neutral[950],
     '--mj-bg-surface-hover': neutral[600], '--mj-bg-surface-active': neutral[500],
     '--mj-text-primary': neutral[100], '--mj-text-secondary': neutral[300], '--mj-text-muted': neutral[400],
     '--mj-text-disabled': neutral[600], '--mj-text-inverse': neutral[900],
@@ -91,10 +95,10 @@ function resolveSemantics(
     '--mj-brand-accent-subtle': `color-mix(in srgb, ${accent[400]} 15%, transparent)`, '--mj-brand-on-accent': neutral[900],
     '--mj-brand-tertiary': tertiary[400], '--mj-brand-tertiary-hover': tertiary[300], '--mj-brand-tertiary-active': tertiary[200],
     '--mj-brand-tertiary-subtle': `color-mix(in srgb, ${tertiary[500]} 15%, transparent)`, '--mj-brand-on-tertiary': neutral[0],
-    '--mj-status-success': STATUS.success, '--mj-status-success-bg': `rgba(34, 197, 94, 0.15)`, '--mj-status-success-text': STATUS.successText100,
-    '--mj-status-warning': STATUS.warning, '--mj-status-warning-bg': `rgba(245, 158, 11, 0.15)`, '--mj-status-warning-text': STATUS.warningText100,
-    '--mj-status-error': STATUS.error, '--mj-status-error-bg': `rgba(239, 68, 68, 0.15)`, '--mj-status-error-text': STATUS.errorText100,
-    '--mj-status-info': STATUS.info, '--mj-status-info-bg': `rgba(59, 130, 246, 0.15)`, '--mj-status-info-text': STATUS.infoText100,
+    '--mj-status-success': STATUS.success, '--mj-status-success-bg': `rgba(${rgbTriplet(STATUS.success)}, 0.15)`, '--mj-status-success-text': STATUS.successText100,
+    '--mj-status-warning': STATUS.warning, '--mj-status-warning-bg': `rgba(${rgbTriplet(STATUS.warning)}, 0.15)`, '--mj-status-warning-text': STATUS.warningText100,
+    '--mj-status-error': STATUS.error, '--mj-status-error-bg': `rgba(${rgbTriplet(STATUS.error)}, 0.15)`, '--mj-status-error-text': STATUS.errorText100,
+    '--mj-status-info': STATUS.info, '--mj-status-info-bg': `rgba(${rgbTriplet(STATUS.info)}, 0.15)`, '--mj-status-info-text': STATUS.infoText100,
   };
 }
 
@@ -220,9 +224,15 @@ export function emitOverlayCss(themeId: string, derived: DerivedTheme, options: 
 
 /**
  * Scope raw custom CSS under `selector`, but hoist at-rules that MUST live at the
- * stylesheet top level (`@keyframes`, `@font-face`, `@property`, `@import`) out of the
- * wrapper — CSS nesting forbids them inside a style rule, so nesting them would silently
- * break animations/fonts. Everything else is wrapped so it only applies to this theme.
+ * stylesheet top level (`@keyframes`, `@font-face`, `@property`) out of the wrapper —
+ * CSS nesting forbids them inside a style rule, so nesting them would silently break
+ * animations/fonts. Everything else is wrapped so it only applies to this theme.
+ *
+ * `@import` is STRIPPED entirely, not hoisted: a scoped theme overlay has no
+ * legitimate need to pull another stylesheet, an org-wide `@import` of a remote URL
+ * is a cross-origin request from every user's session (data-exfiltration surface),
+ * and a hoisted `@import` would be dead anyway — CSS ignores `@import` after any
+ * other rule, and the overlay Blob always begins with the token block.
  */
 export function emitScopedCustomCss(selector: string, css: string): string {
   const trimmed = css.trim();
@@ -234,7 +244,8 @@ export function emitScopedCustomCss(selector: string, css: string): string {
   return out;
 }
 
-const HOIST_AT_RULE = /^@(?:-webkit-|-moz-|-o-)?(?:keyframes|font-face|property|import)\b/i;
+const HOIST_AT_RULE = /^@(?:-webkit-|-moz-|-o-)?(?:keyframes|font-face|property)\b/i;
+const STRIP_AT_RULE = /^@(?:-webkit-|-moz-|-o-)?import\b/i;
 
 /** Separate top-level hoistable at-rules from the rest of a custom-CSS string. */
 function splitHoistedAtRules(css: string): { hoisted: string; scoped: string } {
@@ -243,12 +254,11 @@ function splitHoistedAtRules(css: string): { hoisted: string; scoped: string } {
   let i = 0;
   const n = css.length;
   while (i < n) {
-    if (css[i] === '@' && HOIST_AT_RULE.test(css.slice(i))) {
-      // @import is a statement ending at ';'; the others are blocks ending at a matched '}'.
-      if (/^@(?:-webkit-|-moz-|-o-)?import/i.test(css.slice(i))) {
+    if (css[i] === '@' && (HOIST_AT_RULE.test(css.slice(i)) || STRIP_AT_RULE.test(css.slice(i)))) {
+      // @import is a statement ending at ';' — consumed and DISCARDED (see emitScopedCustomCss).
+      if (STRIP_AT_RULE.test(css.slice(i))) {
         const semi = css.indexOf(';', i);
         const end = semi === -1 ? n : semi + 1;
-        hoisted.push(css.slice(i, end));
         i = end;
         continue;
       }

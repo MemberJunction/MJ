@@ -90,9 +90,12 @@ export function hexToOKLCH(hex: string): OKLCH {
  * stable instead of the hue-shifting that naive per-channel clamping causes.
  */
 export function oklchToHex(color: OKLCH): string {
-  const { l } = color;
-  let { c } = color;
-  const hRad = (color.h * Math.PI) / 180;
+  // Public surface: non-finite components (NaN/±Infinity from upstream math on
+  // degenerate inputs) would otherwise propagate into a "#NaNNaNNaN" string.
+  const l = Number.isFinite(color.l) ? color.l : 0;
+  let c = Number.isFinite(color.c) ? Math.max(0, color.c) : 0;
+  const h = Number.isFinite(color.h) ? color.h : 0;
+  const hRad = (h * Math.PI) / 180;
   const cos = Math.cos(hRad);
   const sin = Math.sin(hRad);
 
@@ -143,11 +146,12 @@ export function deltaEOK(a: string, b: string): number {
   return Math.sqrt((A.L - B.L) ** 2 + (A.a - B.a) ** 2 + (A.b - B.b) ** 2);
 }
 
-/** Mix two hex colors in linear-light space; `t` 0..1 is the weight of `b`. */
+/** Mix two hex colors in linear-light space; `t` 0..1 is the weight of `b`.
+ *  A non-finite `t` is treated as 0 (returns `a`) rather than emitting "#NaN…". */
 export function mixHex(a: string, b: string, t: number): string {
   const A = hexToLinear(a);
   const B = hexToLinear(b);
-  const k = clamp01(t);
+  const k = clamp01(Number.isFinite(t) ? t : 0);
   return `#${toHex2(linearToSrgb(A.r + (B.r - A.r) * k))}${toHex2(
     linearToSrgb(A.g + (B.g - A.g) * k),
   )}${toHex2(linearToSrgb(A.b + (B.b - A.b) * k))}`;

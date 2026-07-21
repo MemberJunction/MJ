@@ -1,371 +1,407 @@
-<div class="ts-app" [class.fs]="fullscreen">
-  <!-- Page header (mirrors mj-page-header) -->
-  <div class="ts-page-header">
-    <div class="ph-row primary">
-      <div class="ph-titlebar">
-        <div class="ph-icon"><i class="fa-solid fa-palette"></i></div>
-        <div class="ph-text">
-          <h1 class="ph-title">Theme Studio</h1>
-          <p class="ph-sub">Organization theme &amp; branding</p>
-          <div class="ph-meta">
-            <div class="theme-pick-wrap">
-              <div class="theme-pick">
-                <span class="sw">
-                  <i [style.background]="seeds.primary"></i>
-                  <i [style.background]="seeds.accent"></i>
-                  <i [style.background]="seeds.tertiary"></i>
-                </span>
-                <input *ngIf="editingName" #nameInput class="name-input" [(ngModel)]="currentName"
-                       (keydown.enter)="commitRename()" (keydown.escape)="cancelRename()" (blur)="commitRename()"
-                       maxlength="80" aria-label="Theme name" />
-                <ng-container *ngIf="!editingName">
-                  <b class="theme-name" (dblclick)="startRename()">{{ currentName }}</b>
-                  <button type="button" class="rename-btn" *ngIf="!isBuiltInSelected"
-                          title="Rename theme" aria-label="Rename theme" (click)="startRename()">
-                    <i class="fa-solid fa-pen"></i>
-                  </button>
-                </ng-container>
-                <span class="badge" *ngIf="currentIsDefault">DEFAULT</span>
-                <button type="button" class="pick-caret" title="Switch theme"
-                        aria-label="Switch theme" (click)="toggleThemePicker()">
-                  <i class="fa-solid fa-chevron-down caret"></i>
-                </button>
-              </div>
-              <div class="menu-backdrop" *ngIf="themePickerOpen" (click)="themePickerOpen = false"></div>
-              <div class="theme-menu" *ngIf="themePickerOpen">
-                <button type="button" class="theme-menu-item" *ngFor="let t of themes"
-                        [class.on]="t.id === currentThemeId" (click)="selectTheme(t)">
-                  <span class="sw"><i *ngFor="let c of t.swatches" [style.background]="c"></i></span>
-                  <b>{{ t.name }}</b>
-                  <span class="badge" *ngIf="t.isDefault">DEFAULT</span>
-                </button>
-                <button type="button" class="theme-menu-new" (click)="newTheme()"><i class="fa-solid fa-plus"></i> New theme</button>
-              </div>
-            </div>
-          </div>
+<mj-page-layout>
+  <mj-page-header Title="Theme Studio" Icon="fa-solid fa-palette" Subtitle="Organization theme &amp; branding">
+    <!-- [meta] = state: which theme is loaded (picker) + its read-only flag. -->
+    <div meta>
+      <div class="theme-pick-wrap">
+        <div class="theme-pick">
+          <span class="sw">
+            <i [style.background]="seeds.primary"></i>
+            <i [style.background]="seeds.accent"></i>
+            <i [style.background]="seeds.tertiary"></i>
+          </span>
+          @if (editingName) {
+            <input #nameInput class="name-input" [(ngModel)]="currentName"
+                   (keydown.enter)="commitRename()" (keydown.escape)="cancelRename()" (blur)="commitRename()"
+                   maxlength="80" aria-label="Theme name" />
+          } @else {
+            <b class="theme-name" (dblclick)="startRename()">{{ currentName }}</b>
+            @if (!isBuiltInSelected) {
+              <button type="button" class="rename-btn" title="Rename theme" aria-label="Rename theme" (click)="startRename()">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+            }
+          }
+          @if (currentIsDefault) { <span class="badge">DEFAULT</span> }
+          <button type="button" class="pick-caret" title="Switch theme"
+                  aria-label="Switch theme" (click)="toggleThemePicker()">
+            <i class="fa-solid fa-chevron-down caret"></i>
+          </button>
         </div>
-      </div>
-      <div class="ph-actions">
-        <span class="readonly-note" *ngIf="isBuiltInSelected"><i class="fa-solid fa-lock"></i> Built-in · read-only</span>
-        <button type="button" class="ts-btn ghost" (click)="discard()">Discard</button>
-        <button type="button" class="ts-btn" [disabled]="!currentThemeId" title="Apply this theme to your workspace now" (click)="applyToMe()">Apply</button>
-        <button type="button" class="ts-btn" [disabled]="!currentThemeId" title="Make this the organization-wide default theme for everyone" (click)="setAsDefault()">Set as org default</button>
-        <button type="button" class="ts-btn primary" *ngIf="isBuiltInSelected" (click)="saveAsCopy()">Save as copy</button>
-        <button type="button" class="ts-btn primary" *ngIf="!isBuiltInSelected" [disabled]="saving" (click)="save()">{{ saving ? 'Saving…' : 'Save theme' }}</button>
-      </div>
-    </div>
-
-    <div class="ph-row toolbar">
-      <div class="chips" role="group" aria-label="Preview surface">
-        <button type="button" [class.on]="activeView === 'explorer'" (click)="setView('explorer')">Explorer UI</button>
-        <button type="button" [class.on]="activeView === 'artifact'" (click)="setView('artifact')">Artifact</button>
-      </div>
-      <div class="seg" role="group" aria-label="Preview mode">
-        <span class="seg-lab">Preview</span>
-        <button type="button" [class.on]="previewMode === 'light'" (click)="setPreviewMode('light')"><i class="fa-solid fa-sun"></i>Light</button>
-        <button type="button" [class.on]="previewMode === 'dark'" (click)="setPreviewMode('dark')"><i class="fa-solid fa-moon"></i>Dark</button>
-      </div>
-      <button type="button" class="icon-tbtn" title="Full screen preview" (click)="toggleFullscreen(true)"><i class="fa-solid fa-expand"></i></button>
-      <button type="button" class="ts-btn tgl" [class.on]="!panelCollapsed" (click)="togglePanel()"><i class="fa-solid fa-sliders"></i> Edit theme</button>
-    </div>
-  </div>
-
-  <!-- Stage: preview (primary) + slide panel -->
-  <div class="ts-stage" [class.collapsed]="panelCollapsed">
-    <div class="pv-wrap">
-      <div class="pv-inner">
-        <div #previewCanvas class="ts-canvas" [class.fullscreen]="fullscreen">
-          <!-- Fullscreen floating controls (inside canvas so they render in the top layer) -->
-          <div class="fs-bar" *ngIf="fullscreen">
-            <div class="seg">
-              <button type="button" [class.on]="previewMode === 'light'" (click)="setPreviewMode('light')">Light</button>
-              <button type="button" [class.on]="previewMode === 'dark'" (click)="setPreviewMode('dark')">Dark</button>
-            </div>
-            <button type="button" class="ts-btn" (click)="toggleFullscreen(false)">Exit full screen <span class="kbd">Esc</span></button>
+        @if (themePickerOpen) {
+          <div class="menu-backdrop" (click)="themePickerOpen = false"></div>
+          <div class="theme-menu">
+            @for (t of themes; track t.id) {
+              <button type="button" class="theme-menu-item" [class.on]="isCurrentTheme(t.id)" (click)="selectTheme(t)">
+                <span class="sw">
+                  @for (c of t.swatches; track $index) { <i [style.background]="c"></i> }
+                </span>
+                <b>{{ t.name }}</b>
+                @if (t.isDefault) { <span class="badge">DEFAULT</span> }
+              </button>
+            }
+            <button type="button" class="theme-menu-new" (click)="newTheme()"><i class="fa-solid fa-plus"></i> New theme</button>
           </div>
-          <div class="pv-scroll">
+        }
+      </div>
+      @if (isBuiltInSelected) {
+        <span class="readonly-note"><i class="fa-solid fa-lock"></i> Built-in · read-only</span>
+      }
+    </div>
 
-            <!-- ============ Explorer UI style guide ============ -->
-            <div class="pv-view" *ngIf="activeView === 'explorer'">
-              <div class="zone-lab">Explorer UI · shell + page chrome + ng-ui-components</div>
-              <div class="mx">
-                <div class="mx-shell">
-                  <span class="mx-appico"><i class="fa-solid fa-table-cells-large"></i></span>
-                  <span class="mx-nav"><b class="on">Dashboards</b><b>Data</b><b>Agents</b></span>
-                  <span class="mx-search"><i class="fa-solid fa-magnifying-glass"></i> Search everything…</span>
-                  <span class="mx-sp"></span>
-                  <span class="mx-av">AC</span>
-                </div>
-                <div class="mx-ph">
-                  <div class="mx-ph-top">
-                    <span class="mx-ph-ico"><i class="fa-solid fa-users"></i></span>
-                    <div>
-                      <div class="mx-ph-title">Membership Overview</div>
-                      <div class="mx-ph-sub">mj-page-layout · mj-page-header · mj-page-body</div>
-                    </div>
-                    <div class="mx-ph-actions">
-                      <button class="mx-btn sec">Export</button>
-                      <button class="mx-btn pri">New record</button>
-                    </div>
-                  </div>
-                  <div class="mx-toolbar">
-                    <span class="mx-tabs"><i class="on">Overview</i><i>Members</i><i>Renewals</i></span>
-                  </div>
-                </div>
-                <div class="mx-body">
-                  <div class="mx-cell wide">
-                    <span class="mx-cap">mjButton — primary · secondary · outline · danger</span>
-                    <div class="mx-row">
-                      <button class="mx-btn pri">Save</button>
-                      <button class="mx-btn sec">Cancel</button>
-                      <button class="mx-btn out">Configure</button>
-                      <button class="mx-btn dgr">Delete</button>
-                    </div>
-                  </div>
-                  <div class="mx-cell wide">
-                    <span class="mx-cap">mj-input · mj-combobox · mj-switch</span>
-                    <div class="mx-row">
-                      <span class="mx-input focus" style="flex:1">Northwind Tra</span>
-                      <span class="mx-input" style="flex:1">Member type <i class="fa-solid fa-chevron-down"></i></span>
-                    </div>
-                    <div class="mx-row">
-                      <span class="mx-swch"></span><span class="mx-swch off"></span><span class="mx-lbl">Auto-renew</span>
-                    </div>
-                  </div>
-                  <div class="mx-cell">
-                    <span class="mx-cap">mj-filter-chip</span>
-                    <div class="mx-row"><span class="mx-chip on">Active</span><span class="mx-chip">Lapsed</span><span class="mx-chip">Pending</span></div>
-                  </div>
-                  <div class="mx-cell">
-                    <span class="mx-cap">mj-stat-badge · mj-progress-bar</span>
-                    <div class="mx-row"><span class="mx-stat brand">1,204 Members</span><span class="mx-stat suc">Active</span><span class="mx-stat wrn">Expiring</span></div>
-                    <div class="mx-row"><span class="mx-prog"><i></i></span><span class="mx-lbl">64%</span></div>
-                  </div>
-                  <div class="mx-cell">
-                    <span class="mx-cap">mj-left-nav · mj-alert</span>
-                    <div class="mx-lnav">
-                      <b class="on"><i class="fa-solid fa-house"></i> Overview</b>
-                      <b><i class="fa-solid fa-users"></i> Members</b>
-                    </div>
-                    <div class="mx-alert"><i></i>12 imports finished overnight</div>
-                  </div>
-                  <div class="mx-cell">
-                    <span class="mx-cap">mj-dialog · mj-dialog-actions</span>
-                    <div class="mx-dlg">
-                      <div class="mx-dlg-t">Rename view</div>
-                      <div class="mx-dlg-b"><span class="mx-input focus" style="width:100%">Q3 Renewal Pipeline</span></div>
-                      <div class="mx-dlg-a"><button class="mx-btn pri">Save</button><button class="mx-btn sec">Cancel</button></div>
-                    </div>
-                  </div>
-                </div>
+    <!-- [actions] = verbs: secondary actions, then the one primary CTA rightmost. -->
+    <div actions>
+      <button mjButton variant="flat" size="sm" (click)="discard()">Discard</button>
+      <button mjButton variant="outline" size="sm" [disabled]="!currentThemeId"
+              title="Apply this theme to your workspace now" (click)="applyToMe()">Apply</button>
+      <button mjButton variant="outline" size="sm" [disabled]="!currentThemeId"
+              title="Make this the organization-wide default theme for everyone" (click)="setAsDefault()">Set as org default</button>
+      @if (isBuiltInSelected) {
+        <button mjButton variant="primary" size="sm" (click)="saveAsCopy()">Save as copy</button>
+      } @else {
+        <button mjButton variant="primary" size="sm" [disabled]="saving" (click)="save()">{{ saving ? 'Saving…' : 'Save theme' }}</button>
+      }
+    </div>
+
+    <!-- [toolbar] = secondary controls: preview surface / mode, fullscreen, panel toggle. -->
+    <div toolbar>
+      <mj-view-toggle [Options]="surfaceOptions" [ActiveKey]="activeView"
+                      (KeyChange)="onSurfaceToggle($event)"></mj-view-toggle>
+      <span class="toolbar-spacer"></span>
+      <mj-view-toggle [Options]="modeOptions" [ActiveKey]="previewMode"
+                      (KeyChange)="onModeToggle($event)"></mj-view-toggle>
+      <button mjButton variant="icon" ariaLabel="Full screen preview" title="Full screen preview"
+              (click)="toggleFullscreen(true)"><i class="fa-solid fa-expand"></i></button>
+      <button mjButton [variant]="panelCollapsed ? 'outline' : 'secondary'" size="sm"
+              (click)="togglePanel()"><i class="fa-solid fa-sliders"></i> Edit theme</button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Padding]="false" [Flex]="true">
+    <!-- Stage: preview (primary) + slide panel -->
+    <div class="ts-stage" [class.collapsed]="panelCollapsed">
+      <div class="pv-wrap">
+        <div class="pv-inner">
+          <div #previewCanvas class="ts-canvas" [class.fullscreen]="fullscreen">
+            <!-- Fullscreen floating controls (inside canvas so they render in the top layer) -->
+            @if (fullscreen) {
+              <div class="fs-bar">
+                <mj-view-toggle [Options]="modeOptions" [ActiveKey]="previewMode"
+                                (KeyChange)="onModeToggle($event)"></mj-view-toggle>
+                <button mjButton variant="secondary" size="sm" (click)="toggleFullscreen(false)">Exit full screen <span class="kbd">Esc</span></button>
               </div>
-            </div>
+            }
+            <div class="pv-scroll">
 
-            <!-- ============ Artifact — one generated document, styled by the theme ============ -->
-            <div class="pv-view" *ngIf="activeView === 'artifact'">
-              <div class="report">
-                <div class="rhead">
-                  <span class="logo"></span>
-                  <div><div class="ti">Acme Analytics</div><div class="su">Q2 Pipeline Overview</div></div>
-                  <div class="rt">Generated · Jul 2026</div>
-                </div>
-                <div class="rbody">
-                  <div class="kpis">
-                    <div class="kpi"><div class="n">$4.2M</div><div class="l">Pipeline value</div><div class="d up">▲ 12.4%</div></div>
-                    <div class="kpi"><div class="n">318</div><div class="l">Open deals</div><div class="d up">▲ 6.1%</div></div>
-                    <div class="kpi"><div class="n">27%</div><div class="l">Win rate</div><div class="d dn">▼ 1.8%</div></div>
-                  </div>
-                  <div class="chart">
-                    <div class="ct">Pipeline by stage</div>
-                    <div class="cs">Value in each stage, current quarter</div>
-                    <div class="bars">
-                      <div class="bar" *ngFor="let h of barHeights; let i = index">
-                        <span class="bv">{{ barValues[i] }}</span>
-                        <span class="fill" [style.height.%]="h" [style.background]="vizColors[i % vizColors.length]"></span>
+              <!-- ============ Explorer UI style guide ============ -->
+              @if (activeView === 'explorer') {
+                <div class="pv-view">
+                  <div class="zone-lab">Explorer UI · shell + page chrome + ng-ui-components</div>
+                  <div class="mx">
+                    <div class="mx-shell">
+                      <span class="mx-appico"><i class="fa-solid fa-table-cells-large"></i></span>
+                      <span class="mx-nav"><b class="on">Dashboards</b><b>Data</b><b>Agents</b></span>
+                      <span class="mx-search"><i class="fa-solid fa-magnifying-glass"></i> Search everything…</span>
+                      <span class="mx-sp"></span>
+                      <span class="mx-av">AC</span>
+                    </div>
+                    <div class="mx-ph">
+                      <div class="mx-ph-top">
+                        <span class="mx-ph-ico"><i class="fa-solid fa-users"></i></span>
+                        <div>
+                          <div class="mx-ph-title">Membership Overview</div>
+                          <div class="mx-ph-sub">mj-page-layout · mj-page-header · mj-page-body</div>
+                        </div>
+                        <div class="mx-ph-actions">
+                          <button class="mx-btn sec">Export</button>
+                          <button class="mx-btn pri">New record</button>
+                        </div>
+                      </div>
+                      <div class="mx-toolbar">
+                        <span class="mx-tabs"><i class="on">Overview</i><i>Members</i><i>Renewals</i></span>
                       </div>
                     </div>
-                    <div class="cats"><span *ngFor="let c of barCats">{{ c }}</span></div>
+                    <div class="mx-body">
+                      <div class="mx-cell wide">
+                        <span class="mx-cap">mjButton — primary · secondary · outline · danger</span>
+                        <div class="mx-row">
+                          <button class="mx-btn pri">Save</button>
+                          <button class="mx-btn sec">Cancel</button>
+                          <button class="mx-btn out">Configure</button>
+                          <button class="mx-btn dgr">Delete</button>
+                        </div>
+                      </div>
+                      <div class="mx-cell wide">
+                        <span class="mx-cap">mj-input · mj-combobox · mj-switch</span>
+                        <div class="mx-row">
+                          <span class="mx-input focus" style="flex:1">Northwind Tra</span>
+                          <span class="mx-input" style="flex:1">Member type <i class="fa-solid fa-chevron-down"></i></span>
+                        </div>
+                        <div class="mx-row">
+                          <span class="mx-swch"></span><span class="mx-swch off"></span><span class="mx-lbl">Auto-renew</span>
+                        </div>
+                      </div>
+                      <div class="mx-cell">
+                        <span class="mx-cap">mj-filter-chip</span>
+                        <div class="mx-row"><span class="mx-chip on">Active</span><span class="mx-chip">Lapsed</span><span class="mx-chip">Pending</span></div>
+                      </div>
+                      <div class="mx-cell">
+                        <span class="mx-cap">mj-stat-badge · mj-progress-bar</span>
+                        <div class="mx-row"><span class="mx-stat brand">1,204 Members</span><span class="mx-stat suc">Active</span><span class="mx-stat wrn">Expiring</span></div>
+                        <div class="mx-row"><span class="mx-prog"><i></i></span><span class="mx-lbl">64%</span></div>
+                      </div>
+                      <div class="mx-cell">
+                        <span class="mx-cap">mj-left-nav · mj-alert</span>
+                        <div class="mx-lnav">
+                          <b class="on"><i class="fa-solid fa-house"></i> Overview</b>
+                          <b><i class="fa-solid fa-users"></i> Members</b>
+                        </div>
+                        <div class="mx-alert"><i></i>12 imports finished overnight</div>
+                      </div>
+                      <div class="mx-cell">
+                        <span class="mx-cap">mj-dialog · mj-dialog-actions</span>
+                        <div class="mx-dlg">
+                          <div class="mx-dlg-t">Rename view</div>
+                          <div class="mx-dlg-b"><span class="mx-input focus" style="width:100%">Q3 Renewal Pipeline</span></div>
+                          <div class="mx-dlg-a"><button class="mx-btn pri">Save</button><button class="mx-btn sec">Cancel</button></div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <table class="grid">
-                    <thead><tr><th>Account</th><th>Stage</th><th class="r">Value</th><th class="r">Close</th></tr></thead>
-                    <tbody>
-                      <tr><td><b>Northwind Traders</b></td><td>Negotiate</td><td class="r">$820,000</td><td class="r">Aug 12</td></tr>
-                      <tr><td><b>Contoso Ltd</b></td><td>Propose</td><td class="r">$465,000</td><td class="r">Sep 03</td></tr>
-                      <tr><td><b>Fabrikam Inc</b></td><td>Commit</td><td class="r">$1,240,000</td><td class="r">Jul 29</td></tr>
-                    </tbody>
-                  </table>
-                  <p class="ag-sum"><b>Summary.</b> Northwind expanded into two of Acme's core regions this quarter,
-                    hired a new VP of Partnerships, and repriced its mid-tier plan 8% below Acme's.</p>
-                  <div class="ag-finds">
-                    <div class="ag-find"><span class="fdot"></span><span><b>Regional expansion</b> — opened Denver and Austin offices</span><span class="mx-stat wrn">High impact</span></div>
-                    <div class="ag-find"><span class="fdot"></span><span><b>Pricing move</b> — mid-tier repriced to $79/seat</span><span class="mx-stat brand">Watch</span></div>
-                    <div class="ag-find"><span class="fdot"></span><span><b>Positioning shift</b> — "live in 30 days" campaign</span><span class="mx-stat neu">Monitor</span></div>
-                  </div>
-                  <table class="grid">
-                    <thead><tr><th>Source</th><th>Type</th><th class="r">Confidence</th></tr></thead>
-                    <tbody>
-                      <tr><td><b>Northwind press release</b></td><td>Primary</td><td class="r">High</td></tr>
-                      <tr><td><b>G2 pricing capture</b></td><td>Primary</td><td class="r">High</td></tr>
-                      <tr><td><b>LinkedIn hiring signals</b></td><td>Inferred</td><td class="r">Medium</td></tr>
-                    </tbody>
-                  </table>
                 </div>
-                <div class="rfoot"><span>{{ footerNotice }}</span><span class="dot"></span><span>as of Jul 2026</span></div>
-              </div>
-            </div>
+              }
 
+              <!-- ============ Artifact — one generated document, styled by the theme ============ -->
+              @if (activeView === 'artifact') {
+                <div class="pv-view">
+                  <div class="report">
+                    <div class="rhead">
+                      <span class="logo"></span>
+                      <div><div class="ti">Acme Analytics</div><div class="su">Q2 Pipeline Overview</div></div>
+                      <div class="rt">Generated · Jul 2026</div>
+                    </div>
+                    <div class="rbody">
+                      <div class="kpis">
+                        <div class="kpi"><div class="n">$4.2M</div><div class="l">Pipeline value</div><div class="d up">▲ 12.4%</div></div>
+                        <div class="kpi"><div class="n">318</div><div class="l">Open deals</div><div class="d up">▲ 6.1%</div></div>
+                        <div class="kpi"><div class="n">27%</div><div class="l">Win rate</div><div class="d dn">▼ 1.8%</div></div>
+                      </div>
+                      <div class="chart">
+                        <div class="ct">Pipeline by stage</div>
+                        <div class="cs">Value in each stage, current quarter</div>
+                        <div class="bars">
+                          @for (h of barHeights; track $index; let i = $index) {
+                            <div class="bar">
+                              <span class="bv">{{ barValues[i] }}</span>
+                              <span class="fill" [style.height.%]="h" [style.background]="vizColors[i % vizColors.length]"></span>
+                            </div>
+                          }
+                        </div>
+                        <div class="cats">
+                          @for (c of barCats; track c) { <span>{{ c }}</span> }
+                        </div>
+                      </div>
+                      <table class="grid">
+                        <thead><tr><th>Account</th><th>Stage</th><th class="r">Value</th><th class="r">Close</th></tr></thead>
+                        <tbody>
+                          <tr><td><b>Northwind Traders</b></td><td>Negotiate</td><td class="r">$820,000</td><td class="r">Aug 12</td></tr>
+                          <tr><td><b>Contoso Ltd</b></td><td>Propose</td><td class="r">$465,000</td><td class="r">Sep 03</td></tr>
+                          <tr><td><b>Fabrikam Inc</b></td><td>Commit</td><td class="r">$1,240,000</td><td class="r">Jul 29</td></tr>
+                        </tbody>
+                      </table>
+                      <p class="ag-sum"><b>Summary.</b> Northwind expanded into two of Acme's core regions this quarter,
+                        hired a new VP of Partnerships, and repriced its mid-tier plan 8% below Acme's.</p>
+                      <div class="ag-finds">
+                        <div class="ag-find"><span class="fdot"></span><span><b>Regional expansion</b> — opened Denver and Austin offices</span><span class="mx-stat wrn">High impact</span></div>
+                        <div class="ag-find"><span class="fdot"></span><span><b>Pricing move</b> — mid-tier repriced to $79/seat</span><span class="mx-stat brand">Watch</span></div>
+                        <div class="ag-find"><span class="fdot"></span><span><b>Positioning shift</b> — "live in 30 days" campaign</span><span class="mx-stat neu">Monitor</span></div>
+                      </div>
+                      <table class="grid">
+                        <thead><tr><th>Source</th><th>Type</th><th class="r">Confidence</th></tr></thead>
+                        <tbody>
+                          <tr><td><b>Northwind press release</b></td><td>Primary</td><td class="r">High</td></tr>
+                          <tr><td><b>G2 pricing capture</b></td><td>Primary</td><td class="r">High</td></tr>
+                          <tr><td><b>LinkedIn hiring signals</b></td><td>Inferred</td><td class="r">Medium</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="rfoot"><span>{{ footerNotice }}</span><span class="dot"></span><span>as of Jul 2026</span></div>
+                  </div>
+                </div>
+              }
+
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- Slide panel: editor -->
+      <aside class="ts-panel" aria-label="Theme editor">
+        <div class="panel-h">
+          <span class="ic"><i class="fa-solid fa-palette"></i></span>
+          <div><h2>Edit theme</h2><small>One theme serves light &amp; dark</small></div>
+          <button type="button" class="collapse-btn" (click)="togglePanel()" title="Collapse panel"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div class="panel-body">
+
+          <div class="card">
+            <h3><span class="ic"><i class="fa-solid fa-plus"></i></span>Start from a preset</h3>
+            <div class="preset-row">
+              @for (p of presets; track p.name) {
+                <button type="button" class="preset" (click)="applyPreset(p)" [title]="p.name">
+                  <span class="sw"><i [style.background]="p.seeds.primary"></i><i [style.background]="p.seeds.accent"></i><i [style.background]="p.seeds.tertiary || p.seeds.accent"></i></span>
+                  <small>{{ p.name }}</small>
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="card">
+            <h3><span class="ic"><i class="fa-solid fa-plus"></i></span>Brand colors<span class="scope">Everywhere</span></h3>
+            <p class="sub">Anchor colors only. Ramps, hovers, and dark-mode values derive automatically.</p>
+            <div class="row"><div class="lab">Primary<small>Buttons, links, headers</small></div>
+              <div class="ctl"><span class="clr"><input type="color" [(ngModel)]="seeds.primary" (ngModelChange)="onSeedsChanged()"><span class="hex">{{ seeds.primary }}</span></span></div></div>
+            <div class="derived-note"><i [style.background]="darkPrimary"></i>Dark mode uses derived <code>{{ darkPrimary }}</code> (ramp step)</div>
+            <div class="row"><div class="lab">Accent<small>Highlights, KPI accents</small></div>
+              <div class="ctl"><span class="clr"><input type="color" [(ngModel)]="seeds.accent" (ngModelChange)="onSeedsChanged()"><span class="hex">{{ seeds.accent }}</span></span></div></div>
+            <div class="row"><div class="lab">Tertiary<small>Secondary actions, info</small></div>
+              <div class="ctl"><span class="clr"><input type="color" [(ngModel)]="seeds.tertiary" (ngModelChange)="onSeedsChanged()"><span class="hex">{{ seeds.tertiary }}</span></span></div></div>
+            <div class="row"><div class="lab">Secondary<small>Derived — deep surfaces</small></div>
+              <div class="ctl"><span class="clr static"><span class="sw-box" [style.background]="secondaryColor"></span><span class="hex">{{ secondaryColor }}</span></span></div></div>
+            <div class="row"><div class="lab">Text on primary<small>Auto-picked · checked per mode</small></div>
+              <div class="ctl">
+                @if (onPrimaryCheck; as check) {
+                  <span class="ok" [class.warn]="!check.passes">
+                    {{ check.passes ? '✓' : '⚠' }} {{ check.ratio }}:1
+                    @if (!check.passes && check.suggestion) { <span> → {{ check.suggestion.hex }}</span> }
+                  </span>
+                }
+              </div></div>
+          </div>
+
+          <div class="card">
+            <h3><span class="ic"><i class="fa-solid fa-font"></i></span>Typography<span class="scope">Everywhere</span></h3>
+            <div class="row"><div class="lab">Font family</div>
+              <div class="ctl"><select [(ngModel)]="seeds.fontFamily" (ngModelChange)="onSeedsChanged()">
+                @for (f of fontOptions; track f.value) {
+                  <option [value]="f.value">{{ f.label }}</option>
+                }
+              </select></div></div>
+            <div class="row"><div class="lab">Vibrancy<small>Brand ramp saturation</small></div>
+              <div class="ctl"><input type="range" min="0.5" max="1.4" step="0.05" [(ngModel)]="seeds.vibrancy" (ngModelChange)="onSeedsChanged()"><span class="val">{{ seeds.vibrancy }}</span></div></div>
+            <div class="row"><div class="lab">Neutral character<small>Brand tint in grays</small></div>
+              <div class="ctl"><input type="range" min="0" max="0.08" step="0.005" [(ngModel)]="seeds.neutralChroma" (ngModelChange)="onSeedsChanged()"><span class="val">{{ seeds.neutralChroma }}</span></div></div>
+            <div class="row"><div class="lab">Base size<small>Generated content</small></div>
+              <div class="ctl"><input type="range" min="12" max="18" step="1" [(ngModel)]="baseFontSize" (ngModelChange)="onBaseSizeChanged()"><span class="val">{{ baseFontSize }}px</span></div></div>
+          </div>
+
+          <div class="card">
+            <h3><span class="ic"><i class="fa-solid fa-square"></i></span>Shape &amp; density<span class="scope">Generated content</span></h3>
+            <p class="sub">Applies to Skip / agent components. Explorer chrome keeps MJ shape.</p>
+            <div class="row"><div class="lab">Corner radius</div>
+              <div class="ctl"><input type="range" min="0" max="20" step="1" [(ngModel)]="seeds.radius" (ngModelChange)="onSeedsChanged()"><span class="val">{{ seeds.radius }}px</span></div></div>
+            <div class="row"><div class="lab">Elevation depth<small>Brand shadow strength</small></div>
+              <div class="ctl"><input type="range" min="0" max="1" step="0.1" [(ngModel)]="seeds.depth" (ngModelChange)="onSeedsChanged()"><span class="val">{{ seeds.depth }}</span></div></div>
+            <div class="row"><div class="lab">Density</div>
+              <div class="ctl"><div class="miniseg">
+                <button type="button" [class.on]="density === 16" (click)="density = 16; onDensityChanged()">Comfortable</button>
+                <button type="button" [class.on]="density === 9" (click)="density = 9; onDensityChanged()">Compact</button>
+              </div></div></div>
+          </div>
+
+          <div class="card">
+            <h3><span class="ic"><i class="fa-solid fa-chart-column"></i></span>Chart palette
+              @if (vizOverridden) {
+                <button type="button" class="reset-link" (click)="resetViz()">reset</button>
+              }
+            </h3>
+            <p class="sub">Series 1 follows Primary until you override it {{ vizOverridden ? '(overridden)' : '' }}.</p>
+            <div class="swrow">
+              @for (c of vizColors; track $index; let i = $index) {
+                <label class="chip-clr" [style.background]="c">
+                  <span class="chip-num">{{ i + 1 }}</span>
+                  <input type="color" [value]="c" (input)="editViz(i, $event)">
+                </label>
+              }
+            </div>
+          </div>
+
+          <div class="card">
+            <h3><span class="ic"><i class="fa-solid fa-image"></i></span>Logo &amp; branding</h3>
+            <div class="row"><div class="lab">Footer notice<small>Shown in generated output</small></div>
+              <div class="ctl"><input class="tinput" [(ngModel)]="footerNotice"></div></div>
+            <p class="sub" style="margin:8px 0 0">Logo variant uploads (light / dark / wordmark) are coming with the asset pipeline.</p>
+          </div>
+
+          <!-- Advanced: token overrides + raw CSS escape hatch + generated-CSS view -->
+          <div class="card adv-card">
+            <h3 class="adv-head" (click)="advancedOpen = !advancedOpen">
+              <span class="ic"><i class="fa-solid fa-code"></i></span>Advanced
+              <i class="fa-solid caret" [class.fa-chevron-down]="advancedOpen" [class.fa-chevron-right]="!advancedOpen"></i>
+            </h3>
+            @if (advancedOpen) {
+              <p class="sub">A power-user layer applied on top of the derived theme. Leave empty to use the pure seed-derived theme.</p>
+
+              <div class="adv-sec">
+                <div class="adv-lab">Token overrides</div>
+                <p class="sub">Override any <code>--mj-*</code> value; applied over the derived tokens (both modes).</p>
+                <datalist id="ts-token-names">
+                  @for (n of overridableTokens; track n) {
+                    <option [value]="n"></option>
+                  }
+                </datalist>
+                @for (row of overrideRows; track $index; let i = $index) {
+                  <div class="ovr-row">
+                    <input class="tinput ovr-key" list="ts-token-names" placeholder="--mj-brand-primary" spellcheck="false"
+                           [(ngModel)]="row.key" (ngModelChange)="onAdvancedChanged()">
+                    <input class="tinput ovr-val" placeholder="#0a5cff" spellcheck="false"
+                           [(ngModel)]="row.value" (ngModelChange)="onAdvancedChanged()">
+                    <button type="button" class="ovr-del" title="Remove override" (click)="removeOverrideRow(i)"><i class="fa-solid fa-xmark"></i></button>
+                  </div>
+                }
+                <button type="button" class="adv-add" (click)="addOverrideRow()"><i class="fa-solid fa-plus"></i> Add override</button>
+              </div>
+
+              <div class="adv-sec">
+                <div class="adv-lab">Custom CSS</div>
+                <p class="sub">Appended to the theme overlay, auto-scoped to this theme. Type to autocomplete MJ chrome selectors (<code>mj-shell</code>, …) and <code>--mj-*</code> tokens. <code>&#64;import</code> is not supported and is removed on save.</p>
+                <div class="adv-css-wrap">
+                  <textarea #cssEditor class="adv-css" rows="6" spellcheck="false" placeholder="mj-shell &#123; box-shadow: none; &#125;"
+                            [(ngModel)]="customCss"
+                            (ngModelChange)="onCustomCssChanged()"
+                            (click)="refreshCssAutocomplete()"
+                            (keydown)="onCssKeydown($event)"
+                            (blur)="onCssBlur()"></textarea>
+                  @if (cssAcOpen) {
+                    <ul class="css-ac">
+                      @for (s of cssAcItems; track s; let i = $index) {
+                        <li [class.on]="i === cssAcIndex"
+                            (mousedown)="$event.preventDefault(); applyCssSuggestion(s)">
+                          <i class="fa-solid" [class.fa-hashtag]="s.startsWith('--')" [class.fa-code]="!s.startsWith('--')"></i>{{ s }}
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+                <p class="sub adv-note">Live preview of custom CSS is approximate — the mock's markup differs from the real chrome.</p>
+              </div>
+
+              <div class="adv-sec">
+                <button type="button" class="adv-add" (click)="showGeneratedCss = !showGeneratedCss">
+                  <i class="fa-solid" [class.fa-eye]="!showGeneratedCss" [class.fa-eye-slash]="showGeneratedCss"></i>
+                  {{ showGeneratedCss ? 'Hide' : 'View' }} generated CSS
+                </button>
+                @if (showGeneratedCss) {
+                  <div class="gen-css">
+                    <button type="button" class="gen-copy" (click)="copyGeneratedCss()"><i class="fa-solid fa-copy"></i> Copy</button>
+                    <pre>{{ generatedCss }}</pre>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+        </div>
+      </aside>
     </div>
-
-    <!-- Slide panel: editor -->
-    <aside class="ts-panel" aria-label="Theme editor">
-      <div class="panel-h">
-        <span class="ic"><i class="fa-solid fa-palette"></i></span>
-        <div><h2>Edit theme</h2><small>One theme serves light &amp; dark</small></div>
-        <button type="button" class="collapse-btn" (click)="togglePanel()" title="Collapse panel"><i class="fa-solid fa-chevron-right"></i></button>
-      </div>
-      <div class="panel-body">
-
-        <div class="card">
-          <h3><span class="ic"><i class="fa-solid fa-plus"></i></span>Start from a preset</h3>
-          <div class="preset-row">
-            <button type="button" class="preset" *ngFor="let p of presets" (click)="applyPreset(p)" [title]="p.name">
-              <span class="sw"><i [style.background]="p.seeds.primary"></i><i [style.background]="p.seeds.accent"></i><i [style.background]="p.seeds.tertiary || p.seeds.accent"></i></span>
-              <small>{{ p.name }}</small>
-            </button>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3><span class="ic"><i class="fa-solid fa-plus"></i></span>Brand colors<span class="scope">Everywhere</span></h3>
-          <p class="sub">Anchor colors only. Ramps, hovers, and dark-mode values derive automatically.</p>
-          <div class="row"><div class="lab">Primary<small>Buttons, links, headers</small></div>
-            <div class="ctl"><span class="clr"><input type="color" [(ngModel)]="seeds.primary" (ngModelChange)="onSeedsChanged()"><span class="hex">{{ seeds.primary }}</span></span></div></div>
-          <div class="derived-note"><i [style.background]="darkPrimary"></i>Dark mode uses derived <code>{{ darkPrimary }}</code> (ramp step)</div>
-          <div class="row"><div class="lab">Accent<small>Highlights, KPI accents</small></div>
-            <div class="ctl"><span class="clr"><input type="color" [(ngModel)]="seeds.accent" (ngModelChange)="onSeedsChanged()"><span class="hex">{{ seeds.accent }}</span></span></div></div>
-          <div class="row"><div class="lab">Tertiary<small>Secondary actions, info</small></div>
-            <div class="ctl"><span class="clr"><input type="color" [(ngModel)]="seeds.tertiary" (ngModelChange)="onSeedsChanged()"><span class="hex">{{ seeds.tertiary }}</span></span></div></div>
-          <div class="row"><div class="lab">Secondary<small>Derived — deep surfaces</small></div>
-            <div class="ctl"><span class="clr static"><span class="sw-box" [style.background]="secondaryColor"></span><span class="hex">{{ secondaryColor }}</span></span></div></div>
-          <div class="row"><div class="lab">Text on primary<small>Auto-picked · checked per mode</small></div>
-            <div class="ctl"><span class="ok" *ngIf="onPrimaryCheck" [class.warn]="!onPrimaryCheck.passes">
-              {{ onPrimaryCheck.passes ? '✓' : '⚠' }} {{ onPrimaryCheck.ratio }}:1
-              <ng-container *ngIf="!onPrimaryCheck.passes && onPrimaryCheck.suggestion"> → {{ onPrimaryCheck.suggestion.hex }}</ng-container>
-            </span></div></div>
-        </div>
-
-        <div class="card">
-          <h3><span class="ic"><i class="fa-solid fa-font"></i></span>Typography<span class="scope">Everywhere</span></h3>
-          <div class="row"><div class="lab">Font family</div>
-            <div class="ctl"><select [(ngModel)]="seeds.fontFamily" (ngModelChange)="onSeedsChanged()">
-              <option *ngFor="let f of fontOptions" [value]="f.value">{{ f.label }}</option>
-            </select></div></div>
-          <div class="row"><div class="lab">Vibrancy<small>Brand ramp saturation</small></div>
-            <div class="ctl"><input type="range" min="0.5" max="1.4" step="0.05" [(ngModel)]="seeds.vibrancy" (ngModelChange)="onSeedsChanged()"><span class="val">{{ seeds.vibrancy }}</span></div></div>
-          <div class="row"><div class="lab">Neutral character<small>Brand tint in grays</small></div>
-            <div class="ctl"><input type="range" min="0" max="0.08" step="0.005" [(ngModel)]="seeds.neutralChroma" (ngModelChange)="onSeedsChanged()"><span class="val">{{ seeds.neutralChroma }}</span></div></div>
-          <div class="row"><div class="lab">Base size<small>Generated content</small></div>
-            <div class="ctl"><input type="range" min="12" max="18" step="1" [(ngModel)]="baseFontSize" (ngModelChange)="onBaseSizeChanged()"><span class="val">{{ baseFontSize }}px</span></div></div>
-        </div>
-
-        <div class="card">
-          <h3><span class="ic"><i class="fa-solid fa-square"></i></span>Shape &amp; density<span class="scope">Generated content</span></h3>
-          <p class="sub">Applies to Skip / agent components. Explorer chrome keeps MJ shape.</p>
-          <div class="row"><div class="lab">Corner radius</div>
-            <div class="ctl"><input type="range" min="0" max="20" step="1" [(ngModel)]="seeds.radius" (ngModelChange)="onSeedsChanged()"><span class="val">{{ seeds.radius }}px</span></div></div>
-          <div class="row"><div class="lab">Elevation depth<small>Brand shadow strength</small></div>
-            <div class="ctl"><input type="range" min="0" max="1" step="0.1" [(ngModel)]="seeds.depth" (ngModelChange)="onSeedsChanged()"><span class="val">{{ seeds.depth }}</span></div></div>
-          <div class="row"><div class="lab">Density</div>
-            <div class="ctl"><div class="miniseg">
-              <button type="button" [class.on]="density === 16" (click)="density = 16; onDensityChanged()">Comfortable</button>
-              <button type="button" [class.on]="density === 9" (click)="density = 9; onDensityChanged()">Compact</button>
-            </div></div></div>
-        </div>
-
-        <div class="card">
-          <h3><span class="ic"><i class="fa-solid fa-chart-column"></i></span>Chart palette
-            <button type="button" class="reset-link" *ngIf="vizOverridden" (click)="resetViz()">reset</button>
-          </h3>
-          <p class="sub">Series 1 follows Primary until you override it {{ vizOverridden ? '(overridden)' : '' }}.</p>
-          <div class="swrow">
-            <label class="chip-clr" *ngFor="let c of vizColors; let i = index" [style.background]="c">
-              <span class="chip-num">{{ i + 1 }}</span>
-              <input type="color" [value]="c" (input)="editViz(i, $any($event.target).value)">
-            </label>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3><span class="ic"><i class="fa-solid fa-image"></i></span>Logo &amp; branding</h3>
-          <div class="row"><div class="lab">Footer notice<small>Shown in generated output</small></div>
-            <div class="ctl"><input class="tinput" [(ngModel)]="footerNotice"></div></div>
-          <p class="sub" style="margin:8px 0 0">Logo variant uploads (light / dark / wordmark) are coming with the asset pipeline.</p>
-        </div>
-
-        <!-- Advanced: token overrides + raw CSS escape hatch + generated-CSS view -->
-        <div class="card adv-card">
-          <h3 class="adv-head" (click)="advancedOpen = !advancedOpen">
-            <span class="ic"><i class="fa-solid fa-code"></i></span>Advanced
-            <i class="fa-solid caret" [class.fa-chevron-down]="advancedOpen" [class.fa-chevron-right]="!advancedOpen"></i>
-          </h3>
-          <ng-container *ngIf="advancedOpen">
-            <p class="sub">A power-user layer applied on top of the derived theme. Leave empty to use the pure seed-derived theme.</p>
-
-            <div class="adv-sec">
-              <div class="adv-lab">Token overrides</div>
-              <p class="sub">Override any <code>--mj-*</code> value; applied over the derived tokens (both modes).</p>
-              <datalist id="ts-token-names">
-                <option *ngFor="let n of overridableTokens" [value]="n"></option>
-              </datalist>
-              <div class="ovr-row" *ngFor="let row of overrideRows; let i = index">
-                <input class="tinput ovr-key" list="ts-token-names" placeholder="--mj-brand-primary" spellcheck="false"
-                       [(ngModel)]="row.key" (ngModelChange)="onAdvancedChanged()">
-                <input class="tinput ovr-val" placeholder="#0a5cff" spellcheck="false"
-                       [(ngModel)]="row.value" (ngModelChange)="onAdvancedChanged()">
-                <button type="button" class="ovr-del" title="Remove override" (click)="removeOverrideRow(i)"><i class="fa-solid fa-xmark"></i></button>
-              </div>
-              <button type="button" class="adv-add" (click)="addOverrideRow()"><i class="fa-solid fa-plus"></i> Add override</button>
-            </div>
-
-            <div class="adv-sec">
-              <div class="adv-lab">Custom CSS</div>
-              <p class="sub">Appended to the theme overlay, auto-scoped to this theme. Type to autocomplete MJ chrome selectors (<code>mj-shell</code>, …) and <code>--mj-*</code> tokens.</p>
-              <div class="adv-css-wrap">
-                <textarea #cssEditor class="adv-css" rows="6" spellcheck="false" placeholder="mj-shell &#123; box-shadow: none; &#125;"
-                          [(ngModel)]="customCss"
-                          (ngModelChange)="onCustomCssChanged()"
-                          (click)="refreshCssAutocomplete()"
-                          (keydown)="onCssKeydown($event)"
-                          (blur)="onCssBlur()"></textarea>
-                <ul class="css-ac" *ngIf="cssAcOpen">
-                  <li *ngFor="let s of cssAcItems; let i = index" [class.on]="i === cssAcIndex"
-                      (mousedown)="$event.preventDefault(); applyCssSuggestion(s)">
-                    <i class="fa-solid" [class.fa-hashtag]="s.startsWith('--')" [class.fa-code]="!s.startsWith('--')"></i>{{ s }}
-                  </li>
-                </ul>
-              </div>
-              <p class="sub adv-note">Live preview of custom CSS is approximate — the mock's markup differs from the real chrome.</p>
-            </div>
-
-            <div class="adv-sec">
-              <button type="button" class="adv-add" (click)="showGeneratedCss = !showGeneratedCss">
-                <i class="fa-solid" [class.fa-eye]="!showGeneratedCss" [class.fa-eye-slash]="showGeneratedCss"></i>
-                {{ showGeneratedCss ? 'Hide' : 'View' }} generated CSS
-              </button>
-              <div class="gen-css" *ngIf="showGeneratedCss">
-                <button type="button" class="gen-copy" (click)="copyGeneratedCss()"><i class="fa-solid fa-copy"></i> Copy</button>
-                <pre>{{ generatedCss }}</pre>
-              </div>
-            </div>
-          </ng-container>
-        </div>
-
-      </div>
-    </aside>
-  </div>
-
-  <div class="ts-toast" [class.show]="!!toast">{{ toast }}</div>
-</div>
+  </mj-page-body>
+</mj-page-layout>

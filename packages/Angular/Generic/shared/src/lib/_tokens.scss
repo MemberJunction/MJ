@@ -383,7 +383,11 @@
   
   --mj-bg-page: var(--mj-color-neutral-900);
   --mj-bg-surface: var(--mj-color-neutral-800);
-  --mj-bg-surface-card: #253347;
+  /* Card sits between surface (800) and elevated (700). Derived from the neutral
+     primitives (not a literal) so org brand overlays re-tint it in dark mode; the
+     68/32 srgb-linear split reproduces the historical #253347 with MJ's defaults
+     and matches the theme engine's mixHex(neutral-800, neutral-700, 0.32) exactly. */
+  --mj-bg-surface-card: color-mix(in srgb-linear, var(--mj-color-neutral-800) 68%, var(--mj-color-neutral-700));
   --mj-bg-surface-elevated: var(--mj-color-neutral-700);
   --mj-bg-surface-sunken: var(--mj-color-neutral-950);
   --mj-bg-surface-hover: var(--mj-color-neutral-600);

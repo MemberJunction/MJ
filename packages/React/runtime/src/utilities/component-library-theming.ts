@@ -5,6 +5,16 @@
  * on their own — without their theme provider they render in the library's built-in
  * LIGHT theme even when the host is in dark mode. The host wraps the mounted React
  * tree once, and the provider's context flows to every library component below.
+ *
+ * TYPE-SAFETY NOTE (`unknown` usage): React and antd reach this module as UMD
+ * globals loaded at runtime by the library loader — there are no compile-time
+ * types for them in this package, and adding @types deps for runtime-loaded UMD
+ * bundles would lie about the actual contract. `unknown` here is the narrow,
+ * honest boundary type for those module surfaces (mirroring the existing
+ * `unwrapLibraryComponent`); every access is funneled through the unwrapper or
+ * an explicit shape check rather than blind property access. Do NOT widen these
+ * to `any` — and do not treat this as precedent outside runtime-loaded UMD
+ * boundaries (see the no-`any`/`unknown` rule in the root CLAUDE.md).
  * @module @memberjunction/react-runtime/utilities
  */
 
