@@ -147,6 +147,15 @@ export interface TestRunOptions {
 }
 
 /**
+ * Dispatch ordering for the parallel work queue (DR-D1).
+ * - `suite` — original suite sequence (historical behavior; default).
+ * - `longest-first` — LPT scheduling: dispatch highest mean-duration tests first
+ *   so the long pole starts at t=0 and short tests backfill the tail. Requires
+ *   duration history (DR-G6); without it, degrades to `suite`.
+ */
+export type SeedOrder = 'suite' | 'longest-first';
+
+/**
  * Options for running a test suite
  */
 export interface SuiteRunOptions extends TestRunOptions {
@@ -154,6 +163,13 @@ export interface SuiteRunOptions extends TestRunOptions {
    * Run tests in parallel
    */
   parallel?: boolean;
+
+  /**
+   * Order tests come off the shared parallel work queue (DR-D1). Does not
+   * change each test's reporting `sequence` (always its suite position) — only
+   * dispatch order. Default `suite`.
+   */
+  seedOrder?: SeedOrder;
 
   /**
    * Stop on first failure

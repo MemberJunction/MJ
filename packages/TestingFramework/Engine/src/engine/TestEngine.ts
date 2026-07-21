@@ -48,6 +48,7 @@ import {
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
 import { runWithRetries } from './retry';
+import { WorkItem, seedWorkItems, drainQueue } from './work-queue';
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -553,10 +554,14 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
-     * Run tests in parallel across multiple workers. Each worker runs its
-     * share of tests sequentially. The test driver (not the engine) manages
-     * browser resource sharing via HeadlessBrowserEngine singleton — the
-     * TestEngine only passes workerIndex so the driver can construct a key.
+     * Run tests in parallel across multiple workers (DR-D1). One shared work
+     * queue is drained by N worker loops with work stealing — whichever worker
+     * is free takes the next test — instead of the old static round-robin
+     * partition, whose makespan was set by the unluckiest worker's tail. The
+     * test driver (not the engine) manages browser resource sharing via the
+     * HeadlessBrowserEngine singleton; the TestEngine only passes workerIndex so
+     * the driver can construct its key. The 2.5 s staggered start (Auth0 login
+     * spacing) is preserved via {@link drainQueue}'s stagger.
      * @private
      */
     private async runTestsParallel(
@@ -570,51 +575,40 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         const maxWorkers = Math.min(options.maxParallel ?? 4, tests.length);
         this.log(`Starting parallel execution: ${tests.length} tests across ${maxWorkers} workers`);
 
-        // Partition tests into worker groups (round-robin)
-        const workerGroups: Array<{ test: MJTestEntity; sequence: number }[]> = Array.from({ length: maxWorkers }, () => []);
-        tests.forEach((test, i) => {
-            workerGroups[i % maxWorkers].push({ test, sequence: i + 1 });
-        });
+        // Index tests by ID so the (id, sequence)-based queue can recover the entity.
+        const testById = new Map(tests.map(t => [t.ID, t]));
+        const items: WorkItem[] = tests.map((t, i) => ({ testId: t.ID, testName: t.Name, sequence: i + 1 }));
+        // Dispatch order (suite | longest-first). Duration history (DR-G6) isn't
+        // wired yet, so longest-first currently degrades to suite order.
+        const seeded = seedWorkItems(items, options.seedOrder ?? 'suite');
 
-        // Execute workers concurrently with staggered starts
-        const workerPromises = workerGroups.map((group, workerIndex) => {
-            // Stagger worker starts to avoid simultaneous Auth0 logins
-            const staggerMs = workerIndex * 2500;
-            return new Promise<TestRunResult[]>((resolve, reject) => {
-                setTimeout(() => {
-                    this.log(`Worker ${workerIndex + 1}/${maxWorkers} starting (${group.length} tests)`);
-                    this.executeParallelWorker(
-                        group, workerIndex, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext
-                    ).then(resolve, reject);
-                }, staggerMs);
-            });
-        });
-
-        const settled = await Promise.allSettled(workerPromises);
-
-        // Merge results from all workers
-        const allResults: TestRunResult[] = [];
-        for (let i = 0; i < settled.length; i++) {
-            const result = settled[i];
-            if (result.status === 'fulfilled') {
-                allResults.push(...result.value);
-            } else {
-                this.logError(`Worker ${i + 1} failed`, result.reason as Error);
+        const allResults = await drainQueue<TestRunResult>(
+            seeded,
+            maxWorkers,
+            (item, workerIndex) => this.runQueuedItem(
+                item, testById, workerIndex, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext
+            ),
+            {
+                staggerMs: 2500,
+                onWorkerStart: (wi, count) => this.log(`Worker ${wi + 1}/${count} starting`),
             }
-        }
+        );
 
-        // Sort by original sequence to maintain consistent reporting
+        // Sort by original suite sequence to maintain consistent reporting.
         allResults.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
-
         return allResults;
     }
 
     /**
-     * Execute a batch of tests sequentially within a single worker.
+     * Run one queued test to its final result(s) and finalize each (DR-D1/D5).
+     * A thrown Execute is synthesized into a counted `Error` result rather than
+     * dropped (which `compare` misread as "removed"). Returns the row(s) for the
+     * shared collector.
      * @private
      */
-    private async executeParallelWorker(
-        group: Array<{ test: MJTestEntity; sequence: number }>,
+    private async runQueuedItem(
+        item: WorkItem,
+        testById: Map<string, MJTestEntity>,
         workerIndex: number,
         options: SuiteRunOptions,
         contextUser: UserInfo,
@@ -622,31 +616,28 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         suiteVariablesJson: string | null,
         suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult[]> {
-        const results: TestRunResult[] = [];
-
-        for (const { test, sequence } of group) {
-            try {
-                this.log(`[Worker ${workerIndex + 1}] Running: ${test.Name}`, options.verbose);
-                const result = await this.runTestWithSuiteVariables(
-                    test.ID, options, contextUser, suiteRunId, sequence, suiteVariablesJson, workerIndex, suiteContext
-                );
-                const arr = Array.isArray(result) ? result : [result];
-                for (const r of arr) {
-                    this.finalizeTestResult(r, workerIndex, sequence, options);
-                    results.push(r);
-                }
-            } catch (error) {
-                // DR-D5: a thrown Execute must NOT silently vanish from the totals
-                // (previously logged + dropped, so `compare` misread it as "removed").
-                // Synthesize an Error result, emit it incrementally, keep going.
-                this.logError(`[Worker ${workerIndex + 1}] Test failed: ${test.Name}`, error as Error);
-                const errResult = this.synthesizeErrorResult(test, error as Error, suiteRunId, sequence, workerIndex);
-                this.finalizeTestResult(errResult, workerIndex, sequence, options);
-                results.push(errResult);
-            }
+        const test = testById.get(item.testId);
+        if (!test) {
+            return [];
         }
-
-        return results;
+        const rows: TestRunResult[] = [];
+        try {
+            this.log(`[Worker ${workerIndex + 1}] Running: ${test.Name}`, options.verbose);
+            const result = await this.runTestWithSuiteVariables(
+                item.testId, options, contextUser, suiteRunId, item.sequence, suiteVariablesJson, workerIndex, suiteContext
+            );
+            const arr = Array.isArray(result) ? result : [result];
+            for (const r of arr) {
+                this.finalizeTestResult(r, workerIndex, item.sequence, options);
+                rows.push(r);
+            }
+        } catch (error) {
+            this.logError(`[Worker ${workerIndex + 1}] Test failed: ${test.Name}`, error as Error);
+            const errResult = this.synthesizeErrorResult(test, error as Error, suiteRunId, item.sequence, workerIndex);
+            this.finalizeTestResult(errResult, workerIndex, item.sequence, options);
+            rows.push(errResult);
+        }
+        return rows;
     }
 
     /**
