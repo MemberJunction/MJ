@@ -1374,16 +1374,22 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const md = this.ProviderToUse;
 
-    // Collect all unique record IDs from selected views
+    // Collect all unique record IDs from selected views.
+    // Batch every selected view into a single RunViews call rather than issuing a
+    // sequential RunView per view (N round-trips → 1). Each view has a distinct ViewID,
+    // so this can't collapse to one query, but RunViews parallelizes the round trips.
     const recordIdSet = new Set<string>();
 
-    for (const userView of this.userViewsToAdd) {
-      const runViewResult = await rv.RunView({
+    const viewResults = await rv.RunViews(
+      this.userViewsToAdd.map(userView => ({
         ViewID: userView.ID,
         ViewEntity: userView,
         Fields: ["ID"]
-      }, md.CurrentUser);
+      })),
+      md.CurrentUser
+    );
 
+    for (const runViewResult of viewResults) {
       if (runViewResult.Success) {
         const records = runViewResult.Results as Array<Record<string, string>>;
         records.forEach(r => recordIdSet.add(NormalizeUUID(r.ID)));

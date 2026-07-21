@@ -403,6 +403,14 @@
             "lastModified": "2026-07-21T00:04:38.432Z",
             "checksum": "10ea6909eb71966219b9eda02dfc648c10ec1ddf560621b968b73654b1c906e7"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT31 - Startup Mode",
+            "Sequence": 27,
+            "Status": "Active"
+          }
         }
       ]
     },
