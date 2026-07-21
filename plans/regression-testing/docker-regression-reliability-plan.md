@@ -366,6 +366,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 
 **Risks / open questions.** None material — this is the single most enabling change in Theme D and has no behavioral downside.
 
+**Wave 1 status — LANDED.** Engine: `SuiteRunOptions.onTestComplete` hook + `TestRunResult.workerIndex`; `finalizeTestResult` fires the hook for every result (incl. repeated iterations + synthesized errors) and a thrown Execute now becomes a counted `Error` result in both loops (was logged-and-dropped → `compare` misread as "removed"). CLI: `IncrementalResultsSink` writes `results.jsonl` (one line per attempt, synchronous append) + atomic `results.partial.json` (Running→Completed/Cancelled/Crashed) next to `--output`; SIGTERM/SIGINT/uncaughtException handlers flush a terminal partial before exit. No-op without `--output`. Verified: 8 sink unit tests + 59 engine tests + 31 CLI tests green. **Deferred:** the engine-side DB `TestSuiteRun` finalize on signal (a signal handler can't reliably await async DB work — the file partial is the reliable artifact).
+
 #### DR-D6 — Resumable runs
 
 **Problem.** `RunSuite` always creates a fresh `TestSuiteRun` and runs the full filtered list; re-running after a crash repeats all 380 tests even though per-test DB rows exist incrementally.
@@ -514,6 +516,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 
 **Risks / open questions.** None.
 
+**Wave 1 status — LANDED.** `mintRunId()` (docker-helpers) produces `run-<utc>` byte-identical to the entrypoint's `date -u` form; `up` (both paths) mints/honors RUN_ID, threads it as compose env, prints run id + output dir. Compose declares `RUN_ID`; both entrypoints prefer it (`RUN_ID="${RUN_ID:-run-${TIMESTAMP}}"`) and the `latest` symlink now targets `$RUN_ID` (was a hardcoded `run-${TIMESTAMP}`, which F1 would have broken). Verified: format parity host↔container; compose passthrough.
+
 #### DR-F2 — Exit-code propagation + CLI-owned stdout
 
 **Problem.** Monorepo `up` runs plain `docker compose up`: the suite's exit code never reaches the shell and attached `up` blocks forever after the runner finishes (`up.ts` vs the external path at `up.ts:118-121`, which does it right). `stdio: 'inherit'` means the CLI can't tee anything; `-d` produces nothing on disk; entrypoint stdout is never written into the run dir.
@@ -523,6 +527,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 **Expected impact.** Mode A becomes CI-usable; detached and attached runs both leave a complete console record; "docker logs is the only monitor" ends.
 
 **Risks / open questions.** `compose run` bypasses `depends_on` gating — the CLI must sequence the up-then-run itself (it now can, and gains per-phase timing as a bonus — the first step toward DR-F7's phase inversion).
+
+**Wave 1 status — up-then-run + exit-code propagation LANDED (completing the F2 slice).** Attached non-bacpac Mode A now `up -d --wait <infra>` then `run --rm test-runner` in the foreground, so the runner's exit code (the suite verdict via the entrypoint's `exit $EXIT_CODE`) reaches the shell — plain `up` swallowed it and blocked forever, and plain `--abort-on-container-exit` was unsafe with the one-shot db-setup. New `spawnTee` mirrors runner stdout+stderr to the terminal AND `<RUN_DIR>/console.log`. Detach/bacpac keep the classic `up`; stack is left running (enables status/stop/resume). Verified: `spawnTee` propagates exit code, tees both streams, auto-creates the dir, resolves 1 on spawn error. **Deferred:** distinct exit codes per outcome class (with DR-D7) + full phase inversion (DR-F7).
 
 **Wave 0 status — entrypoint `tee` slice LANDED; up-then-run + exit-code propagation deferred to Wave 1.** Both entrypoints `exec > >(tee -a "$RUN_DIR/runner.log") 2>&1` right after RUN_DIR creation, so a detached (`up -d`) or crashed/OOM-killed run leaves a console record on the bind mount (not only in `docker logs`). Output before RUN_DIR (socat/metadata/preflight) stays in docker logs. Verified: `bash -n` + the tee idiom captures stdout+stderr while still echoing. **Deferred to Wave 1:** the host-side half — restructuring Mode A as `up -d` infra + `compose run --rm test-runner` with piped stdio, CLI tee to `$RUN_ID/console.log`, and verbatim exit-code propagation with distinct codes (needs DR-F1 host-minted RUN_ID first).
 
@@ -539,6 +545,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 
 **Risks / open questions.** None; v1 needs zero container changes beyond DR-D5.
 
+**Wave 1 status — LANDED.** `status [--run] [--watch]` (reads the D5 partial → progress/counts/pace/health-state + `compose ps`), `logs [service] [-f] [--since] [--tail]` (compose-logs wrapper), `stop` (`compose stop`, preserves DB). New docker-helpers `latestRunDir`/`resolveRunDir`/`readRunSnapshot` (never throw; normalize partial|final|none). Verified: all three in the oclif manifest; snapshot reader handles partial/final/none + surfaces flaky; 426 MJCLI tests green. `down`'s in-progress guard + keep-volumes-by-default ride with DR-B2 (Wave 3).
+
 #### DR-F4 — `rerun-failures` and ad-hoc test selection
 
 **Problem.** "Rerun the failures" has no command: seven hand-authored one-off suite JSONs (`.regression-recheck-suite.json`, `.regression-fixes-check-suite.json`, …) exist in the working tree solely as workarounds. There is no `--tests` filter and no way to list suites.
@@ -548,6 +556,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 **Expected impact.** Kills the hand-authored-suite cottage industry; the §3.3-style recheck becomes a one-liner producing classified results in ~1.5 h instead of 4.7.
 
 **Risks / open questions.** None material.
+
+**Wave 1 status — LANDED.** Name-based selection: testing-cli `SuiteFlags.tests` → `GetTestByName` → `selectedTestIds`; MJCLI `test suite --tests`; compose `TEST_NAME_FILTER` → entrypoint `--tests`. `rerun-failures [--run] [--workers 2] [--retries 0] [--status]` reads the prior run's snapshot, dedupes failing names, and runs a one-off `compose run --rm test-runner` against the ALREADY-RUNNING stack with a fresh RUN_ID (defaults codify the recheck-storm lesson). Comma-in-name guarded. Verified: failure-extraction (dedup/status-filter/comma-guard) + `--tests`/`rerun-failures` registration; testing-cli + MJCLI tests green. **Deferred:** category-filtered rerun (`--category`) waits on DR-D8's persisted `FailureCategory`; `suites` list + `up --tests` range syntax not built (names-only).
 
 #### DR-F5 — Resource-sizing and behavior flags
 
@@ -603,6 +613,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 
 **Risks / open questions.** Per-attempt screenshots multiply disk usage — retain full artifacts for failures, final-attempt-only for passes.
 
+**Wave 1 status — summary.json + null-safe reports LANDED; timeline/overlay/per-attempt dirs deferred.** New `generate-summary.cjs` emits `summary.json` (totals, passRate, avgScore, failure `categories` — prefers CU-F5 `failureClass` else status, envQuality from `diagnostics.ndjson`); falls back to the D5 partial when a run crashed pre-finalize. `generate-md-report.cjs`: the single outer try/catch replaced by per-section + per-row guards + safe formatters, so one malformed record drops only its row, never the whole report. Verified: md report survives a null-score record; summary build (counts/categories/envQuality/partial-fallback/null) correct. **Deferred (need real multi-worker artifacts to build+verify):** the per-worker swimlane timeline, health-window overlay, and per-attempt screenshot directories — the data they consume (workerIndex+timestamps from D5, diagnostics.ndjson from G4) now exists.
+
 #### DR-G3 — Flaky tracking, SLO, and quarantine lane
 
 **Problem.** 37 flaky passes in the full run are invisible in gating; 8 of 17 recheck passes were retry-only *on a dedicated host* — chronic instability with no tracking or containment. Trunk/Buildkite/QA Wolf all run quarantine lanes with flake-rate history.
@@ -622,6 +634,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 **Expected impact.** The monitor becomes the sensory system for admission control, circuit breaking, and report overlays instead of a write-only log.
 
 **Risks / open questions.** Docker-socket access from the runner container is a privilege decision — a host-side supervisor process (owned by the CLI, DR-F2) is the cleaner placement.
+
+**Wave 1 status — LANDED (in-container scope).** health-monitor.cjs rewritten: appends `diagnostics.ndjson` + bounded `diagnostics.json` summary; samples the runner's own cgroup memory (v2/v1) + Chromium proc-count/RSS via `/proc`; adds a SQL Server TCP probe; writes `health-state.json` ({state, recommendedWorkers, reasons}) consumed by `status`; PARENT-WATCHES (exits on reparent-to-init) so it can't orphan (the §3.2 10-hour failure). Stays alive through report generation, then stopped at the end. Verified: 10/10 pure-helper assertions. **Deferred:** per-SIBLING-container stats need the Docker socket / host-side supervisor (Open Question 2); running in REMOTE mode needs a memory-only variant (its probes assume the local stack).
 
 #### DR-G5 — Screenshot/artifact pipeline efficiency
 
@@ -653,6 +667,8 @@ Then delete `clear-baseline-suite-members.cjs`.
 
 **Risks / open questions.** None.
 
+**Wave 1 status — partial (operator-facing surfaces LANDED).** The `mj test regression` help (index.ts) + docker/CLAUDE.md now document the new commands (status/logs/stop/rerun-failures), host-minted RUN_ID, up-then-run/exit-code behavior, the sizing/retry knobs, and the new run-dir artifacts (results.jsonl/partial, summary.json, diagnostics.ndjson, health-state.json, console.log). DR-E3 already fixed the biggest live breakage (the referenced-but-missing `.env.test.example`). **Deferred:** the full ARCHITECTURE.md/REGRESSION_TESTING.md/QUICKSTART.md prose reconciliation (codegen pass count, worker-default drift, phantom 4GB SQL reservation, file inventory) + the CI docs-drift check — a larger deliberate pass.
+
 ---
 
 ## 5. How Others Solve This
@@ -682,8 +698,8 @@ Cross-plan note for capacity math: once the CU plan's replay-first tier lands, ~
 **Wave 0 — stop the bleeding (independent, small, immediate): ✅ LANDED (2026-07-21).**
 DR-C1 (`.dockerignore` + layer order) · DR-A1 (resource limits + SQL cap) · DR-A3 (`init:`/ipc) · DR-E2's `MAX_RETRIES` compose fix + `--retries` flag · DR-E1's container-side gate teeth (exit-nonzero + entrypoint abort + Auth0-probe fix + DB suite-member assertion) · DR-E6 (Explorer healthcheck + warm-up) · DR-F2's entrypoint `tee` · DR-E3 (credential-fallback deletion, `.env.test.example`). Nothing here depends on anything else; together they eliminate the OOM configuration class, the silent-stale-suite class, and the unturnable-retry knob. All eight shipped as one commit each (see per-item "Wave 0 status" blocks in §4 for what landed vs. deferred to Wave 1). Not yet done from this wave's spirit: DR-E1's host-side gate + DR-A4 arithmetic and DR-F2's up-then-run/exit-code propagation both moved to Wave 1 (they need the host-minted RUN_ID / cgroup reads that are Wave-1 foundations).
 
-**Wave 1 — run ownership & incremental truth:**
-DR-F1 (RUN_ID) → DR-F2 (up-then-run + exit codes) → DR-D5 (JSONL + partials + signal handlers) → DR-F3 (status/logs/stop) → DR-F4 (rerun-failures) → DR-G4 (supervisor rewrite) → DR-G2 (per-attempt artifacts + timeline). D5 unblocks F3/F4 and all of Theme G; F1/F2 unblock everything host-side. DR-G7 docs pass rides along.
+**Wave 1 — run ownership & incremental truth: ✅ LANDED (2026-07-21).**
+DR-F1 (RUN_ID) → DR-F2 (up-then-run + exit codes) → DR-D5 (JSONL + partials + signal handlers) → DR-F3 (status/logs/stop) → DR-F4 (rerun-failures) → DR-G4 (supervisor rewrite) → DR-G2 (per-attempt artifacts + timeline). D5 unblocks F3/F4 and all of Theme G; F1/F2 unblock everything host-side. DR-G7 docs pass rides along. All eight shipped (one commit each; see per-item "Wave 1 status" blocks for what landed vs. deferred). Carried into later waves: G2's swimlane/timeline HTML viz + per-attempt screenshot dirs (need real multi-worker artifacts), G4's sibling-container stats + remote-mode variant, F2's distinct exit codes (with DR-D7), and G7's full ARCHITECTURE/REGRESSION_TESTING/QUICKSTART prose reconciliation + CI docs-drift check.
 
 **Wave 2 — scheduler intelligence (depends on Wave 1's data):**
 DR-D1 (work queue) → DR-D2 (classified deferred retries; stopgap regex classifier until CU taxonomy lands) → DR-D3 (admission control, fed by G4) → DR-D4 (watchdog) → DR-D7 (circuit breakers) → DR-D8 (attempt lineage + retry-aware compare) → DR-D9 (dead knobs). D1 is the keystone; everything else in the wave attaches to its dispatch point.
