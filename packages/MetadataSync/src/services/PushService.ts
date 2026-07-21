@@ -41,6 +41,14 @@ export interface PushOptions {
   exclude?: string[]; // Skip these directories (blacklist, supports patterns)
   deleteDbOnly?: boolean; // Delete database-only records that reference records being deleted
   incremental?: boolean;  // Skip files whose checksum hasn't changed since last push
+  /**
+   * Suppress writing primaryKey/sync metadata back into the source JSON files
+   * (DR-B4). For ephemeral-DB / CI pushes (e.g. the Docker regression stack)
+   * where the DB is thrown away after the run, so the stamped PKs are meaningless
+   * on the next fresh DB and only pollute the working tree. The DB upsert still
+   * happens exactly as before; only the file write-back is skipped.
+   */
+  noWriteBack?: boolean;
 }
 
 /**
@@ -902,7 +910,8 @@ export class PushService {
         // Write back to file (handles both single records and arrays)
         // Use unprocessedRecords to preserve @file: references
         // Defer writing if file contains deletions - they'll be written after Phase 2
-        if (!options.dryRun) {
+        // DR-B4: --no-write-back skips ALL file stamping (the DB upsert above still ran).
+        if (!options.dryRun && !options.noWriteBack) {
           if (hasDeletions) {
             // Store for later writing after deletions complete
             this.deferredFileWrites.set(filePath, {
@@ -2226,7 +2235,9 @@ export class PushService {
    * Called in Phase 3 after all deletions complete successfully
    */
   private async writeDeferredFiles(options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
-    if (this.deferredFileWrites.size === 0) {
+    // DR-B4: with --no-write-back the inline path never populated this map, but
+    // guard here too so the suppression is unconditional.
+    if (options.noWriteBack || this.deferredFileWrites.size === 0) {
       return;
     }
 

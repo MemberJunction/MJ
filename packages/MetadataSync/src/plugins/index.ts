@@ -89,6 +89,13 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       description: 'Write a detailed per-record change report (primary keys + field diffs) to a file',
       default: false,
     }),
+    'no-write-back': Flags.boolean({
+      description:
+        'Do NOT write primaryKey/sync metadata back into the source JSON files after pushing. ' +
+        'For ephemeral-DB / CI pushes (e.g. the Docker regression stack) where stamped PKs are ' +
+        'meaningless on the next fresh DB and only pollute the working tree. The DB upsert is unaffected.',
+      default: false,
+    }),
   };
 
   static Usage: PluginUsage = {
@@ -194,6 +201,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
         include: includeFilter,
         exclude: excludeFilter,
         incremental: flags.incremental,
+        noWriteBack: flags['no-write-back'],
       },
       {
         onProgress: (message) => this.Host.StartStep(message),

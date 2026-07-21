@@ -47,7 +47,7 @@ if [ -z "${BACPAC_FILE:-}" ]; then
 # ApplicationEntity rows (with DefaultForNewUser=1) to create the matching
 # UserApplicationEntity rows.
 echo "Syncing application metadata..."
-npx mj sync push --dir=metadata --include="applications" 2>&1 || {
+npx mj sync push --dir=metadata --include="applications" --no-write-back 2>&1 || {
     echo "  WARNING: Application metadata sync failed"
 }
 echo ""
@@ -58,7 +58,7 @@ echo ""
 #           + User Views + User Notifications (nested as relatedEntities)
 # Tags must process first so any future UserTag references resolve.
 echo "Syncing test user metadata..."
-npx mj sync push --dir=/app/test-metadata --include="tags,users" 2>&1 || {
+npx mj sync push --dir=/app/test-metadata --include="tags,users" --no-write-back 2>&1 || {
     echo "  WARNING: Test user metadata sync failed — falling back to SQL"
 }
 echo ""
@@ -86,12 +86,12 @@ echo ""
 # records (metadata/tests/regression/.deleted-computer-use-tests.json) that prune
 # the pre-consolidation regression tests from the instance.
 echo "Syncing test metadata (incl. Computer Use delete records)..."
-npx mj sync push --dir=metadata --include="tests" 2>&1 || {
+npx mj sync push --dir=metadata --include="tests" --no-write-back 2>&1 || {
     echo "  WARNING: Test metadata sync failed"
 }
 echo ""
 echo "Syncing test suites..."
-npx mj sync push --dir=metadata --include="test-suites" 2>&1 || {
+npx mj sync push --dir=metadata --include="test-suites" --no-write-back 2>&1 || {
     echo "  WARNING: Suite metadata sync failed"
 }
 echo ""
@@ -100,7 +100,7 @@ echo ""
 # (kept out of the base instance, like integration-test). directoryOrder pushes
 # tests before the suite so @lookup suite members resolve.
 echo "Syncing regression tests + suite from metadata-optional/regression-test..."
-npx mj sync push --dir=metadata-optional/regression-test 2>&1 || {
+npx mj sync push --dir=metadata-optional/regression-test --no-write-back 2>&1 || {
     echo "  WARNING: Regression metadata sync failed"
 }
 echo ""
@@ -118,7 +118,7 @@ if [ -n "${EXTRA_METADATA_DIRS:-}" ]; then
         EXTRA_DIR_TRIMMED="$(echo "$EXTRA_DIR" | xargs)"
         if [ -d "$EXTRA_DIR_TRIMMED" ]; then
             echo "Syncing extra metadata from $EXTRA_DIR_TRIMMED..."
-            npx mj sync push --dir="$EXTRA_DIR_TRIMMED" 2>&1 || {
+            npx mj sync push --dir="$EXTRA_DIR_TRIMMED" --no-write-back 2>&1 || {
                 echo "  WARNING: Extra metadata sync from $EXTRA_DIR_TRIMMED failed"
             }
             echo ""
