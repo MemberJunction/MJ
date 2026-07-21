@@ -234,8 +234,12 @@ export async function CheckSe1_DenyPrecedence(ctx: IntegrationCheckContext): Pro
     try {
         // Key A: Allow + Deny on entity:read at equal priority.
         const keyA = await createKey(engine, ctx, cleanup);
-        await addKeyScope(ctx, cleanup, keyA.apiKeyId, readScopeId, { isDeny: false, priority: 0 });
-        await addKeyScope(ctx, cleanup, keyA.apiKeyId, readScopeId, { isDeny: true, priority: 0 });
+        // UQ_APIKeyScope is (APIKeyID, ScopeID, ResourcePattern) — the Allow and Deny rows
+        // must differ by pattern. Deny targets the exact evaluated resource ('Users'); Allow
+        // is the wildcard. At equal priority the evaluator sorts IsDeny DESC, so the matching
+        // Deny short-circuits — the same precedence proof, schema-correct.
+        await addKeyScope(ctx, cleanup, keyA.apiKeyId, readScopeId, { isDeny: false, priority: 0, pattern: '*' });
+        await addKeyScope(ctx, cleanup, keyA.apiKeyId, readScopeId, { isDeny: true, priority: 0, pattern: 'Users' });
         // Key B (control): Allow only.
         const keyB = await createKey(engine, ctx, cleanup);
         await addKeyScope(ctx, cleanup, keyB.apiKeyId, readScopeId, { isDeny: false, priority: 0 });

@@ -505,7 +505,10 @@ export const RunQueryParamsChecks: NamedCheck[] = [
             if (templated.length === 0) {
                 SkipAsPass('runquery-params.QP8', 'leg A: no dependency-free templated parameterized catalog query');
             } else {
-                const cls = allOptionalQueries(catalog).find(c => !c.HasDependencies) ?? templated[0];
+                // The preferred all-optional pick must STAY WITHIN the templated/dependency-free
+                // set — the original pick bypassed those filters and could select a non-templated
+                // query (which legitimately IGNORES unknown params — leg B's contract).
+                const cls = allOptionalQueries(catalog).find(c => templated.includes(c)) ?? templated[0];
                 const parameters = { ...DeriveAllParams(cls, refEntity), [BOGUS_PARAM]: 1 };
                 const run = await RunCatalogQuery({ QueryID: cls.Query.ID, Parameters: parameters }, ctx.User);
                 Assert(!run.Threw, `${queryLabel(cls)} unknown-param leg THREW (must be a clean result): ${run.Error}`);
