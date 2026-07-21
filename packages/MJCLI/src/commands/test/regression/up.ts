@@ -6,11 +6,13 @@ import {
   BACPAC_OVERLAY,
   BACPAC_STANDALONE_COMPOSE,
   dockerComposeArgs,
+  FULL_INFRA_SERVICES,
   isInsideMonorepo,
   mintRunId,
   resolveStandaloneCompose,
   runDirFor,
   spawnInherit,
+  spawnTee,
 } from '../../../lib/regression/docker-helpers.js';
 
 export default class TestRegressionUp extends Command {
@@ -98,9 +100,34 @@ export default class TestRegressionUp extends Command {
     if (flags.retries !== undefined) { childEnv.MAX_RETRIES = String(flags.retries); this.log(`  Retries: ${flags.retries}`); }
     if (flags.workers !== undefined) { childEnv.MAX_PARALLEL_WORKERS = String(flags.workers); this.log(`  Workers: ${flags.workers}`); }
 
-    const composeArgs = dockerComposeArgs('full', ['up'], overlays);
-    if (flags.detach) composeArgs.push('-d');
-    const code = await spawnInherit('docker', composeArgs, { env: childEnv });
+    // DR-F2: detached, or bacpac (its own one-shot import flow), keep the classic
+    // single `up`. Plain `--abort-on-container-exit` is unsafe here — the one-shot
+    // db-setup exits 0 early and would abort the whole stack — so the exit-code fix
+    // uses the up-then-run split below instead.
+    if (flags.detach || flags.bacpac) {
+      const composeArgs = dockerComposeArgs('full', ['up'], overlays);
+      if (flags.detach) composeArgs.push('-d');
+      const code = await spawnInherit('docker', composeArgs, { env: childEnv });
+      if (code !== 0) this.exit(code);
+      return;
+    }
+
+    // DR-F2: attached Mode A — start infrastructure detached and wait for health,
+    // then run the test-runner in the FOREGROUND so its exit code (the suite
+    // verdict, propagated by the entrypoint's `exit $EXIT_CODE`) reaches the shell
+    // verbatim. Plain `docker compose up` swallowed that code and blocked forever
+    // after the runner finished. The runner's stream is teed to the run dir's
+    // console.log so an attached run also leaves a complete host-side record.
+    const upArgs = dockerComposeArgs('full', ['up', '-d', '--wait', ...FULL_INFRA_SERVICES], overlays);
+    const upCode = await spawnInherit('docker', upArgs, { env: childEnv });
+    if (upCode !== 0) {
+      this.error(`✗ Infrastructure failed to start/stay healthy (exit ${upCode}). See logs above; the runner was not started.`);
+    }
+
+    const consoleLog = path.join(runDirFor(runId), 'console.log');
+    const runArgs = dockerComposeArgs('full', ['run', '--rm', 'test-runner'], overlays);
+    const code = await spawnTee('docker', runArgs, consoleLog, { env: childEnv });
+    this.log(`\n▶ Run ${runId} finished (exit ${code}). Stack left running — 'mj test regression down' to tear down, 'stop' to pause.`);
     if (code !== 0) this.exit(code);
   }
 

@@ -7,7 +7,7 @@
  * conventions apply across every subcommand.
  */
 import { spawn, type SpawnOptions } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, createWriteStream } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -133,6 +133,50 @@ export function spawnInherit(
     });
   });
 }
+
+/**
+ * Spawn a child and TEE its stdout+stderr to both this process's streams and a
+ * file (DR-F2), so an attached run leaves a complete console record on disk —
+ * host-side, in the run dir, independent of the container-side `runner.log`
+ * (DR-F2 Wave-0 slice). Resolves with the exit code; never rejects. A file-open
+ * failure degrades to terminal-only (best-effort). stdin is inherited.
+ */
+export function spawnTee(
+  command: string,
+  args: string[],
+  teeFilePath: string,
+  options: SpawnOptions = {},
+): Promise<number> {
+  return new Promise((resolve) => {
+    let fileStream: ReturnType<typeof createWriteStream> | undefined;
+    try {
+      mkdirSync(path.dirname(teeFilePath), { recursive: true });
+      fileStream = createWriteStream(teeFilePath, { flags: 'a' });
+    } catch {
+      fileStream = undefined; // tee to terminal only
+    }
+    const child = spawn(command, args, { stdio: ['inherit', 'pipe', 'pipe'], ...options });
+    child.stdout?.setEncoding('utf8');
+    child.stderr?.setEncoding('utf8');
+    child.stdout?.on('data', (c: string) => { process.stdout.write(c); fileStream?.write(c); });
+    child.stderr?.on('data', (c: string) => { process.stderr.write(c); fileStream?.write(c); });
+    child.on('exit', (code) => { fileStream?.end(); resolve(code ?? 1); });
+    child.on('error', (err) => {
+      process.stderr.write(`✗ failed to spawn ${command}: ${err.message}\n`);
+      fileStream?.end();
+      resolve(1);
+    });
+  });
+}
+
+/**
+ * Infrastructure services of the `full` profile — everything except the
+ * test-runner (DR-F2). The attached `up` starts these detached + waits for
+ * health, then runs the test-runner in the foreground so its exit code (the
+ * suite verdict) propagates. Order is informational; compose resolves the
+ * dependency graph itself.
+ */
+export const FULL_INFRA_SERVICES = ['sqlserver', 'db-setup', 'mjapi', 'mjexplorer'];
 
 /**
  * Capture stdout from a child process (stderr inherited so errors surface).
