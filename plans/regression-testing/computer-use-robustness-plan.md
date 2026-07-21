@@ -542,6 +542,8 @@ mabl's confidence gate applies: a low-confidence heal (ambiguous target) should 
 
 **Risks / open questions.** None material; pure telemetry.
 
+**Wave 2 status — LANDED (per-run signals + pairwise agreement).** Pure, unit-tested `divergence.ts` (`computeDivergence`) keeps the three "did the goal succeed?" signals SEPARATE — controller **self-report** (a step that requested judgement with no further actions = "I'm done, check me"), **judge** verdict (`FinalJudgeVerdict.Done`, now rubric-derived via CU-D1), and deterministic **oracle** outcome (all gating oracles passed, else engine success) — and computes their pairwise agreement (`selfVsJudge`, `judgeVsOracle`, `selfVsOracle`, `unanimous`). The driver stamps the report on `actualOutput.divergence` every run (and logs when not unanimous), so a suite run can aggregate the pairwise **disagreement rates** and alarm on trend shifts (a judge-prompt/model change that inflates judge↔self-report agreement is a regression even if pass rates "improve" — the guardrail that keeps Themes C/D honest as they shift verdicts from LLM to assertions). Layer-2 only. **Deferred:** the suite-level aggregation + trend alerting is the sibling plan's reporting surface (this lands the per-run raw material it needs). Tests: MJComputerUse 148 (+4 divergence).
+
 ---
 
 ### Theme E — Prompting

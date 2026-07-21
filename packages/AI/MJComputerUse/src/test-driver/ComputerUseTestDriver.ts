@@ -95,6 +95,7 @@ import { StepCountOracle } from './oracles/StepCountOracle.js';
 import { isOracleAdvisory, partitionGatingOracles } from './oracle-scoring.js';
 import { classifyFailure, FailureSignals } from './classify-failure.js';
 import { ArtifactRetentionPolicy, shouldCaptureArtifact, shouldRetainArtifact } from './artifact-retention.js';
+import { computeDivergence } from './divergence.js';
 import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -283,6 +284,20 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             if (failureClass) {
                 (actualOutput as Record<string, unknown>).failureClass = failureClass;
                 this.logToTestRun(context, 'info', `Failure class: ${failureClass}`);
+            }
+
+            // 6c. Divergence telemetry (CU-D7): keep the controller self-report,
+            //     the judge verdict, and the deterministic oracle outcome as three
+            //     SEPARATE signals + their pairwise agreement, so a suite run can
+            //     estimate judge error and alarm on trend shifts.
+            const divergence = computeDivergence({
+                selfReportDone: result.Steps.some(s => s.RequestedJudgement && s.ActionsRequested.length === 0),
+                judgeDone: result.FinalJudgeVerdict?.Done === true,
+                oraclesPassed: gating.length > 0 ? gating.every(r => r.passed) : result.Success,
+            });
+            (actualOutput as Record<string, unknown>).divergence = divergence;
+            if (!divergence.unanimous) {
+                this.logToTestRun(context, 'info', `Divergence: self=${divergence.selfReportDone} judge=${divergence.judgeDone} oracles=${divergence.oraclesPassed} (self~judge=${divergence.selfVsJudgeAgree}, judge~oracle=${divergence.judgeVsOracleAgree})`);
             }
 
             // 7. Build structured outputs (screenshots from each step) + retain the
