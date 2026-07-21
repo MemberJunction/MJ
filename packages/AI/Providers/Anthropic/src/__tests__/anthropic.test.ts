@@ -15,8 +15,17 @@ const MockAnthropic = vi.hoisted(() => vi.fn().mockImplementation(function (this
 }));
 
 // Mock the Anthropic SDK
+/** Stand-in for the SDK's abort error — the driver uses `instanceof` on it to detect cancellation. */
+const MockAPIUserAbortError = vi.hoisted(() => class MockAPIUserAbortError extends Error {
+    constructor() {
+        super('Request was aborted.');
+        this.name = 'APIUserAbortError';
+    }
+});
+
 vi.mock('@anthropic-ai/sdk', () => ({
-    Anthropic: MockAnthropic
+    Anthropic: MockAnthropic,
+    APIUserAbortError: MockAPIUserAbortError
 }));
 
 // Mock @memberjunction/global
@@ -560,6 +569,92 @@ describe('AnthropicLLM', () => {
                 expect(apiMessages).toHaveLength(1);
                 expect(apiMessages[0].role).toBe('user');
             });
+        });
+    });
+
+    describe('cancellationToken', () => {
+        const baseParams = {
+            messages: [{ role: ChatMessageRole.user, content: 'Hello' }],
+            model: 'claude-sonnet-4-20250514',
+            maxOutputTokens: 1024,
+            enableCaching: false
+        };
+
+        const mockOkStream = () => {
+            const finalMessage = vi.fn().mockResolvedValue({
+                content: [{ type: 'text', text: 'response' }],
+                usage: { input_tokens: 10, output_tokens: 5 },
+                stop_reason: 'end_turn'
+            });
+            mockStream.mockReturnValue({ on: vi.fn().mockReturnValue({ finalMessage }) });
+        };
+
+        it('should forward the token to messages.stream as the `signal` request option', async () => {
+            mockOkStream();
+            const controller = new AbortController();
+
+            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({
+                ...baseParams,
+                cancellationToken: controller.signal
+            });
+
+            expect(mockStream.mock.calls[0][1]).toEqual({ signal: controller.signal });
+        });
+
+        it('should forward the token to messages.create as the `signal` request option (streaming)', async () => {
+            mockCreate.mockResolvedValue({});
+            const controller = new AbortController();
+
+            await (instance as ReturnType<typeof Object.create>)['createStreamingRequest']({
+                ...baseParams,
+                cancellationToken: controller.signal
+            });
+
+            expect(mockCreate.mock.calls[0][1]).toEqual({ signal: controller.signal });
+        });
+
+        it('should short-circuit without calling the API when already aborted', async () => {
+            mockOkStream();
+            const controller = new AbortController();
+            controller.abort();
+
+            const result = await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({
+                ...baseParams,
+                cancellationToken: controller.signal
+            });
+
+            expect(mockStream).not.toHaveBeenCalled();
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('cancelled');
+            expect(result.errorMessage).toBe('Anthropic request was cancelled');
+        });
+
+        it('should report an APIUserAbortError from the SDK as a cancelled result', async () => {
+            const finalMessage = vi.fn().mockRejectedValue(new MockAPIUserAbortError());
+            mockStream.mockReturnValue({ on: vi.fn().mockReturnValue({ finalMessage }) });
+
+            const result = await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'](baseParams);
+
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('cancelled');
+        });
+
+        it('should report a cancelled stream as a failure, not a truncated success', async () => {
+            mockCreate.mockResolvedValue({});
+            const controller = new AbortController();
+
+            await (instance as ReturnType<typeof Object.create>)['createStreamingRequest']({
+                ...baseParams,
+                cancellationToken: controller.signal
+            });
+
+            // Caller cancels mid-stream; the SDK's Stream ends silently rather than throwing.
+            controller.abort();
+
+            const result = (instance as ReturnType<typeof Object.create>)['finalizeStreamingResponse']('partial', null, null);
+
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('cancelled');
         });
     });
 });

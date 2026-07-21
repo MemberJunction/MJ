@@ -60,7 +60,7 @@ const RUN_FEATURE_PIPELINE_OP = 'PredictiveStudio.RunFeaturePipeline';
   standalone: false,
   selector: 'app-feature-pipelines-resource',
   templateUrl: './feature-pipelines-resource.component.html',
-  styleUrls: ['./feature-pipelines-resource.component.scss'],
+  styleUrls: ['./feature-pipelines-resource.component.css'],
 })
 export class FeaturePipelinesResourceComponent
   extends BaseResourceComponent

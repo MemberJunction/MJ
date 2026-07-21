@@ -524,7 +524,7 @@ rebuilt so Explorer serves Auth0, you may instead drive the Auth0 Universal Logi
 ## TIER 1: API smoke
 
 ### Step 1: Build MJAPI
-cd /workspace/MJ && npx turbo build --filter=@memberjunction/server --filter=@memberjunction/server-bootstrap --filter=@memberjunction/mjapi
+cd /workspace/MJ && npx turbo build --filter=mj_api   # NOTE: the MJAPI app workspace is named mj_api (@memberjunction/mjapi does not exist); turbo builds server/server-bootstrap as its deps
 
 ### Step 2: Configure + start MJAPI for PG
 Read /workspace/MJ/packages/MJAPI/.env and mj.config.cjs for variable names. Override DB connection to point at PostgreSQL {{PG_DB_NAME}} (DB_PLATFORM=postgresql, DB_HOST=postgres-claude, DB_PORT=5432, DB_USERNAME/PG_USERNAME=mj_admin, DB_PASSWORD/PG_PASSWORD=Claude2Pg99, DB_DATABASE/PG_DATABASE={{PG_DB_NAME}}, MJ_CORE_SCHEMA=__mj, GRAPHQL_PORT=4000).
@@ -578,7 +578,7 @@ echo "<RAW>" > /tmp/ml_browser_token.txt   # the browser script reads this
 served `AUTH_TYPE` does NOT matter for magic-link — the provider activates on the
 `#token=` fragment regardless (msal/auth0/any). No Auth0 env provisioning needed.
 ```bash
-cd /workspace/MJ && npx turbo build --filter=@memberjunction/ng-explorer
+cd /workspace/MJ && npx turbo build --filter=mj_explorer   # NOTE: the Explorer app workspace is named mj_explorer (@memberjunction/ng-explorer does not exist)
 cd /workspace/MJ/packages/MJExplorer
 NODE_OPTIONS=--max-old-space-size=16384 npx ng serve --port 4200 --host 0.0.0.0 --configuration=development > /tmp/mjexplorer.log 2>&1 &
 ```

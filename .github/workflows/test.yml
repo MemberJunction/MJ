@@ -123,6 +123,12 @@ jobs:
 
       - name: Build + run unit tests
         run: |
+          # Angular DOM suites each spin heavy AOT-compile + jsdom workers (capped
+          # to 2/package by vitest.dom.shared.ts). The AFFECTED path touches only a
+          # few packages, so it runs at full turbo parallelism (fast — the common
+          # PR case). The FULL-suite backstop can fire all ~8 DOM packages at once,
+          # so it caps turbo `--concurrency` to keep peak workers (concurrency × 2)
+          # well under the 16 GB runner's limit (otherwise: OOM / exit 137).
           if [ -n "$TURBO_FILTER" ]; then
             echo "::group::Affected build"
             npx turbo run build --log-order=stream "$TURBO_FILTER"
@@ -130,7 +136,7 @@ jobs:
             npx turbo run test "$TURBO_FILTER"
           else
             npm run build
-            npm test
+            npm test -- --concurrency=4
           fi
 
       # Native-ESM import guard (#3142, follow-up to #3137): import every BUILT

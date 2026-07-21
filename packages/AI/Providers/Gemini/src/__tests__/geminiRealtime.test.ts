@@ -561,3 +561,44 @@ describe('GeminiRealtime', () => {
         });
     });
 });
+
+describe('C6: cross-provider config-bag safety (shared-key scrubbing)', () => {
+    it('scrubs OpenAI-family feature keys + transport keys before the Live SDK spread (with a warning)', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({
+                Config: {
+                    effortLevel: 85,
+                    reasoningEffort: 'high',
+                    parallelToolCalls: true,
+                    mcpTools: [{ type: 'mcp', server_label: 'kb' }],
+                    inputTranscriptionModel: 'whisper-1',
+                    endpoint: 'ws://x/v1/realtime',
+                    sampleRate: 24000,
+                    proxyBaseUrl: 'https://p',
+                    temperature: 0.4, // legit Gemini key — must survive
+                },
+            }));
+            const cfg = driver.LastConnectArgs?.Config as Record<string, unknown>;
+            for (const key of ['effortLevel', 'reasoningEffort', 'parallelToolCalls', 'mcpTools', 'inputTranscriptionModel', 'endpoint', 'sampleRate', 'proxyBaseUrl']) {
+                expect(cfg[key], `key ${key} must be scrubbed`).toBeUndefined();
+            }
+            expect(cfg.temperature).toBe(0.4);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('Scrubbed non-Gemini config key'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('a clean Gemini-native bag produces no scrub warning', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({ Config: { temperature: 0.2 } }));
+            expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('Scrubbed non-Gemini config key'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+});

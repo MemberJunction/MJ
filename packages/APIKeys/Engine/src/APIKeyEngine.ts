@@ -555,6 +555,11 @@ export class APIKeyEngine {
             operation?: string | null;
             ipAddress?: string | null;
             userAgent?: string | null;
+        },
+        options?: {
+            /** When true, skip writing to the usage log. Useful for speculative
+             *  checks (e.g. full_access probe) that are not the real authorization decision. */
+            skipLogging?: boolean;
         }
     ): Promise<AuthorizationResult & { LogId?: string }> {
         const startTime = Date.now();
@@ -609,48 +614,50 @@ export class APIKeyEngine {
 
         const responseTimeMs = Date.now() - startTime;
 
-        // 5. Always log the authorization decision
+        // 5. Log the authorization decision (unless caller opted out for speculative checks)
         let logId: string | undefined;
-        try {
-            const endpoint = requestContext?.endpoint || `/${applicationName.toLowerCase()}`;
-            const method = requestContext?.method || 'POST';
-            const operation = requestContext?.operation || `${scopePath}:${resource}`;
-            const statusCode = result.Allowed ? 200 : 403;
+        if (!options?.skipLogging) {
+            try {
+                const endpoint = requestContext?.endpoint || `/${applicationName.toLowerCase()}`;
+                const method = requestContext?.method || 'POST';
+                const operation = requestContext?.operation || `${scopePath}:${resource}`;
+                const statusCode = result.Allowed ? 200 : 403;
 
-            if (result.Allowed) {
-                logId = (await this._usageLogger.LogSuccess(
-                    keyValidation.APIKey.ID,
-                    app.ID,
-                    endpoint,
-                    operation,
-                    method,
-                    statusCode,
-                    responseTimeMs,
-                    resource,
-                    result.EvaluatedRules,
-                    requestContext?.ipAddress || null,
-                    requestContext?.userAgent || null,
-                    contextUser
-                )) || undefined;
-            } else {
-                logId = (await this._usageLogger.LogDenied(
-                    keyValidation.APIKey.ID,
-                    app.ID,
-                    endpoint,
-                    operation,
-                    method,
-                    statusCode,
-                    responseTimeMs,
-                    resource,
-                    result.EvaluatedRules,
-                    result.Reason,
-                    requestContext?.ipAddress || null,
-                    requestContext?.userAgent || null,
-                    contextUser
-                )) || undefined;
+                if (result.Allowed) {
+                    logId = (await this._usageLogger.LogSuccess(
+                        keyValidation.APIKey.ID,
+                        app.ID,
+                        endpoint,
+                        operation,
+                        method,
+                        statusCode,
+                        responseTimeMs,
+                        resource,
+                        result.EvaluatedRules,
+                        requestContext?.ipAddress || null,
+                        requestContext?.userAgent || null,
+                        contextUser
+                    )) || undefined;
+                } else {
+                    logId = (await this._usageLogger.LogDenied(
+                        keyValidation.APIKey.ID,
+                        app.ID,
+                        endpoint,
+                        operation,
+                        method,
+                        statusCode,
+                        responseTimeMs,
+                        resource,
+                        result.EvaluatedRules,
+                        result.Reason,
+                        requestContext?.ipAddress || null,
+                        requestContext?.userAgent || null,
+                        contextUser
+                    )) || undefined;
+                }
+            } catch {
+                // Non-fatal - continue even if logging fails
             }
-        } catch {
-            // Non-fatal - continue even if logging fails
         }
 
         return { ...result, LogId: logId };

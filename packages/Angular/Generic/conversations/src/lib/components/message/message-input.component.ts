@@ -40,7 +40,7 @@ import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-message-input',
   templateUrl: './message-input.component.html',
-  styleUrl: './message-input.component.scss'
+  styleUrl: './message-input.component.css'
 })
 export class MessageInputComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit  {
   // Default artifact type ID for JSON (when agent doesn't specify DefaultArtifactTypeID)

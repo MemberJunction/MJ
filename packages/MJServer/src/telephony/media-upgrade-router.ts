@@ -29,6 +29,23 @@ export function RegisterMediaUpgradeRoute(path: string, wss: WebSocketServer): v
 }
 
 /**
+ * Whether an upgrade request's pathname should be routed to the GraphQL subscriptions socket.
+ *
+ * `GRAPHQL_ROOT_PATH` defaults to `/` (see `config.ts` / the docker README). On the HTTP side that
+ * default is invisible — Express's `app.use(graphqlRootPath, ...)` mounts with PREFIX matching, so a
+ * request to `/graphql` lands on the GraphQL middleware even when the configured root is the bare `/`.
+ * A WebSocket upgrade has no such prefix-matching fallback: it needs an exact pathname match. With no
+ * override, a stock install's default root (`/`) never matches the shipped MJExplorer client's hardcoded
+ * `GRAPHQL_WS_URI` (`ws://<host>/graphql`), so every subscription upgrade gets silently rejected — surfaces
+ * client-side as "WebSocket handshake: Unexpected response code: 400". Accept the conventional `/graphql`
+ * suffix as an alias of the bare root so a stock install works out of the box; a non-default `graphqlPath`
+ * (e.g. `/api`) keeps requiring an exact match, unchanged.
+ */
+export function IsGraphQLWsPath(pathname: string, graphqlPath: string): boolean {
+    return pathname === graphqlPath || (graphqlPath === '/' && pathname === '/graphql');
+}
+
+/**
  * Installs the single path-routing `upgrade` dispatcher. No-op when no media routes are registered, so
  * the GraphQL server keeps its own listener untouched. Otherwise it removes the auto-attached listeners
  * (GraphQL's included) and dispatches every upgrade by pathname — GraphQL on `graphqlPath`, each media
@@ -48,7 +65,7 @@ export function InstallMediaUpgradeDispatcher(httpServer: HttpServer, graphqlWss
     };
     httpServer.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
         const pathname = (req.url ?? '').split('?')[0];
-        if (pathname === graphqlPath) {
+        if (IsGraphQLWsPath(pathname, graphqlPath)) {
             dispatch(graphqlWss, req, socket, head);
             return;
         }

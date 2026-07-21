@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { DOMINANCE_THRESHOLD_DEFAULT, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { modelingPlanToPipelineConfig } from '../modeling-plan-to-pipeline';
 
 /**
@@ -64,9 +64,12 @@ describe('modelingPlanToPipelineConfig', () => {
   });
 
   it('denies only the fields the plan marked exclude (leakage guard)', () => {
+    // Agent-authored pipelines previously got their own private default of 0.85 —
+    // a materially laxer guard than the 0.6 every other path used. Both now come
+    // from the single shared constant.
     expect(modelingPlanToPipelineConfig(baseSpec()).leakageGuard).toEqual({
       DenyFields: ['CancellationDate'],
-      SingleFeatureDominanceThreshold: 0.85,
+      SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT,
     });
   });
 

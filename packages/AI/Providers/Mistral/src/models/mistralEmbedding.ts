@@ -30,6 +30,8 @@ export class MistralEmbedding extends BaseEmbeddings {
             const request: EmbeddingRequest = {
                 inputs: params.text,
                 model: params.model || "mistral-embed",
+                // Only effective on models that support output truncation (e.g. codestral-embed)
+                ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
             };
 
             params.model = params.model || "mistral-embed";
@@ -67,6 +69,8 @@ export class MistralEmbedding extends BaseEmbeddings {
             const request: EmbeddingRequest = {
                 inputs: params.texts,
                 model: params.model || "mistral-embed",
+                // Only effective on models that support output truncation (e.g. codestral-embed)
+                ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
             };
 
             params.model = params.model || "mistral-embed";
