@@ -288,7 +288,113 @@ export const RecordProcessChecks: NamedCheck[] = [
             AssertEqual(Boolean(run[0].DryRun), false, 'persisted DryRun flag is false for a normal apply');
             console.log(`      → apply ${result.ProcessRunID}: persisted DryRun=${run[0].DryRun}`);
         }
-    }
+    },
+    {
+        Id: 'record-process.AP1',
+        Name: 'AP1: resume-from-cursor — pause mid-run, resume, every record processed exactly once (no dup, no gap)',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const entityID = await resolveEntityID(ctx.User);
+            const all = makeRecordRefs(entityID, 'ap1', 10);
+            const firstLeg: string[] = [];
+            const secondLeg: string[] = [];
+
+            // Leg 1: pause after the checkpoint where >=4 records are processed (batchSize 2 → offset 4).
+            const t1 = new InMemoryRunTracker({ pauseAtProcessed: 4 });
+            const r1 = await RecordSetProcessor.Instance.Process({
+                source: new ArraySource(all, entityID),
+                processor: new FunctionRecordProcessor(async (rec) => { firstLeg.push(String(rec.RecordID)); return { Status: 'Succeeded' as const }; }),
+                tracker: t1, contextUser: ctx.User, batchSize: 2,
+            });
+            AssertEqual(r1.Status, 'Paused', 'AP1 leg 1 must pause at the checkpoint');
+            AssertEqual(r1.Processed, 4, 'AP1 leg 1 processed exactly to the pause boundary');
+            Assert(t1.LastCursor?.Offset === 4, `AP1 leg 1 cursor offset must equal processed count (got ${t1.LastCursor?.Offset})`);
+
+            // Leg 2: resume from leg 1's cursor — the engine asks the tracker for the resume cursor.
+            const t2 = new InMemoryRunTracker({ resumeCursor: t1.LastCursor });
+            const r2 = await RecordSetProcessor.Instance.Process({
+                source: new ArraySource(all, entityID),
+                processor: new FunctionRecordProcessor(async (rec) => { secondLeg.push(String(rec.RecordID)); return { Status: 'Succeeded' as const }; }),
+                tracker: t2, contextUser: ctx.User, batchSize: 2, resume: true,
+            });
+            AssertEqual(r2.Status, 'Completed', 'AP1 leg 2 must run to completion');
+
+            // The marquee invariant: union covers ALL records, intersection is EMPTY.
+            const dup = firstLeg.filter((id) => secondLeg.includes(id));
+            AssertEqual(dup.length, 0, `AP1: resume re-processed ${dup.length} record(s) (dup: ${dup.join(',')})`);
+            const seen = new Set([...firstLeg, ...secondLeg]);
+            const missing = all.map((r) => String(r.RecordID)).filter((id) => !seen.has(id));
+            AssertEqual(missing.length, 0, `AP1: resume skipped ${missing.length} record(s) (gap: ${missing.join(',')})`);
+            AssertEqual(seen.size, 10, 'AP1: exactly the 10 source records were processed across both legs');
+        }
+    },
+    {
+        Id: 'record-process.AP9',
+        Name: "AP9: budget gate — onAfterBatch veto pauses with 'Auto-paused:' reason; a THROWING hook is swallowed and the run completes",
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const entityID = await resolveEntityID(ctx.User);
+
+            // Leg A: the gate vetoes after the first batch → Paused with the stamped reason.
+            const rA = await RecordSetProcessor.Instance.Process({
+                source: new ArraySource(makeRecordRefs(entityID, 'ap9a', 6), entityID),
+                processor: new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const })),
+                tracker: new InMemoryRunTracker(), contextUser: ctx.User, batchSize: 2,
+                onAfterBatch: async () => ({ continue: false, reason: 'it-budget-cap' }),
+            });
+            AssertEqual(rA.Status, 'Paused', 'AP9: a vetoing budget gate must pause the run');
+            AssertEqual(rA.Processed, 2, 'AP9: the veto lands AFTER the first batch (2 of 6 processed)');
+            Assert((rA.ErrorMessage ?? '').startsWith('Auto-paused:') && (rA.ErrorMessage ?? '').includes('it-budget-cap'),
+                `AP9: pause reason must be stamped 'Auto-paused: <reason>' (got "${rA.ErrorMessage}")`);
+
+            // Leg B: a THROWING gate must be isolated (safeAfterBatch) — the run completes.
+            const rB = await RecordSetProcessor.Instance.Process({
+                source: new ArraySource(makeRecordRefs(entityID, 'ap9b', 6), entityID),
+                processor: new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const })),
+                tracker: new InMemoryRunTracker(), contextUser: ctx.User, batchSize: 2,
+                onAfterBatch: async () => { throw new Error('it-hook-explosion'); },
+            });
+            AssertEqual(rB.Status, 'Completed', 'AP9: a throwing budget hook must be swallowed, not fail the run');
+            AssertEqual(rB.Processed, 6, 'AP9: all records processed despite the throwing hook');
+        }
+    },
+    {
+        Id: 'record-process.AP10',
+        Name: 'AP10: maxRecords hard cap — a 10-record source with maxRecords 7 processes exactly 7 (mid-batch trim) then completes',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const entityID = await resolveEntityID(ctx.User);
+            const processedIds: string[] = [];
+            const result = await RecordSetProcessor.Instance.Process({
+                source: new ArraySource(makeRecordRefs(entityID, 'ap10', 10), entityID),
+                processor: new FunctionRecordProcessor(async (rec) => { processedIds.push(String(rec.RecordID)); return { Status: 'Succeeded' as const }; }),
+                tracker: new InMemoryRunTracker(), contextUser: ctx.User,
+                batchSize: 3, maxRecords: 7,
+            });
+            AssertEqual(result.Status, 'Completed', 'AP10: a capped run terminates Completed, not Paused/Failed');
+            AssertEqual(result.Processed, 7, `AP10: the cap must trim mid-batch to EXACTLY 7 (3+3+1), got ${result.Processed}`);
+            // The trim must take the FIRST 7 in order — no skip-ahead.
+            AssertEqual(processedIds.join(','), makeRecordRefs(entityID, 'ap10', 7).map((r) => String(r.RecordID)).join(','),
+                'AP10: the capped run processes the first 7 records in source order');
+        }
+    },
+    {
+        Id: 'record-process.AP11',
+        Name: 'AP11: pause handshake — a tracker veto halts a live loop at the NEXT checkpoint (batch boundary), cursor = processed',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const entityID = await resolveEntityID(ctx.User);
+            // Ask to pause once >=5 are processed with batchSize 3: the engine only consults the
+            // tracker at checkpoints (batch boundaries), so the halt must land at 6 — proving the
+            // handshake is graceful (finish the in-flight batch) rather than abortive.
+            const tracker = new InMemoryRunTracker({ pauseAtProcessed: 5 });
+            const result = await RecordSetProcessor.Instance.Process({
+                source: new ArraySource(makeRecordRefs(entityID, 'ap11', 12), entityID),
+                processor: new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const })),
+                tracker, contextUser: ctx.User, batchSize: 3,
+            });
+            AssertEqual(result.Status, 'Paused', 'AP11: the tracker veto must pause the run');
+            AssertEqual(result.Processed, 6, `AP11: halt lands at the NEXT batch boundary (6, not 5) — got ${result.Processed}`);
+            Assert(tracker.LastCursor?.Offset === 6, `AP11: the checkpointed cursor equals the processed count (got ${tracker.LastCursor?.Offset})`);
+            Assert(tracker.Checkpoints.length === 2, `AP11: exactly 2 checkpoints before the halt (got ${tracker.Checkpoints.length})`);
+        }
+    },
 ];
 
 for (const check of RecordProcessChecks) {

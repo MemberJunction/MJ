@@ -87,7 +87,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
         ['rls-isolation', RlsIsolationChecks, 9],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
-        ['record-process', RecordProcessChecks, 8],
+        ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
         ['scheduled-jobs', ScheduledJobsChecks, 2],
         ['field-rules-bulk-update', FieldRulesBulkUpdateChecks, 3],
