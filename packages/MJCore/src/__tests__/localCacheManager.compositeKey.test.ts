@@ -422,8 +422,17 @@ describe('LocalCacheManager CompositeKey Support', () => {
         });
 
         it('should update multiple unfiltered fingerprints for the same entity', async () => {
-            const fp1 = 'OrderItems|_|_|-1|0|_';
-            const fp2 = 'OrderItems|_|_|-1|0|_|otherconn';
+            // Production fingerprint shape: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch
+            // then any appended segments, then the connection LAST. The previous fixture put
+            // 'otherconn' at index [6] — which is the UserSearchString slot, not the connection —
+            // so once search became a maintainability axis (N1) this slot correctly classified as
+            // a narrowed search result and was invalidated rather than upserted. The fixture, not
+            // the classifier, was wrong: it predates the UserSearch segment.
+            const fp1 = 'OrderItems|_|_|-1|0|_|_';
+            // Realistic connection token too: every shipping provider emits a `<driver>://host…`
+            // form (mssql://, postgresql://, or an absolute GraphQL URL), which is how the
+            // classifier distinguishes slot IDENTITY from a row predicate.
+            const fp2 = 'OrderItems|_|_|-1|0|_|_|mssql://otherhost:1433/';
 
             await cacheManager.SetRunViewResult(
                 fp1,

@@ -42,6 +42,7 @@ import {
     RunQueryWithCacheCheckParams,
     RunQueriesWithCacheCheckResponse,
     RunQueryWithCacheCheckResult,
+    QueryCacheAuthorization,
     QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
@@ -2148,7 +2149,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
-            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
             const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
@@ -2214,7 +2215,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -2362,7 +2363,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return { viewIndex, status: 'error', errorMessage: result.ErrorMessage || 'Unknown error executing view' };
         }
         const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
-        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.TotalRowCount };
+        // aggregateResults must ride along (B40): InternalRunView computed them, the contract
+        // type declares the field, but this return omitted them — so every CacheLocal request
+        // that took the cache-check transport got Success with NO aggregates, even on a cold
+        // miss. The subset/aggregate differential gate routes aggregate-bearing params through
+        // THIS path, which makes the omission total rather than occasional.
+        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.TotalRowCount, aggregateResults: result.AggregateResults };
     }
 
     /**
@@ -2390,7 +2396,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
                     const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
                     const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-                    await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this, ttlMs);
+                    // Pass the aggregates (B38-family omission #4). This slot is ALSO written by
+                    // InternalRunView's normal PostRunView path WITH aggregates — two writers,
+                    // one slot, and this one dropped them. Whichever write landed last won, so a
+                    // later server-cache hit served rows with or without aggregates depending on
+                    // a write race. That is exactly the standalone-passes / aggregator-fails
+                    // flake client-cache C13 exhibited.
+                    await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, result.aggregateResults, result.rowCount, this, ttlMs);
                 }
             }
             // Project the response down to the caller's requested shape AFTER the
@@ -2561,7 +2573,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
-        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number },
+        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] },
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         // The server cache stores the full-width superset — project down to the
@@ -2577,6 +2589,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             results: results as T[],
             maxUpdatedAt: serverCached.maxUpdatedAt,
             rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
+            // Carry aggregates through (B40-family, 4th drop). The server slot stores them and
+            // GetRunViewResult returns them, but this serve-leg's inline serverCached type omitted
+            // the field, so TypeScript could not flag the drop. Both callers (noCacheStatus + stale)
+            // now widen their type to match, so the field flows.
+            aggregateResults: serverCached.aggregateResults,
         };
     }
 
@@ -2639,6 +2656,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const projectedRows = callerFields
                 ? ProjectRowsToFields(updatedRows as Record<string, unknown>[], callerFields) as T[]
                 : updatedRows;
+
+            // Never OFFER a differential the client is structurally unable to merge.
+            //
+            // The client refuses a delta merge for MaxRows/StartRow (subset) and aggregate-bearing
+            // slots — the row window and the aggregate are not derivable from a row delta in JS.
+            // But its decline path THROWS, inside a Promise.all over the whole batch, with no
+            // refetch available (a differential reply carries only a delta). So one such slot
+            // fails the caller's entire RunViews call.
+            //
+            // Verified reachable, not theoretical: a CacheLocal slot with `Aggregates`, and one
+            // with a merely DEFENSIVE `MaxRows: 50` over 3 rows (a cap that does not even
+            // truncate), both threw after a single external change. A returning browser with a
+            // persistent IndexedDB slot is the ordinary path in.
+            //
+            // Deciding it HERE is the right seam: the server is the only party that can still
+            // produce full data at this point, and runFullQueryAndCacheResult is the same
+            // fallback the implied-deletes validation above already uses. The client then takes
+            // its 'stale' branch, which carries a complete result set.
+            const isSubsetShape = (params.MaxRows != null && params.MaxRows > 0)
+                || (params.StartRow != null && params.StartRow > 0);
+            const hasAggregateShape = !!params.Aggregates && params.Aggregates.length > 0;
+            if (isSubsetShape || hasAggregateShape) {
+                LogStatus(`Differential skipped for ${entityInfo.Name}: ${isSubsetShape ? 'subset (MaxRows/StartRow)' : 'aggregate-bearing'} params cannot be merged from a delta. Falling back to full refresh.`);
+                return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
+            }
 
             return {
                 viewIndex,
@@ -2820,6 +2862,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         } catch (e) {
             LogError(e);
             return { success: false, results: [], errorMessage: e instanceof Error ? e.message : String(e) };
+        }
+    }
+
+    /**
+     * B45 override of the RunQuery cache-serve seam — enforce the SAME authorization on a
+     * cache HIT that the miss path enforces. Resolution uses `resolveQuery()` (QueryEngine as
+     * the single source of truth, with CategoryPath disambiguation of same-named queries — the
+     * B46 pairing), and authorization is the FULL `MJQueryEntityExtended.UserCanRun` (roles +
+     * entity CanRead + recursive composition) — exactly the check `ValidateQueryForExecution`
+     * applies before a real execution. The base's roles-only check would let a user read cached
+     * rows of a query whose underlying entities they cannot read.
+     *
+     * Non-throwing by contract: any resolution error degrades to `resolvable: false`, which the
+     * gate treats as "fall through to authorized execution" — one extra query run, never an
+     * unauthorized serve and never a crashed cache path.
+     */
+    protected override ResolveQueryCacheAuthorization(params: RunQueryParams, user?: UserInfo): QueryCacheAuthorization {
+        try {
+            const query = this.resolveQuery(params);
+            if (!query) {
+                return { resolvable: false, authorized: false };
+            }
+            return {
+                resolvable: true,
+                authorized: !user || query.UserCanRun(user).canRun,
+                categoryPath: query.CategoryPath,
+                queryName: query.Name
+            };
+        } catch (e) {
+            LogStatusEx({ message: `ResolveQueryCacheAuthorization: resolution failed (${e instanceof Error ? e.message : String(e)}) — treating as unresolvable.`, verboseOnly: true });
+            return { resolvable: false, authorized: false };
         }
     }
 
@@ -3298,7 +3371,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 __startRow: params.StartRow ?? 0,
                 __eds: externalDataSourceID,
             };
-            fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString);
+            fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString, query.CategoryPath);
             const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint); // TTL-enforced
             if (cached) {
                 return {

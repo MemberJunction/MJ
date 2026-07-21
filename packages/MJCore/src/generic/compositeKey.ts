@@ -510,7 +510,14 @@ export class CompositeKey extends FieldValueCollection {
                 if (!UUIDsEqual(kvPair.Value, sourcekvPair.Value)) {
                     return false;
                 }
-            } else if (kvPair.Value !== sourcekvPair.Value) {
+            } else if (String(kvPair.Value ?? '') !== String(sourcekvPair.Value ?? '')) {
+                // Scalar (e.g. integer) primary keys can arrive typed differently on each side: a
+                // loaded entity holds the raw column value (number 5), while a URL/tab-derived key is
+                // always a string ("5" from split()). A strict !== between a number and a string is
+                // always true, so record-identity checks would never converge for integer PKs —
+                // causing an infinite re-render/re-navigate loop (browser freeze) when navigating a
+                // record view (e.g. the back button). Coerce both to string before comparing, matching
+                // MjEntityFormHostComponent.compositeKeysEqual.
                 return false;
             }
         }

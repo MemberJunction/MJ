@@ -3,7 +3,7 @@ import { UserInfo } from "./securityInfo";
 import { IMetadataProvider } from "./interfaces";
 import { Metadata } from "./metadata";
 import { LocalCacheManager } from "./localCacheManager";
-import { LogStatusEx } from "./logging";
+import { LogStatus, LogStatusEx } from "./logging";
 
 /**
  * Options for the @RegisterForStartup decorator
@@ -160,6 +160,141 @@ export interface LoadAllResult {
      * The fatal error that stopped loading (if any)
      */
     fatalError?: Error;
+}
+
+// ============================================================================
+// STARTUP MODE
+// ============================================================================
+
+/**
+ * Governs whether registered startup engines pre-warm during Startup().
+ * - 'full': today's behavior — sync engines awaited in priority groups, then
+ *   deferred engines fired. The right choice for long-running servers (MJAPI).
+ * - 'task': no registered engines execute (sync or deferred); every engine
+ *   lazy-loads on first touch via its own Config()/EnsureLoaded() call. The
+ *   right choice for short-lived CLI/script processes (MJCLI, mj-sync, CodeGen).
+ *
+ * LocalCacheManager initialization runs in BOTH modes — it is provider
+ * infrastructure, not an engine pre-warm.
+ */
+export type StartupMode = 'full' | 'task';
+
+/**
+ * Options for StartupManager.Startup(). All fields optional; omitted ⇒ 'full'
+ * mode with no filter, i.e. pre-change behavior.
+ */
+export interface StartupOptions {
+    /**
+     * Which startup profile to run. Defaults to 'full'.
+     * Resolve via ResolveStartupMode() so the env-var/config precedence chain
+     * behaves identically across entry points.
+     */
+    mode?: StartupMode;
+
+    /**
+     * Internal seam for future profiles/per-engine knobs: when provided (and
+     * mode is 'full'), only registrations passing the predicate execute.
+     * Not surfaced in user-facing configuration.
+     */
+    engineFilter?: (reg: StartupRegistration) => boolean;
+}
+
+/**
+ * Where the resolved startup mode came from, highest precedence first:
+ * MJ_STARTUP_MODE env var > programmatic option > config file > caller default.
+ */
+export type StartupModeSource = 'env' | 'option' | 'config' | 'default';
+
+/**
+ * Result of ResolveStartupMode() — the effective mode plus which precedence
+ * level supplied it (for boot logging / diagnostics).
+ */
+export interface ResolvedStartupMode {
+    mode: StartupMode;
+    source: StartupModeSource;
+}
+
+const STARTUP_MODES: readonly StartupMode[] = ['full', 'task'];
+
+/**
+ * Environment variable for per-invocation startup-mode override,
+ * e.g. `MJ_STARTUP_MODE=full npx mj sync push`.
+ */
+export const STARTUP_MODE_ENV_VAR = 'MJ_STARTUP_MODE';
+
+/**
+ * Parses a candidate mode string; returns undefined for missing/invalid values.
+ */
+function parseStartupMode(value: string | undefined | null): StartupMode | undefined {
+    if (!value) {
+        return undefined;
+    }
+    const normalized = value.trim().toLowerCase();
+    return STARTUP_MODES.find(m => m === normalized);
+}
+
+/**
+ * Reads MJ_STARTUP_MODE, guarding for browser contexts where `process` does not exist.
+ */
+function readStartupModeEnvVar(): string | undefined {
+    if (typeof process === 'undefined' || !process.env) {
+        return undefined;
+    }
+    return process.env[STARTUP_MODE_ENV_VAR];
+}
+
+/**
+ * Single source of truth for startup-mode precedence, shared by every entry
+ * point (MJAPI, MJCLI, mj-sync, CodeGen). Highest wins:
+ *
+ * 1. MJ_STARTUP_MODE env var (per-invocation override)
+ * 2. `option` — programmatic option passed by the entry point
+ * 3. `configValue` — the process's loaded config (e.g. mj.config.cjs `startup.mode`)
+ * 4. `defaultMode` — the entry point's default ('full' when omitted)
+ *
+ * Invalid env/config values warn and fall through to the next level — an env
+ * typo must never crash a process. The resolved mode + source is logged
+ * (non-verbose when an env/config override won, so a server silently switched
+ * to task mode by a shared mj.config.cjs is visible at boot).
+ */
+export function ResolveStartupMode(args?: {
+    option?: StartupMode;
+    configValue?: string;
+    defaultMode?: StartupMode;
+}): ResolvedStartupMode {
+    const envRaw = readStartupModeEnvVar();
+    const envMode = parseStartupMode(envRaw);
+    if (envRaw && !envMode) {
+        console.warn(`[StartupManager] Ignoring invalid ${STARTUP_MODE_ENV_VAR}='${envRaw}' (expected one of: ${STARTUP_MODES.join(', ')})`);
+    }
+    if (envMode) {
+        return logResolvedStartupMode({ mode: envMode, source: 'env' });
+    }
+
+    if (args?.option) {
+        return logResolvedStartupMode({ mode: args.option, source: 'option' });
+    }
+
+    const configMode = parseStartupMode(args?.configValue);
+    if (args?.configValue && !configMode) {
+        console.warn(`[StartupManager] Ignoring invalid startup.mode='${args.configValue}' from config (expected one of: ${STARTUP_MODES.join(', ')})`);
+    }
+    if (configMode) {
+        return logResolvedStartupMode({ mode: configMode, source: 'config' });
+    }
+
+    return logResolvedStartupMode({ mode: args?.defaultMode ?? 'full', source: 'default' });
+}
+
+/**
+ * Logs the resolution outcome. Env/config wins are overrides of the entry
+ * point's intent and log non-verbose; option/default are the normal path and
+ * stay verbose-only.
+ */
+function logResolvedStartupMode(resolved: ResolvedStartupMode): ResolvedStartupMode {
+    const verboseOnly = resolved.source === 'option' || resolved.source === 'default';
+    LogStatusEx({ message: `[StartupManager] Startup mode resolved: '${resolved.mode}' (source: ${resolved.source})`, verboseOnly });
+    return resolved;
 }
 
 // Type for the class constructor that can be decorated.
@@ -321,12 +456,16 @@ export class StartupManager extends BaseSingleton<StartupManager> {
      * @param forceRefresh - If true, reload all startup classes even if already loaded
      * @param contextUser - The authenticated user context
      * @param provider - Optional metadata provider
+     * @param options - Startup mode/filter options; omitted ⇒ 'full' mode (pre-change behavior).
+     *   A process booted in 'task' mode can later opt up with
+     *   `Startup(true, user, provider, { mode: 'full' })` — forceRefresh bypasses the cached result.
      * @returns Results of all load operations
      */
     public async Startup(
         forceRefresh: boolean = false,
         contextUser?: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        options?: StartupOptions
     ): Promise<LoadAllResult> {
         // If already completed and not forcing refresh, return cached result
         if (this._loadCompleted && !forceRefresh && this._lastResult) {
@@ -347,7 +486,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         }
 
         // Start loading and store the promise so other callers can await it
-        this._loadPromise = this.ExecuteLoad(contextUser, provider);
+        this._loadPromise = this.ExecuteLoad(contextUser, provider, options);
 
         try {
             this._lastResult = await this._loadPromise;
@@ -361,8 +500,9 @@ export class StartupManager extends BaseSingleton<StartupManager> {
     /**
      * Internal method that performs the actual startup loading work.
      */
-    private async ExecuteLoad(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<LoadAllResult> {
-        // first, init the LocalCacheManager and await its completion
+    private async ExecuteLoad(contextUser?: UserInfo, provider?: IMetadataProvider, options?: StartupOptions): Promise<LoadAllResult> {
+        // first, init the LocalCacheManager and await its completion — this is
+        // provider infrastructure and runs in BOTH startup modes
         // Get the storage provider from the metadata provider (uses IndexedDB)
         const cacheStart = Date.now();
         const storageProvider = (provider ?? Metadata.Provider).LocalStorageProvider;
@@ -374,13 +514,22 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         const startTime = Date.now();
         const allRegistrations = this.GetRegistrations();
 
+        const mode: StartupMode = options?.mode ?? 'full';
+        if (mode === 'task') {
+            return this.CompleteTaskModeLoad(allRegistrations, startTime);
+        }
+
+        const activeRegistrations = options?.engineFilter
+            ? allRegistrations.filter(options.engineFilter)
+            : allRegistrations;
+
         // Split into synchronous (awaited, gates startup completion) and deferred
         // (fired but not awaited; consumers must call Engine.Instance.EnsureLoaded()
         // before reading state). Deferred engines start AFTER sync engines complete
         // so they don't compete with the shell-render-critical batch for the same
         // GraphQL coalesce window.
-        const syncRegistrations = allRegistrations.filter(r => !r.options.deferred);
-        const deferredRegistrations = allRegistrations.filter(r => r.options.deferred);
+        const syncRegistrations = activeRegistrations.filter(r => !r.options.deferred);
+        const deferredRegistrations = activeRegistrations.filter(r => r.options.deferred);
 
         const groups = this.GroupByPriority(syncRegistrations);
         const results: LoadResult[] = [];
@@ -462,6 +611,29 @@ export class StartupManager extends BaseSingleton<StartupManager> {
             success: results.every(r => r.success || r.severity !== 'fatal'),
             results,
             totalDurationMs: totalMs
+        };
+    }
+
+    /**
+     * Completes a 'task'-mode startup: no registered engines execute (sync or
+     * deferred); each lazy-loads on first touch via its own Config()/EnsureLoaded().
+     * Marks startup completed so idempotency semantics match 'full' mode — the
+     * result is cached and repeat Startup() calls return it without re-running.
+     */
+    private CompleteTaskModeLoad(registrations: StartupRegistration[], startTime: number): LoadAllResult {
+        this._loadCompleted = true;
+
+        // One non-verbose line so a slow first AI call is never a debugging mystery
+        LogStatus(`MJ startup: task mode — engine pre-warm skipped (${registrations.length} engine(s) deferred to first use)`);
+        if (registrations.length > 0) {
+            const names = registrations.map(r => r.constructor.name);
+            LogStatusEx({ message: `[StartupManager] Task mode skipped engines: [${names.join(', ')}]`, verboseOnly: true });
+        }
+
+        return {
+            success: true,
+            results: [],
+            totalDurationMs: Date.now() - startTime
         };
     }
 

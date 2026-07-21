@@ -28,6 +28,14 @@ interface OmnibarRow {
 /** Debounce for the default (network-backed) search mode; trigger modes serve warm caches. */
 const SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * Debounce for trigger modes (e.g. '#' jump-to-record). Entity-name matching is in-memory,
+ * but the record-suggestion path issues a RunView per keystroke — firing on every character
+ * floods MJAPI during a typing burst. A short debounce collapses rapid typing into a single
+ * backend query while keeping the picker responsive.
+ */
+const TRIGGER_DEBOUNCE_MS = 150;
+
 /** Max suggestions requested per keystroke. */
 const MAX_RESULTS = 9;
 
@@ -491,7 +499,9 @@ export class OmnibarPaletteComponent implements OnDestroy {
 
         const fire = () => void this.fetchSuggestions(provider, query, generation);
         if (isTriggerMode) {
-            fire(); // warm caches — no debounce
+            // Short debounce: entity matching is in-memory, but record suggestions issue a
+            // RunView per keystroke — debouncing collapses a typing burst into one backend query.
+            this.debounceHandle = setTimeout(fire, TRIGGER_DEBOUNCE_MS);
         } else {
             this.IsLoading = this.Rows.length === 0;
             this.cdr.markForCheck();

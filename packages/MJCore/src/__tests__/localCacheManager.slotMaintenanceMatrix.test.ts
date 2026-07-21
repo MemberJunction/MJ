@@ -102,6 +102,37 @@ const SLOT_TYPES: SlotType[] = [
         why: 'an offset window is not the head of the set; maintaining it in place silently shifts the page',
     },
     {
+        name: 'ordered (OrderBy, segment [2])  <-- B42',
+        params: { EntityName: ENTITY, OrderBy: 'Name ASC' },
+        saveMaintains: false,
+        deleteMaintains: true,   // removal preserves the relative order of the remaining rows
+        why: 'an upsert appends at map-insertion end and leaves re-sorted rows in old positions — the row SET stays right, the ORDER the caller asked for is violated',
+    },
+    {
+        name: 'user search (UserSearchString, segment [6])  <-- N1',
+        params: { EntityName: ENTITY, UserSearchString: 'annual gala' },
+        saveMaintains: false,
+        deleteMaintains: true,   // as with any predicate, a deleted row matches nothing
+        why: 'UserSearchString generates LIKE/FTS WHERE clauses — a row predicate sitting INSIDE the 7-segment base, where neither the parts[1] check nor hasNarrowingSegment (index 7+) was looking',
+    },
+    {
+        name: 'aggregates (aggHash segment)  <-- H2',
+        params: { EntityName: ENTITY, Aggregates: [{ expression: 'COUNT(*)', alias: 'Cnt' }] },
+        saveMaintains: false,
+        deleteMaintains: false,
+        why: 'the aggregate was computed by the DB over the pre-mutation set and is not derivable in JS — carrying it forward served COUNT(*)=6 alongside rows=7',
+    },
+    {
+        name: 'saved view (vw: segment)  <-- H1',
+        params: { EntityName: ENTITY, ViewID: '00000000-0000-0000-0000-0000000000AA' },
+        saveMaintains: false,
+        // DELETE stays maintainable — same reasoning as a filtered slot: a deleted row is gone
+        // from the view too, so removing it can never make the slot wrong. Only SAVE is unsafe
+        // (we cannot evaluate the view's WhereClause in JS to know whether the new row belongs).
+        deleteMaintains: true,
+        why: "a view's WhereClause lives ON THE VIEW, not in ExtraFilter, so the filter segment is '_' — maintaining a SAVE in place served rows the view excludes",
+    },
+    {
         name: 'filtered + MaxRows (both axes)',
         params: { EntityName: ENTITY, ExtraFilter: "Status='Active'", MaxRows: 2 },
         saveMaintains: false,
@@ -149,6 +180,45 @@ describe('LocalCacheManager — slot maintenance matrix (slot type x mutation)',
             // or truthiness-based, every ordinary unlimited slot would be misread as a subset
             // and the cache would stop maintaining anything — a silent perf cliff.
             expect(classify({ EntityName: ENTITY, MaxRows: -1, StartRow: 0 })).toBe(false);
+        });
+
+        it('treats an UNKNOWN trailing segment as narrowing (deny-by-default)', () => {
+            // The whole point of hasNarrowingSegment: `vw:` and `rls:` were BOTH misclassified as
+            // maintainable because the old check only read parts[1]. Enumerating the narrowing
+            // segments would repeat that mistake for the NEXT segment someone appends, so unknown
+            // segments must default to "do not maintain".
+            const hasNarrowing = (cache as unknown as { hasNarrowingSegment(p: string[]): boolean }).hasNarrowingSegment.bind(cache);
+            const base = ['E', '_', '_', '-1', '0', '_', '_'];
+            expect(hasNarrowing([...base, 'mssql://localhost:1433/'])).toBe(false);  // connection = identity
+            expect(hasNarrowing([...base, 'imr:1'])).toBe(false);                    // widens the set
+            expect(hasNarrowing([...base, 'rls:abc123'])).toBe(true);                // narrows (H3)
+            expect(hasNarrowing([...base, 'vw:some-view-id'])).toBe(true);           // narrows (H1)
+            expect(hasNarrowing([...base, 'futureSegment:whatever'])).toBe(true);    // UNKNOWN → deny
+        });
+
+        it('classifies a user-search slot as non-maintainable (N1)', () => {
+            // The blind spot was positional: hasNarrowingSegment starts at index 7, the filter
+            // check reads index 1, and UserSearch sits at 6 — a row predicate hiding between the
+            // two guards. Proven by a search slot being upserted with a non-matching row.
+            const hasSearch = (cache as unknown as { hasUserSearch(p: string[]): boolean }).hasUserSearch.bind(cache);
+            expect(hasSearch(['E', '_', '_', '-1', '0', '_', '_'])).toBe(false);
+            expect(hasSearch(['E', '_', '_', '-1', '0', '_', 'annual gala'])).toBe(true);
+        });
+
+        it('allowlists the full-width client projection f:* but NOT a narrow one (R1)', () => {
+            // Every CLIENT fingerprint carries an f:<fields> segment. Omitting f:* classified
+            // 100% of client slots as unmergeable, which disabled the client's differential path
+            // entirely. f:* narrows neither rows nor columns; a narrow projection still does.
+            const hasNarrowing = (cache as unknown as { hasNarrowingSegment(p: string[]): boolean }).hasNarrowingSegment.bind(cache);
+            const base = ['E', '_', '_', '-1', '0', '_', '_'];
+            expect(hasNarrowing([...base, 'f:*'])).toBe(false);
+            expect(hasNarrowing([...base, 'f:ID,Name'])).toBe(true);
+        });
+
+        it('classifies an aggregate-bearing slot as non-maintainable (H2)', () => {
+            const hasAgg = (cache as unknown as { hasAggregates(p: string[]): boolean }).hasAggregates.bind(cache);
+            expect(hasAgg(['E', '_', '_', '-1', '0', '_', '_'])).toBe(false);
+            expect(hasAgg(['E', '_', '_', '-1', '0', 'a1b2c3', '_'])).toBe(true);
         });
 
         it('fails SAFE on a malformed fingerprint rather than over-invalidating', () => {

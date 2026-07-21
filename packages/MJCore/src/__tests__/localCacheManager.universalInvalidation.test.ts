@@ -72,11 +72,21 @@ describe('LocalCacheManager Universal Cache Invalidation', () => {
                 .isFilteredFingerprint(fp);
 
         it('should return false for unfiltered fingerprint (underscore filter)', () => {
-            expect(isFiltered('Users|_|Name ASC|100|0|_')).toBe(false);
+            // Production shape: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|UserSearch.
+            // The previous fixture ('Users|_|Name ASC|100|0|_') encoded the OLD contract, where
+            // ONLY the filter segment mattered — but it carried an ORDER BY and a MaxRows cap,
+            // both of which now correctly make a slot non-maintainable (B42 / #3199). The
+            // fixture's intent (underscore filter => not filtered) needs a fingerprint that is
+            // clean on every axis.
+            expect(isFiltered('Users|_|_|-1|0|_|_')).toBe(false);
         });
 
         it('should return false for empty filter', () => {
-            expect(isFiltered('Users||Name ASC|100|0|_')).toBe(false);
+            expect(isFiltered('Users||_|-1|0|_|_')).toBe(false);
+        });
+
+        it('should return true when an ORDER BY is present (B42 — upsert appends out of order)', () => {
+            expect(isFiltered('Users|_|Name ASC|-1|0|_|_')).toBe(true);
         });
 
         it('should return true for a filtered fingerprint', () => {

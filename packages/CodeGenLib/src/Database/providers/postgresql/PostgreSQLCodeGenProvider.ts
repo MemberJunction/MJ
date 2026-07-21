@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, SetProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -110,6 +110,13 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         if (!currentUser) {
             throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
         }
+
+        // Run MJ startup with the same 'task' entry-point default as the SQL Server path
+        // (where setupSQLServerClient runs this internally). Previously the PG path skipped
+        // Startup() entirely — adding it initializes LocalCacheManager and makes an
+        // MJ_STARTUP_MODE=full opt-up actually pre-warm engines on PG too.
+        const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'task' });
+        await StartupManager.Instance.Startup(false, currentUser, provider, { mode: startupMode.mode });
 
         const connectionInfo = `${pgConfig.Host}:${pgConfig.Port ?? 5432}/${pgConfig.Database}`;
         succeedSpinner('PostgreSQL connection initialized: ' + connectionInfo);
@@ -1807,16 +1814,6 @@ ORDER BY ordinal_position`;
      * `PG_PASSWORD`) with fallback to `configInfo` values.
      */
     async executeSQLFileViaShell(filePath: string): Promise<boolean> {
-        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
-        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
-        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
-        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
-        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
-
-        if (!pgUser || !pgPassword || !pgDatabase) {
-            throw new Error('PostgreSQL user, password, and database must be provided in the configuration or environment variables');
-        }
-
         const absoluteFilePath = path.resolve(process.cwd(), filePath);
         let sql: string;
         try {
@@ -1827,17 +1824,11 @@ ORDER BY ordinal_position`;
         }
         if (!sql.trim()) return true;
 
-        const pgModule = await import('pg');
-        const client = new pgModule.default.Client({
-            host: pgHost,
-            port: pgPort,
-            user: pgUser,
-            password: pgPassword,
-            database: pgDatabase,
-        });
-
+        // [Large Schema Series] pooled client (was `new pg.Client()` per file) —
+        // reuses a physical connection instead of a fresh handshake every call.
+        let client: Awaited<ReturnType<typeof this.acquireCodeGenClient>> | undefined;
         try {
-            await client.connect();
+            client = await this.acquireCodeGenClient();
             // Postgres executes a multi-statement script in a single query call. A single
             // statement error aborts the rest of the batch server-side (simple query
             // protocol) — so silently converting that to `return true` hid real data loss:
@@ -1857,7 +1848,7 @@ ORDER BY ordinal_position`;
             logError(`[CodeGen] Failed to execute SQL file ${absoluteFilePath}: ${e instanceof Error ? e.message : e}`);
             return false;
         } finally {
-            try { await client.end(); } catch { /* best-effort cleanup */ }
+            if (client) client.release();
         }
     }
 
@@ -1894,28 +1885,8 @@ WHERE p.prokind IN ('f', 'p')
         viewSQL: string,
         willRegenerate?: Set<string>
     ): Promise<void> {
-        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
-        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
-        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
-        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
-        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
-
-        if (!pgUser || !pgPassword || !pgDatabase) {
-            throw new Error(
-                'PostgreSQL user, password, and database must be provided in the configuration or environment variables'
-            );
-        }
-
-        const pgModule = await import('pg');
-        const client = new pgModule.default.Client({
-            host: pgHost,
-            port: pgPort,
-            user: pgUser,
-            password: pgPassword,
-            database: pgDatabase,
-        });
-
-        await client.connect();
+        // [Large Schema Series] pooled client (was `new pg.Client()` per entity).
+        const client = await this.acquireCodeGenClient();
         try {
             // PG-only: emit recursive-FK root-ID helpers ahead of the view.
             //
@@ -1965,7 +1936,7 @@ WHERE p.prokind IN ('f', 'p')
                 baseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
             });
         } finally {
-            try { await client.end(); } catch { /* best-effort cleanup */ }
+            client.release();
         }
     }
 
@@ -1992,28 +1963,9 @@ WHERE p.prokind IN ('f', 'p')
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult> {
-        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
-        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
-        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
-        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
-        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
-
-        if (!pgUser || !pgPassword || !pgDatabase) {
-            throw new Error(
-                'PostgreSQL user, password, and database must be provided in the configuration or environment variables'
-            );
-        }
-
-        const pgModule = await import('pg');
-        const client = new pgModule.default.Client({
-            host: pgHost,
-            port: pgPort,
-            user: pgUser,
-            password: pgPassword,
-            database: pgDatabase,
-        });
-
-        await client.connect();
+        // [Large Schema Series] pooled client (was `new pg.Client()` per entity —
+        // the per-entity handshake that dominated manageSQLScriptsAndExecution).
+        const client = await this.acquireCodeGenClient();
         try {
             // ── Phase 0: root-ID TVFs ────────────────────────────────────
             // The base view references these helper functions; PG rejects
@@ -2083,13 +2035,40 @@ WHERE p.prokind IN ('f', 'p')
 
             return { success: true, phase: null };
         } finally {
-            try { await client.end(); } catch { /* best-effort cleanup */ }
+            client.release();
         }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // PRIVATE HELPERS
     // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * [Large Schema Series] Acquire a POOLED PG client for a per-entity codegen
+     * operation, replacing the previous `new pg.Client()` + connect + end that
+     * ran once PER ENTITY. On a large-schema run that was ~one full connection
+     * handshake per entity (≈2,000 on a 2k-table install) — a dominant cost of
+     * the manageSQLScriptsAndExecution phase. The module-cached pool (via
+     * {@link PGConnection}) hands back a reused physical connection AND applies
+     * the codegen `statement_timeout` GUC that the ad-hoc clients never set.
+     *
+     * Callers MUST `release()` the returned client in a `finally`. The connection
+     * is always transaction-clean at release time: `executeWithFallback` issues
+     * its own BEGIN/COMMIT and rolls back internally on error, and the other
+     * callers only run autonomous simple-query statements that never open a
+     * transaction — so a normal `release()` (not `release(err)`) is correct on
+     * every path and no poisoned connection is returned to the pool.
+     *
+     * Env-var precedence is already resolved into `configInfo` upstream (see
+     * CLAUDE.md — PG_* wins on the PostgreSQL platform, resolved once in
+     * Config/config.ts), so the pool targets the same host/db the per-entity
+     * clients did; the previous `process.env.PG_* ?? configInfo.*` reads here
+     * were redundant.
+     */
+    private async acquireCodeGenClient() {
+        const pool = await PGConnection();
+        return pool.connect();
+    }
 
     /**
      * Converts a PascalCase or camelCase string to snake_case.

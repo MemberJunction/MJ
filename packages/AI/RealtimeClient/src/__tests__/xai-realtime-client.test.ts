@@ -275,6 +275,29 @@ describe('xAIRealtimeClient', () => {
             expect(transcripts.at(-1)).toEqual({ Role: 'User', Text: 'and Skip?', IsFinal: true, Kind: 'normal', ReplacesPrevious: false });
         });
 
+        it('treats a post-pause caption that CONTINUES the utterance as a replacement, not a new bubble (topology parity)', () => {
+            // Mirrors the server-session regression: Grok's VAD fires speech_started on mid-sentence
+            // pauses, but the provider keeps re-emitting the SAME utterance with more words. Without
+            // the continuation check, one spoken thought renders as several growing bubbles. Note the
+            // re-punctuation ('remote.' → 'remote,') — a raw prefix test would miss it.
+            const { transcripts } = collect(client);
+            const P1 = 'including whiteboarding, uh, remote.';
+            const P2 = 'including whiteboarding, uh, remote, so just get going.';
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: P1 });
+            client.Emit({ type: 'input_audio_buffer.speech_started' });   // breath, NOT a turn boundary
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: P2 });
+            expect(transcripts.map(t => t.ReplacesPrevious)).toEqual([false, true]);
+        });
+
+        it('a NEW utterance after the model responded starts a fresh bubble (anchor cleared on response.created)', () => {
+            const { transcripts } = collect(client);
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Show me the weather' });
+            client.Emit({ type: 'response.created' });                    // model replies → user turn over
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Show me the weather for Tokyo too' });
+            expect(transcripts.map(t => t.ReplacesPrevious)).toEqual([false, false]);
+        });
+
         it('should emit nothing for empty transcript payloads', () => {
             const { transcripts } = collect(client);
             client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: '  ' });

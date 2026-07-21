@@ -23,7 +23,7 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
             { sectionKey: 'cachingPerformance', sectionName: 'Caching & Performance', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AI Agent Actions', isExpanded: false },
-            { sectionKey: 'mJAIAgentTypes', sectionName: 'AI Agent Types', isExpanded: false },
+            { sectionKey: 'mJAIAgentTypesSystemPromptID', sectionName: 'AI Agent Types (System Prompt)', isExpanded: false },
             { sectionKey: 'mJAIConfigurationsDefaultPromptForContextSummarizationID', sectionName: 'AI Configurations (Default Prompt For Context Summarization)', isExpanded: false },
             { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJAIConfigurationsDefaultPromptForContextCompressionID', sectionName: 'AI Configurations (Default Prompt For Context Compression)', isExpanded: false },
@@ -34,12 +34,15 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptRunsChildPromptID', sectionName: 'AI Prompt Runs (Child Prompt)', isExpanded: false },
             { sectionKey: 'mJAIPromptRunsPromptID', sectionName: 'AI Prompt Runs (Prompt)', isExpanded: false },
             { sectionKey: 'mJAIPromptRunsJudgeID', sectionName: 'AI Prompt Runs (Judge Prompt)', isExpanded: false },
-            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
+            { sectionKey: 'mJAIAgentsContextCompressionPromptID', sectionName: 'AI Agents', isExpanded: false },
             { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
             { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false },
             { sectionKey: 'mJScopedPromptParts', sectionName: 'Scoped Prompt Parts', isExpanded: false },
-            { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false }
+            { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false },
+            { sectionKey: 'mJAIAgentsConversationSummaryPromptID', sectionName: 'AI Agents (Conversation Summary Prompt ID)', isExpanded: false },
+            { sectionKey: 'mJAIAgentTypesContextCompressionPromptID', sectionName: 'AI Agent Types (Context Compression Prompt ID)', isExpanded: false },
+            { sectionKey: 'mJAIAgentTypesConversationSummaryPromptID', sectionName: 'AI Agent Types (Conversation Summary Prompt ID)', isExpanded: false }
         ]);
     }
 }
