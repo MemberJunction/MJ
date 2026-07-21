@@ -542,18 +542,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             if (!SIGNIFICANT_PROGRESS_STEPS.includes(progress.step)) {
                 return;
             }
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                message: JSON.stringify({
-                    resolver: 'RealtimeClientSessionResolver',
-                    type: 'RealtimeDelegationProgress',
-                    agentSessionID,
-                    callID,
-                    step: progress.step,
-                    message: progress.message,
-                    percentage: progress.percentage,
-                }),
-                sessionId: userPayload.sessionId,
-            });
+            this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+                resolver: 'RealtimeClientSessionResolver',
+                type: 'RealtimeDelegationProgress',
+                agentSessionID,
+                callID,
+                step: progress.step,
+                message: progress.message,
+                percentage: progress.percentage,
+            }), userPayload);
         };
     }
 

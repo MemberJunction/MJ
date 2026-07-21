@@ -4,7 +4,7 @@ import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { PubSubEngine } from 'type-graphql';
 import { UserPayload } from '../types.js';
-import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
+import { publishStatusUpdate } from '../generic/PushStatusResolver.js';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 /**
@@ -226,7 +226,10 @@ export class TaskOrchestrator {
             return;
         }
 
-        const payload = {
+        LogStatus(`📡 Publishing task progress: ${taskName} - ${message} (${percentComplete}%) to session ${this.userPayload.sessionId}`);
+        publishStatusUpdate(this.pubSub, {
+            sessionId: this.userPayload.sessionId,
+            ownerUserId: this.userPayload.userRecord.ID,
             message: JSON.stringify({
                 resolver: 'TaskOrchestrator',
                 type: 'TaskProgress',
@@ -238,12 +241,8 @@ export class TaskOrchestrator {
                     timestamp: new Date(),
                     conversationDetailId: this.conversationDetailId
                 }
-            }),
-            sessionId: this.userPayload.sessionId
-        };
-
-        LogStatus(`📡 Publishing task progress: ${taskName} - ${message} (${percentComplete}%) to session ${this.userPayload.sessionId}`);
-        this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
+            })
+        });
 
         LogStatus(`[Task: ${taskName}] ${message} (${percentComplete}%)`);
     }
@@ -257,7 +256,10 @@ export class TaskOrchestrator {
             return;
         }
 
-        const payload = {
+        LogStatus(`📡 Publishing agent progress: ${taskName} → ${agentStep} to session ${this.userPayload.sessionId}`);
+        publishStatusUpdate(this.pubSub, {
+            sessionId: this.userPayload.sessionId,
+            ownerUserId: this.userPayload.userRecord.ID,
             message: JSON.stringify({
                 resolver: 'TaskOrchestrator',
                 type: 'AgentProgress',
@@ -269,12 +271,8 @@ export class TaskOrchestrator {
                     timestamp: new Date(),
                     conversationDetailId: this.conversationDetailId
                 }
-            }),
-            sessionId: this.userPayload.sessionId
-        };
-
-        LogStatus(`📡 Publishing agent progress: ${taskName} → ${agentStep} to session ${this.userPayload.sessionId}`);
-        this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
+            })
+        });
 
         LogStatus(`[Task: ${taskName}] → ${agentStep}: ${agentMessage}`);
     }
@@ -851,8 +849,10 @@ export class TaskOrchestrator {
 
             // Publish real-time event if pubSub available
             if (this.pubSub && this.userPayload) {
-                this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                    userPayload: JSON.stringify(this.userPayload),
+                // NOTE (B49): normalized from a malformed no-sessionId payload
+                publishStatusUpdate(this.pubSub, {
+                    sessionId: this.userPayload.sessionId,
+                    ownerUserId: this.userPayload.userRecord.ID,
                     message: JSON.stringify({
                         type: 'notification',
                         notificationId: notification.ID,
