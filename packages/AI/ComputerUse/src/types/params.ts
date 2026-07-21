@@ -14,7 +14,7 @@
 
 import { ComputerUseAuthConfig } from './auth.js';
 import { BrowserConfig } from './browser.js';
-import type { BrowserAction } from './browser.js';
+import type { BrowserAction, ContextSeed } from './browser.js';
 import { ComputerUseTool } from './tools.js';
 import type { JudgeFrequency } from './judge.js';
 import type { AppProfile } from './app-profile.js';
@@ -261,4 +261,12 @@ export class RunComputerUseParams {
      * at {@link StartUrl}, or whose subject IS navigation.
      */
     public Prelude?: RunPrelude;
+
+    /**
+     * Warm-seed snapshot (CU-G4): localStorage + IndexedDB captured once
+     * post-login and restored into this run's context before the app boots, so
+     * it doesn't cold-boot its metadata cache from the server. Restored
+     * best-effort (cold-boot-safe). Omit to cold-boot as before.
+     */
+    public ContextSeed?: ContextSeed;
 }

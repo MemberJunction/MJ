@@ -472,6 +472,14 @@ export class BrowserConfig {
     public InitialLocalStorage?: LocalStorageOriginState[];
 
     /**
+     * A warm-seed snapshot (CU-G4) restored into the context after launch —
+     * localStorage + IndexedDB captured once post-login so the app doesn't
+     * cold-boot its metadata cache from the server every test. Restored
+     * best-effort; a failure falls back to a cold boot (never corruption).
+     */
+    public ContextSeed?: ContextSeed;
+
+    /**
      * Attach to an already-running browser instead of launching one.
      * Auto-detects the connect method from the URL scheme:
      *   - `http(s)://…`  → Chrome DevTools Protocol (`chromium.connectOverCDP`),
@@ -514,6 +522,53 @@ export class LocalStorageOriginState {
     public Origin: string = '';
     /** Key-value pairs to inject into localStorage for this origin */
     public Entries: { name: string; value: string }[] = [];
+}
+
+// ─── Context Seed (CU-G4 warm-seed) ────────────────────────
+/**
+ * A snapshot of an origin's client-side storage — localStorage + IndexedDB —
+ * captured once (e.g. post-login, after the app has warmed its metadata cache)
+ * and restored into a fresh context so it doesn't cold-boot that cache from the
+ * server on every test (the largest self-inflicted load multiplier per CU-G4).
+ *
+ * App-agnostic and exactly analogous to Playwright's `storageState`, extended to
+ * IndexedDB (where SPA metadata caches live). The adapter knows only HOW to
+ * capture/restore generic storage; WHAT to seed is the opaque snapshot the
+ * caller supplies. Restore is best-effort and cold-boot-safe: a restore failure
+ * must leave the context to refetch, never corrupt a half-populated cache.
+ */
+export class ContextSeed {
+    /** Full origin the snapshot belongs to (protocol + host + port). */
+    public Origin: string = '';
+    /** localStorage key-value pairs (optional). */
+    public LocalStorage?: { name: string; value: string }[];
+    /** IndexedDB snapshot (optional) — the heavy SPA metadata cache. */
+    public IndexedDB?: ContextSeedIndexedDB;
+}
+
+/** A serializable snapshot of an origin's IndexedDB databases. */
+export class ContextSeedIndexedDB {
+    public Databases: IndexedDBDatabase[] = [];
+}
+
+export class IndexedDBDatabase {
+    public Name: string = '';
+    public Version: number = 1;
+    public Stores: IndexedDBStore[] = [];
+}
+
+export class IndexedDBStore {
+    public Name: string = '';
+    /** The store's key path (null = out-of-line keys). */
+    public KeyPath: string | string[] | null = null;
+    public AutoIncrement: boolean = false;
+    public Records: IndexedDBRecord[] = [];
+}
+
+export class IndexedDBRecord {
+    /** Present only for out-of-line keys (KeyPath === null). */
+    public Key?: unknown;
+    public Value: unknown;
 }
 
 // ─── Navigation Decision ───────────────────────────────────

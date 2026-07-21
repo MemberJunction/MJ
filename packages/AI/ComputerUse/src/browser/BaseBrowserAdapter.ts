@@ -25,6 +25,7 @@ import {
     ElementInfo,
     InteractiveElement,
     BrowserDiagnosticEvent,
+    ContextSeed,
 } from '../types/browser.js';
 
 // Re-exported for back-compat: the type now lives in types/browser.ts (CU-A7)
@@ -336,6 +337,38 @@ export abstract class BaseBrowserAdapter {
      */
     public async ResetStatePreservingAuth(_origin: string): Promise<void> {
         // No-op by default — adapters that share context across tests override this.
+    }
+
+    // ─── Warm-Seed Context Storage (CU-G4) ─────────────────
+
+    /**
+     * Capture a snapshot of the given origin's client-side storage (localStorage
+     * + IndexedDB) for later restore into a fresh context — the warm-seed that
+     * kills the per-test cold-boot metadata refetch (CU-G4). The caller (driver)
+     * captures once post-login and reuses the seed across contexts.
+     *
+     * Default returns `null` (nothing to capture) so adapters without a live
+     * page don't break — additive and non-throwing. Adapters backed by a real
+     * page (e.g. Playwright) override this.
+     *
+     * @param _origin - Origin (protocol + host + port) to snapshot.
+     */
+    public async CaptureContextSeed(_origin: string): Promise<ContextSeed | null> {
+        // No-op default — adapters with a live page override this.
+        return null;
+    }
+
+    /**
+     * Restore a previously-captured {@link ContextSeed} into the current context
+     * BEFORE the app boots (CU-G4). Best-effort and cold-boot-safe by contract:
+     * any failure must leave the context to refetch from the server, never a
+     * half-populated (corrupt) cache.
+     *
+     * Default is a no-op resolve so adapters that can't seed don't break —
+     * additive and non-throwing. Adapters backed by a real page override this.
+     */
+    public async SeedContext(_seed: ContextSeed): Promise<void> {
+        // No-op default — adapters with a live page override this.
     }
 
     // ─── Diagnostics ──────────────────────────────────────

@@ -166,6 +166,7 @@ export class ComputerUseEngine {
             this.initializeComponents(params);
             await this.launchBrowser(params);
             this.log('Browser launched');
+            await this.applyContextSeed(params);
             await this.startTracingIfRequested(params);
             await this.runGlobalAuthCallback();
             await this.navigateToStartUrl(params, context);
@@ -295,6 +296,7 @@ export class ComputerUseEngine {
         try {
             this.initializeComponents(params);
             await this.launchBrowser(params);
+            await this.applyContextSeed(params);
             await this.startTracingIfRequested(params);
             await this.runGlobalAuthCallback();
             await this.navigateToStartUrl(params, context);
@@ -463,6 +465,26 @@ export class ComputerUseEngine {
         this.populateInitialLocalStorage(config, params);
 
         await this.browserAdapter.Launch(config);
+    }
+
+    /**
+     * Restore a warm-seed snapshot (CU-G4) into the freshly-launched context,
+     * before navigation, so the app doesn't cold-boot its metadata cache. The
+     * adapter's SeedContext is best-effort and cold-boot-safe; this wrapper only
+     * skips it when no seed was supplied and never lets a seed failure abort the
+     * run.
+     */
+    private async applyContextSeed(params: RunComputerUseParams): Promise<void> {
+        const seed = params.ContextSeed;
+        if (!seed) {
+            return;
+        }
+        try {
+            this.log(`Restoring warm-seed context snapshot for ${seed.Origin} (CU-G4)`);
+            await this.browserAdapter.SeedContext(seed);
+        } catch (error) {
+            this.logError('Context seed restore failed (falling back to a cold boot)', error);
+        }
     }
 
     /**
