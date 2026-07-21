@@ -343,7 +343,174 @@ export const EntityServerInvariantsChecks: NamedCheck[] = [
 
             console.log(`      → exactly one Manage grant to the creator on create; still exactly one after update`);
         }
-    }
+    },
+    {
+        Id: 'entity-server-invariants.ESI5',
+        Name: 'ESI5 (ES2): VectorIndex sanitizeIndexName — lowercase/hyphen/45-cap matrix + empty-result throws',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const idx = await ctx.Provider.GetEntityObject<MJVectorIndexEntity>(VECTOR_INDEX_ENTITY, ctx.User);
+            const capable = idx as unknown as SanitizeIndexNameCapable;
+            if (typeof capable.sanitizeIndexName !== 'function') {
+                console.warn('  ⚠ ESI5 SKIPPED — MJVectorIndexEntityServer not registered in this process (client-only bootstrap)');
+                return;
+            }
+            AssertEqual(capable.sanitizeIndexName('My Index_Name!'), 'my-index-name', 'spaces/underscores → hyphens, invalid chars stripped, lowercased');
+            AssertEqual(capable.sanitizeIndexName('--Already--Hyphened--'), 'already-hyphened', 'multi-hyphens collapse, leading/trailing trimmed');
+            const long = capable.sanitizeIndexName('x'.repeat(60) + '-tail');
+            Assert(long.length <= 45 && !long.endsWith('-'), `45-char cap without a dangling hyphen (got ${long.length} "${long}")`);
+            let threw = false;
+            try { capable.sanitizeIndexName('!!!***'); } catch { threw = true; }
+            Assert(threw, 'a name that sanitizes to empty must THROW, not return "" (a "" index name would fail provider-side later)');
+        }
+    },
+    {
+        Id: 'entity-server-invariants.ESI6',
+        Name: 'ESI6 (ES3): Application slug — generateSlugFromName matrix + ensureUniqueSlug returns a collision-free base unchanged',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const app = await ctx.Provider.GetEntityObject<MJApplicationEntity>(APPLICATION_ENTITY, ctx.User);
+            const capable = app as unknown as ApplicationSlugCapable;
+            if (typeof capable.generateSlugFromName !== 'function') {
+                console.warn('  ⚠ ESI6 SKIPPED — MJApplicationEntityServer not registered in this process');
+                return;
+            }
+            AssertEqual(capable.generateSlugFromName('Data Explorer'), 'data-explorer', 'basic name → kebab slug');
+            AssertEqual(capable.generateSlugFromName("Bob's App (v2) [beta]"), 'bobs-app-v2-beta', 'quotes stripped, brackets removed, spaces → hyphens');
+            AssertEqual(capable.generateSlugFromName('  ---Weird---  '), 'weird', 'trim + hyphen collapse + edge trim');
+            AssertEqual(capable.generateSlugFromName(''), '', 'empty name → empty slug (caller falls back)');
+            // ensureUniqueSlug on a slug that cannot collide returns it verbatim (the read-only leg;
+            // the -2/-3 suffix walk requires seeding real Applications — covered by app-behavioral S6).
+            const unique = `it-esi6-${Date.now().toString(36)}`;
+            AssertEqual(await capable.ensureUniqueSlug(unique), unique, 'a collision-free base slug passes through unchanged');
+        }
+    },
+    {
+        Id: 'entity-server-invariants.ESI7',
+        Name: 'ESI7 (ES4): DuplicateRun normalizeThreshold — <=0 / >=1.0 / null fall back; in-range passes through',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const run = await ctx.Provider.GetEntityObject<MJDuplicateRunEntity>(DUPLICATE_RUN_ENTITY, ctx.User);
+            const capable = run as unknown as NormalizeThresholdCapable;
+            if (typeof capable.normalizeThreshold !== 'function') {
+                console.warn('  ⚠ ESI7 SKIPPED — MJDuplicateRunEntityServer not registered in this process');
+                return;
+            }
+            const FB = 0.65;
+            AssertEqual(capable.normalizeThreshold(null, FB), FB, 'null → fallback');
+            AssertEqual(capable.normalizeThreshold(undefined, FB), FB, 'undefined → fallback');
+            AssertEqual(capable.normalizeThreshold(0, FB), FB, '0 → fallback (unconfigured)');
+            AssertEqual(capable.normalizeThreshold(-0.5, FB), FB, 'negative → fallback');
+            AssertEqual(capable.normalizeThreshold(1.0, FB), FB, '1.0 → fallback (a >=1.0 threshold matches nothing — the bug this pins)');
+            AssertEqual(capable.normalizeThreshold(1.7, FB), FB, '>1.0 → fallback');
+            AssertEqual(capable.normalizeThreshold(0.75, FB), 0.75, 'in-range value passes through');
+        }
+    },
+    {
+        Id: 'entity-server-invariants.ESI8',
+        Name: 'ESI8 (ES5): ConversationDetailAttachment MIME gate — empty + unregistered MIME rejected BEFORE any artifact rows; a registered MIME passes',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const att = await ctx.Provider.GetEntityObject<MJConversationDetailAttachmentEntity>(ATTACHMENT_ENTITY, ctx.User);
+            const capable = att as unknown as MimeGateCapable;
+            if (typeof capable.checkMimeRegistered !== 'function') {
+                console.warn('  ⚠ ESI8 SKIPPED — MJConversationDetailAttachmentEntityServer not registered in this process');
+                return;
+            }
+            // Empty MIME → gate error, no artifact side effects (nothing saved, entity unsaved).
+            att.MimeType = '';
+            const emptyErr = await capable.checkMimeRegistered();
+            Assert(emptyErr != null && /required/i.test(emptyErr.Message), `empty MimeType must gate with a 'required' error (got: ${emptyErr?.Message})`);
+
+            att.MimeType = 'application/x-it-definitely-unregistered';
+            att.FileName = 'probe.itbogus';
+            const bogusErr = await capable.checkMimeRegistered();
+            Assert(bogusErr != null, 'an unregistered MIME must be rejected by the gate');
+
+            // Positive control: pick a MIME the ArtifactMetadataEngine actually registers, so the
+            // check never hardcodes a guess about seeded artifact types.
+            await ArtifactMetadataEngine.Instance.Config(false, ctx.User);
+            const withMime = (ArtifactMetadataEngine.Instance.ArtifactTypes as MJArtifactTypeEntity[])
+                .find((t) => !!t.ContentType && t.ContentType.includes('/') && !t.ContentType.includes('*'));
+            if (!withMime) {
+                console.warn('  ⚠ ESI8 positive leg SKIPPED — no artifact type with a concrete ContentType is seeded');
+                return;
+            }
+            const mime = withMime.ContentType!;
+            att.MimeType = mime;
+            att.FileName = 'probe.bin';
+            const okErr = await capable.checkMimeRegistered();
+            Assert(okErr == null, `registered MIME '${mime}' (artifact type '${withMime.Name}') must pass the gate (got: ${okErr?.Message})`);
+        }
+    },
+    {
+        Id: 'entity-server-invariants.ESI9',
+        Name: 'ESI9 (ES9): TemplateContent syncTemplateParameters — params extracted on save; a case-changed re-save does NOT duplicate (case-insensitive diff)',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // Full save-path check (MUT): create a Template + one TemplateContent whose body names
+            // two params; the server subclass extracts + syncs MJ: Template Params rows. Then
+            // re-save the SAME content with a case-flipped param name — the case-insensitive diff
+            // must neither duplicate nor churn the row.
+            const marker = `it-esi9-${Date.now().toString(36)}`;
+            const tpl = await ctx.Provider.GetEntityObject<MJTemplateEntity>(TEMPLATE_ENTITY, ctx.User);
+            // MJTemplateContentEntityServer.Save wraps param-sync in a provider TRANSACTION —
+            // available in-process (SQLServerDataProvider) but not on the client GraphQL provider.
+            // Under client transport, skip loudly; the save-path leg needs a server-transport run.
+            const txProvider = tpl.ProviderToUse as unknown as { BeginTransaction?: unknown };
+            if (typeof txProvider.BeginTransaction !== 'function') {
+                console.warn('  ⚠ ESI9 SKIPPED — provider has no BeginTransaction (client transport); the TemplateContent param-sync save path requires an in-process server provider');
+                return;
+            }
+            tpl.Name = `${marker} ${FIXTURE_TAG}`;
+            tpl.Description = FIXTURE_TAG;
+            tpl.UserID = ctx.User.ID;
+            Assert(await tpl.Save(), `ESI9 template save: ${tpl.LatestResult?.CompleteMessage}`);
+            let contentID: string | undefined;
+            try {
+                const typeRow = await new RunView().RunView<{ ID: string }>({
+                    EntityName: TEMPLATE_CONTENT_TYPE_ENTITY, MaxRows: 1, Fields: ['ID'], ResultType: 'simple',
+                }, ctx.User);
+                Assert(typeRow.Success && typeRow.Results.length > 0, 'a Template Content Type must exist');
+                const content = await ctx.Provider.GetEntityObject<MJTemplateContentEntity>(TEMPLATE_CONTENT_ENTITY, ctx.User);
+                content.TemplateID = tpl.ID;
+                content.TypeID = typeRow.Results[0].ID;
+                content.TemplateText = `Hello {{ itAlphaParam }} and {{ itBetaParam }} ${FIXTURE_TAG}`;
+                content.Priority = 1;
+                Assert(await content.Save(), `ESI9 content save: ${content.LatestResult?.CompleteMessage}`);
+                contentID = content.ID;
+
+                const params1 = await new RunView().RunView<{ ID: string; Name: string }>({
+                    EntityName: TEMPLATE_PARAM_ENTITY, ExtraFilter: `TemplateID='${tpl.ID}'`,
+                    Fields: ['ID', 'Name'], ResultType: 'simple', BypassCache: true,
+                }, ctx.User);
+                Assert(params1.Success, `param load: ${params1.ErrorMessage}`);
+                const names1 = params1.Results.map((r) => r.Name.toLowerCase()).sort();
+                AssertEqual(JSON.stringify(names1), JSON.stringify(['italphaparam', 'itbetaparam']),
+                    `save must extract exactly the two params (got ${JSON.stringify(params1.Results.map((r) => r.Name))})`);
+
+                // Case-flip re-save: the diff is case-insensitive → still exactly 2 rows, no dup.
+                content.TemplateText = `Hello {{ ITALPHAPARAM }} and {{ itBetaParam }} ${FIXTURE_TAG}`;
+                Assert(await content.Save(), `ESI9 case-flip re-save: ${content.LatestResult?.CompleteMessage}`);
+                const params2 = await new RunView().RunView<{ ID: string; Name: string }>({
+                    EntityName: TEMPLATE_PARAM_ENTITY, ExtraFilter: `TemplateID='${tpl.ID}'`,
+                    Fields: ['ID', 'Name'], ResultType: 'simple', BypassCache: true,
+                }, ctx.User);
+                AssertEqual(params2.Results.length, 2,
+                    `a case-changed param name must NOT duplicate (got ${params2.Results.length}: ${params2.Results.map((r) => r.Name).join(',')})`);
+            } finally {
+                // FK-safe teardown: params → content → template.
+                const params = await new RunView().RunView<{ ID: string }>({
+                    EntityName: TEMPLATE_PARAM_ENTITY, ExtraFilter: `TemplateID='${tpl.ID}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true,
+                }, ctx.User);
+                for (const row of params.Success ? params.Results : []) {
+                    const pe = await ctx.Provider.GetEntityObject<MJTemplateParamEntity>(TEMPLATE_PARAM_ENTITY, ctx.User);
+                    if (await pe.Load(row.ID)) { await pe.Delete(); }
+                }
+                if (contentID) {
+                    const ce = await ctx.Provider.GetEntityObject<MJTemplateContentEntity>(TEMPLATE_CONTENT_ENTITY, ctx.User);
+                    if (await ce.Load(contentID)) { await ce.Delete(); }
+                }
+                await tpl.Delete();
+            }
+        }
+    },
 ];
 
 for (const check of EntityServerInvariantsChecks) {
