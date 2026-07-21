@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT51 - Realtime Deterministic Seams",
+    "Description": "Realtime + Predictive Studio deterministic legs: realtime entity metadata integrity, driver-registry resolution without sessions, session-entity validation invariants via tagged fixtures. Server transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Realtime + Predictive Studio deterministic legs: realtime entity metadata integrity, driver-registry resolution without sessions, session-entity validation invariants via tagged fixtures. Server transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "realtime-deterministic"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "334A2065-3ADB-4ACE-818E-A3B6CAB9D86E"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:49:20.733Z",
+    "checksum": "b2e8aeda1a8c47e7f61630cbe0974d6a5c6c5f5acd23048cbcda7eba038dc4b8"
+  }
+}

@@ -3,6 +3,7 @@ import { AppContext } from '../types.js';
 import { CompositeKey, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { GetReadWriteProvider } from '../util.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 export enum TransactionVariableType {
     Define = "Define",
@@ -77,13 +78,46 @@ export class TransactionOutputType {
 
 
 
-export class TransactionResolver {
+export class TransactionResolver extends ResolverBase {
+    /**
+     * Maps a TransactionGroup item's operation type onto the SAME API-key scope path the singular
+     * CRUD mutations enforce (ResolverBase.CreateRecord/UpdateRecord/DeleteRecord), so the
+     * transaction path cannot be used to sidestep a key's scope ceiling.
+     */
+    protected GetScopePathForOperation(operationType: TransactionOperationType): string {
+        switch (operationType) {
+            case TransactionOperationType.Create:
+                return 'entity:create';
+            case TransactionOperationType.Update:
+                return 'entity:update';
+            case TransactionOperationType.Delete:
+                return 'entity:delete';
+        }
+    }
+
     @Mutation(() => TransactionOutputType)
     async ExecuteTransactionGroup(
     @Arg('group', () => TransactionInputType ) group: TransactionInputType,
     @Ctx() context: AppContext
     ) {
-        try { 
+        // SECURITY (bug-register B1 / catalog SEC1): route every transaction item through the same
+        // API-key scope gate the singular CRUD resolvers use, BEFORE any entity work happens.
+        // Without this pre-pass, a restricted API key (e.g. view:run-only) could Create/Update/
+        // Delete over the wire by wrapping the mutation in a TransactionGroup — the scope ceiling
+        // was simply never consulted on this path. No-op for OAuth/JWT sessions (no apiKeyHash),
+        // and full_access keys short-circuit inside CheckAPIKeyScopeAuthorization, so legitimate
+        // callers are unaffected; only keys that would already be denied on the singular CRUD
+        // mutations are now equally denied here. Deliberately OUTSIDE the try below so the
+        // AuthorizationError propagates to the client unwrapped.
+        for (const item of group.Items) {
+            await this.CheckAPIKeyScopeAuthorization(
+                this.GetScopePathForOperation(item.OperationType),
+                item.EntityName,
+                context.userPayload
+            );
+        }
+
+        try {
             // we have received the transaction group information via the network, now we need to reconstruct our TransactionGroup object and run it
             const md = (GetReadWriteProvider(context.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider) ?? new Metadata();
             const tg = await md.CreateTransactionGroup();

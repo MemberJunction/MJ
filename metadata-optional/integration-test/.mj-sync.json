@@ -8,7 +8,13 @@
     "test-suites",
     "roles",
     "entity-permissions",
-    "users"
+    "users",
+    "ai-prompt-categories",
+    "ai-agent-categories",
+    "ai-prompts",
+    "ai-skills",
+    "ai-search",
+    "ai-agents"
   ],
   "emitSyncNotes": false
 }

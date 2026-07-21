@@ -1,6 +1,6 @@
 # Integration Test Catalog
 
-The **living index** of MemberJunction's headless integration test coverage: what exists, what's planned, and the rules for adding more. Keep this updated as bundles land. The deep design rationale + full candidate enumeration lives in [`plans/integration-test-expansion/`](../../../plans/integration-test-expansion/README.md) ([catalog](../../../plans/integration-test-expansion/test-catalog.md) · [bug register](../../../plans/integration-test-expansion/bug-register.md)).
+The **living index** of MemberJunction's headless integration test coverage: what exists, what's planned, and the rules for adding more. Keep this updated as bundles land. The deep design rationale lives in [`plans/integration-test-expansion/`](../../../plans/integration-test-expansion/README.md) ([candidate catalog](../integration-test-suite/docs/test-catalog.md) · [bug register](../../../plans/integration-test-expansion/bug-register.md)), and the **comprehensive per-sub-suite documentation** (mechanism + per-check inventory for every shipped bundle) lives in [`integration-test-suite/docs/`](../integration-test-suite/docs/README.md).
 
 > **Where the code lives (July-2026 restructure):** this package (`@memberjunction/testing-integration`) is **framework-only** — registry, check contracts, driver, bootstraps, instrumented cache, tiers. The check bundles themselves live in the **private, never-published sibling** [`@memberjunction/integration-test-suite`](../integration-test-suite/), loaded into `mj test` at runtime via `mj.config.cjs` `testing.checkModules`.
 
@@ -45,17 +45,39 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | metadata-consistency | 7 | det | server |
 | view-execution | 9 | det | **client** |
 | app-wiring | 10 | det | **client** |
-| entity-writes | 8 | det | **client** |
+| entity-writes | 9 | det | **client** |
 | permission-engine | 14 | det | **client** |
 | cache-gauntlet | 8 | det | server |
 | conversation-compaction | 12 | det | server |
 | prompt-runner / agent-runner / concurrent | 4 | live | server |
+| runview-matrix | 18 | det | **client** |
+| runview-features | 6 | det | **client** |
+| runquery-catalog | 6 | det | **client** |
+| runquery-params | 10 | det | **client** |
+| runquery-features | 10 | det | server |
+| scope-enforcement | 5 | det | server |
+| subscription-isolation | 2 | det | **client** |
+| templates | 6 | det | server |
+| actions-pipeline | 5 | det | server |
+| entity-server-invariants | 4 | det | **client** |
+| scheduling-concurrency | 3 | det | server |
+| communication | 4 | det | server |
+| ai-cost | 6 | det | **client** |
+| ai-permissions | 6 | det | **client** |
+| ai-embeddings | 5 | det | **client** |
+| agent-loop-standin | 6 | det | server |
+| transaction-groups | 5 | det | **client** |
+| class-resolution | 5 | det | server |
+| metadata-sync | 9 | det | server |
+| codegen-determinism | 6 | det | **client** |
+| realtime-deterministic | 9 | det | server |
+| search | 7 | det | **client** |
 
-**~220 checks / 30 bundles today** (IT01–IT30). The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles (view-execution, app-wiring, entity-writes, permission-engine) are client-first from birth.
+**~365 checks / 52 registered bundles today** (IT01–IT52): 48 land in the **deterministic** suite, 4 (IT16–IT19) are **live-model**. The 2026-07 expansion added 22 bundles (IT31–IT52, ~143 checks) + EW9 to entity-writes. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
 
 ## Expansion roadmap (the growth target)
 
-Toward a **1000+-factor** suite (checks × entities × apps × queries). Domains from the plan's [test-catalog](../../../plans/integration-test-expansion/test-catalog.md):
+Toward a **1000+-factor** suite (checks × entities × apps × queries). Domains from the [test-catalog](../integration-test-suite/docs/test-catalog.md):
 
 - **Domain 0 — Exhaustive RunView + RunQuery** (client-first): RunView matrix swept across all 379 entities; every catalog query run with valid parameter permutations. *(First landing: `runview-matrix-tests.ts` — a client-first RunView sweep, currently a standalone rig in [`integration-test-suite/rigs/`](../integration-test-suite/rigs/).)*
 - **1** Metadata↔DB consistency audit · **2** Core write-side & transactions · **3** Security & permissions · **4** AI stack (cost, permissions, memory guards, + the stand-in-LLM harness for deterministic agent-loop coverage) · **5** Actions & background processing · **6** Entity-server invariants · **7** Communication/Templates · **8** PostgreSQL parity · **9** Metadata tooling · **10** Realtime/PS · **11** Viewing system · **12** All shipped apps · **13** Unified Search (client-first via `GraphQLSearchClient` — SearchEntities/FullTextSearch/SearchEngine + result permission scoping).
