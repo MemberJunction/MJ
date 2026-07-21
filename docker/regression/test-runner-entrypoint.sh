@@ -263,11 +263,10 @@ npx mj test suite --name "${SUITE_NAME}" \
 EXIT_CODE=$?
 set -e
 
-# Stop the health monitor.
-echo ""
-echo "Stopping health monitor..."
-kill $MONITOR_PID 2>/dev/null
-wait $MONITOR_PID 2>/dev/null || true
+# DR-G4: the health supervisor stays alive THROUGH report generation (below) so
+# its samples cover the whole run, then is stopped at the very end. It also
+# parent-watches, so even if this script dies unexpectedly the supervisor exits
+# on its own rather than orphaning for hours (the §3.2 failure).
 
 # ─── 7. Extract screenshots + generate reports ───────────────────────────────
 echo ""
@@ -292,16 +291,25 @@ source "$SCRIPTS/archive-run.sh"
 # Maintain a "latest" symlink pointing at this run's directory.
 # `mj test compare --from-json docker/regression/test-results` discovers
 # all run-* folders automatically (no need to reference "latest" explicitly).
-ln -sfn "run-${TIMESTAMP}" /app/test-results/latest \
+ln -sfn "$RUN_ID" /app/test-results/latest \
     || echo "  WARNING: Could not create latest symlink"
+
+# DR-G4: stop the supervisor now that reports are done (it stayed alive through
+# them). Parent-watch already backstops orphaning if we never reach here.
+if [ -n "${MONITOR_PID:-}" ]; then
+    kill "$MONITOR_PID" 2>/dev/null || true
+    wait "$MONITOR_PID" 2>/dev/null || true
+fi
 
 echo ""
 echo "Run directory: $RUN_DIR"
 echo "  results.json       → $RUN_DIR/results.json"
+echo "  results.jsonl      → $RUN_DIR/results.jsonl       (per-attempt, crash-safe)"
 echo "  report.md          → $RUN_DIR/report.md"
 echo "  report.html        → $RUN_DIR/report.html  (open in a browser)"
 echo "  screenshots/       → $RUN_DIR/screenshots/"
-echo "  diagnostics.json   → $RUN_DIR/diagnostics.json  (health monitor log)"
-echo "  preflight.json     → $RUN_DIR/preflight.json    (pre-flight checks)"
-echo "  latest symlink     → /app/test-results/latest → run-${TIMESTAMP}"
+echo "  diagnostics.ndjson → $RUN_DIR/diagnostics.ndjson  (health supervisor log)"
+echo "  health-state.json  → $RUN_DIR/health-state.json   (last health state)"
+echo "  preflight.json     → $RUN_DIR/preflight.json      (pre-flight checks)"
+echo "  latest symlink     → /app/test-results/latest → $RUN_ID"
 exit $EXIT_CODE
