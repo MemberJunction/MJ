@@ -258,6 +258,16 @@ services:
     # mj sync, report generation). Raise together with the worker count —
     # DR-A4 (Wave 2) adds the in-container workers-vs-memory clamp.
     mem_limit: "${MJ_REGRESSION_RUNNER_MEM_LIMIT:-7g}"
+    # DR-A3: Chromium container hygiene, straight from Playwright's Docker
+    # guidance. `init` reaps zombies — hundreds of browser launches per run
+    # plus socat's fork-per-connection otherwise accumulate defunct processes
+    # over a multi-hour run. `ipc: host` shares the (VM) host IPC namespace,
+    # which Playwright recommends because Chromium "can run out of memory and
+    # crash" in a private IPC namespace. Under ipc:host the private /dev/shm
+    # (shm_size) is unused, but the setting stays as defense if ipc is ever
+    # removed.
+    init: true
+    ipc: host
     shm_size: '4gb'
     # Compose interpolates ${TEST_RUNNER_ENTRYPOINT} at parse time using the
     # host env (defaulting to the full-stack script). Both scripts are bind-
