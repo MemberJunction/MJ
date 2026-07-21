@@ -3112,8 +3112,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Runs all registered PreRunView hooks against a single RunViewParams,
      * returning the (possibly mutated) params.
+     *
+     * Protected (not private) on purpose: any subclass pipeline that executes
+     * view queries WITHOUT passing through PreRunView/PreRunViews — e.g. the
+     * RunViewsWithCacheCheck smart-cache path in GenericDatabaseProvider —
+     * MUST apply these hooks itself. Hooks are an enforcement seam (tenant
+     * scoping middleware injects filters here); a query path that skips them
+     * silently returns rows the hooked paths would have filtered out.
      */
-    private async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
+    protected async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
         const hooks = GetDataHooks<PreRunViewHook>('PreRunView');
         for (const hook of hooks) {
             params = await hook(params, contextUser);

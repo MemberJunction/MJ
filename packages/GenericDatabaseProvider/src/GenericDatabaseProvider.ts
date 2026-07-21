@@ -2083,6 +2083,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             for (let i = 0; i < params.length; i++) {
                 // Shallow-clone: widening must never leak into the caller's objects
                 params[i] = { ...params[i], params: { ...params[i].params } };
+                // ── PreRunView data hooks (same enforcement seam as the standard
+                // PreRunView/PreRunViews pipeline) ──
+                // This path executes queries via buildWhereClauseForCacheCheck and
+                // InternalRunView directly, so registered hooks (e.g. tenant-filter
+                // middleware injecting scoping into ExtraFilter) would otherwise be
+                // SKIPPED for every CacheLocal read — and this operation is directly
+                // client-invokable over GraphQL. Apply them here, once per item,
+                // BEFORE the cache-currency WHERE clause is built and before any
+                // execution leg, so the currency check and the returned rows always
+                // agree with what the hooked non-cached path would produce.
+                // PlatformSQL resolves first (hooks expect plain-string filters),
+                // mirroring PreRunView's ordering.
+                this.ResolvePlatformSQLInParams(params[i].params);
+                params[i].params = await this.RunPreRunViewHooks(params[i].params, user);
                 const p = params[i].params;
                 const widenEntity = p.EntityName ? this.EntityByName(p.EntityName) : null;
                 if (widenEntity && this.runViewCacheEligible(p)) {
