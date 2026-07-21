@@ -40,6 +40,7 @@ export * from './engine/RunContext.js';
 export * from './engine/ResponseParser.js';
 export * from './engine/ComputerUseEngine.js';
 export * from './engine/trace-url.js';
+export * from './engine/trace-recorder.js';
 
 // ─── Tool Exports ──────────────────────────────────────────
 export * from './tools/ToolProvider.js';
