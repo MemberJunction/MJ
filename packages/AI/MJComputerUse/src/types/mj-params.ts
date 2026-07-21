@@ -118,6 +118,14 @@ export class MJRunComputerUseParams extends RunComputerUseParams {
      * Screenshots remain in the in-memory step history / run result regardless.
      */
     public PersistStepMedia?: boolean;
+
+    /**
+     * Per-test controller generation overrides (CU-E6) threaded into the
+     * controller `AIPromptParams` — `temperature` (rides `additionalParameters`)
+     * and `effortLevel` (1–100). The determinism knobs for pinned regression
+     * runs (e.g. `temperature: 0`). Judge generation is unaffected.
+     */
+    public ControllerGeneration?: { temperature?: number; effortLevel?: number };
 }
 
 // ─── MJ Domain Auth Binding ──────────────────────────────────

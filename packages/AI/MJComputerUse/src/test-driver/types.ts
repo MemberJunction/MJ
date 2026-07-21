@@ -206,6 +206,13 @@ export interface ComputerUseTestConfig {
     };
 
     /**
+     * Per-test controller generation overrides (CU-E6) — determinism knobs
+     * threaded into the controller prompt. `temperature` (e.g. 0 for pinned
+     * regression runs) and `effortLevel` (1–100). Judge generation is unaffected.
+     */
+    generation?: { temperature?: number; effortLevel?: number };
+
+    /**
      * Element-grounded perception (CU-A4). When true, each step the engine
      * extracts the page's interactive elements into an indexed list, renders it
      * into the controller prompt, and lets the controller act by index

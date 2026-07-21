@@ -120,6 +120,9 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private controllerPromptEntity: MJAIPromptEntityExtended | undefined;
     private judgePromptEntity: MJAIPromptEntityExtended | undefined;
 
+    /** Per-test controller generation overrides (CU-E6), populated in Run(). */
+    private controllerGeneration?: { temperature?: number; effortLevel?: number };
+
     constructor() {
         super();
         this.promptRunner = new AIPromptRunner();
@@ -142,6 +145,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     public override async Run(params: MJRunComputerUseParams): Promise<ComputerUseResult> {
         this.contextUser = params.ContextUser;
         this.agentRunId = params.AgentRunId;
+        this.controllerGeneration = params.ControllerGeneration;   // per-test determinism knobs (CU-E6)
         this.lastPromptRunId = undefined;
         this.lastJudgePromptRunId = undefined;
 
@@ -253,7 +257,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 formLoginCredentials: request.FormLoginCredentials,
                 previousStepSummary: request.PreviousStepSummary,
                 applicationContext: request.ApplicationContext,
-            }, request.Signal);
+            }, request.Signal, this.controllerGeneration);
 
             if (!result.success) {
                 this.logError(`AIPromptRunner failed: ${result.errorMessage ?? 'unknown error'}`);
@@ -396,7 +400,11 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         if (ref.PromptId) {
             prompt = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, ref.PromptId));
         } else if (ref.PromptName) {
-            prompt = AIEngine.Instance.Prompts.find(p => p.Name === ref.PromptName);
+            // Case-insensitive, trimmed match (CU-E6) — mirrors the repo's
+            // EntityByName convention; a stray case/whitespace difference in a
+            // test's PromptName should still resolve.
+            const target = ref.PromptName.trim().toLowerCase();
+            prompt = AIEngine.Instance.Prompts.find(p => p.Name?.trim().toLowerCase() === target);
         }
 
         if (!prompt) {
@@ -492,7 +500,8 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private async executePromptViaRunner(
         promptEntity: MJAIPromptEntityExtended,
         data: Record<string, unknown>,
-        signal?: AbortSignal
+        signal?: AbortSignal,
+        generation?: { temperature?: number; effortLevel?: number }
     ) {
         // Extract screenshot fields — these go as image messages, not template data
         const currentScreenshot = data.currentScreenshot as string | undefined;
@@ -516,6 +525,15 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         // cancelled run releases its worker slot in seconds instead of at step end.
         if (signal) {
             params.cancellationToken = signal;
+        }
+        // Per-test generation overrides (CU-E6): determinism knobs (e.g. temp≈0
+        // for pinned regression runs). temperature rides additionalParameters;
+        // effortLevel is a first-class AIPromptParams field.
+        if (generation?.temperature != null) {
+            params.additionalParameters = { ...params.additionalParameters, temperature: generation.temperature };
+        }
+        if (generation?.effortLevel != null) {
+            params.effortLevel = generation.effortLevel;
         }
 
         if (conversationMessages.length > 0) {

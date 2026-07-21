@@ -449,6 +449,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         // Element-grounded perception (CU-A4): opt-in per test/suite; default off
         // (coordinate mode) until baked in across the suite.
         params.ElementGrounding = config.elementGrounding ?? false;
+        // Per-test controller generation overrides (CU-E6): determinism knobs.
+        if (config.generation) {
+            params.ControllerGeneration = config.generation;
+        }
 
         // Adaptive settle profile (CU-A1/A2): MJ-Explorer defaults, config-overridable.
         params.AppProfile = this.buildAppProfile(config);
