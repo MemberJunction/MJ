@@ -194,6 +194,17 @@ export interface SuiteRunOptions extends TestRunOptions {
    * when tests perform repeated logins from the same IP.
    */
   delayBetweenTests?: number;
+
+  /**
+   * Fired the moment each test resolves its final result (after any retries),
+   * in whichever worker ran it (DR-D5). The suite runner uses this to persist
+   * results incrementally — one JSONL line per attempt + an atomic partial
+   * snapshot — so a crashed or OOM-killed run preserves every completed test
+   * instead of losing everything (results.json is otherwise written once at the
+   * very end). Must be cheap and non-throwing; the engine invokes it inline in
+   * the worker loop and swallows any error it throws.
+   */
+  onTestComplete?: (result: TestRunResult) => void;
 }
 
 /**
@@ -377,6 +388,13 @@ export interface TestRunResult {
    * final `result` object no longer silently discards attempt 1's failure.
    */
   priorAttempts?: PriorAttemptSummary[];
+
+  /**
+   * Zero-based index of the parallel worker that ran this test (DR-D5).
+   * Undefined for sequential runs. Enables per-worker swimlane timelines and
+   * "poisoned worker" analysis in reporting (DR-G2).
+   */
+  workerIndex?: number;
 }
 
 /**

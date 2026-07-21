@@ -13,12 +13,37 @@ import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj
 import { parseVariableFlags } from '../utils/variable-parser';
 import { loadOraclesModule } from '../utils/oracle-module-loader';
 import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
+import { IncrementalResultsSink } from '../utils/incremental-results';
 
 /**
  * Suite command - Execute a test suite
  */
 export class SuiteCommand {
     private spinner = new SpinnerManager();
+
+    /**
+     * DR-D5: on external termination (docker stop → SIGTERM, Ctrl-C → SIGINT) or
+     * an uncaught crash, flush a terminal partial snapshot before exiting so the
+     * run dir reflects reality — status `Cancelled`/`Crashed` with counts-so-far —
+     * instead of leaving a stale `Running` partial forever. Writes are synchronous
+     * (writeFileSync/rename) so they complete inside the handler. We do NOT attempt
+     * an async DB finalize of the TestSuiteRun here — a signal handler can't
+     * reliably await it; the file snapshot is the reliable crash-safety artifact.
+     */
+    private installCrashHandlers(sink: IncrementalResultsSink): void {
+        const onSignal = (signal: NodeJS.Signals, code: number) => {
+            sink.finalize('Cancelled');
+            console.error(`\n${signal} received — flushed ${sink.completedCount} completed test(s) to results.partial.json. Exiting.`);
+            process.exit(code);
+        };
+        process.once('SIGTERM', () => onSignal('SIGTERM', 143));
+        process.once('SIGINT', () => onSignal('SIGINT', 130));
+        process.once('uncaughtException', (err) => {
+            sink.finalize('Crashed');
+            console.error('Uncaught exception — flushed partial results before exit:', err);
+            process.exit(1);
+        });
+    }
 
     /**
      * Execute the suite command
@@ -112,6 +137,14 @@ export class SuiteCommand {
             // Note: Suite variables apply to all tests - type conversion happens per-test
             const variables = parseVariableFlags(flags.var);
 
+            // DR-D5: persist results incrementally next to --output so a crash /
+            // OOM / `docker stop` preserves every completed test (results.json is
+            // otherwise written only at the very end). No-op when --output is unset.
+            const resultsSink = IncrementalResultsSink.forOutput(flags.output, suite.Name);
+            if (resultsSink) {
+                this.installCrashHandlers(resultsSink);
+            }
+
             // Execute suite
             const flakyMsg = flags.flakyCheck && flags.flakyCheck > 1
                 ? ` (flaky-check: each test ×${flags.flakyCheck})`
@@ -132,9 +165,12 @@ export class SuiteCommand {
                 maxParallel: integrationSerial ? 1 : flags.maxParallel,
                 maxRetries: flags.maxRetries,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
+                onTestComplete: resultsSink?.onTestComplete,
             }, contextUser);
 
             this.spinner.stop();
+            // DR-D5: normal completion — stamp the partial snapshot terminal.
+            resultsSink?.finalize('Completed');
 
             // If --flaky-check was used, compute per-test variance and report flaky tests.
             // The engine returns multiple results per test (one per iteration); we group by

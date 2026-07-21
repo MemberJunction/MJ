@@ -441,19 +441,91 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
             try {
                 const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRunId, testSequence, suiteVariablesJson, undefined, suiteContext);
-                if (Array.isArray(result)) {
-                    testResults.push(...result);
-                } else {
-                    testResults.push(result);
+                const arr = Array.isArray(result) ? result : [result];
+                for (const r of arr) {
+                    this.finalizeTestResult(r, undefined, testSequence, options);
+                    testResults.push(r);
                 }
             } catch (error) {
+                // DR-D5: synthesize + emit instead of dropping (see executeParallelWorker).
                 this.logError(`Test failed in suite: ${test.Name}`, error as Error);
+                const errResult = this.synthesizeErrorResult(test, error as Error, suiteRunId, testSequence, undefined);
+                this.finalizeTestResult(errResult, undefined, testSequence, options);
+                testResults.push(errResult);
             } finally {
                 testSequence++;
             }
         }
 
         return testResults;
+    }
+
+    /**
+     * Stamp cross-cutting fields onto a resolved result and fire the incremental
+     * completion hook (DR-D5). Called for every result the suite produces — the
+     * happy path, each iteration of a repeated test, and synthesized Error
+     * results — from the one worker that produced it. The hook is invoked inline
+     * (so the JSONL/partial write is ordered before the next test starts) and
+     * its throws are swallowed: a reporting-sink failure must never fail a test.
+     * @private
+     */
+    private finalizeTestResult(
+        result: TestRunResult,
+        workerIndex: number | undefined,
+        sequence: number,
+        options: SuiteRunOptions
+    ): void {
+        if (result.workerIndex === undefined && workerIndex !== undefined) {
+            result.workerIndex = workerIndex;
+        }
+        if (result.sequence === undefined) {
+            result.sequence = sequence;
+        }
+        try {
+            options.onTestComplete?.(result);
+        } catch (hookErr) {
+            this.logError('onTestComplete hook threw (ignored)', hookErr as Error);
+        }
+    }
+
+    /**
+     * Build a stand-in `Error` result for a test whose execution THREW (DR-D5).
+     * Before this, a thrown Execute was logged and dropped, so the test vanished
+     * from the totals and `compare` misread it as "removed". No TestRun row was
+     * persisted (the throw escaped `runSingleTestIteration`), so `testRunId` is
+     * empty — the result exists purely so the failure is counted and emitted.
+     * @private
+     */
+    private synthesizeErrorResult(
+        test: MJTestEntity,
+        error: Error,
+        suiteRunId: string,
+        sequence: number,
+        workerIndex: number | undefined
+    ): TestRunResult {
+        const now = new Date();
+        return {
+            testRunId: '',
+            testId: test.ID,
+            testName: test.Name,
+            status: 'Error',
+            score: 0,
+            passedChecks: 0,
+            failedChecks: 0,
+            totalChecks: 0,
+            oracleResults: [],
+            targetType: '',
+            targetLogId: '',
+            durationMs: 0,
+            totalCost: 0,
+            startedAt: now,
+            completedAt: now,
+            errorMessage: error?.message ?? String(error),
+            sequence,
+            attempts: 1,
+            flaky: false,
+            workerIndex,
+        };
     }
 
     /**
@@ -558,13 +630,19 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 const result = await this.runTestWithSuiteVariables(
                     test.ID, options, contextUser, suiteRunId, sequence, suiteVariablesJson, workerIndex, suiteContext
                 );
-                if (Array.isArray(result)) {
-                    results.push(...result);
-                } else {
-                    results.push(result);
+                const arr = Array.isArray(result) ? result : [result];
+                for (const r of arr) {
+                    this.finalizeTestResult(r, workerIndex, sequence, options);
+                    results.push(r);
                 }
             } catch (error) {
+                // DR-D5: a thrown Execute must NOT silently vanish from the totals
+                // (previously logged + dropped, so `compare` misread it as "removed").
+                // Synthesize an Error result, emit it incrementally, keep going.
                 this.logError(`[Worker ${workerIndex + 1}] Test failed: ${test.Name}`, error as Error);
+                const errResult = this.synthesizeErrorResult(test, error as Error, suiteRunId, sequence, workerIndex);
+                this.finalizeTestResult(errResult, workerIndex, sequence, options);
+                results.push(errResult);
             }
         }
 
