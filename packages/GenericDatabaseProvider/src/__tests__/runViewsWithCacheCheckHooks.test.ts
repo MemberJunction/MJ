@@ -18,6 +18,7 @@ import {
     UserInfo,
     EntityInfo,
     PreRunViewHook,
+    PostRunViewHook,
 } from '@memberjunction/core';
 import type { SaveSQLResult, DeleteSQLResult } from '../GenericDatabaseProvider';
 
@@ -51,10 +52,13 @@ class HookCaptureProvider extends GenericDatabaseProvider {
 
     /** Params captured from every InternalRunView invocation. */
     public capturedRunViewParams: RunViewParams[] = [];
+    /** Rows InternalRunView returns — set by the PostRunView tests to have something to mask. */
+    public rowsToReturn: unknown[] = [];
 
     protected override async InternalRunView<T = unknown>(params: RunViewParams): Promise<RunViewResult<T>> {
         this.capturedRunViewParams.push(params);
-        return { Success: true, Results: [], UserViewRunID: '', RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' } as RunViewResult<T>;
+        const rows = this.rowsToReturn as T[];
+        return { Success: true, Results: rows, UserViewRunID: '', RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' } as RunViewResult<T>;
     }
 
     // Widening/caching lookups are irrelevant to these tests — no entity metadata loaded.
@@ -136,5 +140,66 @@ describe('RunViewsWithCacheCheck — PreRunView data hooks', () => {
 
         expect(result.success).toBe(true);
         expect(provider.capturedRunViewParams[0].ExtraFilter).toBe('A = 1');
+    });
+});
+
+describe('RunViewsWithCacheCheck — PostRunView data hooks', () => {
+    let provider: HookCaptureProvider;
+
+    beforeEach(() => {
+        ClearAllDataHooks();
+        provider = new HookCaptureProvider();
+    });
+
+    afterEach(() => {
+        ClearAllDataHooks();
+    });
+
+    /** Reads the row set off a returned cache-check item (stale/differential legs carry `results`). */
+    const rowsOf = (item: unknown): Array<Record<string, unknown>> | undefined =>
+        (item as { results?: Array<Record<string, unknown>> }).results;
+
+    it('applies registered PostRunView hooks to the returned rows (data masking)', async () => {
+        provider.rowsToReturn = [
+            { ID: '1', Name: 'a', Secret: 'top' },
+            { ID: '2', Name: 'b', Secret: 'sauce' },
+        ];
+        const hook: PostRunViewHook = (_params, result) => ({
+            ...result,
+            Results: (result.Results as Array<Record<string, unknown>>).map((r) => ({ ...r, Secret: '***' })),
+        });
+        RegisterDataHook('PostRunView', hook);
+
+        const result = await provider.RunViewsWithCacheCheck([{ params: { EntityName: 'Test Entity A' } }], mockUser);
+
+        expect(result.success).toBe(true);
+        const rows = rowsOf(result.results[0]);
+        expect(rows).toBeDefined();
+        expect(rows!.every((r) => r.Secret === '***')).toBe(true);
+        // Non-masked fields survive untouched.
+        expect(rows!.map((r) => r.Name)).toEqual(['a', 'b']);
+    });
+
+    it('passes the resolved context user to the PostRunView hooks', async () => {
+        provider.rowsToReturn = [{ ID: '1' }];
+        const seenUsers: Array<UserInfo | undefined> = [];
+        const hook: PostRunViewHook = (_params, result, contextUser) => {
+            seenUsers.push(contextUser);
+            return result;
+        };
+        RegisterDataHook('PostRunView', hook);
+
+        await provider.RunViewsWithCacheCheck([{ params: { EntityName: 'Test Entity A' } }], mockUser);
+
+        expect(seenUsers.map((u) => u?.ID)).toContain('test-user-id');
+    });
+
+    it('leaves rows unchanged when no PostRunView hooks are registered (baseline)', async () => {
+        provider.rowsToReturn = [{ ID: '1', Secret: 'top' }];
+
+        const result = await provider.RunViewsWithCacheCheck([{ params: { EntityName: 'Test Entity A' } }], mockUser);
+
+        expect(result.success).toBe(true);
+        expect(rowsOf(result.results[0])?.[0]?.Secret).toBe('top');
     });
 });

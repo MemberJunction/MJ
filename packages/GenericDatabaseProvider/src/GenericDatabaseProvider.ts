@@ -2277,6 +2277,43 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
             allResults.sort((a, b) => a.viewIndex - b.viewIndex);
 
+            // ── PostRunView data hooks (OUTPUT half of the enforcement seam) ──
+            // The Pre hooks were applied to each item's params up front; the
+            // matching Post hooks (data masking / audit) run HERE, once per
+            // row-bearing item at the outbound boundary — mirroring
+            // ProviderBase.PostRunViews — so rows returned via ANY leg (fresh
+            // query, server-cache serve, or differential) get the same masking
+            // the hooked non-cached path applies. Applied AFTER projection
+            // (item.results is already the caller's shape) and PER REQUEST, so
+            // masking is never baked into the shared cache. 'current' and
+            // 'error' items carry no rows: a 'current' client keeps its own
+            // cache, which was masked when an earlier 'stale'/'differential'
+            // response populated it. Uses params[viewIndex] — the same hooked
+            // params object the Pre hooks produced.
+            for (const item of allResults) {
+                const rowBearing = item as { viewIndex: number; results?: T[]; rowCount?: number };
+                if (!Array.isArray(rowBearing.results)) {
+                    continue;
+                }
+                const viewParams = params[rowBearing.viewIndex]?.params;
+                if (!viewParams) {
+                    continue;
+                }
+                const hooked = await this.RunPostRunViewHooks(
+                    viewParams,
+                    {
+                        Success: true,
+                        Results: rowBearing.results,
+                        RowCount: rowBearing.results.length,
+                        TotalRowCount: rowBearing.rowCount ?? rowBearing.results.length,
+                    } as unknown as RunViewResult<T>,
+                    user,
+                );
+                if (hooked && Array.isArray(hooked.Results)) {
+                    rowBearing.results = hooked.Results as T[];
+                }
+            }
+
             const entities = params.map(p => p.params.EntityName || 'unknown').join(', ');
             const totalServerCacheHits = (itemsNeedingValidation.length - serverCacheMissItems.length) + noCacheStatusServedFromCache.length;
             const totalChecked = itemsNeedingValidation.length + itemsWithoutCacheCheck.length;
