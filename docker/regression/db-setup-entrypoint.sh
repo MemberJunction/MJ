@@ -74,7 +74,7 @@ if [ -n "${BACPAC_FILE:-}" ]; then
     # test engine to run. Non-fatal: an as-is current-version bacpac may already
     # carry them.
     echo "Step 4: Syncing prompts metadata (Computer Use controller/judge templates)..."
-    npx mj sync push --dir=metadata --include="prompts" 2>&1 || {
+    npx mj sync push --dir=metadata --include="prompts" --no-write-back 2>&1 || {
         echo "  WARNING: Prompts metadata sync failed — Computer Use prompts may be stale/missing"
     }
     echo ""
@@ -126,7 +126,7 @@ echo ""
 
 # Step 4: Sync application metadata (baseline migration only seeds 2 of ~20 apps)
 echo "Step 4: Syncing application metadata..."
-npx mj sync push --dir=metadata --include="applications" 2>&1 || {
+npx mj sync push --dir=metadata --include="applications" --no-write-back 2>&1 || {
     echo "  WARNING: Application metadata sync failed — apps may be limited"
 }
 echo "  ✓ Application metadata sync complete"
@@ -137,7 +137,7 @@ echo ""
 # changes. Re-pushing here ensures the regression run uses the current
 # templates (e.g., new Computer Use action types).
 echo "Step 5: Syncing prompts metadata (refreshes Computer Use controller/judge templates)..."
-npx mj sync push --dir=metadata --include="prompts" 2>&1 || {
+npx mj sync push --dir=metadata --include="prompts" --no-write-back 2>&1 || {
     echo "  WARNING: Prompts metadata sync failed — Computer Use prompts may be stale"
 }
 echo "  ✓ Prompts metadata sync complete"

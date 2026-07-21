@@ -329,7 +329,11 @@ services:
       # Target profile JSONs for Modes B/C/D (read-only — the runner only
       # consumes them, the loader runs on the host).
       - ./targets:/app/docker/regression/targets:ro
-      - ../../metadata:/app/metadata
+      # DR-B5: mounted READ-ONLY. Every runner push uses --no-write-back (DR-B4),
+      # so nothing needs to write here; :ro turns any accidental write-back into a
+      # loud failure instead of silent repo pollution, and makes "what's in the DB"
+      # a pure function of the working tree at run start.
+      - ../../metadata:/app/metadata:ro
       - ./test-metadata:/app/test-metadata:ro
 
 # DR-B2: named volume for the SQL Server data dir. Explicitly named so it's

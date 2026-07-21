@@ -52,6 +52,17 @@ npx mj sync push --dir=metadata --include="applications" --no-write-back 2>&1 ||
 }
 echo ""
 
+# DR-B5: push Computer Use controller/judge PROMPTS from the LIVE host mount
+# every run. db-setup also seeds them, but from its BAKED copy — so editing a
+# prompt JSON used to take effect only on a db-setup image rebuild (the
+# staleness trap). This live push (idempotent, runs after db-setup) makes prompt
+# edits take effect on the next `up`, same as test/suite edits already do.
+echo "Syncing Computer Use prompts (live)..."
+npx mj sync push --dir=metadata --include="prompts" --no-write-back 2>&1 || {
+    echo "  WARNING: Prompts metadata sync failed — Computer Use prompts may be stale"
+}
+echo ""
+
 # Test-scoped metadata (from docker/regression/test-metadata/):
 #   tags  — 3 global tags (vip, follow-up, regression-test)
 #   users — test user + roles + List Categories + Lists + User View Categories
