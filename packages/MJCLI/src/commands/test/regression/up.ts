@@ -7,7 +7,9 @@ import {
   BACPAC_STANDALONE_COMPOSE,
   dockerComposeArgs,
   isInsideMonorepo,
+  mintRunId,
   resolveStandaloneCompose,
+  runDirFor,
   spawnInherit,
 } from '../../../lib/regression/docker-helpers.js';
 
@@ -66,6 +68,13 @@ export default class TestRegressionUp extends Command {
     const childEnv: NodeJS.ProcessEnv = { ...process.env };
     const overlays: string[] = [];
 
+    // DR-F1: mint the run id host-side (unless the caller pre-set RUN_ID, e.g.
+    // a resume) so the host owns the run's identity + output dir from launch.
+    const runId = process.env.RUN_ID || mintRunId();
+    childEnv.RUN_ID = runId;
+    this.log(`▶ Run: ${runId}`);
+    this.log(`  Output: ${runDirFor(runId)}`);
+
     if (flags.bacpac) {
       const abs = path.resolve(flags.bacpac as string);
       if (!existsSync(abs) || !statSync(abs).isFile()) this.error(`✗ Bacpac file not found: ${abs}`);
@@ -115,6 +124,7 @@ export default class TestRegressionUp extends Command {
 
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
+      RUN_ID: process.env.RUN_ID || mintRunId(), // DR-F1: host-owned run identity
       MJ_IMAGE: (flags.image as string) ?? AGENTIC_TEST_RUNNER_IMAGE,
       MJ_EXPLORER_IMAGE: (flags['explorer-image'] as string) ?? 'memberjunction/explorer:latest',
       BACPAC_DIR: path.dirname(abs),

@@ -39,6 +39,24 @@ export function resolveStandaloneCompose(monorepoRelPath: string): string {
 }
 export const ENV_FILE = `${REGRESSION_DIR}/.env.test`;
 export const TARGETS_DIR = `${REGRESSION_DIR}/targets`;
+
+/**
+ * Mint a run id host-side, matching the entrypoint's `run-<utc-timestamp>`
+ * folder convention (DR-F1). The CLI passes this to compose as `RUN_ID` so the
+ * host knows the run's identity — and therefore its `test-results/<RUN_ID>/`
+ * directory — from the moment it launches, instead of reverse-engineering it
+ * from the `latest` symlink after the fact. `status`/`logs`/`rerun-failures`
+ * (DR-F3/F4) all key off this.
+ */
+export function mintRunId(): string {
+  const ts = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  return `run-${ts}`;
+}
+
+/** Absolute host path to a run's output directory for a given run id (DR-F1). */
+export function runDirFor(runId: string): string {
+  return path.resolve(RESULTS_DIR, runId);
+}
 export const LOAD_TARGET_SCRIPT = `${REGRESSION_DIR}/scripts/load-target-profile.cjs`;
 export const GEN_FORMS_SCRIPT = `${REGRESSION_DIR}/gen-forms.sh`;
 export const RESULTS_DIR = `${REGRESSION_DIR}/test-results`;

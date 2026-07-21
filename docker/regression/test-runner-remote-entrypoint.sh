@@ -102,7 +102,9 @@ fi
 
 # ─── 2. Per-run output directory ─────────────────────────────────────────────
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
-RUN_DIR="/app/test-results/run-${TIMESTAMP}"
+# DR-F1: prefer the host-minted RUN_ID; fall back to a container-minted id.
+RUN_ID="${RUN_ID:-run-${TIMESTAMP}}"
+RUN_DIR="/app/test-results/${RUN_ID}"
 mkdir -p "$RUN_DIR/screenshots"
 
 # DR-F2: tee everything from here on to the bind-mounted run dir so a detached

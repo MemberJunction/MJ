@@ -168,7 +168,11 @@ fi
 #                                     screenshots/}
 # A "latest" symlink always points at the most recent run.
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
-RUN_DIR="/app/test-results/run-${TIMESTAMP}"
+# DR-F1: prefer the host-minted RUN_ID (the CLI sets it before compose so it
+# owns this run's identity + output dir from launch); fall back to a
+# container-minted id for direct `docker run` / legacy invocations.
+RUN_ID="${RUN_ID:-run-${TIMESTAMP}}"
+RUN_DIR="/app/test-results/${RUN_ID}"
 mkdir -p "$RUN_DIR/screenshots"
 
 # DR-F2: tee everything from here on to the bind-mounted run dir, so a detached
