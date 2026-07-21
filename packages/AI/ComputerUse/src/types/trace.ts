@@ -172,6 +172,46 @@ export class ComputerUseTrace {
     public GoalPostconditions: GoalPostcondition[] = [];
 }
 
+// ─── Replay Telemetry (CU-C2/C3) ───────────────────────────
+/**
+ * Per-step replay outcome (Momentic's Cache pane vocabulary), which doubles as
+ * UI-drift telemetry:
+ * - `'hit'`      — replayed deterministically; guards passed as recorded.
+ * - `'healed'`   — the recorded target drifted; one focused heal call (CU-C3)
+ *                  re-resolved it and the trace step was rewritten.
+ * - `'diverged'` — replay + heal both failed; the run falls back to the LLM tier.
+ */
+export type ReplayStepOutcome = 'hit' | 'healed' | 'diverged';
+
+/** Outcome of replaying one trace step. */
+export class ReplayStepResult {
+    /** 0-based index into the trace's Steps. */
+    public StepIndex: number = 0;
+    /** The step's recorded instruction (for the run log / drift report). */
+    public Instruction: string = '';
+    public Outcome: ReplayStepOutcome = 'hit';
+    /** Human-readable detail — why it healed/diverged, or 'ok'. */
+    public Detail: string = '';
+}
+
+/**
+ * Replay telemetry stamped onto a {@link ComputerUseResult} produced by the
+ * replay tier (CU-C2). A suite-wide spike in {@link Healed}/{@link Diverged}
+ * after a merge is a free "this PR changed the UI" signal (CU-C3.3).
+ */
+export class ReplayInfo {
+    /** Which tier this run executed in. */
+    public Tier: 'replay' | 'replay-with-heal' = 'replay';
+    /** Per-step outcomes in order. */
+    public Steps: ReplayStepResult[] = [];
+    /** Count of steps that self-healed (CU-C3). */
+    public Healed: number = 0;
+    /** Count of steps that diverged (unrecovered). */
+    public Diverged: number = 0;
+    /** Whether every step hit or healed (no unrecovered divergence). */
+    public AllStepsSucceeded: boolean = false;
+}
+
 /** A recorded, replayable step (CU-C1). */
 export class TraceStep {
     /** Human-readable intent (from the controller's reasoning) — the heal prompt seed. */

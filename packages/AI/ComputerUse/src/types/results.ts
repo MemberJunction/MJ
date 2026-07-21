@@ -11,6 +11,7 @@
 
 import { JudgeVerdict, StepRecord } from './judge.js';
 import { ComputerUseError } from './errors.js';
+import type { ReplayInfo } from './trace.js';
 
 // Re-export StepRecord for convenience — it's defined in judge.ts
 // because the judge needs it in JudgeContext, but consumers often
@@ -112,4 +113,11 @@ export class ComputerUseResult {
 
     /** Error details (populated when Status is 'Error') */
     public Error?: ComputerUseError;
+
+    /**
+     * Replay telemetry (CU-C2/C3), set only when the run executed on the replay
+     * tier via {@link ComputerUseEngine.Replay}. Undefined for LLM-tier runs.
+     * Carries per-step hit/healed/diverged outcomes for the UI-drift report.
+     */
+    public Replay?: ReplayInfo;
 }

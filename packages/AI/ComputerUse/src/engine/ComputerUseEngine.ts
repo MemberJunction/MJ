@@ -66,6 +66,16 @@ import { serializeInteractiveElements } from './element-serializer.js';
 import { evaluateBatchStop, DEFAULT_MAX_ACTIONS_PER_BATCH } from './batch-control.js';
 import { gateImpossibleVerdict, DEFAULT_IMPOSSIBLE_QUORUM } from './terminal-verdict.js';
 import { formatDiagnosticsDigest } from './diagnostics-digest.js';
+import { traceUrlMatches } from './trace-url.js';
+import {
+    planReplayActions,
+    evaluatePrecondition,
+    evaluatePostcondition,
+    targetSelector,
+} from './replay-step.js';
+import type { GuardResult } from './replay-step.js';
+import { ComputerUseTrace, ReplayInfo, ReplayStepResult } from '../types/trace.js';
+import type { TraceStep } from '../types/trace.js';
 import {
     JudgeContext,
     JudgeVerdict,
@@ -240,6 +250,56 @@ export class ComputerUseEngine {
         }
     }
 
+    /**
+     * Replay a recorded trace deterministically (CU-C2) — the flagship execution
+     * tier. Same browser lifecycle as {@link Run}, but each step is driven by the
+     * recorded trajectory instead of an LLM: settle → precondition (bounded wait
+     * for the target; **fail the step on timeout — never proceed anyway**) →
+     * locator-based action with Playwright auto-wait → postcondition assert.
+     * Replay steps consume ZERO LLM budget and run at Playwright speed.
+     *
+     * Fail-fast: the first step that can't be satisfied consults the heal seam
+     * ({@link healReplayStep}, a no-op at this layer until CU-C3) and, if it
+     * can't heal, ends the run `Failed` with the divergence recorded on
+     * {@link ComputerUseResult.Replay}. All-steps-hit ends `Completed`. Never
+     * throws — errors return in the result, exactly like {@link Run}.
+     */
+    public async Replay(trace: ComputerUseTrace, params: RunComputerUseParams): Promise<ComputerUseResult> {
+        this.cancelled = false;
+        this.abortController = new AbortController();
+        this.activeParams = params;
+        const context = new RunContext(params);
+        const replay = new ReplayInfo();
+
+        this.log(`Replay starting — Test ${trace.TestId}, ${trace.Steps.length} recorded steps`);
+
+        let result: ComputerUseResult | undefined;
+        try {
+            this.initializeComponents(params);
+            await this.launchBrowser(params);
+            await this.startTracingIfRequested(params);
+            await this.runGlobalAuthCallback();
+            await this.navigateToStartUrl(params, context);
+            result = await this.executeReplayLoop(trace, context, replay);
+            return result;
+        } catch (error) {
+            if (error instanceof CancellationError) {
+                this.log('Replay cancelled mid-step (CU-B8) — returning Cancelled');
+                result = this.buildResult(context, 'Cancelled', false);
+                result.Replay = replay;
+                return result;
+            }
+            this.logError('Replay failed with error', error);
+            result = this.buildErrorResult(context, error);
+            result.Replay = replay;
+            return result;
+        } finally {
+            await this.stopTracingIfRequested(params, result);
+            await this.closeBrowser();
+            this.log('Browser closed');
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════
     // PROTECTED VIRTUAL METHODS
     // ═══════════════════════════════════════════════════════════
@@ -273,11 +333,31 @@ export class ComputerUseEngine {
     }
 
     /**
+     * Self-heal seam for a diverged replay step (CU-C3). Called when a step's
+     * precondition/action/postcondition failed during {@link Replay}. A subclass
+     * with an LLM controller overrides this to re-resolve the drifted target
+     * from a fresh element list + the step's recorded instruction, execute the
+     * healed action, rewrite the trace step in place, and update `step`
+     * accordingly — returning `true` on success. The base implementation cannot
+     * heal (no re-derivation at this layer) and returns `false`, so the step
+     * diverges and the run falls back to the LLM tier.
+     */
+    protected async healReplayStep(
+        _trace: ComputerUseTrace,
+        _stepIndex: number,
+        _context: RunContext,
+        _step: StepRecord,
+        _reason: string
+    ): Promise<boolean> {
+        return false;
+    }
+
+    /**
      * Hook: called after each step completes.
      * Override for logging, persistence, or real-time monitoring.
      */
     protected onStepComplete(_step: StepRecord, _params: RunComputerUseParams): void {
-        
+
     }
 
     /**
@@ -813,6 +893,212 @@ export class ComputerUseEngine {
         );
         this.onRunComplete(errorResult);
         return errorResult;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // REPLAY (CU-C2)
+    // ═══════════════════════════════════════════════════════════
+
+    /** Bounded wait for a replay step's target to become attached+visible. */
+    private static readonly REPLAY_PRECONDITION_TIMEOUT_MS = 12_000;
+    /** Poll interval while waiting for a replay target. */
+    private static readonly REPLAY_POLL_MS = 250;
+
+    /**
+     * Drive the recorded steps in order. Stops fail-fast on the first
+     * unrecovered divergence; otherwise ends when every step hit/healed.
+     */
+    private async executeReplayLoop(
+        trace: ComputerUseTrace,
+        context: RunContext,
+        replay: ReplayInfo
+    ): Promise<ComputerUseResult> {
+        const volatile = context.Params.AppProfile?.Loop?.VolatileParams ?? [];
+        const values = context.Params.VariableValues ?? {};
+
+        for (let i = 0; i < trace.Steps.length; i++) {
+            this.ensureNotCancelled();
+            const { result: stepResult, step } = await this.replayOneStep(trace, i, context, volatile, values);
+            replay.Steps.push(stepResult);
+            context.AddStep(step);
+            this.onStepComplete(step, context.Params);
+
+            if (stepResult.Outcome === 'diverged') {
+                replay.Diverged++;
+                replay.AllStepsSucceeded = false;
+                return this.buildReplayResult(context, replay, false, `diverged at step ${i + 1}: ${stepResult.Detail}`);
+            }
+            if (stepResult.Outcome === 'healed') {
+                replay.Healed++;
+            }
+        }
+
+        replay.AllStepsSucceeded = true;
+        return this.buildReplayResult(context, replay, true, 'all steps hit');
+    }
+
+    /**
+     * Replay one recorded step: settle → screenshot (observability) →
+     * precondition → action(s) → postcondition. Any guard/action failure routes
+     * through {@link divergeOrHeal}. Returns the per-step outcome + a StepRecord
+     * so the storyboard/telemetry look the same as an LLM-tier run.
+     */
+    private async replayOneStep(
+        trace: ComputerUseTrace,
+        index: number,
+        context: RunContext,
+        volatile: string[],
+        values: Record<string, string>
+    ): Promise<{ result: ReplayStepResult; step: StepRecord }> {
+        const traceStep = trace.Steps[index];
+        const result = new ReplayStepResult();
+        result.StepIndex = index;
+        result.Instruction = traceStep.Instruction;
+
+        const step = new StepRecord();
+        step.StepNumber = index + 1;
+        step.StartedAt = Date.now();
+
+        const settle = await this.settleBeforePerception(context);
+        step.SettleMs = settle.ms;
+        step.SettleReason = settle.reason;
+        this.ensureNotCancelled();
+
+        const screenshot = await this.captureScreenshot(context);
+        step.Screenshot = screenshot;
+        step.ScreenshotHash = computePerceptualHash(screenshot);
+        step.UrlBefore = this.browserAdapter.CurrentUrl;
+        step.Url = step.UrlBefore;
+        step.UrlAfter = step.UrlBefore;
+        step.ControllerReasoning = `[replay] ${traceStep.Instruction}`;
+        context.CurrentUrl = step.UrlBefore;
+
+        const pre = await this.replayPrecondition(traceStep, volatile);
+        if (!pre.pass) {
+            return this.divergeOrHeal(trace, index, context, step, result, `precondition — ${pre.reason}`);
+        }
+
+        const actions = planReplayActions(traceStep, values);
+        if (actions.length === 0) {
+            return this.divergeOrHeal(trace, index, context, step, result, 'no replayable action (missing recorded selector)');
+        }
+        step.ActionsRequested = actions;
+        step.ActionResults = [];
+        const actionStart = performance.now();
+        for (const action of actions) {
+            this.ensureNotCancelled();
+            const r = await this.executeSingleBrowserAction(action, context);
+            step.ActionResults.push(r);
+            if (!r.Success) {
+                step.ActionMs = performance.now() - actionStart;
+                return this.divergeOrHeal(trace, index, context, step, result, `action ${action.Type} failed — ${r.Error ?? 'unknown'}`);
+            }
+        }
+        step.ActionMs = performance.now() - actionStart;
+        step.UrlAfter = this.browserAdapter.CurrentUrl;
+        context.CurrentUrl = step.UrlAfter;
+
+        const post = await this.replayPostcondition(traceStep, volatile);
+        if (!post.pass) {
+            return this.divergeOrHeal(trace, index, context, step, result, `postcondition — ${post.reason}`);
+        }
+
+        result.Outcome = 'hit';
+        result.Detail = 'ok';
+        return { result, step };
+    }
+
+    /**
+     * A replay step failed a guard/action. Consult the heal seam (CU-C3, a no-op
+     * at this layer): a successful heal has already executed the corrected action
+     * and updated `step`, so mark `healed`; otherwise mark `diverged`.
+     */
+    private async divergeOrHeal(
+        trace: ComputerUseTrace,
+        index: number,
+        context: RunContext,
+        step: StepRecord,
+        result: ReplayStepResult,
+        reason: string
+    ): Promise<{ result: ReplayStepResult; step: StepRecord }> {
+        const healed = await this.healReplayStep(trace, index, context, step, reason);
+        if (healed) {
+            result.Outcome = 'healed';
+            result.Detail = `healed after: ${reason}`;
+            step.UrlAfter = this.browserAdapter.CurrentUrl;
+            context.CurrentUrl = step.UrlAfter;
+        } else {
+            result.Outcome = 'diverged';
+            result.Detail = reason;
+            this.log(`Replay step ${index + 1} diverged — ${reason}`);
+        }
+        return { result, step };
+    }
+
+    /** Evaluate a replay step's precondition against the live page (bounded wait). */
+    private async replayPrecondition(traceStep: TraceStep, volatile: string[]): Promise<GuardResult> {
+        const pre = traceStep.Precondition;
+        const urlMatched = pre.UrlPattern
+            ? traceUrlMatches(pre.UrlPattern, this.browserAdapter.CurrentUrl, volatile)
+            : true;
+        const sel = targetSelector(traceStep);
+        const targetChecked = pre.WaitForTarget && sel !== undefined;
+        let targetVisible = false;
+        if (targetChecked && sel) {
+            // Bound the wait by the configured action timeout (the plan's 10–15s),
+            // falling back to the engine default when no BrowserConfig is set.
+            const timeoutMs = this.activeParams?.BrowserConfig?.ActionTimeoutMs
+                ?? ComputerUseEngine.REPLAY_PRECONDITION_TIMEOUT_MS;
+            targetVisible = await this.waitForTargetVisible(sel, timeoutMs);
+        }
+        return evaluatePrecondition(pre, { urlMatched, targetVisible, targetChecked });
+    }
+
+    /** Evaluate a replay step's postcondition against the live page. */
+    private async replayPostcondition(traceStep: TraceStep, volatile: string[]): Promise<GuardResult> {
+        const post = traceStep.Postcondition;
+        if (!post) {
+            return { pass: true, reason: 'no postcondition recorded' };
+        }
+        const urlMatched = post.UrlPattern
+            ? traceUrlMatches(post.UrlPattern, this.browserAdapter.CurrentUrl, volatile)
+            : true;
+        const sel = post.ExpectVisible?.Selector;
+        const expectChecked = sel !== undefined;
+        let expectVisibleOk = false;
+        if (expectChecked && sel) {
+            const info = await this.safeQuery(sel);
+            expectVisibleOk = info.Exists && info.Visible;
+        }
+        return evaluatePostcondition(post, { urlMatched, expectVisibleOk, expectChecked });
+    }
+
+    /** Poll for an element to become attached + visible, bounded by `timeoutMs`. */
+    private async waitForTargetVisible(selector: string, timeoutMs: number): Promise<boolean> {
+        const start = performance.now();
+        while (performance.now() - start < timeoutMs) {
+            this.ensureNotCancelled();
+            const info = await this.safeQuery(selector);
+            if (info.Exists && info.Visible) {
+                return true;
+            }
+            await this.delay(ComputerUseEngine.REPLAY_POLL_MS);
+        }
+        return false;
+    }
+
+    /** Build the terminal replay result and stamp the {@link ReplayInfo}. */
+    private buildReplayResult(
+        context: RunContext,
+        replay: ReplayInfo,
+        success: boolean,
+        note: string
+    ): ComputerUseResult {
+        const result = this.buildResult(context, success ? 'Completed' : 'Failed', success);
+        result.Replay = replay;
+        this.log(`Replay ${result.Status}: ${note} (${replay.Steps.length} steps, ${replay.Healed} healed, ${replay.Diverged} diverged)`);
+        this.onRunComplete(result);
+        return result;
     }
 
     // ═══════════════════════════════════════════════════════════

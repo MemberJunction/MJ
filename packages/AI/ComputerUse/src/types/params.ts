@@ -221,4 +221,14 @@ export class RunComputerUseParams {
      * UI contract harvested from failure triage; empty when none.
      */
     public Hints?: string[];
+
+    /**
+     * Concrete values for the test's declared variables, keyed by name (CU-C1/C2).
+     * On the replay tier the engine substitutes these into the `%placeholder%`
+     * tokens a recorded trace stores in typed text / navigate URLs — so a
+     * "create record named %recordName%" trace runs with a fresh name each time.
+     * A generic string map; the values themselves are never recorded. Ignored on
+     * the LLM tier.
+     */
+    public VariableValues?: Record<string, string>;
 }

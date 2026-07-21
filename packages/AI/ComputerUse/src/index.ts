@@ -42,6 +42,7 @@ export * from './engine/ComputerUseEngine.js';
 export * from './engine/trace-url.js';
 export * from './engine/trace-recorder.js';
 export * from './engine/trace-keying.js';
+export * from './engine/replay-step.js';
 
 // ─── Tool Exports ──────────────────────────────────────────
 export * from './tools/ToolProvider.js';
