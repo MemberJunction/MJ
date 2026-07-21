@@ -282,6 +282,11 @@ echo ""
 echo "Generating HTML screenshot gallery..."
 RUN_DIR="$RUN_DIR" TIMESTAMP="$TIMESTAMP" node "$SCRIPTS/generate-html-report.cjs" 2>&1
 
+# DR-G2: machine-readable summary.json for CI gates + trend tracking.
+echo ""
+echo "Generating summary.json..."
+RUN_DIR="$RUN_DIR" node "$SCRIPTS/generate-summary.cjs" 2>&1 || echo "  WARNING: summary.json generation failed"
+
 # ─── 8. Optional archive: pull this suite-run + children + push to archive MJ ─
 # Shared with the remote entrypoint — see scripts/archive-run.sh for the full
 # env-var contract. Sourced so it runs in this shell with RUN_DIR / SCRIPTS /
@@ -308,6 +313,7 @@ echo "  results.jsonl      → $RUN_DIR/results.jsonl       (per-attempt, crash-
 echo "  report.md          → $RUN_DIR/report.md"
 echo "  report.html        → $RUN_DIR/report.html  (open in a browser)"
 echo "  screenshots/       → $RUN_DIR/screenshots/"
+echo "  summary.json       → $RUN_DIR/summary.json        (CI-gate machine summary)"
 echo "  diagnostics.ndjson → $RUN_DIR/diagnostics.ndjson  (health supervisor log)"
 echo "  health-state.json  → $RUN_DIR/health-state.json   (last health state)"
 echo "  preflight.json     → $RUN_DIR/preflight.json      (pre-flight checks)"
