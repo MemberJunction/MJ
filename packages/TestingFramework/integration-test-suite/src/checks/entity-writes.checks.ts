@@ -35,7 +35,7 @@
 import { RunView, CompositeKey, ProviderBase, EntitySaveOptions } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJActionCategoryEntity, MJListEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
+import { MJActionCategoryEntity, MJConversationEntity, MJConversationDetailEntity, MJListEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, EntityWritesFixture } from '@memberjunction/testing-integration';
@@ -476,6 +476,62 @@ export const EntityWritesChecks: NamedCheck[] = [
                 `refusal did not come from MJTagScopeEntityServer.ValidateAsync; message was: ${message.slice(0, 300)}`);
 
             console.log(`      → local async validation skipped, server MJTagScopeEntityServer still refused — server subclass resolved`);
+        }
+    },
+    {
+        Id: 'entity-writes.EW9',
+        Name: 'EW9: OriginalMessageChanged flags a post-hoc Message edit over the wire — and ONLY that (server dirty-tracking parity)',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // PR #2732 fixed MJConversationDetailEntityServer.ShouldFlagOriginalMessageChanged —
+            // the pre-existing predicate had an inverted IsSaved check, so the flag could literally
+            // never be set, and it shipped that way for its whole life precisely because nothing
+            // asserted it. This is also the EW-doctrine skew class: the predicate reads dirty
+            // state (Field.Dirty / Status-not-dirty exemptions), which differs MECHANICALLY between
+            // an in-process entity and the resolver's load-then-apply path — so the wire is the
+            // only honest place to pin it. Self-cleaning: one tagged conversation + detail.
+            const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+            conversation.NewRecord();
+            conversation.Name = 'EW9 flag probe (mj-integration-test — safe to delete)';
+            conversation.UserID = ctx.User.ID;
+            Assert(await conversation.Save(), `EW9 conversation save failed: ${conversation.LatestResult?.CompleteMessage}`);
+            try {
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+                detail.NewRecord();
+                detail.ConversationID = conversation.ID;
+                detail.Role = 'User';
+                detail.Message = 'original message (mj-integration-test — safe to delete)';
+                detail.Status = 'Complete';
+                Assert(await detail.Save(), `EW9 detail save failed: ${detail.LatestResult?.CompleteMessage}`);
+                try {
+                    Assert(detail.OriginalMessageChanged === false, 'a fresh detail must not be born flagged');
+
+                    // 1) Edit Message alone → the flag MUST flip (the compaction "edited after
+                    //    summarization" signal the whole feature depends on).
+                    detail.Message = 'edited message (mj-integration-test — safe to delete)';
+                    Assert(await detail.Save(), `EW9 edit save failed: ${detail.LatestResult?.CompleteMessage}`);
+                    AssertEqual(detail.OriginalMessageChanged, true,
+                        'editing Message on a saved detail must set OriginalMessageChanged (the #2732 predicate)');
+
+                    // 2) Control — Status-dirty exemption: change Message AND Status together →
+                    //    the predicate must NOT re-fire (streaming completions rewrite Message
+                    //    while flipping Status; that is not a user edit). Reset the flag first so
+                    //    the assertion is not vacuous against the already-true value.
+                    detail.OriginalMessageChanged = false;
+                    Assert(await detail.Save(), `EW9 flag reset save failed: ${detail.LatestResult?.CompleteMessage}`);
+                    detail.Message = 'streamed rewrite (mj-integration-test — safe to delete)';
+                    detail.Status = 'In-Progress';
+                    Assert(await detail.Save(), `EW9 combined save failed: ${detail.LatestResult?.CompleteMessage}`);
+                    AssertEqual(detail.OriginalMessageChanged, false,
+                        'Message+Status changed together must NOT flag (streaming-completion exemption)');
+
+                    console.log('      → OriginalMessageChanged: fires on lone Message edit, exempt on Message+Status — wire parity holds');
+                } finally {
+                    await detail.Delete();
+                }
+            } finally {
+                await conversation.Delete();
+            }
         }
     }
 ];
