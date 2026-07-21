@@ -29,8 +29,11 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     // Real RegisterClass eagerly registers into the real ClassFactory the moment this test's
     // module graph loads — avoid that side effect with a no-op.
     RegisterClass: () => (_target: unknown) => {},
-    // Real MJGlobal.Instance.ClassFactory would resolve against real registrations from every
-    // entity/action pulled in transitively; the test controls resolution itself instead.
+    // No-op decorator factory — classes in the ai-vector-sync module graph declare
+    // `@RequiresSubclass()`; the mock must expose it or module init throws on the missing export.
+    RequiresSubclass: () => (_target: unknown) => {},
+    // Same story for OptionalKeyedSpecialization (baseEntity marks EntityField with it, B47).
+    OptionalKeyedSpecialization: () => (_target: unknown) => {},
     MJGlobal: { Instance: { ClassFactory: { GetRegistration: vi.fn() } } },
     // Real BaseSingleton persists instances in a process-wide global object store
     // (GetGlobalObjectStore()) — shared across every test file in the same vitest worker.

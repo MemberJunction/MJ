@@ -1,0 +1,69 @@
+[
+  {
+    "fields": {
+      "Name": "Summarize Conversation Range",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/summarize-range.template.md",
+      "ResponseFormat": "Any",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "Status": "Active",
+      "Description": "The summarizeRange conversation tool's recursive sub-call: summarizes a sequence-addressed slice of stored conversation history through a task-specific lens, on a cheap sub-call model (RLM pattern: strong root model, cheap recursive summarizer)."
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "B1CECB41-0C20-45A2-AD49-F980D91EE2F3"
+          },
+          "sync": {
+            "lastModified": "2026-07-13T17:54:21.865Z",
+            "checksum": "27c24599c2101f4c3e0d2813b7dfd3fbdcad2de8616dea292fd460535f9e5820"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "6CDC0771-F8A4-4A7E-B761-AF34D94C32CC"
+          },
+          "sync": {
+            "lastModified": "2026-07-13T17:54:21.881Z",
+            "checksum": "00e9bb2738251bd056e8e08389ec2df93ced4be02502e816052e46773c1e8f92"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "7AB38FD7-03BF-4187-B5FC-2810D9805AC8"
+          },
+          "sync": {
+            "lastModified": "2026-07-13T17:54:21.893Z",
+            "checksum": "e76d76fc0aa8004595f6b4bdd34d9b1ec46dba9b1fb68421d39830db9f7481c2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "83CC07EF-AA62-483C-84CE-FB1C29EF9D81"
+    },
+    "sync": {
+      "lastModified": "2026-07-13T17:54:21.843Z",
+      "checksum": "8ef5dceaa3e8c9dd0dbdd79de032c677b67c04160a1b7ccdaa415116c7239b8c"
+    }
+  }
+]

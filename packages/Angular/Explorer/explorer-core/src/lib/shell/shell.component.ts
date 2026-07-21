@@ -1416,7 +1416,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         case 'records':
           // /app/:appName/record/:entityName/:recordId
           if (entityName && recordId) {
-            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`);
+            // recordId is a CompositeKey URL segment ("ID|<value>") — the '|' MUST be encoded.
+            // Angular's UrlSerializer percent-encodes '|' to %7C in router.url, so if we embed it raw
+            // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
+            // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
+            // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
+            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
           }
           break;
 
@@ -1493,7 +1498,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     switch (resourceType) {
       case 'records':
         if (entityName && recordId) {
-          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${recordId}`);
+          // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
+          // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
+          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
         }
         break;
 

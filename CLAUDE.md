@@ -420,22 +420,26 @@ If `my-feature` tracks `origin/next`:
 
 ## 🚨 Integration Testing — REQUIRED Before Any Project Is "Done" 🚨
 
-MemberJunction has a **live, headless integration suite** at [`packages/MJServer/integration-test-scripts/`](packages/MJServer/integration-test-scripts/) that exercises real server componentry against the live dev database (real SQLServerDataProvider, real engines, real entity saves — no mocks, no LLM calls in the deterministic tier). It sits between unit tests and the browser regression suite and catches the **seams between packages** that unit tests mock away.
+MemberJunction has a **live, headless integration suite** that exercises real server componentry against the live dev database (real SQLServerDataProvider, real engines, real entity saves — no mocks, no LLM calls in the deterministic tier). It sits between unit tests and the browser regression suite and catches the **seams between packages** that unit tests mock away.
 
 **The rule: no feature/PR is considered DONE until the deterministic integration tier has been run headless and passes.** Unit tests passing is necessary but NOT sufficient.
 
 ```bash
 # The whole deterministic tier (from repo root) — REQUIRED before declaring done
-npm run test:integration
+npm run test:integration          # = MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"
 
-# A single suite while iterating
-npx tsx packages/MJServer/integration-test-scripts/ai-skills-tests.ts
+# A single bundle while iterating (by its IT record name)
+npx mj test run "IT30 - Conversation Compaction (assembly layer)"
 ```
 
-- The **deterministic tier** runs by default: credential-light, self-cleaning fixtures, no LLM cost. The **live-model tier** (real agent/prompt runs) is gated behind `RUN_AGENT_TESTS=1`; the **Predictive Studio tier** behind `PS_INTEGRATION=1`.
-- **Extend the suite with every feature.** When you ship server-side capability (new engine methods, new columns with runtime semantics, new gates), add deterministic cases to the matching `*-tests.ts` script (or create one and register it in `run-all.ts`). New suites must be **self-cleaning** (create + delete their own fixtures, tagged `(mj-integration-test — safe to delete)`) and reference-only toward existing records. Update the folder README's suite table when you do.
-- **A bundle MUST keep both siblings in sync — a `tsx` dispatcher AND a metadata `Test` (IT) record.** The check *logic* lives once, in a registry bundle (`@memberjunction/testing-integration/src/checks/<bundle>.checks.ts`); the two siblings are thin pointers to it — a `<bundle>-tests.ts` dispatcher under [`integration-test-scripts/`](packages/MJServer/integration-test-scripts/) (bootstrap → `GetLifecycle`/`GetBundle` → run, per the `field-rules-bulk-update-tests.ts` template) and a `.IT##-<bundle>.json` under [`metadata-optional/integration-test/tests/integration/`](metadata-optional/integration-test/tests/integration/) joined to the "Integration Tests — Deterministic" suite in [`.integration-suite.json`](metadata-optional/integration-test/test-suites/.integration-suite.json). **When you add a bundle, generate BOTH siblings.** This is enforced automatically: the `sibling-parity.test.ts` drift-check (a `@memberjunction/testing-integration` unit test) fails the build if any bundle is missing a dispatcher or an IT record, or if either points at a non-existent bundle. A bundle that intentionally has no `tsx` dispatcher (driver/MJAPI-only, like `rls-isolation-client`) must be listed — with a reason — in that test's `NO_TSX_DISPATCHER` set and still have an IT record.
-- Suites live against the real DB, so run them AFTER migrations + CodeGen have been applied — they double as a smoke test that the schema, generated types, and engines agree.
+- **Where things live (July-2026 restructure):** the check *logic* lives once, as registry bundles in the **private, never-published** [`@memberjunction/integration-test-suite`](packages/TestingFramework/integration-test-suite/) package (`src/checks/*.checks.ts`); the shippable **framework** (registry, check contracts, `TestRunner`, bootstraps, `IntegrationTestDriver`) is [`@memberjunction/testing-integration`](packages/TestingFramework/testing-integration/), deliberately content-free. Special rigs (two-server cross-invalidation, `ps-*` flows, agent-memory live-model) are standalone scripts under the suite package's `rigs/` — not catalog entry paths.
+- **Single entry path: `mj test`.** The per-bundle tsx dispatchers and `run-all.ts` were deleted — do not recreate them. `mj test` loads the private suite package at runtime via the `testing.checkModules` key in `mj.config.cjs` (the sanctioned config-driven plugin seam; external adopters point it at their own check packages).
+- **Metadata is load-bearing:** `mj test` dispatches from `MJ: Tests` / `MJ: Test Suites` records. Every environment (fresh dev DB, CI) must seed them once: `npx mj sync push --dir=metadata-optional/integration-test`. See the pointer README at [`packages/MJServer/integration-test-scripts/`](packages/MJServer/integration-test-scripts/README.md) (the suite's former home) for troubleshooting.
+- The **deterministic tier** runs by default: credential-light, self-cleaning fixtures, no LLM cost. The **live-model tier** (real agent/prompt runs) is gated behind `RUN_AGENT_TESTS=1`; the mutation axis behind `RUN_MUTATION_TESTS=1`; the **Predictive Studio tier** behind `PS_INTEGRATION=1`.
+- **Extend the suite with every feature.** When you ship server-side capability, add deterministic checks to the matching `*.checks.ts` bundle in the suite package (or create one and register it in the suite's `index.ts`). New bundles must be **self-cleaning** (create + delete their own fixtures, tagged `(mj-integration-test — safe to delete)`) and reference-only toward existing records.
+- **A bundle MUST have its metadata sibling — an `MJ: Tests` (IT) record.** The bundle logic + a `.IT##-<bundle>.json` under [`metadata-optional/integration-test/tests/integration/`](metadata-optional/integration-test/tests/integration/), joined to the "Integration Tests — Deterministic" suite in [`.integration-suite.json`](metadata-optional/integration-test/test-suites/.integration-suite.json). Enforced automatically: the suite package's `sibling-parity.test.ts` fails the build if a bundle lacks its IT record, an IT record points at a non-existent bundle, a record isn't joined to a suite, or `mj.config.cjs` stops loading the suite package. Also update the coverage-loss count table in `check-registry.test.ts`.
+- Suites run against the real DB, so run them AFTER migrations + CodeGen have been applied — they double as a smoke test that the schema, generated types, and engines agree.
+- **Transport doctrine — write integration checks CLIENT-FIRST, over the GraphQL wire.** Prefer exercising capability through the **client layer** — `GraphQLDataProvider` and the other non-visual client-side objects in `@memberjunction/graphql-dataprovider` (NOT Angular), against a running MJAPI (`bootstrapIntegrationClient`). Driving BaseEntity CRUD, `RunView`/`RunViews`/`RunQuery`, and Remote Operations over the real wire exercises serialization, the resolver auth/scope layer, field mapping, and transport framing — where a large class of bugs lives that in-process server calls never touch. **Use `bootstrapIntegrationServer` (in-process) ONLY where there is no client surface.** When an otherwise server-only capability needs coverage, **prefer adding a typed Remote Operation** and invoking it client-side. Full doctrine: [`plans/integration-test-expansion/`](plans/integration-test-expansion/README.md).
 
 ## Unit Testing
 
@@ -886,6 +890,11 @@ protected generateSingleOperation(operation: Operation): string {
 - Clear "is-a" relationships between classes
 
 ## Entity Metadata Best Practices (CRITICAL)
+
+### 🚨 GROUND TRUTH FOR SCHEMA IS THE ORM LAYER — NOT MIGRATIONS 🚨
+- **When you need to know an entity's real schema — its fields, types, nullability, value-lists, relationships, primary keys — read the generated ORM layer in `packages/MJCoreEntities` (the `entity_subclasses.ts` classes + their Zod schemas), NOT the migration SQL.**
+- **Why**: migrations are an *append-only history* of changes over time. The current true shape of a table/entity is the sum of the baseline plus every subsequent ALTER — reconstructing it from migrations is error-prone and often wrong. CodeGen regenerates `MJCoreEntities` from the live database after every schema change, so the generated entity classes are the **authoritative, current** projection of the schema. A field you see added in one migration may have been altered or dropped in a later one; the ORM class reflects the net result.
+- **Practical rule**: to answer "what fields does entity X have / what type is field Y / what are the allowed values / what does it relate to", open the `X`-entity class in `packages/MJCoreEntities/src/generated/entity_subclasses.ts`. Use `SomeEntity['FieldName']` for a field's type (see rule 2c). Only read migration SQL when you specifically need the *history* of a change, the *view/stored-proc body* (which isn't in the ORM), or to author a *new* migration.
 
 ### Finding Entity Names
 - **ALWAYS** use `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` to find correct entity names
@@ -1532,6 +1541,41 @@ module.exports = {
 - **Local Development with Remote Services**: Test local MJAPI changes against production Skip API
 - **Webhook Testing**: Receive callbacks from remote services during development
 - **Hybrid Deployments**: Mix local and cloud services during development/testing
+
+## Startup Mode (`startup.mode` / `MJ_STARTUP_MODE`)
+
+Every server-side MJ process boots through `StartupManager.Instance.Startup()`, which by default pre-warms every imported `@RegisterForStartup` engine. The **startup mode** makes that configurable so short-lived CLI/script processes skip the pre-warm tax:
+
+| Mode | Behavior | Default for |
+|---|---|---|
+| `full` | All registered engines run at boot — sync engines awaited in priority groups, then deferred engines fire (pre-change behavior, byte-for-byte) | MJAPI (SQL Server and PG paths) |
+| `task` | **No** registered engines execute (sync or deferred); every engine lazy-loads on first touch via its own `Config()`/`EnsureLoaded()` call. `LocalCacheManager` init still runs | MJCLI, mj-sync (`initializeProvider`), CodeGen |
+
+Skipping pre-warm is safe by construction: MJ's convention is that every engine consumer calls `await Engine.Instance.Config(false, user, provider)` at entry, which no-ops if loaded and loads on demand otherwise. Startup registration is an optimization, not a correctness requirement.
+
+### Mode resolution precedence (highest wins)
+
+1. **`MJ_STARTUP_MODE` env var** — per-invocation override, e.g. `MJ_STARTUP_MODE=full npx mj sync push`. Invalid values warn and fall through (never crash).
+2. **Programmatic option** passed by the entry point (e.g. `setupSQLServerClient(cfg, { mode: 'task' })`).
+3. **`mj.config.cjs` → `startup.mode`** — note this file is shared by every process in a repo, which is why the env var and programmatic levels outrank it.
+4. **Entry-point default** — `full` for MJAPI, `task` for CLI-style processes.
+
+Resolution lives in ONE shared helper — `ResolveStartupMode()` in `@memberjunction/core` — so every entry point behaves identically. It returns `{ mode, source }` and logs the outcome (non-verbose when an env/config override won, so a server silently switched to task mode by a shared config is visible at boot).
+
+```javascript
+// mj.config.cjs
+module.exports = {
+  startup: {
+    mode: 'task',   // 'full' | 'task' — omit to use each entry point's default
+  },
+};
+```
+
+### Trade-offs to know
+
+- **Fail-fast validators don't run in `task` mode.** `EncryptionStartupValidator` (priority 200, severity `error`) is a boot-time misconfiguration check, not a cache — in `task` mode encryption misconfiguration surfaces at first use instead of at startup. `full` mode (servers) keeps the fail-fast guarantee.
+- **First touch pays the load.** A `task`-mode process's first AI call absorbs the deferred cost — including the ~50MB local-embeddings model download/load on the first `FindSimilar*`-style call (`AIEngine.ensureEmbeddingsGenerated`). The boot log line `MJ startup: task mode — engine pre-warm skipped (N engine(s) deferred to first use)` makes this discoverable.
+- **Opt-up escape hatch**: a process booted in `task` mode can later run `StartupManager.Instance.Startup(true, user, provider, { mode: 'full' })` (`forceRefresh` bypasses the cached result). Client-side startup (`GraphQLDataProvider`, Angular shell) passes no options and always gets `full`.
 
 ## MetadataSync Package
 

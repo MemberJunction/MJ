@@ -1,8 +1,10 @@
 name: Integration Tier
 
-# Deterministic integration tier — the in-process cache / RunQuery / RLS / engine suites
-# (packages/MJServer/integration-test-scripts/run-all.ts) against a fresh SQL Server, on
-# every PR that touches server code or the integration metadata.
+# Deterministic integration tier — the check bundles in the private
+# @memberjunction/integration-test-suite package, dispatched by `mj test suite`
+# ("Integration Tests — Deterministic") against a fresh SQL Server, on every PR that
+# touches server code or the integration metadata. Single entry path: the per-bundle tsx
+# dispatchers and run-all.ts were removed in the July-2026 restructure.
 #
 # HOST-BASED lane (no Docker regression images). This PR gate provisions the DB directly on
 # the runner: a throwaway SQL Server container, THIS branch's locally-built `mj` CLI applies
@@ -130,7 +132,7 @@ jobs:
       # dep), and the mj CLI (migrate + sync push). --filter skips the Angular/Explorer half
       # of the monorepo this lane never touches. Built once; every step below reuses it.
       - name: Build integration graph + CLI
-        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/open-app-engine
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine
 
       # Provision the DB (aggregator SETUP): apply the committed migrations — which include the
       # committed CodeGen output and the repeatable R__RefreshMetadata that refreshes every core
@@ -175,9 +177,12 @@ jobs:
             exit 1
           fi
 
-      # The deterministic aggregator: run-all.ts spawns each suite via `npx tsx` and gates the
-      # job on its 0/1/2 exit contract (0 = all passed/skipped, 1 = failures, 2 = bootstrap
-      # error). PS_INTEGRATION / RUN_AGENT_TESTS are deliberately unset (no token cost /
-      # flakiness); no MJAPI is up, so the client suite SKIPs.
-      - name: Run integration aggregator
+      # The deterministic tier via the single entry path: `mj test suite` loads the private
+      # suite package through mj.config.cjs `testing.checkModules`, dispatches every IT
+      # record in "Integration Tests — Deterministic", and exits non-zero on failures.
+      # No live-model pin needed: the deterministic suite contains no live-model members
+      # (they live in the separate "Integration Tests — Live Model" suite), and LLM creds
+      # come from the local .env, which CI does not have. PS_INTEGRATION stays unset. No
+      # MJAPI is up, so client-transport members skip on the MJAPI preflight.
+      - name: Run integration tier (mj test)
         run: npm run test:integration
