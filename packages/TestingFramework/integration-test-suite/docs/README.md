@@ -43,6 +43,11 @@ proposed bundles) — is specified in
 It lives there while under review/build and **will move into this folder as `agents-suite.md`
 when the build lands**.
 
+## Running it
+
+- [`build-engineering-runbook.md`](build-engineering-runbook.md) — **for the release/CI build engineer**: where the suite fits in the build order (migrations → CodeGen → build → seed → MJAPI → run), the tier commands + env flags, CI recommendations, how to read the persisted `MJ: Test Runs` / `MJ: Test Suite Runs` telemetry, and the three-way failure triage.
+- From Claude Code: the `/run-integration-tests` slash command runs a tier and triages the results.
+
 ## Related reading
 
 - [`packages/TestingFramework/testing-integration/CATALOG.md`](../../testing-integration/CATALOG.md) — the living one-page coverage index (bundle × count × tier × transport)
