@@ -1,0 +1,31 @@
+{
+  "name": "@memberjunction/theme-engine",
+  "type": "module",
+  "version": "5.48.0",
+  "description": "MemberJunction: Theme Engine - framework-agnostic derivation of the full --mj-* token contract from a small set of brand seeds (OKLCH ramps, state families, dark re-point, viz palette, shadows, a11y contrast report). Shared by the Angular theme builder and future server overlay endpoint.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
