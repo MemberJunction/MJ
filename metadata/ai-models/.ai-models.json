@@ -20053,5 +20053,175 @@
     "primaryKey": {
       "ID": "CA2A5DA9-E471-44E2-A712-48A2C9145DDB"
     }
+  },
+  {
+    "fields": {
+      "Name": "Kimi K3",
+      "PowerRank": 22,
+      "Description": "Moonshot AI's frontier-class open-weight multimodal MoE, released July 16, 2026. ~2.8T total parameters with sparse activation, 1M (1,048,576) token context, native multimodal input (text + images), and strong long-horizon coding and agentic capabilities. Modified MIT open weights on Hugging Face; direct API at platform.moonshot.ai (endpoint https://api.moonshot.ai/v1). Also listed as `moonshotai/kimi-k3` on OpenRouter. Pricing: $3.00 input / $15.00 output per 1M tokens with an aggressive $0.30 cached-input rate; flat across full context (no long-context surcharge). Positioned by Bloomberg and Simon Willison as closing the gap with U.S. frontier models. Direct successor to Kimi K2.6.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 5,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Kimi K2.6"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "5DCBD112-129D-4698-BF2B-DF4845C7F644"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MoonshotLLM",
+            "APIName": "kimi-k3",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E86ECBE1-B849-4CBE-A4F1-23DE132BC7B6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "moonshotai/kimi-k3",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "5E72A7FF-EA95-4A18-BE1C-C090E4EC07D2"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "StartedAt": "2026-07-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 3,
+            "OutputPricePerUnit": 15,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kimi K3 launch pricing on Moonshot direct API (July 16, 2026): $3.00/$15.00 per 1M tokens with $0.30 cached-input. Flat pricing across full 1M-token context (no long-context surcharge). 2.8T-param MoE, native multimodal. Also available on OpenRouter as `moonshotai/kimi-k3` at similar rates. Sources: https://www.kimi.com/blog/kimi-k3 ; https://openrouter.ai/moonshotai/kimi-k3 ; https://simonwillison.net/2026/Jul/16/kimi-k3/ ; https://kie.ai/blog/kimi-k3-pricing ; https://www.verdent.ai/guides/agents/kimi-k3-api-guide",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "820305FB-9671-41D7-965A-02D6568D7A12"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F1E35809-985F-45B6-9C44-BCD8A2EDDF7F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inkling",
+      "PowerRank": 20,
+      "Description": "Thinking Machines Lab's inaugural open-weights frontier model, released July 15, 2026. 975B total / 41B active mixture-of-experts transformer, multimodal pretraining on 45T tokens (text/image/audio/video), 1M token architectural context. NOTE: served context is provider-specific and lower than the architectural maximum — OpenRouter (Together-backed) serves 524,288 tokens, and Tinker offers 64K/256K options; the vendor rows carry the provider limits, not the 1M architectural figure. Apache 2.0 license with weights on Hugging Face at launch. Positioned by Artificial Analysis at release as the leading U.S. open-weights model. Accessible via Thinking Machines Lab's Tinker direct API (`inkling`, currently at 50% launch-promo pricing of $1.87/$4.68 per 1M) and via OpenRouter as `thinkingmachines/inkling` at $1.00 input / $4.05 output per 1M tokens. First major open-weights frontier release from a U.S. lab in 2026, from the team led by former OpenAI CTO Mira Murati.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Thinking Machines Lab",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "E538C3F6-B5B5-4D7E-9971-B2DF1677E778"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "thinkingmachines/inkling",
+            "MaxInputTokens": 524288,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "33D0E046-CC95-4451-A312-FE5682AE18FF"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-07-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 4.05,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Inkling launch pricing on OpenRouter (July 15, 2026): $1.00/$4.05 per 1M tokens for `thinkingmachines/inkling`. Direct Tinker API (thinkingmachines.ai) is currently running a 50% launch promo at $1.87 input / $0.374 cached-input / $4.68 output — not recorded here to avoid tying the cost history to a temporary discount. 975B total / 41B active MoE, Apache 2.0. Sources: https://thinkingmachines.ai/news/introducing-inkling/ ; https://openrouter.ai/thinkingmachines/inkling ; https://artificialanalysis.ai/models/inkling ; https://techcrunch.com/2026/07/15/thinking-machines-amps-up-its-bet-against-one-size-fits-all-ai-with-its-first-open-model-inkling/",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "A3A39356-0723-4F9B-9525-75DCDAEB162A"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A42CC9EC-0F06-4546-8269-EC626A5AD337"
+    }
   }
 ]

@@ -181,4 +181,36 @@ describe('FireAndForgetHelper.Execute', () => {
         expect(await settled).toMatchObject({ message: 'stream died' });
         expect(onStall).toHaveBeenCalledTimes(1);
     });
+
+    // ===== Headless / non-browser providers (no PushStatusUpdates channel) =====
+
+    /** Stub provider WITHOUT a PushStatusUpdates method — mirrors a headless GraphQL client. */
+    function makeHeadlessProvider(ack: Record<string, unknown> = { success: true, result: 'sync-payload' }) {
+        const ExecuteGQL = vi.fn().mockResolvedValue({ [FIELD]: ack });
+        return {
+            provider: { sessionId: 'test-session', ExecuteGQL } as unknown as GraphQLDataProvider,
+            ExecuteGQL,
+        };
+    }
+
+    it('runs synchronously when the provider has no PushStatusUpdates channel', async () => {
+        const { provider, ExecuteGQL } = makeHeadlessProvider();
+        const result = await FireAndForgetHelper.Execute(baseConfig(provider, {
+            variables: { fireAndForget: true },
+            extractSyncResult: (ack) => ({ ok: ack.success === true, via: String(ack.result) }),
+        }));
+
+        expect(result).toEqual({ ok: true, via: 'sync-payload' });
+        // The mutation must be sent with fireAndForget disabled so the resolver runs inline.
+        expect(ExecuteGQL).toHaveBeenCalledTimes(1);
+        expect(ExecuteGQL.mock.calls[0][1]).toMatchObject({ fireAndForget: false });
+    });
+
+    it('degrades to an error result (no crash) when no synchronous extractor is configured', async () => {
+        const { provider } = makeHeadlessProvider();
+        const result = await FireAndForgetHelper.Execute(baseConfig(provider));
+        // Previously this path crashed with "PushStatusUpdates is not a function".
+        expect(result).toMatchObject({ ok: false });
+        expect(String((result as OpResult).via)).toContain('PushStatusUpdates');
+    });
 });

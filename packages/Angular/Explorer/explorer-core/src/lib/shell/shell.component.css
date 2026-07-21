@@ -5,14 +5,19 @@
   overflow: hidden;
 }
 
-/* MJ Logo - uses design token for theme switching & white-labeling */
+/* MJ Logo - uses design tokens for theme switching & white-labeling.
+   Geometry follows --mj-logo-width/-height so a differently-shaped org mark fits;
+   --mj-logo-plate-bg is set by the theme engine only when a single-variant logo needs
+   a legibility plate in the mode it wasn't designed for (org-theming Phase 4). */
 .mj-logo {
-  width: 32px;
-  height: 18px;
+  width: var(--mj-logo-width, 32px);
+  height: var(--mj-logo-height, 18px);
   background-image: var(--mj-logo-mark);
+  background-color: var(--mj-logo-plate-bg, transparent);
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
+  border-radius: var(--mj-radius-sm, 4px);
   flex-shrink: 0;
 }
 

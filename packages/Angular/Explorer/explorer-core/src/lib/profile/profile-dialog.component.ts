@@ -9,15 +9,17 @@ import {
     inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { UserRoleInfo } from '@memberjunction/core';
+import { RunView, UserRoleInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
+    MJThemeEntity,
     MJUserNotificationPreferenceEntity,
     UserInfoEngine
 } from '@memberjunction/core-entities';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ThemeService, SharedService, ThemeDefinition } from '@memberjunction/ng-shared';
+import type { ThemeSeeds } from '@memberjunction/theme-engine';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { IsOmnibarAvailable, IsOmnibarEnabledForUser, OMNIBAR_USER_SETTING_KEY } from '../omnibar/omnibar-user-setting';
 import { GetOmnibarShortcutLabel } from '../omnibar/omnibar-shortcut';
@@ -29,6 +31,15 @@ interface NotificationChannel {
     icon: string;
     enabled: boolean;
     saving: boolean;
+}
+
+interface StarredThemeItem {
+    id: string;
+    name: string;
+    seeds: string;
+    swatches: string[];
+    overrides: string | null;
+    customCss: string | null;
 }
 
 type ProfilePanel = 'none' | 'photo' | 'theme';
@@ -224,6 +235,25 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
                                 <i class="fa-solid fa-check mj-profile__theme-check"></i>
                             }
                         </button>
+                    }
+                    @if (StarredThemes.length) {
+                        <div class="mj-profile__theme-sep">Brand themes</div>
+                        @for (t of StarredThemes; track t.id) {
+                            <button type="button"
+                                    class="mj-profile__theme"
+                                    [class.mj-profile__theme--active]="IsAppliedBrand(t.id)"
+                                    (click)="ApplyStarredTheme(t)">
+                                <div class="mj-profile__theme-swatch mj-profile__brand-swatch">
+                                    @for (c of t.swatches; track $index) { <i [style.background]="c"></i> }
+                                </div>
+                                <div class="mj-profile__theme-info">
+                                    <div class="mj-profile__theme-name">{{ t.name }}</div>
+                                </div>
+                                @if (IsAppliedBrand(t.id)) {
+                                    <i class="fa-solid fa-check mj-profile__theme-check"></i>
+                                }
+                            </button>
+                        }
                     }
                 </div>
             }
@@ -743,6 +773,18 @@ img.mj-profile__avatar { background: var(--mj-bg-surface-card); }
     flex-shrink: 0;
 }
 
+/* Starred brand themes shown inline in the theme list */
+.mj-profile__theme-sep {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--mj-text-muted); padding: 6px 4px 2px; margin-top: 6px;
+}
+.mj-profile__brand-swatch {
+    display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 0;
+}
+.mj-profile__brand-swatch i {
+    width: 33%; height: 100%; display: block;
+}
+
 @media (max-width: 480px) {
     .mj-profile__hero { padding: 20px 18px 48px; }
     .mj-profile__avatar-zone { width: 88px; height: 88px; margin-top: -44px; }
@@ -795,6 +837,18 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
     public ThemePreference = '';
     public SavingTheme: string | null = null;
 
+    // Starred brand themes shown inline in the theme list
+    public StarredThemes: StarredThemeItem[] = [];
+    public get AppliedBrandId(): string | null {
+        return this.themeService.BrandOverlayId;
+    }
+
+    /** Whether a theme id is the applied brand overlay (case-insensitive GUID compare). */
+    public IsAppliedBrand(id: string): boolean {
+        const active = this.themeService.BrandOverlayId;
+        return !!active && UUIDsEqual(id, active);
+    }
+
     public get PanelTitle(): string {
         switch (this.ActivePanel) {
             case 'photo': return 'Profile photo';
@@ -842,6 +896,9 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
 
     public OpenPanel(panel: ProfilePanel): void {
         this.ActivePanel = panel;
+        if (panel === 'theme') {
+            this.loadStarredThemes();
+        }
     }
 
     public ClosePanel(): void {
@@ -872,6 +929,64 @@ export class ProfileDialogComponent extends BaseAngularComponent implements OnIn
         } finally {
             this.SavingTheme = null;
             this.cdr.markForCheck();
+        }
+    }
+
+    // ========================================
+    // Starred brand themes
+    // ========================================
+
+    /** Load the user's starred brand themes to show inline in the theme list. */
+    private async loadStarredThemes(): Promise<void> {
+        this.StarredThemes = [];
+        try {
+            const ids = this.themeService.GetStarredThemeIds();
+            if (ids.length) {
+                const idList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+                const rv = new RunView();
+                const result = await rv.RunView<MJThemeEntity>({
+                    EntityName: 'MJ: Themes',
+                    ExtraFilter: `ID IN (${idList}) AND Status = 'Active'`,
+                    OrderBy: 'Name',
+                    ResultType: 'entity_object',
+                });
+                if (result.Success) {
+                    this.StarredThemes = result.Results.map((t) => ({
+                        id: t.ID,
+                        name: t.Name,
+                        seeds: t.Seeds,
+                        swatches: this.swatchesFor(t.Seeds),
+                        overrides: t.Overrides,
+                        customCss: t.CustomCSS,
+                    }));
+                }
+            }
+        } catch {
+            /* non-fatal: the list just stays light/dark/system */
+        }
+        this.cdr.markForCheck();
+    }
+
+    /** Apply a starred brand theme to the running app and persist it as the user's choice. */
+    public async ApplyStarredTheme(t: StarredThemeItem): Promise<void> {
+        try {
+            this.themeService.RegisterBrandTheme({ id: t.id, name: t.name, seeds: t.seeds, overrides: t.overrides, customCss: t.customCss });
+            await this.themeService.ApplyBrandOverlay(t.id);
+            await this.themeService.SetSelectedBrandTheme(t.id);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            this.sharedService.CreateSimpleNotification(`Could not apply theme: ${msg}`, 'error', 3000);
+        } finally {
+            this.cdr.markForCheck();
+        }
+    }
+
+    private swatchesFor(seedsJson: string): string[] {
+        try {
+            const s = JSON.parse(seedsJson) as ThemeSeeds;
+            return [s.primary, s.accent ?? s.primary, s.tertiary ?? s.accent ?? s.primary];
+        } catch {
+            return ['#0076b6', '#38a9d9', '#8b5cf6'];
         }
     }
 

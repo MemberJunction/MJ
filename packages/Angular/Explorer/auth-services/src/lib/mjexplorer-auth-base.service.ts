@@ -229,7 +229,10 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
     // script in index.html, MJExplorerAppComponent's login screen, and
     // ThemeService post-login. Preserving across logout means the login
     // screen continues to show the user's last theme without flashing.
-    return new Set(['mj-theme']);
+    // 'mj-theme-overlay' mirrors the active org brand overlay id for the same
+    // pre-paint script — the org brand persists across logout (ThemeService.Reset
+    // deliberately keeps the overlay), so its pre-paint mirror must too.
+    return new Set(['mj-theme', 'mj-theme-overlay']);
   }
 
   /**

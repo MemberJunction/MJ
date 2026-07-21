@@ -41,7 +41,7 @@ content-free) and a **content** package (private, never published) — and there
   │   @memberjunction/testing-integration     │   │  @memberjunction/integration-test-suite  │
   │   (published — FRAMEWORK ONLY)            │   │  (private: true — MJ's OWN test content) │
   │                                           │   │                                          │
-  │  IntegrationCheckRegistry (BaseSingleton) │◀──┤  src/checks/  · 30 bundles · ~220 checks │
+  │  IntegrationCheckRegistry (BaseSingleton) │◀──┤  src/checks/  · 52 bundles · ~365 checks │
   │  NamedCheck / BundleLifecycle contracts   │   │  src/index.ts barrel (side-effect-       │
   │  bootstrap  (server / client / PostgreSQL)│   │    imports every bundle → registers all) │
   │  InstrumentedLocalStorageProvider         │   │  src/__tests__/  count table + parity    │
@@ -236,11 +236,11 @@ metadata-driven end to end:
 MJ: Test Types ──▶ "Integration Test"  { DriverClass: "IntegrationTestDriver", Status: Active }
       │                                  metadata/test-types/.integration-test-type.json  (normal metadata — inert type def)
       ▼
-MJ: Tests ───────▶ IT01…IT30            Configuration selects bundles + tier + transport
+MJ: Tests ───────▶ IT01…IT52            Configuration selects bundles + tier + transport
       │                                  metadata-optional/integration-test/tests/integration/.IT*.json
       ▼
 MJ: Test Suites ─▶ "Integration Tests"  (parent)
-                   ├─ "Integration Tests — Deterministic"   IT01–IT15, IT20–IT30  (the blocking tier)
+                   ├─ "Integration Tests — Deterministic"   IT01–IT15, IT20–IT52  (48 members, the blocking tier)
                    └─ "Integration Tests — Live Model"      IT16–IT19  (opt-in)
                                          metadata-optional/integration-test/test-suites/.integration-suite.json
       ▼
@@ -814,7 +814,7 @@ sidecar-dependent scripts (`cross-server-invalidation-tests.ts`, `agent-memory-t
 | [`packages/TestingFramework/testing-integration/`](../packages/TestingFramework/testing-integration/) | The **framework** (published): driver, registry, check contracts, bootstraps, tiers, instrumented cache |
 | [`packages/TestingFramework/integration-test-suite/`](../packages/TestingFramework/integration-test-suite/) | The **content** (private, never published): all 30 check bundles, their unit tests, and the standalone rigs |
 | [`metadata/test-types/.integration-test-type.json`](../metadata/test-types/.integration-test-type.json) | The `Integration Test` TestType — an inert type definition, kept in the normal `metadata/` tree |
-| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT30 Tests, the suite hierarchy, AND the seeded RLS test users/role/permission. Kept out of the default-pushed `metadata/` tree so these test-only records never reach production. **Must be seeded once per environment** |
+| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT52 Tests, the suite hierarchy, AND the seeded RLS test users/role/permission. Kept out of the default-pushed `metadata/` tree so these test-only records never reach production. **Must be seeded once per environment** |
 | `mj.config.cjs` → `testing.checkModules` | The runtime seam that loads the private suite package (or a consumer's own check packages) into `mj test` |
 | [`packages/TestingFramework/Engine/`](../packages/TestingFramework/Engine/) | `TestEngine`, `BaseTestDriver`, suite fixture lifecycle |
 | [`packages/TestingFramework/CLI/`](../packages/TestingFramework/CLI/) | `mj test run` / `suite` / `list` / `validate` / `history` |
@@ -826,6 +826,11 @@ sidecar-dependent scripts (`cross-server-invalidation-tests.ts`, `agent-memory-t
 - **The coverage index:**
   [`packages/TestingFramework/testing-integration/CATALOG.md`](../packages/TestingFramework/testing-integration/CATALOG.md)
   — the living catalog: transport doctrine, current bundles, expansion roadmap.
+- **Per-sub-suite deep docs:**
+  [`packages/TestingFramework/integration-test-suite/docs/`](../packages/TestingFramework/integration-test-suite/docs/README.md)
+  — mechanism + per-check inventory for every shipped bundle family (cache, data-access,
+  security, writes/transactions, AI, platform), plus the candidate
+  [test-catalog](../packages/TestingFramework/integration-test-suite/docs/test-catalog.md).
 - **The restructure rationale:**
   [`plans/integration-test-expansion/framework-restructure-proposal.md`](../plans/integration-test-expansion/framework-restructure-proposal.md)
   (executed 2026-07-20) and the pointer README at
