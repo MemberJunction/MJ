@@ -237,6 +237,48 @@ describe('BaseLLM', () => {
         });
     });
 
+    describe('Streaming thinking-tag boundary handling (bug A5)', () => {
+        // Helper: feed a sequence of chunks through processStreamChunkWithThinking and
+        // return the concatenated user-visible emission + the captured thinking.
+        function stream(instance: TestLLM, chunks: string[]): { emitted: string; thinking: string } {
+            const obj = instance as unknown as Record<string, (arg?: unknown) => unknown>;
+            obj['initializeThinkingStreamState']();
+            let emitted = '';
+            for (const c of chunks) {
+                emitted += obj['processStreamChunkWithThinking'](c) as string;
+            }
+            const state = (instance as unknown as { thinkingStreamState: { accumulatedThinking: string } }).thinkingStreamState;
+            return { emitted, thinking: state.accumulatedThinking };
+        }
+
+        it('does not leak a partial open tag split across chunk boundaries', () => {
+            // "<think>" arrives split as "Hello <thi" | "nk>reasoning</think> World"
+            const { emitted, thinking } = stream(llm, ['Hello <thi', 'nk>reasoning</think> World']);
+            expect(emitted).not.toContain('<thi');
+            expect(emitted).not.toContain('<think');
+            expect(emitted).toBe('Hello  World');
+            expect(thinking).toBe('reasoning');
+        });
+
+        it('does not leak a partial close tag split across chunk boundaries', () => {
+            // "</think>" arrives split as "...text</thi" | "nk>answer"
+            const { emitted, thinking } = stream(llm, ['<think>reasoning</thi', 'nk>answer']);
+            expect(emitted).toBe('answer');
+            expect(thinking).toBe('reasoning');
+        });
+
+        it('emits normal content that merely contains a lone "<" without holding it forever', () => {
+            const { emitted } = stream(llm, ['a < b and c ', '> d']);
+            expect(emitted).toBe('a < b and c > d');
+        });
+
+        it('passes through content unchanged when there is no thinking block', () => {
+            const { emitted, thinking } = stream(llm, ['plain ', 'streamed ', 'text']);
+            expect(emitted).toBe('plain streamed text');
+            expect(thinking).toBe('');
+        });
+    });
+
     describe('Streaming state reset (memory-leak fix R2-C5)', () => {
         // Subclass that tracks resetStreamingState calls + accumulates buffer
         // so we can assert the base orchestrator resets it on success AND error.
