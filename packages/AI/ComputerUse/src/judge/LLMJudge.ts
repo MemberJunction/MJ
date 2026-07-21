@@ -58,7 +58,13 @@ export class LLMJudge extends BaseJudge {
         const request = new JudgePromptRequest();
         request.Goal = context.Goal;
         request.CurrentScreenshot = context.CurrentScreenshot;
-        request.ScreenshotHistory = context.ScreenshotHistory;
+        // Current-frame-only by default (CU-D5): "is the goal visibly done?"
+        // almost always needs only the current frame, and re-uploading the full
+        // image history every judge call is the dominant judge cost. The textual
+        // step summary (URLs + per-action OK/FAIL + page-state) carries the
+        // progression the history images used to. (Deferred: re-add history
+        // conditionally for Impossible-leaning verdicts.)
+        request.ScreenshotHistory = [];
         request.StepNumber = context.StepNumber;
         request.MaxSteps = context.MaxSteps;
         request.StepSummary = this.buildStepSummary(context);
@@ -163,11 +169,32 @@ export class LLMJudge extends BaseJudge {
             const actions = step.ActionsRequested
                 .map(a => a.Type)
                 .join(', ');
+            // Per-action OK/FAIL so the judge sees which actions actually landed (CU-D5).
+            const results = step.ActionResults
+                .map(r => r.Success ? 'OK' : `FAIL:${r.Error ?? 'unknown'}`)
+                .join(', ');
+            const resultNote = results ? ` → [${results}]` : '';
+            // Post-action URL (CU-A8) + page-state (CU-A1/A2) so a half-rendered
+            // page is distinguishable from a broken one.
+            const url = this.compactUrl(step.UrlAfter || step.Url);
+            const urlNote = url ? ` [${url}]` : '';
+            const pageState = step.SettleReason === 'budget' ? ' [page still loading]' : '';
             const errorNote = step.Error
                 ? ` [ERROR: ${step.Error.Message}]`
                 : '';
-            return `Step ${step.StepNumber}: ${step.ControllerReasoning || 'No reasoning'} → Actions: [${actions}]${errorNote}`;
+            return `Step ${step.StepNumber}${urlNote}: ${step.ControllerReasoning || 'No reasoning'} → Actions: [${actions}]${resultNote}${pageState}${errorNote}`;
         }).join('\n');
+    }
+
+    /** Compact URL (path + query, origin dropped) for the judge step summary (CU-D5). */
+    private compactUrl(url: string): string {
+        if (!url) return '';
+        try {
+            const u = new URL(url);
+            return `${u.pathname}${u.search}`;
+        } catch {
+            return url;
+        }
     }
 
     /**
