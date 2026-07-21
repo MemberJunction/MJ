@@ -39,12 +39,15 @@ export type ComputerUseStatus =
     | 'Cancelled';
 
 /**
- * Machine-readable failure reason (CU-B1/F5). A finer-grained classification
+ * Machine-readable failure reason (CU-B1/B7/F5). A finer-grained classification
  * than {@link ComputerUseStatus} — grows as the engine and classifier learn to
- * name more classes. `'LoopDetected'` is set when the engine terminates a run
- * that was stuck repeating a state.
+ * name more classes.
+ * - `'LoopDetected'` — the engine terminated a run stuck repeating a state (CU-B1).
+ * - `'AuthDetour'`   — the run bounced to an identity provider more times than
+ *   the watchdog's cap allowed (CU-B7): an infrastructure/session fault, not an
+ *   agent failure.
  */
-export type ComputerUseFailureReason = 'LoopDetected';
+export type ComputerUseFailureReason = 'LoopDetected' | 'AuthDetour';
 
 // ─── Run Result ────────────────────────────────────────────
 /**
@@ -89,6 +92,15 @@ export class ComputerUseResult {
      * classes). Extended as more classes are detected.
      */
     public FailureReason?: ComputerUseFailureReason;
+
+    /**
+     * How many times the run bounced to an identity provider and was recovered
+     * by the auth-detour watchdog (CU-B7). 0 on runs that never detoured. A
+     * per-run infrastructure-health signal: a non-zero count on an otherwise
+     * successful run still flags a flaky session, and it's the count that
+     * decides the `AuthDetour` termination.
+     */
+    public AuthDetourCount: number = 0;
 
     /** Error details (populated when Status is 'Error') */
     public Error?: ComputerUseError;

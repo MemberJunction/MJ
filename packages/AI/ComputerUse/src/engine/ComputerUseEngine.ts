@@ -60,6 +60,7 @@ import { SettleConfig, DEFAULT_BUSY_MARKERS, LoopConfig } from '../types/app-pro
 import type { SettleReason } from '../types/app-profile.js';
 import { resolveSettleExit } from './settle-decision.js';
 import { computeStateSignature, detectLoop } from './loop-detection.js';
+import { evaluateAuthDetour } from './auth-detour.js';
 import { formatDiagnosticsDigest } from './diagnostics-digest.js';
 import {
     JudgeContext,
@@ -457,6 +458,19 @@ export class ComputerUseEngine {
                 return this.buildResult(context, 'Cancelled', false, lastVerdict);
             }
 
+            // Auth-detour watchdog (CU-B7): if the session was invalidated and
+            // the page bounced to an identity provider, recover it here —
+            // BEFORE perceiving — so the step runs against the recovered app,
+            // not the login page. No step and no agent-time is charged for the
+            // detour (recovery time is accounted as settle). After MaxDetours
+            // the recovery clearly isn't holding, so we terminate as an
+            // infrastructure AuthDetour instead of grading the agent on it.
+            const authResult = await this.handleAuthDetour(context, stepNumber, lastVerdict);
+            if (authResult.result) {
+                return authResult.result;
+            }
+            cumulativeSettleMs += authResult.recoveryMs;
+
             // Agent-time budget (CU-B4): never START a step past the budget.
             // Graceful expiry runs one forced final judge so the run is scored
             // on real end-state, not zeroed (pairs with CU-D4).
@@ -602,6 +616,85 @@ export class ComputerUseEngine {
             this.logError('Forced final judge evaluation failed', error);
             return lastVerdict;
         }
+    }
+
+    /**
+     * Auth-detour watchdog (CU-B7). Runs at the top of each step, before
+     * perception. If the current URL matches an identity-provider pattern from
+     * the {@link AppProfile}, the session was invalidated mid-run and the page
+     * bounced to login. We recover generically (re-apply auth + re-navigate to
+     * the start URL) so the step then perceives the recovered app — the agent
+     * never sees the login page and burns no steps re-consenting. After
+     * `MaxDetours` detours in one run the recovery clearly isn't holding, so we
+     * terminate the run as an infrastructure `AuthDetour` (a counted, alarmable
+     * signal) rather than grade the agent on a harness/session fault.
+     *
+     * Returns `{ result?, recoveryMs }`. A set `result` means the run
+     * terminated (MaxDetours exceeded) and the caller must return it.
+     * `recoveryMs` is the wall time spent recovering, which the caller folds
+     * into cumulative settle so the detour is excluded from the agent-time
+     * budget. A no-op (no profile / no patterns / URL clean) returns
+     * `{ recoveryMs: 0 }`.
+     */
+    private async handleAuthDetour(
+        context: RunContext,
+        stepNumber: number,
+        lastVerdict: JudgeVerdict | undefined
+    ): Promise<{ result?: ComputerUseResult; recoveryMs: number }> {
+        const authCfg = context.Params.AppProfile?.Auth;
+        if (!authCfg || authCfg.IdentityProviderPatterns.length === 0) {
+            return { recoveryMs: 0 };
+        }
+
+        const currentUrl = this.browserAdapter.CurrentUrl;
+        const decision = evaluateAuthDetour(
+            currentUrl,
+            authCfg.IdentityProviderPatterns,
+            context.AuthDetourCount,
+            authCfg.MaxDetours
+        );
+        if (!decision.isDetour) {
+            return { recoveryMs: 0 };
+        }
+
+        context.AuthDetourCount++;
+
+        if (decision.shouldTerminate) {
+            this.logError(`Step ${stepNumber} — auth detour #${context.AuthDetourCount} to ${currentUrl}; exceeded MaxDetours (${authCfg.MaxDetours}). Terminating as Failed/AuthDetour — an infrastructure/session fault, not an agent failure (CU-B7)`);
+            const verdict = await this.forceFinalJudge(context, stepNumber, lastVerdict);
+            const result = this.buildResult(context, 'Failed', false, verdict);
+            result.FailureReason = 'AuthDetour';
+            this.onRunComplete(result);
+            return { result, recoveryMs: 0 };
+        }
+
+        this.log(`Step ${stepNumber} — auth detour #${context.AuthDetourCount} detected (${currentUrl}); recovering (re-apply auth + navigate to start URL), not charging the agent (CU-B7)`);
+        const recoveryMs = await this.recoverFromAuthDetour(context);
+        return { recoveryMs };
+    }
+
+    /**
+     * Recover from an auth detour by re-applying the run's configured auth and
+     * re-navigating to the start URL. Reuses the same generic primitives the
+     * engine uses at launch — it holds no app- or provider-specific knowledge.
+     * `ResetDomain` clears the "already applied" guard so header/cookie auth is
+     * genuinely re-applied for the start domain. Best-effort: never throws (a
+     * failed recovery just leaves the login page up, and the next detour will
+     * escalate toward the MaxDetours terminate). Returns the elapsed ms.
+     */
+    private async recoverFromAuthDetour(context: RunContext): Promise<number> {
+        const start = performance.now();
+        try {
+            const startUrl = context.Params.StartUrl;
+            if (startUrl) {
+                this.authHandler.ResetDomain(NavigationGuard.ExtractDomain(startUrl));
+            }
+            await this.runGlobalAuthCallback();
+            await this.navigateToStartUrl(context.Params, context);
+        } catch (error) {
+            this.logError('Auth-detour recovery failed (leaving current page for the next detour check)', error);
+        }
+        return performance.now() - start;
     }
 
     /**
@@ -1679,6 +1772,7 @@ export class ComputerUseEngine {
         result.FinalUrl = context.CurrentUrl;
         result.FinalScreenshot = context.CurrentScreenshot;
         result.FinalJudgeVerdict = lastVerdict;
+        result.AuthDetourCount = context.AuthDetourCount;
         return result;
     }
 

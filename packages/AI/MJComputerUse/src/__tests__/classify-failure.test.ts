@@ -40,6 +40,16 @@ describe('classifyFailure (CU-F5)', () => {
         expect(classifyFailure(sig({ status: 'Failed', failureReason: 'LoopDetected' }))).toBe('loop-detected');
     });
 
+    it('classifies an auth-detour terminate as auth-detour, outranking its own 401 app-errors', () => {
+        // The 401s that caused the detour also set hasAppError — auth-detour is the root cause and wins.
+        expect(classifyFailure(sig({ status: 'Failed', failureReason: 'AuthDetour' }))).toBe('auth-detour');
+        expect(classifyFailure(sig({ status: 'Failed', failureReason: 'AuthDetour', hasAppError: true }))).toBe('auth-detour');
+    });
+
+    it('infra still outranks auth-detour', () => {
+        expect(classifyFailure(sig({ hasCrash: true, failureReason: 'AuthDetour' }))).toBe('infra');
+    });
+
     it('classifies cancellation and impossibility', () => {
         expect(classifyFailure(sig({ status: 'Cancelled' }))).toBe('cancelled');
         expect(classifyFailure(sig({ status: 'Impossible' }))).toBe('impossible');

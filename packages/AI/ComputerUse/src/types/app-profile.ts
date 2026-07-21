@@ -56,6 +56,42 @@ export class AppProfile {
 
     /** Loop-detection tuning (CU-B1); engine defaults apply when omitted. */
     public Loop?: LoopConfig;
+
+    /**
+     * Auth-detour watchdog config (CU-B7); omitted → the watchdog is off. The
+     * engine stays app-agnostic — it only knows how to recognize the identity
+     * providers the profile names, never any specific one.
+     */
+    public Auth?: AuthDetourConfig;
+}
+
+/**
+ * Auth-detour watchdog tuning (CU-B7). When a run's session is invalidated
+ * mid-flight the page bounces to an identity provider (Auth0, Entra, Okta…);
+ * the agent would then burn ~10 steps re-consenting and the heuristics would
+ * mislabel it a navigation loop. The watchdog recognizes the bounce, recovers
+ * generically (re-apply auth + re-navigate to the start URL) without charging
+ * the agent a step or its time, and after {@link MaxDetours} bounces terminates
+ * the run as an infrastructure `AuthDetour` rather than grading the agent on it.
+ *
+ * App-specific (which identity providers this app uses), so it lives on the
+ * profile — the engine ships no provider list of its own.
+ */
+export class AuthDetourConfig {
+    /**
+     * Case-insensitive substrings identifying an identity-provider bounce,
+     * matched against the full current URL (e.g. `'auth0.com'`,
+     * `'login.microsoftonline.com'`, `'/u/consent'`). Empty → watchdog disabled.
+     */
+    public IdentityProviderPatterns: string[] = [];
+
+    /**
+     * Terminate the run as `Failed`/`AuthDetour` once this many detours have
+     * occurred in a single run (default 2). The first detours are recovered;
+     * exceeding the cap means recovery isn't holding — an environment fault, not
+     * an agent failure.
+     */
+    public MaxDetours: number = 2;
 }
 
 /** Loop-detection tuning (CU-B1). All values have engine defaults. */

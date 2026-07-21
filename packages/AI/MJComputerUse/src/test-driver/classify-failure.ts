@@ -19,6 +19,7 @@ import type { ComputerUseStatus, ComputerUseFailureReason } from '@memberjunctio
 /** The failure taxonomy. `null` (not a member) is reserved for success. */
 export type ComputerUseFailureClass =
     | 'infra'
+    | 'auth-detour'
     | 'app-error'
     | 'loop-detected'
     | 'cancelled'
@@ -69,42 +70,49 @@ export function classifyFailure(s: FailureSignals): ComputerUseFailureClass | nu
     if (s.hasCrash || s.status === 'Error') {
         return 'infra';
     }
-    // 2. Application error — console errors / failed requests / page errors.
-    //    First among non-infra: it's the root cause behind many blank-page loops/stalls.
+    // 2. Auth detour (CU-B7) — the engine gave up after the session bounced to
+    //    an identity provider past the watchdog's cap. This is the authoritative
+    //    root cause, so it outranks the `app-error` its own 401/403s would
+    //    otherwise register as: the failed auth requests are the symptom.
+    if (s.failureReason === 'AuthDetour') {
+        return 'auth-detour';
+    }
+    // 3. Application error — console errors / failed requests / page errors.
+    //    First among the remaining: it's the root cause behind many blank-page loops/stalls.
     if (s.hasAppError) {
         return 'app-error';
     }
-    // 3. Engine-detected navigation loop.
+    // 4. Engine-detected navigation loop.
     if (s.failureReason === 'LoopDetected') {
         return 'loop-detected';
     }
-    // 4. Externally cancelled.
+    // 5. Externally cancelled.
     if (s.status === 'Cancelled') {
         return 'cancelled';
     }
-    // 5. Judge declared the goal impossible.
+    // 6. Judge declared the goal impossible.
     if (s.status === 'Impossible') {
         return 'impossible';
     }
-    // 6. Time budget expired — split by whether the page was still changing.
+    // 7. Time budget expired — split by whether the page was still changing.
     if (s.status === 'TimeBudgetExceeded') {
         return s.tailHashStable ? 'timeout-stuck' : 'timeout-progressing';
     }
-    // 7. Page never settled and the frame was frozen — a stuck page.
+    // 8. Page never settled and the frame was frozen — a stuck page.
     if (s.settleBudgetExhausted && s.tailHashStable) {
         return 'stuck-page';
     }
-    // 8. A declared beacon never fired and there were no app errors — the app/env
+    // 9. A declared beacon never fired and there were no app errors — the app/env
     //    just never became ready (module never loaded), distinct from "agent lost".
     if (s.beaconConfigured && !s.beaconEverReady) {
         return 'env-stall';
     }
-    // 9. The engine itself terminated the run Failed (e.g. controller declared
+    // 10. The engine itself terminated the run Failed (e.g. controller declared
     //    completion but the judge kept disagreeing — CU-B3).
     if (s.status === 'Failed') {
         return 'judge-disagreement';
     }
-    // 10. The run finished but the oracles didn't pass — a plain assertion failure.
+    // 11. The run finished but the oracles didn't pass — a plain assertion failure.
     if (s.oraclesFailed) {
         return 'assertion';
     }

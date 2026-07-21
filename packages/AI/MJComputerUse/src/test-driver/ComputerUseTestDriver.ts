@@ -71,6 +71,7 @@ import {
     LocalStorageInjectionAuthMethod,
     AppProfile,
     SettleConfig,
+    AuthDetourConfig,
     hashesSimilar,
 } from '@memberjunction/computer-use';
 import type { AuthMethod, ComputerUseResult, BrowserDiagnosticEvent } from '@memberjunction/computer-use';
@@ -509,6 +510,18 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             profile.Settle = settle;
         }
 
+        // Auth-detour watchdog (CU-B7). MJ Explorer authenticates via Auth0 or
+        // Microsoft Entra (MSAL); when a mid-run session invalidation bounces the
+        // page to one of those, the watchdog recovers it without charging the
+        // agent and, past MaxDetours, ends the run as an infrastructure
+        // AuthDetour. Defaulted on for the MJ suite (this is the ~13/44 failure
+        // class the plan targets); `identityProviderPatterns: []` disables it.
+        const auth = new AuthDetourConfig();
+        auth.IdentityProviderPatterns =
+            cfg?.auth?.identityProviderPatterns ?? ['auth0.com', 'login.microsoftonline.com'];
+        if (cfg?.auth?.maxDetours != null) auth.MaxDetours = cfg.auth.maxDetours;
+        profile.Auth = auth;
+
         return profile;
     }
 
@@ -769,7 +782,16 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             finalUrl: result.FinalUrl,
             finalScreenshot: result.FinalScreenshot,
             stepCount: result.Steps.length,
+            // Auth-detour watchdog telemetry (CU-B7) — always present so a flaky
+            // session shows up even on runs that recovered and still passed.
+            authDetourCount: result.AuthDetourCount,
         };
+
+        // Engine-named failure reason (CU-B1/B7), when set — surfaced for the
+        // classifier and for at-a-glance triage of the raw output.
+        if (result.FailureReason) {
+            output.failureReason = result.FailureReason;
+        }
 
         // Include judge verdict if available
         if (result.FinalJudgeVerdict) {

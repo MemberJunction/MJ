@@ -187,6 +187,20 @@ export interface ComputerUseTestConfig {
             networkIdleCapMs?: number;
             minWaitMs?: number;
         };
+        /**
+         * Auth-detour watchdog (CU-B7). When the session is invalidated mid-run
+         * and the page bounces to an identity provider, the watchdog recovers it
+         * (re-auth + re-navigate) without charging the agent a step, and after
+         * `maxDetours` ends the run as an infrastructure `AuthDetour` instead of
+         * grading the agent on it. Defaults to MJ's providers (Auth0 + Entra);
+         * pass `identityProviderPatterns: []` to disable.
+         */
+        auth?: {
+            /** Case-insensitive URL substrings marking an identity-provider bounce. */
+            identityProviderPatterns?: string[];
+            /** Terminate as AuthDetour after this many detours (default 2). */
+            maxDetours?: number;
+        };
     };
 }
 

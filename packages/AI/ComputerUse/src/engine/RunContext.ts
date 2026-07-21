@@ -36,6 +36,9 @@ export class RunContext {
     /** Compact diagnostics digest from the previous step, injected into the next controller prompt (CU-A7). */
     public LastDiagnosticsDigest?: string;
 
+    /** How many identity-provider detours the watchdog has recovered this run (CU-B7). */
+    public AuthDetourCount: number = 0;
+
     /**
      * Perceptual hash of the screenshot the judge last evaluated (CU-G5).
      * Used to skip re-judging an unchanged visible state.
