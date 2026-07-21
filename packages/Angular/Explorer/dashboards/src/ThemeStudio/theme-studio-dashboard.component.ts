@@ -1,14 +1,17 @@
 /**
  * @fileoverview Theme Studio dashboard (org-theming Phase 5) — the polished authoring
  * surface for brand themes, matching theme-studio-mockup-v2: a preview-primary layout
- * with a collapsible slide-panel editor, three switchable preview surfaces (Explorer
- * UI style-guide, Skip reports, agent output), and a fullscreen mode.
+ * with a collapsible, resizable slide-panel editor, three switchable preview surfaces
+ * (Explorer UI style-guide, Skip reports, agent output), and a fullscreen mode.
  *
  * Preview fidelity (proposal 16.2 / decision #4): every surface is fed by the SAME
  * derivation module as the save path (@memberjunction/theme-engine). The mockup's
  * parallel `--p-*` + JS color math is replaced by the real derived `--mj-*` token map,
  * pushed onto the preview canvas — so hovers, dark re-point, and status colors are the
  * true generator output, not an approximation.
+ *
+ * Customization escalates in order (design feedback v1.1): seeds → token overrides
+ * (visual token browser + recipes) → custom CSS (escape hatch, CodeMirror-backed).
  * @module ThemeStudio
  */
 
@@ -22,10 +25,13 @@ import {
   ViewChild,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
+import { autocompletion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
+import { Extension } from '@codemirror/state';
 import { RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard, ThemeService } from '@memberjunction/ng-shared';
-import { MJThemeEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJThemeEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import {
@@ -37,7 +43,15 @@ import {
   MJ_DEFAULT_SEEDS,
   ThemeSeeds,
 } from '@memberjunction/theme-engine';
-import { isBuiltInTheme, MJ_CHROME_SELECTORS } from './theme-studio.constants';
+import {
+  isBuiltInTheme,
+  MJ_CHROME_SELECTOR_INFO,
+  MJ_CHROME_SELECTORS,
+  THEME_RECIPES,
+  ThemeRecipe,
+  TOKEN_CATEGORIES,
+  TOKEN_PREVIEW_TARGETS,
+} from './theme-studio.constants';
 import { buildThemeStudioAgentContext, resolveThemeByIDOrName, ThemeSummaryRow } from './theme-agent-context';
 
 /** A named starting point that leads with identity, not a blank color picker (16.5). */
@@ -54,7 +68,37 @@ interface ThemeListItem {
   swatches: string[];
 }
 
+/** One row in the visual token browser. */
+interface TokenRow {
+  name: string;
+  /** Effective value shown (override if present, else derived for the preview mode). */
+  value: string;
+  overridden: boolean;
+  /** Whether `value` is a plain hex color editable with a color picker. */
+  isColor: boolean;
+  /** Normalized 6-digit hex for input[type=color] (only meaningful when isColor). */
+  colorValue: string;
+}
+
+/** One category group in the visual token browser. */
+interface TokenGroup {
+  key: string;
+  label: string;
+  rows: TokenRow[];
+  modified: number;
+}
+
 type PreviewSurface = 'explorer' | 'artifact';
+
+/** Panel sizing (Q3): resizable with a min, an advanced-mode preset, and a preview floor. */
+const PANEL_MIN_WIDTH = 392;
+const PANEL_ADVANCED_WIDTH = 600;
+const PREVIEW_MIN_WIDTH = 640;
+const PANEL_MAX_FRACTION = 0.55;
+/** User-settings key for a manually-dragged panel width. */
+const PANEL_WIDTH_KEY = 'mj.themeStudio.panelWidth.v1';
+/** Brand-overlay id used for the temporary "Preview on my workspace" application. */
+const WORKSPACE_PREVIEW_ID = 'theme-studio-draft-preview';
 
 @RegisterClass(BaseDashboard, 'ThemeStudioDashboard')
 @Component({
@@ -66,13 +110,9 @@ type PreviewSurface = 'explorer' | 'artifact';
 export class ThemeStudioDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
   @ViewChild('previewCanvas') private previewCanvas?: ElementRef<HTMLElement>;
   @ViewChild('nameInput') private nameInput?: ElementRef<HTMLInputElement>;
-  @ViewChild('cssEditor') private cssEditor?: ElementRef<HTMLTextAreaElement>;
+  @ViewChild('stage') private stageEl?: ElementRef<HTMLElement>;
+  @ViewChild('cssCm') private cssCm?: CodeEditorComponent;
   private themesChangedSub?: Subscription;
-
-  /** Custom-CSS autocomplete (MJ chrome selectors + --mj-* tokens). */
-  public cssAcOpen = false;
-  public cssAcItems: string[] = [];
-  public cssAcIndex = 0;
 
   public readonly presets: ThemePreset[] = [
     { name: 'MJ Default', seeds: { ...MJ_DEFAULT_SEEDS } },
@@ -109,6 +149,9 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   public themePickerOpen = false;
   public saving = false;
 
+  /** Preset gallery shown as step one of "New theme" (Q1#2). */
+  public presetGalleryOpen = false;
+
   /** Toolbar segmented controls (mj-view-toggle options). */
   public readonly surfaceOptions: ViewToggleOption[] = [
     { key: 'explorer', label: 'Explorer UI' },
@@ -124,17 +167,63 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   public baseFontSize = 14;
   public density = 16;
 
+  /** Interactive-mock state (Q1#6) — clickable tabs/nav/switches/accordion so the
+   *  derived state token families (hover/active/focus) demonstrate themselves live. */
+  public readonly mockNavItems = ['Dashboards', 'Data', 'Agents'];
+  public mockNav = 0;
+  public readonly mockTabs = ['Overview', 'Members', 'Renewals'];
+  public mockTab = 0;
+  public mockSwitchA = true;
+  public mockSwitchB = false;
+  public mockAccordionOpen = false;
+
   /** Advanced customization (persisted): per-token overrides + raw scoped CSS. */
   public advancedOpen = false;
-  public overrideRows: { key: string; value: string }[] = [];
+  public tokenOverrides: Record<string, string> = {};
   public customCss = '';
   public showGeneratedCss = false;
+
+  /** Visual token browser state (Q2#1). */
+  public tokenSearch = '';
+  public tokenGroups: TokenGroup[] = [];
+  public openTokenCats = new Set<string>();
+  public editingToken: string | null = null;
+  public editingTokenValue = '';
+  private editingTokenOriginal = '';
+  private editingTokenWasOverridden = false;
+
+  /** Recipes (Q2#3): curated intents expanded to token sets, with cached on/off state. */
+  public readonly chromeSelectorInfo = MJ_CHROME_SELECTOR_INFO;
+  public recipeStates: { recipe: ThemeRecipe; on: boolean }[] = [];
+
+  /** Inline custom-CSS validation results (Q3#6). */
+  public cssWarnings: string[] = [];
+
+  /** Panel sizing (Q3#1/#2). */
+  public panelWidth = PANEL_MIN_WIDTH;
+  public panelResizing = false;
+  private manualPanelWidth: number | null = null;
+
+  /** "Preview on my workspace" (Q3#8). */
+  public workspacePreviewOn = false;
+  private priorOverlayId: string | null = null;
+  private workspacePreviewTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** CodeMirror extensions for the custom-CSS editor: MJ selector + token completions. */
+  public readonly cssEditorExtensions: Extension[] = [
+    autocompletion({ override: [(ctx) => this.mjCssCompletionSource(ctx)] }),
+  ];
+
+  private tokenHighlightEl: HTMLStyleElement | null = null;
+  private appliedVarKeys = new Set<string>();
+  private liveTokenCache: Set<string> | null = null;
 
   constructor(private cdRef: ChangeDetectorRef, private themeService: ThemeService) {
     super();
   }
 
   ngAfterViewInit(): void {
+    this.syncPanelWidth();
     this.applyPreviewVars();
   }
 
@@ -144,6 +233,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
 
   protected initDashboard(): void {
     this.seeds = { ...MJ_DEFAULT_SEEDS };
+    this.loadPersistedPanelWidth();
     this.recompute();
     // Keep the switcher list fresh when themes change in the Manage Themes tab.
     this.themesChangedSub = this.themeService.ThemesChanged$.subscribe(() => {
@@ -155,6 +245,10 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   override ngOnDestroy(): void {
     this.themesChangedSub?.unsubscribe();
     clearTimeout(this.agentContextTimer);
+    clearTimeout(this.workspacePreviewTimer);
+    if (this.workspacePreviewOn) {
+      void this.endWorkspacePreview(false);
+    }
     super.ngOnDestroy();
   }
 
@@ -204,15 +298,34 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   public recompute(): void {
     this.derived = derive(this.seeds);
     this.applyPreviewVars();
+    this.rebuildTokenBrowser();
+    this.refreshWorkspacePreviewDebounced();
   }
 
-  public get contrastChecks(): ContrastCheck[] {
-    return this.derived.contrast[this.previewMode];
+  /**
+   * The text-on-primary contrast headline, reporting the WORST of light and dark
+   * (Q1#3) — a failing dark pair must not hide while previewing light. A failing
+   * mode always beats a passing one; between two of the same outcome, lower ratio.
+   */
+  public get onPrimaryWorst(): { check: ContrastCheck; mode: 'light' | 'dark' } | undefined {
+    const light = this.derived.contrast.light.find((c) => c.name === 'text-on-primary');
+    const dark = this.derived.contrast.dark.find((c) => c.name === 'text-on-primary');
+    if (!light || !dark) {
+      const only = light ?? dark;
+      return only ? { check: only, mode: light ? 'light' : 'dark' } : undefined;
+    }
+    if (light.passes !== dark.passes) {
+      return light.passes ? { check: dark, mode: 'dark' } : { check: light, mode: 'light' };
+    }
+    return light.ratio <= dark.ratio ? { check: light, mode: 'light' } : { check: dark, mode: 'dark' };
   }
 
-  /** The text-on-primary check for the previewed mode (drives the Brand card chip). */
-  public get onPrimaryCheck(): ContrastCheck | undefined {
-    return this.contrastChecks.find((c) => c.name === 'text-on-primary');
+  /** Per-mode text-on-primary detail shown alongside the worst-of-both headline. */
+  public get onPrimaryDetail(): { light?: ContrastCheck; dark?: ContrastCheck } {
+    return {
+      light: this.derived.contrast.light.find((c) => c.name === 'text-on-primary'),
+      dark: this.derived.contrast.dark.find((c) => c.name === 'text-on-primary'),
+    };
   }
 
   /** All 10 derived categorical colors (--mj-viz-1..10) — the full chart-palette contract. */
@@ -251,13 +364,18 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   /**
    * Push the derived token map onto the preview canvas as scoped CSS vars — the
    * fidelity guarantee. Also sets preview-only density/size vars and the mode attr so
-   * any [data-theme="dark"] rules inside the canvas resolve.
+   * any [data-theme="dark"] rules inside the canvas resolve. Stale keys from removed
+   * overrides (e.g. a recipe toggled off) are cleared before re-applying.
    */
   private applyPreviewVars(): void {
     const el = this.previewCanvas?.nativeElement;
     if (!el) return;
     // Advanced token overrides win, layered last — mirrors emitOverlayCss's merge order.
     const vars = { ...this.derived.overlayVars, ...this.derived.tokens[this.previewMode], ...this.overridesMap() };
+    for (const k of this.appliedVarKeys) {
+      if (!(k in vars)) el.style.removeProperty(k);
+    }
+    this.appliedVarKeys = new Set(Object.keys(vars));
     for (const [k, v] of Object.entries(vars)) {
       el.style.setProperty(k, v);
     }
@@ -288,48 +406,321 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   }
 
   // ========================================
-  // Advanced customization (overrides + raw CSS)
+  // Advanced customization — token browser + recipes + raw CSS
   // ========================================
 
-  /** Build the override token map from the editable rows (blank keys dropped). */
+  /** The persisted override token map (defensive copy). */
   private overridesMap(): Record<string, string> {
-    const map: Record<string, string> = {};
-    for (const row of this.overrideRows) {
-      const key = row.key.trim();
-      if (key) map[key] = row.value;
-    }
-    return map;
+    return { ...this.tokenOverrides };
   }
 
-  /** Parse a persisted Overrides JSON map into editable rows. */
-  private overrideRowsFrom(json: string | null): { key: string; value: string }[] {
-    if (!json) return [];
+  /** Parse a persisted Overrides JSON map. */
+  private overridesFrom(json: string | null): Record<string, string> {
+    if (!json) return {};
     try {
       const obj = JSON.parse(json) as Record<string, string>;
-      return Object.entries(obj).map(([key, value]) => ({ key, value: String(value) }));
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        if (k.trim()) out[k.trim()] = String(v);
+      }
+      return out;
     } catch {
-      return [];
+      return {};
     }
   }
 
-  /** Token names offered for autocomplete in the override editor. */
+  /** Token names in the derived contract (completion, insert picker, validation). */
   public get overridableTokens(): string[] {
     const names = new Set([...Object.keys(this.derived.overlayVars), ...Object.keys(this.derived.tokens.light)]);
     return Array.from(names).sort();
   }
 
-  public addOverrideRow(): void {
-    this.overrideRows = [...this.overrideRows, { key: '', value: '' }];
+  /** Overrides/custom CSS don't change derivation — re-apply the preview layer, refresh
+   *  the browser rows + recipe states, and keep any live workspace preview in sync. */
+  public onAdvancedChanged(): void {
+    this.applyPreviewVars();
+    this.rebuildTokenBrowser();
+    this.refreshWorkspacePreviewDebounced();
+    this.publishAgentContextDebounced();
   }
 
-  public removeOverrideRow(index: number): void {
-    this.overrideRows = this.overrideRows.filter((_, i) => i !== index);
+  /** Expand/collapse the Advanced card, auto-widening the panel while it's open (Q3#2). */
+  public toggleAdvanced(): void {
+    this.advancedOpen = !this.advancedOpen;
+    this.syncPanelWidth();
+  }
+
+  /** Closed-state summary — "3 token overrides · 14 lines CSS" (Q3#7). */
+  public get advancedSummary(): string | null {
+    const overrideCount = Object.keys(this.tokenOverrides).length;
+    const cssLines = this.customCss.trim() ? this.customCss.trim().split('\n').length : 0;
+    if (!overrideCount && !cssLines) return null;
+    const parts: string[] = [];
+    if (overrideCount) parts.push(`${overrideCount} token override${overrideCount === 1 ? '' : 's'}`);
+    if (cssLines) parts.push(`${cssLines} line${cssLines === 1 ? '' : 's'} CSS`);
+    return parts.join(' · ');
+  }
+
+  // ---- Visual token browser (Q2#1) ----
+
+  /** Rebuild the grouped, searchable token rows + cached recipe on/off states. */
+  private rebuildTokenBrowser(): void {
+    const q = this.tokenSearch.trim().toLowerCase();
+    const names = new Set([
+      ...Object.keys(this.derived.overlayVars),
+      ...Object.keys(this.derived.tokens.light),
+      ...Object.keys(this.tokenOverrides),
+    ]);
+    const groups: TokenGroup[] = TOKEN_CATEGORIES.map((c) => ({ key: c.key, label: c.label, rows: [], modified: 0 }));
+    const other: TokenGroup = { key: 'other', label: 'Other', rows: [], modified: 0 };
+    for (const name of Array.from(names).sort()) {
+      if (q && !name.toLowerCase().includes(q)) continue;
+      const derivedVal = this.derived.tokens[this.previewMode][name] ?? this.derived.overlayVars[name] ?? '';
+      const overridden = name in this.tokenOverrides;
+      const value = overridden ? this.tokenOverrides[name] : derivedVal;
+      const hex = /^#[0-9a-fA-F]{6}$/.test(value.trim());
+      const row: TokenRow = { name, value, overridden, isColor: hex, colorValue: hex ? value.trim() : '#000000' };
+      const catIndex = TOKEN_CATEGORIES.findIndex((c) => c.match.test(name));
+      const group = catIndex >= 0 ? groups[catIndex] : other;
+      group.rows.push(row);
+      if (overridden) group.modified++;
+    }
+    this.tokenGroups = [...groups, other].filter((g) => g.rows.length > 0);
+    this.recipeStates = THEME_RECIPES.map((recipe) => {
+      const keys = Object.keys(recipe.tokens(this.derived, this.seeds));
+      return { recipe, on: keys.length > 0 && keys.every((k) => k in this.tokenOverrides) };
+    });
+  }
+
+  public onTokenSearchChanged(): void {
+    this.rebuildTokenBrowser();
+  }
+
+  public toggleTokenCategory(key: string): void {
+    if (this.openTokenCats.has(key)) {
+      this.openTokenCats.delete(key);
+    } else {
+      this.openTokenCats.add(key);
+    }
+  }
+
+  /** A category is open when toggled open, or always while a search narrows the rows. */
+  public isTokenCategoryOpen(key: string): boolean {
+    return this.tokenSearch.trim().length > 0 || this.openTokenCats.has(key);
+  }
+
+  public setTokenOverride(name: string, value: string): void {
+    this.tokenOverrides = { ...this.tokenOverrides, [name]: value };
     this.onAdvancedChanged();
   }
 
-  /** Overrides/custom CSS don't change derivation — just re-apply the preview layer. */
-  public onAdvancedChanged(): void {
+  public resetTokenOverride(name: string): void {
+    const next = { ...this.tokenOverrides };
+    delete next[name];
+    this.tokenOverrides = next;
+    if (this.editingToken === name) this.editingToken = null;
+    this.onAdvancedChanged();
+  }
+
+  public onTokenColorInput(name: string, event: Event): void {
+    this.setTokenOverride(name, (event.target as HTMLInputElement).value);
+  }
+
+  /** Begin inline text editing for a non-color token value. */
+  public beginTokenEdit(row: TokenRow): void {
+    this.editingToken = row.name;
+    this.editingTokenValue = row.value;
+    this.editingTokenOriginal = row.value;
+    this.editingTokenWasOverridden = row.overridden;
+  }
+
+  public commitTokenEdit(): void {
+    if (!this.editingToken) return;
+    const name = this.editingToken;
+    const value = this.editingTokenValue.trim();
+    this.editingToken = null;
+    // An unchanged, previously-underived value is a no-op — don't mark it modified.
+    if (!value || (!this.editingTokenWasOverridden && value === this.editingTokenOriginal)) return;
+    this.setTokenOverride(name, value);
+  }
+
+  public cancelTokenEdit(): void {
+    this.editingToken = null;
+  }
+
+  // ---- Reverse highlight (Q2#2): token row hover → outline preview elements ----
+
+  /** Outline the preview elements that use `token` (exact by construction — the canvas
+   *  markup is ours; see TOKEN_PREVIEW_TARGETS). Unmapped tokens simply don't highlight. */
+  public highlightTokenTargets(token: string): void {
+    const canvas = this.previewCanvas?.nativeElement;
+    if (!canvas) return;
+    const selectors = TOKEN_PREVIEW_TARGETS[token];
+    if (!selectors?.length) {
+      this.clearTokenHighlight();
+      return;
+    }
+    if (!this.tokenHighlightEl || !this.tokenHighlightEl.isConnected) {
+      this.tokenHighlightEl = document.createElement('style');
+      this.tokenHighlightEl.id = 'ts-token-highlight';
+      canvas.appendChild(this.tokenHighlightEl);
+    }
+    const scoped = selectors.map((s) => `.ts-canvas ${s}`).join(', ');
+    // Fixed magenta on purpose: an inspector affordance that must stand out on any theme.
+    this.tokenHighlightEl.textContent = `${scoped} { outline: 2px solid #e935c1 !important; outline-offset: 2px; }`;
+  }
+
+  public clearTokenHighlight(): void {
+    if (this.tokenHighlightEl) this.tokenHighlightEl.textContent = '';
+  }
+
+  // ---- Recipes (Q2#3) ----
+
+  /** Toggle a recipe: expand its token set into overrides, or remove exactly those keys. */
+  public toggleRecipe(recipe: ThemeRecipe): void {
+    const tokens = recipe.tokens(this.derived, this.seeds);
+    const keys = Object.keys(tokens);
+    if (keys.length === 0) return;
+    const on = keys.every((k) => k in this.tokenOverrides);
+    const next = { ...this.tokenOverrides };
+    if (on) {
+      for (const k of keys) delete next[k];
+    } else {
+      Object.assign(next, tokens);
+    }
+    this.tokenOverrides = next;
+    this.onAdvancedChanged();
+  }
+
+  // ---- Custom CSS editor (Q3#4/#5/#6) ----
+
+  public onCssEditorChange(value: string): void {
+    this.customCss = value;
+    this.validateCustomCss();
     this.applyPreviewVars();
+    this.refreshWorkspacePreviewDebounced();
+    this.publishAgentContextDebounced();
+  }
+
+  /** All completions offered: real chrome selectors + the theme's derived token names. */
+  private get cssSuggestions(): string[] {
+    return [...MJ_CHROME_SELECTORS, ...this.overridableTokens];
+  }
+
+  /** CodeMirror completion source over the MJ chrome selectors + `--mj-*` tokens. */
+  private mjCssCompletionSource(context: CompletionContext): CompletionResult | null {
+    const word = context.matchBefore(/[-\w.]+/);
+    if (!word || (word.text.length < 2 && !context.explicit)) return null;
+    return {
+      from: word.from,
+      options: this.cssSuggestions.map((s) => ({ label: s, type: s.startsWith('--') ? 'variable' : 'type' })),
+      validFor: /^[-\w.]*$/,
+    };
+  }
+
+  /** Insert a chrome selector at the caret; on an empty line, scaffold a full rule. */
+  public insertChromeSelector(selector: string): void {
+    const view = this.cssCm?.view;
+    if (!view) {
+      const prefix = this.customCss.trim() ? `${this.customCss.replace(/\s+$/, '')}\n\n` : '';
+      this.onCssEditorChange(`${prefix}${selector} {\n  \n}`);
+      return;
+    }
+    const pos = view.state.selection.main.head;
+    const line = view.state.doc.lineAt(pos);
+    if (line.text.trim().length === 0) {
+      const opener = `${selector} {\n  `;
+      view.dispatch({
+        changes: { from: pos, insert: `${opener}\n}` },
+        selection: { anchor: pos + opener.length },
+      });
+    } else {
+      view.dispatch({
+        changes: { from: pos, insert: selector },
+        selection: { anchor: pos + selector.length },
+      });
+    }
+    view.focus();
+  }
+
+  /** Insert-token picker (same enumeration the overrides use). */
+  public onInsertTokenPick(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const token = select.value;
+    select.value = '';
+    if (!token) return;
+    const text = `var(${token})`;
+    const view = this.cssCm?.view;
+    if (!view) {
+      this.onCssEditorChange(this.customCss + text);
+      return;
+    }
+    const pos = view.state.selection.main.head;
+    view.dispatch({ changes: { from: pos, insert: text }, selection: { anchor: pos + text.length } });
+    view.focus();
+  }
+
+  /** Inline validation at edit time (Q3#6): @import removal + unknown --mj-* names. */
+  private validateCustomCss(): void {
+    const warnings: string[] = [];
+    if (/@import\b/i.test(this.customCss)) {
+      warnings.push('@import is not supported and is removed on save.');
+    }
+    const known = this.knownMjTokens();
+    const unknown = new Set<string>();
+    for (const match of this.customCss.matchAll(/--mj-[a-zA-Z0-9-]+/g)) {
+      if (!known.has(match[0])) unknown.add(match[0]);
+    }
+    if (unknown.size > 0) {
+      const list = Array.from(unknown);
+      const shown = list.slice(0, 4).join(', ');
+      warnings.push(
+        `Unknown token${list.length > 1 ? 's' : ''}: ${shown}${list.length > 4 ? ` (+${list.length - 4} more)` : ''} — check the token browser for exact names.`,
+      );
+    }
+    this.cssWarnings = warnings;
+  }
+
+  /** The full known --mj-* set: the derived contract ∪ every token the live app defines. */
+  private knownMjTokens(): Set<string> {
+    const known = new Set(this.overridableTokens);
+    for (const t of this.collectLiveMjTokens()) known.add(t);
+    return known;
+  }
+
+  /** Scan loaded stylesheets once for every defined `--mj-*` custom property, so the
+   *  unknown-name warning validates against the real base contract (no false positives
+   *  on base tokens outside the derived overlay, e.g. --mj-shadow-sm). */
+  private collectLiveMjTokens(): Set<string> {
+    if (this.liveTokenCache) return this.liveTokenCache;
+    const set = new Set<string>();
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules: CSSRuleList;
+      try {
+        rules = sheet.cssRules;
+      } catch {
+        continue; // cross-origin sheet
+      }
+      for (const rule of Array.from(rules)) {
+        this.collectTokensFromRule(rule, set);
+      }
+    }
+    this.liveTokenCache = set;
+    return set;
+  }
+
+  private collectTokensFromRule(rule: CSSRule, set: Set<string>): void {
+    if (rule instanceof CSSStyleRule) {
+      for (const prop of Array.from(rule.style)) {
+        if (prop.startsWith('--mj-')) set.add(prop);
+      }
+    }
+    const children = (rule as CSSGroupingRule).cssRules;
+    if (children) {
+      for (const child of Array.from(children)) {
+        this.collectTokensFromRule(child, set);
+      }
+    }
   }
 
   /** The actual overlay CSS this theme produces (tokens + advanced layer) — read-only view. */
@@ -349,94 +740,6 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     }
   }
 
-  // ---- Custom-CSS autocomplete (MJ chrome selectors + --mj-* tokens) ----
-
-  /** All completions offered: real chrome selectors + the theme's derived token names. */
-  private get cssSuggestions(): string[] {
-    return [...MJ_CHROME_SELECTORS, ...this.overridableTokens];
-  }
-
-  /** The identifier-ish word straddling the caret (selectors, classes, --mj-* tokens). */
-  private currentCssWord(): { word: string; start: number; end: number } {
-    const el = this.cssEditor?.nativeElement;
-    const pos = el?.selectionStart ?? this.customCss.length;
-    let start = pos;
-    while (start > 0 && /[-\w.]/.test(this.customCss[start - 1])) start--;
-    return { word: this.customCss.slice(start, pos), start, end: pos };
-  }
-
-  /** Text actually changed: update the live preview and refresh suggestions. Driving the
-   *  refresh off model changes (not keyup) keeps arrow-key navigation from resetting it. */
-  public onCustomCssChanged(): void {
-    this.onAdvancedChanged();
-    this.refreshCssAutocomplete();
-  }
-
-  /** Recompute suggestions for the word at the caret (called on type/click). */
-  public refreshCssAutocomplete(): void {
-    const { word } = this.currentCssWord();
-    if (word.length < 2) {
-      this.cssAcOpen = false;
-      return;
-    }
-    const lower = word.toLowerCase();
-    const matches = this.cssSuggestions.filter((s) => s.toLowerCase().includes(lower));
-    // Prefix matches first, then substring matches — both alphabetical within group.
-    matches.sort((a, b) => {
-      const ap = a.toLowerCase().startsWith(lower) ? 0 : 1;
-      const bp = b.toLowerCase().startsWith(lower) ? 0 : 1;
-      return ap - bp || a.localeCompare(b);
-    });
-    this.cssAcItems = matches.slice(0, 8);
-    this.cssAcIndex = 0;
-    this.cssAcOpen = this.cssAcItems.length > 0;
-  }
-
-  public onCssKeydown(event: KeyboardEvent): void {
-    if (!this.cssAcOpen) return;
-    switch (event.key) {
-      case 'ArrowDown':
-        event.preventDefault();
-        this.cssAcIndex = (this.cssAcIndex + 1) % this.cssAcItems.length;
-        break;
-      case 'ArrowUp':
-        event.preventDefault();
-        this.cssAcIndex = (this.cssAcIndex - 1 + this.cssAcItems.length) % this.cssAcItems.length;
-        break;
-      case 'Enter':
-      case 'Tab':
-        event.preventDefault();
-        this.applyCssSuggestion(this.cssAcItems[this.cssAcIndex]);
-        break;
-      case 'Escape':
-        this.cssAcOpen = false;
-        break;
-    }
-  }
-
-  /** Replace the word at the caret with the chosen suggestion, then restore focus. */
-  public applyCssSuggestion(item: string): void {
-    const el = this.cssEditor?.nativeElement;
-    if (!el) return;
-    const { start, end } = this.currentCssWord();
-    this.customCss = this.customCss.slice(0, start) + item + this.customCss.slice(end);
-    this.cssAcOpen = false;
-    const caret = start + item.length;
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(caret, caret);
-      this.onAdvancedChanged();
-    });
-  }
-
-  /** Close the dropdown on blur, deferred so a suggestion click lands first. */
-  public onCssBlur(): void {
-    setTimeout(() => {
-      this.cssAcOpen = false;
-      this.cdRef.detectChanges();
-    }, 150);
-  }
-
   // ========================================
   // View / panel / fullscreen chrome
   // ========================================
@@ -448,6 +751,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   public setPreviewMode(mode: 'light' | 'dark'): void {
     this.previewMode = mode;
     this.applyPreviewVars();
+    this.rebuildTokenBrowser();
     this.publishAgentContextDebounced();
   }
 
@@ -465,6 +769,59 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   public togglePanel(): void {
     this.panelCollapsed = !this.panelCollapsed;
     this.publishAgentContextDebounced();
+  }
+
+  // ---- Panel resize (Q3#1): drag handle, clamped, persisted per user ----
+
+  /** Clamp a requested panel width: >= the design minimum, <= 55% of the stage, and
+   *  never eating the canvas below its ~640px floor (the resize clamps, not the preview). */
+  private clampPanelWidth(width: number): number {
+    const stageWidth = this.stageEl?.nativeElement.clientWidth ?? window.innerWidth;
+    const max = Math.max(PANEL_MIN_WIDTH, Math.min(stageWidth * PANEL_MAX_FRACTION, stageWidth - PREVIEW_MIN_WIDTH));
+    return Math.round(Math.min(max, Math.max(PANEL_MIN_WIDTH, width)));
+  }
+
+  /** Manually-dragged width wins; otherwise auto-widen while Advanced is open (Q3#2). */
+  private syncPanelWidth(): void {
+    this.panelWidth = this.clampPanelWidth(this.manualPanelWidth ?? (this.advancedOpen ? PANEL_ADVANCED_WIDTH : PANEL_MIN_WIDTH));
+  }
+
+  private loadPersistedPanelWidth(): void {
+    try {
+      const raw = UserInfoEngine.Instance.GetSetting(PANEL_WIDTH_KEY);
+      const parsed = raw ? parseInt(raw, 10) : NaN;
+      if (Number.isFinite(parsed) && parsed >= PANEL_MIN_WIDTH) {
+        this.manualPanelWidth = parsed;
+      }
+    } catch {
+      // no persisted width — defaults apply
+    }
+    this.syncPanelWidth();
+  }
+
+  public startPanelResize(event: PointerEvent): void {
+    event.preventDefault();
+    this.panelResizing = true;
+    const startX = event.clientX;
+    const startWidth = this.panelWidth;
+    const onMove = (e: PointerEvent) => {
+      this.panelWidth = this.clampPanelWidth(startWidth + (startX - e.clientX));
+      this.cdRef.detectChanges();
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      this.panelResizing = false;
+      this.manualPanelWidth = this.panelWidth;
+      UserInfoEngine.Instance.SetSettingDebounced(PANEL_WIDTH_KEY, String(this.panelWidth));
+      this.cdRef.detectChanges();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+  }
+
+  @HostListener('window:resize')
+  public onWindowResize(): void {
+    this.syncPanelWidth();
   }
 
   /** Prefer the native Fullscreen API — it promotes the canvas to the browser's top
@@ -498,6 +855,11 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
 
   @HostListener('document:keydown.escape')
   public onEscape(): void {
+    if (this.presetGalleryOpen) {
+      this.presetGalleryOpen = false;
+      this.cdRef.detectChanges();
+      return;
+    }
     // Only needed for the CSS fallback; native fullscreen handles Esc itself.
     if (this.fullscreen && !document.fullscreenElement) {
       this.fullscreen = false;
@@ -555,8 +917,9 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     } catch {
       this.seeds = { ...MJ_DEFAULT_SEEDS };
     }
-    this.overrideRows = this.overrideRowsFrom(entity.Overrides);
+    this.tokenOverrides = this.overridesFrom(entity.Overrides);
     this.customCss = entity.CustomCSS ?? '';
+    this.validateCustomCss();
     this.recompute();
     this.publishAgentContext();
     // Async continuation under the OnPush resource wrapper: refresh the header pill,
@@ -631,14 +994,33 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     this.editingName = false;
   }
 
-  public newTheme(): void {
+  /**
+   * Start a fresh, unsaved draft. From the UI this opens on the preset gallery
+   * (choosing a personality first, Q1#2); agent-driven calls skip straight to the
+   * MJ default seeds.
+   */
+  public newTheme(showGallery = true): void {
     this.themePickerOpen = false;
     this.currentThemeId = null;
     this.currentName = 'New Theme';
     this.seeds = { ...MJ_DEFAULT_SEEDS };
-    this.overrideRows = [];
+    this.tokenOverrides = {};
     this.customCss = '';
+    this.cssWarnings = [];
     this.recompute();
+    this.presetGalleryOpen = showGallery;
+  }
+
+  /** Preset gallery: pick a personality card as step one of a new theme. */
+  public choosePreset(preset: ThemePreset): void {
+    this.presetGalleryOpen = false;
+    this.applyPreset(preset);
+    this.cdRef.detectChanges();
+  }
+
+  /** Close the gallery keeping the MJ-default draft (the "start blank" path). */
+  public closePresetGallery(): void {
+    this.presetGalleryOpen = false;
   }
 
   public discard(): void {
@@ -647,7 +1029,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     if (current) {
       this.selectTheme(current);
     } else {
-      this.newTheme();
+      this.newTheme(false);
     }
   }
 
@@ -791,8 +1173,66 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     if (!this.currentThemeId) return;
     await this.applyLive();
     await this.themeService.SetSelectedBrandTheme(this.currentThemeId);
-    this.notify(`Applied "${this.currentName}" to your workspace.`);
+    this.notify(`Applied "${this.currentName}" to your workspace — it stays applied across sessions.`);
     this.cdRef.detectChanges();
+  }
+
+  // ---- "Preview on my workspace" (Q3#8): draft against the REAL chrome ----
+
+  /**
+   * Temporarily apply the in-memory draft (seeds + overrides + custom CSS) to the real
+   * app chrome so custom-CSS selectors are authored against reality, with revert on
+   * toggle-off or when leaving the studio. Nothing persists — the prior overlay (or
+   * none) is restored exactly.
+   */
+  public async toggleWorkspacePreview(): Promise<void> {
+    if (this.workspacePreviewOn) {
+      await this.endWorkspacePreview();
+      return;
+    }
+    this.priorOverlayId = this.themeService.BrandOverlayId;
+    this.registerDraftPreview();
+    await this.themeService.ApplyBrandOverlay(WORKSPACE_PREVIEW_ID);
+    this.workspacePreviewOn = true;
+    this.notify('Draft applied to your workspace for preview — edits update live. Toggle off to revert.', 'info');
+    this.cdRef.detectChanges();
+  }
+
+  private registerDraftPreview(): void {
+    this.themeService.RegisterBrandTheme({
+      id: WORKSPACE_PREVIEW_ID,
+      name: `${this.currentName} (draft preview)`,
+      seeds: this.seeds,
+      overrides: this.overridesMap(),
+      customCss: this.customCss,
+    });
+  }
+
+  /** While the workspace preview is on, keep it tracking the draft (debounced). */
+  private refreshWorkspacePreviewDebounced(): void {
+    if (!this.workspacePreviewOn) return;
+    clearTimeout(this.workspacePreviewTimer);
+    this.workspacePreviewTimer = setTimeout(() => {
+      if (!this.workspacePreviewOn) return;
+      this.registerDraftPreview();
+      void this.themeService.ApplyBrandOverlay(WORKSPACE_PREVIEW_ID);
+    }, 400);
+  }
+
+  private async endWorkspacePreview(notifyUser = true): Promise<void> {
+    if (!this.workspacePreviewOn) return;
+    this.workspacePreviewOn = false;
+    clearTimeout(this.workspacePreviewTimer);
+    if (this.priorOverlayId) {
+      await this.themeService.ApplyBrandOverlay(this.priorOverlayId);
+    } else {
+      this.themeService.ClearBrandOverlay();
+    }
+    this.priorOverlayId = null;
+    if (notifyUser) {
+      this.notify('Workspace preview ended — your previous theme is back.');
+      this.cdRef.detectChanges();
+    }
   }
 
   private notify(message: string, style: 'success' | 'error' | 'info' = 'success'): void {
@@ -828,7 +1268,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
         PreviewSurface: this.activeView,
         EditorPanelOpen: !this.panelCollapsed,
         Seeds: this.seeds,
-        OverrideTokenCount: Object.keys(this.overridesMap()).length,
+        OverrideTokenCount: Object.keys(this.tokenOverrides).length,
         HasCustomCss: this.customCss.trim().length > 0,
         Contrast: this.derived.contrast,
       })
@@ -878,7 +1318,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
         Description: 'Start a fresh, unsaved theme draft from the MJ default seeds (nothing persists until the user saves).',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.newTheme();
+          this.newTheme(false);
           this.cdRef.detectChanges();
           return { Success: true, Data: { CurrentThemeName: this.currentName } };
         },
@@ -898,6 +1338,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
           if (!ref || !preset) {
             return { Success: false, ErrorMessage: `Unknown preset. Available: ${this.presets.map((p) => p.name).join(', ')}.` };
           }
+          this.presetGalleryOpen = false;
           this.applyPreset(preset);
           this.publishAgentContext();
           this.cdRef.detectChanges();

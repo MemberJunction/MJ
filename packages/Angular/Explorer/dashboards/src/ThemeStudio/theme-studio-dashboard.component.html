@@ -46,13 +46,17 @@
       @if (isBuiltInSelected) {
         <span class="readonly-note"><i class="fa-solid fa-lock"></i> Built-in · read-only</span>
       }
+      @if (workspacePreviewOn) {
+        <span class="preview-note"><i class="fa-solid fa-eye"></i> Draft previewing on your workspace</span>
+      }
     </div>
 
     <!-- [actions] = verbs: secondary actions, then the one primary CTA rightmost. -->
     <div actions>
       <button mjButton variant="flat" size="sm" (click)="discard()">Discard</button>
       <button mjButton variant="outline" size="sm" [disabled]="!currentThemeId"
-              title="Apply this theme to your workspace now" (click)="applyToMe()">Apply</button>
+              title="Apply this theme to your workspace now — it persists across sessions until you pick another"
+              (click)="applyToMe()">Apply to me</button>
       <button mjButton variant="outline" size="sm" [disabled]="!currentThemeId"
               title="Make this the organization-wide default theme for everyone" (click)="setAsDefault()">Set as org default</button>
       @if (isBuiltInSelected) {
@@ -78,7 +82,40 @@
 
   <mj-page-body [Padding]="false" [Flex]="true">
     <!-- Stage: preview (primary) + slide panel -->
-    <div class="ts-stage" [class.collapsed]="panelCollapsed">
+    <div #stage class="ts-stage" [class.collapsed]="panelCollapsed">
+
+      <!-- New-theme preset gallery (Q1#2): pick a personality before tuning seeds. -->
+      @if (presetGalleryOpen) {
+        <div class="gal-backdrop" (click)="closePresetGallery()"></div>
+        <div class="gal" role="dialog" aria-modal="true" aria-label="Start a new theme">
+          <h2>Start a new theme</h2>
+          <p class="gal-sub">Pick a personality first — everything derives from a few seeds, so you can tune it all after.</p>
+          <div class="gal-grid">
+            @for (p of presets; track p.name) {
+              <button type="button" class="gal-card" (click)="choosePreset(p)">
+                <span class="gal-mock" [style.border-radius.px]="p.seeds.radius ?? 8">
+                  <span class="gal-mock-bar" [style.background]="p.seeds.primary"></span>
+                  <span class="gal-mock-body">
+                    <span class="gal-line"></span>
+                    <span class="gal-line short"></span>
+                    <span class="gal-mock-row">
+                      <span class="gal-dot" [style.background]="p.seeds.accent ?? p.seeds.primary"></span>
+                      <span class="gal-dot" [style.background]="p.seeds.tertiary ?? p.seeds.accent ?? p.seeds.primary"></span>
+                      <span class="gal-btn" [style.background]="p.seeds.primary"
+                            [style.border-radius.px]="(p.seeds.radius ?? 8) / 2"></span>
+                    </span>
+                  </span>
+                </span>
+                <b>{{ p.name }}</b>
+              </button>
+            }
+          </div>
+          <div class="gal-foot">
+            <button mjButton variant="flat" size="sm" (click)="closePresetGallery()">Start blank (MJ defaults)</button>
+          </div>
+        </div>
+      }
+
       <div class="pv-wrap">
         <div class="pv-inner">
           <div #previewCanvas class="ts-canvas" [class.fullscreen]="fullscreen">
@@ -92,17 +129,22 @@
             }
             <div class="pv-scroll">
 
-              <!-- ============ Explorer UI style guide ============ -->
+              <!-- ============ Explorer UI style guide (interactive — Q1#6) ============ -->
               @if (activeView === 'explorer') {
                 <div class="pv-view">
-                  <div class="zone-lab">Explorer UI · shell + page chrome + ng-ui-components</div>
+                  <div class="zone-lab">Explorer UI · shell + page chrome + ng-ui-components · hover &amp; tab around — states are live</div>
                   <div class="mx">
                     <div class="mx-shell">
                       <span class="mx-appico"><i class="fa-solid fa-table-cells-large"></i></span>
-                      <span class="mx-nav"><b class="on">Dashboards</b><b>Data</b><b>Agents</b></span>
-                      <span class="mx-search"><i class="fa-solid fa-magnifying-glass"></i> Search everything…</span>
+                      <span class="mx-nav">
+                        @for (item of mockNavItems; track item; let i = $index) {
+                          <b [class.on]="mockNav === i" tabindex="0" role="button"
+                             (click)="mockNav = i" (keydown.enter)="mockNav = i">{{ item }}</b>
+                        }
+                      </span>
+                      <span class="mx-search" tabindex="0"><i class="fa-solid fa-magnifying-glass"></i> Search everything…</span>
                       <span class="mx-sp"></span>
-                      <span class="mx-av">AC</span>
+                      <span class="mx-av" tabindex="0">AC</span>
                     </div>
                     <div class="mx-ph">
                       <div class="mx-ph-top">
@@ -117,7 +159,12 @@
                         </div>
                       </div>
                       <div class="mx-toolbar">
-                        <span class="mx-tabs"><i class="on">Overview</i><i>Members</i><i>Renewals</i></span>
+                        <span class="mx-tabs">
+                          @for (t of mockTabs; track t; let i = $index) {
+                            <i [class.on]="mockTab === i" tabindex="0" role="tab" [attr.aria-selected]="mockTab === i"
+                               (click)="mockTab = i" (keydown.enter)="mockTab = i">{{ t }}</i>
+                          }
+                        </span>
                       </div>
                     </div>
                     <div class="mx-body">
@@ -131,18 +178,59 @@
                         </div>
                       </div>
                       <div class="mx-cell wide">
+                        <span class="mx-cap">Button states — rest · hover · active · focus · disabled</span>
+                        <div class="mx-row states-row">
+                          <button class="mx-btn pri">Rest</button>
+                          <button class="mx-btn pri is-hover">Hover</button>
+                          <button class="mx-btn pri is-active">Active</button>
+                          <button class="mx-btn pri is-focus">Focus</button>
+                          <button class="mx-btn pri" disabled>Disabled</button>
+                        </div>
+                        <div class="mx-row states-row">
+                          <button class="mx-btn sec">Rest</button>
+                          <button class="mx-btn sec is-hover">Hover</button>
+                          <button class="mx-btn sec is-active">Active</button>
+                          <button class="mx-btn sec is-focus">Focus</button>
+                          <button class="mx-btn sec" disabled>Disabled</button>
+                        </div>
+                        <div class="mx-row states-row">
+                          <button class="mx-btn out">Rest</button>
+                          <button class="mx-btn out is-hover">Hover</button>
+                          <button class="mx-btn out is-active">Active</button>
+                          <button class="mx-btn out is-focus">Focus</button>
+                          <button class="mx-btn out" disabled>Disabled</button>
+                        </div>
+                        <div class="mx-row states-row">
+                          <button class="mx-btn dgr">Rest</button>
+                          <button class="mx-btn dgr is-hover">Hover</button>
+                          <button class="mx-btn dgr is-active">Active</button>
+                          <button class="mx-btn dgr is-focus">Focus</button>
+                          <button class="mx-btn dgr" disabled>Disabled</button>
+                        </div>
+                      </div>
+                      <div class="mx-cell wide">
                         <span class="mx-cap">mj-input · mj-combobox · mj-switch</span>
                         <div class="mx-row">
                           <span class="mx-input focus" style="flex:1">Northwind Tra</span>
-                          <span class="mx-input" style="flex:1">Member type <i class="fa-solid fa-chevron-down"></i></span>
+                          <span class="mx-input" tabindex="0" style="flex:1">Member type <i class="fa-solid fa-chevron-down"></i></span>
                         </div>
                         <div class="mx-row">
-                          <span class="mx-swch"></span><span class="mx-swch off"></span><span class="mx-lbl">Auto-renew</span>
+                          <span class="mx-swch" [class.off]="!mockSwitchA" role="switch" tabindex="0"
+                                [attr.aria-checked]="mockSwitchA" aria-label="Toggle switch"
+                                (click)="mockSwitchA = !mockSwitchA" (keydown.enter)="mockSwitchA = !mockSwitchA"></span>
+                          <span class="mx-swch" [class.off]="!mockSwitchB" role="switch" tabindex="0"
+                                [attr.aria-checked]="mockSwitchB" aria-label="Toggle auto-renew"
+                                (click)="mockSwitchB = !mockSwitchB" (keydown.enter)="mockSwitchB = !mockSwitchB"></span>
+                          <span class="mx-lbl">Auto-renew</span>
                         </div>
                       </div>
                       <div class="mx-cell">
                         <span class="mx-cap">mj-filter-chip</span>
-                        <div class="mx-row"><span class="mx-chip on">Active</span><span class="mx-chip">Lapsed</span><span class="mx-chip">Pending</span></div>
+                        <div class="mx-row">
+                          <span class="mx-chip on" tabindex="0">Active</span>
+                          <span class="mx-chip" tabindex="0">Lapsed</span>
+                          <span class="mx-chip" tabindex="0">Pending</span>
+                        </div>
                       </div>
                       <div class="mx-cell">
                         <span class="mx-cap">mj-stat-badge · mj-progress-bar</span>
@@ -150,10 +238,18 @@
                         <div class="mx-row"><span class="mx-prog"><i></i></span><span class="mx-lbl">64%</span></div>
                       </div>
                       <div class="mx-cell">
-                        <span class="mx-cap">mj-left-nav · mj-alert</span>
+                        <span class="mx-cap">mj-left-nav · mj-accordion · mj-alert</span>
                         <div class="mx-lnav">
-                          <b class="on"><i class="fa-solid fa-house"></i> Overview</b>
-                          <b><i class="fa-solid fa-users"></i> Members</b>
+                          <b class="on" tabindex="0"><i class="fa-solid fa-house"></i> Overview</b>
+                          <b tabindex="0"><i class="fa-solid fa-users"></i> Members</b>
+                          <b tabindex="0" role="button" [attr.aria-expanded]="mockAccordionOpen"
+                             (click)="mockAccordionOpen = !mockAccordionOpen" (keydown.enter)="mockAccordionOpen = !mockAccordionOpen">
+                            <i class="fa-solid" [class.fa-chevron-down]="mockAccordionOpen" [class.fa-chevron-right]="!mockAccordionOpen"></i> Reports
+                          </b>
+                          @if (mockAccordionOpen) {
+                            <b class="mx-acc-item" tabindex="0">Renewal funnel</b>
+                            <b class="mx-acc-item" tabindex="0">Engagement</b>
+                          }
                         </div>
                         <div class="mx-alert"><i></i>12 imports finished overnight</div>
                       </div>
@@ -234,8 +330,11 @@
         </div>
       </div>
 
-      <!-- Slide panel: editor -->
-      <aside class="ts-panel" aria-label="Theme editor">
+      <!-- Slide panel: editor (resizable — Q3#1/#2) -->
+      <aside class="ts-panel" aria-label="Theme editor" [class.resizing]="panelResizing"
+             [style.width.px]="panelCollapsed ? 0 : panelWidth">
+        <div class="panel-resize" role="separator" aria-orientation="vertical" aria-label="Resize editor panel"
+             title="Drag to resize" (pointerdown)="startPanelResize($event)"></div>
         <div class="panel-h">
           <span class="ic"><i class="fa-solid fa-palette"></i></span>
           <div><h2>Edit theme</h2><small>One theme serves light &amp; dark</small></div>
@@ -267,15 +366,21 @@
               <div class="ctl"><span class="clr"><input type="color" [(ngModel)]="seeds.tertiary" (ngModelChange)="onSeedsChanged()"><span class="hex">{{ seeds.tertiary }}</span></span></div></div>
             <div class="row"><div class="lab">Secondary<small>Derived — deep surfaces</small></div>
               <div class="ctl"><span class="clr static"><span class="sw-box" [style.background]="secondaryColor"></span><span class="hex">{{ secondaryColor }}</span></span></div></div>
-            <div class="row"><div class="lab">Text on primary<small>Auto-picked · checked per mode</small></div>
+            <div class="row"><div class="lab">Text on primary<small>Worst of light &amp; dark</small></div>
               <div class="ctl">
-                @if (onPrimaryCheck; as check) {
-                  <span class="ok" [class.warn]="!check.passes">
-                    {{ check.passes ? '✓' : '⚠' }} {{ check.ratio }}:1
-                    @if (!check.passes && check.suggestion) { <span> → {{ check.suggestion.hex }}</span> }
+                @if (onPrimaryWorst; as worst) {
+                  <span class="ok" [class.warn]="!worst.check.passes"
+                        [title]="'light ' + (onPrimaryDetail.light?.ratio ?? '—') + ':1 · dark ' + (onPrimaryDetail.dark?.ratio ?? '—') + ':1'">
+                    {{ worst.check.passes ? '✓' : '⚠' }} {{ worst.check.ratio }}:1 <em class="mode-tag">{{ worst.mode }}</em>
+                    @if (!worst.check.passes && worst.check.suggestion) { <span> → {{ worst.check.suggestion.hex }}</span> }
                   </span>
                 }
               </div></div>
+            @if (onPrimaryDetail.light; as l) {
+              @if (onPrimaryDetail.dark; as d) {
+                <div class="derived-note contrast-detail">Per mode: light {{ l.ratio }}:1 {{ l.passes ? '✓' : '⚠' }} · dark {{ d.ratio }}:1 {{ d.passes ? '✓' : '⚠' }}</div>
+              }
+            }
           </div>
 
           <div class="card">
@@ -329,60 +434,119 @@
             <h3><span class="ic"><i class="fa-solid fa-image"></i></span>Logo &amp; branding</h3>
             <div class="row"><div class="lab">Footer notice<small>Shown in generated output</small></div>
               <div class="ctl"><input class="tinput" [(ngModel)]="footerNotice"></div></div>
-            <p class="sub" style="margin:8px 0 0">Logo variant uploads (light / dark / wordmark) are coming with the asset pipeline.</p>
+            <p class="sub" style="margin:8px 0 0">Logo variant uploads (light / dark / wordmark) are coming with the asset pipeline — no recolor knob needed.</p>
           </div>
 
-          <!-- Advanced: token overrides + raw CSS escape hatch + generated-CSS view -->
+          <!-- Recipes (Q2#3): curated intents that expand to reversible token sets. -->
+          <div class="card">
+            <h3><span class="ic"><i class="fa-solid fa-wand-magic-sparkles"></i></span>Recipes</h3>
+            <p class="sub">Curated looks, expanded to token overrides underneath — fully reversible.</p>
+            @for (rs of recipeStates; track rs.recipe.id) {
+              <div class="row">
+                <div class="lab">{{ rs.recipe.name }}<small>{{ rs.recipe.description }}</small></div>
+                <div class="ctl">
+                  <button type="button" class="recipe-toggle" [class.on]="rs.on" role="switch"
+                          [attr.aria-checked]="rs.on" [attr.aria-label]="'Toggle ' + rs.recipe.name"
+                          (click)="toggleRecipe(rs.recipe)"><i></i></button>
+                </div>
+              </div>
+            }
+          </div>
+
+          <!-- Advanced: the explicit escalation ladder — seeds → token overrides → CSS (Q3#9). -->
           <div class="card adv-card">
-            <h3 class="adv-head" (click)="advancedOpen = !advancedOpen">
+            <h3 class="adv-head" (click)="toggleAdvanced()">
               <span class="ic"><i class="fa-solid fa-code"></i></span>Advanced
               <i class="fa-solid caret" [class.fa-chevron-down]="advancedOpen" [class.fa-chevron-right]="!advancedOpen"></i>
             </h3>
+            @if (!advancedOpen && advancedSummary) {
+              <p class="adv-summary">{{ advancedSummary }}
+                <button type="button" class="reset-link adv-edit" (click)="toggleAdvanced()">Edit</button>
+              </p>
+            }
             @if (advancedOpen) {
-              <p class="sub">A power-user layer applied on top of the derived theme. Leave empty to use the pure seed-derived theme.</p>
-
-              <div class="adv-sec">
-                <div class="adv-lab">Token overrides</div>
-                <p class="sub">Override any <code>--mj-*</code> value; applied over the derived tokens (both modes).</p>
-                <datalist id="ts-token-names">
-                  @for (n of overridableTokens; track n) {
-                    <option [value]="n"></option>
-                  }
-                </datalist>
-                @for (row of overrideRows; track $index; let i = $index) {
-                  <div class="ovr-row">
-                    <input class="tinput ovr-key" list="ts-token-names" placeholder="--mj-brand-primary" spellcheck="false"
-                           [(ngModel)]="row.key" (ngModelChange)="onAdvancedChanged()">
-                    <input class="tinput ovr-val" placeholder="#0a5cff" spellcheck="false"
-                           [(ngModel)]="row.value" (ngModelChange)="onAdvancedChanged()">
-                    <button type="button" class="ovr-del" title="Remove override" (click)="removeOverrideRow(i)"><i class="fa-solid fa-xmark"></i></button>
-                  </div>
-                }
-                <button type="button" class="adv-add" (click)="addOverrideRow()"><i class="fa-solid fa-plus"></i> Add override</button>
+              <div class="ladder" aria-hidden="true">
+                <span class="ladder-step done"><b>1</b> Seeds</span>
+                <i class="fa-solid fa-arrow-right"></i>
+                <span class="ladder-step"><b>2</b> Token overrides</span>
+                <i class="fa-solid fa-arrow-right"></i>
+                <span class="ladder-step esc"><b>3</b> Custom CSS</span>
               </div>
+              <p class="sub">Escalate in order. Seeds (above) cover most themes; token overrides refine specific surfaces; custom CSS is the escape hatch for what tokens can't express.</p>
 
+              <!-- Step 2: visual token browser (Q2#1) -->
               <div class="adv-sec">
-                <div class="adv-lab">Custom CSS</div>
-                <p class="sub">Appended to the theme overlay, auto-scoped to this theme. Type to autocomplete MJ chrome selectors (<code>mj-shell</code>, …) and <code>--mj-*</code> tokens. <code>&#64;import</code> is not supported and is removed on save.</p>
-                <div class="adv-css-wrap">
-                  <textarea #cssEditor class="adv-css" rows="6" spellcheck="false" placeholder="mj-shell &#123; box-shadow: none; &#125;"
-                            [(ngModel)]="customCss"
-                            (ngModelChange)="onCustomCssChanged()"
-                            (click)="refreshCssAutocomplete()"
-                            (keydown)="onCssKeydown($event)"
-                            (blur)="onCssBlur()"></textarea>
-                  @if (cssAcOpen) {
-                    <ul class="css-ac">
-                      @for (s of cssAcItems; track s; let i = $index) {
-                        <li [class.on]="i === cssAcIndex"
-                            (mousedown)="$event.preventDefault(); applyCssSuggestion(s)">
-                          <i class="fa-solid" [class.fa-hashtag]="s.startsWith('--')" [class.fa-code]="!s.startsWith('--')"></i>{{ s }}
-                        </li>
+                <div class="adv-lab"><span class="step-num">2</span>Token overrides</div>
+                <p class="sub">The full derived token contract, grouped and searchable. Click a swatch to override; hover a row to see where it's used in the preview. Overrides apply over the derived tokens (both modes).</p>
+                <input class="tinput tok-search" type="search" placeholder="Search tokens (e.g. hover, surface, viz)…"
+                       [(ngModel)]="tokenSearch" (ngModelChange)="onTokenSearchChanged()" spellcheck="false">
+                <div class="tok-groups">
+                  @for (g of tokenGroups; track g.key) {
+                    <div class="tok-group">
+                      <button type="button" class="tok-group-h" (click)="toggleTokenCategory(g.key)">
+                        <i class="fa-solid" [class.fa-chevron-down]="isTokenCategoryOpen(g.key)" [class.fa-chevron-right]="!isTokenCategoryOpen(g.key)"></i>
+                        {{ g.label }}
+                        @if (g.modified > 0) { <span class="tok-mod-count">{{ g.modified }} modified</span> }
+                        <span class="tok-count">{{ g.rows.length }}</span>
+                      </button>
+                      @if (isTokenCategoryOpen(g.key)) {
+                        @for (t of g.rows; track t.name) {
+                          <div class="tok-row" [class.mod]="t.overridden"
+                               (mouseenter)="highlightTokenTargets(t.name)" (mouseleave)="clearTokenHighlight()">
+                            <span class="tok-sw" [style.background]="t.value"></span>
+                            <code class="tok-name" [title]="t.name">{{ t.name }}</code>
+                            @if (t.overridden) { <span class="tok-badge">modified</span> }
+                            @if (editingToken === t.name) {
+                              <input class="tinput tok-edit" [(ngModel)]="editingTokenValue" spellcheck="false"
+                                     (keydown.enter)="commitTokenEdit()" (keydown.escape)="cancelTokenEdit()" (blur)="commitTokenEdit()">
+                            } @else if (t.isColor) {
+                              <label class="tok-clr" [title]="t.value">
+                                <input type="color" [value]="t.colorValue" (input)="onTokenColorInput(t.name, $event)">
+                                <span class="tok-val">{{ t.value }}</span>
+                              </label>
+                            } @else {
+                              <button type="button" class="tok-val-btn" [title]="'Edit ' + t.name" (click)="beginTokenEdit(t)">{{ t.value }}</button>
+                            }
+                            @if (t.overridden) {
+                              <button type="button" class="tok-reset" title="Reset to derived value" (click)="resetTokenOverride(t.name)"><i class="fa-solid fa-rotate-left"></i></button>
+                            }
+                          </div>
+                        }
                       }
-                    </ul>
+                    </div>
                   }
                 </div>
-                <p class="sub adv-note">Live preview of custom CSS is approximate — the mock's markup differs from the real chrome.</p>
+              </div>
+
+              <!-- Step 3: custom CSS — the escape hatch (Q3#4/#5/#6/#8) -->
+              <div class="adv-sec">
+                <div class="adv-lab"><span class="step-num esc">3</span>Custom CSS<span class="esc-tag">escape hatch</span></div>
+                <p class="sub">Only for what tokens can't express. Appended to the theme overlay, auto-scoped to this theme. <code>&#64;import</code> is not supported and is removed on save.</p>
+                <div class="sel-chips">
+                  @for (s of chromeSelectorInfo; track s.selector) {
+                    <button type="button" class="sel-chip" [title]="s.description" (click)="insertChromeSelector(s.selector)">{{ s.selector }}</button>
+                  }
+                </div>
+                <div class="css-tools">
+                  <select class="tok-pick" (change)="onInsertTokenPick($event)" aria-label="Insert a token at the cursor">
+                    <option value="">Insert token…</option>
+                    @for (n of overridableTokens; track n) { <option [value]="n">{{ n }}</option> }
+                  </select>
+                </div>
+                <div class="adv-css-editor">
+                  <mj-code-editor #cssCm language="css" setup="basic"
+                                  [value]="customCss" (change)="onCssEditorChange($event)"
+                                  [extensions]="cssEditorExtensions" [lineWrapping]="true"
+                                  placeholder="mj-shell &#123; box-shadow: none; &#125;"></mj-code-editor>
+                </div>
+                @for (w of cssWarnings; track w) {
+                  <p class="css-warn"><i class="fa-solid fa-triangle-exclamation"></i> {{ w }}</p>
+                }
+                <p class="sub adv-note">The canvas preview of custom CSS is approximate — the mock's markup differs from the real chrome. Use the workspace preview to author against reality:</p>
+                <button mjButton [variant]="workspacePreviewOn ? 'warning' : 'outline'" size="sm" (click)="toggleWorkspacePreview()">
+                  <i class="fa-solid" [class.fa-eye]="!workspacePreviewOn" [class.fa-eye-slash]="workspacePreviewOn"></i>
+                  {{ workspacePreviewOn ? 'End workspace preview' : 'Preview on my workspace' }}
+                </button>
               </div>
 
               <div class="adv-sec">
@@ -393,7 +557,9 @@
                 @if (showGeneratedCss) {
                   <div class="gen-css">
                     <button type="button" class="gen-copy" (click)="copyGeneratedCss()"><i class="fa-solid fa-copy"></i> Copy</button>
-                    <pre>{{ generatedCss }}</pre>
+                    <div class="gen-css-editor">
+                      <mj-code-editor language="css" setup="minimal" readonly [value]="generatedCss"></mj-code-editor>
+                    </div>
                   </div>
                 }
               </div>
