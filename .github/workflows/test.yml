@@ -125,6 +125,9 @@ jobs:
       - name: Generic DOM coverage ratchet
         run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=137
 
+      - name: Bootstrap DOM coverage ratchet
+        run: node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0
+
       # Decide what to run:
       #  - pull_request: only packages changed since the base branch PLUS everything that
       #    depends on them (turbo's `...[ref]` package-dependency selection).

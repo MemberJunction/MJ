@@ -17,6 +17,7 @@
 "@memberjunction/ng-entity-relationship-diagram": patch
 "@memberjunction/ng-actions": patch
 "@memberjunction/ng-testing": patch
+"@memberjunction/ng-bootstrap": patch
 ---
 
 Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + a scoping-tool CI gate); no runtime change.
