@@ -100,7 +100,7 @@ class TestableSyncer extends EntityVectorSyncer {
     return (this as unknown as Record<string, CallableFunction>)['buildVectorId'](entityDocumentID, compositeKey, strategy) as string;
   }
 
-  /** Expose buildVectorMetadata for testing */
+  /** Expose buildVectorMetadata for testing — now protected, so a direct `this.` call works */
   public testBuildVectorMetadata(
     embeddingItem: { __mj_compositeKey: string; EntityData: Record<string, unknown> },
     entityDocument: { ID: string; Entity: string },
@@ -112,6 +112,39 @@ class TestableSyncer extends EntityVectorSyncer {
     return (this as unknown as Record<string, CallableFunction>)['buildVectorMetadata'](
       embeddingItem, entityDocument, templateContent, entityInfo, displayFields, metadataConfig
     ) as Record<string, string | number | boolean>;
+  }
+
+  /** Expose the individually-overridable addSystemMetadata step */
+  public testAddSystemMetadata(
+    metadata: Record<string, string | number | boolean>,
+    embeddingItem: { __mj_compositeKey: string },
+    entityDocument: { ID: string; Entity: string },
+    templateContent: { ID: string },
+    explicit: boolean
+  ): void {
+    (this as unknown as Record<string, CallableFunction>)['addSystemMetadata'](
+      metadata, embeddingItem, entityDocument, templateContent, explicit
+    );
+  }
+
+  /** Expose the individually-overridable addEntityIconMetadata step */
+  public testAddEntityIconMetadata(
+    metadata: Record<string, string | number | boolean>,
+    entityInfo: { Icon?: string } | undefined,
+    metadataConfig: EntityDocumentMetadataConfig | undefined,
+    explicit: boolean
+  ): void {
+    (this as unknown as Record<string, CallableFunction>)['addEntityIconMetadata'](metadata, entityInfo, metadataConfig, explicit);
+  }
+
+  /** Expose the individually-overridable addUpdatedAtMetadata step */
+  public testAddUpdatedAtMetadata(
+    metadata: Record<string, string | number | boolean>,
+    record: Record<string, unknown>,
+    metadataConfig: EntityDocumentMetadataConfig | undefined,
+    explicit: boolean
+  ): void {
+    (this as unknown as Record<string, CallableFunction>)['addUpdatedAtMetadata'](metadata, record, metadataConfig, explicit);
   }
 }
 
@@ -516,6 +549,97 @@ describe('EntityDocumentConfiguration', () => {
 
       expect(metadata['Status']).toBeUndefined();
       expect(Object.keys(metadata)).toEqual([]);
+    });
+  });
+
+  /* ---- decomposed buildVectorMetadata steps, tested individually ---- */
+  describe('buildVectorMetadata decomposed steps', () => {
+    const entityDocument = { ID: 'DOC-1', Entity: 'Content Items' };
+    const templateContent = { ID: 'TPL-1' };
+
+    describe('addSystemMetadata', () => {
+      it('should set RecordID / Entity / TemplateID when not explicit', () => {
+        const metadata: Record<string, string | number | boolean> = {};
+        syncer.testAddSystemMetadata(metadata, { __mj_compositeKey: 'ID|abc' }, entityDocument, templateContent, false);
+        expect(metadata).toEqual({ RecordID: 'ID|abc', Entity: 'Content Items', TemplateID: 'TPL-1' });
+      });
+
+      it('should add nothing when explicit', () => {
+        const metadata: Record<string, string | number | boolean> = {};
+        syncer.testAddSystemMetadata(metadata, { __mj_compositeKey: 'ID|abc' }, entityDocument, templateContent, true);
+        expect(metadata).toEqual({});
+      });
+    });
+
+    describe('addEntityIconMetadata', () => {
+      it('should include the icon by default when not explicit', () => {
+        const metadata: Record<string, string | number | boolean> = {};
+        syncer.testAddEntityIconMetadata(metadata, { Icon: 'fa-file' }, undefined, false);
+        expect(metadata['EntityIcon']).toBe('fa-file');
+      });
+
+      it('should omit the icon by default when explicit', () => {
+        const metadata: Record<string, string | number | boolean> = {};
+        syncer.testAddEntityIconMetadata(metadata, { Icon: 'fa-file' }, undefined, true);
+        expect(metadata['EntityIcon']).toBeUndefined();
+      });
+
+      it('should include the icon under explicit when includeEntityIcon:true is set', () => {
+        const metadata: Record<string, string | number | boolean> = {};
+        syncer.testAddEntityIconMetadata(metadata, { Icon: 'fa-file' }, { includeEntityIcon: true }, true);
+        expect(metadata['EntityIcon']).toBe('fa-file');
+      });
+    });
+
+    describe('addUpdatedAtMetadata', () => {
+      it('should include __mj_UpdatedAt by default when not explicit', () => {
+        const metadata: Record<string, string | number | boolean> = {};
+        syncer.testAddUpdatedAtMetadata(metadata, { __mj_UpdatedAt: '2026-01-01T00:00:00Z' }, undefined, false);
+        expect(metadata['__mj_UpdatedAt']).toBe('2026-01-01T00:00:00Z');
+      });
+
+      it('should omit __mj_UpdatedAt by default when explicit', () => {
+        const metadata: Record<string, string | number | boolean> = {};
+        syncer.testAddUpdatedAtMetadata(metadata, { __mj_UpdatedAt: '2026-01-01T00:00:00Z' }, undefined, true);
+        expect(metadata['__mj_UpdatedAt']).toBeUndefined();
+      });
+    });
+  });
+
+  /* ---- proof that the protected decomposition is genuinely overridable ---- */
+  describe('buildVectorMetadata subclass overrides', () => {
+    const entityDocument = { ID: 'DOC-1', Entity: 'Content Items' };
+    const templateContent = { ID: 'TPL-1' };
+    const entityInfo = { Icon: 'fa-solid fa-file' };
+
+    it('lets a subclass override one step (EntityIcon) without touching the others', () => {
+      class CustomIconSyncer extends TestableSyncer {
+        protected addEntityIconMetadata(
+          metadata: Record<string, string | number | boolean>,
+          _entityInfo: unknown,
+          _metadataConfig: EntityDocumentMetadataConfig | undefined,
+          _explicit: boolean
+        ): void {
+          metadata['EntityIcon'] = 'custom-icon-override';
+        }
+      }
+
+      const customSyncer = new CustomIconSyncer();
+      const metadata = customSyncer.testBuildVectorMetadata(
+        { __mj_compositeKey: 'ID|abc', EntityData: { __mj_UpdatedAt: '2026-01-01T00:00:00Z' } },
+        entityDocument,
+        templateContent,
+        entityInfo,
+        [],
+      );
+
+      // The overridden step's output wins...
+      expect(metadata['EntityIcon']).toBe('custom-icon-override');
+      // ...while the un-overridden steps still ran normally, untouched by the subclass.
+      expect(metadata['Entity']).toBe('Content Items');
+      expect(metadata['RecordID']).toBe('ID|abc');
+      expect(metadata['TemplateID']).toBe('TPL-1');
+      expect(metadata['__mj_UpdatedAt']).toBe('2026-01-01T00:00:00Z');
     });
   });
 });

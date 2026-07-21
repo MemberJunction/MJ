@@ -10,7 +10,7 @@
  */
 
 import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
-import { MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/core-entities';
+import { MJVectorIndexEntity, MJVectorDatabaseEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
@@ -38,14 +38,6 @@ export class VectorSearchProvider extends BaseSearchProvider {
     private static EmbeddingCache = new Map<string, EmbeddingCacheEntry>();
     private static readonly CACHE_MAX_SIZE = 200;
     private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-    /**
-     * Cache of vector index ID (lowercased) → fallback entity name resolved from the
-     * index's entity documents. `null` = unresolvable (no documents, or documents for
-     * multiple entities — ambiguous). Used when vector metadata omits the `Entity` key
-     * (e.g. indexes populated with fieldStrategy 'explicit').
-     */
-    private indexEntityNameCache = new Map<string, string | null>();
 
     /**
      * Check and cache availability. Requires at least one vector index to be
@@ -356,7 +348,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
     /**
      * Resolve a fallback entity name for matches whose metadata omits the `Entity` key
      * (e.g. indexes populated with fieldStrategy 'explicit'). Only does the lookup when
-     * at least one match actually needs it; result is cached per index.
+     * at least one match actually needs it.
      */
     private async getFallbackEntityName(
         matches: Array<{ metadata?: Record<string, unknown> }> | undefined,
@@ -371,35 +363,33 @@ export class VectorSearchProvider extends BaseSearchProvider {
 
     /**
      * Resolve the entity name an index serves by inspecting its entity documents.
-     * Unambiguous only when every entity document targeting the index vectorizes
-     * the same entity — otherwise returns null and results stay 'Unknown'.
+     *
+     * Sourced from `KnowledgeHubMetadataEngine` rather than a `RunView` — Entity Documents
+     * are small in number and change infrequently, and the engine already caches them
+     * (event-driven auto-refresh on entity change, per `BaseEngine`), so a per-query RunView
+     * here would be pure waste. `Config()` is a no-op once loaded, so this call is cheap on
+     * every invocation.
+     *
+     * Unambiguous only when every entity document targeting the index vectorizes the same
+     * entity — otherwise returns null and results stay 'Unknown'.
      */
     private async resolveIndexEntityName(vectorIndexID: string, contextUser: UserInfo): Promise<string | null> {
-        const cacheKey = vectorIndexID.toLowerCase();
-        const cached = this.indexEntityNameCache.get(cacheKey);
-        if (cached !== undefined) return cached;
-
-        let entityName: string | null = null;
         try {
-            const rv = new RunView();
-            const result = await rv.RunView<{ Entity: string }>({
-                EntityName: 'MJ: Entity Documents',
-                Fields: ['Entity'],
-                ExtraFilter: `VectorIndexID='${vectorIndexID}'`,
-                ResultType: 'simple'
-            }, contextUser);
-            if (result.Success) {
-                const distinct = new Set(result.Results.map(r => r.Entity).filter(Boolean));
-                if (distinct.size === 1) {
-                    entityName = distinct.values().next().value ?? null;
-                }
-            }
-        } catch (error) {
-            LogError(`VectorSearchProvider: Failed to resolve entity name for vector index ${vectorIndexID}: ${error}`);
-        }
+            await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
 
-        this.indexEntityNameCache.set(cacheKey, entityName);
-        return entityName;
+            const distinct = new Set(
+                KnowledgeHubMetadataEngine.Instance.EntityDocuments
+                    .filter(d => UUIDsEqual(d.VectorIndexID, vectorIndexID) && d.Entity)
+                    .map(d => d.Entity)
+            );
+
+            return distinct.size === 1 ? (distinct.values().next().value ?? null) : null;
+        } catch (error) {
+            // A fallback display name is a nice-to-have — never let a resolution failure
+            // sink the actual query results for this index.
+            LogError(`VectorSearchProvider: Failed to resolve entity name for vector index ${vectorIndexID}: ${error}`);
+            return null;
+        }
     }
 
     /** Convert vector DB matches to SearchResultItem[] */

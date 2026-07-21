@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoisted mock variables
-const { mockRunViewFn, mockAvailable } = vi.hoisted(() => {
+const { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef } = vi.hoisted(() => {
     const mockRunViewFn = vi.fn();
     const mockAvailable = { value: false };
-    return { mockRunViewFn, mockAvailable };
+    const mockKHConfig = vi.fn();
+    const mockEntityDocumentsRef: { value: Array<{ VectorIndexID: string; Entity: string }> } = { value: [] };
+    return { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef };
 });
 
 vi.mock('@memberjunction/core', () => {
@@ -43,13 +45,20 @@ vi.mock('@memberjunction/core', () => {
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         UserInfo: vi.fn(),
-        UUIDsEqual: vi.fn(),
+        UUIDsEqual: (a: unknown, b: unknown) =>
+        typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase(),
     };
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJVectorIndexEntity: vi.fn(),
     MJVectorDatabaseEntity: vi.fn(),
+    KnowledgeHubMetadataEngine: {
+        Instance: {
+            Config: mockKHConfig,
+            get EntityDocuments() { return mockEntityDocumentsRef.value; },
+        },
+    },
 }));
 
 vi.mock('@memberjunction/aiengine', () => ({
@@ -79,7 +88,8 @@ vi.mock('@memberjunction/global', () => ({
             },
         },
     },
-    UUIDsEqual: vi.fn(),
+    UUIDsEqual: (a: unknown, b: unknown) =>
+        typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase(),
     RegisterClass: () => (target: Function) => target,
 }));
 
@@ -106,6 +116,8 @@ describe('VectorSearchProvider', () => {
         provider = new VectorSearchProvider();
         contextUser = createMockUser();
         mockRunViewFn.mockReset();
+        mockKHConfig.mockReset().mockResolvedValue(undefined);
+        mockEntityDocumentsRef.value = [];
     });
 
     describe('SourceType', () => {
@@ -331,14 +343,12 @@ describe('VectorSearchProvider', () => {
                 contextUser
             );
             expect(result).toBeNull();
+            expect(mockKHConfig).not.toHaveBeenCalled();
             expect(mockRunViewFn).not.toHaveBeenCalled();
         });
 
-        it('should resolve the entity name from the index entity documents when a match lacks Entity', async () => {
-            mockRunViewFn.mockResolvedValue({
-                Success: true,
-                Results: [{ Entity: 'Content Items' }],
-            });
+        it('should resolve the entity name from the cached KnowledgeHubMetadataEngine entity documents when a match lacks Entity', async () => {
+            mockEntityDocumentsRef.value = [{ VectorIndexID: 'idx-1', Entity: 'Content Items' }];
 
             const result = await getFallbackFn()(
                 [{ metadata: {} }],
@@ -346,43 +356,58 @@ describe('VectorSearchProvider', () => {
                 contextUser
             );
             expect(result).toBe('Content Items');
-            expect(mockRunViewFn).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    EntityName: 'MJ: Entity Documents',
-                    ExtraFilter: `VectorIndexID='idx-1'`,
-                }),
-                contextUser
-            );
+            expect(mockKHConfig).toHaveBeenCalledWith(false, contextUser);
+            // No RunView/RunQuery — this is a lookup against the already-cached engine, never a query.
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('should match VectorIndexID case-insensitively', async () => {
+            mockEntityDocumentsRef.value = [{ VectorIndexID: 'IDX-1', Entity: 'Content Items' }];
+
+            const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-1' }, contextUser);
+            expect(result).toBe('Content Items');
         });
 
         it('should return null when the index serves multiple entities (ambiguous)', async () => {
-            mockRunViewFn.mockResolvedValue({
-                Success: true,
-                Results: [{ Entity: 'Content Items' }, { Entity: 'People' }],
-            });
+            mockEntityDocumentsRef.value = [
+                { VectorIndexID: 'idx-2', Entity: 'Content Items' },
+                { VectorIndexID: 'idx-2', Entity: 'People' },
+            ];
 
             const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-2' }, contextUser);
             expect(result).toBeNull();
         });
 
-        it('should cache the resolution per index (one lookup for repeated queries)', async () => {
-            mockRunViewFn.mockResolvedValue({
-                Success: true,
-                Results: [{ Entity: 'Content Items' }],
-            });
+        it('should ignore entity documents belonging to other vector indexes', async () => {
+            mockEntityDocumentsRef.value = [
+                { VectorIndexID: 'idx-other', Entity: 'People' },
+                { VectorIndexID: 'idx-3', Entity: 'Content Items' },
+            ];
 
-            const fn = getFallbackFn();
-            await fn([{ metadata: {} }], { ID: 'idx-3' }, contextUser);
-            await fn([{ metadata: {} }], { ID: 'idx-3' }, contextUser);
-            await fn([{ metadata: {} }], { ID: 'IDX-3' }, contextUser); // case-insensitive cache key
-
-            expect(mockRunViewFn).toHaveBeenCalledTimes(1);
+            const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-3' }, contextUser);
+            expect(result).toBe('Content Items');
         });
 
-        it('should return null (and not throw) when the lookup fails', async () => {
-            mockRunViewFn.mockRejectedValue(new Error('DB unavailable'));
+        it('should resolve consistently across repeated calls without issuing a RunView/RunQuery', async () => {
+            // KnowledgeHubMetadataEngine IS the cache — Config() is a cheap no-op once loaded,
+            // so there is no need for (and no correctness benefit to) a second, hand-rolled
+            // per-index cache layer inside VectorSearchProvider.
+            mockEntityDocumentsRef.value = [{ VectorIndexID: 'idx-4', Entity: 'Content Items' }];
 
-            const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-4' }, contextUser);
+            const fn = getFallbackFn();
+            const r1 = await fn([{ metadata: {} }], { ID: 'idx-4' }, contextUser);
+            const r2 = await fn([{ metadata: {} }], { ID: 'idx-4' }, contextUser);
+
+            expect(r1).toBe('Content Items');
+            expect(r2).toBe('Content Items');
+            expect(mockKHConfig).toHaveBeenCalledTimes(2);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('should return null (and not throw) when the engine fails to load', async () => {
+            mockKHConfig.mockRejectedValueOnce(new Error('metadata unavailable'));
+
+            const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-5' }, contextUser);
             expect(result).toBeNull();
         });
     });

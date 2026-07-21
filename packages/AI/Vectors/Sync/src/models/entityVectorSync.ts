@@ -544,8 +544,13 @@ export class EntityVectorSyncer extends VectorBase {
    *
    * Under the 'explicit' strategy, metadata contains EXACTLY the configured fields:
    * no system keys, and EntityIcon / __mj_UpdatedAt flip to opt-in (default false).
+   *
+   * `protected` and decomposed into focused `add*Metadata` steps (each also `protected`)
+   * so a subclass can override just the piece it cares about — e.g. a custom EntityIcon
+   * resolution, or different chunk-aware display-field handling — without having to
+   * reimplement this whole method.
    */
-  private buildVectorMetadata(
+  protected buildVectorMetadata(
     embeddingItem: EmbeddingData,
     entityDocument: MJEntityDocumentEntity,
     templateContent: MJTemplateContentEntity,
@@ -555,28 +560,70 @@ export class EntityVectorSyncer extends VectorBase {
   ): Record<string, string | number | boolean> {
     const explicit = metadataConfig?.fieldStrategy === 'explicit';
     const record = embeddingItem.EntityData as Record<string, unknown>;
-
     const metadata: Record<string, string | number | boolean> = {};
-    if (!explicit) {
-      metadata['RecordID'] = String(embeddingItem.__mj_compositeKey ?? '');
-      metadata['Entity'] = entityDocument.Entity;
-      metadata['TemplateID'] = templateContent.ID;
-    }
 
-    // Entity icon: opt-out by default, opt-in under 'explicit'
+    this.addSystemMetadata(metadata, embeddingItem, entityDocument, templateContent, explicit);
+    this.addEntityIconMetadata(metadata, entityInfo, metadataConfig, explicit);
+    this.addUpdatedAtMetadata(metadata, record, metadataConfig, explicit);
+    this.addDisplayFieldsMetadata(metadata, record, displayFields, metadataConfig);
+
+    return metadata;
+  }
+
+  /**
+   * Adds the system-injected RecordID / Entity / TemplateID keys — omitted entirely
+   * under the 'explicit' strategy, where metadata contains only configured fields.
+   */
+  protected addSystemMetadata(
+    metadata: Record<string, string | number | boolean>,
+    embeddingItem: EmbeddingData,
+    entityDocument: MJEntityDocumentEntity,
+    templateContent: MJTemplateContentEntity,
+    explicit: boolean
+  ): void {
+    if (explicit) return;
+    metadata['RecordID'] = String(embeddingItem.__mj_compositeKey ?? '');
+    metadata['Entity'] = entityDocument.Entity;
+    metadata['TemplateID'] = templateContent.ID;
+  }
+
+  /** Adds EntityIcon: opt-out by default, opt-in under the 'explicit' strategy. */
+  protected addEntityIconMetadata(
+    metadata: Record<string, string | number | boolean>,
+    entityInfo: EntityInfo | undefined,
+    metadataConfig: EntityDocumentMetadataConfig | undefined,
+    explicit: boolean
+  ): void {
     const includeIcon = explicit ? metadataConfig?.includeEntityIcon === true : metadataConfig?.includeEntityIcon !== false;
     if (entityInfo?.Icon && includeIcon) {
       metadata['EntityIcon'] = entityInfo.Icon;
     }
+  }
 
-    // __mj_UpdatedAt for recency sorting: opt-out by default, opt-in under 'explicit'
+  /** Adds __mj_UpdatedAt for recency sorting: opt-out by default, opt-in under the 'explicit' strategy. */
+  protected addUpdatedAtMetadata(
+    metadata: Record<string, string | number | boolean>,
+    record: Record<string, unknown>,
+    metadataConfig: EntityDocumentMetadataConfig | undefined,
+    explicit: boolean
+  ): void {
     const includeUpdatedAt = explicit ? metadataConfig?.includeUpdatedAt === true : metadataConfig?.includeUpdatedAt !== false;
     if (record['__mj_UpdatedAt'] && includeUpdatedAt) {
       metadata['__mj_UpdatedAt'] = String(record['__mj_UpdatedAt']);
     }
+  }
 
-    // Add display fields with type-aware storage (numeric SQL types stay numeric;
-    // date fields can be converted to epoch seconds via storeAs config).
+  /**
+   * Adds configured display fields with type-aware storage: numeric SQL types stay
+   * numeric, date fields can convert to epoch seconds/milliseconds via `storeAs`,
+   * uniqueidentifier values are lowercase-normalized, and long strings are truncated.
+   */
+  protected addDisplayFieldsMetadata(
+    metadata: Record<string, string | number | boolean>,
+    record: Record<string, unknown>,
+    displayFields: EntityFieldInfo[],
+    metadataConfig?: EntityDocumentMetadataConfig
+  ): void {
     for (const field of displayFields) {
       const val = record[field.Name];
       if (val == null) continue;
@@ -606,8 +653,6 @@ export class EntityVectorSyncer extends VectorBase {
         metadata[field.Name] = strVal.length > limit ? strVal.substring(0, limit) : strVal;
       }
     }
-
-    return metadata;
   }
 
   private async upsertBatchToVectorDB(
