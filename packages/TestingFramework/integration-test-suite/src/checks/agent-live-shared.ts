@@ -67,6 +67,7 @@ export function userTurn(text: string): WireMessages {
 /** Options threaded to a wire run (conversation-linked runs pass conversationDetailId). */
 export interface WireRunOptions {
     conversationDetailId?: string;
+    conversationId?: string;
     planMode?: boolean;
     requestedSkillIDs?: string[];
 }
@@ -82,6 +83,7 @@ export async function runAgentOverWire(
         agent,
         conversationMessages: messages,
         conversationDetailId: opts.conversationDetailId,
+        conversationId: opts.conversationId,
         planMode: opts.planMode,
         requestedSkillIDs: opts.requestedSkillIDs,
     };

@@ -22,10 +22,23 @@ const RAN_OK = new Set(['Completed', 'AwaitingFeedback', 'Paused']);
 
 /** Fetches a single row by ID via the real RunView pipeline (BypassCache = true DB state), asserting one match. */
 async function fetchById(entity: string, id: string, user: UserInfo): Promise<Row> {
-    const result = await new RunView().RunView({ EntityName: entity, ExtraFilter: `ID='${id}'`, ResultType: 'simple', BypassCache: true }, user);
-    Assert(result.Success, `RunView('${entity}') failed: ${result.ErrorMessage}`);
-    Assert(result.Results.length === 1, `${entity} ${id} not found (got ${result.Results.length} rows)`);
-    return result.Results[0] as Row;
+    // Bounded poll: the rows this verifies (Action Execution Logs, child AI Prompt Runs) are
+    // written by the agent loop's FIRE-AND-FORGET save queue, which can land AFTER the run
+    // handle returns — especially under the fast server-in-process transport. A single-shot read
+    // raced that write (agent-loop-live AL2). Retry up to ~12s before failing.
+    for (let attempt = 0; attempt < 24; attempt++) {
+        const result = await new RunView().RunView({ EntityName: entity, ExtraFilter: `ID='${id}'`, ResultType: 'simple', BypassCache: true }, user);
+        Assert(result.Success, `RunView('${entity}') failed: ${result.ErrorMessage}`);
+        if (result.Results.length === 1) {
+            return result.Results[0] as Row;
+        }
+        if (result.Results.length > 1) {
+            Assert(false, `${entity} ${id}: expected 1 row, got ${result.Results.length}`);
+        }
+        await new Promise(r => setTimeout(r, 500));
+    }
+    Assert(false, `${entity} ${id} not found after bounded poll (fire-and-forget write never landed)`);
+    throw new Error('unreachable');
 }
 
 /**
