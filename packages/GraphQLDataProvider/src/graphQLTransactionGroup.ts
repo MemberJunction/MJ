@@ -92,12 +92,21 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
         const results = await this._provider.ExecuteGQL(mutation, vars)
         if (results && results.ExecuteTransactionGroup) {
             const data = results.ExecuteTransactionGroup;
+            // The server's Success flag is authoritative. When the server-side transaction failed
+            // (rolled back), PrepareReturnValue still serializes each entity's IN-MEMORY state into
+            // ResultsJSON — so the old per-item "resultObject !== null" test reported success for
+            // every item of a rolled-back transaction, TransactionGroupBase.Submit() returned true,
+            // and each entity finalized itself against phantom (never-persisted) data. Gate every
+            // per-item success on the transaction-level Success so a rollback surfaces as
+            // Submit() === false with per-entity failure results (see TransactionGroupBase.Submit's
+            // callback + notification flow).
+            const transactionSucceeded = data.Success === true;
             const returnResults: TransactionResult[] = [];
             for (let i = 0; i < this.PendingTransactions.length; i++) {
                 const resultJSON = data.ResultsJSON[i];
                 const resultObject = SafeJSONParse(resultJSON);
                 const item = this.PendingTransactions[i];
-                returnResults.push(new TransactionResult(item, resultObject, resultObject !== null));
+                returnResults.push(new TransactionResult(item, resultObject, transactionSucceeded && resultObject !== null));
             }
             return returnResults;
         }

@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT46 - Agent Loop Stand-In",
+    "Description": "Agent-loop machinery without any LLM: failed-step single-INSERT persistence, two-phase step round-trip incl. non-terminal Plan StepType, pre-aborted cancellation leaves no orphan run, non-Active agent deterministic failure with terminal Validation step, PayloadManager pure guards (applyAgentChangeRequest fence, scope round-trip, path prefixing). 6 checks (ALS1-ALS6), self-cleaning tagged runs/steps. Server-only (BaseAgent internals).",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Agent-loop machinery without any LLM: failed-step single-INSERT persistence, two-phase step round-trip incl. non-terminal Plan StepType, pre-aborted cancellation leaves no orphan run, non-Active agent deterministic failure with terminal Validation step, PayloadManager pure guards (applyAgentChangeRequest fence, scope round-trip, path prefixing). 6 checks (ALS1-ALS6), self-cleaning tagged runs/step"
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-loop-standin"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "FEAA0082-AF39-41B4-854E-1EB3F30A9A34"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:49:20.662Z",
+    "checksum": "1aeab1bfcf52a903ee66c7378dc256aab1b83493269dc3594f2cc0cb14245eea"
+  }
+}

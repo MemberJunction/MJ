@@ -1,0 +1,125 @@
+{
+  "description": "Expected-value manifest for the extended agents integration suite asset files (mj-integration-test — safe to delete). Single source of truth for AT1-AT9 assertions: checks read expected values from here, never duplicate constants.",
+  "generator": "Deterministic byte-level generation; regenerating must be byte-identical or this manifest MUST be updated in the same commit.",
+  "files": {
+    "sample.json": {
+      "mimeType": "application/json",
+      "sizeBytes": 473,
+      "sha256": "c431ebc1bff4b5a23848ffcbc9807e956d3366e4aa306b73c16ea994ddeea173",
+      "expected": {
+        "topLevelKeys": [
+          "suite",
+          "sentinel",
+          "counts",
+          "items",
+          "nested"
+        ],
+        "jsonPath": {
+          "$.nested.level1.level2.value": "IT-DEEP-VALUE-42",
+          "$.items[1].name": "second",
+          "$.counts.gamma": 3
+        },
+        "sentinel": "IT-JSON-SENTINEL-X9",
+        "itemsLength": 3
+      }
+    },
+    "sample.csv": {
+      "mimeType": "text/csv",
+      "sizeBytes": 231,
+      "sha256": "2c17543e083225032b76c825f734469b56241bcdd445cbf8ded6ff886fcbeda7",
+      "expected": {
+        "headers": [
+          "OrderID",
+          "Customer",
+          "Region",
+          "Amount",
+          "Notes"
+        ],
+        "rowCount": 5,
+        "cells": {
+          "row0.Customer": "Acme Corp",
+          "row2.Amount": "980.25",
+          "row4.Customer": "Stark Industries"
+        },
+        "sentinel": "IT-CSV-SENTINEL-ROW"
+      }
+    },
+    "sample.xml": {
+      "mimeType": "application/xml",
+      "sizeBytes": 392,
+      "sha256": "d38a6f73568f4b4aa116e930dcdf03a02913d83a7b71ee1b50e3c8aef8aca095",
+      "expected": {
+        "productCount": 3,
+        "nodeValues": {
+          "product[@id='P2']/name": "Gadget",
+          "product[@id='P3']/price": "4.50"
+        },
+        "sentinel": "IT-XML-SENTINEL-K7",
+        "grep": {
+          "pattern": "<name>\\w+</name>",
+          "matchCount": 3
+        },
+        "note": "No XMLToolLibrary exists today (proposal Q6) — XML falls back to TextToolLibrary grep; nodeValues are for the future xpath tool."
+      }
+    },
+    "sample.md": {
+      "mimeType": "text/markdown",
+      "sizeBytes": 431,
+      "sha256": "aff917c075fd9d3bfb8ab493c4e076f0ac12381df16abcff5aeb87f8daf79dae",
+      "expected": {
+        "grep": [
+          {
+            "pattern": "IT-MD-SENTINEL-Q3",
+            "matchCount": 1,
+            "line": 11
+          },
+          {
+            "pattern": "deterministic",
+            "matchCount": 3
+          },
+          {
+            "pattern": "^## ",
+            "matchCount": 3
+          }
+        ],
+        "headingCount": 4
+      }
+    },
+    "sample.pdf": {
+      "mimeType": "application/pdf",
+      "sizeBytes": 1041,
+      "sha256": "d90e4b0b5bac8d38192057a06b63e1164a1485c4231788508bceb4422d1981b3",
+      "expected": {
+        "pageCount": 2,
+        "sentinel": {
+          "phrase": "IT-PDF-SENTINEL-Z5",
+          "page": 1
+        },
+        "page2Snippet": "quick brown fox",
+        "metadata": {
+          "title": "IT Sample PDF",
+          "author": "MJ Integration Tests"
+        }
+      }
+    },
+    "sample.png": {
+      "mimeType": "image/png",
+      "sizeBytes": 69,
+      "sha256": "2e9b06dc65a4dec84a3eb3124553ec93ca27c78221e64ab2177d0f1412cfcb20",
+      "expected": {
+        "width": 1,
+        "height": 1,
+        "pixel": "red (255,0,0)",
+        "note": "No image metadata extraction exists today (proposal Q6) — only GenericBinaryToolLibrary sizeBytes/sha256 apply; width/height are for the future get_metadata tool."
+      }
+    },
+    "sample.bin": {
+      "mimeType": "application/octet-stream",
+      "sizeBytes": 256,
+      "sha256": "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880",
+      "expected": {
+        "note": "Universal binary anchor: bytes 0x00..0xFF in order. Only sizeBytes/sha256 are extractable."
+      }
+    }
+  }
+}

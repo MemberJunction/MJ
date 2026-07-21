@@ -83,9 +83,16 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
       * system.
       * @param providerName - Name of the communication provider to use
       * @param providerMessageTypeName - Type of message to send
-      * @param message - Base message (To will be replaced with each recipient)
+      * @param message - Base message (To will be replaced with each recipient). Set
+      *                  `message.DryRun = true` for a DRY RUN: every per-recipient copy keeps the
+      *                  flag, so the full pipeline (run + per-message audit log lifecycle, template
+      *                  processing, provider payload construction) executes but no provider contacts
+      *                  its external service; each MessageResult comes back with `DryRun: true` and
+      *                  the Communication Log rows carry a `DryRun: true` marker in MessageContent.
       * @param recipients - Array of recipients to send to
-      * @param previewOnly - If true, only preview without sending
+      * @param previewOnly - If true, only preview without sending (stops BEFORE the provider and
+      *                      writes no Communication Log — see `Message.DryRun` for the deeper
+      *                      no-external-send rehearsal that still exercises provider + audit)
       * @param credentials - Optional credentials override for this request.
       *                      Provider-specific credential object (e.g., SendGridCredentials).
       *                      If not provided, uses environment variables.
@@ -122,9 +129,14 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
       * Sends a single message using the specified provider. The provider must be one of the providers that are configured in the system.
       * @param providerName - Name of the communication provider to use
       * @param providerMessageTypeName - Type of message to send
-      * @param message - The message to send
+      * @param message - The message to send. Set `message.DryRun = true` for a DRY RUN: the message
+      *                  is processed, the Communication Log is written (marked `DryRun: true` in its
+      *                  MessageContent), and the provider constructs its full payload — but never
+      *                  contacts its external service; the returned MessageResult has `DryRun: true`.
       * @param run - Optional communication run entity for logging
-      * @param previewOnly - If true, only preview without sending
+      * @param previewOnly - If true, only preview without sending (stops BEFORE the provider and
+      *                      writes no Communication Log — see `Message.DryRun` for the deeper
+      *                      no-external-send rehearsal that still exercises provider + audit)
       * @param credentials - Optional credentials override for this request.
       *                      Provider-specific credential object (e.g., SendGridCredentials).
       *                      If not provided, uses environment variables.
