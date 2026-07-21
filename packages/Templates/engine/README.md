@@ -97,6 +97,18 @@ const result = await engine.RenderTemplateSimple(
 // result.Output: "Hello Jane, welcome to MemberJunction!"
 ```
 
+By default, output is HTML-escaped. For plain-text contexts such as email subject lines — where
+`Acme & Co` must not become `Acme &amp; Co` — opt out with the `autoescape` option:
+
+```typescript
+const subject = await engine.RenderTemplateSimple(
+    '{{ company }} — your invite',
+    { company: 'Acme & Co' },
+    { autoescape: false }
+);
+// subject.Output: "Acme & Co — your invite"  (no entity encoding)
+```
+
 ### Custom Nunjucks Filters
 
 The engine provides built-in filters for JSON operations:

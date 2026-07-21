@@ -13,6 +13,23 @@
 /* ------------------------------------------------------------------ */
 
 export interface EntityDocumentConfiguration {
+    /**
+     * Strategy for generating vector record IDs in the vector database:
+     * - "hash" (default): SHA-1 hash of `<EntityDocumentID>_<compositeKey>`.
+     *   Safe everywhere — stays under provider ID length limits, handles
+     *   composite primary keys, and namespaces by entity document so two
+     *   documents writing the same entity into one index never collide.
+     * - "recordId": the source record's primary key value is used directly
+     *   as the vector ID (UUIDs are normalized to lowercase for cross-platform
+     *   portability; composite PK values are joined with "||"). Makes vectors
+     *   portable between systems and lets the record be identified without a
+     *   RecordID metadata field. Requires that only ONE entity document writes
+     *   to the index (or namespace) — otherwise IDs collide. Changing this on
+     *   an already-populated index orphans previously-written vectors under
+     *   their old hashed IDs; purge or re-create the index when switching.
+     */
+    vectorIdStrategy?: 'hash' | 'recordId';
+
     /** Controls which entity fields appear in vector metadata and how they're stored */
     metadata?: EntityDocumentMetadataConfig;
 
@@ -36,12 +53,21 @@ export interface EntityDocumentConfiguration {
 export interface EntityDocumentMetadataConfig {
     /**
      * Strategy for selecting which fields go into vector metadata:
-     * - "all":     include every non-PK, non-FK, non-binary, non-system field
-     *              (current default behavior)
-     * - "include": only include fields listed in `fields`
-     * - "exclude": include all fields EXCEPT those listed in `fields`
+     * - "all":      include every non-PK, non-uniqueidentifier, non-binary,
+     *               non-system field (current default behavior)
+     * - "include":  only include fields listed in `fields`. Explicitly listed
+     *               fields are honored even when the "all" heuristics would
+     *               skip them (PKs, uniqueidentifiers, __mj_* fields) — only
+     *               binary column types remain unstorable.
+     * - "exclude":  include all "all"-eligible fields EXCEPT those listed in `fields`
+     * - "explicit": the metadata object contains EXACTLY the fields listed in
+     *               `fields` and nothing else — none of the system-injected keys
+     *               (RecordID, Entity, TemplateID) are added, and `includeEntityIcon`
+     *               / `includeUpdatedAt` flip to opt-in (default false). Use this
+     *               to keep vector metadata minimal — e.g. only the fields you
+     *               filter on. Field selection follows the same rules as "include".
      */
-    fieldStrategy?: 'all' | 'include' | 'exclude';
+    fieldStrategy?: 'all' | 'include' | 'exclude' | 'explicit';
 
     /**
      * Per-field overrides. The key is the entity field name.
@@ -60,13 +86,16 @@ export interface EntityDocumentMetadataConfig {
 
     /**
      * Whether to include the entity icon in vector metadata.
-     * Default: true.
+     * Default: true — except under fieldStrategy "explicit", where the
+     * default flips to false (explicit mode is opt-in for everything).
      */
     includeEntityIcon?: boolean;
 
     /**
      * Whether to include __mj_UpdatedAt in vector metadata for
-     * freshness display in search results. Default: true.
+     * freshness display in search results.
+     * Default: true — except under fieldStrategy "explicit", where the
+     * default flips to false (explicit mode is opt-in for everything).
      */
     includeUpdatedAt?: boolean;
 }
