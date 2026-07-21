@@ -180,10 +180,9 @@ jobs:
       # The deterministic tier via the single entry path: `mj test suite` loads the private
       # suite package through mj.config.cjs `testing.checkModules`, dispatches every IT
       # record in "Integration Tests — Deterministic", and exits non-zero on failures.
-      # RUN_AGENT_TESTS=0 pins the live-model opt-OUT (the tier is on-by-default as of
-      # 2026-07-20; CI has no LLM credentials and no flake budget). PS_INTEGRATION stays
-      # unset. No MJAPI is up, so client-transport members skip on the MJAPI preflight.
+      # No live-model pin needed: the deterministic suite contains no live-model members
+      # (they live in the separate "Integration Tests — Live Model" suite), and LLM creds
+      # come from the local .env, which CI does not have. PS_INTEGRATION stays unset. No
+      # MJAPI is up, so client-transport members skip on the MJAPI preflight.
       - name: Run integration tier (mj test)
         run: npm run test:integration
-        env:
-          RUN_AGENT_TESTS: '0'
