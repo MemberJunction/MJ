@@ -25,6 +25,7 @@ import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { MJTemplateEntity, MJTemplateContentEntity, MJTemplateParamEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
+import { ProcessedMessageServer } from '@memberjunction/communication-engine';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -205,6 +206,45 @@ export const TemplatesChecks: NamedCheck[] = [
             Assert(r.Success, `post-update render failed: ${r.Message}`);
             AssertEqual(r.Output, 'Goodbye X!', 'render output reflects the updated entity text');
             console.log('      → save → refresh → render round-trip verified (old text fully replaced)');
+        }
+    },
+    {
+        Id: 'templates.TP7',
+        Name: 'TP7 (CT3a): ProcessedMessage — a Text-only BodyTemplate renders the body AND the HTML body falls back to the rendered text',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const t = engineTemplate(ctx);
+            const msg = new ProcessedMessageServer();
+            msg.BodyTemplate = t;
+            msg.ContextData = { name: 'Integration', count: 3 };
+            const r = await msg.Process(false, ctx.User);
+            Assert(r.Success, `TP7: Process failed: ${r.Message}`);
+            // Sibling checks may add higher-priority content rows to the fixture template, so the
+            // expectation is a DIRECT render of whatever GetHighestPriorityContent('Text') returns —
+            // the contract is "body == rendered highest-priority Text", not a fixed string.
+            const expected = await TemplateEngineServer.Instance.RenderTemplate(t, t.GetHighestPriorityContent('Text')!, msg.ContextData);
+            Assert(expected.Success, `TP7: control render failed: ${expected.Message}`);
+            AssertEqual(msg.ProcessedBody, expected.Output, 'TP7: ProcessedBody equals the rendered highest-priority Text content');
+            Assert(msg.ProcessedBody.includes('Integration'), 'TP7: the context data reached the render');
+            // The matrix's fallback edge: no HTML content + no HTMLBodyTemplate/HTMLBody ⇒ the
+            // HTML body is the RENDERED TEXT, never empty.
+            AssertEqual(msg.ProcessedHTMLBody, msg.ProcessedBody, 'TP7: HTML body falls back to the rendered text body when the template has no HTML content');
+        }
+    },
+    {
+        Id: 'templates.TP8',
+        Name: 'TP8 (CT3b): ProcessedMessage — a SubjectTemplate WITHOUT HTML content fails loudly (the subject path requires HTML content)',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const t = engineTemplate(ctx);
+            // The fixture template has only a Text content row — the subject path resolves content
+            // via GetHighestPriorityContent('HTML') and must REFUSE, naming the requirement, rather
+            // than silently sending an empty subject.
+            const msg = new ProcessedMessageServer();
+            msg.SubjectTemplate = t;
+            msg.ContextData = { name: 'x', count: 1 };
+            const r = await msg.Process(false, ctx.User);
+            AssertEqual(r.Success, false, 'TP8: a Text-only SubjectTemplate must fail Process');
+            Assert(/subject/i.test(r.Message ?? '') && /HTML/i.test(r.Message ?? ''),
+                `TP8: the failure names the subject-requires-HTML rule (got "${r.Message}")`);
         }
     },
 ];

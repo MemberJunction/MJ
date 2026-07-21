@@ -48,7 +48,8 @@
     "@memberjunction/communication-ms-graph": "5.48.0",
     "@memberjunction/communication-expo-push": "5.48.0",
     "dotenv": "17.2.4",
-    "mssql": "^12.2.0"
+    "mssql": "^12.2.0",
+    "@memberjunction/notifications": "5.48.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

@@ -38,6 +38,8 @@ import { TwilioProvider } from '@memberjunction/communication-twilio';
 import { MSGraphProvider } from '@memberjunction/communication-ms-graph';
 import { ExpoPushProvider } from '@memberjunction/communication-expo-push';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
+import { NotificationEngine } from '@memberjunction/notifications';
+import type { MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity } from '@memberjunction/core-entities';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { CommunicationFixture } from '@memberjunction/testing-integration';
@@ -275,6 +277,53 @@ export const CommunicationChecks: NamedCheck[] = [
             Assert(r.Success, `querying Communication Logs failed: ${r.ErrorMessage}`);
             AssertEqual(r.Results?.length ?? 0, 0, 'previewOnly writes NO Communication Log row (dry-run does — CM2)');
             console.log('      → previewOnly: processed message returned, no DryRun mark, zero audit rows');
+        }
+    },
+    {
+        Id: 'communication.CM5',
+        Name: 'CM5 (CT5): NotificationEngine delivery-channel precedence — force > master opt-out > per-channel pref > type default',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            interface ChannelResolverCapable {
+                resolveDeliveryChannels(
+                    params: { forceDeliveryChannels?: { inApp: boolean; email: boolean; sms: boolean } },
+                    prefs: MJUserNotificationPreferenceEntity | null,
+                    type: MJUserNotificationTypeEntity,
+                ): { inApp: boolean; email: boolean; sms: boolean };
+            }
+            const engine = NotificationEngine.Instance as unknown as ChannelResolverCapable;
+            Assert(typeof engine.resolveDeliveryChannels === 'function', 'CM5: NotificationEngine.resolveDeliveryChannels seam missing');
+
+            const type = await ctx.Provider.GetEntityObject<MJUserNotificationTypeEntity>('MJ: User Notification Types', ctx.User);
+            type.NewRecord();
+            type.DefaultInApp = true; type.DefaultEmail = false; type.DefaultSMS = false;
+            type.AllowUserPreference = true;
+            const prefs = await ctx.Provider.GetEntityObject<MJUserNotificationPreferenceEntity>('MJ: User Notification Preferences', ctx.User);
+            prefs.NewRecord();
+
+            // 1. force wins over EVERYTHING (even a master opt-out).
+            prefs.Enabled = false;
+            const forced = engine.resolveDeliveryChannels({ forceDeliveryChannels: { inApp: false, email: true, sms: true } }, prefs, type);
+            AssertEqual(JSON.stringify(forced), JSON.stringify({ inApp: false, email: true, sms: true }), 'CM5: forceDeliveryChannels bypasses prefs AND defaults');
+
+            // 2. master opt-out (Enabled=false) kills all channels.
+            const optedOut = engine.resolveDeliveryChannels({}, prefs, type);
+            AssertEqual(JSON.stringify(optedOut), JSON.stringify({ inApp: false, email: false, sms: false }), 'CM5: Enabled=false is a master kill switch');
+
+            // 3. per-channel pref overrides the type default (email on despite DefaultEmail=false).
+            prefs.Enabled = true; prefs.EmailEnabled = true; prefs.InAppEnabled = false;
+            const prefWins = engine.resolveDeliveryChannels({}, prefs, type);
+            AssertEqual(prefWins.email, true, 'CM5: an explicit per-channel pref overrides the type default (email)');
+            AssertEqual(prefWins.inApp, false, 'CM5: an explicit per-channel pref overrides the type default (inApp)');
+
+            // 4. AllowUserPreference=false locks channels to the TYPE defaults, prefs ignored.
+            type.AllowUserPreference = false;
+            const locked = engine.resolveDeliveryChannels({}, prefs, type);
+            AssertEqual(JSON.stringify(locked), JSON.stringify({ inApp: true, email: false, sms: false }), 'CM5: AllowUserPreference=false pins the type defaults');
+
+            // 5. no prefs at all → pure type defaults.
+            type.AllowUserPreference = true;
+            const defaults = engine.resolveDeliveryChannels({}, null, type);
+            AssertEqual(JSON.stringify(defaults), JSON.stringify({ inApp: true, email: false, sms: false }), 'CM5: null prefs → type defaults');
         }
     },
 ];
