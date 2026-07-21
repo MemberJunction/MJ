@@ -87,7 +87,7 @@ export interface EmptyStateConfig {
 }
 
 /** Default width (percentage) for the artifact viewer pane */
-const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
+export const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
 
 @Component({
   standalone: false,
@@ -1336,7 +1336,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.uploadingMessage = '';
     this.intentCheckMessage = null;
 
+    // Reset width along with the flag — otherwise a pane maximized in the
+    // previous conversation leaves artifactPaneWidth at 100, and the next
+    // artifact opens overflowing the viewport (chat area still visible).
+    // Guarded so a non-maximized user-dragged width survives the switch.
+    if (this.isArtifactPaneMaximized) {
+      this.resetArtifactPaneSizing();
+    }
+  }
+
+  private resetArtifactPaneSizing(): void {
     this.isArtifactPaneMaximized = false;
+    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
@@ -2886,8 +2897,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.canShareSelectedArtifact = false;
     this.canEditSelectedArtifact = false;
     // Reset maximize state and width when closing so the next artifact opens at default size
-    this.isArtifactPaneMaximized = false;
-    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
+    this.resetArtifactPaneSizing();
     this.cdr.detectChanges();
   }
 
