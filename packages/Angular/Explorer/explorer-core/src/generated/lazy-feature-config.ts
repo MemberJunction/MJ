@@ -28,7 +28,7 @@ const loadNgDashboardsCommunicationDashboardsModule = featureLoader(() => import
 // --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (3 entries) ---
 const loadNgDashboardsComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (30 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (34 entries) ---
 const loadNgDashboardsCoreDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/core-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./credentials-dashboards.module (6 entries) ---
@@ -120,6 +120,8 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   // @memberjunction/ng-dashboards → ./core-dashboards.module
   'BaseApplication::HomeApplication': loadNgDashboardsCoreDashboardsModule,
   'BaseDashboard::EntityAdmin': loadNgDashboardsCoreDashboardsModule,
+  'BaseDashboard::ThemeManagerDashboard': loadNgDashboardsCoreDashboardsModule,
+  'BaseDashboard::ThemeStudioDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminDataSchema': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminDeveloperTools': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminIdentityAccess': loadNgDashboardsCoreDashboardsModule,
@@ -144,6 +146,8 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::RealtimeRecordingsDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::SettingsExplorerInspector': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::SystemDiagnosticsResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::ThemeManagerResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::ThemeStudioResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryDiffResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryGraphResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryLabelsResource': loadNgDashboardsCoreDashboardsModule,
@@ -223,4 +227,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 110;
+export const LAZY_FEATURE_CONFIG_COUNT = 114;

@@ -77,6 +77,26 @@ export interface FireAndForgetConfig<TResult> {
     extractResult: (parsed: Record<string, unknown>) => TResult;
 
     /**
+     * Optional SYNCHRONOUS-fallback extractor for headless / non-browser clients.
+     *
+     * The fire-and-forget pattern delivers its result over a WebSocket PubSub channel
+     * ({@link GraphQLDataProvider.PushStatusUpdates}). A headless client — the integration
+     * GraphQL client, a Node/MCP consumer, any provider without a subscription surface —
+     * does not implement `PushStatusUpdates`, so it can never hear the completion event.
+     * Historically this crashed with `PushStatusUpdates is not a function`.
+     *
+     * When this extractor is supplied AND the data provider has no `PushStatusUpdates`
+     * method, {@link FireAndForgetHelper.Execute} instead runs the mutation in SYNCHRONOUS
+     * mode (it forces `fireAndForget: false`), so the resolver awaits the run and returns the
+     * full result inline in the mutation's own return payload. This function receives that
+     * ack payload (`result[mutationFieldName]`) and produces the final `TResult`.
+     *
+     * When omitted, a provider lacking `PushStatusUpdates` degrades to a clear error result
+     * via {@link createErrorResult} rather than crashing.
+     */
+    extractSyncResult?: (ackResult: Record<string, unknown>) => TResult;
+
+    /**
      * Optional handler for all PubSub messages (progress, streaming, etc.).
      * Called for every message, not just completion events.
      * Use this to forward progress updates to UI callbacks.
@@ -162,6 +182,19 @@ export class FireAndForgetHelper {
         config: FireAndForgetConfig<TResult>
     ): Promise<TResult> {
         const label = config.operationLabel ?? config.mutationFieldName;
+
+        // Feature-detect the browser-only PubSub push-status channel. Fire-and-forget delivers
+        // its result over `PushStatusUpdates` (a WebSocket subscription). Headless / non-Angular
+        // clients (integration GraphQL client, Node/MCP consumers) use a data provider with no
+        // subscription surface — calling `PushStatusUpdates` there throws
+        // "PushStatusUpdates is not a function". For those providers, run the mutation
+        // synchronously instead (the resolver awaits the run and returns the result inline).
+        const supportsPushStatus =
+            typeof (config.dataProvider as unknown as { PushStatusUpdates?: unknown }).PushStatusUpdates === 'function';
+        if (!supportsPushStatus) {
+            return FireAndForgetHelper.executeSynchronously(config);
+        }
+
         const idleMs = config.timeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
         const maxStalls = config.maxStallReconciles ?? DEFAULT_MAX_STALL_RECONCILES;
 
@@ -353,5 +386,42 @@ export class FireAndForgetHelper {
             config.variables
         );
         return (result as Record<string, unknown>)[config.mutationFieldName] as Record<string, unknown>;
+    }
+
+    /**
+     * Synchronous fallback used when the data provider has no PubSub push-status channel
+     * (headless / non-browser clients). Forces `fireAndForget: false` so the resolver awaits
+     * the run and returns the full result inline, then extracts it via `config.extractSyncResult`.
+     * The final result is delivered in the mutation's own return payload — no WebSocket needed.
+     */
+    private static async executeSynchronously<TResult>(
+        config: FireAndForgetConfig<TResult>
+    ): Promise<TResult> {
+        const label = config.operationLabel ?? config.mutationFieldName;
+        LogStatus(
+            `[FireAndForget:${label}] Provider has no PushStatusUpdates channel — running synchronously (fireAndForget disabled)`
+        );
+
+        // Override fireAndForget so the server runs the operation inline and returns the result,
+        // rather than acking immediately and publishing the result over a channel we can't hear.
+        const syncVariables: Record<string, unknown> = { ...config.variables, fireAndForget: false };
+        const raw = await config.dataProvider.ExecuteGQL(config.mutation, syncVariables);
+        const ack = (raw as Record<string, unknown>)?.[config.mutationFieldName] as Record<string, unknown> | undefined;
+
+        if (!ack) {
+            LogError(`[FireAndForget:${label}] Synchronous execution returned no '${config.mutationFieldName}' payload`);
+            return config.createErrorResult(`Server returned no '${config.mutationFieldName}' result for ${label}`);
+        }
+
+        if (!config.extractSyncResult) {
+            // No synchronous extractor wired for this operation — degrade clearly instead of crashing.
+            return config.createErrorResult(
+                `${label} cannot run on this data provider: it has no PushStatusUpdates channel and no ` +
+                `synchronous result extractor is configured for this operation.`
+            );
+        }
+
+        LogStatus(`[FireAndForget:${label}] Synchronous execution completed`);
+        return config.extractSyncResult(ack);
     }
 }

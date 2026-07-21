@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -89033,6 +89033,242 @@ export class MJTestResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Tests', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Themes
+//****************************************************************************
+@ObjectType({ description: `A named brand theme. Stores ~8 brand seeds (color hue anchors, neutral character, vibrancy, shape, depth, type, viz palette) as JSON; the full --mj-* design-token contract is derived from the seeds at load. A theme is a brand — light/dark is the user\'s mode layered under it, so a theme carries no per-mode values.` })
+export class MJTheme_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Display name for the theme (unique).`}) 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional description of the theme.`}) 
+    Description?: string;
+        
+    @Field({description: `Brand seeds as JSON (the ThemeSeeds shape from @memberjunction/theme-engine): primary/accent/tertiary hue anchors, neutralChroma, vibrancy, radius, depth, fontFamily, and an optional vizPalette override. Source of truth — the full token contract is derived from this, not stored.`}) 
+    Seeds: string;
+        
+    @Field({nullable: true, description: `Public URL of the logo mark for light surfaces. Logos are variant uploads, never recolored.`}) 
+    @MaxLength(1000)
+    LightMarkURL?: string;
+        
+    @Field({nullable: true, description: `Public URL of the logo mark for dark surfaces. Dark mode swaps to this artwork rather than transforming the light mark.`}) 
+    @MaxLength(1000)
+    DarkMarkURL?: string;
+        
+    @Field({nullable: true, description: `Optional public URL of the full wordmark logo.`}) 
+    @MaxLength(1000)
+    WordmarkURL?: string;
+        
+    @Field({nullable: true, description: `Optional public URL of a single-fill monochrome logo variant.`}) 
+    @MaxLength(1000)
+    MonochromeURL?: string;
+        
+    @Field(() => Boolean, {description: `When 1, this is the default theme applied when no other is selected. Single-default enforcement is handled at the application layer.`}) 
+    IsDefault: boolean;
+        
+    @Field({description: `Lifecycle status: Active (available), Inactive (retired), or Draft (in progress, not applied).`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true, description: `Optional advanced token overrides as a JSON object mapping a --mj-* CSS custom property name to a value (e.g. {"--mj-brand-primary-hover":"#0a5cff"}). Applied on top of the seed-derived token contract at load, before CustomCSS. Leave null to use the pure derived theme.`}) 
+    Overrides?: string;
+        
+    @Field({nullable: true, description: `Optional advanced raw CSS appended to the theme overlay and auto-scoped under [data-theme-overlay="<id>"]. Applied last, after the derived tokens and Overrides. Escape hatch for rules the seed/token model cannot express; leave null for none.`}) 
+    CustomCSS?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Themes
+//****************************************************************************
+@InputType()
+export class CreateMJThemeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Seeds?: string;
+
+    @Field({ nullable: true })
+    LightMarkURL: string | null;
+
+    @Field({ nullable: true })
+    DarkMarkURL: string | null;
+
+    @Field({ nullable: true })
+    WordmarkURL: string | null;
+
+    @Field({ nullable: true })
+    MonochromeURL: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Overrides: string | null;
+
+    @Field({ nullable: true })
+    CustomCSS: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Themes
+//****************************************************************************
+@InputType()
+export class UpdateMJThemeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Seeds?: string;
+
+    @Field({ nullable: true })
+    LightMarkURL?: string | null;
+
+    @Field({ nullable: true })
+    DarkMarkURL?: string | null;
+
+    @Field({ nullable: true })
+    WordmarkURL?: string | null;
+
+    @Field({ nullable: true })
+    MonochromeURL?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Overrides?: string | null;
+
+    @Field({ nullable: true })
+    CustomCSS?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Themes
+//****************************************************************************
+@ObjectType()
+export class RunMJThemeViewResult {
+    @Field(() => [MJTheme_])
+    Results: MJTheme_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTheme_)
+export class MJThemeResolver extends ResolverBase {
+    @Query(() => RunMJThemeViewResult)
+    async RunMJThemeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJThemeViewResult)
+    async RunMJThemeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJThemeViewResult)
+    async RunMJThemeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Themes';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTheme_, { nullable: true })
+    async MJTheme(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTheme_ | null> {
+        this.CheckUserReadPermissions('MJ: Themes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwThemes')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Themes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Themes', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTheme_)
+    async CreateMJTheme(
+        @Arg('input', () => CreateMJThemeInput) input: CreateMJThemeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Themes', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTheme_)
+    async UpdateMJTheme(
+        @Arg('input', () => UpdateMJThemeInput) input: UpdateMJThemeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Themes', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTheme_)
+    async DeleteMJTheme(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Themes', key, options, provider, userPayload, pubSub);
     }
     
 }

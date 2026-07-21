@@ -1,0 +1,33 @@
+{
+  "suite": "agents-extended",
+  "sentinel": "IT-JSON-SENTINEL-X9",
+  "counts": {
+    "alpha": 1,
+    "beta": 2,
+    "gamma": 3
+  },
+  "items": [
+    {
+      "id": 1,
+      "name": "first",
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "second",
+      "active": false
+    },
+    {
+      "id": 3,
+      "name": "third",
+      "active": true
+    }
+  ],
+  "nested": {
+    "level1": {
+      "level2": {
+        "value": "IT-DEEP-VALUE-42"
+      }
+    }
+  }
+}

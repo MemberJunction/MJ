@@ -1,0 +1,31 @@
+{
+  "fields": {
+    "Name": "Theme Studio",
+    "Description": "Author organization brand themes: tune a few seeds and see the full --mj-* token contract derived live across chrome and generated components, with per-mode accessibility validation.",
+    "Icon": "fa-solid fa-palette",
+    "DefaultForNewUser": false,
+    "Color": "#8b5cf6",
+    "DefaultSequence": 1050,
+    "DefaultNavItems": [
+      {
+        "Label": "Theme Studio",
+        "Icon": "fa-solid fa-palette",
+        "ResourceType": "Custom",
+        "DriverClass": "ThemeStudioResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Manage Themes",
+        "Icon": "fa-solid fa-swatchbook",
+        "ResourceType": "Custom",
+        "DriverClass": "ThemeManagerResource"
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "BCB7A189-8456-43DC-B5A0-F207D1FCD2C5"
+  }
+}

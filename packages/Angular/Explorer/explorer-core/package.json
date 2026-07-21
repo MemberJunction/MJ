@@ -44,6 +44,7 @@
     "@memberjunction/graphql-dataprovider": "5.48.0",
     "@memberjunction/interactive-component-types": "5.48.0",
     "@memberjunction/lists-base": "5.48.0",
+    "@memberjunction/theme-engine": "5.48.0",
     "@memberjunction/ng-ai-test-harness": "5.48.0",
     "@memberjunction/ng-artifacts": "5.48.0",
     "@memberjunction/ng-auth-services": "5.48.0",

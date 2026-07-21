@@ -240,6 +240,19 @@ export class TwilioProvider extends BaseCommunicationProvider {
       // Optional media URLs if specified in context data
       const mediaUrls = message.ContextData?.mediaUrls as string[] || [];
 
+      // DRY RUN: full pipeline ran (credential resolution/validation, channel detection,
+      // from/to formatting, body + media assembly above) — stop at the transport boundary,
+      // never calling the Twilio API.
+      if (message.DryRun) {
+        LogStatus(`[DryRun] Twilio: ${channelType.toUpperCase()} payload constructed for ${to} — external send skipped`);
+        return {
+          Message: message,
+          Success: true,
+          Error: '',
+          DryRun: true
+        };
+      }
+
       // Send the message
       const result = await twilioClient.messages.create({
         body,
