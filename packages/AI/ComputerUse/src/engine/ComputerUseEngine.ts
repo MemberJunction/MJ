@@ -76,6 +76,9 @@ import {
 } from './replay-step.js';
 import type { GuardResult } from './replay-step.js';
 import { reresolveTarget, shouldAcceptHeal, isSelectorHealable } from './heal-decision.js';
+import { executeGoalPostconditions } from './postcondition.js';
+import { makeJudgeCacheKey, JudgeVerdictCache } from './judge-cache.js';
+import { hashGoal } from './trace-recorder.js';
 import { ComputerUseTrace, ReplayInfo, ReplayStepResult, TraceStep, TraceAction, TraceTarget } from '../types/trace.js';
 import {
     JudgeContext,
@@ -226,6 +229,18 @@ export class ComputerUseEngine {
         this.browserAdapter = adapter;
         this._ownsAdapter = false;
     }
+
+    /**
+     * Inject a shared judge-verdict cache (CU-C5.3). When set, the engine reuses
+     * a cached verdict for an identical (goal, URL, visible-state) key instead of
+     * calling the LLM judge — the cross-attempt generalization of CU-G5's
+     * within-run gating. The driver owns the instance so verdicts survive attempt
+     * boundaries; unset → no cross-attempt caching (behavior unchanged).
+     */
+    public SetJudgeCache(cache: JudgeVerdictCache): void {
+        this.judgeCache = cache;
+    }
+    private judgeCache?: JudgeVerdictCache;
 
     /**
      * Request cancellation of a running run. Cooperative: sets the flag the
@@ -933,7 +948,43 @@ export class ComputerUseEngine {
         }
 
         replay.AllStepsSucceeded = true;
+
+        // CU-C5: score deterministically by the distilled goal postconditions —
+        // free, and more trustworthy than a judge float. All steps hitting is
+        // necessary but not sufficient; the end-state must also satisfy the goal.
+        if (trace.GoalPostconditions.length > 0) {
+            const gp = await this.scoreGoalPostconditions(trace, volatile);
+            if (!gp.passed) {
+                return this.buildReplayResult(context, replay, false, `goal postconditions failed: ${gp.detail}`);
+            }
+            this.log(`Replay — all ${trace.GoalPostconditions.length} goal postconditions met (CU-C5)`);
+        }
         return this.buildReplayResult(context, replay, true, 'all steps hit');
+    }
+
+    /**
+     * Execute the trace's distilled goal postconditions against the current
+     * end-state (CU-C5) — deterministic, no LLM. Extracts the final element list
+     * once; a probe failure yields an empty list (postconditions then fail
+     * honestly rather than falsely passing).
+     */
+    private async scoreGoalPostconditions(
+        trace: ComputerUseTrace,
+        volatile: string[]
+    ): Promise<{ passed: boolean; detail: string }> {
+        let elements: InteractiveElement[] = [];
+        try {
+            elements = await this.browserAdapter.ExtractInteractiveElements();
+        } catch {
+            /* empty list → presence postconditions fail honestly */
+        }
+        const { passed, results } = executeGoalPostconditions(trace.GoalPostconditions, {
+            url: this.browserAdapter.CurrentUrl,
+            elements,
+            volatileParams: volatile,
+        });
+        const failed = results.filter(r => !r.met).map(r => r.detail).join('; ');
+        return { passed, detail: failed || 'all met' };
     }
 
     /**
@@ -2018,6 +2069,26 @@ export class ComputerUseEngine {
         currentScreenshotHash: string = '',
         currentDiagnosticsDigest: string = ''
     ): Promise<JudgeVerdict> {
+        // Cross-attempt judge cache (CU-C5.3): an identical (goal, URL, state)
+        // returns the prior verdict — most valuably, a cached Impossible
+        // short-circuits a retry. Only when a shared cache is injected and the
+        // frame hashed (an unstable key would poison the cache).
+        const cacheKey = this.judgeCache && currentScreenshotHash
+            ? makeJudgeCacheKey(
+                hashGoal(context.Params.Goal),
+                context.CurrentUrl,
+                currentScreenshotHash,
+                context.Params.AppProfile?.Loop?.VolatileParams ?? []
+            )
+            : undefined;
+        if (cacheKey) {
+            const cached = this.judgeCache!.get(cacheKey);
+            if (cached) {
+                this.log(`Step ${stepNumber} — judge verdict served from the cross-attempt cache (CU-C5)`);
+                return cached;
+            }
+        }
+
         const judgeContext = new JudgeContext();
         judgeContext.Goal = context.Params.Goal;
         judgeContext.CurrentScreenshot = context.CurrentScreenshot;
@@ -2032,7 +2103,11 @@ export class ComputerUseEngine {
         judgeContext.ValidationCriteria = context.Params.ValidationCriteria;   // rubric judging (CU-D1)
         judgeContext.Signal = this.abortController.signal;   // abort in-flight judge call on Stop() (CU-B8)
 
-        return this.judge.Evaluate(judgeContext);
+        const verdict = await this.judge.Evaluate(judgeContext);
+        if (cacheKey) {
+            this.judgeCache!.set(cacheKey, verdict);
+        }
+        return verdict;
     }
 
     // ═══════════════════════════════════════════════════════════

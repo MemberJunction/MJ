@@ -7,10 +7,11 @@ import {
     ActionExecutionResult,
     CookieEntry,
     ElementInfo,
+    InteractiveElement,
 } from '../types/browser.js';
 import { RunComputerUseParams } from '../types/params.js';
 import { AppProfile, SettleConfig } from '../types/app-profile.js';
-import { ComputerUseTrace, TraceStep, TraceTarget, StepPostcondition } from '../types/trace.js';
+import { ComputerUseTrace, TraceStep, TraceTarget, StepPostcondition, GoalPostcondition } from '../types/trace.js';
 
 /**
  * Scriptable fake adapter for driving the replay loop without a real browser.
@@ -25,6 +26,8 @@ class FakeAdapter extends BaseBrowserAdapter {
     /** selector → URL to move to when a click on it executes. */
     public clickNavigates = new Map<string, string>();
     public failSelectors = new Set<string>();
+    /** Elements returned by ExtractInteractiveElements (for goal postconditions). */
+    public elements: InteractiveElement[] = [];
 
     public async Launch(_c: BrowserConfig): Promise<void> {}
     public async Close(): Promise<void> {}
@@ -35,6 +38,9 @@ class FakeAdapter extends BaseBrowserAdapter {
         info.Exists = this.visible.get(selector) ?? false;
         info.Visible = info.Exists;
         return info;
+    }
+    public async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
+        return this.elements;
     }
     public async ExecuteAction(action: BrowserAction): Promise<ActionExecutionResult> {
         const r = new ActionExecutionResult(action);
@@ -188,5 +194,43 @@ describe('ComputerUseEngine.Replay (CU-C2)', () => {
 
         expect(result.Status).toBe('Completed');
         expect(adapter.typed).toEqual([{ selector: '#name', text: 'Co-Acme-2026' }]);
+    });
+
+    it('scores Completed only when goal postconditions are met (CU-C5)', async () => {
+        const engine = new ComputerUseEngine();
+        const adapter = new FakeAdapter();
+        adapter.visible.set('#nav', true);
+        adapter.clickNavigates.set('#nav', 'http://localhost:4200/app/data');
+        const heading = new InteractiveElement();
+        heading.Role = 'heading'; heading.Name = 'Data Explorer';
+        adapter.elements = [heading];
+        engine.SetBrowserAdapter(adapter);
+
+        const t = trace([clickStep('#nav', { postUrl: '/app/data' })]);
+        t.GoalPostconditions = [
+            Object.assign(new GoalPostcondition(), { Kind: 'url', UrlPattern: '/app/data' }),
+            Object.assign(new GoalPostcondition(), { Kind: 'visible', Target: Object.assign(new TraceTarget(), { Role: 'heading', Name: 'Data Explorer' }) }),
+        ];
+
+        const result = await engine.Replay(t, baseParams());
+        expect(result.Status).toBe('Completed');
+    });
+
+    it('fails when all steps hit but a goal postcondition is unmet (CU-C5)', async () => {
+        const engine = new ComputerUseEngine();
+        const adapter = new FakeAdapter();
+        adapter.visible.set('#nav', true);
+        adapter.clickNavigates.set('#nav', 'http://localhost:4200/app/data');
+        adapter.elements = [];   // the expected heading is NOT present
+        engine.SetBrowserAdapter(adapter);
+
+        const t = trace([clickStep('#nav', { postUrl: '/app/data' })]);
+        t.GoalPostconditions = [
+            Object.assign(new GoalPostcondition(), { Kind: 'visible', Target: Object.assign(new TraceTarget(), { Role: 'heading', Name: 'Data Explorer' }) }),
+        ];
+
+        const result = await engine.Replay(t, baseParams());
+        expect(result.Status).toBe('Failed');
+        expect(result.Replay?.AllStepsSucceeded).toBe(true);   // steps hit — the GOAL check failed
     });
 });

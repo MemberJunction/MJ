@@ -44,6 +44,8 @@ export * from './engine/trace-recorder.js';
 export * from './engine/trace-keying.js';
 export * from './engine/replay-step.js';
 export * from './engine/heal-decision.js';
+export * from './engine/postcondition.js';
+export * from './engine/judge-cache.js';
 
 // ─── Tool Exports ──────────────────────────────────────────
 export * from './tools/ToolProvider.js';
