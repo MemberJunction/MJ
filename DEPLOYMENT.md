@@ -331,9 +331,10 @@ Follow [NEW_PACKAGE_SETUP.md](NEW_PACKAGE_SETUP.md):
 
 1. Check if any new `@memberjunction/*` packages were added since the last release — the authoritative check is the same script the publish workflow runs:
    ```bash
-   ./.github/scripts/validate-npm-packages.sh   # lists every package missing from npm
+   ./.github/scripts/validate-npm-packages.sh   # lists every publishable package missing from npm
    ```
-2. For each new package, create a placeholder on npm with OIDC trusted publishing:
+   Packages marked `private: true` are skipped — changesets never publishes them, so they need no npm placeholder. (`validate-package-repository.sh` applies the same rule: private packages don't need `repository.url`, which exists only for npm provenance.)
+2. For each package the script lists, create a placeholder on npm with OIDC trusted publishing:
    ```bash
    npx setup-npm-trusted-publish @memberjunction/new-package-name
    ```
