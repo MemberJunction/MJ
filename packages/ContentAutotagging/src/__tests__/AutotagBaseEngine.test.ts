@@ -1015,35 +1015,51 @@ describe('AutotagBaseEngine', () => {
         }));
       }
 
-      // Install a ProviderToUse whose GetEntityObject records every ContentItemChunk row it
-      // hands out, so tests can inspect exactly what replaceContentItemChunks wrote.
-      function captureChunkRows(): Array<Record<string, unknown>> {
+      // Install a stub request-scoped provider (`this.ProviderToUse`) exposing everything the
+      // persistence path now uses: GetEntityObject (records each ContentItemChunk row for
+      // inspection), RunView (returns the item's existing chunk rows — NOT a global `new RunView()`),
+      // and the server-side transaction methods. `opts.failInsertAt` forces the Nth inserted chunk's
+      // Save to return false, to exercise the rollback path. Returns handles for assertions.
+      function installProvider(
+        existingRows: Array<Record<string, unknown>> = [],
+        opts: { failInsertAt?: number } = {}
+      ) {
         const created: Array<Record<string, unknown>> = [];
-        Object.defineProperty(engine, 'ProviderToUse', {
-          get() {
-            return {
-              GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
-                const row: Record<string, unknown> = {
-                  NewRecord: vi.fn(),
-                  Save: vi.fn().mockResolvedValue(true),
-                  ContentItemID: '',
-                  Sequence: 0,
-                  Text: '',
-                  VectorRecordID: '',
-                };
-                if (entityName === 'MJ: Content Item Chunks') created.push(row);
-                return row;
-              }),
+        let insertIndex = 0;
+        const provider = {
+          GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+            const row: Record<string, unknown> = {
+              NewRecord: vi.fn(),
+              ContentItemID: '',
+              Sequence: 0,
+              Text: '',
+              VectorRecordID: '',
+              LatestResult: { CompleteMessage: 'simulated chunk save failure' },
             };
-          },
+            if (entityName === 'MJ: Content Item Chunks') {
+              const idx = insertIndex++;
+              row.Save = vi.fn().mockResolvedValue(opts.failInsertAt !== idx);
+              created.push(row);
+            } else {
+              row.Save = vi.fn().mockResolvedValue(true);
+            }
+            return row;
+          }),
+          RunView: vi.fn().mockResolvedValue({ Success: true, Results: existingRows }),
+          BeginTransaction: vi.fn().mockResolvedValue(undefined),
+          CommitTransaction: vi.fn().mockResolvedValue(undefined),
+          RollbackTransaction: vi.fn().mockResolvedValue(undefined),
+        };
+        Object.defineProperty(engine, 'ProviderToUse', {
+          get() { return provider; },
           configurable: true,
         });
-        return created;
+        return { created, provider };
       }
 
       it('stores the vector record id on ContentItem.VectorRecordID for a single-chunk item', async () => {
         await setupVectorMocks();
-        const created = captureChunkRows();
+        const { created, provider } = installProvider();
         const item = createVectorItem('item-single', 'Short single-chunk content');
 
         await engine.VectorizeContentItems([item] as never[], mockUser);
@@ -1051,14 +1067,15 @@ describe('AutotagBaseEngine', () => {
         // crypto is mocked, so contentItemVectorId returns the fixed digest.
         expect(item.VectorRecordID).toBe('abc123hash');
         expect(item.EmbeddingStatus).toBe('Complete');
-        // A single-chunk item must NOT create ContentItemChunk rows.
+        // A single-chunk item must NOT create ContentItemChunk rows or open a transaction.
         expect(created).toHaveLength(0);
+        expect(provider.BeginTransaction).not.toHaveBeenCalled();
       });
 
-      it('writes ordered ContentItemChunk rows (and leaves item VectorRecordID null) for a multi-chunk item', async () => {
+      it('writes ordered ContentItemChunk rows in one committed transaction (multi-chunk item)', async () => {
         await setupVectorMocks();
         embedOnePerText();
-        const created = captureChunkRows();
+        const { created, provider } = installProvider();
         const item = createVectorItem('item-multi', LONG_TEXT);
 
         await engine.VectorizeContentItems([item] as never[], mockUser);
@@ -1076,35 +1093,43 @@ describe('AutotagBaseEngine', () => {
         // Chunk 0 uses the base vector id; later chunks get the _chunkN suffix.
         expect(created[0].VectorRecordID).toBe('abc123hash');
         expect(created[1].VectorRecordID).toBe('abc123hash_chunk1');
+        // Persisted atomically: one transaction, committed, never rolled back.
+        expect(provider.BeginTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.CommitTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.RollbackTransaction).not.toHaveBeenCalled();
       });
 
-      it('deletes existing ContentItemChunk rows before writing new ones (idempotent re-vectorization)', async () => {
+      it('reads existing rows via the request-scoped provider and deletes them before insert (idempotent)', async () => {
         await setupVectorMocks();
         embedOnePerText();
 
-        // Existing chunk rows the RunView inside replaceContentItemChunks should find + delete.
+        // Existing chunk rows returned by the provider's RunView (NOT a global `new RunView()`).
         const deleteSpies = [vi.fn().mockResolvedValue(true), vi.fn().mockResolvedValue(true)];
         const existingRows = deleteSpies.map((del, i) => ({ ID: `old-chunk-${i}`, Delete: del }));
-        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
-          const entityName = params['EntityName'] as string;
-          if (entityName === 'MJ: Vector Indexes') {
-            return { Success: true, Results: [{ ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1' }] } as never;
-          }
-          if (entityName === 'MJ: Vector Databases') {
-            return { Success: true, Results: [{ ID: 'vdb-1', Name: 'Pinecone', ClassKey: 'PineconeDB' }] } as never;
-          }
-          if (entityName === 'MJ: Content Item Chunks') {
-            return { Success: true, Results: existingRows } as never;
-          }
-          return { Success: true, Results: [] } as never;
-        });
-        captureChunkRows();
+        const { provider } = installProvider(existingRows);
         const item = createVectorItem('item-rerun', LONG_TEXT);
 
         await engine.VectorizeContentItems([item] as never[], mockUser);
 
-        // Prior rows must be deleted so the new sequence can't collide with the unique constraint.
+        // Loaded via the request-scoped provider, deleted before the new rows are written, committed once.
+        expect(provider.RunView).toHaveBeenCalled();
         deleteSpies.forEach(del => expect(del).toHaveBeenCalledTimes(1));
+        expect(provider.CommitTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.RollbackTransaction).not.toHaveBeenCalled();
+      });
+
+      it('rolls back the transaction and keeps the batch alive when a chunk insert fails', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+        const { provider } = installProvider([], { failInsertAt: 1 });
+        const item = createVectorItem('item-rollback', LONG_TEXT);
+
+        // Per-item persistence failure is best-effort: the run itself does not throw.
+        await expect(engine.VectorizeContentItems([item] as never[], mockUser)).resolves.not.toThrow();
+
+        // The failed replacement rolled back and was NOT committed.
+        expect(provider.RollbackTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.CommitTransaction).not.toHaveBeenCalled();
       });
     });
   });

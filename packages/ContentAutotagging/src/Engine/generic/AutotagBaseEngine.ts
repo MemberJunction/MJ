@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core'
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core'
 import { MJGlobal, UUIDsEqual, NormalizeUUID, RegisterClass } from '@memberjunction/global'
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
@@ -1669,9 +1669,20 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Replace the ContentItemChunk rows for a content item with the supplied ordered chunks.
-     * Existing rows are deleted first so re-vectorization stays idempotent and never collides
-     * with UQ_ContentItemChunk_ContentItemID_Sequence.
+     * Atomically replace the ContentItemChunk rows for a content item with the supplied ordered
+     * chunks: delete the current rows, then insert the new ones, inside a single server-side
+     * transaction. Either the item's chunk set is fully replaced or left untouched — a mid-operation
+     * failure rolls back so the item is never left with a partial/empty chunk set. On failure this
+     * throws; the caller (persistVectorReferences) logs it and moves on to the next item.
+     *
+     * Provider discipline (server, multi-user): the RunView read, the entity objects, and the
+     * transaction ALL go through `this.ProviderToUse` — the connection allocated to this request.
+     * A bare `new RunView()` would run on the process-global provider/connection, outside this
+     * transaction and under the wrong user context. The ops run sequentially, not in parallel:
+     * MJ's server transaction is a single pinned connection, so concurrent requests on it race
+     * (see SQLServerDataProvider's own note). Deletes-before-inserts is also required by
+     * UQ_ContentItemChunk_ContentItemID_Sequence — a Sequence can't be reinserted until the old
+     * row holding it is gone.
      */
     private async replaceContentItemChunks(
         contentItemID: string,
@@ -1679,25 +1690,21 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo
     ): Promise<void> {
         const md = this.ProviderToUse;
+        const rv = this.ProviderToUse as unknown as IRunViewProvider;
+        const provider = this.ProviderToUse as unknown as DatabaseProviderBase;
 
-        // Remove any prior chunk rows for this item.
-        const existing = await new RunView().RunView<MJContentItemChunkEntity>({
+        // Load the current chunk rows for this item via the request-scoped provider (not `new RunView()`).
+        const existing = await rv.RunView<MJContentItemChunkEntity>({
             EntityName: 'MJ: Content Item Chunks',
             ExtraFilter: `ContentItemID='${contentItemID}'`,
             ResultType: 'entity_object'
         }, contextUser);
-        if (existing.Success) {
-            for (const row of existing.Results) {
-                const deleted = await row.Delete();
-                if (!deleted) {
-                    LogError(`replaceContentItemChunks: failed to delete existing chunk ${row.ID} for item ${contentItemID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-                }
-            }
-        } else {
-            LogError(`replaceContentItemChunks: failed to load existing chunks for item ${contentItemID}: ${existing.ErrorMessage}`);
+        if (!existing.Success) {
+            throw new Error(`failed to load existing chunks for item ${contentItemID}: ${existing.ErrorMessage}`);
         }
 
-        // Insert the new ordered chunk rows.
+        // Pre-build the replacement rows (in-memory only; GetEntityObject does not hit the DB).
+        const newRows: MJContentItemChunkEntity[] = [];
         for (const chunk of chunks) {
             const row = await md.GetEntityObject<MJContentItemChunkEntity>('MJ: Content Item Chunks', contextUser);
             row.NewRecord();
@@ -1705,10 +1712,26 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             row.Sequence = chunk.chunkIndex;
             row.Text = chunk.text;
             row.VectorRecordID = chunk.vectorRecordID;
-            const saved = await row.Save();
-            if (!saved) {
-                LogError(`replaceContentItemChunks: failed to save chunk ${chunk.chunkIndex} for item ${contentItemID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            newRows.push(row);
+        }
+
+        // Atomic delete-then-insert on the request-scoped connection.
+        await provider.BeginTransaction();
+        try {
+            for (const row of existing.Results) {
+                if (!(await row.Delete())) {
+                    throw new Error(`failed to delete existing chunk ${row.ID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
             }
+            for (const row of newRows) {
+                if (!(await row.Save())) {
+                    throw new Error(`failed to save chunk ${row.Sequence}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }
+            await provider.CommitTransaction();
+        } catch (e) {
+            await provider.RollbackTransaction();
+            throw e;
         }
     }
 

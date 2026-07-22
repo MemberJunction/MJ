@@ -1,6 +1,6 @@
 ---
-"@memberjunction/content-autotagging": patch
-"@memberjunction/core-entities": patch
+"@memberjunction/content-autotagging": minor
+"@memberjunction/core-entities": minor
 ---
 
 Content autotagging: persist vector-database record identifiers, and add the ContentItemChunk entity
