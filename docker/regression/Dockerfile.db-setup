@@ -20,7 +20,7 @@
 FROM node:24-slim AS manifests
 WORKDIR /m
 COPY packages/ ./packages/
-RUN find packages -type f ! -name package.json -delete \
+RUN find packages -type f ! -name package.json ! -path '*/bin/*' -delete \
     && find packages -type d -empty -delete
 
 # ─── Main image ─────────────────────────────────────────────────────────────
