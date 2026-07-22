@@ -975,6 +975,138 @@ describe('AutotagBaseEngine', () => {
         expect(errorMessages.some(m => m.includes('item-save-throw') && m.includes('connection reset by peer'))).toBe(true);
       });
     });
+
+    describe('vector reference persistence — ContentItem.VectorRecordID + ContentItemChunk', () => {
+      // Item factory with a Save spy plus the fields the persistence path reads/writes.
+      function createVectorItem(id: string, text: string): Record<string, unknown> {
+        return {
+          ID: id,
+          Text: text,
+          Name: `Item ${id}`,
+          Description: `Description for ${id}`,
+          URL: `https://example.com/${id}`,
+          ContentSourceID: 'source-1',
+          ContentSourceTypeID: 'type-1',
+          ContentFileTypeID: 'file-type-1',
+          ContentTypeID: 'content-type-1',
+          EmbeddingStatus: 'Pending' as 'Pending' | 'Processing' | 'Complete' | 'Failed',
+          LastEmbeddedAt: null as Date | null,
+          EmbeddingModelID: null as string | null,
+          VectorRecordID: null as string | null,
+          Save: vi.fn().mockResolvedValue(true),
+        };
+      }
+
+      // Comfortably exceeds MAX_EMBEDDING_TOKENS * 4 (~30,000 chars) so buildEmbeddingChunks
+      // routes through the (mocked) TextChunker and yields more than one chunk.
+      const LONG_TEXT = 'This is a sentence about content. '.repeat(1200);
+
+      // Return one vector per embedded text so the vector count always matches the chunk
+      // count, regardless of exactly how many chunks the splitter produces.
+      function embedOnePerText() {
+        mockRunEmbeddingFn.mockImplementationOnce(async (params: { Texts: string[] }) => ({
+          Success: true,
+          Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]),
+          PromptRunID: 'mock-multi-run',
+          TokensUsed: 100,
+          Cost: 0.001,
+          ErrorMessage: null,
+          ExecutionTimeMs: 10,
+        }));
+      }
+
+      // Install a ProviderToUse whose GetEntityObject records every ContentItemChunk row it
+      // hands out, so tests can inspect exactly what replaceContentItemChunks wrote.
+      function captureChunkRows(): Array<Record<string, unknown>> {
+        const created: Array<Record<string, unknown>> = [];
+        Object.defineProperty(engine, 'ProviderToUse', {
+          get() {
+            return {
+              GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+                const row: Record<string, unknown> = {
+                  NewRecord: vi.fn(),
+                  Save: vi.fn().mockResolvedValue(true),
+                  ContentItemID: '',
+                  Sequence: 0,
+                  Text: '',
+                  VectorRecordID: '',
+                };
+                if (entityName === 'MJ: Content Item Chunks') created.push(row);
+                return row;
+              }),
+            };
+          },
+          configurable: true,
+        });
+        return created;
+      }
+
+      it('stores the vector record id on ContentItem.VectorRecordID for a single-chunk item', async () => {
+        await setupVectorMocks();
+        const created = captureChunkRows();
+        const item = createVectorItem('item-single', 'Short single-chunk content');
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // crypto is mocked, so contentItemVectorId returns the fixed digest.
+        expect(item.VectorRecordID).toBe('abc123hash');
+        expect(item.EmbeddingStatus).toBe('Complete');
+        // A single-chunk item must NOT create ContentItemChunk rows.
+        expect(created).toHaveLength(0);
+      });
+
+      it('writes ordered ContentItemChunk rows (and leaves item VectorRecordID null) for a multi-chunk item', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+        const created = captureChunkRows();
+        const item = createVectorItem('item-multi', LONG_TEXT);
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Multi-chunk: provenance lives in ContentItemChunk, not on the item.
+        expect(item.VectorRecordID).toBeNull();
+        expect(item.EmbeddingStatus).toBe('Complete');
+        expect(created.length).toBeGreaterThan(1);
+        // Rows are ordered by sequence, carry the parent id, and are each saved.
+        created.forEach((row, i) => {
+          expect(row.ContentItemID).toBe('item-multi');
+          expect(row.Sequence).toBe(i);
+          expect(row.Save).toHaveBeenCalledTimes(1);
+        });
+        // Chunk 0 uses the base vector id; later chunks get the _chunkN suffix.
+        expect(created[0].VectorRecordID).toBe('abc123hash');
+        expect(created[1].VectorRecordID).toBe('abc123hash_chunk1');
+      });
+
+      it('deletes existing ContentItemChunk rows before writing new ones (idempotent re-vectorization)', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+
+        // Existing chunk rows the RunView inside replaceContentItemChunks should find + delete.
+        const deleteSpies = [vi.fn().mockResolvedValue(true), vi.fn().mockResolvedValue(true)];
+        const existingRows = deleteSpies.map((del, i) => ({ ID: `old-chunk-${i}`, Delete: del }));
+        mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+          const entityName = params['EntityName'] as string;
+          if (entityName === 'MJ: Vector Indexes') {
+            return { Success: true, Results: [{ ID: 'idx-1', Name: 'test-index', VectorDatabaseID: 'vdb-1', EmbeddingModelID: 'embed-model-1' }] } as never;
+          }
+          if (entityName === 'MJ: Vector Databases') {
+            return { Success: true, Results: [{ ID: 'vdb-1', Name: 'Pinecone', ClassKey: 'PineconeDB' }] } as never;
+          }
+          if (entityName === 'MJ: Content Item Chunks') {
+            return { Success: true, Results: existingRows } as never;
+          }
+          return { Success: true, Results: [] } as never;
+        });
+        captureChunkRows();
+        const item = createVectorItem('item-rerun', LONG_TEXT);
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Prior rows must be deleted so the new sequence can't collide with the unique constraint.
+        deleteSpies.forEach(del => expect(del).toHaveBeenCalledTimes(1));
+      });
+    });
   });
 
   describe('Circuit breaker', () => {

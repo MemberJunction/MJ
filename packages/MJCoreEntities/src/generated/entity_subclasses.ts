@@ -11993,6 +11993,53 @@ export const MJContentItemAttributeSchema = z.object({
 export type MJContentItemAttributeEntityType = z.infer<typeof MJContentItemAttributeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Content Item Chunks
+ */
+export const MJContentItemChunkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ContentItemID: z.string().describe(`
+        * * Field Name: ContentItemID
+        * * Display Name: Content Item ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.`),
+    Text: z.string().describe(`
+        * * Field Name: Text
+        * * Display Name: Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector.`),
+    VectorRecordID: z.string().nullable().describe(`
+        * * Field Name: VectorRecordID
+        * * Display Name: Vector Record ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The identifier of this chunk's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the chunk's embedding under. Provides traceability from the chunk back to its stored vector.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ContentItem: z.string().nullable().describe(`
+        * * Field Name: ContentItem
+        * * Display Name: Content Item
+        * * SQL Data Type: nvarchar(250)`),
+});
+
+export type MJContentItemChunkEntityType = z.infer<typeof MJContentItemChunkSchema>;
+
+/**
  * zod schema definition for the entity MJ: Content Item Duplicates
  */
 export const MJContentItemDuplicateSchema = z.object({
@@ -12165,7 +12212,7 @@ export const MJContentItemSchema = z.object({
         * * Default Value: newsequentialid()`),
     ContentSourceID: z.string().describe(`
         * * Field Name: ContentSourceID
-        * * Display Name: Content Source ID
+        * * Display Name: Content Source
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)`),
     Name: z.string().nullable().describe(`
@@ -12178,17 +12225,17 @@ export const MJContentItemSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     ContentTypeID: z.string().describe(`
         * * Field Name: ContentTypeID
-        * * Display Name: Content Type ID
+        * * Display Name: Content Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)`),
     ContentSourceTypeID: z.string().describe(`
         * * Field Name: ContentSourceTypeID
-        * * Display Name: Content Source Type ID
+        * * Display Name: Content Source Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)`),
     ContentFileTypeID: z.string().describe(`
         * * Field Name: ContentFileTypeID
-        * * Display Name: Content File Type ID
+        * * Display Name: Content File Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)`),
     Checksum: z.string().nullable().describe(`
@@ -12218,7 +12265,7 @@ export const MJContentItemSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityRecordDocumentID: z.string().nullable().describe(`
         * * Field Name: EntityRecordDocumentID
-        * * Display Name: Entity Record Document ID
+        * * Display Name: Entity Record Document
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Record Documents (vwEntityRecordDocuments.ID)
         * * Description: For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.`),
@@ -12242,7 +12289,7 @@ export const MJContentItemSchema = z.object({
         * * Description: Timestamp of the most recent successful embedding for this content item.`),
     EmbeddingModelID: z.string().nullable().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model ID
+        * * Display Name: Embedding Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: The AI model used to generate the most recent embedding for this content item.`),
@@ -12264,29 +12311,34 @@ export const MJContentItemSchema = z.object({
         * * Display Name: Last Tagged At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp of the most recent successful autotagging run for this content item.`),
+    VectorRecordID: z.string().nullable().describe(`
+        * * Field Name: VectorRecordID
+        * * Display Name: Vector Record ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
-        * * Display Name: Content Source
+        * * Display Name: Content Source Name
         * * SQL Data Type: nvarchar(255)`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
-        * * Display Name: Content Type
+        * * Display Name: Content Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
-        * * Display Name: Content Source Type
+        * * Display Name: Content Source Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
-        * * Display Name: Content File Type
+        * * Display Name: Content File Type Name
         * * SQL Data Type: nvarchar(255)`),
     EntityRecordDocument: z.string().nullable().describe(`
         * * Field Name: EntityRecordDocument
-        * * Display Name: Entity Record Document
+        * * Display Name: Entity Record Document Name
         * * SQL Data Type: nvarchar(450)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -43879,6 +43931,78 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CompactionTargetPercent: Compaction target percentage must be a value between 1 and 100 percent.
+    * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than zero.
+    * * Table-Level: The compaction target percentage must be strictly less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCompactionTargetPercentRange(result);
+        this.ValidateContextWindowMaxTokensPositive(result);
+        this.ValidateCompactionTargetPercentLessThanTriggerPercent(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Compaction target percentage must be a value between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTargetPercentRange(result: ValidationResult) {
+        if (this.CompactionTargetPercent != null && (this.CompactionTargetPercent < 1 || this.CompactionTargetPercent > 100)) {
+            result.Errors.push(new ValidationErrorInfo(
+                "CompactionTargetPercent",
+                "Compaction Target Percent must be between 1 and 100.",
+                this.CompactionTargetPercent,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * The maximum tokens for the context window must be a positive number greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextWindowMaxTokensPositive(result: ValidationResult) {
+    	if (this.ContextWindowMaxTokens != null && this.ContextWindowMaxTokens <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ContextWindowMaxTokens",
+    			"The maximum tokens for the context window must be greater than zero.",
+    			this.ContextWindowMaxTokens,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The compaction target percentage must be strictly less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTargetPercentLessThanTriggerPercent(result: ValidationResult) {
+        if (this.CompactionTargetPercent != null && this.CompactionTriggerPercent != null) {
+            if (this.CompactionTargetPercent >= this.CompactionTriggerPercent) {
+                result.Errors.push(new ValidationErrorInfo(
+                    "CompactionTargetPercent",
+                    "Compaction Target Percent must be less than Compaction Trigger Percent.",
+                    this.CompactionTargetPercent,
+                    ValidationErrorType.Failure
+                ));
+            }
+        }
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -44298,6 +44422,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CompactionTargetPercent: The compaction target percentage must be between 1 and 100 percent.
+    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100.
+    * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than zero.
     * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
     * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
     * * MaxMessages: This rule ensures that the maximum number of messages, if specified, must be greater than zero.
@@ -44311,6 +44438,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateCompactionTargetPercentRange(result);
+        this.ValidateCompactionTriggerPercentRange(result);
+        this.ValidateContextWindowMaxTokensGreaterThanZero(result);
         this.ValidateDefaultPromptEffortLevelInAllowedRange(result);
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
         this.ValidateMaxMessagesGreaterThanZero(result);
@@ -44321,6 +44451,57 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * The compaction target percentage must be between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTargetPercentRange(result: ValidationResult) {
+    	if (this.CompactionTargetPercent != null && (this.CompactionTargetPercent < 1 || this.CompactionTargetPercent > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CompactionTargetPercent",
+    			"Compaction target percent must be between 1 and 100.",
+    			this.CompactionTargetPercent,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The compaction trigger percentage must be a value between 1 and 100.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
+    		if (this.CompactionTriggerPercent != null && (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"CompactionTriggerPercent",
+    				"Compaction trigger percentage must be between 1 and 100.",
+    				this.CompactionTriggerPercent,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+
+    /**
+    * The maximum tokens for the context window must be a positive number greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextWindowMaxTokensGreaterThanZero(result: ValidationResult) {
+    	if (this.ContextWindowMaxTokens != null && this.ContextWindowMaxTokens <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ContextWindowMaxTokens",
+    			"The maximum tokens for the context window must be greater than zero.",
+    			this.ContextWindowMaxTokens,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -64552,6 +64733,132 @@ export class MJContentItemAttributeEntity extends BaseEntity<MJContentItemAttrib
 
 
 /**
+ * MJ: Content Item Chunks - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentItemChunk
+ * * Base View: vwContentItemChunks
+ * * @description Represents an individual chunk of a Content Item's text that was embedded as a distinct vector. When a Content Item is too large to embed as a single vector it is split into ordered chunks; each chunk becomes one row here, linking the stored vector back to the specific portion of the parent Content Item it represents.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Content Item Chunks')
+export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntityType> {
+    /**
+    * Loads the MJ: Content Item Chunks record from the database
+    * @param ID: string - primary key value to load the MJ: Content Item Chunks record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJContentItemChunkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ContentItemID
+    * * Display Name: Content Item ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+    */
+    get ContentItemID(): string {
+        return this.Get('ContentItemID');
+    }
+    set ContentItemID(value: string) {
+        this.Set('ContentItemID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Description: Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Text
+    * * Display Name: Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector.
+    */
+    get Text(): string {
+        return this.Get('Text');
+    }
+    set Text(value: string) {
+        this.Set('Text', value);
+    }
+
+    /**
+    * * Field Name: VectorRecordID
+    * * Display Name: Vector Record ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The identifier of this chunk's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the chunk's embedding under. Provides traceability from the chunk back to its stored vector.
+    */
+    get VectorRecordID(): string | null {
+        return this.Get('VectorRecordID');
+    }
+    set VectorRecordID(value: string | null) {
+        this.Set('VectorRecordID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ContentItem
+    * * Display Name: Content Item
+    * * SQL Data Type: nvarchar(250)
+    */
+    get ContentItem(): string | null {
+        return this.Get('ContentItem');
+    }
+}
+
+
+/**
  * MJ: Content Item Duplicates - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ContentItemDuplicate
@@ -64984,7 +65291,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceID
-    * * Display Name: Content Source ID
+    * * Display Name: Content Source
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
     */
@@ -65021,7 +65328,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentTypeID
-    * * Display Name: Content Type ID
+    * * Display Name: Content Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)
     */
@@ -65034,7 +65341,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceTypeID
-    * * Display Name: Content Source Type ID
+    * * Display Name: Content Source Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)
     */
@@ -65047,7 +65354,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentFileTypeID
-    * * Display Name: Content File Type ID
+    * * Display Name: Content File Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)
     */
@@ -65119,7 +65426,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: EntityRecordDocumentID
-    * * Display Name: Entity Record Document ID
+    * * Display Name: Entity Record Document
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Record Documents (vwEntityRecordDocuments.ID)
     * * Description: For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.
@@ -65167,7 +65474,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model ID
+    * * Display Name: Embedding Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: The AI model used to generate the most recent embedding for this content item.
@@ -65214,8 +65521,21 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     }
 
     /**
+    * * Field Name: VectorRecordID
+    * * Display Name: Vector Record ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.
+    */
+    get VectorRecordID(): string | null {
+        return this.Get('VectorRecordID');
+    }
+    set VectorRecordID(value: string | null) {
+        this.Set('VectorRecordID', value);
+    }
+
+    /**
     * * Field Name: ContentSource
-    * * Display Name: Content Source
+    * * Display Name: Content Source Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSource(): string | null {
@@ -65224,7 +65544,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentType
-    * * Display Name: Content Type
+    * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentType(): string {
@@ -65233,7 +65553,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceType
-    * * Display Name: Content Source Type
+    * * Display Name: Content Source Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSourceType(): string {
@@ -65242,7 +65562,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentFileType
-    * * Display Name: Content File Type
+    * * Display Name: Content File Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentFileType(): string {
@@ -65251,7 +65571,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: EntityRecordDocument
-    * * Display Name: Entity Record Document
+    * * Display Name: Entity Record Document Name
     * * SQL Data Type: nvarchar(450)
     */
     get EntityRecordDocument(): string | null {
@@ -65260,7 +65580,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string | null {
@@ -68884,9 +69204,6 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     */
     get Sequence(): number {
         return this.Get('Sequence');
-    }
-    set Sequence(value: number) {
-        this.Set('Sequence', value);
     }
 
     /**

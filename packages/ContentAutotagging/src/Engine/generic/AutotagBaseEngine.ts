@@ -7,7 +7,7 @@ import {
     MJContentItemAttributeEntity, MJContentSourceTypeParamEntity,
     MJContentProcessRunEntity_IContentProcessRunConfiguration,
     MJContentItemDuplicateEntity, MJTaggedItemEntity,
-    MJEntityRecordDocumentEntity
+    MJEntityRecordDocumentEntity, MJContentItemChunkEntity
 } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
 import { RateLimiter } from './RateLimiter'
@@ -1554,6 +1554,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const batchSuccess = await this.upsertVectorRecords(records, infra);
             if (batchSuccess) {
                 vectorized += batch.length;
+                // Persist the vector-DB record identifiers back into MJ before the status save,
+                // so single-chunk items carry their VectorRecordID in the same 'Complete' write.
+                await this.persistVectorReferences(batch, allChunks, records, contextUser);
                 await this.updateEmbeddingStatusBatch(batch, 'Complete', contextUser, infra.embeddingModelID);
             } else {
                 await this.updateEmbeddingStatusBatch(batch, 'Failed', contextUser);
@@ -1614,6 +1617,99 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             values: vectors[idx],
             metadata: this.buildVectorMetadata(chunk.item, tagMap.get(chunk.item.ID))
         }));
+    }
+
+    /**
+     * Persist the vector-database record identifiers produced during this batch back into MJ.
+     *
+     * - Single-chunk items: the item embeds as one vector, so its record id is stored directly
+     *   on ContentItem.VectorRecordID (set in-memory here; persisted by the subsequent
+     *   'Complete' status Save so no extra write is needed).
+     * - Multi-chunk items: the item was split into several vectors, so per-chunk provenance is
+     *   recorded in ContentItemChunk rows (ContentItemID, Sequence, Text, VectorRecordID) and
+     *   ContentItem.VectorRecordID is left null (the chunk table is the source of truth).
+     *
+     * `allChunks` and `records` are parallel arrays (buildVectorRecords maps 1:1), so
+     * records[i].id is the vector-DB id for allChunks[i]. Best-effort: a persistence failure
+     * for one item is logged but does not abort the batch — the vectors are already upserted.
+     */
+    private async persistVectorReferences(
+        batch: MJContentItemEntity[],
+        allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string }[],
+        records: VectorRecord[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Group (chunkIndex, text, vectorRecordID) by content item, preserving order.
+        const byItem = new Map<string, { chunkIndex: number; text: string; vectorRecordID: string }[]>();
+        for (let idx = 0; idx < allChunks.length; idx++) {
+            const c = allChunks[idx];
+            const key = NormalizeUUID(c.item.ID);
+            const list = byItem.get(key) ?? [];
+            list.push({ chunkIndex: c.chunkIndex, text: c.text, vectorRecordID: String(records[idx].id) });
+            byItem.set(key, list);
+        }
+
+        for (const item of batch) {
+            const chunks = byItem.get(NormalizeUUID(item.ID));
+            if (!chunks || chunks.length === 0) continue;
+            try {
+                if (chunks.length === 1) {
+                    // Single vector — the record id lives on the content item itself.
+                    item.VectorRecordID = chunks[0].vectorRecordID;
+                } else {
+                    // Multiple vectors — record per-chunk provenance; the item-level id is not meaningful.
+                    item.VectorRecordID = null;
+                    await this.replaceContentItemChunks(item.ID, chunks, contextUser);
+                }
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`persistVectorReferences: failed to persist chunk references for item ${item.ID}: ${msg}`);
+            }
+        }
+    }
+
+    /**
+     * Replace the ContentItemChunk rows for a content item with the supplied ordered chunks.
+     * Existing rows are deleted first so re-vectorization stays idempotent and never collides
+     * with UQ_ContentItemChunk_ContentItemID_Sequence.
+     */
+    private async replaceContentItemChunks(
+        contentItemID: string,
+        chunks: { chunkIndex: number; text: string; vectorRecordID: string }[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = this.ProviderToUse;
+
+        // Remove any prior chunk rows for this item.
+        const existing = await new RunView().RunView<MJContentItemChunkEntity>({
+            EntityName: 'MJ: Content Item Chunks',
+            ExtraFilter: `ContentItemID='${contentItemID}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        if (existing.Success) {
+            for (const row of existing.Results) {
+                const deleted = await row.Delete();
+                if (!deleted) {
+                    LogError(`replaceContentItemChunks: failed to delete existing chunk ${row.ID} for item ${contentItemID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }
+        } else {
+            LogError(`replaceContentItemChunks: failed to load existing chunks for item ${contentItemID}: ${existing.ErrorMessage}`);
+        }
+
+        // Insert the new ordered chunk rows.
+        for (const chunk of chunks) {
+            const row = await md.GetEntityObject<MJContentItemChunkEntity>('MJ: Content Item Chunks', contextUser);
+            row.NewRecord();
+            row.ContentItemID = contentItemID;
+            row.Sequence = chunk.chunkIndex;
+            row.Text = chunk.text;
+            row.VectorRecordID = chunk.vectorRecordID;
+            const saved = await row.Save();
+            if (!saved) {
+                LogError(`replaceContentItemChunks: failed to save chunk ${chunk.chunkIndex} for item ${contentItemID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        }
     }
 
     /**
