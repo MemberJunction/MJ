@@ -93,6 +93,13 @@ generate_standard_reports() {
     echo ""
     echo "Generating HTML screenshot gallery..."
     RUN_DIR="$RUN_DIR" TIMESTAMP="$TIMESTAMP" node "$SCRIPTS/generate-html-report.cjs" 2>&1
+
+    # DR-F6 (carve-out): JUnit XML for CI consumers. Best-effort — a report
+    # failure must never fail an otherwise-complete run.
+    echo ""
+    echo "Generating JUnit XML (CI)..."
+    RUN_DIR="$RUN_DIR" node "$SCRIPTS/generate-junit.cjs" 2>&1 \
+        || echo "  WARNING: JUnit report generation failed"
 }
 
 # Point test-results/latest at THIS run. Keyed on RUN_ID (which equals
