@@ -4,7 +4,7 @@ This document provides step-by-step instructions for registering new MemberJunct
 
 ## ⚠️ Automated Validation
 
-The publish workflow now **automatically checks** for missing packages and will **fail early** if any `@memberjunction` packages don't exist on npm. This prevents partial publish failures.
+The publish workflow now **automatically checks** for missing packages and will **fail early** if any publishable `@memberjunction` packages don't exist on npm. This prevents partial publish failures. Packages marked `private: true` are skipped — changesets never publishes them, so they need no placeholder.
 
 **When the workflow fails with missing packages:**
 1. Follow Steps 2-3 below to create placeholders and configure OIDC

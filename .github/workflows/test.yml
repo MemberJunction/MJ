@@ -157,11 +157,16 @@ jobs:
       - name: Build + run unit tests
         run: |
           # Angular DOM suites each spin heavy AOT-compile + jsdom workers (capped
-          # to 2/package by vitest.dom.shared.ts). The AFFECTED path touches only a
-          # few packages, so it runs at full turbo parallelism (fast — the common
-          # PR case). The FULL-suite backstop can fire all ~8 DOM packages at once,
-          # so it caps turbo `--concurrency` to keep peak workers (concurrency × 2)
-          # well under the 16 GB runner's limit (otherwise: OOM / exit 137).
+          # to 2/package by vitest.dom.shared.ts). The FULL-suite backstop can fire
+          # all ~8 DOM packages at once, so it caps turbo `--concurrency` to keep
+          # peak workers (concurrency × 2) well under the 16 GB runner's limit
+          # (otherwise: OOM / exit 137). The AFFECTED path gets the SAME cap: a PR
+          # touching a root package (@memberjunction/global, core, ...) makes
+          # `...[base]` select essentially the whole repo — a de-facto full suite
+          # that OOM'd exactly as predicted when left uncapped (PR #3231, exit 137
+          # on CoreActions + react-test-harness, twice). The cap costs the common
+          # small-PR case nothing: with fewer than 4 test tasks in scope it never
+          # engages.
           # `test:types` = the spec type-check gate (tsc --noEmit -p tsconfig.spec.json in
           # each DOM-testing package). Vitest/esbuild is transpile-only — it strips types and
           # silently erases broken `import type` statements — so without this gate a spec can
@@ -172,7 +177,7 @@ jobs:
             npx turbo run build --log-order=stream "$TURBO_FILTER"
             echo "::endgroup::"
             npx turbo run test:types "$TURBO_FILTER"
-            npx turbo run test "$TURBO_FILTER"
+            npx turbo run test --concurrency=4 "$TURBO_FILTER"
           else
             npm run build
             npx turbo run test:types
