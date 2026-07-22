@@ -100,6 +100,27 @@ jobs:
             echo "skip_apply=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # ─── Step 3b: Verify PG counterparts have CONTENT, not just existence ──
+      # Step 3 (and the parity test) assert a .pg.sql counterpart EXISTS. Nothing
+      # asserted it contains anything, and that gap shipped a broken release:
+      # v5.45's Metadata_Sync.pg.sql is 126 bytes against 12,041 lines of T-SQL,
+      # so PG deployments migrating through v5.45 silently received none of that
+      # release's metadata.
+      #
+      # Critically, the apply step below CANNOT catch this. An empty migration
+      # applies perfectly cleanly — there is nothing in it to fail. So this must
+      # be its own gate, and it must run BEFORE the apply, where the failure is
+      # still attributable to conversion rather than to SQL.
+      #
+      # The detector self-tests first (same convention as changes.yml running
+      # check-migration-id-determinism.sh --self-test), so a broken detector
+      # fails loudly instead of silently passing everything.
+      - name: Self-test the PG content detector
+        run: node scripts/check-pg-migration-content.mjs --self-test
+
+      - name: Verify PG migration content
+        run: node scripts/check-pg-migration-content.mjs
+
       # ─── Step 4: Bootstrap PG roles ─────────────────────────────────
       # Skyway creates `__mj.flyway_schema_history` itself at startup, so the
       # only thing CI has to seed is the cdp_* roles that migration GRANT

@@ -1,0 +1,315 @@
+#!/usr/bin/env node
+/**
+ * PG migration CONTENT check — the sibling of check-pg-migration-parity.mjs.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * check-pg-migration-parity.mjs asserts a `.pg.sql` counterpart EXISTS. Nothing
+ * asserts it contains anything. That gap has shipped a broken release:
+ *
+ *   v5.45  V202607071019__v5.45.x__Metadata_Sync.sql   12,041 lines
+ *          V202607071019__v5.45.x__Metadata_Sync.pg.sql   126 BYTES (2 comments)
+ *
+ * PostgreSQL deployments migrating through v5.45 silently received none of that
+ * release's curated metadata. Every automated check passed, because the check
+ * everyone treats as authoritative — a clean `mj migrate` on a fresh PG database —
+ * is structurally incapable of catching it: EMPTY SQL APPLIES CLEANLY.
+ *
+ * The same failure recurred during the v5.49.0 build: `mj migrate convert` emitted
+ * three header-only stubs and one file containing six bare `;` where six
+ * CREATE INDEX statements belonged, while reporting `unhandled stmts: 0` and
+ * exiting 0. It was caught by hand-diffing line counts. This script is that diff,
+ * made non-optional.
+ *
+ * WHAT IT DOES NOT DO
+ * -------------------
+ * It does not judge SQL correctness — `mj migrate` on a fresh DB does that, and
+ * does it well. This only answers "did the converter silently drop everything?"
+ *
+ * INTENTIONALLY-EMPTY COUNTERPARTS
+ * --------------------------------
+ * Some counterparts are legitimately empty. In v5.49.0 two were: the SS migration
+ * altered `spUpdateExistingEntityFieldsFromSchema`, which PostgreSQL maintains in
+ * TypeScript (CodeGenLib/.../postgresql/metadataSupportObjects.ts), not in a
+ * migration. A blunt "empty = fail" rule would cry wolf and be disabled inside two
+ * releases.
+ *
+ * So the rule is not "is this empty?" but "is this empty AND undocumented?".
+ * An intentionally-empty counterpart must declare itself:
+ *
+ *     -- PG-EMPTY-BY-DESIGN: <reason>
+ *
+ * That converts a convention a reviewer might notice into a postcondition that
+ * cannot be skipped, while leaving the judgement itself with the human.
+ *
+ * USAGE
+ *   node scripts/check-pg-migration-content.mjs              # check the repo
+ *   node scripts/check-pg-migration-content.mjs --self-test  # validate the detector
+ *
+ * EXIT  0 = clean · 1 = suspect counterpart(s) · 2 = usage error
+ */
+
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { join, basename, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const SS_DIR = 'migrations/v5';
+const PG_DIR = 'migrations-pg/v5';
+
+/** A source this small can legitimately produce a near-empty counterpart. */
+const SOURCE_STATEMENT_FLOOR = 5;
+/** At/below this many real statements, a counterpart is "effectively empty". */
+const PG_EMPTY_CEILING = 1;
+
+const DESIGN_TOKEN = /^\s*--\s*PG-EMPTY-BY-DESIGN:\s*\S/m;
+
+/**
+ * Grandfathered counterparts — a RATCHET, not an amnesty.
+ *
+ * These predate the PG-EMPTY-BY-DESIGN convention and CANNOT be retrofitted:
+ * committed `.pg.sql` files are byte-for-byte immutable because Flyway checksums
+ * them, so editing one breaks `mj migrate` on every deployment that already applied
+ * it. The reason therefore lives here instead of in the file.
+ *
+ * Anything NOT on this list must be fixed or must declare itself. Do not add
+ * entries to silence a new failure — that is the exact reflex this script exists
+ * to prevent. Add one only for a file that is genuinely immutable AND genuinely
+ * correct, with the reason written out.
+ */
+const GRANDFATHERED = new Map([
+  ['V202605281538__v5.38.x__Fix_AllowUpdateAPI_On_Virtual_Transition',
+   'Correctly empty. Alters spUpdateExistingEntityFieldsFromSchema, which PostgreSQL ' +
+   'maintains in CodeGenLib/.../postgresql/metadataSupportObjects.ts, not in a migration.'],
+
+  ['V202607071019__v5.45.x__Metadata_Sync',
+   'NOT correct — a real, shipped gap (issue #3253). The converter emitted a 126-byte ' +
+   'reseed marker for 12,041 lines of metadata DML. PG deployments that migrated through ' +
+   'v5.45 need `mj sync push` to be whole. Immutable now; tracked for a forward-fix.'],
+
+  ['V202607202000__v5.49.x__SS_Materialize_Catalog_Views_spUpdateExistingEntityFields',
+   'Correctly empty — same proc/TypeScript split as the v5.38 entry above. Committed ' +
+   'before this check existed; PG side landed in metadataSupportObjects.ts via d23aa8952c.'],
+
+  ['V202607202100__v5.49.x__SoftPK_Guard_Materialized_spUpdateExistingEntityFieldsFromSchema',
+   'Correctly empty — same proc/TypeScript split. The U2 soft-PK guard is present in ' +
+   'metadataSupportObjects.ts with matching semantics.'],
+
+  ['V202607202110__v5.49.x__Fix_ConversationDetail_Sequence_Deadlock',
+   'Correctly empty — PostgreSQL never had the AFTER-trigger deadlock the SS migration ' +
+   'fixes; its trigger is already BEFORE ROW + pg_advisory_xact_lock. The file carries a ' +
+   'prose explanation but predates the machine-readable token.'],
+]);
+
+/**
+ * Boilerplate every converted file carries. These are real statements but say
+ * nothing about whether the migration's CONTENT survived, so they don't count.
+ */
+const BOILERPLATE = [
+  /^\s*CREATE\s+EXTENSION\s+IF\s+NOT\s+EXISTS/i,
+  /^\s*CREATE\s+SCHEMA\s+IF\s+NOT\s+EXISTS/i,
+  /^\s*SET\s+search_path/i,
+  /^\s*SET\s+standard_conforming_strings/i,
+];
+
+/**
+ * Count statements that carry actual migration content.
+ *
+ * Deliberately counts STATEMENTS, not lines: the v5.49 `Backfill_Missing_FK_Auto_Indexes`
+ * failure emitted six bare `;` — 23 lines of "output" carrying zero statements. A
+ * line-count heuristic scores that 23 and waves it through; this scores it 0.
+ */
+export function countContentStatements(sql) {
+  const withoutBlockComments = sql.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const lines = withoutBlockComments
+    .split('\n')
+    .map((l) => l.replace(/--.*$/, '').trim())
+    .filter(Boolean);
+
+  let count = 0;
+  let buffer = '';
+  for (const line of lines) {
+    buffer += (buffer ? ' ' : '') + line;
+    if (!line.endsWith(';')) continue;
+
+    const stmt = buffer.trim();
+    buffer = '';
+    if (stmt === ';') continue;                              // a bare `;` is not content
+    if (BOILERPLATE.some((re) => re.test(stmt))) continue;   // header scaffolding
+    count++;
+  }
+  if (buffer.trim()) count++;                                // trailing unterminated block
+  return count;
+}
+
+/** @returns {{verdict:'ok'|'documented'|'suspect', ssStmts:number, pgStmts:number}} */
+export function classify(ssSql, pgSql) {
+  const ssStmts = countContentStatements(ssSql);
+  const pgStmts = countContentStatements(pgSql);
+
+  if (ssStmts <= SOURCE_STATEMENT_FLOOR) return { verdict: 'ok', ssStmts, pgStmts };
+  if (pgStmts > PG_EMPTY_CEILING) return { verdict: 'ok', ssStmts, pgStmts };
+  if (DESIGN_TOKEN.test(pgSql)) return { verdict: 'documented', ssStmts, pgStmts };
+  return { verdict: 'suspect', ssStmts, pgStmts };
+}
+
+function runCheck() {
+  if (!existsSync(SS_DIR) || !existsSync(PG_DIR)) {
+    console.error(`Run from the repo root — ${SS_DIR} / ${PG_DIR} not found.`);
+    return 2;
+  }
+
+  const suspects = [];
+  let checked = 0;
+  let documented = 0;
+  let grandfathered = 0;
+
+  for (const f of readdirSync(SS_DIR).filter((f) => /^V\d{12}__.*\.sql$/.test(f)).sort()) {
+    const stem = basename(f, '.sql');
+    const pgPath = join(PG_DIR, `${stem}.pg.sql`);
+    if (!existsSync(pgPath)) continue;   // existence is check-pg-migration-parity.mjs's job
+
+    checked++;
+    const { verdict, ssStmts, pgStmts } = classify(
+      readFileSync(join(SS_DIR, f), 'utf8'),
+      readFileSync(pgPath, 'utf8'),
+    );
+    if (verdict === 'documented') {
+      documented++;
+      console.log(`ok (documented no-op): ${stem}`);
+    } else if (verdict === 'suspect') {
+      if (GRANDFATHERED.has(stem)) {
+        grandfathered++;
+        console.log(`ok (grandfathered)   : ${stem}`);
+      } else {
+        suspects.push({ stem, ssStmts, pgStmts });
+      }
+    }
+  }
+
+  if (suspects.length === 0) {
+    console.log(
+      `PG content OK — ${checked} counterpart(s) checked, ` +
+      `${documented} documented no-op(s), ${grandfathered} grandfathered, 0 suspect.`,
+    );
+    return 0;
+  }
+
+  console.error(`\nPG content FAILED — ${suspects.length} counterpart(s) look silently emptied:\n`);
+  for (const s of suspects) {
+    console.error(`  ${s.stem}`);
+    console.error(`      source has ${s.ssStmts} content statement(s); PG counterpart has ${s.pgStmts}.`);
+  }
+  console.error(`
+This is the failure mode that shipped in v5.45 (see the header of this script) and
+recurred during the v5.49.0 build. The converter can report success while writing
+nothing, and a clean 'mj migrate' cannot detect it because empty SQL applies fine.
+
+For each file above, do ONE of:
+
+  1. Re-convert / hand-author the missing DDL. Check git history first — feature PRs
+     sometimes authored a counterpart that was later deleted by policy:
+         git log --all --oneline --diff-filter=A -- '*<Name>.pg.sql'
+
+  2. If the counterpart is CORRECTLY empty (e.g. PostgreSQL maintains that routine in
+     TypeScript, or never had the defect the SS migration fixes), declare it in the file:
+         -- PG-EMPTY-BY-DESIGN: <why, and what carries the change instead>
+`);
+  return 1;
+}
+
+// ── Self-test ───────────────────────────────────────────────────────────────────
+// Fixtures are the REAL shapes seen in production, not invented ones.
+function selfTest() {
+  let fail = 0;
+  const assert = (expected, ss, pg, label) => {
+    const { verdict } = classify(ss, pg);
+    if (verdict === expected) {
+      console.log(`ok   (${expected.padEnd(10)}): ${label}`);
+    } else {
+      console.log(`FAIL (expected ${expected}, got ${verdict}): ${label}`);
+      fail = 1;
+    }
+  };
+
+  const HEADER = `-- ============================================================================
+-- MemberJunction PostgreSQL Migration — X.sql
+-- ============================================================================
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE SCHEMA IF NOT EXISTS __mj;
+SET search_path TO __mj, public;
+SET standard_conforming_strings = on;
+`;
+
+  const REAL_SOURCE = Array.from(
+    { length: 12 },
+    (_, i) => `CREATE INDEX IX_${i} ON __mj.T${i} (C${i});`,
+  ).join('\n');
+
+  // ── Must FLAG ──
+  assert('suspect', REAL_SOURCE, HEADER + '\n-- X.sql — no DDL to translate.\n',
+    'header-only stub ("no DDL to translate") [v5.49 Fix_ConversationDetail_Sequence_Deadlock]');
+
+  assert('suspect', REAL_SOURCE, HEADER + '\n;\n\n;\n\n;\n\n;\n\n;\n\n;\n',
+    'bare semicolons, no statements [v5.49 Backfill_Missing_FK_Auto_Indexes]');
+
+  assert('suspect',
+    Array.from({ length: 400 }, (_, i) => `EXEC __mj.spCreateThing @ID='${i}';`).join('\n'),
+    '-- Metadata_Sync.sql — no DDL to translate.\n-- Metadata is re-seeded via `mj sync push` against PG.\n',
+    '126-byte reseed marker [v5.45 Metadata_Sync — actually shipped]');
+
+  assert('suspect', REAL_SOURCE, HEADER,
+    'header only, nothing after it at all');
+
+  assert('suspect', REAL_SOURCE,
+    HEADER + '\n/* CREATE INDEX IX_0 ON __mj.T0 (C0); */\n',
+    'content present but entirely commented out');
+
+  // ── Must NOT flag ──
+  assert('documented', REAL_SOURCE,
+    HEADER + '\n-- PG-EMPTY-BY-DESIGN: PG maintains this proc in metadataSupportObjects.ts.\n',
+    'intentionally empty WITH the declaration token');
+
+  assert('ok', REAL_SOURCE,
+    HEADER + Array.from({ length: 12 }, (_, i) =>
+      `CREATE INDEX IF NOT EXISTS "IX_${i}" ON __mj."T${i}" USING btree ("C${i}");`).join('\n'),
+    'genuine full conversion');
+
+  assert('ok', 'ALTER TABLE __mj.T ADD C INT NULL;', HEADER,
+    'tiny source (1 statement) — must not false-positive on a legitimately thin migration');
+
+  assert('ok', REAL_SOURCE,
+    HEADER + '\nDO $mj$\nDECLARE p_ID UUID;\nBEGIN\n  p_ID := gen_random_uuid();\n  PERFORM __mj."spCreateThing"(p_ID := p_ID);\nEND $mj$;\n',
+    'multi-line DO $mj$ block counts as content [v5.49 Metadata_Sync, correct output]');
+
+  assert('ok', REAL_SOURCE,
+    HEADER + '\n-- a comment ending in a semicolon;\nCREATE INDEX "IX_a" ON __mj."T" ("C");\nCREATE INDEX "IX_b" ON __mj."T" ("D");\n',
+    'comment ending in `;` must not be miscounted as a statement');
+
+  if (fail) {
+    console.log('\nSELF-TEST FAILED');
+    return 1;
+  }
+  console.log('\nSELF-TEST PASSED');
+  return 0;
+}
+
+// ── Entry point ─────────────────────────────────────────────────────────────────
+// Guarded so the module can be IMPORTED without executing. `classify` and
+// `countContentStatements` are exported for unit tests; without this guard a bare
+// `import` would run the full repo check and call process.exit, making them
+// unreachable to any test that imports them.
+function main() {
+  const arg = process.argv[2] ?? '';
+  if (arg === '--self-test') return selfTest();
+  if (arg === '-h' || arg === '--help') {
+    console.log('usage: node scripts/check-pg-migration-content.mjs [--self-test]');
+    return 0;
+  }
+  if (arg === '') return runCheck();
+  console.error(`unknown argument: ${arg}`);
+  return 2;
+}
+
+const invokedDirectly =
+  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) process.exit(main());

@@ -30,6 +30,44 @@ This document covers the end-to-end process for releasing a new version of Membe
 > workflow, commit to your prep branch instead — it reaches `next` through the PR.
 > The steps use `next` as shorthand for "the branch that becomes the release."
 
+### Step 0: Preflight — check the environment before you start
+
+These are cheap to verify and expensive to discover mid-release. Every item below cost real time in a previous build.
+
+**1. The workbench env file exists (needed in Step 8).** `docker/workbench/.env.database` is **gitignored** and must exist locally, or `docker compose up` fails with `env file … not found`. Copy the tracked template:
+
+```bash
+cp -n docker/workbench/.env.database.example docker/workbench/.env.database
+```
+
+> The template is the single source for those values — do not retype them here or anywhere else. If you override `SA_PASSWORD` / `PG_PASSWORD` in `docker/workbench/.env`, update `.env.database` to match.
+
+**2. Provider API keys are *valid*, not merely present.** The live-model tier has **no credential preflight** — a dead key fails the tier and the failures look exactly like product defects. In one build an expired Gemini key produced 11 red agent tests that were triaged as a `BaseAgent` regression before the real cause surfaced. Verify before you start:
+
+```bash
+# Google — 200 = good, 400 = dead key
+curl -s -o /dev/null -w 'gemini=%{http_code}\n' \
+  -H "x-goog-api-key: $(grep '^AI_VENDOR_API_KEY__GeminiLLM=' .env | cut -d= -f2- | tr -d "'\"")" \
+  https://generativelanguage.googleapis.com/v1beta/models
+# OpenAI
+curl -s -o /dev/null -w 'openai=%{http_code}\n' https://api.openai.com/v1/models \
+  -H "Authorization: Bearer $(grep '^AI_VENDOR_API_KEY__OpenAILLM=' .env | cut -d= -f2- | tr -d "'\"")"
+```
+
+**3. `MJ_API_KEY` is in repo-root `.env`, not just your shell.** It is a **self-chosen shared secret** — no registry issues it; `MJServer` reads `process.env.MJ_API_KEY` and string-compares it against the `x-mj-api-key` header. Both MJAPI *and* the test run need the same value, so `.env` is the only channel that reliably reaches both. Generate one if absent:
+
+```bash
+grep -q '^MJ_API_KEY=' .env || printf 'MJ_API_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
+```
+
+**4. Docker has headroom.** Step 8's workbench adds four containers plus two turbo builds. Check before you start — an unrelated hot container has starved SQL Server badly enough to masquerade as migration timeouts for over an hour:
+
+```bash
+docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'
+```
+
+Stop anything unrelated. On a < 8 GiB Docker VM, cap every turbo build with `--concurrency=2`.
+
 ### Step 1: Verify CI on `next`
 
 Before anything else, confirm the `next` branch is healthy:
@@ -241,6 +279,8 @@ With those rows present all 7 cache-gauntlet checks pass and the tier reaches 52
 cd packages/MJAPI && npm run start
 ```
 
+> ⚠️ **Run it from `packages/MJAPI`, not `npm run start:api` from the repo root.** The root script is `turbo start --filter=mj_api`, and **turbo passes through only the environment variables declared in `turbo.json`** — anything else is stripped before the task sees it. Overriding the database with `DB_DATABASE=… npm run start:api` therefore fails with `Error parsing config file … "path": ["dbDatabase"] … "received": "undefined"`, which reads like a config-file problem rather than an env-passthrough one. Running from the package directory bypasses turbo entirely and the variables arrive intact.
+
 - `MJ_API_KEY` must be set (process env or repo-root `.env`), and **the same value must be set for the test run** — MJServer reads it from `process.env.MJ_API_KEY` too (`packages/MJServer/src/config.ts`).
 - **Start MJAPI from the *current* build — after Step 7, not before.** For the 19 client-transport bundles, the running server *is* the artifact under test, so a stale `packages/MJServer/dist/` silently tests last week's server. This is not theoretical: a server built before this release's merge fails `transaction-groups.TG5` with `SCOPE BYPASS (bug-register B1): a view:run-only API key executed a Create via ExecuteTransactionGroup` — the check working exactly as designed, reporting that the server it reached lacks the scope gate. Confirm before blaming the product:
   ```bash
@@ -389,10 +429,22 @@ npx turbo run test --force --filter=@memberjunction/integration-test-suite
   - `packages/ServerBootstrapLite/src/generated/`
   - `packages/Angular/Bootstrap/src/generated/`
   - `packages/Angular/BootstrapLite/src/generated/`
-- **You will likely see diffs in these generated files.** This is normal — different PRs merge class registrations independently, and the full build reconciles them into the correct combined manifest. Commit these regenerated files to `next` before creating the release PR.
+- **You will likely see diffs in these generated files.** This is normal — different PRs merge class registrations independently, and the full build reconciles them into the correct combined manifest.
+
+**Decide whether the diff is substantive before committing it.** There are two very different cases, and only one needs a commit:
 
 ```bash
-# If bootstrap files changed, commit them
+# Substantive? Compare the registration COUNT, not the diff size.
+git diff packages/ServerBootstrap/src/generated/mj-class-registrations.ts | grep -E '^[+-]' | grep -vE '^[+-]{3}'
+```
+
+| What changed | Action |
+|---|---|
+| **Import/registration lines added or removed** (the count in the header comment moved, e.g. `105 contain @RegisterClass` → `107`) | **Commit it.** This is the case the step exists for — a missing registration is a runtime failure |
+| **Only the header comment's package-walk count** (e.g. `1211 packages walked` → `1207`), registrations unchanged | **Leave it uncommitted.** `publish.yml` regenerates and commits these post-release itself — `9cc0a42fa5 chore: post-release generated files [skip ci]` did exactly that for v5.48, covering `mj-class-registrations.ts` for both bootstraps plus `version.generated.ts` |
+
+```bash
+# ONLY if registrations actually changed:
 git add packages/ServerBootstrap/src/generated/ packages/ServerBootstrapLite/src/generated/ \
        packages/Angular/Bootstrap/src/generated/ packages/Angular/BootstrapLite/src/generated/
 git commit -m "chore: regenerate bootstrap manifests for release"
@@ -400,6 +452,8 @@ git push origin next
 ```
 
 > **Why this matters:** Git merging catches code-level conflicts, but bootstrap manifests are generated files that concatenate registrations from all packages. Two PRs each adding a new `@RegisterClass` will merge cleanly (no git conflict) but the manifest won't contain both registrations until a full build regenerates it. Skipping this step can cause missing class registrations at runtime.
+>
+> The same reasoning is why a *cosmetic* diff should be left alone: committing it adds release-PR noise for a file CI is about to rewrite anyway. `package-lock.json` changes from `npm install` fall in the same bucket — `publish.yml` updates lock files during the `main` → `next` back-merge.
 
 ---
 
@@ -423,6 +477,49 @@ MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migra
 6. The verified `.pg.sql` files are copied back to the host as **uncommitted** changes for review, along with a `migrations-pg/PG_MIGRATION_REPORT.md`.
 
 **After the skill finishes:** review the converted `.pg.sql` files and the report, then **commit them to `next`** so they're included in the release PR. Confirm no `.needs-hand` files were copied back (that would mean conversion is incomplete).
+
+#### 🚨 Verify content, not just existence — the gate cannot do this for you
+
+**The "clean apply" gate is structurally blind to an emptied migration, because empty SQL applies cleanly.** So does the L1 parity script, which only checks that a counterpart file *exists*. A silently-emptied `.pg.sql` passes every automated check in this step and ships.
+
+This is not hypothetical. It has happened in both directions:
+
+- **v5.45** shipped `Metadata_Sync.pg.sql` as a **126-byte marker** — 12,041 lines of SQL Server metadata DML reduced to two comment lines. PostgreSQL deployments migrating through v5.45 silently received none of that release's curated metadata (issue #3253).
+- In a later build the converter emitted **three** header-only stubs and one file containing six bare `;` statements where six `CREATE INDEX` statements belonged — while reporting `unhandled stmts: 0` and exiting successfully (issue #3252).
+
+**Always diff output size against source before committing:**
+
+```bash
+# Every new .pg.sql vs its SS original — investigate anything suspiciously small
+for f in migrations/v5/V*.sql; do
+  b=$(basename "$f" .sql); pg="migrations-pg/v5/${b}.pg.sql"
+  [ -f "$pg" ] || continue
+  ss=$(wc -l < "$f"); p=$(wc -l < "$pg")
+  [ "$p" -le 25 ] && [ "$ss" -gt 60 ] && printf 'SUSPECT %-58s SS=%s PG=%s\n' "${b:0:56}" "$ss" "$p"
+done
+```
+
+**An empty counterpart is sometimes correct** — do not blindly treat every hit as a defect. Two legitimate cases:
+
+- The SS migration modifies a routine that PostgreSQL maintains in **TypeScript** rather than a migration (e.g. `spUpdateExistingEntityFieldsFromSchema` lives in `packages/CodeGenLib/src/Database/providers/postgresql/metadataSupportObjects.ts`). Verify the TS side actually received the equivalent change in this release.
+- PostgreSQL genuinely never had the defect the SS migration fixes.
+
+**When an empty file is correct, say so in the file.** A bare stub is indistinguishable from the silent-emptying bug. Write a header explaining *why* it is empty and what carries the change instead — that turns "empty" from an invisible state into a documented decision a reviewer can check.
+
+#### Check git history before hand-authoring anything
+
+Feature PRs sometimes author their own `.pg.sql` counterparts, which are then **deliberately deleted** under the "build engineer creates PG migrations during the build" policy. That work is reviewed and recoverable — search for it before writing your own:
+
+```bash
+git log --all --oneline --diff-filter=A -- '*<MigrationName>.pg.sql'   # was it ever authored?
+git show <deleting-commit>^:migrations-pg/v5/<file>.pg.sql > /tmp/recovered.pg.sql
+```
+
+In one build this recovered a hand-authored PL/pgSQL trigger (a `BEFORE INSERT FOR EACH ROW` using `pg_advisory_xact_lock`) plus a full CodeGen bake — 7,002 lines that would otherwise have been re-authored from scratch and re-reviewed. Confirm the SS source hasn't changed since the deletion before reusing it:
+
+```bash
+git log --oneline <deleting-commit>..HEAD -- migrations/v5/<MigrationName>.sql   # blank = still matches
+```
 
 > **Invariant:** committed `migrations-pg/v5/*.pg.sql` / `*.pg-only.sql` are a deployed historical ledger — byte-for-byte immutable. This step only ever produces PG counterparts for the **new** SS migrations in this release.
 
@@ -469,6 +566,15 @@ Enabling it is a **code change, not configuration**: a platform branch (and a PG
 
    > Two traps in this list: the hardcoded-UUID scan for migrations is now an **advisory, non-blocking** step *inside* `changes.yml` (the old `claude.yml` workflow was deleted) — it posts a sticky PR comment plus a `::warning` and **never fails the job**, so you must read it, not just wait for green. And `dependency-check.yml` only triggers on PRs into `next`, so it will not appear on this PR at all.
 
+   **Which absences are expected.** "Missing rather than green means go back to Step 1" applies only to checks that *should* have run. Two legitimately never appear on a release PR, and reading their absence as a failure will send you chasing nothing:
+
+   | Check | Why it's absent |
+   |---|---|
+   | `build.yml` ("Build all packages for testing") | Path-filtered to `package-lock.json` and `packages/**`. A release whose only changes are `migrations/`, `migrations-pg/` and `metadata/` does not trigger it. Confirm it was green on the last commit that *did* touch `packages/**` |
+   | `dependency-check.yml` | Triggers on PRs into `next` only |
+
+   To read the advisory UUID scan when no PR comment appears (a clean scan *clears* its comment rather than posting one), check the job log — the step is `Check migration ID determinism (hard-coded UUIDs, not NEWID())`, and the following step being `Clear stale non-deterministic ID comment` is the clean outcome.
+
 ### Step 10: Merge the PR
 
 Once all checks pass, merge the PR into `main`.
@@ -478,6 +584,28 @@ Once all checks pass, merge the PR into `main`.
 ## Post-Merge: Automated Pipeline
 
 Merging to `main` triggers a chain of automated workflows. Monitor each one.
+
+> ## 🚨 Do not cancel `publish.yml`
+>
+> **GitHub's "Cancel workflow" button has no confirmation dialog.** One click, immediate, no undo — and `publish.yml` spends most of its runtime inside a loop publishing ~300 packages to npm. A cancel during that loop leaves the **fixed-version group split across two versions on npm**, and npm has no transaction to roll back.
+>
+> This happened in v5.49.0: an accidental click mid-publish left `@memberjunction/core` and `@memberjunction/global` at the new version while `@memberjunction/cli`, `@memberjunction/sqlserver-dataprovider` and the release's new package stayed behind. The version-bump commit, the git tag, and the `main` → `next` back-merge never ran.
+>
+> **Recovery — it is recoverable, do not panic:**
+>
+> ```bash
+> gh run rerun <run-id> --failed     # re-runs only the failed job; test-migrations is not repeated
+> ```
+>
+> `changeset publish` **skips versions already on npm**, so the re-run publishes only the remainder and then proceeds to bump, tag, and back-merge. Afterwards, verify explicitly rather than trusting the exit code:
+>
+> ```bash
+> npm view @memberjunction/cli version                              # expect the new version
+> git fetch origin --tags && git tag --sort=-creatordate | head -1  # expect vX.Y.Z
+> git show origin/main:packages/MJCore/package.json | grep version  # expect the new version
+> ```
+>
+> If you want to prevent this structurally, a GitHub **environment with a required reviewer** on the publish job makes the dangerous phase distinct from the harmless build phase.
 
 ### 10a. `publish.yml` — Build & Publish Packages
 
@@ -507,7 +635,11 @@ Builds and pushes multi-platform Docker images (`linux/amd64`, `linux/arm64`):
 
 **Triggered by:** `publish.yml` completion
 
-Builds TypeDoc documentation and deploys to GitHub Pages.
+Runs `npm ci` → `npm run build` → `npx typedoc` → deploy to GitHub Pages. Publishes the API reference for every shipped package (`typedoc.json` `entryPoints: ["packages/**"]`, excluding CLI/CodeGen/MJAPI/MJExplorer and generated packages) to **https://memberjunction.github.io/MJ/**.
+
+> This workflow failed silently on every release from v5.45.1 through v5.48.0 — the published docs sat weeks stale while each release otherwise looked green, because `docs.yml` is downstream of the tag and nobody checks it. **Look at its result, not just `publish.yml`'s.**
+
+> **Both 10b and 10c chain off `publish.yml` *completion*, not success.** If `publish.yml` is cancelled or fails, these fire anyway and fail with nothing to install or build — that failure is **collateral, not a real defect**. After re-running `publish.yml` successfully, both trigger again; judge them on the *later* run.
 
 ### Post-Merge Checklist
 
@@ -523,14 +655,15 @@ Builds TypeDoc documentation and deploys to GitHub Pages.
 
 ### Step 11: Update MJ Documentation Site
 
-Go to [ReadMe Dashboard](https://dash.readme.com/):
+Go to [ReadMe Dashboard](https://dash.readme.com/) → **Guides** → **Getting Started** → **Quick Start Guide**:
 
-1. Click **Edit**
-2. Navigate to **quickstart-download**
-3. Confirm the quickstart points users at the CLI installer — `npx @memberjunction/cli install` (online) or `npx @memberjunction/cli bundle` for an offline zip — rather than a per-version download link.
-4. **Save** — this can be done while the post-merge actions are still running
+1. Open the page titled **"Installation in Minutes"** — this is the live quickstart.
+2. Confirm it points users at the CLI installer — `npx @memberjunction/cli install` (online) or `npx @memberjunction/cli bundle` for an offline/air-gapped zip — rather than a per-version download link.
+3. **Save** — this can be done while the post-merge actions are still running.
 
-> **Note:** The legacy per-version distribution zip (`Distributions/MemberJunction_Code_Bootstrap.zip`) has been retired. `mj install` now sparse-fetches and assembles the project from the tagged source on demand, so there is no longer a version-specific zip URL to update each release.
+> **The page you want is "Installation in Minutes", not "Downloads".** Earlier revisions of this guide said to navigate to the `quickstart-download` slug. That page still exists in the sidebar as **Downloads** but is **hidden/unpublished** — its content moved to "Installation in Minutes". Searching for "quickstart-download" as a title finds nothing, because that is the URL slug, not the display name.
+
+> **Note:** The legacy per-version distribution zip (`Distributions/MemberJunction_Code_Bootstrap.zip`) has been retired — the `Distributions/` folder no longer exists in the repo. `mj install` sparse-fetches and assembles the project from the tagged source on demand, so there is no version-specific URL to update each release. **This step is now a verification, not an edit** — its purpose is to catch drift back toward a hardcoded versioned link, which would be a live 404 for every new user. Read the page rather than assuming.
 
 ### Step 12: Update Changelog
 
@@ -538,7 +671,25 @@ Go to [ReadMe Dashboard](https://dash.readme.com/):
 - [ ] npm packages published
 - [ ] Docker images pushed
 
-> Saving the changelog sends a notification to users, so everything must be live first.
+> Saving the changelog **publishes it and notifies your users.** There is no draft-then-notify-later. Everything must be live first.
+
+**Where the content comes from:** the release notes were already written for you. `generate-release-notes.yml` rewrote the `next → main` PR's title and body when you opened it (Step 9), producing a structured `# <headline>` / `## New Features` / `## Improvements` / `## Bug Fixes` document. That PR body **is** the changelog entry.
+
+```bash
+gh pr view <release-pr-number> --json body --jq .body | pbcopy
+```
+
+**Then, in ReadMe:**
+
+1. Left sidebar → **Changelog**
+2. Create a **new** entry (do not edit the previous release's)
+3. **Title:** `vX.Y.Z` — match the existing convention
+4. **Body:** paste. ReadMe renders markdown natively, so backticks and bold survive
+5. Publish
+
+> Two things worth doing before you publish. The body opens with an H1 headline, which may duplicate the entry title — check how the previous release's entry handled it and match. And **skim the Bug Fixes section for accuracy**: the notes are generated from the diff, and this is the one release artifact that goes to users under your name.
+
+> **There is no GitHub Release.** No workflow creates one — `ci/commit_push.mjs` pushes the `vX.Y.Z` *tag* only, and a repo-wide search for `gh release create` / `action-gh-release` finds nothing. Release information lives in three places: this ReadMe changelog entry (users), the release PR body (the source text), and per-package `CHANGELOG.md` files written by changesets (developers).
 
 ---
 
@@ -557,6 +708,25 @@ Go to [ReadMe Dashboard](https://dash.readme.com/):
 | `docs.yml` | After `publish.yml` | Deploy TypeDoc to GitHub Pages |
 | `generate-release-notes.yml` | PR to `main` | Auto-generate PR description |
 | `integration.yml` | PR to `next` + push to `next` | Deterministic integration tier against a fresh SQL Server |
+
+### Where release information lives
+
+| Artifact | Location | Produced by |
+|---|---|---|
+| **Release notes** (the text you paste into chat / the changelog) | Body of the `next → main` PR | `generate-release-notes.yml`, on PR open |
+| Per-package changelogs | `packages/*/CHANGELOG.md` | changesets, in the `RELEASING: Releasing N package(s)` commit |
+| npm packages | `latest` dist-tag | `publish.yml` |
+| Git tag `vX.Y.Z` | repo tags | `ci/commit_push.mjs` |
+| Docker images | Docker Hub `memberjunction/api`, Azure ACR | `docker.yml` |
+| API docs | https://memberjunction.github.io/MJ/ | `docs.yml` |
+| Public changelog | ReadMe → Changelog | **manual, Step 12** |
+| ~~GitHub Release~~ | — | **nothing creates one** |
+
+```bash
+gh pr view <release-pr> --json body --jq .body     # the release notes
+git show <releasing-commit>:packages/MJCore/CHANGELOG.md | head -40
+git log v5.48.0..v5.49.0 --oneline | wc -l          # raw commit count for a release
+```
 
 ### Migration Naming Convention
 
