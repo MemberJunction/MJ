@@ -21,7 +21,7 @@ import {
     RealtimeModelResolution,
     CoAgentSystemPromptResolution
 } from '../realtime/realtime-client-session-service';
-import { RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
+import { RealtimeCoAgentConfig, ResolveEffectiveRealtimeConfig, GetSessionTuningSettings } from '../realtime/realtime-coagent-config';
 
 // Keep the import graph light — delegation is not under test here.
 vi.mock('../AgentRunner', () => ({
@@ -295,5 +295,44 @@ describe('PrepareClientSession — modelPreference participation in model select
         );
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('missing-model');
+    });
+});
+
+describe('C1 re-audit: realtime.session propagates through the effective-config resolver', () => {
+    // ResolveEffectiveRealtimeConfig(typeDefaultJson, agentJson, overridesJson, targetAgentJson?, appSettingsJson?)
+    const layer = (obj: unknown): string => JSON.stringify(obj);
+
+    it('carries a validated session tuning block end-to-end (was always dropped before the fix)', () => {
+        const effective = ResolveEffectiveRealtimeConfig(
+            null,
+            layer({ realtime: { session: { effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' } } }),
+            null
+        );
+        expect(effective.realtime?.session).toEqual({ effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' });
+        // And GetSessionTuningSettings now returns a real bag (was always null before the fix):
+        expect(GetSessionTuningSettings(effective)).toMatchObject({ effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' });
+    });
+
+    it('later layers deep-merge the session block (per-key override; agent < override)', () => {
+        const effective = ResolveEffectiveRealtimeConfig(
+            layer({ realtime: { session: { effortLevel: 'low', parallelToolCalls: false } } }), // type default
+            null,
+            layer({ realtime: { session: { effortLevel: 'xhigh' } } })                          // runtime override
+        );
+        expect(effective.realtime?.session).toEqual({ effortLevel: 'xhigh', parallelToolCalls: false });
+    });
+
+    it('normalizes away invalid session values (unknown/mistyped knobs dropped)', () => {
+        const effective = ResolveEffectiveRealtimeConfig(
+            null,
+            layer({ realtime: { session: { effortLevel: { nested: 1 }, parallelToolCalls: 'yes', mcpTools: 'not-array', bogus: 42 } } }),
+            null
+        );
+        expect(effective.realtime?.session).toBeUndefined();
+    });
+
+    it('a numeric effortLevel survives as a number through the resolver', () => {
+        const effective = ResolveEffectiveRealtimeConfig(null, layer({ realtime: { session: { effortLevel: 85 } } }), null);
+        expect(effective.realtime?.session?.effortLevel).toBe(85);
     });
 });

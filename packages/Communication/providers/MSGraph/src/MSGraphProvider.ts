@@ -296,6 +296,20 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
             // Use email address directly in API path instead of looking up user ID
             const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(senderEmail)}/sendMail`;
+
+            // DRY RUN: full pipeline ran (credential resolution/validation, sender selection,
+            // complete Graph sendMail payload + headers + API path construction above) — stop at
+            // the transport boundary, never calling Microsoft Graph.
+            if (message.DryRun) {
+                LogStatus(`[DryRun] Microsoft Graph: sendMail payload constructed for ${message.To} — external send skipped`);
+                return {
+                    Message: message,
+                    Success: true,
+                    Error: '',
+                    DryRun: true
+                };
+            }
+
             await client.api(sendMessagePath).post(sendMail);
 
             return {

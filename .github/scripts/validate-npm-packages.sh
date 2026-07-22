@@ -24,6 +24,7 @@ new_packages=()
 missing_count=0
 checked_count=0
 mj_checked_count=0
+private_skipped_count=0
 total_count=$(echo "$packages" | wc -l | tr -d ' ')
 error_count=0
 max_errors=5
@@ -96,6 +97,19 @@ for pkg_file in $packages; do
     continue
   fi
 
+  # Skip packages marked private. This gate exists to predict whether `npm run change publish`
+  # will succeed, and changesets never publishes a private package
+  # (@changesets/cli: `packages.filter(pkg => !pkg.packageJson.private)`), so requiring an npm
+  # entry for one asks a question that has no bearing on the outcome it gates.
+  # Logged rather than silent so an accidental `"private": true` is still visible in CI output.
+  # A jq failure yields an empty string here, which falls through to the normal npm check --
+  # the conservative direction.
+  if [[ "$(jq -r '.private // false' "$pkg_file" 2>/dev/null)" == "true" ]]; then
+    echo "   ⏭️  $pkg_name - private, never published (skipped)"
+    private_skipped_count=$((private_skipped_count + 1))
+    continue
+  fi
+
   mj_checked_count=$((mj_checked_count + 1))
 
   # Show progress every 10 packages (more frequent updates)
@@ -130,7 +144,10 @@ done
 # Report results
 if [ $missing_count -eq 0 ]; then
   echo ""
-  echo "✅ All $mj_checked_count @memberjunction packages exist on npm"
+  echo "✅ All $mj_checked_count publishable @memberjunction packages exist on npm"
+  if [ $private_skipped_count -gt 0 ]; then
+    echo "   ($private_skipped_count private package(s) skipped - never published)"
+  fi
   exit 0
 else
   echo "❌ Found $missing_count package(s) without npm placeholders:"

@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT58 - Agent Skills (live loop)",
+    "Description": "Skills over the live loop: requested activation with provenance, unentitled dropped, hallucinated not activated, un-requested RequestedOnly gated, activation applied to prompt. 5 checks SL1-SL5.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Skills over the live loop: requested activation with provenance, unentitled dropped, hallucinated not activated, un-requested RequestedOnly gated, activation applied to prompt. 5 checks SL1-SL5."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-skills-live"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "B86AA305-94EE-448E-9A59-6E8C47AB9D16"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T14:29:28.919Z",
+    "checksum": "ff77667e7441992c117573cc57b1f333b3a4a04921a8f1602d241f67cca5dc1f"
+  }
+}

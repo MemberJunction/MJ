@@ -58,7 +58,14 @@ WHERE
     AND (
         c.relkind = 'r'
         OR (c.relkind = 'v' AND e."VirtualEntity" = true)
-    );
+    )
+    -- [Large Schema Series] system namespaces can never host MJ entities; without this
+    -- filter every pg_catalog table flows through with EntityID NULL and
+    -- vwSQLColumnsAndEntityFields pays per-column introspection for all of them.
+    -- Mirrors migration V202607181800 so a regenerated PG baseline keeps this filter.
+    AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+    AND n.nspname NOT LIKE 'pg_toast%'
+    AND n.nspname NOT LIKE 'pg_temp%';
 `],
 
   // ─── 2. vwForeignKeys ──────────────────────────────────────────────────────
@@ -84,7 +91,13 @@ INNER JOIN pg_catalog.pg_attribute a1
 INNER JOIN pg_catalog.pg_attribute a2
     ON a2.attrelid = c2.oid AND a2.attnum = cols.ref_col
 WHERE
-    con.contype = 'f';
+    con.contype = 'f'
+    -- [Large Schema Series] FKs can only originate from user schemas; filtering the
+    -- parent side is sufficient and never drops a legitimate FK.
+    -- Mirrors migration V202607181800 so a regenerated PG baseline keeps this filter.
+    AND n1.nspname NOT IN ('pg_catalog', 'information_schema')
+    AND n1.nspname NOT LIKE 'pg_toast%'
+    AND n1.nspname NOT LIKE 'pg_temp%';
 `],
 
   // ─── 3. vwTablePrimaryKeys ─────────────────────────────────────────────────
@@ -101,7 +114,13 @@ CROSS JOIN LATERAL unnest(i.indkey) AS cols(col_num)
 INNER JOIN pg_catalog.pg_attribute a
     ON a.attrelid = c.oid AND a.attnum = cols.col_num
 WHERE
-    i.indisprimary = true;
+    i.indisprimary = true
+    -- [Large Schema Series] exclude system-catalog indexes (pg_catalog alone carries
+    -- hundreds); MJ entities never live in system namespaces.
+    -- Mirrors migration V202607181800 so a regenerated PG baseline keeps this filter.
+    AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+    AND n.nspname NOT LIKE 'pg_toast%'
+    AND n.nspname NOT LIKE 'pg_temp%';
 `],
 
   // ─── 4. vwTableUniqueKeys ─────────────────────────────────────────────────
@@ -119,7 +138,12 @@ INNER JOIN pg_catalog.pg_attribute a
     ON a.attrelid = c.oid AND a.attnum = cols.col_num
 WHERE
     i.indisunique = true
-    AND i.indisprimary = false;
+    AND i.indisprimary = false
+    -- [Large Schema Series] same namespace exclusion as vwTablePrimaryKeys.
+    -- Mirrors migration V202607181800 so a regenerated PG baseline keeps this filter.
+    AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+    AND n.nspname NOT LIKE 'pg_toast%'
+    AND n.nspname NOT LIKE 'pg_temp%';
 `],
 
   // ─── 5. vwSQLSchemas ──────────────────────────────────────────────────────

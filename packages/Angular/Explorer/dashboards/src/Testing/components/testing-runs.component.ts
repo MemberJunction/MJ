@@ -275,7 +275,13 @@ interface FilteredStats {
             @if (SelectedRun.targetType) {
               <div class="detail-section">
                 <h4><i class="fa-solid fa-server"></i> Execution Context</h4>
-                <mj-execution-context></mj-execution-context>
+                <mj-execution-context
+                  [machineName]="SelectedRun.machineName ?? null"
+                  [machineId]="SelectedRun.machineID ?? null"
+                  [runByUserName]="SelectedRun.runByUserName ?? null"
+                  [runByUserEmail]="SelectedRun.runByUserEmail ?? null"
+                  [runContextDetailsJson]="SelectedRun.runContextDetails ?? null">
+                </mj-execution-context>
               </div>
             }
 

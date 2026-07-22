@@ -4,12 +4,13 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ResolveStartupMode } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { registerIntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
+import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap } from './integration/EntityMapLifecycle.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -48,7 +49,7 @@ import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTel
 import { createVonageTelephonyHandler, VONAGE_TELEPHONY_MOUNT_PATH, SetVonageTelephonyService } from './telephony/index.js';
 import { RingCentralTelephonyService, SetRingCentralTelephonyService } from './telephony/index.js';
 import { createTeamsMeetingsHandler, TEAMS_MEETINGS_MOUNT_PATH, SetTeamsMeetingsService, GetTeamsMeetingsService, StartCalendarScheduler } from './telephony/index.js';
-import { InstallMediaUpgradeDispatcher } from './telephony/index.js';
+import { InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from './telephony/index.js';
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
@@ -324,10 +325,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // Refresh user cache using PostgreSQL
     await refreshUserCacheFromPG(pgPool, mj_core_schema);
 
-    // Run startup actions
+    // Run startup actions — same 'full' entry-point default as the SQL Server path
     const sysUser = UserCache.Instance.GetSystemUser();
     const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
-    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider);
+    const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
+    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode });
 
     // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
     // Generated resolvers call this static method with bracket-quoted SQL.
@@ -417,6 +419,17 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
           if (cgConfig.additionalSchemaInfo) {
             RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(cgConfig.additionalSchemaInfo);
             startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${cgConfig.additionalSchemaInfo}`);
+          } else if (RuntimeSchemaManager.Instance.IsEnabled) {
+            // U5 — boot-time assert: RSU is enabled but CodeGen has NO additionalSchemaInfo path
+            // configured, so RSU's soft-PK/FK writes land in a file CodeGen never reads. Every
+            // resolved soft PK would be silently lost ("No primary key found" per table). LOUD,
+            // named, and actionable — grep for RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE.
+            console.error(
+              `[RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE] Runtime Schema Update is ENABLED but mj.config.cjs has no ` +
+              `'additionalSchemaInfo' setting — RSU writes soft PK/FK definitions to '${process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json'}' ` +
+              `while CodeGen reads none, so resolved soft primary keys will be silently LOST at codegen time. ` +
+              `Set 'additionalSchemaInfo' in mj.config.cjs to the same file so the write path and read path agree.`
+            );
           }
         } catch (codegenErr) {
           console.warn(`RSU in-process CodeGen runner setup failed (will fall back to child process): ${(codegenErr as Error).message}`);
@@ -469,7 +482,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
 
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
-    await setupSQLServerClient(config);
+    // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
+    // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
+    const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
+    await setupSQLServerClient(config, { mode: startupMode.mode });
     lap('Metadata + Provider Setup', tPhase);
     startupLog.BeginPhase('Initializing data provider');
     const md = new Metadata(); // global-provider-ok: bootstrap
@@ -542,6 +558,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
           if (codegenConfig.additionalSchemaInfo) {
             RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(codegenConfig.additionalSchemaInfo);
             startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${codegenConfig.additionalSchemaInfo}`);
+          } else if (RuntimeSchemaManager.Instance.IsEnabled) {
+            // U5 — boot-time assert: write path ≠ read path (see the PostgreSQL branch for detail).
+            console.error(
+              `[RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE] Runtime Schema Update is ENABLED but mj.config.cjs has no ` +
+              `'additionalSchemaInfo' setting — RSU writes soft PK/FK definitions to '${process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json'}' ` +
+              `while CodeGen reads none, so resolved soft primary keys will be silently LOST at codegen time. ` +
+              `Set 'additionalSchemaInfo' in mj.config.cjs to the same file so the write path and read path agree.`
+            );
           }
         } catch (codegenErr) {
           console.warn(`RSU in-process CodeGen runner setup failed (will fall back to child process): ${(codegenErr as Error).message}`);
@@ -867,6 +891,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // lets self-hosted realtime providers — e.g. HuggingFace speech-to-speech — run the shipped client-direct
   // audio topology without the internal endpoint ever being exposed to the browser); everything on the
   // graphql path goes to graphql-ws; anything else is rejected. Must be registered before httpServer.listen().
+  // Path acceptance (including the bare-root/`/graphql` alias) is centralized in `IsGraphQLWsPath` — see
+  // its doc comment for why the alias exists — so this listener and `InstallMediaUpgradeDispatcher`'s
+  // telephony-active replacement listener can never disagree on what counts as "the GraphQL path."
   httpServer.on('upgrade', (request, socket, head) => {
     if (RealtimeProxyServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
       return;
@@ -877,7 +904,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     } catch {
       /* unparseable — fall through to the graphql-path check, which will reject it */
     }
-    if (pathname === graphqlRootPath) {
+    if (IsGraphQLWsPath(pathname, graphqlRootPath)) {
       webSocketServer.handleUpgrade(request, socket, head, (ws) => webSocketServer.emit('connection', ws, request));
     } else {
       socket.destroy();
@@ -894,7 +921,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       // This prevents re-validating (and re-logging) on every subscription message.
       onConnect: async (ctx) => {
         try {
-          const token = String(ctx.connectionParams?.Authorization);
+          // Only coerce a value that's actually present — `String(undefined)` yields the
+          // literal string "undefined" (truthy, 9 chars), which slips past getUserPayload's
+          // `!token` guard and fails later as 'Invalid token payload' (a full stack-trace log)
+          // instead of the quiet, routine 'Missing token' path. A WS client that connects
+          // before its auth handshake (extremely common) must land on the quiet path.
+          const token = ctx.connectionParams?.Authorization ? String(ctx.connectionParams.Authorization) : '';
           // Carry API keys from connectionParams so API-key / MCP / Node clients can authenticate the socket
           // (validated the same way as the HTTP x-mj-api-key / x-mj-user-api-key headers).
           const systemApiKey = ctx.connectionParams?.['x-mj-api-key'] ? String(ctx.connectionParams['x-mj-api-key']) : undefined;
@@ -1476,7 +1508,22 @@ async function processRSUPendingWork(): Promise<void> {
         let isNewMap = false;
 
         if (existingMapResult.Success && existingMapResult.Results.length > 0) {
-          entityMapID = existingMapResult.Results[0].ID;
+          const existingMap = existingMapResult.Results[0];
+          entityMapID = existingMap.ID;
+          // Re-add re-enables: a previously-removed (disabled) object that is
+          // re-selected comes back Active WITH its field maps re-enabled. Skipped in
+          // CreateDisabled (schema-evolution) mode — a refresh must never resurrect a
+          // map the user turned off.
+          if (!item.CreateDisabled && (existingMap.Status !== 'Active' || existingMap.SyncEnabled === false)) {
+            existingMap.Status = 'Active';
+            existingMap.SyncEnabled = true;
+            if (await existingMap.Save()) {
+              await ReenableFieldMapsForEntityMap(entityMapID, systemUser, Metadata.Provider); // global-provider-ok: server startup recovery — runs once before any per-request context exists
+              console.log(`[RSU] Re-enabled previously-disabled entity map for ${objName} → ${entity.Name} (${entityMapID})`);
+            } else {
+              console.warn(`[RSU] Failed to re-enable entity map for ${objName}: ${existingMap.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+          }
           console.log(`[RSU] Entity map already exists for ${objName} → ${entity.Name} (${entityMapID})`);
         } else {
           const entityMap = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>(
@@ -1487,8 +1534,10 @@ async function processRSUPendingWork(): Promise<void> {
           entityMap.EntityID = entity.ID;
           entityMap.ExternalObjectName = objName;
           entityMap.SyncDirection = 'Pull';
-          entityMap.Status = 'Active';
-          entityMap.SyncEnabled = true;
+          // Refresh diff: schema-evolution-born maps arrive DISABLED (the user
+          // enables them after the refresh); the first-apply/selection path stays Active.
+          entityMap.Status = item.CreateDisabled ? 'Inactive' : 'Active';
+          entityMap.SyncEnabled = !item.CreateDisabled;
           const mapSaved = await entityMap.Save();
           if (!mapSaved) {
             console.warn(`[RSU] Failed to save entity map for ${objName}`);
@@ -1533,12 +1582,27 @@ async function processRSUPendingWork(): Promise<void> {
             fieldMap.IsKeyField = field.IsPrimaryKey ?? false;
             fieldMap.IsRequired = field.IsRequired ?? false;
             fieldMap.Direction = 'SourceToDest';
-            fieldMap.Status = 'Active';
+            fieldMap.Status = item.CreateDisabled ? 'Inactive' : 'Active';
             if (await fieldMap.Save()) fieldCount++;
           }
           console.log(`[RSU] Created entity map for ${objName} → ${entity.Name} with ${fieldCount} field maps${isNewMap ? '' : ' (existing map, new fields only)'}`);
         } catch (fieldErr) {
           console.warn(`[RSU] Field map creation failed for ${objName}: ${fieldErr}`);
+        }
+      }
+
+      // Remove-as-disable: entity maps whose object is NOT in this apply's selection
+      // are disabled (data kept; re-selection re-enables). 'ignore' opts out for subset applies.
+      if ((item.UnselectedAction ?? 'disable') !== 'ignore') {
+        try {
+          const disabledObjects = await DisableUnselectedEntityMaps(
+            item.CompanyIntegrationID, item.SourceObjectNames, systemUser, Metadata.Provider // global-provider-ok: server startup recovery — runs once before any per-request context exists
+          );
+          if (disabledObjects.length > 0) {
+            console.log(`[RSU] Disabled ${disabledObjects.length} unselected entity map(s): ${disabledObjects.join(', ')}`);
+          }
+        } catch (disableErr) {
+          console.warn(`[RSU] Unselected-map disable failed: ${disableErr}`);
         }
       }
 

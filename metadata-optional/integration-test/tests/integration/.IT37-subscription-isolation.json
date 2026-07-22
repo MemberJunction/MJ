@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT37 - Subscription Channel Isolation",
+    "Description": "Pub/sub channel isolation over the wire: concurrent RemoteOperationProgress channels never cross-deliver (per-run discriminator proof), plus loud documented omissions for the statusUpdates session-hijack and unfiltered cacheInvalidation broadcast (SEC6/SEC7 in the register). 2 checks (SI1-SI2), client transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Pub/sub channel isolation over the wire: concurrent RemoteOperationProgress channels never cross-deliver (per-run discriminator proof), plus loud documented omissions for the statusUpdates session-hijack and unfiltered cacheInvalidation broadcast (SEC6/SEC7 in the register). 2 checks (SI1-SI2), client transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "subscription-isolation"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F6AF15D4-297C-4C35-8686-3D2803078EB0"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:28:04.794Z",
+    "checksum": "06768780cf747af46a0344af9ca1a23a439a841aecc596dff5473082172c1f70"
+  }
+}

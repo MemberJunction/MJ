@@ -1,0 +1,6 @@
+OrderID,Customer,Region,Amount,Notes
+1001,Acme Corp,East,250.00,IT-CSV-SENTINEL-ROW
+1002,Globex,West,125.50,standard
+1003,Initech,East,980.25,priority
+1004,Umbrella,North,42.00,standard
+1005,Stark Industries,South,6100.75,priority

@@ -286,6 +286,20 @@ export class GmailProvider extends BaseCommunicationProvider {
       const creds = this.resolveCredentials(credentials);
       const cached = this.getGmailClient(creds);
 
+      // DRY RUN: run the full local pipeline (credential resolution/validation, OAuth2 client
+      // construction, complete base64url RFC-2822 payload construction) but NEVER contact Google —
+      // which is why the getUserEmail() profile round-trip below is also skipped on this path.
+      if (message.DryRun) {
+        this.createEmailContent(message, creds);
+        LogStatus(`[DryRun] Gmail: raw RFC-2822 payload constructed for ${message.To} — external send skipped`);
+        return {
+          Message: message,
+          Success: true,
+          Error: '',
+          DryRun: true
+        };
+      }
+
       // Get user email
       const userEmail = await this.getUserEmail(cached);
       if (!userEmail) {

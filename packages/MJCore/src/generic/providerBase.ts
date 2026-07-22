@@ -97,6 +97,22 @@ export function MetadataFromSimpleObjectWithoutUser(data: any, md: IMetadataProv
  * for iterating through all metadata collections.
  * Each entry maps a property key to its corresponding class constructor.
  */
+/**
+ * Result of `ProviderBase.ResolveQueryCacheAuthorization` — the single pre-fingerprint
+ * resolution + authorization computation the RunQuery TTL cache gate relies on (B45/B46).
+ * See the method JSDoc for the full contract.
+ */
+export interface QueryCacheAuthorization {
+    /** Metadata could resolve the request (by ID, or by name [+ stated category]). */
+    resolvable: boolean;
+    /** The user may run the resolved query. Meaningful only when `resolvable` is true. */
+    authorized: boolean;
+    /** Canonical full category path of the RESOLVED query (e.g. '/MJ/AI/Agents/'; '' when uncategorized). */
+    categoryPath?: string;
+    /** Resolved query name — for log messages when the request was by ID only. */
+    queryName?: string;
+}
+
 export const AllMetadataArrays = [
     { key: 'AllEntities', class: EntityInfo  },
     { key: 'AllApplications', class: ApplicationInfo  },
@@ -1221,6 +1237,41 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * SECURITY — decide whether the shared cache must be BYPASSED for a RunView that targets
+     * a saved VIEW rather than a named entity (no `EntityName`), under a context user.
+     *
+     * The cache-hit path returns BEFORE the DB provider's read-permission gate
+     * (`CheckUserReadPermissions`). The primary gate keys off the entity resolved from
+     * `params.EntityName`, so a ViewID-/ViewName-only request (the Explorer-standard shape for a
+     * saved view) yields no entity there and the gate is disarmed — a read-denied user could be
+     * served rows a permitted user warmed for the same ViewID. The `vw:` fingerprint segment makes
+     * the two users' requests collide on exactly one slot, so the leak is clean.
+     *
+     * Returns true when the cache must be skipped for this call (fail-closed):
+     *  - `ViewEntity` supplied and its entity resolves → apply the normal `CanRead` gate on it
+     *    (allow caching for a permitted user; deny for a read-denied one).
+     *  - `ViewEntity` absent/unresolvable but `ViewID`/`ViewName` present → fail closed: the view's
+     *    real entity (hence the user's permission) is only known after the async `MJ: User Views`
+     *    lookup that the cache-hit path deliberately skips, so we cannot safely consult the cache.
+     * Returns false when there is no context user, when `EntityName` is set (the normal gate owns
+     * that path), or when no view identifier is present at all (nothing to gate).
+     */
+    protected cacheDeniedForViewOnlyRequest(params: RunViewParams, contextUser?: UserInfo): boolean {
+        if (!contextUser || params.EntityName) {
+            return false; // EntityName path is handled by the entity-resolved read-permission gate
+        }
+        if (params.ViewEntity) {
+            const entityID = params.ViewEntity.Get('EntityID');
+            const viewEntity = entityID ? this.EntityByID(entityID) : undefined;
+            if (viewEntity) {
+                return !(viewEntity.GetUserPermisions(contextUser)?.CanRead ?? false);
+            }
+            // ViewEntity present but its entity can't be resolved — fall through to fail-closed.
+        }
+        return !!(params.ViewID || params.ViewName || params.ViewEntity);
+    }
+
+    /**
      * Returns the caller's requested fields (lowercased) unioned with the entity's
      * primary key field names. Platform contract: when `Fields` is explicitly
      * specified, results ALWAYS include the primary key(s) — the direct SQL path has
@@ -1303,11 +1354,44 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return memoized;
         }
         const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-        const fingerprint = `${base}|f:${ProviderBase.NormalizeFieldsKey(param.Fields)}`;
+        // Normalize a FULL-COVERAGE field list to '*' — in the FINGERPRINT only (B44).
+        //
+        // entity_object params get widened to an explicit list of every entity field
+        // (prepareSmartCacheCheckParams), which is semantically identical to "no Fields" — but
+        // it keyed the slot as f:<every field>, so the maintenance classifier read the client's
+        // most common slot shape (the BaseEngine default) as a NARROW projection and stopped
+        // maintaining it in place. Purely a hit-rate loss, but a pervasive one.
+        //
+        // This touches ONLY how the slot is keyed. param.Fields is left untouched, so what the
+        // provider FETCHES is unchanged — an earlier attempt cleared param.Fields instead and was
+        // reverted precisely because fetch behavior could not be verified.
+        const fieldsKey = this.isFullCoverageFieldList(param) ? '*' : ProviderBase.NormalizeFieldsKey(param.Fields);
+        const fingerprint = `${base}|f:${fieldsKey}`;
         this._clientFingerprintMemo.set(param, fingerprint);
         return fingerprint;
     }
     private _clientFingerprintMemo = new WeakMap<RunViewParams, string>();
+
+    /**
+     * True when `param.Fields` names EVERY field of the entity — i.e. an explicit list that is
+     * semantically "full width". Case-insensitive; order-independent. Returns false on any
+     * uncertainty (unknown entity, missing fields) so the fingerprint falls back to the explicit
+     * list — the safe direction, since misclassifying narrow-as-full would cross-serve shapes.
+     */
+    private isFullCoverageFieldList(param: RunViewParams): boolean {
+        if (!param.Fields || param.Fields.length === 0) {
+            return false;   // no Fields at all already normalizes to '*' downstream
+        }
+        const entity = param.EntityName ? this.EntityByName(param.EntityName) : undefined;
+        if (!entity || entity.Fields.length === 0) {
+            return false;
+        }
+        if (param.Fields.length < entity.Fields.length) {
+            return false;   // cheap reject: cannot cover every field with fewer names
+        }
+        const requested = new Set(param.Fields.map(f => f.trim().toLowerCase()));
+        return entity.Fields.every(f => requested.has(f.Name.trim().toLowerCase()));
+    }
 
     /**
      * Ranked search over **one** entity's records. See {@link IMetadataProvider.SearchEntity}
@@ -1661,6 +1745,54 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return false;
     }
 
+    /**
+     * The RunQuery cache-serve seam (B45/B46) — resolves a RunQuery request against this
+     * provider's query metadata and answers, in ONE computation performed BEFORE fingerprinting:
+     *
+     *  - `categoryPath`: the RESOLVED query's canonical full category path. This becomes a
+     *    distinguishing fingerprint segment (B46) so two same-named queries in different
+     *    categories can never collide onto one cache slot. When the request is unresolvable the
+     *    caller falls back to the CALLER-STATED `params.CategoryPath` (still distinguishing,
+     *    just not canonicalized).
+     *  - `resolvable`: whether metadata could resolve the request at all. Runtime-created
+     *    queries are typically NOT resolvable from the base metadata cache (it does not refresh
+     *    in-process) — the gate then applies the warmer tie-break instead.
+     *  - `authorized`: whether `user` may run the resolved query. Meaningful only when
+     *    `resolvable` is true.
+     *
+     * The BASE implementation resolves from the metadata `Queries` cache and enforces the
+     * ROLES-ONLY `QueryInfo.UserCanRun` — the strongest check available at this layer.
+     * Providers with richer query metadata MUST override this to enforce the SAME authorization
+     * their miss path enforces (`GenericDatabaseProvider` overrides with
+     * `MJQueryEntityExtended.UserCanRun`, which adds entity CanRead + recursive composition
+     * checks — the exact check `ValidateQueryForExecution` applies on a cache miss). The
+     * invariant this seam exists to hold: **a cache HIT must never be easier to read than a
+     * cache MISS** (B45 was precisely that asymmetry — the TTL gate checked roles only while
+     * the miss path also checked entity read permissions).
+     */
+    protected ResolveQueryCacheAuthorization(params: RunQueryParams, user?: UserInfo): QueryCacheAuthorization {
+        const requestedPath = params.CategoryPath?.trim().toLowerCase();
+        const qInfo = this.Queries.find(q =>
+            (params.QueryID && UUIDsEqual(q.ID, params.QueryID))
+            || (!params.QueryID && params.QueryName
+                && q.Name?.trim().toLowerCase() === params.QueryName.trim().toLowerCase()
+                // When the caller states a category, honor it as a disambiguator — same-named
+                // queries in other categories must not resolve (mirrors resolveQuery()).
+                && (!requestedPath || q.CategoryPath?.trim().toLowerCase() === requestedPath))
+        );
+        if (!qInfo) {
+            return { resolvable: false, authorized: false };
+        }
+        return {
+            resolvable: true,
+            // No user (client-side / trusted single-user context) ⇒ nothing to authorize against;
+            // the gate only consults `authorized` when a contextUser is present.
+            authorized: !user || qInfo.UserCanRun(user),
+            categoryPath: qInfo.CategoryPath,
+            queryName: qInfo.Name
+        };
+    }
+
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // Shallow-clone for symmetry with RunView — pipeline must never mutate caller objects
         params = { ...params };
@@ -1686,6 +1818,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             && LocalCacheManager.Instance.IsInitialized;
         let queryFingerprint: string | undefined;
         if (queryCacheEngaged) {
+            // Resolve + authorize ONCE, BEFORE fingerprinting (B45/B46 seam). The resolved
+            // category feeds the fingerprint below, and the same result drives the permission
+            // gate on a hit — so the slot key and the authorization decision can never disagree
+            // about WHICH query they are talking about.
+            const queryAuth = this.ResolveQueryCacheAuthorization(params, contextUser);
             // MaxRows/StartRow shape the result set — they MUST distinguish cache slots,
             // so fold them into the parameters portion of the fingerprint.
             const fingerprintParams: Record<string, unknown> = {
@@ -1694,7 +1831,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 __startRow: params.StartRow ?? 0
             };
             queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
-                params.QueryID, params.QueryName, fingerprintParams, this.InstanceConnectionString
+                params.QueryID, params.QueryName, fingerprintParams, this.InstanceConnectionString,
+                // B46: the full category path is a DISTINGUISHING element. Canonical resolved
+                // path when metadata resolves; the caller-stated path otherwise (runtime-created
+                // queries) — either way, same-named queries in different categories get
+                // different slots.
+                queryAuth.resolvable ? queryAuth.categoryPath : params.CategoryPath
             );
             const cached = await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint); // TTL-enforced
             if (cached) {
@@ -1712,10 +1854,65 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 });
                 const checker = (this as IRunQueryProvider).RunQueriesWithCacheCheck?.bind(this);
                 if (!checker || this.TrustLocalCacheCompletely) {
-                    // TTL mode (server providers / no validation transport)
-                    return serveFromSlot();
+                    // TTL mode (server providers / no validation transport).
+                    //
+                    // PERMISSION GATE (B43): the RunQuery fingerprint carries no user segment, so
+                    // user A's warmed slot is user B's cache hit — and this path previously served
+                    // it with NO UserCanRun check (the gate lived only on the miss path, in
+                    // ValidateQueryForExecution). Same shape as the RunView S31/S31b fix, which
+                    // was never applied here. The client transport is unaffected (its validation
+                    // round trip re-authorizes server-side); the exposure is server-side TTL mode
+                    // with per-request users — agents/actions running as different principals.
+                    //
+                    // Deny ⇒ fall through to normal execution, which resolves the query and
+                    // authorizes with the proper error message. Query metadata missing from the
+                    // provider cache ⇒ ALSO fall through (never serve rows we cannot authorize);
+                    // that costs one query run, not correctness.
+                    if (contextUser) {
+                        if (queryAuth.resolvable) {
+                            // Metadata can answer — enforce it. `authorized` comes from the
+                            // provider's STRONGEST available check (B45): the base enforces
+                            // roles-only QueryInfo.UserCanRun; GenericDatabaseProvider's
+                            // override enforces the full MJQueryEntityExtended.UserCanRun
+                            // (roles + entity CanRead + recursive composition) — the identical
+                            // check ValidateQueryForExecution applies on the miss path, so a
+                            // hit is never easier to read than a miss.
+                            if (queryAuth.authorized) {
+                                return serveFromSlot();
+                            }
+                            LogStatusEx({ message: `RunQuery cache: user '${contextUser.Email}' lacks run permission on '${queryAuth.queryName ?? params.QueryName ?? params.QueryID}' — falling through to authorized execution.`, verboseOnly: true });
+                        } else if (cached.warmedForUserID && UUIDsEqual(cached.warmedForUserID, contextUser.ID)) {
+                            // Metadata CANNOT answer — runtime-created queries never appear in the
+                            // provider's Queries cache (it does not refresh in-process; verified:
+                            // a saved Query stays invisible, 21 -> 21). But a slot only exists
+                            // because its WARMER executed the fully-authorized miss path — so the
+                            // warmer's own permission is already proven. Serve the warmer;
+                            // anyone ELSE falls through and pays one authorized execution.
+                            //
+                            // The first version of this gate failed closed on unresolvable
+                            // metadata, which silently disabled TTL caching for every
+                            // runtime-created query — caught by Q2/Q5/Q10 going red.
+                            return serveFromSlot();
+                        } else {
+                            LogStatusEx({ message: `RunQuery cache: '${params.QueryID ?? params.QueryName}' not in cached metadata and requester is not the slot's warmer — falling through to authorized execution.`, verboseOnly: true });
+                        }
+                    } else {
+                        return serveFromSlot();
+                    }
                 }
-                // Client smart validation round trip
+                // Client smart validation round trip.
+                //
+                // Guarded on `checker` (R4-2): the block above is entered when `!checker ||
+                // TrustLocalCacheCompletely`. If we got here via `!checker` AND the B43 permission
+                // gate DECLINED to serve (denied user / non-warmer), execution used to fall
+                // straight into `await checker(...)` = `await undefined(...)` — a TypeError instead
+                // of the promised "fall through to authorized execution". Every in-tree provider
+                // implements the optional `RunQueriesWithCacheCheck`, so this was latent, but the
+                // pre-B43 code handled `!checker` and this must too: skip the round trip and let
+                // the normal PreRunQuery/InternalRunQuery path below authorize and execute.
+                if (!checker) {
+                    // fall through to normal execution below
+                } else {
                 const response = await checker([{
                     params,
                     cacheStatus: { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount }
@@ -1730,7 +1927,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         // Fire-and-forget slot rewrite — same pattern as the RunView client path
                         LocalCacheManager.Instance.SetRunQueryResult(
                             queryFingerprint, params.QueryName ?? '', freshRows,
-                            check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL
+                            check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL,
+                            contextUser?.ID
                         ).catch(e => LogError(`RunQuery cache rewrite failed: ${e}`));
                         return {
                             QueryID: check.queryId ?? params.QueryID ?? '',
@@ -1743,6 +1941,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                             ErrorMessage: ''
                         };
                     }
+                }
                 }
                 // validation transport failed — fall through to a normal execution
             }
@@ -1773,7 +1972,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (queryCacheEngaged && queryFingerprint && result.Success) {
             LocalCacheManager.Instance.SetRunQueryResult(
                 queryFingerprint, result.QueryName, result.Results,
-                '', result.TotalRowCount, result.QueryID, params.CacheLocalTTL
+                '', result.TotalRowCount, result.QueryID, params.CacheLocalTTL,
+                contextUser?.ID
             ).catch(e => LogError(`RunQuery cache write failed: ${e}`));
         }
 
@@ -1842,8 +2042,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param entityName 
      * @param callerName 
      */
-    protected async EntityStatusCheck(params: RunViewParams, callerName: string) {
-        const entityName = await RunView.GetEntityNameFromRunViewParams(params, this);
+    protected async EntityStatusCheck(params: RunViewParams, callerName: string, contextUser?: UserInfo) {
+        // contextUser threads into the ViewID->entity lookup (B39): without it, server-side
+        // ViewID-only reads failed for every caller because the inner User Views read was unscoped.
+        const entityName = await RunView.GetEntityNameFromRunViewParams(params, this, contextUser);
         const entity = entityName ? this.EntityByName(entityName) : undefined;
         if (!entity) {
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -2040,7 +2242,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Entity status check
         const entityCheckStart = performance.now();
-        await this.EntityStatusCheck(params, 'PreRunView');
+        await this.EntityStatusCheck(params, 'PreRunView', contextUser);
         const entityCheckTime = performance.now() - entityCheckStart;
 
         // Save the caller's original Fields request for post-cache filtering.
@@ -2072,7 +2274,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let cachedResult: RunViewResult | undefined;
         let fingerprint: string | undefined;
 
-        if (willCache && LocalCacheManager.Instance.IsInitialized) {
+        // SECURITY (S31): the cache-hit path returns BEFORE the DB provider's read-permission
+        // gate (CheckUserReadPermissions), so a user lacking CanRead on the entity must not be
+        // allowed to consult the shared cache — it would leak rows a permitted user warmed. When
+        // we can affirmatively determine the user lacks read permission, skip the cache and fall
+        // through to the normal path, which denies with the proper error. Unknown user/entity →
+        // unchanged behavior (the DB path handles null-user semantics).
+        // S31b closes the view-only variant: a ViewID/ViewName-only request never resolves an
+        // entity above, so the entity-keyed gate is disarmed — cacheDeniedForViewOnlyRequest
+        // fails closed (or resolves ViewEntity synchronously) to plug that hole.
+        const cacheReadDenied =
+            (!!entity && !!contextUser && !(entity.GetUserPermisions(contextUser)?.CanRead ?? false)) ||
+            this.cacheDeniedForViewOnlyRequest(params, contextUser);
+
+        if (willCache && !cacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
             const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
@@ -2092,7 +2307,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     ExecutionTime: 0, // Cached, no execution time
                     ErrorMessage: '',
                     UserViewRunID: '',
-                    AggregateResults: cached.aggregateResults // Include cached aggregate results
+                    // Order-insensitive aggHash means this slot may have been warmed with a
+                    // different Aggregates[] order — remap to THIS caller's requested order.
+                    AggregateResults: LocalCacheManager.Instance.ReorderAggregateResultsToRequest(cached.aggregateResults, params.Aggregates)
                 };
                 cacheStatus = 'hit';
                 if (!params.CacheLocal && this.TrustLocalCacheCompletely) {
@@ -2179,7 +2396,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const param = params[i];
 
             // Entity status check
-            await this.EntityStatusCheck(param, 'PreRunViews');
+            await this.EntityStatusCheck(param, 'PreRunViews', contextUser);
 
             // Save caller's original Fields, then always fetch all fields from DB.
             // One cache entry per entity+filter satisfies all field subsets.
@@ -2206,7 +2423,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Check local cache if enabled or if server trusts its cache completely
             // BypassCache skips cache entirely — used by maintenance actions querying for
             // records that were inserted via direct SQL (bypassing BaseEntity.Save())
-            if (batchWillCache && LocalCacheManager.Instance.IsInitialized) {
+            // SECURITY (S31): same read-permission gate as the single-RunView path — never serve
+            // (or consult) the shared cache for a user who lacks CanRead on the entity; fall
+            // through to the DB path, which denies with the proper error. S31b applies the same
+            // view-only fail-closed gate for ViewID/ViewName-only requests (no resolvable entity).
+            const batchCacheReadDenied =
+                (!!batchEntity && !!contextUser && !(batchEntity.GetUserPermisions(contextUser)?.CanRead ?? false)) ||
+                this.cacheDeniedForViewOnlyRequest(param, contextUser);
+
+            if (batchWillCache && !batchCacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
                 const rlsWhereClause = this.ComputeRunViewRLSWhereClause(param, contextUser);
                 const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString, rlsWhereClause);
                 fingerprintMap.set(i, fingerprint);
@@ -2226,7 +2451,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         ExecutionTime: 0,
                         ErrorMessage: '',
                         UserViewRunID: '',
-                        AggregateResults: cached.aggregateResults // Include cached aggregate results
+                        // Order-insensitive aggHash means this slot may have been warmed with a
+                        // different Aggregates[] order — remap to THIS caller's requested order.
+                        AggregateResults: LocalCacheManager.Instance.ReorderAggregateResultsToRequest(cached.aggregateResults, param.Aggregates)
                     };
                     // if needed this will transform each result into an entity object
                     await this.TransformSimpleObjectToEntityObject(param, cachedViewResult, contextUser);
@@ -2280,13 +2507,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const cacheable: { paramIndex: number; fingerprint: string }[] = [];
         for (let i = 0; i < params.length; i++) {
             const param = params[i];
-            await this.EntityStatusCheck(param, 'PreRunViews');
+            await this.EntityStatusCheck(param, 'PreRunViews', contextUser);
 
             if (param.ResultType === 'entity_object') {
                 const entity = this.EntityByName(param.EntityName);
                 if (!entity) {
                     throw new Error(`Entity ${param.EntityName} not found in metadata`);
                 }
+                // NOTE (R2-GAP-1, logged as B44): widening to an explicit full field list makes
+                // the client fingerprint carry `f:<every field>` rather than `f:*`, so the cache
+                // classifier reads the slot as a NARROW projection and stops maintaining it in
+                // place. entity_object is the BaseEngine default, so this costs in-place
+                // maintenance on the client's most common slot shape. It is a PERF gap only —
+                // the slot is invalidated and refetched, never served wrong.
+                //
+                // Deliberately NOT "fixed" by clearing Fields here: that would change what the
+                // provider FETCHES, not just how the slot is keyed, and I could not verify the
+                // downstream fetch behavior tonight. The safe fix is to normalize a full-coverage
+                // field list to `*` in the FINGERPRINT only, which cannot affect fetching.
                 param.Fields = entity.Fields.map(f => f.Name);
             }
 
@@ -2461,7 +2699,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     ExecutionTime: 0,
                     ErrorMessage: '',
                     UserViewRunID: '',
-                    AggregateResults: cached.aggregateResults // Include cached aggregate results
+                    // Order-insensitive aggHash means this slot may have been warmed with a
+                    // different Aggregates[] order — remap to THIS caller's requested order.
+                    AggregateResults: LocalCacheManager.Instance.ReorderAggregateResultsToRequest(cached.aggregateResults, param.Aggregates)
                 };
                 // Transform to entity objects if needed
                 await this.TransformSimpleObjectToEntityObject(param, cachedResult, contextUser);
@@ -2522,14 +2762,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
             }
 
-            // Differential merge failed - this should not happen normally
-            // Throwing an exception rather than returning partial data which would be dangerous
-            // as the caller would have no way of knowing the data is incomplete
-            throw new Error(
-                `Differential cache merge failed for entity '${param.EntityName}'. ` +
-                `Cache fingerprint may be invalid or cache data corrupted. ` +
-                `Consider clearing the local cache and retrying.`
-            );
+            // Differential merge declined → fall back to a FULL FETCH of this one param (B41).
+            //
+            // History, because this exact spot has burned us twice:
+            //   - This used to THROW, inside a Promise.all over the batch, so ONE undecidable
+            //     slot rejected the caller's entire RunViews call. "Decline" is a legitimate
+            //     outcome (subset / aggregate / narrowing slots cannot be merged from a row
+            //     delta), not corruption — so throwing was the wrong contract.
+            //   - Returning null instead was attempted and REVERTED: the batch maps
+            //     `r.result` straight to the caller, so null became the caller's RESULT.
+            //
+            // The only correct remedy is what a cache miss does anyway: fetch in full. The
+            // declined slot was already invalidated by ApplyDifferentialUpdate, so the refetch
+            // repopulates it. CacheLocal is stripped and BypassCache set so this single call
+            // takes the plain path — it cannot re-enter the smart-cache transport, which is what
+            // makes the recursion impossible rather than merely unlikely.
+            LogStatusEx({ message: `Differential merge declined for '${param.EntityName}' — refetching in full.`, verboseOnly: true });
+            const fallbackParam: RunViewParams = { ...param, CacheLocal: false, BypassCache: true };
+            const freshFetch = await (this as unknown as IRunViewProvider).RunView<T>(fallbackParam, contextUser);
+            return { result: freshFetch, cacheHit: false, cacheMiss: true };
         } else if (checkResult.status === 'stale') {
             // Cache is stale - use fresh data and update cache (entity doesn't support differential)
             const staleResults = checkResult.results || [];
@@ -2861,8 +3112,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Runs all registered PreRunView hooks against a single RunViewParams,
      * returning the (possibly mutated) params.
+     *
+     * Protected (not private) on purpose: any subclass pipeline that executes
+     * view queries WITHOUT passing through PreRunView/PreRunViews — e.g. the
+     * RunViewsWithCacheCheck smart-cache path in GenericDatabaseProvider —
+     * MUST apply these hooks itself. Hooks are an enforcement seam (tenant
+     * scoping middleware injects filters here); a query path that skips them
+     * silently returns rows the hooked paths would have filtered out.
      */
-    private async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
+    protected async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
         const hooks = GetDataHooks<PreRunViewHook>('PreRunView');
         for (const hook of hooks) {
             params = await hook(params, contextUser);
@@ -2873,8 +3131,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Runs all registered PostRunView hooks against a single result,
      * returning the (possibly mutated) result.
+     *
+     * Protected (not private) for the same reason as RunPreRunViewHooks above:
+     * a subclass pipeline that returns view rows WITHOUT passing through
+     * PostRunView/PostRunViews — e.g. the RunViewsWithCacheCheck smart-cache
+     * path — MUST apply these hooks to the rows it returns. PostRunView is the
+     * OUTPUT half of the enforcement seam (data masking / audit); a path that
+     * skips it returns rows the hooked paths would have masked.
      */
-    private async RunPostRunViewHooks(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<RunViewResult> {
+    protected async RunPostRunViewHooks(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<RunViewResult> {
         const hooks = GetDataHooks<PostRunViewHook>('PostRunView');
         for (const hook of hooks) {
             result = await hook(params, result, contextUser);
@@ -3137,7 +3402,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Store on params object for retrieval in PostProcessRunView
         (params as Record<string, unknown>)._telemetryEventId = eventId;
 
-        await this.EntityStatusCheck(params, 'PreProcessRunView');
+        await this.EntityStatusCheck(params, 'PreProcessRunView', contextUser);
 
         // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
         // so that we can get the data to populate the entity object with.
@@ -3977,7 +4242,28 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
-                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this);
+                    let newObject: T | null;
+                    try {
+                        newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this);
+                    } catch (instErr) {
+                        // The highest-priority registered class for this entity failed to
+                        // construct in the current runtime context — most commonly a
+                        // server-only entity subclass (e.g. *EntityServer) instantiated
+                        // inside a client/GraphQL process, where its constructor intentionally
+                        // throws. Fall back to the generic BaseEntity (key=null skips the
+                        // subclass lookup and uses the base class), which is exactly what a
+                        // context WITHOUT that subclass registered — a real browser client —
+                        // resolves. Reads/materialization still work over the wire; only
+                        // server-only behaviors are unavailable, which is correct on the client.
+                        LogError(`GetEntityObject: the registered class for '${entityName}' failed to construct (${instErr instanceof Error ? instErr.message : String(instErr)}); falling back to BaseEntity.`);
+                        newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, null, entity, this);
+                    }
+                    if (!newObject) {
+                        // ClassFactory returned null (missing base class / null registration) —
+                        // surface a clear, actionable error rather than letting a null propagate
+                        // to a downstream `.constructor`/`.LoadFromData` crash.
+                        throw new Error(`Entity '${entityName}' could not be instantiated — MJGlobal ClassFactory returned null. Ensure LoadGeneratedEntities()/LoadCoreEntities() has run so the entity's class is registered.`);
+                    }
                     await newObject.Config(actualContextUser);
 
                     // Initialize IS-A parent entity composition chain before any data operations

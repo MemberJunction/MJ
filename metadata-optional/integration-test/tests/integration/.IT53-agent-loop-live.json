@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT53 - Agent Loop Foundation (live)",
+    "Description": "Live agent loop foundation over the wire: Echo terminal + all steps finalized, Tool Loop action lineage, action result in later prompt context, token rollup identity, conversation-run linkage, no-model failover fails loudly, primary-down completes on secondary. 7 checks AL1-AL7.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Live agent loop foundation over the wire: Echo terminal + all steps finalized, Tool Loop action lineage, action result in later prompt context, token rollup identity, conversation-run linkage, no-model failover fails loudly, primary-down completes on secondary. 7 checks AL1-AL7."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-loop-live"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F81B3F36-3BFC-40A3-837E-9965B28FDFF8"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T17:00:43.341Z",
+    "checksum": "7f68c977c3f67e7e9f443a6ce72418018d479dfb3eb266f69c05b7ab4767ecca"
+  }
+}

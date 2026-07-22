@@ -11,7 +11,7 @@
  */
 
 import { Router, json, type Request, type Response } from 'express';
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { LogStatus } from '@memberjunction/core';
 import { configInfo, type WidgetConfig } from '../config.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
@@ -65,7 +65,11 @@ export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { 
     windowMs: config.rateLimitWindowMs,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    keyGenerator: (req: Request) => `${readWidgetKey(req)}:${req.ip ?? 'noip'}`,
+    // ipKeyGenerator collapses IPv6 addresses to their /56 subnet before keying. Raw `req.ip`
+    // would give every IPv6 client a practically unlimited supply of distinct keys (one per
+    // address in their delegated prefix), letting them sidestep the per-IP bucket entirely —
+    // express-rate-limit v8 refuses to start with a keyGenerator that reads req.ip without it.
+    keyGenerator: (req: Request) => `${readWidgetKey(req)}:${req.ip ? ipKeyGenerator(req.ip) : 'noip'}`,
     limit: async (req: Request) => service.ResolvePerInstanceRateLimit(readWidgetKey(req)),
     message: { success: false, errorCode: 'rate_limited', error: 'Too many widget session requests. Try again later.' },
   });
