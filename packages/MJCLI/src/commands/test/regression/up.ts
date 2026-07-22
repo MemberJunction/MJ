@@ -6,6 +6,7 @@ import {
   BACPAC_OVERLAY,
   BACPAC_STANDALONE_COMPOSE,
   dockerComposeArgs,
+  formsFingerprintStatus,
   FULL_INFRA_SERVICES,
   isInsideMonorepo,
   mintRunId,
@@ -48,6 +49,12 @@ export default class TestRegressionUp extends Command {
         'each browser worker needs ~1.5g; 4 workers OOM\'d the default-memory host.',
     }),
     metadata: Flags.string({ description: 'Directory of your test + test-suite metadata (pushed before the run). Requires --bacpac.' }),
+    'skip-forms-check': Flags.boolean({
+      description: 'Skip the DR-C5 tripwire that refuses to start the self-contained stack when the ' +
+        'baked entity forms are missing or stale vs the current schema. Override only when you know ' +
+        'the images already carry current forms.',
+      default: false,
+    }),
     image: Flags.string({ description: '(external) Published agentic-test-runner image. Default: ' + AGENTIC_TEST_RUNNER_IMAGE + '.' }),
     'explorer-image': Flags.string({ description: '(external bacpac) Published Explorer image (prerequisite). Default: memberjunction/explorer:latest.' }),
     'env-file': Flags.string({ description: '(external) .env injected into the runner (auth env: refs).' }),
@@ -69,6 +76,26 @@ export default class TestRegressionUp extends Command {
   private async runInMonorepo(flags: Record<string, unknown>): Promise<void> {
     const childEnv: NodeJS.ProcessEnv = { ...process.env };
     const overlays: string[] = [];
+
+    // DR-C5: the self-contained stack bakes the generated entity forms into the
+    // explorer/api images at build time, so `up` cannot fix stale forms itself
+    // (already-built images keep the forms they were built with). Refuse to run
+    // a stack whose baked forms are missing/stale vs the current schema and point
+    // the user at `build`, rather than silently testing a schema the DB no longer
+    // has. Bacpac runs import their own DB, so this AssociationDemo-forms check
+    // doesn't apply to them.
+    if (!flags.bacpac && !flags['skip-forms-check']) {
+      const status = formsFingerprintStatus();
+      if (!status.fresh) {
+        this.error(
+          `✗ Entity forms are missing or stale — ${status.reason}.\n` +
+          `  The self-contained stack bakes these forms into the explorer/api images at build\n` +
+          `  time; starting now would test a schema that no longer matches the database.\n` +
+          `  Fix:  mj test regression build   (regenerates the forms and rebuilds the images)\n` +
+          `  Override (not recommended):  --skip-forms-check`,
+        );
+      }
+    }
 
     // DR-F1: mint the run id host-side (unless the caller pre-set RUN_ID, e.g.
     // a resume) so the host owns the run's identity + output dir from launch.

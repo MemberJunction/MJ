@@ -7,7 +7,8 @@
  * conventions apply across every subcommand.
  */
 import { spawn, type SpawnOptions } from 'node:child_process';
-import { existsSync, mkdirSync, createWriteStream, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, createWriteStream, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -155,6 +156,127 @@ export const LOAD_TARGET_SCRIPT = `${REGRESSION_DIR}/scripts/load-target-profile
 export const GEN_FORMS_SCRIPT = `${REGRESSION_DIR}/gen-forms.sh`;
 export const RESULTS_DIR = `${REGRESSION_DIR}/test-results`;
 export const INLINE_REPORT_SCRIPT = `${REGRESSION_DIR}/scripts/inline-report.cjs`;
+
+/** Directory gen-forms writes the generated Angular entity forms into. */
+export const GENERATED_FORMS_DIR = `${REGRESSION_DIR}/.docker-generated/MJExplorer-forms/Entities`;
+/** Sidecar recording the schema fingerprint the current forms were generated against (DR-C5). */
+export const FORMS_FINGERPRINT_FILE = `${REGRESSION_DIR}/.docker-generated/.fingerprint`;
+
+// DR-C5: the generated Angular forms (and the entity classes / resolvers baked
+// alongside them) are a pure function of the DB schema — i.e. of the same three
+// inputs DR-B1 hashes for the DB snapshot: the migrations, the AssociationDB
+// demo SQL, and the MJ build version (a proxy for CodeGen behavior across
+// releases). We stamp that hash into .docker-generated/.fingerprint when
+// gen-forms runs, so `build`/`up` can tell "the forms match the current schema"
+// from "the forms are stale and would silently bake a schema that no longer
+// matches the DB" (the stale-forms → runtime-missing-type failure class).
+//
+// This MIRRORS docker/regression/scripts/db-snapshot.cjs computeHash() — same
+// input dirs, extensions, version suffix, and sha256/16 truncation. Keep the two
+// in sync; they run in different contexts (that .cjs in-container over /app, this
+// on the host over the monorepo root) so the logic is intentionally duplicated
+// rather than shared across the container/host boundary.
+const FORMS_HASH_INPUT_DIRS = ['migrations', 'Demos/AssociationDB'];
+const FORMS_HASH_INPUT_EXTS = new Set(['.sql', '.md', '.sh', '.json', '.csv']);
+
+/** All files under `dir`, depth-first, path-sorted for determinism. */
+function walkSorted(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    const fp = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkSorted(fp));
+    else out.push(fp);
+  }
+  return out;
+}
+
+/** MJ monorepo version at `root` — the CodeGen-behavior proxy in the fingerprint. */
+function readBuildVersion(root: string): string {
+  try {
+    return JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
+ * Stable sha256 (first 16 hex chars) over the schema inputs + MJ build version,
+ * computed host-side against the monorepo `root` (default cwd). Deterministic:
+ * same inputs → same fingerprint. See the block comment above for why this
+ * mirrors db-snapshot.cjs.
+ */
+export function computeFormsFingerprint(root: string = process.cwd()): string {
+  const h = createHash('sha256');
+  for (const rel of FORMS_HASH_INPUT_DIRS) {
+    const dirRoot = path.join(root, rel);
+    if (!existsSync(dirRoot)) continue;
+    for (const file of walkSorted(dirRoot)) {
+      if (!FORMS_HASH_INPUT_EXTS.has(path.extname(file).toLowerCase())) continue;
+      h.update(path.relative(root, file));
+      // Wrap in Uint8Array: @types/node types createHash.update's BinaryLike as
+      // Uint8Array<ArrayBuffer>, and a raw Buffer's ArrayBufferLike trips strict TS.
+      h.update(new Uint8Array(readFileSync(file)));
+    }
+  }
+  h.update('version:' + readBuildVersion(root));
+  return h.digest('hex').slice(0, 16);
+}
+
+/** The fingerprint recorded alongside the current generated forms, or null if none. */
+export function readFormsFingerprint(): string | null {
+  const fp = path.resolve(FORMS_FINGERPRINT_FILE);
+  if (!existsSync(fp)) return null;
+  try {
+    return readFileSync(fp, 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Record `hash` as the fingerprint the current generated forms were built against. */
+export function writeFormsFingerprint(hash: string): void {
+  const fp = path.resolve(FORMS_FINGERPRINT_FILE);
+  mkdirSync(path.dirname(fp), { recursive: true });
+  writeFileSync(fp, hash + '\n', 'utf8');
+}
+
+/** Result of comparing the current schema fingerprint to the one the forms were built against. */
+export interface FormsFingerprintStatus {
+  /** True when the generated forms exist AND their fingerprint matches the current schema. */
+  fresh: boolean;
+  /** Human-readable reason when not fresh (empty when fresh). */
+  reason: string;
+  /** The fingerprint of the current on-disk schema inputs. */
+  current: string;
+  /** The fingerprint the existing forms were generated against, or null when unstamped. */
+  recorded: string | null;
+}
+
+/**
+ * Compare the generated forms against the current schema inputs (DR-C5). Forms
+ * are "fresh" only when the output directory exists AND a fingerprint was
+ * recorded AND it matches the current inputs. A missing directory, missing
+ * fingerprint, or mismatch all report `fresh: false` with a specific reason.
+ */
+export function formsFingerprintStatus(root: string = process.cwd()): FormsFingerprintStatus {
+  const current = computeFormsFingerprint(root);
+  const recorded = readFormsFingerprint();
+  if (!existsSync(path.resolve(GENERATED_FORMS_DIR))) {
+    return { fresh: false, reason: 'generated forms are missing (.docker-generated/ not populated)', current, recorded };
+  }
+  if (recorded === null) {
+    return { fresh: false, reason: 'generated forms have no fingerprint (generated before DR-C5, or manually)', current, recorded };
+  }
+  if (recorded !== current) {
+    return {
+      fresh: false,
+      reason: `generated forms are stale — built against ${recorded}, current schema is ${current}`,
+      current,
+      recorded,
+    };
+  }
+  return { fresh: true, reason: '', current, recorded };
+}
 
 /**
  * The pinned runner image tag used when `init` (and future external invocations)
