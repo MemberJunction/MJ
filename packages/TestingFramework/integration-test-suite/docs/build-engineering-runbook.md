@@ -25,24 +25,26 @@ Single entry path: **`mj test`** (dispatched from `MJ: Tests` / `MJ: Test Suites
 |---|---|---|---|
 | **Deterministic** (default) | `npm run test:integration` | **Yes — required to pass** | \$0, no LLM |
 | **+ Mutation axis** | `RUN_MUTATION_TESTS=1 npm run test:integration` | Recommended | \$0, self-cleaning writes |
-| **Live-model** | `RUN_AGENT_TESTS=1 MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Live Model"` | Nightly / on-demand | Real tokens, < \$1/run |
+| **Live-model** | `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Live Model"` | Nightly / on-demand | Real tokens, < \$1/run |
 | **Predictive Studio** | `PS_INTEGRATION=1 …` | On-demand | Varies |
 
 `npm run test:integration` expands to `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"`.
 
-**Environment flags:** `MJ_INTEGRATION_TEST=1` is **required** on every run (it marks the dedicated process whose instrumented cache must be the first `LocalCacheManager` caller). `RUN_MUTATION_TESTS=1`, `RUN_AGENT_TESTS=1`, `PS_INTEGRATION=1` each opt a tier in.
+**Environment flags:** `MJ_INTEGRATION_TEST=1` is **required** on every run (it marks the dedicated process whose instrumented cache must be the first `LocalCacheManager` caller). `RUN_MUTATION_TESTS=1` and `PS_INTEGRATION=1` each opt a tier in — strict `=== '1'`, so `true` does not work.
+
+`RUN_AGENT_TESTS` is **not** an opt-in any more: `IsTierEnabled('live-model')` returns `RUN_AGENT_TESTS !== '0'` (`packages/TestingFramework/testing-integration/src/tiers.ts`), so the live-model tier is **default-ON**, `=1` is a back-compat no-op, and only an explicit `RUN_AGENT_TESTS=0` disables it. What actually keeps live-model checks out of a normal run is **suite selection** — they are members of `"Integration Tests — Live Model"`, and `mj test suite` does not recurse into sibling or child suites. Setting `RUN_AGENT_TESTS=0` while running the live suite yields a green 15/15 that executed nothing.
 
 ### CI recommendation
 - **PR gate:** the deterministic tier (with mutation axis) must pass. It is credential-light, self-cleaning, and $0 — safe to run on every PR against a migrated ephemeral DB.
-- **Nightly:** add the live-model tier (needs provider API keys in the environment; skips cleanly with a loud message if keys are absent).
-- Provider keys are read from the environment / `mj.config.cjs`; the live tier degrades to a documented skip (never a false pass) when they're missing, so a keyless CI leg is safe.
+- **Nightly:** add the live-model tier. It needs working provider API keys in the environment — see the warning below.
+- Provider keys are read from the environment / `mj.config.cjs`. **A keyless leg is NOT safe: the live tier FAILS, it does not skip.** There is no credential preflight in the live bundles, so an absent key surfaces as an ordinary red test — verified by blanking `AI_VENDOR_API_KEY__*` and re-running a previously-green bundle, which failed at fixture setup (`agent-rag-search fixture setup failed: sentinel note save: undefined`) and exited 1, with no skip message anywhere. Gate a keyless CI leg by **not selecting the live suite**, not by relying on a graceful degrade.
 
 ## Reading the results
 
 - Console prints `[SUMMARY] N/M passed (X%)` and per-bundle lines; a failure shows `✗ FAILED` with the failing check's oracle message (e.g. `Oracle 'codegen-determinism.CD6' failed: …`).
 - **Results are persisted** (queryable via `RunView`/`RunQuery`, or a dashboard):
   - `MJ: Test Runs` — one row per bundle: `DurationSeconds`, `PassedChecks` / `FailedChecks` / `TotalChecks`, `Score`, `CostUSD`, `MachineName`, `RunByUserName`, Started/Completed.
-  - `MJ: Test Suite Runs` — one row per suite run: `TotalDurationSeconds`, `TotalTests` / `PassedTests`, `TotalCostUSD`. (Reference: a full deterministic tier is ~50 bundles, ~4–5 minutes wall-clock, \$0.)
+  - `MJ: Test Suite Runs` — one row per suite run: `TotalDurationSeconds`, `TotalTests` / `PassedTests`, `TotalCostUSD`. (Reference: the deterministic tier is **52** bundles, roughly 2–5 minutes wall-clock, \$0 — a fully-seeded local run with MJAPI up measured 127s.)
 - Use these to trend duration over builds and catch a bundle that's slowing down.
 
 ## Triaging a failure (do this before touching anything)
