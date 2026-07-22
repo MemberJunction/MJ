@@ -2,6 +2,27 @@
 
 This document covers the end-to-end process for releasing a new version of MemberJunction. All `@memberjunction/*` packages are versioned together (fixed group via changesets).
 
+> ### 🤖 If you are an AI coding agent running this release
+>
+> **Build a persistent checklist of all 13 steps (0–12) before you start, and tick each one off as it completes.** A release spans hours, several CI waits, and a Docker workbench session, so steps get silently skipped — **Step 5 was nearly missed in v5.49.0** precisely because it sits between two long-running steps and has no CI equivalent to remind you.
+>
+> Include the sub-steps that are separately skippable: 3.8 (commit the mj-sync writeback), 4.2 (seed integration metadata), 4.2b (the `UserSetting` floor), 5 (new-package npm placeholders), 7's parity gate, and 11/12.
+>
+> Steps 5, 11 and 12 are the ones with no automated backstop. If you skip a CI-covered step, something goes red. If you skip those three, nothing does.
+
+> ### Local values differ per engineer — resolve them, don't copy them
+>
+> Every port, container name, database name and path in this guide is **an example from one machine**. Ports collide, containers get named differently, and `.env` varies. Read your own before running anything:
+>
+> ```bash
+> grep -E '^(DB_HOST|DB_PORT|DB_DATABASE|GRAPHQL_PORT)=' .env   # your DB + API port
+> docker ps --format '{{.Names}}\t{{.Ports}}'                    # your container names
+> ```
+>
+> Known to vary: the SQL Server container name (`mj-sqlserver-1455` here) and its host port; `GRAPHQL_PORT` (this repo's `.env` uses **4000**, while root `CLAUDE.md` still says 4001); the Explorer port (4200 in the workbench, 4201 on a desktop dev setup); and the scratch release database name. The workbench's own ports are set by `MJAPI_HOST_PORT` / `EXPLORER_HOST_PORT` in `docker/workbench/.env`.
+>
+> Where a command must agree with a running service, derive it rather than typing it — e.g. the integration suite builds its URL from `GRAPHQL_PORT`, so MJAPI and the test run cannot disagree if both read `.env`.
+
 ---
 
 ## Release Types
@@ -76,6 +97,10 @@ Before anything else, confirm the `next` branch is healthy:
 - [ ] **"Test migrations"** (`migrations.yml`) — passes if migrations were changed
 - [ ] **"Unit Tests"** (`test.yml`) — passes on any open PR, and on the **push-to-`next`** run (that unfiltered backstop is the one that actually proves integration-bundle ↔ `MJ: Tests` metadata sibling parity; a metadata-only PR never triggers `test.yml` at all)
 - [ ] **"Integration Tier"** (`integration.yml`) — passes on `next`. Runs the deterministic suite against a fresh SQL Server on PRs into `next` plus an unfiltered push-to-`next` backstop. It is **not** a substitute for Step 4: CI runs no MJAPI (so client-transport bundles skip) and no live-model tier.
+
+> **Don't idle here.** These runs take ~15 minutes. **Step 3 (fresh database + migrate + metadata push) is independent of them** — it works on a local scratch database and reads nothing from CI. Start Step 3 while Step 1 runs and check back. The only ordering that matters is that Step 3's results are committed before the release PR.
+>
+> Step 2 must still precede Step 3, since its model metadata has to be present before the sync push.
 
 ### Step 2: Pull In New AI Models (REQUIRED — every release)
 
@@ -281,7 +306,12 @@ cd packages/MJAPI && npm run start
 
 > ⚠️ **Run it from `packages/MJAPI`, not `npm run start:api` from the repo root.** The root script is `turbo start --filter=mj_api`, and **turbo passes through only the environment variables declared in `turbo.json`** — anything else is stripped before the task sees it. Overriding the database with `DB_DATABASE=… npm run start:api` therefore fails with `Error parsing config file … "path": ["dbDatabase"] … "received": "undefined"`, which reads like a config-file problem rather than an env-passthrough one. Running from the package directory bypasses turbo entirely and the variables arrive intact.
 
-- `MJ_API_KEY` must be set (process env or repo-root `.env`), and **the same value must be set for the test run** — MJServer reads it from `process.env.MJ_API_KEY` too (`packages/MJServer/src/config.ts`).
+- `MJ_API_KEY` must be in **repo-root `.env`** (Step 0.3), not just your shell — MJAPI and the test run are separate processes and both must see the same value. You invent this value; nothing issues it (`MJServer` string-compares `process.env.MJ_API_KEY` against the `x-mj-api-key` header). Confirm it authenticates end-to-end before running the suite, rather than discovering it 19 tests later:
+  ```bash
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST "http://localhost:${GRAPHQL_PORT:-4000}/" \
+    -H 'Content-Type: application/json' -H "x-mj-api-key: $(grep '^MJ_API_KEY=' .env | cut -d= -f2-)" \
+    -d '{"query":"{ __typename }"}'      # 200 = good; 401 = key mismatch
+  ```
 - **Start MJAPI from the *current* build — after Step 7, not before.** For the 19 client-transport bundles, the running server *is* the artifact under test, so a stale `packages/MJServer/dist/` silently tests last week's server. This is not theoretical: a server built before this release's merge fails `transaction-groups.TG5` with `SCOPE BYPASS (bug-register B1): a view:run-only API key executed a Create via ExecuteTransactionGroup` — the check working exactly as designed, reporting that the server it reached lacks the scope gate. Confirm before blaming the product:
   ```bash
   ls -t packages/MJServer/dist/resolvers/TransactionGroupResolver.js \
@@ -358,6 +388,7 @@ The exit code is driven by `failedTests`, which counts **only** status `Failed`.
   ```bash
   MJ_INTEGRATION_TEST=1 npx mj test run "IT## - <name>"
   ```
+  > 🚨 **Do NOT use single-bundle re-run to triage the live-agent bundles (IT53–IT62).** `mj test run` takes a **different transport path** than the same bundle inside the suite: `agent-loop-live` is not in the `CLIENT_BUNDLES` set (`IntegrationTestDriver.ts`), so standalone it executes the agent **in-process** with no server `contextUser`, fails 7/7, and floods the log with `[CRITICAL] … must provide the contextUser parameter`. In-suite it passes, because an earlier client bundle rebinds the process's global provider. Re-run the **whole live suite** for those. Tracked as **#3251**. Single-bundle triage remains valid for deterministic bundles.
 
 Do **not** reorder suite membership (client-transport members are deliberately sequenced last — the client bootstrap rebinds the process's global provider), and do not declare the gate green on the exit code alone.
 
