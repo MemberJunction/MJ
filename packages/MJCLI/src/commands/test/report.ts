@@ -1,27 +1,23 @@
 import { Command, Flags } from '@oclif/core';
 
-export default class TestHistory extends Command {
-  static description = 'View per-test duration and flake history across recent runs';
+export default class TestReport extends Command {
+  static description = 'Generate a per-run aggregate report (pass rate, duration, flake) with a cross-run trend';
 
   static examples = [
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --test="Active Members Count"',
     '<%= config.bin %> <%= command.id %> --suite="Nightly Regression"',
-    '<%= config.bin %> <%= command.id %> --limit=100 --format=json',
+    '<%= config.bin %> <%= command.id %> --baseline=<suite-run-id>',
+    '<%= config.bin %> <%= command.id %> --suite="Nightly Regression" --format=json',
   ];
 
   static flags = {
-    test: Flags.string({
-      char: 't',
-      description: 'Filter by test name',
-    }),
     suite: Flags.string({
       char: 's',
-      description: 'Filter to runs belonging to the named suite',
+      description: 'Restrict to the named test suite',
     }),
-    limit: Flags.integer({
-      char: 'l',
-      description: 'Max recent test-run records to analyze (default 50)',
+    baseline: Flags.string({
+      char: 'b',
+      description: 'Report on this specific suite-run ID instead of the latest run',
     }),
     format: Flags.string({
       char: 'f',
@@ -36,17 +32,16 @@ export default class TestHistory extends Command {
   };
 
   async run(): Promise<void> {
-    const { HistoryCommand } = await import('@memberjunction/testing-cli');
+    const { ReportCommand } = await import('@memberjunction/testing-cli');
 
-    const { flags } = await this.parse(TestHistory);
+    const { flags } = await this.parse(TestReport);
 
     try {
       // Context user is fetched internally after MJ provider initialization
-      const historyCommand = new HistoryCommand();
-      await historyCommand.execute({
-        test: flags.test,
+      const reportCommand = new ReportCommand();
+      await reportCommand.execute({
         suite: flags.suite,
-        limit: flags.limit,
+        baseline: flags.baseline,
         format: flags.format as 'console' | 'json' | 'markdown',
         output: flags.output,
       });

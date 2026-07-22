@@ -147,24 +147,25 @@ export interface ValidateFlags extends CommonFlags {
 }
 
 /**
- * Flags for report command
+ * Flags for report command (DR-G6). Produces a per-run aggregate + cross-run trend.
  */
 export interface ReportFlags extends CommonFlags {
+    /** Restrict to the named test suite (matched against the suite-run's denormalized Suite name). */
     suite?: string;
-    test?: string;
-    from?: string;
-    to?: string;
-    includeCosts?: boolean;
-    includeTrends?: boolean;
+    /** Report on this specific suite-run ID instead of the latest run. */
+    baseline?: string;
 }
 
 /**
- * Flags for history command
+ * Flags for history command (DR-G6). Produces per-test duration/flake history.
  */
 export interface HistoryFlags extends CommonFlags {
-    recent?: number;
-    from?: string;
-    status?: string;
+    /** Restrict to a single test by name. */
+    test?: string;
+    /** Restrict to runs belonging to the named suite. */
+    suite?: string;
+    /** Max recent test-run records to analyze (newest-first). Default 50. */
+    limit?: number;
 }
 
 /**
