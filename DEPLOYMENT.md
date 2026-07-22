@@ -4,11 +4,11 @@ This document covers the end-to-end process for releasing a new version of Membe
 
 > ### 🤖 If you are an AI coding agent running this release
 >
-> **Build a persistent checklist of all 13 steps (0–12) before you start, and tick each one off as it completes.** A release spans hours, several CI waits, and a Docker workbench session, so steps get silently skipped — **Step 5 was nearly missed in v5.49.0** precisely because it sits between two long-running steps and has no CI equivalent to remind you.
+> **Build a persistent checklist of all 12 steps (0–11) before you start, and tick each one off as it completes.** A release spans hours, several CI waits, and a Docker workbench session, so steps get silently skipped — **Step 5 was nearly missed in v5.49.0** precisely because it sits between two long-running steps and has no CI equivalent to remind you.
 >
-> Include the sub-steps that are separately skippable: 3.8 (commit the mj-sync writeback), 4.2 (seed integration metadata), 4.2b (the `UserSetting` floor), 5 (new-package npm placeholders), 7's parity gate, and 11/12.
+> Include the sub-steps that are separately skippable: 3.8 (commit the mj-sync writeback), 4.2 (seed integration metadata), 4.2b (the `UserSetting` floor), 5 (new-package npm placeholders), 7's parity gate, and 11 (the changelog).
 >
-> Steps 5, 11 and 12 are the ones with no automated backstop. If you skip a CI-covered step, something goes red. If you skip those three, nothing does.
+> Steps 5 and 11 are the ones with no automated backstop. If you skip a CI-covered step, something goes red. If you skip those two, nothing does.
 
 > ### Local values differ per engineer — resolve them, don't copy them
 >
@@ -684,19 +684,13 @@ Runs `npm ci` → `npm run build` → `npx typedoc` → deploy to GitHub Pages. 
 
 ## Post-Release Updates
 
-### Step 11: Update MJ Documentation Site
+> ### ⚠️ Removed step — "Update MJ Documentation Site" (the download-page edit)
+>
+> Older releases had a step here to update a per-version download link on the ReadMe docs site. **It no longer exists.** The versioned distribution zip (`Distributions/MemberJunction_Code_Bootstrap.zip`) was retired — the `Distributions/` folder is gone — and `mj install` sparse-fetches from the tagged source on demand, so there is no per-version URL to update each release. The old **Downloads** page (URL slug `quickstart-download`) is hidden/unpublished; its content moved to **"Installation in Minutes"**, which points users at `npx @memberjunction/cli install`.
+>
+> **Nothing to do here per release.** The only residual concern is drift: if "Installation in Minutes" ever shows a hardcoded version link, fix it — but that's a rare one-off, not a release task, so it is no longer a numbered step.
 
-Go to [ReadMe Dashboard](https://dash.readme.com/) → **Guides** → **Getting Started** → **Quick Start Guide**:
-
-1. Open the page titled **"Installation in Minutes"** — this is the live quickstart.
-2. Confirm it points users at the CLI installer — `npx @memberjunction/cli install` (online) or `npx @memberjunction/cli bundle` for an offline/air-gapped zip — rather than a per-version download link.
-3. **Save** — this can be done while the post-merge actions are still running.
-
-> **The page you want is "Installation in Minutes", not "Downloads".** Earlier revisions of this guide said to navigate to the `quickstart-download` slug. That page still exists in the sidebar as **Downloads** but is **hidden/unpublished** — its content moved to "Installation in Minutes". Searching for "quickstart-download" as a title finds nothing, because that is the URL slug, not the display name.
-
-> **Note:** The legacy per-version distribution zip (`Distributions/MemberJunction_Code_Bootstrap.zip`) has been retired — the `Distributions/` folder no longer exists in the repo. `mj install` sparse-fetches and assembles the project from the tagged source on demand, so there is no version-specific URL to update each release. **This step is now a verification, not an edit** — its purpose is to catch drift back toward a hardcoded versioned link, which would be a live 404 for every new user. Read the page rather than assuming.
-
-### Step 12: Update Changelog
+### Step 11: Update Changelog
 
 **Wait until ALL of the following are complete before saving:**
 - [ ] npm packages published
@@ -750,7 +744,7 @@ gh pr view <release-pr-number> --json body --jq .body | pbcopy
 | Git tag `vX.Y.Z` | repo tags | `ci/commit_push.mjs` |
 | Docker images | Docker Hub `memberjunction/api`, Azure ACR | `docker.yml` |
 | API docs | https://memberjunction.github.io/MJ/ | `docs.yml` |
-| Public changelog | ReadMe → Changelog | **manual, Step 12** |
+| Public changelog | ReadMe → Changelog | **manual, Step 11** |
 | ~~GitHub Release~~ | — | **nothing creates one** |
 
 ```bash
