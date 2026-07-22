@@ -37,6 +37,7 @@
     "@memberjunction/ng-base-types": "5.48.0",
     "@memberjunction/core-entities": "5.48.0",
     "@memberjunction/global": "5.48.0",
+    "@memberjunction/theme-engine": "5.48.0",
     "dompurify": "^3.3.0",
     "tslib": "^2.8.1"
   },

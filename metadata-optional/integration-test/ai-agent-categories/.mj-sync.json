@@ -1,0 +1,17 @@
+{
+  "entity": "MJ: AI Agent Categories",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".it-agent-categories.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name LIKE 'IT:%'",
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true
+  }
+}

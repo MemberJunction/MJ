@@ -1,0 +1,53 @@
+<mj-page-layout>
+  <mj-page-header Title="Manage Themes" Icon="fa-solid fa-swatchbook"
+    Subtitle="Your organization's saved brand themes"></mj-page-header>
+
+  <mj-page-body>
+    @if (!themes.length) {
+      <mj-empty-state Icon="fa-solid fa-swatchbook" Title="No themes yet"
+        Message="Create one in the Theme Studio tab."></mj-empty-state>
+    } @else {
+      <table class="tm-table">
+        <thead>
+          <tr><th>Theme</th><th>Status</th><th>Default</th><th class="r">Actions</th></tr>
+        </thead>
+        <tbody>
+          @for (t of themes; track t.id) {
+            <tr>
+              <td class="name-cell">
+                <button type="button" class="star-btn" [class.on]="t.starred"
+                        [title]="t.starred ? 'Unstar' : 'Star (adds to your user menu)'" (click)="toggleStar(t)">
+                  <i [class]="t.starred ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                </button>
+                <span class="sw">
+                  @for (c of t.swatches; track $index) { <i [style.background]="c"></i> }
+                </span>
+                <b>{{ t.name }}</b>
+                @if (t.builtIn) { <span class="builtin-badge"><i class="fa-solid fa-lock"></i> Built-in</span> }
+              </td>
+              <td><span class="status-pill" [class.inactive]="t.status !== 'Active'">{{ t.status }}</span></td>
+              <td>
+                @if (t.isDefault) {
+                  <span class="badge">DEFAULT</span>
+                } @else {
+                  <button type="button" class="link-btn" title="Make this the organization-wide default" (click)="setDefault(t)">Set as org default</button>
+                }
+              </td>
+              <td class="r actions">
+                <button mjButton variant="primary" size="sm" [disabled]="isApplied(t.id)"
+                        title="Apply this theme to your workspace now" (click)="applyToMe(t)">
+                  {{ isApplied(t.id) ? 'Applied' : 'Apply' }}
+                </button>
+                <button mjButton variant="outline" size="sm" (click)="duplicate(t)">Duplicate</button>
+                @if (!t.builtIn) {
+                  <button mjButton variant="outline" size="sm" (click)="edit(t)">Edit</button>
+                  <button mjButton variant="danger" size="sm" (click)="remove(t)">Delete</button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </mj-page-body>
+</mj-page-layout>

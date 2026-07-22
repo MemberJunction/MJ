@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT40 - Entity-Server Invariants",
+    "Description": "Server-entity invariants proven over the wire (resolver dispatches to the server subclass, EW8 proof style): FK cleanup and validation invariants on additional MJCoreEntitiesServer subclasses beyond entity-writes coverage. Self-cleaning tagged fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Server-entity invariants proven over the wire (resolver dispatches to the server subclass, EW8 proof style): FK cleanup and validation invariants on additional MJCoreEntitiesServer subclasses beyond entity-writes coverage. Self-cleaning tagged fixtures."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "entity-server-invariants"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C5F061E2-74F2-4EDB-902F-9CF878BEE01A"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:28:04.841Z",
+    "checksum": "02d516565876d92b4c517b7d12bd518743cf6bd38d1dc69f133070a91851fe18"
+  }
+}
