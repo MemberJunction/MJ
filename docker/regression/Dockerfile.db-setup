@@ -68,10 +68,17 @@ RUN --mount=type=cache,target=/root/.npm npm ci
 # node_modules created by npm ci are preserved; COPY merges, never deletes).
 COPY packages/ ./packages/
 
+# metadata/ BEFORE the compile: @memberjunction/computer-use's build
+# (scripts/generate-prompt-parts.mjs, since commit 3080b58da6) reads
+# metadata/prompts/templates/computer-use/_includes/ at build time to
+# single-source its prompt text, so the templates must exist before build:api.
+# (Dockerfile.test-runner already copies metadata before its build; db-setup +
+# api were missed, breaking every image rebuild on this branch.)
+COPY metadata/ ./metadata/
+
 RUN npm run build:api
 
-# Data + config after the compile so metadata/migration edits don't recompile.
-COPY metadata/ ./metadata/
+# migrations + demo data after the compile (not build inputs).
 COPY migrations/ ./migrations/
 COPY Demos/AssociationDB/ ./Demos/AssociationDB/
 

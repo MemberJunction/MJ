@@ -43,11 +43,16 @@ COPY packages/ ./packages/
 COPY docker/regression/.docker-generated/GeneratedEntities/ ./packages/GeneratedEntities/src/generated/
 COPY docker/regression/.docker-generated/MJAPI-generated/ ./packages/MJAPI/src/generated/
 
+# metadata/ BEFORE the compile: @memberjunction/computer-use's build
+# (scripts/generate-prompt-parts.mjs, since commit 3080b58da6) reads
+# metadata/prompts/templates/computer-use/_includes/ at build time, so the
+# templates must exist before build:api (matches Dockerfile.test-runner).
+COPY metadata/ ./metadata/
+
 RUN npm run build:api
 
-# Data after the compile so metadata/migration edits don't recompile. These
-# ride into the runtime stage via the whole-tree COPY --from below.
-COPY metadata/ ./metadata/
+# migrations after the compile (not a build input). Rides into the runtime
+# stage via the whole-tree COPY --from below.
 COPY migrations/ ./migrations/
 
 # ─── Runtime ───────────────────────────────────────────────────────────────
