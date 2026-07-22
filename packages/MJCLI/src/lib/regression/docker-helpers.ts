@@ -327,14 +327,44 @@ export const AGENTIC_TEST_RUNNER_IMAGE = 'memberjunction/agentic-test-runner:lat
  * the monorepo; Phase 8 will publish the docker image and lift this guard.
  */
 export function requireMonorepoRoot(): void {
-  if (!existsSync(COMPOSE_FILE)) {
+  if (existsSync(COMPOSE_FILE)) return; // cwd IS the monorepo root — the happy path
+  // DR-F7 (path hardening): distinguish "in a subdirectory OF a monorepo" — a
+  // precise, actionable error — from "not in a monorepo at all" (the external
+  // message). The old guard printed the generic message in both cases, so the
+  // subdir case read like a broken checkout instead of a wrong cwd.
+  const root = findMonorepoRoot();
+  if (root) {
+    process.stderr.write(
+      `✗ 'mj test regression *' must be run from the MemberJunction monorepo root.\n` +
+        `  You're in a subdirectory:  ${process.cwd()}\n` +
+        `  Run:  cd ${root}\n`,
+    );
+  } else {
     process.stderr.write(
       `✗ Expected to find ${COMPOSE_FILE} relative to the current directory.\n` +
         `  'mj test regression *' commands must be run from the MemberJunction\n` +
         `  monorepo root. (Phase 8 will lift this requirement by publishing the\n` +
         `  test-runner image; for now, cd into the MJ repo first.)\n`,
     );
-    process.exit(1);
+  }
+  process.exit(1);
+}
+
+/**
+ * Walk up from `startDir` (inclusive, through the filesystem root) looking for
+ * the regression compose file — the sentinel that marks an MJ monorepo checkout
+ * (present in every checkout, never in an external `npm i -g` install). Returns
+ * the directory that contains it (the monorepo root), or null when none is found
+ * at or above `startDir`. (DR-F7: the single walk-up root resolver.)
+ */
+export function findMonorepoRoot(startDir: string = process.cwd()): string | null {
+  let dir = path.resolve(startDir);
+  const fsRoot = path.parse(dir).root;
+  // Loop tests fsRoot too (the old isInsideMonorepo stopped one short of it).
+  for (;;) {
+    if (existsSync(path.join(dir, COMPOSE_FILE))) return dir;
+    if (dir === fsRoot) return null;
+    dir = path.dirname(dir);
   }
 }
 
@@ -343,18 +373,9 @@ export function requireMonorepoRoot(): void {
  * Used by commands (compare, up, export, remote) to pick monorepo-relative
  * paths over external/published-image paths. Unlike `requireMonorepoRoot()`,
  * this does NOT exit on failure.
- *
- * The sentinel is the regression base compose file: it lives in every
- * monorepo checkout and is never present in an external `npm i -g` install.
  */
 export function isInsideMonorepo(startDir: string = process.cwd()): boolean {
-  let dir = path.resolve(startDir);
-  const root = path.parse(dir).root;
-  while (dir !== root) {
-    if (existsSync(path.join(dir, COMPOSE_FILE))) return true;
-    dir = path.dirname(dir);
-  }
-  return false;
+  return findMonorepoRoot(startDir) !== null;
 }
 
 /** Returns true when `<cwd>/<ENV_FILE>` exists (e.g. user copied .env.test.example). */
