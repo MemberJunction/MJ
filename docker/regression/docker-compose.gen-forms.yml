@@ -1,0 +1,20 @@
+# gen-forms isolation overlay (DR-C5 follow-up).
+#
+# `gen-forms.sh` spins up a THROWAWAY database purely to run CodeGen and emit the
+# Angular entity forms into ./.docker-generated/ (a host bind-mount), then tears
+# itself down with `docker compose … down -v`. Run on the shared `mj-regression`
+# project, that teardown was catastrophic: the base compose pins the SQL Server
+# volumes to EXPLICIT names (`mj-regression-mssql-data` / `-snapshot-data`), so a
+# distinct project name alone does NOT isolate them — `down -v` removed the real
+# stack's database AND the DR-B1 snapshot (and stopped its containers).
+#
+# This overlay re-points those two volumes to gen-forms-only names. Combined with
+# a distinct project (`-p mj-regression-genforms`, set in gen-forms.sh), the
+# gen-forms containers and volumes are fully separate from the real stack, so its
+# `down -v` can only ever remove its own throwaway resources. The generated forms
+# live on a host bind-mount, so they survive the teardown regardless.
+volumes:
+  mssql-data:
+    name: mj-regression-genforms-mssql-data
+  snapshot-data:
+    name: mj-regression-genforms-snapshot-data
