@@ -216,6 +216,66 @@ describe('BaseCommunicationProvider', () => {
             expect(result.ErrorMessage).toContain('credentials provided: false');
         });
     });
+
+    describe('subscription default implementations', () => {
+        it('CreateSubscription should return not supported', async () => {
+            const result = await provider.CreateSubscription({
+                ChangeTypes: ['created'],
+                NotificationUrl: 'https://example.com/hook',
+                ClientState: 'secret',
+                Identifier: 'mailbox@test.com',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support CreateSubscription');
+            expect(result.ErrorMessage).toContain('mailbox@test.com');
+        });
+
+        it('RenewSubscription should return not supported', async () => {
+            const result = await provider.RenewSubscription({ SubscriptionID: 'sub-1' });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support RenewSubscription');
+            expect(result.ErrorMessage).toContain('sub-1');
+        });
+
+        it('DeleteSubscription should return not supported', async () => {
+            const result = await provider.DeleteSubscription({ SubscriptionID: 'sub-1' });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support DeleteSubscription');
+            expect(result.ErrorMessage).toContain('sub-1');
+        });
+
+        it('ParseNotification should return not supported with empty notifications and a 400', async () => {
+            const result = await provider.ParseNotification({
+                Headers: {},
+                QueryParams: {},
+                RawBody: '{}',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support ParseNotification');
+            expect(result.Notifications).toEqual([]);
+            expect(result.SuggestedResponseStatus).toBe(400);
+        });
+
+        it('getSubscriptionCapabilities should return undefined by default', () => {
+            expect(provider.getSubscriptionCapabilities()).toBeUndefined();
+        });
+
+        it('subscription operations are absent from getSupportedOperations by default', () => {
+            expect(provider.supportsOperation('CreateSubscription')).toBe(false);
+            expect(provider.supportsOperation('RenewSubscription')).toBe(false);
+            expect(provider.supportsOperation('DeleteSubscription')).toBe(false);
+            expect(provider.supportsOperation('ParseNotification')).toBe(false);
+        });
+
+        it('capability invariant holds: undefined capabilities IFF ops absent', () => {
+            const caps = provider.getSubscriptionCapabilities();
+            const ops = provider.getSupportedOperations();
+            const hasAnySubOp = ['CreateSubscription', 'RenewSubscription', 'DeleteSubscription', 'ParseNotification']
+                .some((op) => ops.includes(op as never));
+            // Default provider: no capabilities AND no ops - the two agree.
+            expect(caps === undefined).toBe(!hasAnySubOp);
+        });
+    });
 });
 
 describe('MJCommunicationProviderEntityExtended', () => {
