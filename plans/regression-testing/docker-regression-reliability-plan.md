@@ -738,6 +738,10 @@ DR-B4 (baseline root fix — can start anytime, lands here for the mj-sync work)
 - **DR-E5 (entrypoint consolidation)** — a high-risk merge of three load-bearing entrypoints; needs a full-run verification and is the compatibility path DR-F7 depends on staying intact.
 - **DR-C4 / DR-C5 (bake-vs-mount policy · `.docker-generated` fingerprint)** — build/image-orchestration changes whose verification needs slow image rebuilds.
 
+**Two build findings surfaced while rebuilding db-setup to bake the DR-B4 CLI (both now gate the remaining Theme-B/C/E items — all of which need a working image rebuild):**
+1. **FIXED — Dockerfile COPY order.** `@memberjunction/computer-use`'s build reads `metadata/prompts/templates/computer-use/_includes/` at build time (since 3080b58da6), but `Dockerfile.db-setup` + `Dockerfile.api` ran `build:api` BEFORE `COPY metadata/` → every rebuild of those images failed (`ENOENT … controller-actions.md`). `Dockerfile.test-runner` already had the right order. Moved `COPY metadata/` ahead of the compile in both (committed) — this alone unblocked the db-setup rebuild.
+2. **FLAGGED (out of DB-lifecycle scope) — `npx mj` build-reproducibility.** After the rebuild, the freshly-built db-setup image's `npx mj` resolves to a bogus registry `mj@1.0.5` (→ `spawn git ENOENT`) instead of the workspace `@memberjunction/cli` bin — the 44h-old image's `mj` worked, so a fresh `mj test regression build` currently yields a db-setup image that can't `mj migrate`. This is a workspace-bin/manifests-skeleton reproducibility issue, distinct from Theme B; it blocks in-container verification of DR-B4/B5's `--no-write-back` pushes (verified instead via the host CLI) and any rebuild-dependent item (E5/C4/C5). Needs a separate follow-up. The live stack was restored to healthy by RESTORE-ing the valid `33427d50` snapshot directly (proving the .bak is durable + usable) and bringing mjapi/mjexplorer back up.
+
 **Wave 4 — build & distribution:**
 DR-C2 (shared builder; benefits from C1 and the B-wave's clarified image responsibilities) → DR-C3 (runtime Explorer) → DR-C6 (published runner base) → DR-F7 (path hardening + phase inversion).
 
