@@ -27,6 +27,10 @@ set -e
 
 SCRIPTS=/app/docker/regression/scripts
 
+# DR-E5: shared helpers, one copy across both entrypoints (see the full-mode
+# entrypoint + scripts/lib/entrypoint-common.sh).
+source "$SCRIPTS/lib/entrypoint-common.sh"
+
 export NODE_OPTIONS="--import /app/bootstrap.mjs"
 
 echo ""
@@ -69,36 +73,13 @@ npx mj sync push --dir=metadata --include="test-suites" 2>&1 || {
 }
 echo ""
 
-if [ -n "${EXTRA_METADATA_DIRS:-}" ]; then
-    IFS=',' read -ra EXTRA_DIRS <<< "$EXTRA_METADATA_DIRS"
-    for EXTRA_DIR in "${EXTRA_DIRS[@]}"; do
-        EXTRA_DIR_TRIMMED="$(echo "$EXTRA_DIR" | xargs)"
-        if [ -d "$EXTRA_DIR_TRIMMED" ]; then
-            echo "Syncing extra metadata from $EXTRA_DIR_TRIMMED..."
-            npx mj sync push --dir="$EXTRA_DIR_TRIMMED" 2>&1 || {
-                echo "  WARNING: Extra metadata sync from $EXTRA_DIR_TRIMMED failed"
-            }
-            echo ""
-        else
-            echo "  WARNING: EXTRA_METADATA_DIRS entry not found: $EXTRA_DIR_TRIMMED"
-        fi
-    done
-fi
+# Remote mode pushes into its results DB (no --no-write-back).
+push_extra_metadata_dirs ""
 
 # ─── 1b. Archive destination pre-flight ─────────────────────────────────────
-# Mirrors § 4b of test-runner-entrypoint.sh. Fails fast (~5s) if the destination
-# is misconfigured, rather than discovering it after the suite finishes.
-ARCHIVE_PREFLIGHT_OK=0
-if [ -n "${ARCHIVE_DB_DATABASE:-}" ]; then
-    echo "Running archive destination pre-flight..."
-    if node "$SCRIPTS/archive-preflight.cjs" 2>&1; then
-        ARCHIVE_PREFLIGHT_OK=1
-    else
-        echo "  Archive destination pre-flight FAILED — the archive step will be skipped."
-        echo "  Fix the issues above and re-run, or unset ARCHIVE_DB_DATABASE to disable archiving."
-    fi
-    echo ""
-fi
+# Fail fast (~5s) if the archive destination is misconfigured. Sets
+# ARCHIVE_PREFLIGHT_OK, consumed by § 5 (archive-run.sh).
+run_archive_preflight
 
 # ─── 2. Per-run output directory ─────────────────────────────────────────────
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
@@ -118,18 +99,8 @@ echo ""
 WORKERS=${MAX_PARALLEL_WORKERS:-4}
 echo "Running '${TEST_SUITE_NAME}' (${WORKERS} parallel workers) against ${MJ_TEST_VAR_baseUrl}..."
 
-# Optional --oracles-module arg threaded through from the target profile's
-# `oraclesModule` field. Lets Mode C adopters plug app-specific IOracle
-# implementations without touching TestingFramework.
-ORACLES_ARGS=()
-if [ -n "${ORACLES_MODULE:-}" ]; then
-    if [ -f "$ORACLES_MODULE" ]; then
-        ORACLES_ARGS=(--oracles-module "$ORACLES_MODULE")
-        echo "  Custom oracle module: $ORACLES_MODULE"
-    else
-        echo "  WARNING: ORACLES_MODULE=$ORACLES_MODULE not found — skipping"
-    fi
-fi
+# Optional --oracles-module arg from the target profile's `oraclesModule` field.
+build_oracles_args
 
 set +e
 npx mj test suite --name "${TEST_SUITE_NAME}" \
@@ -142,18 +113,7 @@ EXIT_CODE=$?
 set -e
 
 # ─── 4. Extract screenshots + generate reports ───────────────────────────────
-echo ""
-echo "Extracting screenshots..."
-RUN_DIR="$RUN_DIR" node "$SCRIPTS/extract-screenshots.cjs" 2>&1 \
-    || echo "  WARNING: Screenshot extraction failed"
-
-echo ""
-echo "Generating markdown report..."
-RUN_DIR="$RUN_DIR" node "$SCRIPTS/generate-md-report.cjs" 2>&1
-
-echo ""
-echo "Generating HTML report..."
-RUN_DIR="$RUN_DIR" TIMESTAMP="$TIMESTAMP" node "$SCRIPTS/generate-html-report.cjs" 2>&1
+generate_standard_reports
 
 # ─── 5. Optional archive ─────────────────────────────────────────────────────
 # Shared with the full-stack entrypoint — see scripts/archive-run.sh for the
@@ -162,8 +122,7 @@ RUN_DIR="$RUN_DIR" TIMESTAMP="$TIMESTAMP" node "$SCRIPTS/generate-html-report.cj
 source "$SCRIPTS/archive-run.sh"
 
 # ─── 6. Latest symlink ───────────────────────────────────────────────────────
-ln -sfn "run-${TIMESTAMP}" /app/test-results/latest \
-    || echo "  WARNING: Could not create latest symlink"
+finalize_latest_symlink
 
 echo ""
 echo "Run directory: $RUN_DIR"
@@ -171,5 +130,5 @@ echo "  results.json       → $RUN_DIR/results.json"
 echo "  report.md          → $RUN_DIR/report.md"
 echo "  report.html        → $RUN_DIR/report.html  (open in a browser)"
 echo "  screenshots/       → $RUN_DIR/screenshots/"
-echo "  latest symlink     → /app/test-results/latest → run-${TIMESTAMP}"
+echo "  latest symlink     → /app/test-results/latest → $RUN_ID"
 exit $EXIT_CODE

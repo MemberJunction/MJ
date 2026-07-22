@@ -16,6 +16,10 @@ set -e
 
 SCRIPTS=/app/docker/regression/scripts
 
+# DR-E5: shared helpers (extra-metadata push, archive pre-flight, oracles args,
+# report generation, latest symlink) — one copy, sourced by both entrypoints.
+source "$SCRIPTS/lib/entrypoint-common.sh"
+
 # Register ComputerUseTestDriver with ClassFactory before the CLI runs.
 export NODE_OPTIONS="--import /app/bootstrap.mjs"
 
@@ -118,26 +122,9 @@ echo ""
 fi  # end: standard (non-bacpac) metadata seeding
 
 # ─── 2b. Extra metadata directories ──────────────────────────────────────────
-# Optional: extra metadata directories pushed in addition to the MJ metadata.
-# EXTRA_METADATA_DIRS=/app/byo-tests,/app/byo-suites would push two extra dirs
-# of test + suite JSON before running the suite. Used by Mode D overlays that
-# need to seed app-specific tests (e.g., the BYO example app) without making
-# them part of the core MJ metadata.
-if [ -n "${EXTRA_METADATA_DIRS:-}" ]; then
-    IFS=',' read -ra EXTRA_DIRS <<< "$EXTRA_METADATA_DIRS"
-    for EXTRA_DIR in "${EXTRA_DIRS[@]}"; do
-        EXTRA_DIR_TRIMMED="$(echo "$EXTRA_DIR" | xargs)"
-        if [ -d "$EXTRA_DIR_TRIMMED" ]; then
-            echo "Syncing extra metadata from $EXTRA_DIR_TRIMMED..."
-            npx mj sync push --dir="$EXTRA_DIR_TRIMMED" --no-write-back 2>&1 || {
-                echo "  WARNING: Extra metadata sync from $EXTRA_DIR_TRIMMED failed"
-            }
-            echo ""
-        else
-            echo "  WARNING: EXTRA_METADATA_DIRS entry not found: $EXTRA_DIR_TRIMMED"
-        fi
-    done
-fi
+# Optional dirs of test/suite JSON pushed in addition to the MJ metadata (Mode D
+# overlays seeding app-specific tests). --no-write-back: local ephemeral DB.
+push_extra_metadata_dirs "--no-write-back"
 
 # ─── 4. Pre-flight gate ──────────────────────────────────────────────────────
 # DR-E1: preflight now GATES the run. It exits non-zero when a gating check
@@ -156,21 +143,9 @@ fi
 echo ""
 
 # ─── 4b. Archive destination pre-flight ─────────────────────────────────────
-# When ARCHIVE_DB_DATABASE is set, validate the destination MJ instance up
-# front so we fail fast (~5s) instead of discovering misconfiguration after
-# the 10-minute suite. Tracks success in ARCHIVE_PREFLIGHT_OK so § 8 below can
-# decide whether to attempt the push.
-ARCHIVE_PREFLIGHT_OK=0
-if [ -n "${ARCHIVE_DB_DATABASE:-}" ]; then
-    echo "Running archive destination pre-flight..."
-    if node "$SCRIPTS/archive-preflight.cjs" 2>&1; then
-        ARCHIVE_PREFLIGHT_OK=1
-    else
-        echo "  Archive destination pre-flight FAILED — the archive step will be skipped."
-        echo "  Fix the issues above and re-run, or unset ARCHIVE_DB_DATABASE to disable archiving."
-    fi
-    echo ""
-fi
+# Fail fast (~5s) on a misconfigured archive destination instead of after the
+# ~10-min suite. Sets ARCHIVE_PREFLIGHT_OK, consumed by § 8 (archive-run.sh).
+run_archive_preflight
 
 # Each run writes into its own timestamped folder so runs don't overwrite
 # each other. Structure:
@@ -242,17 +217,8 @@ SUITE_NAME="${TEST_SUITE_NAME:-MJ Explorer Regression Suite}"
 RETRIES=${MAX_RETRIES:-2}
 echo "Running '${SUITE_NAME}' (${WORKERS} parallel workers, up to ${RETRIES} retries on failure)..."
 
-# Optional --oracles-module arg (Phase 5). Lets BYO Mode D / Mode C adopters
-# ship custom IOracle implementations alongside their tests.
-ORACLES_ARGS=()
-if [ -n "${ORACLES_MODULE:-}" ]; then
-    if [ -f "$ORACLES_MODULE" ]; then
-        ORACLES_ARGS=(--oracles-module "$ORACLES_MODULE")
-        echo "  Custom oracle module: $ORACLES_MODULE"
-    else
-        echo "  WARNING: ORACLES_MODULE=$ORACLES_MODULE not found — skipping"
-    fi
-fi
+# Optional --oracles-module arg (Phase 5): BYO custom IOracle implementations.
+build_oracles_args
 
 # DR-F4: restrict the run to specific test names (rerun-failures / ad-hoc
 # selection). Empty = whole suite.
@@ -280,18 +246,7 @@ set -e
 # on its own rather than orphaning for hours (the §3.2 failure).
 
 # ─── 7. Extract screenshots + generate reports ───────────────────────────────
-echo ""
-echo "Extracting screenshots..."
-RUN_DIR="$RUN_DIR" node "$SCRIPTS/extract-screenshots.cjs" 2>&1 \
-    || echo "  WARNING: Screenshot extraction failed"
-
-echo ""
-echo "Generating markdown report..."
-RUN_DIR="$RUN_DIR" node "$SCRIPTS/generate-md-report.cjs" 2>&1
-
-echo ""
-echo "Generating HTML screenshot gallery..."
-RUN_DIR="$RUN_DIR" TIMESTAMP="$TIMESTAMP" node "$SCRIPTS/generate-html-report.cjs" 2>&1
+generate_standard_reports
 
 # DR-G2: machine-readable summary.json for CI gates + trend tracking.
 echo ""
@@ -307,8 +262,7 @@ source "$SCRIPTS/archive-run.sh"
 # Maintain a "latest" symlink pointing at this run's directory.
 # `mj test compare --from-json docker/regression/test-results` discovers
 # all run-* folders automatically (no need to reference "latest" explicitly).
-ln -sfn "$RUN_ID" /app/test-results/latest \
-    || echo "  WARNING: Could not create latest symlink"
+finalize_latest_symlink
 
 # DR-G4: stop the supervisor now that reports are done (it stayed alive through
 # them). Parent-watch already backstops orphaning if we never reach here.
