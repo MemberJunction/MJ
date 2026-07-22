@@ -278,6 +278,41 @@ export function formsFingerprintStatus(root: string = process.cwd()): FormsFinge
   return { fresh: true, reason: '', current, recorded };
 }
 
+// ─── DR-F5: resource sizing ──────────────────────────────────────────────────
+
+/**
+ * Parse a docker-style memory string ("8g", "512m", "1024k", "4gb", or a bare
+ * byte count) to bytes. Returns null when the input isn't a recognizable size,
+ * so callers can reject a bad `--*-memory` flag with a clear error.
+ */
+export function parseMemoryToBytes(value: string): number | null {
+  const m = /^(\d+(?:\.\d+)?)\s*([gmk]?)b?$/i.exec(value.trim());
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  const unit = m[2].toLowerCase();
+  const mult = unit === 'g' ? 1024 ** 3 : unit === 'm' ? 1024 ** 2 : unit === 'k' ? 1024 : 1;
+  return Math.round(n * mult);
+}
+
+/**
+ * DR-A4 formula: the max number of browser workers a runner container of
+ * `runnerMemBytes` can hold without OOM. Each Computer-Use worker drives a
+ * Chromium context (~1.5 GiB); a fixed reserve covers the node/CLI process
+ * itself (the `4 workers OOM'd the default-memory host` note in the plan is why
+ * the per-worker budget is deliberately generous). Pure + deterministic, clamped
+ * to [1, 12]. This SURFACES a suggestion (effective-config banner) — it does not
+ * silently override an explicit `--workers`.
+ */
+export function suggestWorkers(
+  runnerMemBytes: number,
+  perWorkerBytes: number = Math.round(1.5 * 1024 ** 3),
+  reserveBytes: number = 1024 ** 3,
+): number {
+  const usable = runnerMemBytes - reserveBytes;
+  if (usable < perWorkerBytes) return 1;
+  return Math.max(1, Math.min(12, Math.floor(usable / perWorkerBytes)));
+}
+
 /**
  * The pinned runner image tag used when `init` (and future external invocations)
  * shell out to `docker run memberjunction/agentic-test-runner …`. Kept here so

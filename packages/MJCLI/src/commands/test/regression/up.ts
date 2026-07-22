@@ -10,10 +10,12 @@ import {
   FULL_INFRA_SERVICES,
   isInsideMonorepo,
   mintRunId,
+  parseMemoryToBytes,
   resolveStandaloneCompose,
   runDirFor,
   spawnInherit,
   spawnTee,
+  suggestWorkers,
 } from '../../../lib/regression/docker-helpers.js';
 
 export default class TestRegressionUp extends Command {
@@ -48,6 +50,11 @@ export default class TestRegressionUp extends Command {
       description: 'Parallel workers (MAX_PARALLEL_WORKERS). Default 3. Size against runner memory — ' +
         'each browser worker needs ~1.5g; 4 workers OOM\'d the default-memory host.',
     }),
+    // DR-F5: resource-sizing flags → the existing compose mem_limit env knobs
+    // (shell env wins over --env-file, the same mechanism --workers/--retries use).
+    'runner-memory': Flags.string({ description: 'Runner container memory limit (MJ_REGRESSION_RUNNER_MEM_LIMIT), e.g. 8g. Default 7g — sizes the Chromium browser workers.' }),
+    'db-memory': Flags.string({ description: 'SQL Server container memory limit (MJ_REGRESSION_SQL_MEM_LIMIT), e.g. 6g. Default 4g.' }),
+    'api-memory': Flags.string({ description: 'MJAPI container memory limit (MJ_REGRESSION_API_MEM_LIMIT), e.g. 12g. Default 10g.' }),
     metadata: Flags.string({ description: 'Directory of your test + test-suite metadata (pushed before the run). Requires --bacpac.' }),
     'skip-forms-check': Flags.boolean({
       description: 'Skip the DR-C5 tripwire that refuses to start the self-contained stack when the ' +
@@ -124,8 +131,38 @@ export default class TestRegressionUp extends Command {
     // DR-E2: forward the sizing knobs as env for compose interpolation. Guard on
     // `!== undefined` — `--retries 0` is valid and falsy (it's the whole point:
     // disable retries when re-running known failures).
-    if (flags.retries !== undefined) { childEnv.MAX_RETRIES = String(flags.retries); this.log(`  Retries: ${flags.retries}`); }
-    if (flags.workers !== undefined) { childEnv.MAX_PARALLEL_WORKERS = String(flags.workers); this.log(`  Workers: ${flags.workers}`); }
+    if (flags.retries !== undefined) { childEnv.MAX_RETRIES = String(flags.retries); }
+    if (flags.workers !== undefined) { childEnv.MAX_PARALLEL_WORKERS = String(flags.workers); }
+
+    // DR-F5: memory-sizing flags → the compose mem_limit env knobs. Validate up
+    // front so a typo'd size aborts here (~instant) rather than as a cryptic
+    // compose error after infra has started.
+    const memFlags: Array<[string, string]> = [
+      ['runner-memory', 'MJ_REGRESSION_RUNNER_MEM_LIMIT'],
+      ['db-memory', 'MJ_REGRESSION_SQL_MEM_LIMIT'],
+      ['api-memory', 'MJ_REGRESSION_API_MEM_LIMIT'],
+    ];
+    for (const [flag, envVar] of memFlags) {
+      const val = flags[flag] as string | undefined;
+      if (val === undefined) continue;
+      if (parseMemoryToBytes(val) === null) {
+        this.error(`✗ --${flag} must be a docker memory size like 8g / 512m / 2048k (got: ${val})`);
+      }
+      childEnv[envVar] = val;
+    }
+
+    // DR-F5: effective-config banner — one place stating exactly what this run
+    // will use, so a mis-set flag is visible before the ~10-min suite. The worker
+    // line carries the DR-A4 suggestion derived from the runner's memory budget:
+    // advisory only, it never overrides an explicit --workers.
+    const runnerMem = childEnv.MJ_REGRESSION_RUNNER_MEM_LIMIT ?? '7g'; // compose default
+    const runnerMemBytes = parseMemoryToBytes(runnerMem);
+    const suggested = runnerMemBytes !== null ? suggestWorkers(runnerMemBytes) : null;
+    const workersLine = flags.workers !== undefined ? String(flags.workers) : '3 (default)';
+    this.log('  ── effective config ──');
+    this.log(`     workers: ${workersLine}` + (suggested !== null ? `   [A4 suggests ≤${suggested} for a ${runnerMem} runner]` : ''));
+    this.log(`     retries: ${flags.retries !== undefined ? String(flags.retries) : '2 (default)'}`);
+    this.log(`     memory:  runner=${runnerMem}  db=${childEnv.MJ_REGRESSION_SQL_MEM_LIMIT ?? '4g'}  api=${childEnv.MJ_REGRESSION_API_MEM_LIMIT ?? '10g'}`);
 
     // DR-F2: detached, or bacpac (its own one-shot import flow), keep the classic
     // single `up`. Plain `--abort-on-container-exit` is unsafe here — the one-shot
