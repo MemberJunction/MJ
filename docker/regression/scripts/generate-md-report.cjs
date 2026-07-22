@@ -11,6 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { clusterFailures, enrichRoutesFromSteps } = require('./lib/cluster-failures.cjs');
 
 const RUN_DIR = process.env.RUN_DIR;
 if (!RUN_DIR) {
@@ -55,6 +56,38 @@ try {
         }
         lines.push(`| **Average Score** | ${pct(r.averageScore, 1)} |`);
         lines.push('');
+    });
+
+    // 1b. Failure clusters (DR-G1) — coarse category+route signatures so a
+    // feature-wide failure reads as one expandable block. Additive: the
+    // per-test rows below are unchanged. Collapsible via <details>.
+    section(lines, 'failure-clusters', () => {
+        const clusters = clusterFailures(enrichRoutesFromSteps(testResults, RUN_DIR));
+        lines.push('## Failure clusters');
+        lines.push('');
+        if (clusters.length === 0) {
+            lines.push('_No failing tests — nothing to cluster._');
+            lines.push('');
+            return;
+        }
+        const defects = clusters.filter((c) => c.suspectedAppDefect).length;
+        lines.push(`${clusters.length} cluster${clusters.length === 1 ? '' : 's'}` +
+            (defects ? ` — **${defects} suspected app defect${defects === 1 ? '' : 's'}** (do not retry, file a bug)` : '') + '.');
+        lines.push('');
+        for (const c of clusters) {
+            const flag = c.suspectedAppDefect ? '🚩 ' : '';
+            const tail = c.suspectedAppDefect ? ' · **suspected app defect**' : '';
+            lines.push('<details>');
+            lines.push(`<summary>${flag}<strong>${c.signature}</strong> — ${c.count} failure${c.count === 1 ? '' : 's'}${tail}</summary>`);
+            lines.push('');
+            c.testNames.forEach((name, i) => {
+                const id = c.testIds[i] ? ` (\`${c.testIds[i]}\`)` : '';
+                lines.push(`- ${name}${id}`);
+            });
+            lines.push('');
+            lines.push('</details>');
+            lines.push('');
+        }
     });
 
     // 2. Summary table — each row guarded so one bad record drops only its row.

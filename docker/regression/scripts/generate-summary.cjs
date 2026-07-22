@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { clusterFailures, enrichRoutesFromSteps } = require('./lib/cluster-failures.cjs');
 
 /** Fold per-test rows into status/category/flaky tallies. */
 function tallyTests(tests) {
@@ -94,6 +95,17 @@ function buildSummary(runDir, nowIso) {
     const loaded = loadResults(runDir);
     if (!loaded) return null;
     const { totals, categories, averageScore } = tallyTests(loaded.tests);
+    // DR-G1: coarse failure-signature clusters. Compact per-cluster contract for
+    // CI (signature/category/route/count/testIds/suspectedAppDefect); the richer
+    // testNames stay in the md/html reports.
+    const failureClusters = clusterFailures(enrichRoutesFromSteps(loaded.tests, runDir)).map((c) => ({
+        signature: c.signature,
+        category: c.category,
+        route: c.route,
+        count: c.count,
+        testIds: c.testIds,
+        suspectedAppDefect: c.suspectedAppDefect,
+    }));
     return {
         runId: path.basename(runDir),
         suiteName: loaded.suiteName ?? null,
@@ -105,6 +117,7 @@ function buildSummary(runDir, nowIso) {
         averageScore,
         durationMs: loaded.durationMs ?? null,
         categories,
+        failureClusters,
         envQuality: readEnvQuality(runDir),
     };
 }
@@ -125,8 +138,10 @@ if (require.main === module) {
         }
         fs.writeFileSync(path.join(RUN_DIR, 'summary.json'), JSON.stringify(summary, null, 2));
         const c = summary.totals;
+        const defects = summary.failureClusters.filter((fc) => fc.suspectedAppDefect).length;
         console.log(`  ✓ summary.json — ${c.passed}/${c.total} passed, ${c.failed} failed, ${c.flaky} flaky` +
-            (summary.envQuality ? `, env ${summary.envQuality.unhealthyPct}% unhealthy` : ''));
+            (summary.envQuality ? `, env ${summary.envQuality.unhealthyPct}% unhealthy` : '') +
+            (summary.failureClusters.length ? `, ${summary.failureClusters.length} failure cluster(s)${defects ? ` (${defects} suspected app defect)` : ''}` : ''));
     } catch (err) {
         console.error('  WARNING: summary.json generation failed:', err.message);
     }
