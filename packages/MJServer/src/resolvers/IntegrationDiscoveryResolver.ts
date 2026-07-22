@@ -4041,10 +4041,21 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // null RunID: an optimistic, untrackable result that read as "started" when nothing
             // could be followed. Poll briefly for ANY run for this connector stamped at/after the
             // fire instant; that catches both the still-running and the already-finished cases.
+            //
+            // The row itself isn't created until executeSyncInternal reaches CreateRunRecord,
+            // which runs AFTER LoadRunConfiguration (loads every entity map + field map + builds
+            // the connector instance) — for a large connector (HubSpot, 168 entity maps) that
+            // synchronous setup alone can take several seconds, so a short fixed poll window can
+            // elapse before the row exists at all, not because the sync failed. Live-verified: a
+            // HubSpot StartSync call reported "no run created" while the run (confirmed present in
+            // the DB moments later) was genuinely syncing. Keep the fast path fast (first 2s still
+            // polled every 200ms) but extend the tail so large connectors get a fair window before
+            // we honestly report failure.
             const firedAtFilter = firedAt.toISOString();
             let run: { ID: string; Status: string } | null = null;
-            for (let attempt = 0; attempt < 15 && !run; attempt++) {
-                await new Promise(resolve => setTimeout(resolve, 200));
+            const pollIntervalsMs = [...Array(10).fill(200), ...Array(20).fill(1000)];
+            for (let attempt = 0; attempt < pollIntervalsMs.length && !run; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, pollIntervalsMs[attempt]));
                 const rv = new RunView();
                 const runResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
                     EntityName: 'MJ: Company Integration Runs',
