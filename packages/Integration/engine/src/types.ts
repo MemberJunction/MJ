@@ -32,6 +32,7 @@ export type SyncErrorCode =
     | 'TRANSFORM_ERROR'
     | 'MATCH_RESOLUTION_ERROR'
     | 'DATABASE_ERROR'
+    | 'WRITE_VERIFICATION_ERROR'
     | 'WATERMARK_INVALID'
     | 'CONFIGURATION_ERROR'
     | 'UNKNOWN_ERROR';
@@ -61,6 +62,19 @@ export function ClassifyError(error: unknown): { Code: SyncErrorCode; Severity: 
     if (lower.includes('duplicate') || lower.includes('unique constraint') || lower.includes('primary key')) {
         return { Code: 'DUPLICATE_KEY', Severity: 'Warning' };
     }
+    // "no rows returned" from a Create's mandatory read-back (spCreate's `SELECT * FROM vw... WHERE
+    // <key columns>`) is a DETERMINISTIC failure — almost always a null/mismatched key-column value
+    // (the U1 class of bug: a PK column silently absent from the generated INSERT/EXEC call, so
+    // `WHERE col = NULL` matches zero rows). Retrying the SAME write with the SAME inputs reproduces
+    // the SAME miss every time — this is NOT a transient condition. Checked BEFORE the generic
+    // 'sql'-substring catch-all below (which this message would otherwise match, since the mssql
+    // driver's own error text is "SQL Error: ..."), and deliberately excluded from
+    // `IsRetryableError` — misclassifying it as `DATABASE_ERROR` sends it through exponential-backoff
+    // retry for the full retry budget before dead-lettering, burning many minutes for a failure that
+    // was never going to resolve on retry.
+    if (lower.includes('no rows returned')) {
+        return { Code: 'WRITE_VERIFICATION_ERROR', Severity: 'Critical' };
+    }
     if (lower.includes('validation') || lower.includes('validate')) {
         return { Code: 'VALIDATION_ERROR', Severity: 'Warning' };
     }
@@ -76,7 +90,11 @@ export function ClassifyError(error: unknown): { Code: SyncErrorCode; Severity: 
     if (lower.includes('configuration') || lower.includes('config')) {
         return { Code: 'CONFIGURATION_ERROR', Severity: 'Critical' };
     }
-    if (lower.includes('connect') || lower.includes('econnrefused') || lower.includes('sql')) {
+    // Genuinely transient/connection-level signals only — NOT a bare 'sql' substring, which matches
+    // almost any DB-flavored error message (including the deterministic one above) and made this
+    // catch-all classify far too much as retryable.
+    if (lower.includes('connect') || lower.includes('econnrefused') || lower.includes('deadlock')
+        || lower.includes('connection') || lower.includes('pool')) {
         return { Code: 'DATABASE_ERROR', Severity: 'Critical' };
     }
     if (lower.includes('connector')) {
