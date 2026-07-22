@@ -1,5 +1,47 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 5.49.0
+
+### Patch Changes
+
+- 2783f4e: Repoint `main` from `src/index.ts` (TypeScript source) to `dist/index.js` so the package entry resolves for native-Node and published consumers, not just `tsx` (#3142). Also adds the repo-level native-ESM import guard (`.github/scripts/check-esm-imports.mjs`, wired into the unit-test workflow) that catches extensionless-specifier dist breaks (#3137's bug class) monorepo-wide.
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [ea945da]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [9fb3fda]
+- Updated dependencies [9e2278c]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [78a5e44]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/ai-mistral@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/ai-vector-sync@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/ai-openai@5.49.0
+  - @memberjunction/ai-vectors-pinecone@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/actions-apollo@5.49.0
+  - @memberjunction/actions-content-autotag@5.49.0
+  - @memberjunction/scheduled-actions@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes

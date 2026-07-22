@@ -1,5 +1,113 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.49.0
+
+### Patch Changes
+
+- c5e4b9e: Agent conversation compaction: durable cross-turn summaries stored on the conversation (Sequence + SummaryPromptRunID, budget knobs on AIAgentType/AIAgent, Compaction run steps), conversation-history retrieval tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange), edit handling with OriginalMessageChanged flagging and a wired chat edit affordance, plus hardening fixes: failed message expansions now surface a reason to the model (breaks an unbounded retry loop), json5 ESM import fix restores the local JSON-repair tier, and SQLConverter no longer truncates PG column comments at escaped apostrophes.
+- 6c910ef: Dialect-aware query extraction with QuerySQL-triggered re-extraction, PG double-quoted identifier unwrapping in SQL parser, lazy-load QueryEngine in MJQuerySQLEntityServer, and suppress full_access scope probe from API key usage logs
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [88d707b]
+- Updated dependencies [7af258e]
+- Updated dependencies [ea945da]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [6c910ef]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [9fb3fda]
+- Updated dependencies [5473e9a]
+- Updated dependencies [9e2278c]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [373c5f6]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [9d6e3d9]
+- Updated dependencies [78a5e44]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-agents@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/core-entities-server@5.49.0
+  - @memberjunction/communication-types@5.49.0
+  - @memberjunction/scheduling-engine@5.49.0
+  - @memberjunction/core-actions@5.49.0
+  - @memberjunction/ai-cohere@5.49.0
+  - @memberjunction/ai-gemini@5.49.0
+  - @memberjunction/ai-mistral@5.49.0
+  - @memberjunction/ai-azure@5.49.0
+  - @memberjunction/ai-bedrock@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/testing-engine@5.49.0
+  - @memberjunction/ai-anthropic@5.49.0
+  - @memberjunction/ai-betty-bot@5.49.0
+  - @memberjunction/ai-cerebras@5.49.0
+  - @memberjunction/ai-fireworks@5.49.0
+  - @memberjunction/ai-groq@5.49.0
+  - @memberjunction/ai-inception@5.49.0
+  - @memberjunction/ai-lmstudio@5.49.0
+  - @memberjunction/ai-ollama@5.49.0
+  - @memberjunction/ai-openai@5.49.0
+  - @memberjunction/predictive-studio@5.49.0
+  - @memberjunction/ai-xai@5.49.0
+  - @memberjunction/ai-vectors-pinecone@5.49.0
+  - @memberjunction/search-engine@5.49.0
+  - @memberjunction/templates@5.49.0
+  - @memberjunction/ai-agent-manager@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/ai-form-builder@5.49.0
+  - @memberjunction/tag-engine-base@5.49.0
+  - @memberjunction/ai-recommendations-rex@5.49.0
+  - @memberjunction/ai-reranker@5.49.0
+  - @memberjunction/ai-vector-dupe@5.49.0
+  - @memberjunction/ai-vectors-memory@5.49.0
+  - @memberjunction/ai-vectors-qdrant@5.49.0
+  - @memberjunction/ai-vectors-sqlserver@5.49.0
+  - @memberjunction/ai-vectors-pgvector@5.49.0
+  - @memberjunction/actions-apollo@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/actions-bizapps-accounting@5.49.0
+  - @memberjunction/actions-bizapps-crm@5.49.0
+  - @memberjunction/actions-bizapps-formbuilders@5.49.0
+  - @memberjunction/actions-bizapps-lms@5.49.0
+  - @memberjunction/actions-bizapps-social@5.49.0
+  - @memberjunction/content-autotagging@5.49.0
+  - @memberjunction/doc-utils@5.49.0
+  - @memberjunction/encryption@5.49.0
+  - @memberjunction/data-context-server@5.49.0
+  - @memberjunction/queue@5.49.0
+  - @memberjunction/storage@5.49.0
+  - @memberjunction/react-linter@5.49.0
+  - @memberjunction/record-comparison@5.49.0
+  - @memberjunction/record-set-processor@5.49.0
+  - @memberjunction/scheduling-actions@5.49.0
+  - @memberjunction/scheduling-engine-base@5.49.0
+  - @memberjunction/geo-core@5.49.0
+  - @memberjunction/ai-assemblyai@5.49.0
+  - @memberjunction/ai-blackforestlabs@5.49.0
+  - @memberjunction/ai-elevenlabs@5.49.0
+  - @memberjunction/ai-heygen@5.49.0
+  - @memberjunction/ai-inworld@5.49.0
+  - @memberjunction/ai-llamacpp@5.49.0
+  - @memberjunction/ai-local-embeddings@5.49.0
+  - @memberjunction/ai-minimax@5.49.0
+  - @memberjunction/ai-openrouter@5.49.0
+  - @memberjunction/ai-vertex@5.49.0
+  - @memberjunction/ai-zhipu@5.49.0
+  - @memberjunction/ai-provider-bundle@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes

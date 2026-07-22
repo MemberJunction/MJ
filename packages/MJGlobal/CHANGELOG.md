@@ -1,5 +1,51 @@
 # Change Log - @memberjunction/global
 
+## 5.49.0
+
+### Patch Changes
+
+- a8cb2b6: Explicit ClassFactory resolution failure + permission provider fault isolation (B34/B35)
+
+  `ClassFactory.CreateInstance` has never returned `null` for an unregistered key — it falls back to
+  instantiating the anchor base class — so every call site written as `if (instance) { use } else { error }`
+  had a dead failure branch and silently installed a hollow base-class object.
+  - **`@memberjunction/global`**: adds `TryCreateInstance` / `TryCreateInstanceAsync`, which return an
+    explicit `ClassResolutionResult<T>` (`Resolved` / `Instance` / `Reason`). Bases that cannot function
+    standalone opt in with `static readonly RequiresSubclass = true`: on a fallback they now throw from
+    `CreateInstance` and return `{Resolved: false, Instance: null}` from `TryCreateInstance`. Bases without
+    the marker keep the historical base-class fallback (e.g. `BaseEntity`) and emit a structured, once-per-key
+    warning listing the registered keys for that base plus the call-site stack. `CreateInstance`,
+    `CreateInstanceAsync`, and the `Try*` variants all route through one shared resolution path.
+  - **`@memberjunction/core`**: `PermissionProviderBase` declares `RequiresSubclass = true` — every member is
+    abstract, so a base instance is a method-less stub.
+  - **`@memberjunction/core-entities`**: `PermissionEngine.instantiateProviders` uses `TryCreateInstance`, so
+    an unresolvable `ProviderClassName` is now genuinely skipped instead of installing a stub as a live
+    provider. The `GetAllUserPermissions` / `GetPermissionsGrantedByUser` / `GetPermissionsSharedWithUser`
+    fan-outs defer each provider call into a promise body so a SYNCHRONOUS throw (a missing method) is
+    isolated by `Promise.allSettled` instead of rejecting the entire aggregate for every user.
+
+- 13d9b8e: Stop the ClassFactory resolution-fallback instrumentation (added in #3197) from flooding builds.
+
+  Two false-positive classes were being reported as fallback "failures":
+  - **Null/empty key** — `CreateInstance(LoggerBase, null)` means "give me the default implementation for this base". Landing on the base is the _intended_ outcome, not a failed lookup.
+  - **Unbounded volume on hot paths** — the dedup keyed on `(base, key)`, which does nothing for callers whose key varies per item. Every `EntityField` hydration calls `CreateInstance(EntityField, '<entity>.<field>')`, so a full repo build emitted thousands of distinct warnings and buried anything real.
+
+  Null-key fallbacks are no longer reported, and remaining fallbacks are capped **per base class** (3, then one summary line). Marker-bearing (`@RequiresSubclass()`) bases are never capped — those are hard errors.
+
+  Suppressing by "this base has no registrations" was tried and **reverted**: a tree-shaken registration leaves zero registrations, which is exactly the B34/B35 shape this instrumentation exists to catch. The unit tests caught that regression.
+
+  Verified: full repo build (293 + 265 tasks) emits **zero** ClassFactory warnings; MJGlobal 581 tests pass.
+
+- 9c07270: Convert the `RequiresSubclass` marker from a static class property to a `@RequiresSubclass()` decorator, and fix an inheritance bug in how it was read.
+
+  `@RequiresSubclass()` applies an own, non-enumerable marker (`__mj_RequiresSubclass`) to the class prototype, and `ClassRequiresSubclass(classOrInstance)` reads it via an **own-property** check.
+
+  That own-property semantics is the substantive change. The previous `(baseClass as X).RequiresSubclass === true` read walked the constructor prototype chain, so **every subclass of a marked base also reported `true`** — meaning a ClassFactory resolution against a concrete, perfectly instantiable subclass would have wrongly thrown. The marker now applies to exactly the class that declared it.
+
+  The decorator also matches the existing `@RegisterClass` idiom, keeps the marker key defined in one place rather than retyped as a literal per base, and centralizes the own-property check so call sites can't get it wrong.
+
+  Backward compatible: the legacy `static RequiresSubclass = true` form is still honored (with the same own-property semantics).
+
 ## 5.48.0
 
 ## 5.47.0
