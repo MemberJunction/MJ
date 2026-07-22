@@ -1,5 +1,20 @@
 # Claude Design Worklist — Missing Functionality to Design
 
+> **STATUS SWEEP 2026-07-22 (post functional mockup + correction pass).** The verified
+> functional mockup RESOLVED the following at the design level (implementation still owes the
+> Angular build): **1.1** message row complete (WP4; placement per BASELINE §C2) · **1.2** run
+> inspector (modeled w/ steps/tokens/cost) · **1.5** composer completions (visual-parity
+> facsimile; "@ people" stays a seam, §C3) · **1.6** header chips consolidation · **1.7/1.8/1.9**
+> share/rating/export (modeled; internals = MOUNT) · **1.10** folder modal (project modal) ·
+> **1.11** empty/first-run (F0/F0x/PA2 persona) · **1.13** scope-at-capture + "Used N notes"
+> chip · **2.2** Collections workspace (full W2 treatment) · **2.9** pinned panel (modeled).
+> **MOOTED**: 2.3 Tasks surfaces (deleted per D-S6). **STILL OPEN**: 1.4 nesting (⚖1, Amith) ·
+> 1.12 plan-approval semantics (⚖2 re-lock; card itself is modeled) · 2.1 artifact viewer at
+> real interactive scale (facsimile shipped; real-scale session when P1.7 lands) · 2.4
+> voice/in-call (design vs #3111) · 2.5 search↔omnibar reconciliation (⚖5) · 2.6 overlay ·
+> 2.7 threads (⚖4) · 2.8 notifications surface · 2.10 attachments viewer prev/next.
+> Part 3 deletions unchanged — they execute during implementation.
+
 > The complete list of shipped functionality that does not yet have a drawn answer in the
 > redesign language. Work these in Claude Design (its mockups are the polished surface);
 > **prepend the context block from CLAUDE-DESIGN-HANDOFF.md to every session** and attach
@@ -133,7 +148,61 @@ Each is a standalone Claude Design engagement; sequence after Part 1's core loop
 | 2.10 | **Attachments viewer** | Fullscreen image viewer (zoom/pan/fit/download) — add the missing prev/next while designing. |
 
 ## Part 3 — Don't design (baseline stubs; propose deletion instead)
-- Like/comment reactions (shipped `display:none`)
-- Jump-to-date (stub)
+- Like/comment reactions (shipped `display:none`) — ⚠ 07-21 gave this a PUBLIC host gate
+  (`showReactions`, README-documented, minor-released); deletion now = input deprecation too
+- Jump-to-date (stub) — same ⚠: now gated by public `showDateNavigation` input
 - Message-level save/share/export handlers (stubs)
 - Members modal in-memory stub (superseded by real sharing when D11/G lands)
+- `ShareModalComponent` (superseded 2026-04 by generic `mj-resource-share-dialog`) — delete
+- `LibraryFullViewComponent` + `CollectionViewComponent` (superseded by collections-full-view) — delete
+- `CollectionTreeComponent` sidebar branch (unreachable: workspace hides the sidebar on the
+  collections tab) — delete or consciously re-expose
+- `services/dialog.service.ts.bak` — stray backup file, delete
+- Dormant intent-check pipeline (`checkContinuityIntent` + dead-bound `intentCheckStarted/Completed`
+  events; LLM check removed for latency, PR #2309) — decide revive-or-delete
+
+## Addendum 2026-07-22 — sweep deltas feeding the sessions above
+
+Full re-sweep on 2026-07-22 (branch current with `next`). Raw record:
+**BASELINE-INVENTORY.md §C**. What it changes here:
+
+- **1.1 / 1.2 (message row + run inspector)**: the placement account must include the shipped
+  placement facts — last-message footer (pin/delete/rating), earlier messages' actions inside
+  the gear panel, gear rating-count badge, non-owner "Rated N/10" pill (§C2).
+- **1.4 (nesting) + 1.6 (header chips)**: the header project tag is a SECOND full folder manager
+  (Assign Project modal w/ Create/Edit/Delete) — same `MJProjectEntity` data, two managers;
+  consolidate consciously (§C2).
+- **1.5 (composer completions)**: drafts are server-persisted and cross-device
+  (`mj.chat.drafts.v1`), not instance-cached — the redesign keeps that bar (§C1). Correction:
+  "@ people" currently suggests ONLY the current user — a seam to design, not parity to keep (§C3).
+- **2.4 (voice/realtime)**: add the headless `ClientContextChannel` (app-context streaming + the
+  ContextTool proxy that lets the agent drive the app), co-agent pairing constraints, and the
+  overlay host-control contract + earned-controls disclosure ratchet (§C1/§C2). These are
+  must-keeps even though invisible.
+- **2.5 (search / ⌘K)**: the omnibar is SHIPPED with a provider registry extending
+  `ComposerTriggerProvider` and a real agent-pill pre-address flow into the composer; the session
+  designs the reconciliation of the legacy search panel WITH it, not a fresh ⌘K (§C1).
+- **Integration-contract class (PARITY §1.12)**: the 07-20/21 host feature-gate contract
+  (~20 inputs), pre-conversation header mode, and `--mj-chat-*` runtime token injection join the
+  must-keep list (§C1).
+- **Behavior must-keeps with no UI**: client-side task-graph orchestration (incl. silent-observation
+  payload continuity) and the 6-step routing precedence (§C2) — any composer re-plumb carries them.
+
+**Second (perimeter) sweep, same day — BASELINE §C4/§C5.** What it changes here:
+- **1.12 (plan-approval card)**: the out-of-conversation surface is fully enumerated now
+  (agent-requests panel states, reassign flow, `requestId` auto-open chain) — that's the real
+  baseline, not the one-liner.
+- **2.1 (artifact viewer)**: the session's baseline grows to the REAL host contract + full
+  plugin roster, incl. the Data viewer's query-sync machinery + Save Query slide-in (§C4).
+  The Studio Split session consumes this directly.
+- **2.2 (collections)**: add the Explorer wrapper's host facts (unpersisted pct-resize,
+  config+queryParams dual delivery, Analyze → new conversation) (§C4).
+- **2.8 (notifications)**: the page is far bigger than the line here — filters, HTML-email
+  parsing, expand-marks-read, TransactionGroup mark-all, meet-room routing (§C4). Also a
+  KNOWN GAP to fix-or-document: `messageId`/`taskId`/`requestId` deep-link params are silently
+  dropped by the live Conversations host today.
+- **Host wiring class (new)**: the string-coupling contract (app/nav names, resource keys),
+  the overlay↔route boundary + toast-suppression predicate, the `<mj-toast>` hosting duty,
+  the pre-render engine gate, and the embedder matrix (Form Builder / Component Studio /
+  Predictive Studio / LiveKit / non-Angular RealtimeWidget) — all must-keeps for the cutover
+  slice (§C4).

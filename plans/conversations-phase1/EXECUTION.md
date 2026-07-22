@@ -1,3 +1,5 @@
+> **2026-07-22:** partially predates the functional-mockup era — read README.md (doc map) and hub-prototype/CONTINUITY-LEDGER.md for current state.
+
 # Conversations Phase 1 — Execution Plan (rev. 2026-07-07, post-review)
 
 > Owner: Matt (UX lead; building with Claude; teammates review PRs). WBS: [conversations-phase1-plan.md](conversations-phase1-plan.md).

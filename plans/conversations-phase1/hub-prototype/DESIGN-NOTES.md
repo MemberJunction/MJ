@@ -60,7 +60,7 @@
 | @ mentions include human users; paste-image; drag-drop files | ◐ people-as-reference exists; paste/drop absent |
 | Message actions: inline edit, delete-last-and-below, retry, elapsed pill, command chips, per-message artifact cards | ⬜ chat idiom reconciliation first (see below) |
 | Header state chips: pins, artifacts, members, shared-by | ⬜ decision: quiet direction may consolidate — decide against the list |
-| Flat avatar-row message idiom (BOTH parties; no user bubbles in product) | ✅ implemented 2026-07-15 (position #13) — unblocks the message-actions row |
+| Flat avatar-row message idiom (BOTH parties; no user bubbles in product) | ◐ CONSCIOUS DIVERGENCE per position #13 as REVERSED 2026-07-15: agent turns keep flat avatar rows (parity), user turns become filled bubbles (deliberate departure from the shipped both-parties idiom — the asymmetric idiom aids who-said-what scanning). Message-actions row still unblocked |
 | Live component artifacts (React, interactive) + 7-tab viewer | ⬜ prototype artifact page is a sketch; note scale honestly in reviews |
 | Agent run inspector (gear: steps/tokens/cost/links) | ⬜ |
 | Rating (1–10 dialog + consent), export modal, share modal parity | ⬜ |

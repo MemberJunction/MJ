@@ -1,3 +1,5 @@
+> **2026-07-22:** predates the functional-mockup era — read README.md (doc map) and hub-prototype/CONTINUITY-LEDGER.md for current state.
+
 # Next-Gen Conversations — Application Atlas
 
 > **The one-page answer to "what does this application actually do?"** Every functional area, two
