@@ -1131,6 +1131,19 @@ describe('AutotagBaseEngine', () => {
         expect(provider.RollbackTransaction).toHaveBeenCalledTimes(1);
         expect(provider.CommitTransaction).not.toHaveBeenCalled();
       });
+
+      it('stays contained (no unhandled throw) even when the rollback itself fails', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+        const { provider } = installProvider([], { failInsertAt: 0 });
+        // Simulate a rollback that also fails (e.g. connection dropped). Must not mask the run or leak.
+        provider.RollbackTransaction = vi.fn().mockRejectedValue(new Error('connection reset during rollback'));
+        const item = createVectorItem('item-rollback-throws', LONG_TEXT);
+
+        await expect(engine.VectorizeContentItems([item] as never[], mockUser)).resolves.not.toThrow();
+        expect(provider.RollbackTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.CommitTransaction).not.toHaveBeenCalled();
+      });
     });
   });
 

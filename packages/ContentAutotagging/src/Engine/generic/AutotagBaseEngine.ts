@@ -1670,30 +1670,23 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /**
      * Atomically replace the ContentItemChunk rows for a content item with the supplied ordered
-     * chunks: delete the current rows, then insert the new ones, inside a single server-side
-     * transaction. Either the item's chunk set is fully replaced or left untouched — a mid-operation
-     * failure rolls back so the item is never left with a partial/empty chunk set. On failure this
+     * chunks. Either the item's chunk set is fully replaced or left untouched — a mid-operation
+     * failure rolls back, so the item is never left with a partial/empty chunk set. On failure this
      * throws; the caller (persistVectorReferences) logs it and moves on to the next item.
      *
      * Provider discipline (server, multi-user): the RunView read, the entity objects, and the
      * transaction ALL go through `this.ProviderToUse` — the connection allocated to this request.
      * A bare `new RunView()` would run on the process-global provider/connection, outside this
-     * transaction and under the wrong user context. The ops run sequentially, not in parallel:
-     * MJ's server transaction is a single pinned connection, so concurrent requests on it race
-     * (see SQLServerDataProvider's own note). Deletes-before-inserts is also required by
-     * UQ_ContentItemChunk_ContentItemID_Sequence — a Sequence can't be reinserted until the old
-     * row holding it is gone.
+     * transaction and under the wrong user's context.
      */
     private async replaceContentItemChunks(
         contentItemID: string,
         chunks: { chunkIndex: number; text: string; vectorRecordID: string }[],
         contextUser: UserInfo
     ): Promise<void> {
-        const md = this.ProviderToUse;
         const rv = this.ProviderToUse as unknown as IRunViewProvider;
-        const provider = this.ProviderToUse as unknown as DatabaseProviderBase;
 
-        // Load the current chunk rows for this item via the request-scoped provider (not `new RunView()`).
+        // Load the current chunk rows via the request-scoped provider (not `new RunView()`).
         const existing = await rv.RunView<MJContentItemChunkEntity>({
             EntityName: 'MJ: Content Item Chunks',
             ExtraFilter: `ContentItemID='${contentItemID}'`,
@@ -1703,8 +1696,18 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             throw new Error(`failed to load existing chunks for item ${contentItemID}: ${existing.ErrorMessage}`);
         }
 
-        // Pre-build the replacement rows (in-memory only; GetEntityObject does not hit the DB).
-        const newRows: MJContentItemChunkEntity[] = [];
+        const newRows = await this.buildChunkRows(contentItemID, chunks, contextUser);
+        await this.commitChunkReplacement(contentItemID, existing.Results, newRows);
+    }
+
+    /** Build (in-memory only — no DB access) the replacement ContentItemChunk rows for an item. */
+    private async buildChunkRows(
+        contentItemID: string,
+        chunks: { chunkIndex: number; text: string; vectorRecordID: string }[],
+        contextUser: UserInfo
+    ): Promise<MJContentItemChunkEntity[]> {
+        const md = this.ProviderToUse;
+        const rows: MJContentItemChunkEntity[] = [];
         for (const chunk of chunks) {
             const row = await md.GetEntityObject<MJContentItemChunkEntity>('MJ: Content Item Chunks', contextUser);
             row.NewRecord();
@@ -1712,25 +1715,55 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             row.Sequence = chunk.chunkIndex;
             row.Text = chunk.text;
             row.VectorRecordID = chunk.vectorRecordID;
-            newRows.push(row);
+            rows.push(row);
         }
+        return rows;
+    }
 
-        // Atomic delete-then-insert on the request-scoped connection.
+    /**
+     * Delete the existing chunk rows and insert the new ones in one server-side transaction.
+     * All deletes fire together, then all inserts together (Promise.all) — MJ's provider serializes
+     * transaction queries onto the single connection internally (its concatMap SQL queue), so
+     * parallel dispatch is safe. The barrier between the phases is required by
+     * UQ_ContentItemChunk_ContentItemID_Sequence: a Sequence can't be reinserted until the old row
+     * holding it is deleted.
+     */
+    private async commitChunkReplacement(
+        contentItemID: string,
+        existingRows: MJContentItemChunkEntity[],
+        newRows: MJContentItemChunkEntity[]
+    ): Promise<void> {
+        const provider = this.ProviderToUse as unknown as DatabaseProviderBase;
         await provider.BeginTransaction();
+        let committed = false;
         try {
-            for (const row of existing.Results) {
-                if (!(await row.Delete())) {
-                    throw new Error(`failed to delete existing chunk ${row.ID}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-                }
+            const deleteResults = await Promise.all(existingRows.map(row => row.Delete()));
+            const failedDelete = existingRows.find((_row, i) => !deleteResults[i]);
+            if (failedDelete) {
+                throw new Error(`failed to delete existing chunk ${failedDelete.ID}: ${failedDelete.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
-            for (const row of newRows) {
-                if (!(await row.Save())) {
-                    throw new Error(`failed to save chunk ${row.Sequence}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-                }
+
+            const saveResults = await Promise.all(newRows.map(row => row.Save()));
+            const failedSave = newRows.find((_row, i) => !saveResults[i]);
+            if (failedSave) {
+                throw new Error(`failed to save chunk ${failedSave.Sequence}: ${failedSave.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
+
             await provider.CommitTransaction();
+            committed = true;
         } catch (e) {
-            await provider.RollbackTransaction();
+            // Guard the rollback so it can never mask the original error: a commit that throws has
+            // already self-rolled-back inside the provider (nulling its transaction, so a second
+            // rollback here throws "no active transaction"), and a rollback can fail on its own. The
+            // provider clears its transaction state on every path, so this never leaves one open.
+            if (!committed) {
+                try {
+                    await provider.RollbackTransaction();
+                } catch (rollbackErr) {
+                    const rbMsg = rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
+                    LogError(`commitChunkReplacement: rollback failed for item ${contentItemID}: ${rbMsg}`);
+                }
+            }
             throw e;
         }
     }
