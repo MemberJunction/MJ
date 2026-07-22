@@ -2,7 +2,7 @@
  * app-wiring.checks.ts — the 'app-wiring' bundle (AW1–AW10): the "every shipped app is wired
  * correctly" contract, asserted over the real GraphQL wire (CLIENT-FIRST transport).
  *
- * Covers Domain 12 (G1–G9, S1, S2, S7) of plans/integration-test-expansion/test-catalog.md.
+ * Covers Domain 12 (G1–G9, S1, S2, S7) of packages/TestingFramework/integration-test-suite/docs/test-catalog.md.
  * Every check PARAMETERIZES over all applications in metadata rather than naming apps, so new
  * apps inherit the contract automatically and a regression in ANY app fails the suite.
  *

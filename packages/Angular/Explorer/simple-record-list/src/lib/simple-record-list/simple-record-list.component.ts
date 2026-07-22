@@ -100,7 +100,7 @@ export class SimpleRecordListComponent extends BaseAngularComponent implements O
     const md = this.ProviderToUse;
     if (this.Columns.length === 0) {
       // populate this by default by taking all columns if entity has < 10 columns, otherwise include columns that have DefaultInView=1, and if we have no columns with DefaultInView=1, then include the first 10 columns
-      const e = md.Entities.find(e => e.Name === this.EntityName);
+      const e = md.EntityByName(this.EntityName);
       if (e) {
         if (e.Fields.length < 10)
           this.Columns = e.Fields.map(f => f.Name);

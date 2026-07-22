@@ -365,6 +365,7 @@ import { MJTestSuiteTestFormComponent } from "./Entities/MJTestSuiteTest/mjtests
 import { MJTestSuiteFormComponent } from "./Entities/MJTestSuite/mjtestsuite.form.component";
 import { MJTestTypeFormComponent } from "./Entities/MJTestType/mjtesttype.form.component";
 import { MJTestFormComponent } from "./Entities/MJTest/mjtest.form.component";
+import { MJThemeFormComponent } from "./Entities/MJTheme/mjtheme.form.component";
 import { MJUserApplicationEntityFormComponent } from "./Entities/MJUserApplicationEntity/mjuserapplicationentity.form.component";
 import { MJUserApplicationFormComponent } from "./Entities/MJUserApplication/mjuserapplication.form.component";
 import { MJUserFavoriteFormComponent } from "./Entities/MJUserFavorite/mjuserfavorite.form.component";
@@ -1021,6 +1022,7 @@ declarations: [
     MJTestSuiteFormComponent,
     MJTestTypeFormComponent,
     MJTestFormComponent,
+    MJThemeFormComponent,
     MJUserApplicationEntityFormComponent,
     MJUserApplicationFormComponent,
     MJUserFavoriteFormComponent,
@@ -1029,8 +1031,7 @@ declarations: [
     MJUserNotificationFormComponent,
     MJUserRecordLogFormComponent,
     MJUserRoleFormComponent,
-    MJUserRoutineRecipientFormComponent,
-    MJUserRoutineRunFormComponent],
+    MJUserRoutineRecipientFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1047,6 +1048,7 @@ export class GeneratedForms_SubModule_17 { }
 
 @NgModule({
 declarations: [
+    MJUserRoutineRunFormComponent,
     MJUserRoutineFormComponent,
     MJUserSettingFormComponent,
     MJUserViewCategoryFormComponent,

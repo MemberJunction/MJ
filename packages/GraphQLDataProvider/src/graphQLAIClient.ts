@@ -324,6 +324,9 @@ export class GraphQLAIClient {
                 validateAck: (ack) => ack?.success === true,
                 isCompletionEvent: (parsed) => this.isAgentCompletionEvent(parsed),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
+                // Headless clients (no PushStatusUpdates channel) run synchronously; the resolver
+                // returns the full result inline in the mutation ack rather than over PubSub.
+                extractSyncResult: (ack) => this.extractAgentResultFromAck(ack),
                 onMessage: (parsed) => {
                     this.captureAgentRunId(parsed, runIdRef);
                     if (params.onProgress) this.forwardAgentProgress(parsed, params.onProgress);
@@ -521,6 +524,9 @@ export class GraphQLAIClient {
                 isCompletionEvent: (parsed) =>
                     this.isConversationDetailCompletionEvent(parsed, params.conversationDetailId),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
+                // Headless clients (no PushStatusUpdates channel) run synchronously; the resolver
+                // returns the full result inline in the mutation ack rather than over PubSub.
+                extractSyncResult: (ack) => this.extractAgentResultFromAck(ack),
                 onMessage: params.onProgress
                     ? (parsed) => this.forwardConversationDetailProgress(parsed, params.onProgress!)
                     : undefined,
@@ -727,6 +733,32 @@ export class GraphQLAIClient {
         return {
             success: data.success as boolean,
             agentRun: undefined,
+        } as ExecuteAgentResult;
+    }
+
+    /**
+     * Extract an ExecuteAgentResult from a SYNCHRONOUS mutation ack.
+     *
+     * Used on the headless-client path: when the data provider has no PushStatusUpdates
+     * channel, FireAndForgetHelper runs the mutation with `fireAndForget: false`, so the
+     * resolver awaits the run and returns the full sanitized result inline in the mutation's
+     * own return payload (`{ success, errorMessage, executionTimeMs, result }`). The `result`
+     * field is the same JSON the completion event carries, so the parsed shape — including
+     * `agentRun` (with its ID and settled Status) — matches the PubSub-completion path.
+     */
+    private extractAgentResultFromAck(ack: Record<string, unknown>): ExecuteAgentResult {
+        const resultJson = ack.result as string | undefined;
+        if (resultJson) {
+            const parsed = SafeJSONParse(resultJson) as ExecuteAgentResult | null;
+            if (parsed) {
+                return parsed;
+            }
+        }
+        // Fallback: the ack carried no parseable result payload — surface success + any error message.
+        return {
+            success: ack.success as boolean,
+            agentRun: undefined,
+            errorMessage: ack.errorMessage as string | undefined,
         } as ExecuteAgentResult;
     }
 

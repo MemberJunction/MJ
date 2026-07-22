@@ -111,6 +111,43 @@ The chat area handles message display, input, and agent interactions:
 </mj-conversation-chat-area>
 ```
 
+#### Feature toggles
+
+Embedding products (white-labeled end-user apps, embedded widgets) can pare the chat surface down through the component contract — no CSS overrides on internal class names. All default to `true`, so existing consumers are unaffected. Set to `false` to remove the feature entirely (the affordance is not rendered, not merely disabled):
+
+| Input | Gates |
+|---|---|
+| `allowMentions` | `@`-mention support in the composer |
+| `allowAttachments` | The file-attachment button |
+| `allowPlanMode` | The composer's Plan Mode toggle button |
+| `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
+| `showEmptyFill` | The message list's built-in "No messages yet" filler |
+| `showLoadingState` | The centered loading spinner (loading still short-circuits rendering, so hiding it does not flash the empty state) |
+| `showAgentPicker` | The agent picker |
+| `showAgentModePicker` | The agent-mode picker |
+| `showExportButton` | The conversation export button |
+| `showShareButton` | The conversation share button |
+| `showArtifactIndicator` | The artifact indicator |
+| `showAgentRunDetails` | The per-message agent run-detail grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide |
+| `showReactions` | The per-message reaction buttons (like / comment) |
+| `showMessageRating` | The per-message thumbs rating control |
+| `allowPinning` | Message pinning (per-message pin button, header pin chip, pinned-messages panel) |
+| `allowMessageEdit` | The per-message edit button (owner's own messages) |
+| `allowMessageDelete` | The per-message delete button (owner's own messages) |
+| `showSuggestedPrompts` | The empty-state's built-in suggested-prompt chips |
+| `showDateNavigation` | The message list's sticky date header + jump-to-date navigation |
+
+```html
+<!-- e.g. a minimal, single-agent end-user surface -->
+<mj-conversation-chat-area
+  [conversationId]="conversationId"
+  [allowPlanMode]="false"
+  [allowRealtime]="false"
+  [showEmptyFill]="false"
+  [showAgentPicker]="false">
+</mj-conversation-chat-area>
+```
+
 ### Chat Overlay
 
 A floating chat panel (bottom-right corner) that wraps the chat area for persistent agent access across the application. Collapses to a bubble icon, expands to a full chat panel.

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<catalog>
+  <meta sentinel="IT-XML-SENTINEL-K7"/>
+  <product id="P1">
+    <name>Widget</name>
+    <price currency="USD">9.99</price>
+  </product>
+  <product id="P2">
+    <name>Gadget</name>
+    <price currency="USD">19.99</price>
+  </product>
+  <product id="P3">
+    <name>Doohickey</name>
+    <price currency="EUR">4.50</price>
+  </product>
+</catalog>

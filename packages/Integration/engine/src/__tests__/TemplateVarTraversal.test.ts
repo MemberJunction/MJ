@@ -127,4 +127,56 @@ describe('BaseRESTIntegrationConnector — multi-level template traversal', () =
         expect(result.Records).toEqual([]);
         expect(c.urls).toEqual([]); // never fetched — bailed before loading
     });
+
+    // Regression for the nested-child pagination truncation bug (found 2026-07-22): a single
+    // parent's child collection larger than ctx.BatchSize must NOT be silently capped. Live-verified
+    // against Wild Apricot's real data — Donation/Event/Invoice/Payment (single-parent, same shape as
+    // this test) each landed exactly ctx.BatchSize (200) rows before the fix, permanently dropping the
+    // rest, with no bookmark to ever resume the excess.
+    it('drains a single parent\'s FULL paginated child collection even when it exceeds ctx.BatchSize', async () => {
+        // /accounts/{AccountId}/donations — one parent (one account), 3 pages of 100 = 300 real children.
+        const fields = [
+            f({ Name: 'AccountId', RelatedIntegrationObjectID: 'objAccount', Status: 'Active', Sequence: 1 }),
+        ];
+        const obj = {
+            ID: 'objDonation', Name: 'donations', APIPath: '/accounts/{AccountId}/donations',
+            SupportsPagination: true, PaginationType: 'Offset', ResponseDataKey: null, DefaultPageSize: 100,
+        } as unknown as MJIntegrationObjectEntity;
+
+        class PaginatingConnector extends TestConnector {
+            private callCount = 0;
+            protected override async MakeHTTPRequest(_a: RESTAuthContext, url: string): Promise<RESTResponse> {
+                this.urls.push(url);
+                this.callCount++;
+                // 3 pages of 100 records each = 300 total; page 4 is empty (end of data).
+                const page = this.callCount;
+                const records = page <= 3
+                    ? Array.from({ length: 100 }, (_, i) => ({ id: `d${(page - 1) * 100 + i}` }))
+                    : [];
+                return { Status: 200, Body: records, Headers: {} } as RESTResponse;
+            }
+            protected override ExtractPaginationInfo(): PaginationState {
+                // HasMore stays true until the 4th (empty) page — a real offset-paginated API's shape.
+                return { HasMore: this.callCount < 4 } as PaginationState;
+            }
+        }
+
+        OBJ_BY_ID['objAccount'] = { ID: 'objAccount', Name: 'Accounts' } as unknown as MJIntegrationObjectEntity;
+        FIELDS['objAccount'] = [f({ Name: 'AccountId', IsPrimaryKey: true, Status: 'Active', Sequence: 1 })];
+        runViewImpl = (params) => {
+            if (params.EntityName === 'MJ: Company Integration Entity Maps') {
+                if (params.ExtraFilter?.includes("ExternalObjectName='Accounts'")) return { Success: true, Results: [{ EntityID: 'eAccount', Entity: 'Accounts' }] };
+                return { Success: true, Results: [] };
+            }
+            if (params.EntityName === 'Accounts') return { Success: true, Results: [{ AccountId: 'acct1' }] };
+            return { Success: false, Results: [] };
+        };
+
+        const c = new PaginatingConnector(obj, fields);
+        // ctx.BatchSize=200 simulates the real per-call cap that used to truncate a single parent's
+        // child pagination. The fix must drain all 300, not stop at 200.
+        const result = await c.FetchChanges({ ...ctx(), ObjectName: 'donations', BatchSize: 200 });
+
+        expect(result.Records.length).toBe(300);
+    });
 });

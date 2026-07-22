@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT64 - View Security (two-identity RLS)",
+    "Description": "Two-identity view security invariants (Domain 11 V14/V15/V16 + RV17) using the seeded scoped principals: VS1 saved-view WHERE AND-combines with the running user's RLS clause (≡ scoped dynamic control, ⊆ admin); VS2 a private view run by a non-owner is refused or B-scoped with the looseness surfaced; VS3 a shared view executes for a non-owner with the NON-OWNER's scope; VS4 COUNT(*) aggregates carry WHERE+RLS. Loud skip on an all-admin DB. 4 checks VS1-VS4, mutation-gated fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Two-identity view security invariants (Domain 11 V14/V15/V16 + RV17) using the seeded scoped principals: VS1 saved-view WHERE AND-combines with the running user's RLS clause (≡ scoped dynamic control, ⊆ admin); VS2 a private view run by a non-owner is refused or B-scoped with the looseness surfaced; VS3 a shared view executes for a non-owner with the NON-OWNER's scope; VS4 COUNT(*) aggregates carr"
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "view-security"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "DF3EB172-4592-443E-B650-143328E30DC1"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T18:38:06.309Z",
+    "checksum": "dfa1747f3b41f625aef268f6f5f25238ca1b947d1da567869b4e5f1958240f84"
+  }
+}

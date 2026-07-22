@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT45 - Embedding Invariants",
+    "Description": "Persisted-embedding invariants without model calls: stored vectors parse finite+dimensioned per (surface,model), no degenerate vectors, cross-entity dimensional agreement, stamped model resolution, LocalEmbeddings catalog shape. 5 checks (AE1-AE5), read-only, loud skips when no embeddings exist.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Persisted-embedding invariants without model calls: stored vectors parse finite+dimensioned per (surface,model), no degenerate vectors, cross-entity dimensional agreement, stamped model resolution, LocalEmbeddings catalog shape. 5 checks (AE1-AE5), read-only, loud skips when no embeddings exist."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ai-embeddings"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C70EDEBA-79EF-45FC-B3C0-160A031DDE04"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:49:20.647Z",
+    "checksum": "2281b7b4f6dbb98f67363f9af7f7289c550abf8ef0fcdea7e1676b4fa26882b4"
+  }
+}
