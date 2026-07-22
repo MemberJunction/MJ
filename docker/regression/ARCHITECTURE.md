@@ -189,6 +189,59 @@ direction:
 | `mj.config.cjs` | Default config copied from [`docker/MJAPI/docker.config.cjs`](../MJAPI/docker.config.cjs); can be overridden by mount |
 | `/usr/local/bin/agentic-test-runner` | Dispatcher script (entrypoint) — supports `run`, `import-bacpac`, `export`, `exec`, `help` |
 
+### Bake-vs-Mount Policy (DR-C4)
+
+One rule governs what lives inside an image versus what is bind-mounted from the
+host, so there is never confusion about which copy is authoritative:
+
+> **Code is baked. Orchestration is mounted.** Compiled TypeScript (`dist/`) and
+> installed dependencies are baked at image-build time. Everything an operator
+> iterates on between builds — entrypoints, `scripts/`, `metadata/`, `targets/`,
+> `archive/`, `test-metadata/` — is **bind-mounted read-only** (`:ro`) in
+> `docker-compose.test.yml`, so editing it takes effect on the next `up`/`run`
+> with no image rebuild. `:ro` also turns any accidental write-back into a loud
+> failure instead of silent host pollution (see DR-B4/B5).
+
+Current state (compose, `full` + `gen-forms` profiles) — already compliant:
+
+| Path | Baked or mounted | Where |
+|---|---|---|
+| `dist/` of every `@memberjunction/*` package | **baked** | all Dockerfiles (`npm run build:api`) |
+| `db-setup-entrypoint.sh` | mounted `:ro` | db-setup |
+| `test-runner-entrypoint.sh`, `test-runner-remote-entrypoint.sh` | mounted `:ro` | test-runner |
+| `form-gen-entrypoint.sh` | mounted `:ro` | form-generator |
+| `scripts/` | mounted `:ro` | db-setup + test-runner |
+| `metadata/`, `test-metadata/`, `targets/`, `archive/` | mounted `:ro` | test-runner |
+
+**Why `develop.watch` is not used:** the iterated paths above are already
+bind-mounts, so a change is live on the next container start with zero sync
+step — a `docker compose watch` block for the same paths would be redundant.
+
+**Intentional exceptions (documented so they aren't mistaken for drift):**
+
+- **Entrypoints in the published / standalone variants are baked**, not mounted:
+  there is no host checkout to mount from when a user runs
+  `memberjunction/agentic-test-runner` or a standalone compose file. The
+  monorepo compose mounts them for the inner-loop; the published image vendors
+  them (tie to DR-C6).
+- **`mj.config.cjs` is baked, then specialized per role** rather than mounted,
+  because a config must exist before any process (and thus any mount-consuming
+  step) starts, and each role needs a *different* config. Four role-specific
+  mechanisms, all starting from `docker/MJAPI/docker.config.cjs`:
+  - **db-setup** — `sed -i` patches `autoCreateNewUsers: true`
+    (`Dockerfile.db-setup`).
+  - **api** — `node scripts/patch-test-api-config.cjs` patches `userHandling`
+    (auto-create + UI/Integration roles) (`Dockerfile.api`).
+  - **test-runner** — baked verbatim, no patch (`Dockerfile.test-runner`).
+  - **form-generator** — baked, then a runtime `:ro` mount of `form-gen.config.cjs`
+    (which `require()`s the baked config and adds the Angular form outputs)
+    overrides it (`docker-compose.test.yml`).
+
+**Rule for new services / files:** if it is code, bake it; if it is an
+entrypoint, script, metadata, or profile that an operator edits between builds,
+bind-mount it `:ro`. Config that must be role-specialized is baked + patched (or
+mounted-over) — add it to the list above rather than inventing a fifth pattern.
+
 ---
 
 ## 4. Compose Profiles
