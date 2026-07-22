@@ -53,6 +53,15 @@ apply, MJAPI runs stock type-graphql (slower boot), never incorrect behavior.
   `.cpuprofile` of just `buildSchemaSync`). Both are no-ops when unset — see `src/index.ts`.
 
 ### Upstream
-This is a generic type-graphql scaling bug (not MJ-specific). An upstream PR to
-`MichalLytek/type-graphql` accompanies this patch; once merged and released, this patch can
-be dropped in favor of the version bump.
+This is a generic type-graphql scaling bug (not MJ-specific). Status of each half upstream:
+
+- **`metadata-storage.js` (fix #2)** is **already fixed in type-graphql `2.0.0-rc.4`** — rc.4
+  added an `initCache()` (called in `build()`) with the equivalent `target → …` lookup caches.
+  MJ pins `2.0.0-beta.3`, which predates that, so this half of the patch is still required until
+  MJ upgrades type-graphql to rc.4+.
+- **`schema-generator.js` (fix #1)** is **still present in rc.4** and is submitted upstream as
+  **MichalLytek/type-graphql#1813** (`perf(schema): remove O(N²) field-resolver lookup in
+  buildTypesInfo`).
+
+Once MJ upgrades to a type-graphql release that contains **both** fixes (rc.4+ *and* #1813
+merged), this patch can be dropped in favor of the version bump.
