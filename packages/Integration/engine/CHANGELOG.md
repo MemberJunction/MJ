@@ -1,5 +1,70 @@
 # @memberjunction/integration-engine
 
+## 5.49.0
+
+### Minor Changes
+
+- 70113b1: Align the integrations framework — resolution overlay, EM/EFM lifecycle, sync locking, watermark backfill, and the U1–U5/U7/U10/U11 upstream defects.
+
+  **Engine (`integration-engine`)**
+  - U1: `IntrospectSchema`/creation-pipeline mappings propagate `undefined` PK/FK flags instead of coercing to `false` — a sample's silence can no longer wipe a declared primary key (`SourceFieldInfo.IsPrimaryKey/IsForeignKey` widened to optional).
+  - Semantic overlay (`decideSemanticOverlay`): Description / DisplayName / IncrementalWatermarkField are external-wins-when-present, curated-fallback-when-silent (per-attribute overlay precedence).
+  - Content-hash basis: the content-hash match/write covers MAPPED fields only — a newly-appearing custom key no longer forces a row rewrite. Custom-key candidates + sizing statistics are aggregated in-memory per sync (`SyncResult.CustomKeyStats`, `foldCustomKeyStats`, `inferColumnTypeFromStats`) and flow to the promotion callback regardless of row skips. **Operational note (one-time):** because the content-hash basis becomes mapped-only, the first sync after this deploys re-hashes and re-writes every overflow-carrying row exactly once — a bounded one-time load spike plus Record-Changes churn — after which stored hashes converge and steady-state (skip-unchanged) writes resume.
+  - Maintenance lock (`AcquireMaintenanceLock`/`ReleaseMaintenanceLock`/`GetMaintenanceLock`): syncs refuse while a metadata refresh / schema evolution / RSU pipeline runs for the connection.
+  - U3: live sync progress is monotonic under concurrency (`RatchetProgressSnapshot`).
+  - U11: `IntrospectSchemaOptions.OnProgress` — determinate discovery progress (scanned/total).
+
+  **Server (`server`)**
+  - `IntegrationSchemaEvolution` is now the full re-resolution refresh: re-resolution → diff → removed objects' entity/field maps disabled (data kept) → changed objects' field maps reconciled + Pull watermarks reset (U10, backfills new columns) → new objects' tables created with entity maps born DISABLED (`autoEnableNewObjects` opts in) → RSU. Extended output: NewObjects/RemovedObjects/ChangedObjects/WatermarksReset.
+  - `IntegrationApplyAll`/`ApplyAllBatch`: `UnselectedAction` ('disable' default) — objects absent from the selection get their entity + field maps disabled; re-selection re-enables both. First-ever apply defaults to a FULL sync.
+  - U7: schedule creation is unique per (connection, job kind) — update-in-place instead of duplicates.
+  - U5: boot-time assert when RSU's additionalSchemaInfo write path diverges from CodeGen's read path.
+  - DAG exposure: `IntegrationListSourceObjects` items carry `DependsOn` parent names.
+  - U11: RSU status/progress expose CurrentStepName/StepIndex/StepTotal; pipeline steps carry StepIndex/StepTotal.
+
+  **SchemaEngine / schema-builder**
+  - additionalSchemaInfo per-table REPLACE semantics for soft FKs (`ClearForeignKeysForTables`) — a refresh's resolution replaces the prior run's FK entries for its tables.
+  - `RSUPendingWork`: `UnselectedAction` + `CreateDisabled` for the post-restart consumer; U11 step-index fields.
+
+  **CodeGenLib / PostgreSQLDataProvider**
+  - U2: `spUpdateExistingEntityFieldsFromSchema` honors `IsSoftPrimaryKey` on BOTH dialects (PG emitter + SQL Server migration) — schema sync no longer wipes resolved soft PKs.
+  - U4: a keyless entity now throws a named "has no primary key" error instead of emitting malformed record-change SQL.
+
+### Patch Changes
+
+- 48fa886: Fix (U1): schema-discovery PK overlay now enforces the rsuplan "either/or" rule — a **declared** primary key wins over a **stream-discovered** one, per rsuplan line 29 ("find a primary key … only for objects where there is no primary key defined").
+
+  Previously `IntegrationSchemaSync.UpsertField` applied `decideBooleanOverlay` to `IsPrimaryKey` per field with no object-level awareness, so a streamed unique column (e.g. HubSpot `hs_object_id`) was **added on top of** the declared PK (`id`), fabricating a composite key. When the added component was nullable/unpopulated, the generated `spCreate` read-back (`SELECT … WHERE a=@a AND b=@b`) could never match (SQL `x = NULL` is never true) → `"no rows returned"` → 0 rows synced.
+
+  The overlay now computes, per object, whether a declared (non-`Discovered`) PK already exists. If it does, discovery may not promote a _different_ field to PK — its uniqueness is still recorded via `IsUniqueKey`. Streaming still runs on every object for column/width/custom-field discovery; only the PK promotion is gated. Connectors whose streamed key equals the declared PK are unaffected.
+
+- 314f667: Stop silently truncating nested-child data in REST integration sync, plus two reliability fixes.
+  - **Nested-child completeness** — `DescendTemplateVars` now drains a parent's FULL paginated child collection instead of capping it at `ctx.BatchSize`. The outer batch size bounds how many PARENTS a call processes (resumable via the parent keyset, never mid-child), so applying it to the per-parent child fetch permanently dropped every record past the first batch with no bookmark to ever revisit it. Live-verified: Wild Apricot Donation/Event/Invoice/Payment (single-parent, capped at 200 each) and a Mailchimp list's full 501-member set now land completely.
+  - **Write-verification errors** — classify a create that returns no rows (`"no rows returned from SQL"`) as a distinct, non-retryable `WRITE_VERIFICATION_ERROR` instead of the retryable `DATABASE_ERROR` catch-all; retrying an identical write only reproduces the identical miss.
+  - **Narrower DATABASE_ERROR match** — the over-broad `"sql"` substring match was routing deterministic failures through retry-with-backoff for no reason; it now keys on real transient signals (deadlock / connection lost).
+  - **StartSync run-detection window** — extend the poll for the run record (fast first 2s, longer tail) so a large connector's synchronous setup (e.g. HubSpot's 168 entity maps) isn't misreported as "no run created" while it is genuinely syncing.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/integration-engine-base@5.49.0
+  - @memberjunction/integration-pk-classifier@5.49.0
+  - @memberjunction/integration-progress-artifacts@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes
