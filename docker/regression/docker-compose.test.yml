@@ -75,6 +75,8 @@ services:
     # stale across schema changes.
     volumes:
       - mssql-data:/var/opt/mssql
+      # DR-B1: sqlserver physically writes/reads the schema .bak here.
+      - snapshot-data:/snapshots
 
   db-setup:
     profiles: ["full"]
@@ -88,8 +90,19 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      # DR-B1: where the schema snapshot .bak + meta live (shared with sqlserver).
+      SNAPSHOT_DIR: /snapshots
     # DR-A1: bounds the migrate + codegen×2 window (node processes).
     mem_limit: "${MJ_REGRESSION_SETUP_MEM_LIMIT:-6g}"
+    # DR-B1: bind-mount the entrypoint + scripts (as the runner already does) so
+    # snapshot/entrypoint logic changes take effect without a full image rebuild;
+    # mount the shared snapshot volume so db-setup can hash-check + write the meta
+    # sidecar next to the .bak that sqlserver writes.
+    entrypoint: ["/bin/bash", "/app/db-setup-entrypoint.sh"]
+    volumes:
+      - ./db-setup-entrypoint.sh:/app/db-setup-entrypoint.sh:ro
+      - ./scripts:/app/docker/regression/scripts:ro
+      - snapshot-data:/snapshots
 
   # Form generator — opt-in service (profile: gen-forms) that runs codegen
   # against a temporary DB and writes Angular entity-form components to a
@@ -339,6 +352,12 @@ services:
 # DR-B2: named volume for the SQL Server data dir. Explicitly named so it's
 # easy to find (`docker volume ls`) and inspect, and so its lifecycle is
 # decoupled from the container — `down` keeps it by default now.
+# DR-B1: `snapshot-data` holds the hash-keyed schema backups (.bak + meta). It's
+# mounted at the SAME path (/snapshots) in sqlserver (which physically writes/
+# reads the .bak via BACKUP/RESTORE) and db-setup (which checks the hash + writes
+# the sidecar). `down` keeps it by default (DR-B2), so cold starts stay warm.
 volumes:
   mssql-data:
     name: mj-regression-mssql-data
+  snapshot-data:
+    name: mj-regression-snapshot-data
