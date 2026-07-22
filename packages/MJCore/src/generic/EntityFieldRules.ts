@@ -112,7 +112,7 @@ export class EntityFieldRules {
             return { Valid: false, Errors: [`entity '${entityName}' not found in metadata`] };
         }
         const field = (name: string): EntityFieldInfo | undefined =>
-            entity.Fields.find((f) => f.Name.trim().toLowerCase() === name.trim().toLowerCase());
+            entity.FieldByName(name);
 
         const errors: string[] = [];
         ruleSet.Rules.forEach((rule, i) => {
@@ -176,7 +176,7 @@ export class EntityFieldRules {
         if (!change.Applied || change.Error || change.NewValue == null) {
             return change;
         }
-        const field = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === change.Field.trim().toLowerCase());
+        const field = entity.EntityInfo.FieldByName(change.Field);
         if (!field) {
             return change;
         }

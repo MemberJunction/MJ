@@ -1,0 +1,238 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Compare Runs</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; align-items:center; }
+  .legend .li { display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:var(--mj-text-secondary); }
+  .legend .sw { width:14px; height:14px; border-radius:4px; }
+  svg text { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  .axis { stroke:var(--mj-border-default); stroke-width:1; }
+  .gridln { stroke:var(--mj-border-subtle); stroke-width:1; }
+  .tick { fill:var(--mj-text-muted); font-size:10px; }
+  .diff-table td .pill { display:inline-block; min-width:54px; text-align:center; }
+  .cA { color:#2050c8 } .cB { color:#7b3ff0 } .cC { color:#d98213 }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav">
+  <div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a><i class="fa-solid fa-cubes"></i> Model Registry</a>
+  <a class="active"><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div>
+  <a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><h1>Compare Runs</h1><div class="crumb">Member Renewal Prediction · Overlay view · 3 runs · FY25 holdout</div></div>
+  <div class="spacer"></div>
+  <button class="btn ghost sm"><i class="fa-solid fa-chart-line"></i> Overlay</button>
+  <button class="btn ghost sm"><i class="fa-solid fa-arrow-up-right-from-square"></i> Export</button>
+  <button class="btn primary"><i class="fa-solid fa-trophy"></i> Promote Winner</button>
+</div><div class="ps-content">
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-body" style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+      <div class="legend">
+        <div class="li"><span class="sw" style="background:#2050c8"></span> Run A — XGBoost + engagement/recency</div>
+        <div class="li"><span class="sw" style="background:#7b3ff0"></span> Run B — LightGBM + full</div>
+        <div class="li"><span class="sw" style="background:#d98213"></span> Run C — Logistic Reg. + core</div>
+      </div>
+      <div class="spacer" style="flex:1"></div>
+      <div class="muted small">Metric of record: <strong style="color:var(--mj-text-primary)">Holdout AUC</strong></div>
+    </div>
+  </div>
+
+  <div class="callout warn" style="margin-bottom:16px">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <div><strong>Run B feature dominance.</strong> <span class="mono">days_since_last_activity</span> carries <strong>0.63</strong> of total importance (&gt; 0.60) — see the grouped importance chart. Combined with its 0.071 Train→Holdout gap, B is the overfit suspect. Read the ROC + holdout bars, not the train numbers.</div>
+  </div>
+
+  <div class="chart-grid">
+
+    <!-- GROUPED METRICS BAR -->
+    <div class="card">
+      <div class="card-head"><i class="fa-solid fa-chart-column" style="color:var(--mj-brand-primary)"></i><h3>Metrics — grouped bars</h3><div class="spacer"></div><span class="muted small">Train vs Holdout AUC, F1</span></div>
+      <div class="card-body">
+        <svg viewBox="0 0 460 280" width="100%" height="280" role="img" aria-label="Grouped bar chart of Train AUC, Holdout AUC and F1 for runs A, B, C">
+          <!-- y grid 0.7 - 0.95 mapped to y 230(0.70)..30(0.95) -->
+          <line class="axis" x1="46" y1="30" x2="46" y2="230"/>
+          <line class="axis" x1="46" y1="230" x2="448" y2="230"/>
+          <!-- gridlines + labels -->
+          <g>
+            <line class="gridln" x1="46" y1="30"  x2="448" y2="30"/><text class="tick" x="42" y="34" text-anchor="end">0.95</text>
+            <line class="gridln" x1="46" y1="70"  x2="448" y2="70"/><text class="tick" x="42" y="74" text-anchor="end">0.90</text>
+            <line class="gridln" x1="46" y1="110" x2="448" y2="110"/><text class="tick" x="42" y="114" text-anchor="end">0.85</text>
+            <line class="gridln" x1="46" y1="150" x2="448" y2="150"/><text class="tick" x="42" y="154" text-anchor="end">0.80</text>
+            <line class="gridln" x1="46" y1="190" x2="448" y2="190"/><text class="tick" x="42" y="194" text-anchor="end">0.75</text>
+            <text class="tick" x="42" y="234" text-anchor="end">0.70</text>
+          </g>
+          <!-- group: Train AUC  (0.91/0.93/0.82) -->
+          <!-- y = 230 - (val-0.70)/0.25*200 -->
+          <g>
+            <rect x="70"  y="62"  width="20" height="168" fill="#2050c8" rx="2"/>
+            <rect x="92"  y="46"  width="20" height="184" fill="#7b3ff0" rx="2"/>
+            <rect x="114" y="134" width="20" height="96"  fill="#d98213" rx="2"/>
+            <text class="tick" x="102" y="248" text-anchor="middle">Train AUC</text>
+          </g>
+          <!-- group: Holdout AUC (0.864/0.859/0.812) -->
+          <g>
+            <rect x="200" y="99"  width="20" height="131" fill="#2050c8" rx="2"/>
+            <rect x="222" y="103" width="20" height="127" fill="#7b3ff0" rx="2"/>
+            <rect x="244" y="140" width="20" height="90"  fill="#d98213" rx="2"/>
+            <text class="tick" x="232" y="248" text-anchor="middle" style="font-weight:700;fill:var(--mj-text-secondary)">Holdout AUC</text>
+            <text x="210" y="93" text-anchor="middle" style="font-size:9px;font-weight:700;fill:#2050c8">.864</text>
+          </g>
+          <!-- group: F1 (0.79/0.78/0.74) -->
+          <g>
+            <rect x="330" y="158" width="20" height="72" fill="#2050c8" rx="2"/>
+            <rect x="352" y="162" width="20" height="68" fill="#7b3ff0" rx="2"/>
+            <rect x="374" y="178" width="20" height="52" fill="#d98213" rx="2"/>
+            <text class="tick" x="362" y="248" text-anchor="middle">F1</text>
+          </g>
+        </svg>
+        <div class="muted small" style="text-align:center;margin-top:-6px">Note the Train bars (left group) tower over Holdout — the over-fit you must discount.</div>
+      </div>
+    </div>
+
+    <!-- ROC CURVE -->
+    <div class="card">
+      <div class="card-head"><i class="fa-solid fa-chart-line" style="color:var(--mj-brand-primary)"></i><h3>ROC curves — holdout</h3><div class="spacer"></div><span class="muted small">AUC = area under curve</span></div>
+      <div class="card-body">
+        <svg viewBox="0 0 320 300" width="100%" height="300" role="img" aria-label="ROC curves on holdout for runs A, B and C">
+          <!-- plot area x:50..300 (FPR 0..1), y:250..20 (TPR 0..1) -->
+          <line class="axis" x1="50" y1="20" x2="50" y2="250"/>
+          <line class="axis" x1="50" y1="250" x2="300" y2="250"/>
+          <!-- grid -->
+          <g>
+            <line class="gridln" x1="112.5" y1="20" x2="112.5" y2="250"/>
+            <line class="gridln" x1="175"   y1="20" x2="175"   y2="250"/>
+            <line class="gridln" x1="237.5" y1="20" x2="237.5" y2="250"/>
+            <line class="gridln" x1="50" y1="192.5" x2="300" y2="192.5"/>
+            <line class="gridln" x1="50" y1="135"   x2="300" y2="135"/>
+            <line class="gridln" x1="50" y1="77.5"  x2="300" y2="77.5"/>
+          </g>
+          <!-- chance diagonal -->
+          <line x1="50" y1="250" x2="300" y2="20" stroke="var(--mj-text-disabled)" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <text class="tick" x="250" y="58" transform="rotate(-39 250 58)" fill="var(--mj-text-disabled)">chance (0.50)</text>
+          <!-- Run C 0.812 -->
+          <path d="M50,250 C95,150 150,95 210,62 C250,42 280,30 300,20" fill="none" stroke="#d98213" stroke-width="2.5"/>
+          <!-- Run B 0.859 -->
+          <path d="M50,250 C88,118 135,75 195,52 C240,38 275,27 300,20" fill="none" stroke="#7b3ff0" stroke-width="2.5"/>
+          <!-- Run A 0.864 (top) -->
+          <path d="M50,250 C84,110 130,68 192,48 C238,35 274,25 300,20" fill="none" stroke="#2050c8" stroke-width="3"/>
+          <!-- axis labels -->
+          <text class="tick" x="46" y="254" text-anchor="end">0</text>
+          <text class="tick" x="300" y="266" text-anchor="middle">1.0</text>
+          <text class="tick" x="46" y="24" text-anchor="end">1.0</text>
+          <text class="tick" x="175" y="280" text-anchor="middle" style="font-size:11px;fill:var(--mj-text-secondary)">False Positive Rate</text>
+          <text class="tick" x="14" y="135" text-anchor="middle" transform="rotate(-90 14 135)" style="font-size:11px;fill:var(--mj-text-secondary)">True Positive Rate</text>
+          <!-- inline AUC chips -->
+          <g font-size="10.5" font-weight="700">
+            <rect x="206" y="92" width="86" height="56" rx="6" fill="var(--mj-bg-surface)" stroke="var(--mj-border-default)"/>
+            <text x="214" y="108" fill="#2050c8">A  0.864</text>
+            <text x="214" y="124" fill="#7b3ff0">B  0.859</text>
+            <text x="214" y="140" fill="#d98213">C  0.812</text>
+          </g>
+        </svg>
+        <div class="muted small" style="text-align:center;margin-top:-4px">A and B nearly overlap (0.005 apart); C trails by ~0.05.</div>
+      </div>
+    </div>
+
+    <!-- GROUPED FEATURE IMPORTANCE -->
+    <div class="card" style="grid-column:1 / span 2">
+      <div class="card-head"><i class="fa-solid fa-layer-group" style="color:var(--mj-brand-primary)"></i><h3>Feature importance — grouped by feature</h3><div class="spacer"></div><span class="muted small">Normalized; bars over the 0.60 line flagged</span></div>
+      <div class="card-body">
+        <svg viewBox="0 0 920 260" width="100%" height="260" role="img" aria-label="Grouped feature importance across runs A, B, C">
+          <!-- y: importance 0..0.65 -> y 220(0)..20(0.65). scale = 200/0.65 = 307.7 -->
+          <line class="axis" x1="60" y1="20" x2="60" y2="220"/>
+          <line class="axis" x1="60" y1="220" x2="900" y2="220"/>
+          <g>
+            <line class="gridln" x1="60" y1="220" x2="900" y2="220"/>
+            <line class="gridln" x1="60" y1="159" x2="900" y2="159"/><text class="tick" x="55" y="163" text-anchor="end">0.20</text>
+            <line class="gridln" x1="60" y1="97"  x2="900" y2="97"/><text class="tick" x="55" y="101" text-anchor="end">0.40</text>
+            <!-- danger line 0.60 -->
+            <line x1="60" y1="35" x2="900" y2="35" stroke="var(--mj-warning)" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <text x="64" y="31" font-size="10" font-weight="700" fill="var(--mj-warning-text)">0.60 dominance threshold</text>
+            <text class="tick" x="55" y="39" text-anchor="end">0.60</text>
+            <text class="tick" x="55" y="224" text-anchor="end">0</text>
+          </g>
+          <!-- groups: tenure / days_since / engagement / events_signup / emb_agg / city
+               each group 140 wide, 3 bars (A,B,C) width 22, gap 4 -->
+          <!-- helper: barH = val * 307.7 ; y = 220 - barH -->
+          <!-- tenure: A0.31 B0.17 C0.34 -->
+          <g>
+            <rect x="86"  y="125" width="22" height="95"  fill="#2050c8" rx="2"/>
+            <rect x="110" y="168" width="22" height="52"  fill="#7b3ff0" rx="2"/>
+            <rect x="134" y="115" width="22" height="105" fill="#d98213" rx="2"/>
+            <text class="tick" x="121" y="236" text-anchor="middle">tenure</text>
+          </g>
+          <!-- days_since: A0.27 B0.63 C0.29 -->
+          <g>
+            <rect x="226" y="137" width="22" height="83"  fill="#2050c8" rx="2"/>
+            <rect x="250" y="26"  width="22" height="194" fill="#7b3ff0" rx="2"/>
+            <rect x="274" y="131" width="22" height="89"  fill="#d98213" rx="2"/>
+            <text x="261" y="20" text-anchor="middle" font-size="9.5" font-weight="800" fill="var(--mj-warning-text)">0.63 ⚠</text>
+            <text class="tick" x="261" y="236" text-anchor="middle">days_since_act</text>
+          </g>
+          <!-- engagement: A0.18 B0.06 C0.21 -->
+          <g>
+            <rect x="366" y="165" width="22" height="55"  fill="#2050c8" rx="2"/>
+            <rect x="390" y="201" width="22" height="19"  fill="#7b3ff0" rx="2"/>
+            <rect x="414" y="155" width="22" height="65"  fill="#d98213" rx="2"/>
+            <text class="tick" x="401" y="236" text-anchor="middle">engagement</text>
+          </g>
+          <!-- events_signup: A0.12 B0.03 C0.11 -->
+          <g>
+            <rect x="506" y="183" width="22" height="37" fill="#2050c8" rx="2"/>
+            <rect x="530" y="211" width="22" height="9"  fill="#7b3ff0" rx="2"/>
+            <rect x="554" y="186" width="22" height="34" fill="#d98213" rx="2"/>
+            <text class="tick" x="541" y="236" text-anchor="middle">events_signup</text>
+          </g>
+          <!-- emb_aggregate: A0.08 B0.09 C0.00 -->
+          <g>
+            <rect x="646" y="195" width="22" height="25" fill="#2050c8" rx="2"/>
+            <rect x="670" y="192" width="22" height="28" fill="#7b3ff0" rx="2"/>
+            <rect x="694" y="219" width="22" height="1"  fill="#d98213" rx="2"/>
+            <text class="tick" x="681" y="236" text-anchor="middle">emb_aggregate</text>
+          </g>
+          <!-- city: A0.04 B0.02 C0.05 -->
+          <g>
+            <rect x="786" y="208" width="22" height="12" fill="#2050c8" rx="2"/>
+            <rect x="810" y="214" width="22" height="6"  fill="#7b3ff0" rx="2"/>
+            <rect x="834" y="205" width="22" height="15" fill="#d98213" rx="2"/>
+            <text class="tick" x="821" y="236" text-anchor="middle">city</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIFF TABLE -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-head"><i class="fa-solid fa-table" style="color:var(--mj-brand-primary)"></i><h3>Compact diff</h3><div class="spacer"></div><span class="muted small">vs Run A (recommended baseline)</span></div>
+    <table class="table diff-table">
+      <thead><tr><th>Metric</th><th class="num cA">A · XGBoost</th><th class="num cB">B · LightGBM</th><th class="num cC">C · LogReg</th><th>Best</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Holdout AUC</strong></td><td class="num"><strong>0.864</strong></td><td class="num">0.859 <span class="muted">(−0.005)</span></td><td class="num">0.812 <span class="muted">(−0.052)</span></td><td><span class="badge green pill">A</span></td></tr>
+        <tr><td>Train AUC</td><td class="num">0.910</td><td class="num">0.930</td><td class="num">0.820</td><td><span class="badge gray pill">B*</span></td></tr>
+        <tr><td>Overfit gap (Train−Holdout)</td><td class="num" style="color:var(--mj-warning-text)">0.046</td><td class="num" style="color:var(--mj-error-text)">0.071</td><td class="num" style="color:var(--mj-success-text)">0.008</td><td><span class="badge green pill">C</span></td></tr>
+        <tr><td>F1 score</td><td class="num"><strong>0.79</strong></td><td class="num">0.78</td><td class="num">0.74</td><td><span class="badge green pill">A</span></td></tr>
+        <tr><td>Train time</td><td class="num">42s</td><td class="num">28s</td><td class="num">9s</td><td><span class="badge gray pill">C</span></td></tr>
+        <tr><td>Max single-feature importance</td><td class="num">0.31</td><td class="num" style="color:var(--mj-error-text)">0.63 ⚠</td><td class="num">0.34</td><td><span class="badge green pill">A</span></td></tr>
+        <tr><td>Interpretability</td><td>SHAP</td><td>SHAP</td><td><strong>Full (coeffs)</strong></td><td><span class="badge green pill">C</span></td></tr>
+      </tbody>
+    </table>
+    <div class="card-body" style="background:var(--mj-bg-surface-card);border-top:1px solid var(--mj-border-subtle)">
+      <span class="muted small">* Train AUC is in-sample and not a promotion criterion — shown only to expose the overfit gap.</span>
+    </div>
+  </div>
+
+</div></main>
+</div></body></html>

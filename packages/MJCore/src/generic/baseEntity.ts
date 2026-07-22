@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
@@ -14,7 +14,13 @@ import { z } from 'zod';
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
  * used properties from the entity field metadata.
+ *
+ * Marked `@OptionalKeyedSpecialization()`: hydration probes the ClassFactory with a
+ * `'<Entity>.<Field>'` key for EVERY field so that a per-field subclass CAN be registered, but
+ * none ever has been in practice — falling back to `EntityField` itself is the designed common
+ * case, not a resolution failure, so the factory must not warn about it.
  */
+@OptionalKeyedSpecialization()
 export class EntityField {
     /**
      * Static object containing the value ranges for various SQL number types. 
@@ -2219,9 +2225,37 @@ export abstract class BaseEntity<T = unknown> {
         this._childEntity = null;
         this._childEntities = null;
         this._childEntityDiscoveryDone = false;
-        // Generate UUID for non-auto-increment GUID/UUID primary keys
-        // (SQL Server `uniqueidentifier` / PostgreSQL `uuid`)
-        if (this.EntityInfo.PrimaryKeys.length === 1) {
+        // Primary-key assignment for a new record.
+        //
+        // Warning, get recurses up the tree adding O(N^2) complexity.
+        // If an entity tree exceeds 3 entities deep, we may want to
+        // consider a more efficient approach. However, the efficient
+        // option currently uses name reference to reach into the parent's
+        // field and pull the key value, passing it down the chain.
+        // That approach is more fragile and less idiomatic to the
+        // rest of the entities codebase. So we settle for some
+        // efficiency with SetLocal, but use get which gets the root's value
+        // when setting keys.
+        if (this._parentEntity) {
+            this._parentEntity.NewRecord();
+            for (const pk of this.EntityInfo.PrimaryKeys) {
+                const parentValue = this._parentEntity.Get(pk.Name);
+                if (parentValue != null) {
+                    this.SetLocal(pk.Name, parentValue);
+                    // The shared PK is ReadOnly, so SetLocal above consumed its
+                    // one-time write (_NeverSet -> false). Restore _NeverSet so the
+                    // child's OWN mirror can be re-written if the shared key is set
+                    // again this lifecycle — e.g. an explicit PK in newValues below,
+                    // or a later Set('ID', ...). Without this, the routed Set would
+                    // update the parent while the child's ReadOnly mirror stays
+                    // locked at the adopted value, re-diverging the shared key.
+                    this.GetFieldByName(pk.Name)?.ResetNeverSetFlag();
+                }
+            }
+        } else if (this.EntityInfo.PrimaryKeys.length === 1) {
+            // Root of an IS-A chain, or a standalone (non-IS-A) entity: generate
+            // a single GUID/UUID PK here (SQL Server `uniqueidentifier` /
+            // PostgreSQL `uuid`).
             const pk = this.EntityInfo.PrimaryKeys[0];
             if (!pk.AutoIncrement &&
                 pk.IsUniqueIdentifier &&
@@ -2237,23 +2271,13 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
 
+        // Apply caller-supplied values LAST so an explicit PK (or any routed
+        // parent field) wins over the generated/adopted value instead of being
+        // clobbered by the parent's NewRecord().
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
                 this.Set(kv.FieldName, kv.Value);
             });
-        }
-
-        // IS-A composition: propagate PK value to parent entity chain
-        // Parent needs NewRecord() called first, then share the same PK value
-        if (this._parentEntity) {
-            this._parentEntity.NewRecord();
-            // Propagate PK — child and parent must share the same UUID
-            for (const pk of this.EntityInfo.PrimaryKeys) {
-                const pkValue = this.Get(pk.Name);
-                if (pkValue != null) {
-                    this._parentEntity.Set(pk.Name, pkValue);
-                }
-            }
         }
 
         this.RaiseEvent('new_record', null);
@@ -2518,18 +2542,30 @@ export abstract class BaseEntity<T = unknown> {
                         else {
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
-                                if (success && results) {
-                                    const transItem = results.find(r => r.Transaction.BaseEntity === this);
-                                    if (transItem) {
-                                        this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
-                                    }
-                                    else {
-                                        // should never get here, but if we do, we need to throw an error
-                                        throw new Error('Transaction group did not return a result for the entity object');
-                                    }
+                                const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
+                                if (transItem) {
+                                    this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                 }
                                 else {
-                                    throw error; // push this to the catch block below and that will add to the result history
+                                    // The transaction group failed / rolled back, OR (should never happen) reported success
+                                    // without a result for this entity. Either way, RECORD the failure on ResultHistory rather
+                                    // than throwing. This handler runs ASYNCHRONOUSLY — after Save() has already returned true and
+                                    // its enclosing try/catch has unwound — so a throw here has no catch to reach: rxjs routes a
+                                    // throwing next-handler to reportUnhandledError, which re-throws it on a fresh tick, producing
+                                    // an uncaughtException that exits the whole host process (MJServer only guards
+                                    // unhandledRejection). The transaction has already rolled back and Submit() returns false; the
+                                    // caller's error handling still runs. Mirrors the Delete() transaction-group-failure path below.
+                                    const err = error ?? (success ? new Error('Transaction group did not return a result for the entity object') : undefined);
+                                    if (currentResultCount === this.ResultHistory.length) {
+                                        // no new result was recorded elsewhere, so add one here (mirrors Save()'s own catch block)
+                                        newResult.Success = false;
+                                        newResult.Type = saveSubType ?? (this.IsSaved ? 'update' : 'create');
+                                        newResult.Message = err?.message ?? (err != null ? String(err) : 'Transaction group failed');
+                                        newResult.Errors = err?.Errors || [];
+                                        newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                        newResult.EndedAt = new Date();
+                                        this.RegisterResultHistoryEntry(newResult);
+                                    }
                                 }
                             });
                             return true;
@@ -3260,14 +3296,24 @@ export abstract class BaseEntity<T = unknown> {
                                 this.NewRecord(); // will trigger a new record event here too
                             }
                             else {
-                                // transaction failed, so we need to add a new result to the history here
-                                newResult.Success = false;
-                                newResult.Type = 'delete'
-                                newResult.Message = error && error.message? error.message : error;
-                                newResult.Errors = error.Errors || [];
-                                newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
-                                newResult.EndedAt = new Date();
-                                this.RegisterResultHistoryEntry(newResult);
+                                // Transaction group failed / rolled back. RECORD the failure instead of
+                                // letting this async handler throw — exactly like the Save() subscriber above.
+                                // `error` may be UNDEFINED: the GraphQL-client transaction group signals
+                                // failure by RETURNING failed result items (no thrown error), so the old
+                                // `error.Errors` was a TypeError, which rxjs re-throws on a fresh tick as an
+                                // uncaughtException that exits the host process. Treat `error` as
+                                // possibly-absent, and guard on currentResultCount so a provider that already
+                                // recorded the failure (real providers do, before the notification fires)
+                                // isn't double-recorded.
+                                if (currentResultCount === this.ResultHistory.length) {
+                                    newResult.Success = false;
+                                    newResult.Type = 'delete';
+                                    newResult.Message = error?.message ?? (error != null ? String(error) : 'Transaction group failed');
+                                    newResult.Errors = error?.Errors || [];
+                                    newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                    newResult.EndedAt = new Date();
+                                    this.RegisterResultHistoryEntry(newResult);
+                                }
                             }
                         });
                     }

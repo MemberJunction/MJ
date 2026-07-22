@@ -1,0 +1,239 @@
+[
+  {
+    "fields": {
+      "Name": "Write Entity Field(s)",
+      "Description": "Writes one or more fields onto a SINGLE entity record — either updating an existing record (identified by its PrimaryKey) or creating a new one (when CreateIfMissing=true and no PrimaryKey is supplied). A reusable write primitive for Flow Agents and as the terminal write-back step of a Feature Pipeline: give it the target entity, an optional primary key, and a field map, and it loads-or-creates, sets the fields, and saves. Respects entity validation, permissions, and audit trails (Record Changes). To always insert use Create Record; to read use Get Record / Run View.",
+      "DriverClass": "WriteEntityFieldsAction",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MJ entity name as registered in the metadata. Built-in MJ entities all use the 'MJ: ' prefix, e.g. 'MJ: AI Agents', 'MJ: Users', 'MJ: AI Prompt Runs'. Custom entities added by an MJ deployment may or may not use the prefix. Case-insensitive. Look up via Metadata.EntityByName if uncertain.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "809B13DE-52F2-4F0D-B75F-FA34DDC7938A"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.124Z",
+            "checksum": "30f857ba8961b797e67d9c857af36396d1c889290b04adcfdbd7fddcc15cc234"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrimaryKey",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Object identifying an EXISTING record to update, e.g. { \"ID\": \"...\" }. Most MJ entities use a single ID field; composite keys are supported via multiple key/value pairs. Accepts a JSON string as well. Omit this to create a new record (requires CreateIfMissing=true).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "71AE82D9-FB39-4AC0-B105-A729E2F408BF"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.167Z",
+            "checksum": "b8b97a8e0a41775e7190609f2122ba198759c9ff3de1f93e681128ef0b391b63"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Fields",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Object mapping field names to values, e.g. { \"Status\": \"Active\", \"Description\": \"Updated\" }. Only writable fields are accepted; primary keys, computed fields, and timestamps (__mj_CreatedAt, __mj_UpdatedAt) are managed automatically and should be omitted. Fields not included are left unchanged on an update. Accepts a JSON string as well.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "60CFDAAC-1A20-4487-ACB4-7F563E1C5643"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.197Z",
+            "checksum": "119341ab86511de06968aa2ba7fdd2ae71085af068069ea0c4c08c7820ac9f83"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreateIfMissing",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true and no PrimaryKey is supplied, a new record is created with the supplied Fields. When false (default), a missing PrimaryKey is a validation error. Defaults to false.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "6F7E91A0-AA1A-4EEB-8CE8-C416D50C73CA"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.224Z",
+            "checksum": "5742d8aebc116192aefdb70ef18120437e89e0cb06de6959fe46f091d327d0b0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AffectedPrimaryKey",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Object containing the primary key field(s) and their value(s) for the affected (created or updated) record.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4390B493-3873-4715-B6EB-6566B038F32D"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.252Z",
+            "checksum": "5e32680578851b1f6254094ab70355b00a8614c7a80305915ff2f7f31cded94f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Saved",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean flag indicating whether the record was successfully saved.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "13AAAE38-1C74-4154-90DA-98514E798F7C"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.285Z",
+            "checksum": "06cb346df3a44537eaf2d40b29c3c3f9fa1de2360f32c09fb5aefb403b327e85"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Record created or updated successfully"
+          },
+          "primaryKey": {
+            "ID": "35A718B6-2BA6-4120-B954-A0AD3F0C12F4"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.326Z",
+            "checksum": "5c96b902adb0a71482a0778b777acd89f1a61a3023af30232ebb4d5fddf579f5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required parameter was missing or invalid, or the save failed validation"
+          },
+          "primaryKey": {
+            "ID": "B97C6583-44CF-4D5B-965C-9675B377C286"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.351Z",
+            "checksum": "dd35a4ebcc3a877cfd37bc0ba896395bcb8a5ab518726f5c558ed409dabbf250"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Entity not found in metadata"
+          },
+          "primaryKey": {
+            "ID": "5B6B9513-A6F4-4DC8-A31D-09EC1CF2B913"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.371Z",
+            "checksum": "7a4758200c9e59517b0561a760f76b8153501b3487b5ff6b658f9c66abc223fc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RECORD_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No existing record was found for the supplied PrimaryKey"
+          },
+          "primaryKey": {
+            "ID": "7093C216-DEC3-404E-B1B3-8F22F5A53A5E"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.392Z",
+            "checksum": "64b6a6d407c2bf5646d1039a0955e8b590814e59ae11b9b97f55a61889c8048e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_DENIED",
+            "IsSuccess": false,
+            "Description": "Permission denied accessing or saving the record"
+          },
+          "primaryKey": {
+            "ID": "2F307DD8-00CC-42DC-9319-DF436C9568D7"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.420Z",
+            "checksum": "29d1c7b8182b5fa344a0fa3b56210ca5be95d09963d592230abc0e4a0b73b064"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SAVE_FAILED",
+            "IsSuccess": false,
+            "Description": "The record could not be saved (see message for the consolidated entity error)"
+          },
+          "primaryKey": {
+            "ID": "2129DC7C-B159-46D3-8328-DB26E916C2E9"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.440Z",
+            "checksum": "1cc7fbb11193612134e374f34e5d7961d4492e0e6716fae0a7a0cec5478892f6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred while writing the record"
+          },
+          "primaryKey": {
+            "ID": "F7621F96-3C0E-4B81-B163-4B333D1FA19B"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:33.460Z",
+            "checksum": "ca4fd7e60e5a9406b6af6bd2dd4d90ca4e31d03ec0a273093dce1e63525f216c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BDA6A3EF-6B11-4AE9-B985-1FE216599230"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:32.984Z",
+      "checksum": "551faa9ecd3a7d6fa9e7e2e2a7ac6e6036b08ea73479796f98eb966cab822d56"
+    }
+  }
+]

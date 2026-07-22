@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NormalizeUUID, UUIDsEqual } from '../util/UUIDUtils';
+import { NormalizeUUID, UUIDsEqual, IsValidUUID } from '../util/UUIDUtils';
 
 describe('NormalizeUUID', () => {
     it('should lowercase an uppercase UUID (SQL Server format)', () => {
@@ -135,5 +135,50 @@ describe('UUIDsEqual', () => {
         // null and '' are different: the null guard returns false before '' could normalize to ''.
         expect(UUIDsEqual(null, '')).toBe(false);
         expect(UUIDsEqual('', null)).toBe(false);
+    });
+});
+
+describe('IsValidUUID', () => {
+    const upperUUID = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
+    const lowerUUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+    it('accepts a canonical lowercase UUID (PostgreSQL format)', () => {
+        expect(IsValidUUID(lowerUUID)).toBe(true);
+    });
+
+    it('accepts a canonical uppercase UUID (SQL Server format)', () => {
+        expect(IsValidUUID(upperUUID)).toBe(true);
+    });
+
+    it('accepts a mixed-case UUID', () => {
+        expect(IsValidUUID('A1b2C3d4-E5f6-7890-AbCd-Ef1234567890')).toBe(true);
+    });
+
+    it('tolerates surrounding whitespace', () => {
+        expect(IsValidUUID('  ' + lowerUUID + '  ')).toBe(true);
+    });
+
+    it('rejects null and undefined', () => {
+        expect(IsValidUUID(null)).toBe(false);
+        expect(IsValidUUID(undefined)).toBe(false);
+    });
+
+    it('rejects empty / whitespace-only strings', () => {
+        expect(IsValidUUID('')).toBe(false);
+        expect(IsValidUUID('   ')).toBe(false);
+    });
+
+    it('rejects non-UUID strings (including injection-shaped input)', () => {
+        expect(IsValidUUID('not-a-uuid')).toBe(false);
+        expect(IsValidUUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890'; DROP TABLE")).toBe(false);
+    });
+
+    it('rejects malformed group lengths', () => {
+        expect(IsValidUUID('a1b2c3d4-e5f6-7890-abcd-ef12345678')).toBe(false); // last group too short
+        expect(IsValidUUID('a1b2c3d4e5f67890abcdef1234567890')).toBe(false); // no hyphens
+    });
+
+    it('rejects non-hex characters in an otherwise correct shape', () => {
+        expect(IsValidUUID('g1b2c3d4-e5f6-7890-abcd-ef1234567890')).toBe(false);
     });
 });

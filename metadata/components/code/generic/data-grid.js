@@ -781,10 +781,13 @@ function DataGrid({
     
     return filteredData.map((row, index) => ({
       ...row,
-      // Use existing key, ID fields, or fall back to index
-      key: row?.key || row?.ID || row?.id || index
+      key: row?.key
+        || (entityPrimaryKeys?.length && entityPrimaryKeys.map(k => row?.[k]).filter(v => v != null).join('_'))
+        || row?.ID
+        || row?.id
+        || index
     }));
-  }, [filteredData]);
+  }, [filteredData, entityPrimaryKeys]);
   
   return (
     <div className="data-grid-component" style={{ width: '100%' }}>

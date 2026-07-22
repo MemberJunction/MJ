@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Option B — Command Center · User Routines</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+:root{color-scheme:light;
+--mj-color-brand-300:#4dabd5;--mj-color-brand-400:#2699cc;--mj-color-brand-500:#0076b6;--mj-color-brand-600:#006aa3;--mj-color-brand-700:#005a8a;--mj-color-brand-900:#092340;
+--mj-color-neutral-0:#fff;--mj-color-neutral-50:#f8fafc;--mj-color-neutral-100:#f1f5f9;--mj-color-neutral-200:#e2e8f0;--mj-color-neutral-300:#cbd5e1;--mj-color-neutral-400:#94a3b8;--mj-color-neutral-500:#64748b;--mj-color-neutral-600:#475569;--mj-color-neutral-700:#334155;--mj-color-neutral-800:#1e293b;--mj-color-neutral-900:#0f172a;--mj-color-neutral-950:#020617;
+--mj-color-success-500:#22c55e;--mj-color-success-700:#15803d;--mj-color-success-50:#f0fdf4;
+--mj-color-warning-500:#f59e0b;--mj-color-warning-700:#b45309;--mj-color-warning-50:#fffbeb;
+--mj-color-error-500:#ef4444;--mj-color-error-700:#b91c1c;--mj-color-error-50:#fef2f2;
+--mj-color-violet-600:#7c3aed;--mj-color-tertiary-600:#0891b2;
+--mj-bg-page:var(--mj-color-neutral-50);--mj-bg-surface:var(--mj-color-neutral-0);--mj-bg-surface-card:var(--mj-color-neutral-50);--mj-bg-surface-sunken:var(--mj-color-neutral-100);--mj-bg-surface-hover:var(--mj-color-neutral-100);--mj-bg-surface-elevated:var(--mj-color-neutral-0);
+--mj-text-primary:var(--mj-color-neutral-800);--mj-text-secondary:var(--mj-color-neutral-600);--mj-text-muted:var(--mj-color-neutral-500);
+--mj-border-default:var(--mj-color-neutral-200);--mj-border-subtle:var(--mj-color-neutral-100);--mj-border-strong:var(--mj-color-neutral-300);
+--mj-brand-primary:var(--mj-color-brand-500);--mj-brand-primary-hover:var(--mj-color-brand-600);
+--mj-status-success:var(--mj-color-success-500);--mj-status-success-text:var(--mj-color-success-700);--mj-status-success-bg:var(--mj-color-success-50);
+--mj-status-warning:var(--mj-color-warning-500);--mj-status-warning-text:var(--mj-color-warning-700);--mj-status-warning-bg:var(--mj-color-warning-50);
+--mj-status-error:var(--mj-color-error-500);--mj-status-error-text:var(--mj-color-error-700);--mj-status-error-bg:var(--mj-color-error-50);
+--shadow-1:0 1px 2px rgba(15,23,42,.06),0 1px 3px rgba(15,23,42,.08);--shadow-2:0 4px 12px rgba(15,23,42,.10);}
+[data-theme="dark"]{color-scheme:dark;
+--mj-bg-page:var(--mj-color-neutral-900);--mj-bg-surface:var(--mj-color-neutral-800);--mj-bg-surface-card:#253347;--mj-bg-surface-sunken:var(--mj-color-neutral-950);--mj-bg-surface-hover:var(--mj-color-neutral-600);--mj-bg-surface-elevated:var(--mj-color-neutral-700);
+--mj-text-primary:var(--mj-color-neutral-100);--mj-text-secondary:var(--mj-color-neutral-300);--mj-text-muted:var(--mj-color-neutral-400);
+--mj-border-default:var(--mj-color-neutral-700);--mj-border-subtle:var(--mj-color-neutral-800);--mj-border-strong:var(--mj-color-neutral-600);
+--mj-brand-primary:var(--mj-color-brand-400);--mj-brand-primary-hover:var(--mj-color-brand-300);
+--mj-status-success-bg:rgba(34,197,94,.15);--mj-status-success-text:#dcfce7;
+--mj-status-warning-bg:rgba(245,158,11,.15);--mj-status-warning-text:#fef3c7;
+--mj-status-error-bg:rgba(239,68,68,.15);--mj-status-error-text:#fee2e2;
+--shadow-1:0 1px 2px rgba(0,0,0,.4);--shadow-2:0 4px 14px rgba(0,0,0,.5);}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--mj-bg-page);color:var(--mj-text-primary);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.thesis{background:linear-gradient(90deg,var(--mj-color-brand-900),var(--mj-color-brand-700));color:#fff;padding:10px 20px;display:flex;gap:18px;align-items:center;font-size:13px;flex:0 0 auto}
+.thesis b{font-size:14px}.thesis .tag{background:rgba(255,255,255,.15);padding:2px 10px;border-radius:10px;font-size:11px;letter-spacing:.4px}
+.thesis .spacer{flex:1}
+.theme-btn{background:rgba(255,255,255,.15);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px}
+.app{flex:1;display:flex;min-height:0}
+.sidebar{width:240px;background:var(--mj-bg-surface);border-right:1px solid var(--mj-border-default);display:flex;flex-direction:column}
+.sb-head{padding:14px 14px 8px;display:flex;align-items:center;gap:8px}
+.sb-head h2{font-size:15px;flex:1}
+.icon-btn{width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--mj-text-secondary)}
+.icon-btn:hover{background:var(--mj-bg-surface-hover);color:var(--mj-text-primary)}
+.convo{padding:9px 14px;margin:1px 8px;border-radius:8px;cursor:pointer}
+.convo:hover{background:var(--mj-bg-surface-hover)}
+.convo.active{background:color-mix(in srgb,var(--mj-brand-primary) 10%,transparent)}
+.convo .t{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.convo .s{font-size:12px;color:var(--mj-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--mj-color-brand-500);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto}
+.chat{flex:1;display:flex;flex-direction:column;min-width:0}
+.chat-head{background:var(--mj-bg-surface);border-bottom:1px solid var(--mj-border-default);padding:10px 20px;display:flex;align-items:center;gap:12px}
+.chat-head h1{font-size:15px;font-weight:650}
+.hd-btn{display:inline-flex;gap:7px;align-items:center;border:1px solid var(--mj-border-default);padding:6px 13px;border-radius:9px;font-size:12.5px;font-weight:600;color:var(--mj-text-secondary)}
+.hd-btn:hover{border-color:var(--mj-brand-primary);color:var(--mj-brand-primary)}
+.hd-btn.active{background:color-mix(in srgb,var(--mj-brand-primary) 10%,transparent);border-color:var(--mj-brand-primary);color:var(--mj-brand-primary)}
+.msgs{flex:1;overflow-y:auto;padding:20px 0}
+.mrow{max-width:720px;margin:0 auto 16px;padding:0 24px;display:flex;gap:12px}
+.bubble{background:var(--mj-bg-surface);border:1px solid var(--mj-border-subtle);border-radius:12px;padding:11px 15px;box-shadow:var(--shadow-1);flex:1;font-size:13.5px}
+.mrow.user .bubble{background:color-mix(in srgb,var(--mj-brand-primary) 7%,var(--mj-bg-surface))}
+.mname{font-size:12px;font-weight:700;margin-bottom:3px;color:var(--mj-text-secondary)}
+.composer{padding:12px 24px 16px;max-width:768px;margin:0 auto;width:100%}
+.comp-box{background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:14px;box-shadow:var(--shadow-1);padding:11px 13px}
+.comp-box .ph{color:var(--mj-text-muted);font-size:13.5px;padding:2px 2px 10px}
+.comp-icons{display:flex;gap:4px;align-items:center}
+.comp-icons .spacer{flex:1}
+.send{width:30px;height:30px;border-radius:8px;background:var(--mj-brand-primary);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+/* ⟡ B: THE COMMAND CENTER PANEL */
+.panel{width:430px;flex:0 0 auto;background:var(--mj-bg-surface);border-left:1px solid var(--mj-border-default);display:flex;flex-direction:column;box-shadow:-6px 0 18px rgba(15,23,42,.06)}
+.panel-head{padding:14px 18px 0;border-bottom:1px solid var(--mj-border-default)}
+.panel-title{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.panel-title .ic{width:30px;height:30px;border-radius:9px;background:var(--mj-brand-primary);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+.panel-title b{font-size:15px;flex:1}
+/* CSS-only tabs */
+.tabs input{display:none}
+.tabbar{display:flex;gap:2px}
+.tabbar label{padding:9px 15px;font-size:13px;font-weight:600;color:var(--mj-text-muted);border-bottom:2.5px solid transparent;cursor:pointer;border-radius:8px 8px 0 0}
+.tabbar label:hover{color:var(--mj-text-primary);background:var(--mj-bg-surface-hover)}
+#tab-list:checked~.panel-head .tabbar label[for=tab-list],
+#tab-new:checked~.panel-head .tabbar label[for=tab-new],
+#tab-hist:checked~.panel-head .tabbar label[for=tab-hist]{color:var(--mj-brand-primary);border-bottom-color:var(--mj-brand-primary)}
+.tabpage{display:none;flex:1;overflow-y:auto}
+#tab-list:checked~.page-list{display:block}
+#tab-new:checked~.page-new{display:block}
+#tab-hist:checked~.page-hist{display:block}
+/* routine rows */
+.rrow{padding:13px 18px;border-bottom:1px solid var(--mj-border-subtle)}
+.rrow:hover{background:var(--mj-bg-surface-hover)}
+.rr-top{display:flex;align-items:center;gap:9px}
+.st{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.st.ok{background:var(--mj-status-success)}.st.err{background:var(--mj-status-error)}.st.pause{background:var(--mj-text-muted)}
+.rr-name{font-weight:650;font-size:13.5px;flex:1}
+.spark{display:flex;gap:2px;align-items:flex-end;height:16px}
+.spark i{width:4px;border-radius:1px;background:var(--mj-status-success);display:block}
+.spark i.f{background:var(--mj-status-error)}
+.spark i.m{background:var(--mj-border-strong)}
+.rr-sub{font-size:12px;color:var(--mj-text-muted);margin:3px 0 0 17px;display:flex;gap:12px;flex-wrap:wrap}
+.chip{display:inline-flex;gap:5px;align-items:center;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-subtle);border-radius:10px;padding:1px 9px;font-size:11px;color:var(--mj-text-secondary)}
+.chip.watch{color:var(--mj-color-tertiary-600);border-color:color-mix(in srgb,var(--mj-color-tertiary-600) 35%,transparent)}
+.rr-expand{margin:10px 0 0 17px;background:var(--mj-bg-surface-card);border:1px solid var(--mj-border-subtle);border-radius:10px;padding:10px 13px;font-size:12.5px}
+.rr-actions{display:flex;gap:8px;margin-top:9px}
+.mini-btn{border:1px solid var(--mj-border-default);border-radius:7px;padding:4px 12px;font-size:12px;font-weight:600;color:var(--mj-text-secondary)}
+.mini-btn:hover{border-color:var(--mj-brand-primary);color:var(--mj-brand-primary)}
+.mini-btn.pri{background:var(--mj-brand-primary);border-color:var(--mj-brand-primary);color:#fff}
+/* form page */
+.fsec{padding:15px 18px;border-bottom:1px solid var(--mj-border-subtle)}
+.fsec h4{font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--mj-text-muted);margin-bottom:10px;display:flex;gap:8px;align-items:center}
+.frow{display:flex;flex-direction:column;gap:5px;margin-bottom:11px}
+.frow label{font-size:12px;font-weight:600;color:var(--mj-text-secondary)}
+.inp{border:1px solid var(--mj-border-default);background:var(--mj-bg-surface-sunken);border-radius:8px;padding:8px 11px;font-size:13px;color:var(--mj-text-primary)}
+.inp.sel{display:flex;justify-content:space-between;align-items:center;color:var(--mj-text-primary)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg{display:inline-flex;border:1px solid var(--mj-border-default);border-radius:9px;overflow:hidden}
+.seg button{padding:7px 13px;font-size:12.5px;color:var(--mj-text-secondary);border-right:1px solid var(--mj-border-default);flex:1}
+.seg button:last-child{border-right:none}
+.seg button.sel{background:color-mix(in srgb,var(--mj-brand-primary) 12%,transparent);color:var(--mj-brand-primary);font-weight:650}
+.preset{border:1px solid var(--mj-border-default);border-radius:14px;padding:5px 12px;font-size:12px;color:var(--mj-text-secondary)}
+.preset.sel{background:var(--mj-brand-primary);border-color:var(--mj-brand-primary);color:#fff;font-weight:600}
+.skillchip{display:inline-flex;gap:6px;align-items:center;border-radius:12px;padding:3px 11px;font-size:12px;font-weight:600;background:color-mix(in srgb,#2563EB 10%,transparent);color:#2563EB;border:1px solid color-mix(in srgb,#2563EB 30%,transparent)}
+[data-theme="dark"] .skillchip{color:#93c5fd}
+.recip{display:flex;gap:8px;align-items:center;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-subtle);border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:12.5px}
+.recip .grip{color:var(--mj-text-muted);cursor:grab}
+.recip .who{flex:1}
+.recip .seq{font-size:10.5px;color:var(--mj-text-muted);background:var(--mj-bg-surface);border:1px solid var(--mj-border-subtle);border-radius:8px;padding:1px 7px}
+.form-foot{padding:14px 18px;display:flex;gap:10px}
+.btn{border-radius:9px;padding:9px 18px;font-size:13px;font-weight:600}
+.btn.primary{background:var(--mj-brand-primary);color:#fff}
+.btn.ghost{color:var(--mj-text-secondary)}
+.btn.ghost:hover{background:var(--mj-bg-surface-hover)}
+/* history page */
+.hrow{padding:12px 18px;border-bottom:1px solid var(--mj-border-subtle);display:flex;gap:11px}
+.hrow .ic{width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex:0 0 auto}
+.ic.ok{background:var(--mj-status-success-bg);color:var(--mj-status-success-text)}
+.ic.err{background:var(--mj-status-error-bg);color:var(--mj-status-error-text)}
+.ic.chg{background:color-mix(in srgb,var(--mj-color-violet-600) 12%,transparent);color:var(--mj-color-violet-600)}
+[data-theme="dark"] .ic.chg{color:#c4b5fd}
+.hrow .hm{flex:1;font-size:12.5px}
+.hrow .hs{color:var(--mj-text-muted);font-size:11.5px;margin-top:1px}
+.hlink{font-size:11.5px;color:var(--mj-brand-primary);font-weight:600;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="thesis">
+  <span class="tag">OPTION B</span>
+  <div><b>Command Center</b> — a right-hand panel (peer of the artifact viewer) that is the full routine cockpit: rich list with run sparklines, a complete power-editor, and per-routine history — all without leaving the conversation. <b>Best for:</b> power users and mixed audiences; full schema reachable in one place. <b>Tradeoff:</b> heavier UI; panel competes with artifacts for the right rail; form-forward rather than conversational.</div>
+  <div class="spacer"></div>
+  <button class="theme-btn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'"><i class="fa-solid fa-circle-half-stroke"></i> Toggle dark</button>
+</div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sb-head"><h2>Conversations</h2><button class="icon-btn"><i class="fa-solid fa-pen-to-square"></i></button></div>
+    <div class="convo active"><div class="t">Pipeline review with Query Builder</div><div class="s">You: how did new pipeline do…</div></div>
+    <div class="convo"><div class="t">Competitor pricing research</div><div class="s">Research Agent: 3 price changes…</div></div>
+    <div class="convo"><div class="t">Q3 membership renewals</div><div class="s">Skip: The renewal forecast…</div></div>
+  </aside>
+  <main class="chat">
+    <div class="chat-head">
+      <h1>Pipeline review with Query Builder</h1>
+      <span style="flex:1"></span>
+      <button class="hd-btn"><i class="fa-regular fa-file-lines"></i> Artifacts</button>
+      <button class="hd-btn active"><i class="fa-solid fa-rotate"></i> Routines</button>
+    </div>
+    <div class="msgs">
+      <div class="mrow user"><span class="avatar">AN</span><div class="bubble"><div class="mname">You</div>Show me yesterday's new pipeline by source, compare to trailing 7-day average, and flag anything unusual.</div></div>
+      <div class="mrow"><span class="avatar" style="background:var(--mj-color-violet-600)">QB</span><div class="bubble"><div class="mname">Query Builder</div>Yesterday you added <b>$412K across 14 opportunities</b> — 22% above the trailing average. Referral pipeline is the outlier (3.1×). I've opened the breakdown as a data artifact. <span style="color:var(--mj-brand-primary);font-weight:600;font-size:12.5px">Make this a routine →</span></div></div>
+    </div>
+    <div class="composer"><div class="comp-box"><div class="ph">Message Query Builder…</div><div class="comp-icons"><button class="icon-btn"><i class="fa-solid fa-clipboard-check"></i></button><button class="icon-btn"><i class="fa-solid fa-rotate"></i></button><button class="icon-btn"><i class="fa-solid fa-paperclip"></i></button><span class="spacer"></span><button class="send"><i class="fa-solid fa-arrow-up"></i></button></div></div></div>
+  </main>
+  <!-- ⟡ THE PANEL (CSS tabs: click My Routines / New Routine / History) -->
+  <aside class="panel tabs" style="display:flex">
+    <input type="radio" name="tb" id="tab-list" checked>
+    <input type="radio" name="tb" id="tab-new">
+    <input type="radio" name="tb" id="tab-hist">
+    <div class="panel-head">
+      <div class="panel-title"><span class="ic"><i class="fa-solid fa-rotate"></i></span><b>Routines</b><button class="icon-btn"><i class="fa-solid fa-arrow-up-right-from-square"></i></button><button class="icon-btn"><i class="fa-solid fa-xmark"></i></button></div>
+      <div class="tabbar">
+        <label for="tab-list">My Routines <span style="opacity:.6">4</span></label>
+        <label for="tab-new">+ New Routine</label>
+        <label for="tab-hist">History</label>
+      </div>
+    </div>
+    <!-- TAB 1: list -->
+    <div class="tabpage page-list">
+      <div class="rrow">
+        <div class="rr-top"><span class="st ok"></span><span class="rr-name">Morning Pipeline Digest</span><span class="spark"><i style="height:9px"></i><i style="height:12px"></i><i style="height:8px"></i><i style="height:13px"></i><i style="height:10px"></i><i style="height:14px"></i><i style="height:11px"></i></span></div>
+        <div class="rr-sub"><span class="chip"><i class="fa-solid fa-robot"></i> Query Builder</span><span>Weekdays 7:00 AM CT</span><span>next in 9h 12m</span></div>
+        <div class="rr-expand">
+          Runs your pipeline-by-source question and posts the digest here every weekday morning. Notifies <b>in-app, every run</b>.
+          <div class="rr-actions"><button class="mini-btn pri"><i class="fa-solid fa-play"></i> Run now</button><button class="mini-btn"><i class="fa-solid fa-pause"></i> Pause</button><button class="mini-btn"><i class="fa-regular fa-pen-to-square"></i> Edit</button><button class="mini-btn"><i class="fa-solid fa-clock-rotate-left"></i> History</button></div>
+        </div>
+      </div>
+      <div class="rrow">
+        <div class="rr-top"><span class="st ok"></span><span class="rr-name">Competitor Price Watch</span><span class="spark"><i class="m" style="height:6px"></i><i class="m" style="height:6px"></i><i style="height:12px"></i><i class="m" style="height:6px"></i><i class="m" style="height:6px"></i><i class="m" style="height:6px"></i><i style="height:13px"></i></span></div>
+        <div class="rr-sub"><span class="chip"><i class="fa-solid fa-robot"></i> Research Agent</span><span class="chip watch"><i class="fa-solid fa-binoculars"></i> Watch · on change</span><span>every 4 hrs</span><span class="chip"><i class="fa-solid fa-wand-magic-sparkles"></i> Web Research</span></div>
+      </div>
+      <div class="rrow">
+        <div class="rr-top"><span class="st err"></span><span class="rr-name">Weekly Churn Snapshot</span><span class="spark"><i style="height:10px"></i><i style="height:11px"></i><i style="height:9px"></i><i style="height:12px"></i><i style="height:10px"></i><i style="height:11px"></i><i class="f" style="height:14px"></i></span></div>
+        <div class="rr-sub"><span class="chip"><i class="fa-solid fa-robot"></i> Skip</span><span>Mondays 6:00 AM</span><span style="color:var(--mj-status-error-text);font-weight:600">last run failed</span><span class="chip"><i class="fa-regular fa-envelope"></i> 2 recipients</span></div>
+      </div>
+      <div class="rrow">
+        <div class="rr-top"><span class="st pause"></span><span class="rr-name">AP Invoice Anomaly Watch</span><span class="spark"><i class="m" style="height:6px"></i><i class="m" style="height:6px"></i><i class="m" style="height:6px"></i><i class="m" style="height:6px"></i><i class="m" style="height:6px"></i><i class="m" style="height:6px"></i><i class="m" style="height:6px"></i></span></div>
+        <div class="rr-sub"><span class="chip"><i class="fa-solid fa-robot"></i> Query Builder</span><span class="chip watch"><i class="fa-solid fa-binoculars"></i> Watch</span><span>paused · ends Sep 30</span></div>
+      </div>
+    </div>
+    <!-- TAB 2: full editor -->
+    <div class="tabpage page-new">
+      <div class="fsec">
+        <h4><i class="fa-solid fa-bullseye"></i> What runs</h4>
+        <div class="frow"><label>Name</label><span class="inp">Morning Pipeline Digest</span></div>
+        <div class="two">
+          <div class="frow"><label>Target type</label><span class="seg"><button class="sel">Agent</button><button>Prompt</button></span></div>
+          <div class="frow"><label>Agent</label><span class="inp sel">Query Builder <i class="fa-solid fa-chevron-down" style="font-size:10px;color:var(--mj-text-muted)"></i></span></div>
+        </div>
+        <div class="frow"><label>Message to send each run</label><span class="inp" style="min-height:56px">Show me yesterday's new pipeline by source, compare to trailing 7-day average, and flag anything unusual.</span></div>
+        <div class="frow"><label>Pre-armed skills <span style="font-weight:400;color:var(--mj-text-muted)">(optional)</span></label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="skillchip"><i class="fa-solid fa-database"></i> Data Analysis &amp; Queries <i class="fa-solid fa-xmark" style="font-size:10px;opacity:.6"></i></span><span class="preset">+ Add skill</span></div>
+        </div>
+      </div>
+      <div class="fsec">
+        <h4><i class="fa-regular fa-clock"></i> When</h4>
+        <div class="frow"><label>Schedule</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="preset sel">Weekday mornings</button><button class="preset">Daily</button><button class="preset">Weekly</button><button class="preset">Monthly</button><button class="preset"><i class="fa-solid fa-code"></i> Cron…</button></div>
+        </div>
+        <div class="two">
+          <div class="frow"><label>Time</label><span class="inp sel">7:00 AM <i class="fa-solid fa-chevron-down" style="font-size:10px;color:var(--mj-text-muted)"></i></span></div>
+          <div class="frow"><label>Timezone</label><span class="inp sel">America/Chicago <i class="fa-solid fa-chevron-down" style="font-size:10px;color:var(--mj-text-muted)"></i></span></div>
+        </div>
+        <div class="two">
+          <div class="frow"><label>Starts <span style="font-weight:400;color:var(--mj-text-muted)">(optional)</span></label><span class="inp" style="color:var(--mj-text-muted)">Immediately</span></div>
+          <div class="frow"><label>Ends <span style="font-weight:400;color:var(--mj-text-muted)">(optional)</span></label><span class="inp">Sep 30, 2026</span></div>
+        </div>
+        <div class="frow"><label>Mode</label><span class="seg"><button class="sel"><i class="fa-regular fa-calendar-check"></i> Scheduled — report every run</button><button><i class="fa-solid fa-binoculars"></i> Watch — only when results change</button></span></div>
+      </div>
+      <div class="fsec">
+        <h4><i class="fa-regular fa-bell"></i> Notifications</h4>
+        <div class="two">
+          <div class="frow"><label>Notify me</label><span class="inp sel">Every run <i class="fa-solid fa-chevron-down" style="font-size:10px;color:var(--mj-text-muted)"></i></span></div>
+          <div class="frow"><label>Channels</label><span class="seg"><button class="sel"><i class="fa-solid fa-bell"></i> In-app</button><button class="sel"><i class="fa-regular fa-envelope"></i> Email</button></span></div>
+        </div>
+        <div class="frow"><label>Also notify (in order)</label>
+          <div class="recip"><i class="fa-solid fa-grip-vertical grip"></i><span class="avatar" style="width:22px;height:22px;font-size:10px;background:var(--mj-color-tertiary-600)">SC</span><span class="who">Sarah Chen</span><span class="seq">1</span><span class="chip"><i class="fa-solid fa-bell"></i> In-app</span><i class="fa-solid fa-xmark" style="color:var(--mj-text-muted);font-size:11px"></i></div>
+          <div class="recip"><i class="fa-solid fa-grip-vertical grip"></i><span class="avatar" style="width:22px;height:22px;font-size:10px;background:var(--mj-color-warning-700)">@</span><span class="who">ops@bluecypress.io</span><span class="seq">2</span><span class="chip"><i class="fa-regular fa-envelope"></i> Email</span><i class="fa-solid fa-xmark" style="color:var(--mj-text-muted);font-size:11px"></i></div>
+          <button class="preset" style="align-self:flex-start">+ Add recipient</button>
+        </div>
+      </div>
+      <div class="form-foot"><button class="btn primary"><i class="fa-solid fa-rotate"></i>&nbsp; Create routine</button><button class="btn ghost">Cancel</button><span style="flex:1"></span><span style="font-size:12px;color:var(--mj-text-muted);align-self:center">First run: tomorrow 7:00 AM</span></div>
+    </div>
+    <!-- TAB 3: history -->
+    <div class="tabpage page-hist">
+      <div style="padding:13px 18px;border-bottom:1px solid var(--mj-border-subtle);font-size:13px"><b>Morning Pipeline Digest</b> <span style="color:var(--mj-text-muted)">· last 7 runs · 100% on schedule</span></div>
+      <div class="hrow"><span class="ic ok"><i class="fa-solid fa-check"></i></span><div class="hm">$188K added across 9 opportunities — in line with 7-day avg (−4%). Nothing unusual.<div class="hs">Today 7:00 AM · 41s · Query Builder</div></div><span class="hlink">Open run ⧉</span></div>
+      <div class="hrow"><span class="ic chg"><i class="fa-solid fa-bolt"></i></span><div class="hm">Referral pipeline 3.1× above average — flagged two enterprise deals from the Chicago event.<div class="hs">Yesterday 7:00 AM · 47s · notified you + 2 recipients</div></div><span class="hlink">Open run ⧉</span></div>
+      <div class="hrow"><span class="ic ok"><i class="fa-solid fa-check"></i></span><div class="hm">$205K across 11 opportunities — +6% vs average. No anomalies.<div class="hs">Mon 7:00 AM · 39s</div></div><span class="hlink">Open run ⧉</span></div>
+      <div class="hrow"><span class="ic err"><i class="fa-solid fa-xmark"></i></span><div class="hm">Run failed: data source timeout after 3 retries.<div class="hs">Fri 7:00 AM · notified you (failure)</div></div><span class="hlink">Open run ⧉</span></div>
+    </div>
+  </aside>
+</div>
+</body>
+</html>

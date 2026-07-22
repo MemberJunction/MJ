@@ -59,7 +59,7 @@
     {
       "name": "entityPrimaryKeys",
       "type": "Array<string>",
-      "description": "Array of field names that constitute the primary key(s) for opening entity records. Required for OpenEntityRecord integration. When provided with entityName, clicking a row will open the entity record using these fields. Use for 1:1 record-to-row scenarios (not aggregated data). Example: ['ID'] for single key, ['OrderID', 'LineNumber'] for composite key.",
+      "description": "Array of field names that constitute the primary key(s). Used for two purposes: (1) React row keys — ensures unique keys per row, which is important for client-side joins where row.ID may not be unique, and (2) OpenEntityRecord integration — clicking a row opens the entity record using these fields. Example: ['ID'] for single key, ['OrderID', 'LineNumber'] for composite key.",
       "required": false,
       "exampleValue": "[\"ID\"]",
       "constraints": [

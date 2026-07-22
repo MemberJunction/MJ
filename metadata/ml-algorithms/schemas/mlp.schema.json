@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Multilayer Perceptron Hyperparameters",
+  "type": "object",
+  "properties": {
+    "hidden_layer_sizes": {
+      "type": "string",
+      "pattern": "^\\d+(,\\d+)*$",
+      "default": "100",
+      "description": "Comma-separated neuron counts per hidden layer, e.g. \"100\" or \"100,50\"."
+    },
+    "activation": {
+      "type": "string",
+      "enum": ["relu", "tanh", "logistic"],
+      "default": "relu",
+      "description": "Activation function for the hidden layers."
+    },
+    "alpha": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 0.0001,
+      "description": "L2 regularization (weight decay) strength."
+    },
+    "learning_rate_init": {
+      "type": "number",
+      "minimum": 0.00001,
+      "maximum": 1,
+      "default": 0.001,
+      "description": "Initial learning rate used by the optimizer."
+    },
+    "max_iter": {
+      "type": "integer",
+      "minimum": 50,
+      "maximum": 5000,
+      "default": 200,
+      "description": "Maximum number of training iterations (epochs)."
+    }
+  }
+}

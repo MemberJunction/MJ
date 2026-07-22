@@ -27,48 +27,37 @@
 
           <!-- ── Inline validation banner (replaces bottom-floating error bar) ─── -->
           @if (ValidationErrors.length > 0) {
-            <div class="wizard-banner wizard-banner-error" role="alert">
-              <i class="fa-solid fa-triangle-exclamation"></i>
-              <div class="wizard-banner-body">
-                <div class="wizard-banner-title">
-                  @if (ValidationErrors.length === 1) {
-                    We hit a problem
-                  } @else {
-                    We hit {{ ValidationErrors.length }} problems
-                  }
-                </div>
-                <ul class="wizard-banner-list">
-                  @for (err of ValidationErrors; track $index) {
-                    <li>{{ err }}</li>
-                  }
-                </ul>
-              </div>
-              <div class="wizard-banner-actions">
-                @if (CurrentStep === 'relationships' || CurrentStep === 'review') {
-                  <button
-                    mjButton
-                    buttonStyle="secondary"
-                    type="button"
-                    [disabled]="IsValidating"
-                    (click)="OnRetryValidation()">
-                    @if (IsValidating) {
-                      <i class="fa-solid fa-spinner fa-spin"></i>
-                      Retrying…
-                    } @else {
-                      <i class="fa-solid fa-rotate-right"></i>
-                      Retry
-                    }
-                  </button>
+            <mj-alert Variant="error" class="wizard-error-alert" Dismissible (Dismissed)="OnDismissErrors()">
+              <div class="wizard-banner-title">
+                @if (ValidationErrors.length === 1) {
+                  We hit a problem
+                } @else {
+                  We hit {{ ValidationErrors.length }} problems
                 }
-                <button
-                  type="button"
-                  class="wizard-banner-dismiss"
-                  title="Dismiss"
-                  (click)="OnDismissErrors()">
-                  <i class="fa-solid fa-xmark"></i>
-                </button>
               </div>
-            </div>
+              <ul class="wizard-banner-list">
+                @for (err of ValidationErrors; track $index) {
+                  <li>{{ err }}</li>
+                }
+              </ul>
+              @if (CurrentStep === 'relationships' || CurrentStep === 'review') {
+                <button
+                  mjButton
+                  buttonStyle="secondary"
+                  type="button"
+                  actions
+                  [disabled]="IsValidating"
+                  (click)="OnRetryValidation()">
+                  @if (IsValidating) {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    Retrying…
+                  } @else {
+                    <i class="fa-solid fa-rotate-right"></i>
+                    Retry
+                  }
+                </button>
+              }
+            </mj-alert>
           }
 
           <!-- Step 1: Basics -->

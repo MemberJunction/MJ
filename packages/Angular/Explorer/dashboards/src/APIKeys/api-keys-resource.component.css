@@ -750,33 +750,6 @@
 }
 
 
-/* Security Notice */
-.security-notice {
-    display: flex;
-    align-items: flex-start;
-    padding: 16px 20px;
-    background: linear-gradient(135deg, var(--mj-color-brand-50) 0%, var(--mj-color-brand-100) 100%);
-    border-radius: 12px;
-    border: 1px solid var(--mj-color-accent-300);
-}
-
-.security-notice i {
-    font-size: 20px;
-    color: var(--mj-brand-primary);
-    margin-right: 12px;
-    margin-top: 2px;
-}
-
-.notice-content {
-    font-size: 13px;
-    color: var(--mj-color-brand-800);
-    line-height: 1.5;
-}
-
-.notice-content strong {
-    font-weight: 600;
-}
-
 /* ========================================
    Responsive Styles — chrome / nav responsiveness now owned by
    <mj-page-layout> + <mj-left-nav>; only inner content needs tuning here.

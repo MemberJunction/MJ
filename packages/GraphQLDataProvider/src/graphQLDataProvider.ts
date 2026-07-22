@@ -12,7 +12,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
-         RunQueryParams, BaseEntityResult, QueryExecutionSpec,
+         RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
@@ -505,10 +505,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
-            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
         }
         else if (params.QueryName) {
-            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
         }
         else {
             throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
@@ -576,7 +576,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             MaxRows: p.MaxRows,
             StartRow: p.StartRow,
             ForceAuditLog: p.ForceAuditLog,
-            AuditLogDescription: p.AuditLogDescription
+            AuditLogDescription: p.AuditLogDescription,
+            Enrichment: p.Enrichment
         }));
 
         const result = await this.ExecuteGQL(query, { input });
@@ -587,17 +588,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return [];
     }
 
-    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
-    
+
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryID };
+        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryID };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -613,24 +614,27 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (StartRow !== undefined) {
             variables.StartRow = StartRow;
         }
-    
+        if (Enrichment !== undefined) {
+            variables.Enrichment = Enrichment;
+        }
+
         const result = await this.ExecuteGQL(query, variables);
         if (result && result.GetQueryData) {
             return this.TransformQueryPayload(result.GetQueryData);
         }
     }
     
-    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number): Promise<RunQueryResult> {
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
-    
+
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number } = { QueryName };
+        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryName };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -646,7 +650,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (StartRow !== undefined) {
             variables.StartRow = StartRow;
         }
-    
+        if (Enrichment !== undefined) {
+            variables.Enrichment = Enrichment;
+        }
+
         const result = await this.ExecuteGQL(query, variables);
         if (result && result.GetQueryDataByName) {
             return this.TransformQueryPayload(result.GetQueryDataByName);
@@ -712,6 +719,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     StartRow: item.params.StartRow ?? null,
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || null,
+                    Enrichment: item.params.Enrichment || null,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -1162,6 +1170,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || '',
                     ResultType: item.params.ResultType || 'simple',
+                    // Aggregates were silently OMITTED from this input map (B40's true root
+                    // cause): the schema accepted them, the server could compute them, the
+                    // response could carry them — but the request never asked. Every layer
+                    // downstream looked correct while the caller got Success with no aggregates.
+                    Aggregates: item.params.Aggregates ?? null,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -1179,6 +1192,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             status
                             maxUpdatedAt
                             rowCount
+                            aggregateResults {
+                                expression
+                                alias
+                                value
+                                error
+                            }
                             errorMessage
                             Results {
                                 PrimaryKey {
@@ -1215,6 +1234,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     rowCount?: number;
                     errorMessage?: string;
                     Results?: Array<{ PrimaryKey: Array<{ FieldName: string; Value: string }>; EntityID: string; Data: string }>;
+                    aggregateResults?: Array<{ expression: string; alias: string; value?: string; error?: string }>;
                     differentialData?: {
                         updatedRows: Array<{ PrimaryKey: Array<{ FieldName: string; Value: string }>; EntityID: string; Data: string }>;
                         deletedRecordIDs: string[];
@@ -1264,6 +1284,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         return data as T;
                     });
 
+                    // Aggregates ride the stale reply (B40). The resolver JSON-stringifies each
+                    // value to preserve its type across GraphQL; parse it back so consumers get
+                    // the native number/string the AggregateResult contract declares.
+                    const aggregateResults = result.aggregateResults?.map(a => ({
+                        expression: a.expression,
+                        alias: a.alias,
+                        value: a.value !== undefined && a.value !== null ? JSON.parse(a.value) : null,
+                        error: a.error,
+                    }));
+
                     return {
                         viewIndex: result.viewIndex,
                         status: result.status as 'current' | 'stale' | 'differential' | 'error',
@@ -1271,6 +1301,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         maxUpdatedAt: result.maxUpdatedAt,
                         rowCount: result.rowCount,
                         errorMessage: result.errorMessage,
+                        aggregateResults,
                     };
                 }
 

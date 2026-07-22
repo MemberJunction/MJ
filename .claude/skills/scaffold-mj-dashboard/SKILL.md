@@ -396,6 +396,42 @@ If the dashboard is a top-level resource (loaded via the app metadata's `Default
 
 ---
 
+## Step 5b — Wire agent context + client tools (REQUIRED for every dashboard)
+
+This is now the baseline for **all** Explorer dashboards (not just Knowledge Hub): one call lights the surface up for both the async chat agent and the realtime co-agent. A surface that skips it leaves the agent blind to its state and unable to act in it. Add this to `ngAfterViewInit()` (and re-call on meaningful state changes). `NavigationService` is already injected for routing; reuse it.
+
+```typescript
+ngAfterViewInit(): void {
+  this.publishAgentContext();
+}
+
+/** Report surface state + register the agent-actionable operations. Re-call when key state changes. */
+private publishAgentContext(): void {
+  // Context: keep to ~15 salient fields. Feeds AppContextSnapshot (async prompt + realtime).
+  this.navigationService.SetAgentContext(this, {
+    ActiveTab: this.ActiveTab,
+    // ...selection, filters, mode, counts the agent should know about
+  });
+
+  // Client tools: the agent-actionable operations this surface exposes. Resolved by the unified
+  // resolver (override > session > app > static) and executable by the realtime ContextTool.
+  this.navigationService.SetAgentClientTools(this, [
+    {
+      Name: 'SwitchTab',
+      Description: 'Switch to a tab on this dashboard',
+      ParameterSchema: { type: 'object', properties: { tab: { type: 'string' } }, required: ['tab'] },
+      Handler: async (params) => {
+        this.OnTabChange(String(params['tab']));
+        return { Success: true };
+      },
+    },
+    // ...add a tool per agent-actionable operation (filter, select, export, run, …)
+  ]);
+}
+```
+
+Don't add a parallel mechanism — `SetAgentContext`/`SetAgentClientTools` are the single surface API. See `packages/Angular/Explorer/dashboards/CLAUDE.md` for the full rule.
+
 ## Step 6 — Verify before committing
 
 After generating files, verify:
@@ -411,6 +447,7 @@ After generating files, verify:
 - [ ] **PascalCase for public members** (`ActiveTab`, `IsLoading`, `OnTabChange`), camelCase for private (`cdr`, `visitedTabs`)
 - [ ] **No `new Metadata()` / `new RunView()`** — use `this.ProviderToUse` / `RunView.FromMetadataProvider(this.ProviderToUse)`
 - [ ] **`@RegisterClass(BaseDashboard, '<DriverClass>')`** decorator present with exact driver class name
+- [ ] **Agent context + client tools wired** (see Step 5b) — `SetAgentContext` + `SetAgentClientTools` called in `ngAfterViewInit()`
 
 ---
 
@@ -420,7 +457,7 @@ These are out of scope for the initial scaffold but worth flagging to the user w
 
 - **Per-tab state cached in setter pattern** — see `SchedulingDashboardComponent` for reference
 - **Filter popover with `<mj-filter-panel>`** — see `SchedulingDashboardComponent` for `JobsFilterFields` / `JobsFilterValues` getters
-- **Agent context + client tools** — for KH-style dashboards, register via `NavigationService.SetAgentContext` and `SetAgentClientTools` in `ngAfterViewInit()`
+- **Agent context + client tools** — REQUIRED for every dashboard (see Step 5b), not just KH-style ones
 - **Query param round-trip** — if the dashboard pushes state to URL, override `OnQueryParamsChanged()` to apply it on later changes (back/forward, deep links, tab re-focus)
 
 For each of those, refer to the per-area `CLAUDE.md` files (`packages/Angular/Explorer/dashboards/CLAUDE.md`, `packages/Angular/CLAUDE.md`, `packages/Angular/Explorer/CLAUDE.md`).

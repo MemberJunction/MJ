@@ -1,11 +1,14 @@
 import { defineProject, mergeConfig } from 'vitest/config';
-import sharedConfig from '../../../../vitest.shared';
+import domSharedConfig from '../../../../vitest.dom.shared';
 
+// Single DOM preset: the package has no class-level spec that mocks @angular/core,
+// so the existing logic specs (index/types) run fine under jsdom alongside the
+// component DOM specs. See guides/ANGULAR_TESTING_GUIDE.md §3b.
 export default mergeConfig(
-  sharedConfig,
+  domSharedConfig,
   defineProject({
     test: {
-      environment: 'node',
+      name: '@memberjunction/ng-timeline',
     },
   })
 );

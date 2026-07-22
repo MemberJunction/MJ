@@ -14,3 +14,11 @@
 **Vulnerability:** Angular components using `[innerHTML]` bindings without explicitly sanitizing rich text.
 **Learning:** While Angular's native `[innerHTML]` sanitizes standard HTML, it can aggressively strip expected content like SVGs or inline styles, or miss specific attack vectors when custom templates are involved. Developers often bypass this improperly or render unsanitized content directly if they assume the data is safe.
 **Prevention:** Always use the centralized `mjSafeRichHtml` pipe (from `@memberjunction/ng-shared-generic`), which utilizes DOMPurify with HTML and SVG profiles, to securely render rich text via `[innerHTML]`.
+## 2024-06-07 - [XSS in DOM innerHTML assignments]
+**Vulnerability:** Direct assignment of user-controlled properties (like title, queryInfo, entityName) to element `innerHTML` without HTML escaping.
+**Learning:** Constructing complex HTML structures dynamically using template strings and injecting variables into `innerHTML` exposes the application to XSS. Angular's built-in `[innerHTML]` sanitization doesn't protect against direct DOM manipulation in component logic.
+**Prevention:** Always wrap dynamically interpolated variables with the `EscapeHTML` utility from `@memberjunction/global` when directly constructing `.innerHTML` strings in TypeScript code.
+## 2025-02-18 - XSS Fix using EscapeHTML in AI Test Harness Component
+**Vulnerability:** Found custom HTML escaping mechanisms (`escapeHtml`, `escapeHtmlAttribute`) in `ai-test-harness.component.ts` that bypassed the standard XSS protection utility (`EscapeHTML`) provided by `@memberjunction/global`. One of the custom methods also unsafely used `div.innerHTML` after setting `textContent`.
+**Learning:** Local, ad-hoc escaping functions in components bypass centralized security patches and often use unsafe patterns like relying on the DOM for escaping (`document.createElement`), which breaks in SSR and is less secure.
+**Prevention:** Always use the centralized `EscapeHTML` utility exported from `@memberjunction/global` instead of writing custom escaping logic.

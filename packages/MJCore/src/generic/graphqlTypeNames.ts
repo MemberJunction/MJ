@@ -152,7 +152,12 @@ export function getSchemaPrefix(schemaName: string): string {
  * ```
  */
 export function getGraphQLTypeNameBase(entity: EntityInfo): string {
-    const schemaPrefix = getSchemaPrefix(entity.SchemaName);
+    // Prefer the case-stable canonical schema name when present. On PostgreSQL the physical
+    // SchemaName is folded to lowercase, so deriving the prefix from SchemaName diverges from the
+    // published, hand-cased entity packages (and from the SQL vwEntities ClassName, which uses the
+    // same COALESCE). CanonicalSchemaName is NULL on SQL Server / existing installs / __mj, where
+    // it correctly falls back to SchemaName — keeping client, server, and the SQL view in lockstep.
+    const schemaPrefix = getSchemaPrefix(entity.CanonicalSchemaName ?? entity.SchemaName);
     const sanitizedBaseTable = sanitizeGraphQLName(entity.BaseTable);
     return `${schemaPrefix}${sanitizedBaseTable}`;
 }

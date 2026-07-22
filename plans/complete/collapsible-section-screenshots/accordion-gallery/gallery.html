@@ -1,0 +1,779 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+@charset "UTF-8";
+/**
+ * MemberJunction Design Tokens
+ * ============================
+ *
+ * This file defines all design tokens for the MJ design system.
+ * These tokens provide consistent styling across all components.
+ *
+ * Token Categories:
+ * - Primitives: Raw color values (not used directly in components)
+ * - Semantic: Purpose-based tokens (what components should use)
+ * - Component: Specific component overrides (if needed)
+ */
+:root {
+  color-scheme: light;
+  /* ========================================
+     PRIMITIVE TOKENS
+     Raw values - DO NOT use directly in components
+     ======================================== */
+  /* Brand Colors - Primary Blue */
+  --mj-color-brand-50: #e6f3f9;
+  --mj-color-brand-100: #b3dbed;
+  --mj-color-brand-200: #80c3e1;
+  --mj-color-brand-300: #4dabd5;
+  --mj-color-brand-350: #3395c8; /* Primary hover (lighter blue) */
+  --mj-color-brand-400: #2699cc;
+  --mj-color-brand-450: #1a88bf; /* Between 400 and 500 */
+  --mj-color-brand-500: #0076b6; /* MJ Primary Blue */
+  --mj-color-brand-600: #006aa3;
+  --mj-color-brand-700: #005a8a;
+  --mj-color-brand-800: #004a71;
+  --mj-color-brand-900: #092340; /* MJ Navy */
+  /* Accent Colors - Light Blue (from MJ website) */
+  --mj-color-accent-50: #f0faff;
+  --mj-color-accent-100: #e0f4fe;
+  --mj-color-accent-200: #bae8fd;
+  --mj-color-accent-300: #aae7fd; /* MJ Light Blue */
+  --mj-color-accent-400: #5cc0ed; /* MJ Skip Agent Blue */
+  --mj-color-accent-500: #38a9d9; /* MJ Accent */
+  --mj-color-accent-600: #2490c0;
+  --mj-color-accent-700: #1d7299;
+  --mj-color-accent-800: #1c5d7d;
+  --mj-color-accent-900: #1b4d68;
+  /* Tertiary Colors - Cyan/Teal (secondary actions, info) */
+  --mj-color-tertiary-50: #ecfeff;
+  --mj-color-tertiary-100: #cffafe;
+  --mj-color-tertiary-200: #a5f3fc;
+  --mj-color-tertiary-300: #67e8f9;
+  --mj-color-tertiary-400: #22d3ee;
+  --mj-color-tertiary-500: #06b6d4; /* MJ Tertiary Cyan */
+  --mj-color-tertiary-600: #0891b2;
+  --mj-color-tertiary-700: #0e7490;
+  --mj-color-tertiary-800: #155e75;
+  --mj-color-tertiary-900: #164e63;
+  /* Neutral Colors (Slate palette) */
+  --mj-color-neutral-0: #ffffff;
+  --mj-color-neutral-50: #f8fafc;
+  --mj-color-neutral-100: #f1f5f9;
+  --mj-color-neutral-200: #e2e8f0;
+  --mj-color-neutral-300: #cbd5e1;
+  --mj-color-neutral-400: #94a3b8;
+  --mj-color-neutral-500: #64748b;
+  --mj-color-neutral-600: #475569;
+  --mj-color-neutral-700: #334155;
+  --mj-color-neutral-800: #1e293b;
+  --mj-color-neutral-900: #0f172a;
+  --mj-color-neutral-950: #020617;
+  /* Status Colors */
+  --mj-color-success-50: #f0fdf4;
+  --mj-color-success-100: #dcfce7;
+  --mj-color-success-200: #bbf7d0;
+  --mj-color-success-300: #86efac;
+  --mj-color-success-400: #4ade80;
+  --mj-color-success-500: #22c55e;
+  --mj-color-success-600: #16a34a;
+  --mj-color-success-700: #15803d;
+  --mj-color-success-800: #166534;
+  --mj-color-warning-50: #fffbeb;
+  --mj-color-warning-100: #fef3c7;
+  --mj-color-warning-200: #fde68a;
+  --mj-color-warning-300: #fcd34d;
+  --mj-color-warning-400: #fbbf24;
+  --mj-color-warning-500: #f59e0b;
+  --mj-color-warning-600: #d97706;
+  --mj-color-warning-700: #b45309;
+  --mj-color-warning-800: #92400e;
+  --mj-color-warning-900: #78350f;
+  --mj-color-error-50: #fef2f2;
+  --mj-color-error-100: #fee2e2;
+  --mj-color-error-200: #fecaca;
+  --mj-color-error-300: #fca5a5;
+  --mj-color-error-400: #f87171;
+  --mj-color-error-500: #ef4444;
+  --mj-color-error-600: #dc2626;
+  --mj-color-error-700: #b91c1c;
+  --mj-color-info-50: #eff6ff;
+  --mj-color-info-100: #dbeafe;
+  --mj-color-info-500: #3b82f6;
+  --mj-color-info-600: #2563eb;
+  --mj-color-info-700: #1d4ed8;
+  /* Violet Colors (applications, special features) */
+  --mj-color-violet-50: #f5f3ff;
+  --mj-color-violet-100: #ede9fe;
+  --mj-color-violet-200: #ddd6fe;
+  --mj-color-violet-300: #c4b5fd;
+  --mj-color-violet-400: #a78bfa;
+  --mj-color-violet-500: #8b5cf6;
+  --mj-color-violet-600: #7c3aed;
+  --mj-color-violet-700: #6d28d9;
+  /* Indigo Colors (updated actions, indicators) */
+  --mj-color-indigo-50: #eef2ff;
+  --mj-color-indigo-100: #e0e7ff;
+  --mj-color-indigo-500: #6366f1;
+  --mj-color-indigo-600: #4f46e5;
+  /* ========================================
+     SEMANTIC TOKENS
+     USE THESE in components
+     ======================================== */
+  /* Background Colors */
+  --mj-bg-page: var(--mj-color-neutral-50);
+  --mj-bg-surface: var(--mj-color-neutral-0);
+  --mj-bg-surface-elevated: var(--mj-color-neutral-0);
+  --mj-bg-surface-card: var(--mj-color-neutral-50);
+  --mj-bg-surface-sunken: var(--mj-color-neutral-100);
+  --mj-bg-surface-hover: var(--mj-color-neutral-100);
+  --mj-bg-surface-active: var(--mj-color-neutral-200);
+  --mj-bg-overlay: rgba(15, 23, 42, 0.5);
+  /* Text Colors */
+  --mj-text-primary: var(--mj-color-neutral-800);
+  --mj-text-secondary: var(--mj-color-neutral-600);
+  --mj-text-muted: var(--mj-color-neutral-500);
+  --mj-text-disabled: var(--mj-color-neutral-400);
+  --mj-text-inverse: var(--mj-color-neutral-0);
+  --mj-text-link: var(--mj-color-brand-500);
+  --mj-text-link-hover: var(--mj-color-brand-600);
+  /* Border Colors */
+  --mj-border-default: var(--mj-color-neutral-200);
+  --mj-border-subtle: var(--mj-color-neutral-100);
+  --mj-border-strong: var(--mj-color-neutral-300);
+  --mj-border-focus: var(--mj-color-brand-500);
+  --mj-border-error: var(--mj-color-error-500);
+  /* Brand Colors (semantic) */
+  --mj-brand-primary: var(--mj-color-brand-500);
+  --mj-brand-primary-hover: var(--mj-color-brand-600);
+  --mj-brand-primary-active: var(--mj-color-brand-700);
+  --mj-brand-primary-light: var(--mj-color-brand-350);
+  --mj-brand-secondary: var(--mj-color-brand-900);
+  --mj-brand-on-primary: var(--mj-color-neutral-0);
+  --mj-brand-on-secondary: var(--mj-color-neutral-0);
+  /* Accent Colors (semantic) - light blue highlights, emphasis */
+  --mj-brand-accent: var(--mj-color-accent-400);
+  --mj-brand-accent-hover: var(--mj-color-accent-500);
+  --mj-brand-accent-active: var(--mj-color-accent-600);
+  --mj-brand-accent-subtle: var(--mj-color-accent-50);
+  --mj-brand-on-accent: var(--mj-color-neutral-900);
+  /* Tertiary Colors (semantic) - secondary actions, complementary highlights */
+  --mj-brand-tertiary: var(--mj-color-tertiary-500);
+  --mj-brand-tertiary-hover: var(--mj-color-tertiary-600);
+  --mj-brand-tertiary-active: var(--mj-color-tertiary-700);
+  --mj-brand-tertiary-subtle: var(--mj-color-tertiary-50);
+  --mj-brand-on-tertiary: var(--mj-color-neutral-0);
+  /* Status Colors (semantic) */
+  --mj-status-success: var(--mj-color-success-500);
+  --mj-status-success-bg: var(--mj-color-success-50);
+  --mj-status-success-text: var(--mj-color-success-700);
+  --mj-status-success-border: var(--mj-color-success-500);
+  --mj-status-warning: var(--mj-color-warning-500);
+  --mj-status-warning-bg: var(--mj-color-warning-50);
+  --mj-status-warning-text: var(--mj-color-warning-700);
+  --mj-status-warning-border: var(--mj-color-warning-500);
+  --mj-status-error: var(--mj-color-error-500);
+  --mj-status-error-bg: var(--mj-color-error-50);
+  --mj-status-error-text: var(--mj-color-error-700);
+  --mj-status-error-border: var(--mj-color-error-500);
+  --mj-status-info: var(--mj-color-info-500);
+  --mj-status-info-bg: var(--mj-color-info-50);
+  --mj-status-info-text: var(--mj-color-info-700);
+  --mj-status-info-border: var(--mj-color-info-500);
+  /* Application Accent (set per-application from metadata)
+     Default uses amber accent, but apps can override to use primary/tertiary/custom */
+  --mj-app-accent: var(--mj-brand-accent);
+  --mj-app-accent-hover: var(--mj-brand-accent-hover);
+  --mj-app-accent-subtle: var(--mj-brand-accent-subtle);
+  /* Highlight Color - for important callouts, notifications, badges */
+  --mj-highlight: var(--mj-brand-accent);
+  --mj-highlight-hover: var(--mj-brand-accent-hover);
+  --mj-highlight-subtle: var(--mj-brand-accent-subtle);
+  --mj-on-highlight: var(--mj-brand-on-accent);
+  /* Search-match highlight — the <mark> wrapping typed-query matches in lists,
+     field labels, FK dropdowns, etc. Muted amber (not the garish browser default). */
+  --mj-search-highlight-bg: color-mix(in srgb, var(--mj-status-warning) 24%, transparent);
+  --mj-search-highlight-text: var(--mj-text-primary);
+  /* Login Banner Gradient & Waves */
+  --mj-login-grad-start: var(--mj-color-brand-900);
+  --mj-login-grad-mid: var(--mj-color-brand-700);
+  --mj-login-grad-end: var(--mj-color-brand-300);
+  --mj-login-wave-1: var(--mj-color-brand-500);
+  --mj-login-wave-2: var(--mj-color-accent-400);
+  --mj-login-wave-3: var(--mj-color-brand-300);
+  /* Logo Tokens — override these for white-labeling */
+  --mj-logo-mark: url('/assets/mj-mark.svg');
+  --mj-logo-mark-inverse: url('/assets/mj-mark-white.svg');
+  --mj-logo-wordmark: url('/assets/MJ_logo.svg');
+  --mj-logo-color: #264FAF;
+  /* ========================================
+     TYPOGRAPHY
+     ======================================== */
+  /* Font Family */
+  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mj-font-family-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+  /* Font Sizes */
+  --mj-text-xs: 0.75rem; /* 12px */
+  --mj-text-sm: 0.875rem; /* 14px */
+  --mj-text-base: 1rem; /* 16px */
+  --mj-text-lg: 1.125rem; /* 18px */
+  --mj-text-xl: 1.25rem; /* 20px */
+  --mj-text-2xl: 1.5rem; /* 24px */
+  --mj-text-3xl: 1.875rem; /* 30px */
+  --mj-text-4xl: 2.25rem; /* 36px */
+  --mj-text-5xl: 3rem; /* 48px */
+  --mj-text-6xl: 3.75rem; /* 60px */
+  --mj-text-display: 5rem; /* 80px - hero/display headings */
+  /* Font Weights */
+  --mj-font-normal: 400;
+  --mj-font-medium: 500;
+  --mj-font-semibold: 600;
+  --mj-font-bold: 700;
+  /* Line Heights */
+  --mj-leading-none: 1;
+  --mj-leading-tight: 1.25;
+  --mj-leading-snug: 1.375;
+  --mj-leading-normal: 1.5;
+  --mj-leading-relaxed: 1.625;
+  --mj-leading-loose: 2;
+  /* Letter Spacing */
+  --mj-tracking-tighter: -0.05em;
+  --mj-tracking-tight: -0.025em;
+  --mj-tracking-normal: 0;
+  --mj-tracking-wide: 0.025em;
+  --mj-tracking-wider: 0.05em;
+  /* ========================================
+     SPACING (4px base scale)
+     ======================================== */
+  --mj-space-0: 0;
+  --mj-space-px: 1px;
+  --mj-space-0-5: 0.125rem; /* 2px */
+  --mj-space-1: 0.25rem; /* 4px */
+  --mj-space-1-5: 0.375rem; /* 6px */
+  --mj-space-2: 0.5rem; /* 8px */
+  --mj-space-2-5: 0.625rem; /* 10px */
+  --mj-space-3: 0.75rem; /* 12px */
+  --mj-space-3-5: 0.875rem; /* 14px */
+  --mj-space-4: 1rem; /* 16px */
+  --mj-space-5: 1.25rem; /* 20px */
+  --mj-space-6: 1.5rem; /* 24px */
+  --mj-space-7: 1.75rem; /* 28px */
+  --mj-space-8: 2rem; /* 32px */
+  --mj-space-9: 2.25rem; /* 36px */
+  --mj-space-10: 2.5rem; /* 40px */
+  --mj-space-11: 2.75rem; /* 44px */
+  --mj-space-12: 3rem; /* 48px */
+  --mj-space-14: 3.5rem; /* 56px */
+  --mj-space-16: 4rem; /* 64px */
+  --mj-space-20: 5rem; /* 80px */
+  --mj-space-24: 6rem; /* 96px */
+  /* ========================================
+     EFFECTS
+     ======================================== */
+  /* Border Radius */
+  --mj-radius-none: 0;
+  --mj-radius-sm: 4px;
+  --mj-radius-md: 8px;
+  --mj-radius-lg: 12px;
+  --mj-radius-xl: 16px;
+  --mj-radius-2xl: 24px;
+  --mj-radius-full: 9999px;
+  /* Shadows */
+  --mj-shadow-none: none;
+  --mj-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --mj-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --mj-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --mj-shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+  /* Brand Shadows */
+  --mj-shadow-brand-sm: 0 2px 8px rgba(0, 118, 182, 0.3);
+  --mj-shadow-brand-md: 0 4px 12px rgba(0, 118, 182, 0.4);
+  /* Focus Ring */
+  --mj-ring-width: 2px;
+  --mj-ring-offset: 2px;
+  --mj-ring-color: var(--mj-brand-primary);
+  --mj-focus-ring: 0 0 0 var(--mj-ring-offset) var(--mj-bg-surface), 0 0 0 calc(var(--mj-ring-offset) + var(--mj-ring-width)) var(--mj-ring-color);
+  /* Transitions */
+  --mj-transition-fast: 150ms ease;
+  --mj-transition-base: 200ms ease;
+  --mj-transition-slow: 300ms ease;
+  --mj-transition-colors: color var(--mj-transition-base), background-color var(--mj-transition-base), border-color var(--mj-transition-base);
+  /* ========================================
+     Z-INDEX SCALE
+     ======================================== */
+  --mj-z-base: 0;
+  --mj-z-dropdown: 100;
+  --mj-z-sticky: 200;
+  --mj-z-fixed: 300;
+  --mj-z-modal-backdrop: 400;
+  --mj-z-modal: 500;
+  --mj-z-popover: 600;
+  --mj-z-tooltip: 700;
+  --mj-z-toast: 800;
+}
+
+/* ========================================
+   DARK THEME
+   ======================================== */
+[data-theme=dark] {
+  color-scheme: dark;
+  /* Background Colors */
+  --mj-bg-page: var(--mj-color-neutral-900);
+  --mj-bg-surface: var(--mj-color-neutral-800);
+  --mj-bg-surface-card: #253347;
+  --mj-bg-surface-elevated: var(--mj-color-neutral-700);
+  --mj-bg-surface-sunken: var(--mj-color-neutral-950);
+  --mj-bg-surface-hover: var(--mj-color-neutral-600);
+  --mj-bg-surface-active: var(--mj-color-neutral-500);
+  --mj-bg-overlay: rgba(0, 0, 0, 0.7);
+  /* Text Colors */
+  --mj-text-primary: var(--mj-color-neutral-100);
+  --mj-text-secondary: var(--mj-color-neutral-300);
+  --mj-text-muted: var(--mj-color-neutral-400);
+  --mj-text-disabled: var(--mj-color-neutral-600);
+  --mj-text-inverse: var(--mj-color-neutral-900);
+  --mj-text-link: var(--mj-color-brand-300);
+  --mj-text-link-hover: var(--mj-color-brand-200);
+  /* Border Colors */
+  --mj-border-default: var(--mj-color-neutral-700);
+  --mj-border-subtle: var(--mj-color-neutral-800);
+  --mj-border-strong: var(--mj-color-neutral-600);
+  --mj-border-focus: var(--mj-color-brand-400);
+  --mj-border-error: var(--mj-color-error-400);
+  /* Brand Colors (adjusted for dark) */
+  --mj-brand-primary: var(--mj-color-brand-400);
+  --mj-brand-primary-hover: var(--mj-color-brand-300);
+  --mj-brand-primary-active: var(--mj-color-brand-200);
+  /* Accent Colors (adjusted for dark) */
+  --mj-brand-accent: var(--mj-color-accent-300);
+  --mj-brand-accent-hover: var(--mj-color-accent-200);
+  --mj-brand-accent-active: var(--mj-color-accent-100);
+  --mj-brand-accent-subtle: color-mix(in srgb, var(--mj-color-accent-400) 15%, transparent);
+  --mj-brand-on-accent: var(--mj-color-neutral-900);
+  /* Tertiary Colors (adjusted for dark) */
+  --mj-brand-tertiary: var(--mj-color-tertiary-400);
+  --mj-brand-tertiary-hover: var(--mj-color-tertiary-300);
+  --mj-brand-tertiary-active: var(--mj-color-tertiary-200);
+  --mj-brand-tertiary-subtle: color-mix(in srgb, var(--mj-color-tertiary-500) 15%, transparent);
+  /* Highlight (adjusted for dark) */
+  --mj-highlight: var(--mj-color-accent-300);
+  --mj-highlight-hover: var(--mj-color-accent-200);
+  --mj-highlight-subtle: var(--mj-brand-accent-subtle);
+  /* Status Colors (adjusted for dark backgrounds) */
+  --mj-status-success-bg: rgba(34, 197, 94, 0.15);
+  --mj-status-success-text: var(--mj-color-success-100);
+  --mj-status-success-border: var(--mj-color-success-600);
+  --mj-status-warning-bg: rgba(245, 158, 11, 0.15);
+  --mj-status-warning-text: var(--mj-color-warning-100);
+  --mj-status-warning-border: var(--mj-color-warning-600);
+  /* Slightly stronger search highlight on dark surfaces so it stays visible. */
+  --mj-search-highlight-bg: color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
+  --mj-search-highlight-text: var(--mj-text-primary);
+  --mj-status-error-bg: rgba(239, 68, 68, 0.15);
+  --mj-status-error-text: var(--mj-color-error-100);
+  --mj-status-error-border: var(--mj-color-error-600);
+  --mj-status-info-bg: rgba(59, 130, 246, 0.15);
+  --mj-status-info-text: var(--mj-color-info-100);
+  --mj-status-info-border: var(--mj-color-info-600);
+  /* Application Accent (dark mode adjustment) */
+  --mj-app-accent: var(--mj-brand-accent);
+  --mj-app-accent-hover: var(--mj-brand-accent-hover);
+  --mj-app-accent-subtle: var(--mj-brand-accent-subtle);
+  /* Shadows (darker for dark mode) */
+  --mj-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --mj-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --mj-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --mj-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  /* Login Banner Gradient & Waves */
+  --mj-login-grad-start: var(--mj-color-neutral-950);
+  --mj-login-grad-mid: var(--mj-color-brand-900);
+  --mj-login-grad-end: var(--mj-color-brand-700);
+  --mj-login-wave-1: var(--mj-color-accent-500);
+  --mj-login-wave-2: var(--mj-color-tertiary-400);
+  --mj-login-wave-3: var(--mj-color-brand-400);
+  /* Logo — lighter mark for dark header backgrounds */
+  --mj-logo-mark: url('/assets/mj-mark-dark.svg');
+  --mj-logo-color: #4dabd5;
+}
+@charset "UTF-8";
+/**
+ * MJ Accordion Panel Styles
+ */
+/* The host is a custom element (defaults to display:inline); make it block so
+   consumers don't each have to set display/width on the panel. */
+.mj-accordion-panel-host {
+  display: block;
+}
+
+.mj-accordion-panel {
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+/* The header ROW owns the background/separator so the toggle button and the
+   optional actions cluster sit on one continuous surface. */
+.mj-accordion-header-row {
+  display: flex;
+  align-items: stretch;
+  background: var(--mj-bg-surface-sunken);
+}
+
+/* The toggle button is the disclosure control (title + chevron). It's
+   transparent over the row background; hover paints just the toggle area. */
+.mj-accordion-header {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--mj-font-family);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+  text-align: left;
+  transition: background var(--mj-transition-fast);
+}
+.mj-accordion-header:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.mj-accordion-header:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
+}
+
+/* Header actions — interactive controls (edit/copy/run/checkbox) that live in
+   the header but are NOT the toggle. Sibling of the button (no button-in-button). */
+.mj-accordion-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 0 12px 0 4px;
+}
+
+/* In dark mode the "sunken" header (near-black) sits much darker than the body
+   and reads as overly bold. Use the elevated surface instead — one step lighter
+   than the body for a subtle raised header. Light mode keeps the sunken look.
+   (Emphasis variants are more specific, so they keep their brand backgrounds.) */
+[data-theme=dark] .mj-accordion-header-row {
+  background: var(--mj-bg-surface-elevated);
+}
+
+.mj-accordion-icon {
+  font-size: 0.75rem;
+  color: var(--mj-text-muted);
+  transition: transform var(--mj-transition-base);
+}
+.mj-accordion-panel--expanded .mj-accordion-icon {
+  transform: rotate(180deg);
+}
+
+/* Body animates open/close via grid-template-rows 0fr -> 1fr (smooth auto-height,
+   no JS measuring). The body stays in the DOM when collapsed (inert) so the
+   transition has something to animate. */
+.mj-accordion-body-outer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--mj-transition-base);
+}
+
+.mj-accordion-panel--expanded .mj-accordion-body-outer {
+  grid-template-rows: 1fr;
+}
+
+/* The clip element is what the grid collapses — it must carry NO padding, or a
+   padding-height sliver survives the 0fr collapse. overflow:hidden + min-height:0
+   let it shrink to a true 0. */
+.mj-accordion-body-clip {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Padding lives on the inner element (fully clipped at 0fr). Keeps the
+   .mj-accordion-body name so existing ::ng-deep consumer overrides still apply. */
+.mj-accordion-body {
+  padding: 16px;
+  background: var(--mj-bg-surface);
+}
+
+/* Header/body separator lives on the header row so it only shows while open
+   (a border on the collapsing body would leave a stray line at 0fr). */
+.mj-accordion-panel--expanded .mj-accordion-header-row {
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+/* Lay the title slot out as a row so projected content (icon + label + badge/
+   count) spaces consistently without each consumer reinventing it. min-width:0
+   lets long titles truncate instead of shoving the chevron off the edge. */
+.mj-accordion-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The accordion owns the size of icons projected into the title — consumers
+   should NOT set font-size on title icons (inline or otherwise). 1em tracks the
+   header's own font-size, so icons scale with the title text (and with any
+   future Size variant) instead of each form hand-tuning pixels. */
+.mj-accordion-title i {
+  font-size: 1em;
+}
+
+/* Muted title icons — opt in via [TitleIconMuted]="true" instead of per-consumer
+   CSS. (Status/brand-colored icons are still set per-instance inline.) */
+.mj-accordion-panel--muted-icon .mj-accordion-title i {
+  color: var(--mj-text-muted);
+}
+
+/* ── Title badge ────────────────────────────────────────────────────────────
+   Standard count/badge for the title slot. Use instead of per-consumer count
+   styling:  <span class="mj-accordion-badge">3</span>
+   Modifiers: --right (push to the far right, before the chevron),
+              --muted (plain muted text, no pill),
+              --success / --error / --warning / --info (status pills).
+   All token-driven, so dark-mode-safe. */
+.mj-accordion-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  line-height: 1.4;
+}
+
+.mj-accordion-badge--right {
+  margin-left: auto;
+}
+
+.mj-accordion-badge--muted {
+  padding: 0;
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-weight: var(--mj-font-normal);
+}
+
+.mj-accordion-badge--success {
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
+}
+
+.mj-accordion-badge--error {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+}
+
+.mj-accordion-badge--warning {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+}
+
+.mj-accordion-badge--info {
+  background: var(--mj-status-info-bg);
+  color: var(--mj-status-info-text);
+}
+
+.mj-accordion-panel--disabled .mj-accordion-header {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.mj-accordion-panel--disabled .mj-accordion-header:hover {
+  background: transparent;
+}
+
+/* ── Density (Size="sm") — tighter padding + smaller text for dense contexts ── */
+.mj-accordion-panel--sm .mj-accordion-header {
+  padding: 8px 12px;
+  font-size: var(--mj-text-xs);
+}
+.mj-accordion-panel--sm .mj-accordion-actions {
+  padding-right: 8px;
+}
+.mj-accordion-panel--sm .mj-accordion-body {
+  padding: 10px 12px;
+}
+
+/* ── Bare — drop the box (border + header background) so the panel sits cleanly
+   inside a host that already provides chrome (e.g. an expandable card). ── */
+.mj-accordion-panel--bare {
+  border: none;
+  border-radius: 0;
+}
+.mj-accordion-panel--bare .mj-accordion-header-row {
+  background: transparent;
+}
+.mj-accordion-panel--bare.mj-accordion-panel--expanded .mj-accordion-header-row {
+  border-bottom-color: var(--mj-border-subtle);
+}
+
+/* ── Flush body — body manages its own padding (code editors, full-bleed grids) ── */
+.mj-accordion-panel--flush-body .mj-accordion-body {
+  padding: 0;
+}
+
+/* ── Emphasis variants (visual hierarchy, brand-colored — not status) ───────
+   Make a panel read bolder/quieter. All driven by brand tokens, so they
+   adapt to dark mode + white-labeling. Set via [Variant] on the panel.
+   The header owns its text colour; custom title slots should inherit it
+   (e.g. `color: inherit`) so the bold `primary` reads correctly. */
+/* secondary — subtle brand tint */
+.mj-accordion-panel[data-variant=secondary] {
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
+}
+.mj-accordion-panel[data-variant=secondary] .mj-accordion-header-row {
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+}
+.mj-accordion-panel[data-variant=secondary] .mj-accordion-header {
+  color: var(--mj-brand-primary);
+}
+.mj-accordion-panel[data-variant=secondary] .mj-accordion-header:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+}
+.mj-accordion-panel[data-variant=secondary] .mj-accordion-icon {
+  color: var(--mj-brand-primary);
+}
+.mj-accordion-panel[data-variant=secondary].mj-accordion-panel--expanded .mj-accordion-header-row {
+  border-bottom-color: color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-border-default));
+}
+
+/* primary — bold, solid brand header (its own colour separates it; no extra line) */
+.mj-accordion-panel[data-variant=primary] {
+  border-color: var(--mj-brand-primary);
+}
+.mj-accordion-panel[data-variant=primary] .mj-accordion-header-row {
+  background: var(--mj-brand-primary);
+}
+.mj-accordion-panel[data-variant=primary] .mj-accordion-header {
+  color: var(--mj-text-inverse);
+}
+.mj-accordion-panel[data-variant=primary] .mj-accordion-header:hover {
+  background: var(--mj-brand-primary-hover);
+}
+.mj-accordion-panel[data-variant=primary] .mj-accordion-icon {
+  color: var(--mj-text-inverse);
+}
+.mj-accordion-panel[data-variant=primary].mj-accordion-panel--expanded .mj-accordion-header-row {
+  border-bottom-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mj-accordion-icon {
+    transition: none;
+  }
+  .mj-accordion-body-outer {
+    transition: none;
+  }
+}
+*{box-sizing:border-box} body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif}
+.themecol{padding:24px;width:50%} .wrap{display:flex}
+.light{background:var(--mj-bg-page)} body{background:#0b1220}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;opacity:.55;margin:26px 0 8px;color:var(--mj-text-primary)}
+h1{font-size:15px;margin:0 0 4px;color:var(--mj-text-primary)} .sub{font-size:12px;opacity:.6;margin:0 0 12px;color:var(--mj-text-primary)}
+.demo{max-width:520px}
+.fieldrow{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--mj-border-subtle);font-size:13px;color:var(--mj-text-primary)}
+.fieldrow span:first-child{color:var(--mj-text-muted)}
+.card{border:1px solid var(--mj-border-default);border-radius:10px;padding:14px;background:var(--mj-bg-surface-card)}
+.cardttl{font-size:13px;font-weight:600;color:var(--mj-text-primary);margin:0 0 10px}
+.ga-iconbtn{border:none;background:transparent;color:var(--mj-text-secondary);cursor:pointer;width:26px;height:26px;border-radius:6px;font-size:12px}
+.ga-iconbtn:hover{background:var(--mj-bg-surface-hover);color:var(--mj-text-primary)}
+.codeblk{background:#1e1e1e;color:#d4d4d4;font-family:monospace;font-size:12px;padding:12px}
+</style></head><body><div class="wrap">
+<div class="themecol light" >
+<div class="demo">
+<h1>LIGHT</h1><p class="sub">mj-accordion-panel — current + proposed variations</p>
+
+<h2>Default · expanded / collapsed</h2>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--expanded"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-circle-info"></i>Details<span class="mj-accordion-badge">3</span></span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body"><div class="fieldrow"><span>Name</span><span>LMS</span></div><div class="fieldrow"><span>Status</span><span>Active</span></div></div></div></div></div></div>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-table-columns"></i>Fields<span class="mj-accordion-badge mj-accordion-badge--muted">(12)</span></span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">hidden</div></div></div></div></div>
+
+<h2>Variant secondary / primary</h2>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--expanded" data-variant="secondary"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-sliders"></i>Configuration</span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">subtle brand tint</div></div></div></div></div>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--expanded" data-variant="primary"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-star"></i>Featured</span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">bold brand header</div></div></div></div></div>
+
+<h2>NEW · Header actions slot (edit/copy/run beside the toggle)</h2>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--expanded"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-plug"></i>Connection<span class="mj-accordion-badge mj-accordion-badge--success">live</span></span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button>
+<div class="mj-accordion-actions"><button class="ga-iconbtn"><i class="fa-solid fa-rotate"></i></button><button class="ga-iconbtn"><i class="fa-solid fa-pen"></i></button><button class="ga-iconbtn"><i class="fa-solid fa-trash"></i></button></div></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">unlocks the ~26 "header has buttons" cases (MCP, cards, scope categories)</div></div></div></div></div>
+
+<h2>NEW · Size="sm" (dense sidebars)</h2>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--sm mj-accordion-panel--expanded"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-clock-rotate-left"></i>Recent Records<span class="mj-accordion-badge mj-accordion-badge--right">8</span></span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">tighter padding + smaller text</div></div></div></div></div>
+
+<h2>NEW · Bare inside a card (fixes the double border)</h2>
+<div class="card"><div class="cardttl">Sales Agent</div><div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--bare mj-accordion-panel--expanded"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-robot"></i>Stats</span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">no border, transparent header — the card owns the chrome</div></div></div></div></div></div>
+
+<h2>NEW · FlushBody (code editor / full-bleed)</h2>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--flush-body mj-accordion-panel--expanded"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-code"></i>SQL</span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body"><div class="codeblk">SELECT * FROM Customers<br>WHERE Status = 'Active';</div></div></div></div></div></div>
+
+</div></div>
+<div class="themecol " data-theme="dark" style="background:var(--mj-bg-page)">
+<div class="demo">
+<h1>DARK</h1><p class="sub">mj-accordion-panel — current + proposed variations</p>
+
+<h2>Default · expanded / collapsed</h2>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--expanded"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-circle-info"></i>Details<span class="mj-accordion-badge">3</span></span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body"><div class="fieldrow"><span>Name</span><span>LMS</span></div><div class="fieldrow"><span>Status</span><span>Active</span></div></div></div></div></div></div>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-table-columns"></i>Fields<span class="mj-accordion-badge mj-accordion-badge--muted">(12)</span></span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">hidden</div></div></div></div></div>
+
+<h2>Variant secondary / primary</h2>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--expanded" data-variant="secondary"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-sliders"></i>Configuration</span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">subtle brand tint</div></div></div></div></div>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--expanded" data-variant="primary"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-star"></i>Featured</span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">bold brand header</div></div></div></div></div>
+
+<h2>NEW · Header actions slot (edit/copy/run beside the toggle)</h2>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--expanded"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-plug"></i>Connection<span class="mj-accordion-badge mj-accordion-badge--success">live</span></span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button>
+<div class="mj-accordion-actions"><button class="ga-iconbtn"><i class="fa-solid fa-rotate"></i></button><button class="ga-iconbtn"><i class="fa-solid fa-pen"></i></button><button class="ga-iconbtn"><i class="fa-solid fa-trash"></i></button></div></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">unlocks the ~26 "header has buttons" cases (MCP, cards, scope categories)</div></div></div></div></div>
+
+<h2>NEW · Size="sm" (dense sidebars)</h2>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--sm mj-accordion-panel--expanded"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-clock-rotate-left"></i>Recent Records<span class="mj-accordion-badge mj-accordion-badge--right">8</span></span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">tighter padding + smaller text</div></div></div></div></div>
+
+<h2>NEW · Bare inside a card (fixes the double border)</h2>
+<div class="card"><div class="cardttl">Sales Agent</div><div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--bare mj-accordion-panel--expanded"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-robot"></i>Stats</span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body">no border, transparent header — the card owns the chrome</div></div></div></div></div></div>
+
+<h2>NEW · FlushBody (code editor / full-bleed)</h2>
+<div class="mj-accordion-panel-host"><div class="mj-accordion-panel mj-accordion-panel--flush-body mj-accordion-panel--expanded"><div class="mj-accordion-header-row">
+<button class="mj-accordion-header"><span class="mj-accordion-title"><i class="fa-solid fa-code"></i>SQL</span><i class="fa-solid fa-chevron-down mj-accordion-icon"></i></button></div>
+<div class="mj-accordion-body-outer"><div class="mj-accordion-body-clip"><div class="mj-accordion-body"><div class="codeblk">SELECT * FROM Customers<br>WHERE Status = 'Active';</div></div></div></div></div></div>
+
+</div></div>
+</div></body></html>

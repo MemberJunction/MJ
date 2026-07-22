@@ -6,11 +6,12 @@ import { MJTemplateParamEntity, MJAIConfigurationEntity } from '@memberjunction/
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual } from '@memberjunction/global';
+import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual, EscapeHTML } from '@memberjunction/global';
 
 /**
  * Supported modes for the test harness
@@ -159,7 +160,8 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      */
     constructor(
         private sanitizer: DomSanitizer,
-        private cdr: ChangeDetectorRef
+        private cdr: ChangeDetectorRef,
+        private confirmService: MJConfirmService
     ) {
     super();}
     
@@ -1068,10 +1070,10 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     /**
      * Starts a new conversation
      */
-    public newConversation() {
+    public async newConversation() {
         if (this.conversationMessages.length > 0 && !this.currentConversationId) {
             // Unsaved conversation exists - use our custom dialog
-            if (confirm('You have an unsaved conversation. Would you like to save it first?')) {
+            if (await this.confirmService.Confirm({ title: 'Unsaved conversation', message: 'You have an unsaved conversation. Would you like to save it first?', confirmText: 'Save' })) {
                 this.saveConversation();
                 return;
             }
@@ -1834,9 +1836,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Clears the current conversation after user confirmation.
      * Resets both the message history and the current conversation ID.
      */
-    public clearConversation() {
+    public async clearConversation() {
         if (this.conversationMessages.length > 0) {
-            if (confirm('Are you sure you want to clear the conversation?')) {
+            if (await this.confirmService.Confirm({ title: 'Clear conversation', message: 'Are you sure you want to clear the conversation?' })) {
                 this.conversationMessages = [];
                 this.currentConversationId = null;
             }
@@ -2201,7 +2203,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     public async deleteConversation(conversation: SavedConversation, event: Event) {
         event.stopPropagation();
         
-        if (confirm(`Delete conversation "${conversation.name}"?`)) {
+        if (await this.confirmService.ConfirmDelete({ title: 'Delete Conversation', message: `Delete conversation "${conversation.name}"?` })) {
             const index = this.savedConversations.findIndex(c => c.id === conversation.id);
             if (index >= 0) {
                 this.savedConversations.splice(index, 1);
@@ -2281,14 +2283,14 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             const file = input.files[0];
             const reader = new FileReader();
             
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const data = JSON.parse(e.target?.result as string);
-                    
+
                     // Validate and import
                     if (data.messages && Array.isArray(data.messages)) {
                         if (this.conversationMessages.length > 0) {
-                            if (!confirm('Importing will replace the current conversation. Continue?')) {
+                            if (!(await this.confirmService.Confirm({ title: 'Import conversation', message: 'Importing will replace the current conversation. Continue?' }))) {
                                 return;
                             }
                         }
@@ -2691,9 +2693,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         let html = content;
         
         // Escape HTML first
-        html = html.replace(/&/g, '&amp;')
-                   .replace(/</g, '&lt;')
-                   .replace(/>/g, '&gt;');
+        html = EscapeHTML(html);
         
         // Code blocks with language support
         html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
@@ -2798,12 +2798,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Escapes HTML content for use in attributes
      */
     private escapeHtmlAttribute(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+        return EscapeHTML(text);
     }
 
     /**
@@ -2944,9 +2939,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     }
 
     private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return EscapeHTML(text);
     }
 
     /**

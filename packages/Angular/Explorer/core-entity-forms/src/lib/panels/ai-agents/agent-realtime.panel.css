@@ -8,14 +8,6 @@
     margin: 0 0 14px;
     max-width: 92ch;
 }
-.rt-error {
-    font-size: 12px;
-    padding: 10px 12px;
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
-    color: var(--mj-status-error-text, var(--mj-status-error));
-}
-.rt-error i { margin-right: 6px; }
 
 .rt-section { margin-bottom: 18px; }
 .rt-section:last-child { margin-bottom: 0; }

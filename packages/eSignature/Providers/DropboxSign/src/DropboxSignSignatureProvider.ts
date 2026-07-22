@@ -9,6 +9,8 @@ import {
     NormalizedSignatureEvent,
     OperationResult,
     RecipientStatus,
+    SignatureFieldPlacement,
+    SignatureFieldType,
     SignatureOperation,
     SignatureProviderConfig,
     SignedDocumentResult,
@@ -55,6 +57,13 @@ export function mapDropboxSignStatus(statusCode: string): EnvelopeStatus {
 
 /** Header carrying the event payload's HMAC when Dropbox Sign is configured to sign callbacks. */
 const DROPBOX_SIGN_EVENT_HASH_FIELD = 'event_hash';
+
+/** US-Letter page in pixels at 96 DPI — the fallback when a field doesn't carry its page's real
+ *  dimensions. Dropbox Sign's form_fields_per_document positions in pixels. */
+const DROPBOX_LETTER_WIDTH_PX = 816;
+const DROPBOX_LETTER_HEIGHT_PX = 1056;
+/** PDF points (1/72") → CSS pixels (1/96") conversion factor, for page dims supplied in points. */
+const PT_TO_PX = 96 / 72;
 
 /**
  * Dropbox Sign (formerly HelloSign) driver for the MemberJunction eSignature primitive — v3 REST
@@ -282,10 +291,98 @@ export class DropboxSignSignatureProvider extends BaseSignatureProvider {
             form.append(`signers[${i}][order]`, String(r.routingOrder ?? i + 1));
         });
 
+        this.appendFieldPlacement(form, req);
+
         Object.entries(req.metadata ?? {}).forEach(([key, value]) => {
             form.append(`metadata[${key}]`, value);
         });
         return form;
+    }
+
+    /**
+     * Translate our portable field placement onto Dropbox Sign's two placement mechanisms:
+     *   - **Coordinates** → `form_fields_per_document` (a per-document array of absolute-positioned
+     *     fields, in pixels from the page's top-left).
+     *   - **Anchor strings** → Dropbox Sign has no "place at arbitrary text" API. Its anchor mechanism
+     *     is `use_text_tags`, which parses Dropbox-format tags already embedded in the document. So if
+     *     any field uses an anchor we enable `use_text_tags` (best-effort: it only takes effect if the
+     *     document actually carries Dropbox tags). This is a documented provider limitation — DocuSign
+     *     is the provider that supports free-text anchors natively.
+     * When no field carries either, we append nothing and Dropbox Sign applies its default placement.
+     */
+    private appendFieldPlacement(form: FormData, req: CreateEnvelopeRequest): void {
+        const allFields = req.recipients.flatMap((r) => r.fields ?? []);
+        if (allFields.length === 0) {
+            return;
+        }
+        if (allFields.some((f) => f.anchor)) {
+            form.append('use_text_tags', '1');
+        }
+
+        // Build coordinate fields grouped by document index (0-based), matching the shape of the
+        // `file[]` array. Fields with an anchor (no coords) are handled by use_text_tags above.
+        const perDoc: Record<string, unknown>[][] = req.documents.map(() => []);
+        req.recipients.forEach((recipient, signerIndex) => {
+            for (const field of recipient.fields ?? []) {
+                this.pushCoordinateField(perDoc, field, signerIndex, req.documents.length);
+            }
+        });
+
+        const hasCoordFields = perDoc.some((d) => d.length > 0);
+        if (hasCoordFields) {
+            form.append('form_fields_per_document', JSON.stringify(perDoc));
+        }
+    }
+
+    /** Add one absolute-positioned field to the right per-document bucket(s). No-op unless the field
+     *  supplies normalized coordinates (anchor-only fields go through use_text_tags instead). */
+    private pushCoordinateField(
+        perDoc: Record<string, unknown>[][],
+        field: SignatureFieldPlacement,
+        signerIndex: number,
+        documentCount: number,
+    ): void {
+        if (field.page == null || field.xPercent == null || field.yPercent == null) {
+            return;
+        }
+        const targetDocs =
+            field.documentIndex != null ? [field.documentIndex - 1] : perDoc.map((_, i) => i);
+        for (const docIdx of targetDocs) {
+            if (docIdx < 0 || docIdx >= documentCount) {
+                continue;
+            }
+            // Dropbox Sign positions in pixels (96 DPI) from the page top-left. Convert the % against
+            // the field's ACTUAL page when supplied (points → px at 96/72), else US-Letter in px.
+            const widthPx = field.pageWidthPt != null ? field.pageWidthPt * PT_TO_PX : DROPBOX_LETTER_WIDTH_PX;
+            const heightPx = field.pageHeightPt != null ? field.pageHeightPt * PT_TO_PX : DROPBOX_LETTER_HEIGHT_PX;
+            perDoc[docIdx].push({
+                api_id: `mj_${signerIndex}_${docIdx}_${perDoc[docIdx].length}`,
+                type: this.dropboxFieldType(field.type ?? 'signature'),
+                signer: signerIndex,
+                page: field.page,
+                x: Math.round((field.xPercent / 100) * widthPx),
+                y: Math.round((field.yPercent / 100) * heightPx),
+                required: field.required !== false,
+            });
+        }
+    }
+
+    /** Map our portable field type onto Dropbox Sign's field-type keyword. */
+    private dropboxFieldType(type: SignatureFieldType): string {
+        switch (type) {
+            case 'signature':
+                return 'signature';
+            case 'initials':
+                return 'initials';
+            case 'dateSigned':
+                return 'date_signed';
+            case 'text':
+                return 'text';
+            case 'checkbox':
+                return 'checkbox';
+            default:
+                return 'signature';
+        }
     }
 
     /** Derive a normalized status from the request booleans + first signature's status code. */

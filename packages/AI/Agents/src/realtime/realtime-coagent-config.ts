@@ -169,6 +169,28 @@ export const REALTIME_MODERATOR_DEFAULTS = {
     prestageOnAgentSpeech: true,
 } as const;
 
+/**
+ * How the co-agent narrates pulling in a colleague agent (a delegation handoff):
+ * - `'mention'` (default): names the handoff out loud ("Let me bring in Skip for that…").
+ * - `'silent'`: absorbs the colleague's result and speaks it as its own — delegation is invisible.
+ * - `'hand-voice'`: heavier handoff where the colleague takes the mic (reserved; not yet implemented).
+ */
+export type RealtimeDisclosurePolicy = 'silent' | 'mention' | 'hand-voice';
+
+/**
+ * A delegation target the lead co-agent may invoke via `invoke_agent`. Allowed targets are
+ * **union-accumulated** across cascade layers (type, co-agent, target, app) plus dynamic
+ * (channel-registered) additions — NOT array-replaced — by {@link accumulateAllowedAgents}.
+ */
+export interface RealtimeAllowedAgent {
+    /** The target agent's `MJ: AI Agents` ID (loop or flow — transparent to the co-agent). */
+    agentId: string;
+    /** Friendly label used in the manifest / disclosure narration ("Skip", "Query Builder"). */
+    label?: string;
+    /** Per-target disclosure override; falls back to the effective default disclosure. */
+    disclosure?: RealtimeDisclosurePolicy;
+}
+
 /** The `realtime` section of a co-agent's effective configuration. */
 export interface RealtimeConfigSection {
     /** Preferred realtime model — an `MJ: AI Models` Name OR ID. Degrades gracefully when unsatisfiable. */
@@ -188,6 +210,79 @@ export interface RealtimeConfigSection {
     narration?: RealtimeNarrationConfig;
     /** Multi-agent turn-taking: this agent's participation {@link RealtimeTurnTakingConfig.mode} + the room-wide moderator. */
     turnTaking?: RealtimeTurnTakingConfig;
+    /**
+     * Default delegation disclosure for this co-agent (scalar — follows the per-key cascade override).
+     * Absent ⇒ {@link GetEffectiveDisclosure} returns `'mention'`.
+     */
+    disclosure?: RealtimeDisclosurePolicy;
+    /**
+     * Delegation targets the lead co-agent may invoke. UNION-accumulated across layers + dynamic
+     * (see {@link accumulateAllowedAgents}); {@link ResolveEffectiveRealtimeConfig} populates this
+     * with the accumulated union rather than the array-replaced top layer.
+     */
+    allowedAgents?: RealtimeAllowedAgent[];
+    /**
+     * Provider-session tuning knobs, folded into the driver's open Config bag by the session
+     * builders (both topologies) — the SAME pact `voice`/`disableAutoResponse` ride. Drivers
+     * translate each key to their native wire field ONLY when their profile confirms support and
+     * scrub it otherwise, so a shared co-agent config is safe on every provider.
+     */
+    session?: RealtimeSessionTuningConfig;
+}
+
+/**
+ * Provider-session tuning for a Realtime co-agent — the config-cascade source for the driver
+ * feature keys ({@link GetSessionTuningSettings} projects these onto the flat bag keys the
+ * drivers consume). Every field is optional; absent fields contribute NOTHING to the bag.
+ */
+export interface RealtimeSessionTuningConfig {
+    /**
+     * MJ-normalized effort level (the `ChatParams.effortLevel` vocabulary: numeric 1–100 or a
+     * named level). Providers with reasoning realtime models (OpenAI gpt-realtime-2.x) map it to
+     * their native literals; others scrub it.
+     */
+    effortLevel?: string | number;
+    /** Whether the model may run tool calls in parallel (GA reasoning realtime models). */
+    parallelToolCalls?: boolean;
+    /**
+     * Remote MCP server tool declarations (provider-native `{ type:'mcp', server_label,
+     * server_url|connector_id, … }` objects) for providers that support MCP in `session.tools`.
+     * Until an approval UX exists, declare servers with `require_approval: 'never'` — an approval
+     * request is auto-denied by the driver.
+     */
+    mcpTools?: JSONObjectLike[];
+    /** Per-session input-transcription model override (OpenAI-protocol providers). */
+    inputTranscriptionModel?: string;
+}
+
+/**
+ * Projects the effective config's `realtime.session` tuning section onto the FLAT Config-bag keys
+ * the realtime drivers consume (`effortLevel`, `parallelToolCalls`, `mcpTools`,
+ * `inputTranscriptionModel`). Returns `null` when the section is absent or contributes nothing —
+ * callers then skip the merge entirely, preserving the prior bag byte-for-byte.
+ *
+ * @param config The effective configuration.
+ * @returns The flat tuning bag, or `null` when nothing is configured.
+ */
+export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | undefined): JSONObjectLike | null {
+    const tuning = config?.realtime?.session;
+    if (!tuning) {
+        return null;
+    }
+    const bag: JSONObjectLike = {};
+    if (typeof tuning.effortLevel === 'string' || typeof tuning.effortLevel === 'number') {
+        bag['effortLevel'] = tuning.effortLevel;
+    }
+    if (typeof tuning.parallelToolCalls === 'boolean') {
+        bag['parallelToolCalls'] = tuning.parallelToolCalls;
+    }
+    if (Array.isArray(tuning.mcpTools) && tuning.mcpTools.length > 0) {
+        bag['mcpTools'] = tuning.mcpTools;
+    }
+    if (typeof tuning.inputTranscriptionModel === 'string' && tuning.inputTranscriptionModel.trim().length > 0) {
+        bag['inputTranscriptionModel'] = tuning.inputTranscriptionModel.trim();
+    }
+    return Object.keys(bag).length > 0 ? bag : null;
 }
 
 /** The fully-normalized effective configuration for a Realtime co-agent. */
@@ -321,24 +416,183 @@ export function ParseRealtimeTypeConfiguration(json: string | null | undefined):
  * @param agentJson The CO-AGENT's `TypeConfiguration` JSON (shared per-co-agent layer).
  * @param overridesJson Runtime overrides JSON (per-session layer; already authorization-gated by the caller).
  * @param targetAgentJson Optional TARGET agent's `TypeConfiguration` JSON (per-voiced-agent layer). Merged
- *   ABOVE the co-agent and BELOW the runtime override regardless of argument position. Omit when there is
- *   no distinct target (e.g. the co-agent voicing itself).
+ *   ABOVE the co-agent and BELOW the app/runtime-override layers regardless of argument position. Omit when
+ *   there is no distinct target (e.g. the co-agent voicing itself).
+ * @param appSettingsJson Optional APP layer — `Application.AgentSettings.Realtime` translated into the
+ *   canonical `{"realtime":{…}}` shape (use {@link BuildAppRealtimeOverridesJson}). Merged ABOVE the target
+ *   and BELOW the runtime override. Omit when no app context is known.
+ * @param dynamicAllowedAgents Optional channel-registered delegation targets added at runtime (Move 3b),
+ *   union-accumulated on top of the layer-sourced `allowedAgents`.
  * @returns The normalized effective configuration. `realtime` is absent when no layer supplied a usable section.
  */
 export function ResolveEffectiveRealtimeConfig(
     typeDefaultJson: string | null | undefined,
     agentJson: string | null | undefined,
     overridesJson: string | null | undefined,
-    targetAgentJson?: string | null | undefined
+    targetAgentJson?: string | null | undefined,
+    appSettingsJson?: string | null | undefined,
+    dynamicAllowedAgents?: RealtimeAllowedAgent[]
 ): RealtimeCoAgentConfig {
-    // Merge order = precedence (later wins): type-default < co-agent < target < runtime-override.
-    const merged = DeepMergeConfigs(
-        ParseRealtimeTypeConfiguration(typeDefaultJson),
-        ParseRealtimeTypeConfiguration(agentJson),
-        ParseRealtimeTypeConfiguration(targetAgentJson),
-        ParseRealtimeTypeConfiguration(overridesJson)
+    // Parse each layer once — reused for both the scalar deep-merge and the allowedAgents union.
+    const typeLayer = ParseRealtimeTypeConfiguration(typeDefaultJson);
+    const agentLayer = ParseRealtimeTypeConfiguration(agentJson);
+    const targetLayer = ParseRealtimeTypeConfiguration(targetAgentJson);
+    const appLayer = ParseRealtimeTypeConfiguration(appSettingsJson);
+    const overrideLayer = ParseRealtimeTypeConfiguration(overridesJson);
+
+    // Scalar fields: merge order = precedence (later wins):
+    //   type-default < co-agent < target < app < runtime-override.
+    const merged = DeepMergeConfigs(typeLayer, agentLayer, targetLayer, appLayer, overrideLayer);
+    const config = normalizeConfig(merged);
+
+    // allowedAgents: union-accumulate across all layers (+ dynamic), since DeepMergeConfigs
+    // array-replaces. Later layers win per-entry fields; deduped by agentId.
+    const allowed = accumulateAllowedAgents(
+        [typeLayer, agentLayer, targetLayer, appLayer, overrideLayer],
+        dynamicAllowedAgents
     );
-    return normalizeConfig(merged);
+    if (allowed.length > 0) {
+        config.realtime = config.realtime ?? {};
+        config.realtime.allowedAgents = allowed;
+    }
+
+    return config;
+}
+
+/**
+ * Normalizes a single raw `allowedAgents` entry; returns `null` when it lacks a usable `agentId`.
+ * Omits absent optional fields so per-entry field-merge in {@link accumulateAllowedAgents} is clean.
+ */
+function normalizeAllowedAgent(raw: unknown): RealtimeAllowedAgent | null {
+    if (!isPlainObject(raw)) {
+        return null;
+    }
+    const agentId = raw['agentId'];
+    if (typeof agentId !== 'string' || agentId.trim().length === 0) {
+        return null;
+    }
+    const entry: RealtimeAllowedAgent = { agentId: agentId.trim() };
+    if (typeof raw['label'] === 'string' && raw['label'].trim().length > 0) {
+        entry.label = raw['label'].trim();
+    }
+    const disclosure = raw['disclosure'];
+    if (disclosure === 'silent' || disclosure === 'mention' || disclosure === 'hand-voice') {
+        entry.disclosure = disclosure;
+    }
+    return entry;
+}
+
+/**
+ * UNION-accumulates `realtime.allowedAgents` across cascade layers (base first) plus optional
+ * dynamic additions. Deduped by `agentId` (case/whitespace-insensitive); later sources win per
+ * **field** (a later layer that only sets `disclosure` keeps an earlier layer's `label`).
+ *
+ * This is the deliberate exception to the array-replace merge rule — the lead co-agent should
+ * *accumulate* colleagues as layers add them, not have the top layer clobber the set.
+ *
+ * @param layers Parsed config layers (each a `{realtime:{allowedAgents:[…]}}` blob or null), base first.
+ * @param dynamic Optional runtime/channel-registered targets, accumulated last (highest precedence).
+ * @returns The deduped, accumulated allowed-agent list (empty when none configured).
+ */
+export function accumulateAllowedAgents(
+    layers: Array<JSONObjectLike | null | undefined>,
+    dynamic?: RealtimeAllowedAgent[]
+): RealtimeAllowedAgent[] {
+    const map = new Map<string, RealtimeAllowedAgent>();
+    const ingest = (list: unknown): void => {
+        if (!Array.isArray(list)) {
+            return;
+        }
+        for (const raw of list) {
+            const entry = normalizeAllowedAgent(raw);
+            if (!entry) {
+                continue;
+            }
+            const key = entry.agentId.trim().toLowerCase();
+            const existing = map.get(key);
+            map.set(key, existing ? { ...existing, ...entry } : entry);
+        }
+    };
+    for (const layer of layers) {
+        if (isPlainObject(layer)) {
+            const rt = layer['realtime'];
+            if (isPlainObject(rt)) {
+                ingest(rt['allowedAgents']);
+            }
+        }
+    }
+    ingest(dynamic);
+    return Array.from(map.values());
+}
+
+/**
+ * The effective DEFAULT delegation disclosure for the co-agent (scalar cascade result),
+ * defaulting to `'mention'` when no layer set one.
+ */
+export function GetEffectiveDisclosure(
+    config: RealtimeCoAgentConfig | null | undefined
+): RealtimeDisclosurePolicy {
+    return config?.realtime?.disclosure ?? 'mention';
+}
+
+/**
+ * The effective disclosure for a SPECIFIC delegation target: the target's per-entry override
+ * when present, else the co-agent's effective default ({@link GetEffectiveDisclosure}).
+ *
+ * @param config The normalized effective configuration.
+ * @param agentId The target agent's ID.
+ */
+export function GetDisclosureForTarget(
+    config: RealtimeCoAgentConfig | null | undefined,
+    agentId: string | null | undefined
+): RealtimeDisclosurePolicy {
+    const target = config?.realtime?.allowedAgents?.find((a) => idsEqual(a.agentId, agentId));
+    return target?.disclosure ?? GetEffectiveDisclosure(config);
+}
+
+/**
+ * Maps an app's `Application.AgentSettings.Realtime` block (+ optional `RelevantAgents`) into the
+ * canonical `{"realtime":{…}}` JSON the cascade consumes as its **app layer**. Pure mapper so the
+ * call site (which reads `AgentSettingsObject`) stays thin and this module stays canonical.
+ *
+ * @param appRealtime The `AgentSettings.Realtime` overrides (Disclosure / Persona / ModelPreference).
+ * @param relevantAgents The app's `AgentSettings.RelevantAgents` mapped to allowed-agent entries.
+ * @returns Canonical app-layer JSON string, or `null` when nothing was supplied (keeps the cascade lower).
+ */
+export function BuildAppRealtimeOverridesJson(
+    appRealtime?: {
+        Disclosure?: RealtimeDisclosurePolicy | null;
+        Persona?: { Tone?: string | null; SpeakingStyle?: string | null } | null;
+        ModelPreference?: string | null;
+    } | null,
+    relevantAgents?: RealtimeAllowedAgent[] | null
+): string | null {
+    const realtime: RealtimeConfigSection = {};
+
+    const disclosure = appRealtime?.Disclosure;
+    if (disclosure === 'silent' || disclosure === 'mention' || disclosure === 'hand-voice') {
+        realtime.disclosure = disclosure;
+    }
+    const tone = appRealtime?.Persona?.Tone?.trim();
+    const style = appRealtime?.Persona?.SpeakingStyle?.trim();
+    if (tone || style) {
+        realtime.voice = { default: {} };
+        if (tone) {
+            realtime.voice.default!.tone = tone;
+        }
+        if (style) {
+            realtime.voice.default!.speakingStyle = style;
+        }
+    }
+    const model = appRealtime?.ModelPreference?.trim();
+    if (model) {
+        realtime.modelPreference = model;
+    }
+    if (relevantAgents && relevantAgents.length > 0) {
+        realtime.allowedAgents = relevantAgents;
+    }
+
+    return Object.keys(realtime).length > 0 ? JSON.stringify({ realtime }) : null;
 }
 
 /** Normalizes a merged raw config object into the typed, sanity-checked shape. */
@@ -357,6 +611,14 @@ function normalizeConfig(merged: JSONObjectLike): RealtimeCoAgentConfig {
     if (typeof rawRealtime['allowUserModelOverride'] === 'boolean') {
         section.allowUserModelOverride = rawRealtime['allowUserModelOverride'];
     }
+
+    const disclosure = rawRealtime['disclosure'];
+    if (disclosure === 'silent' || disclosure === 'mention' || disclosure === 'hand-voice') {
+        section.disclosure = disclosure;
+    }
+    // NOTE: `allowedAgents` is intentionally NOT normalized here — it is union-accumulated across
+    // ALL layers by ResolveEffectiveRealtimeConfig (the merged blob only carries the array-replaced
+    // top layer, which would be wrong as a union).
 
     const voice = normalizeVoice(rawRealtime['voice']);
     if (voice) {
@@ -378,7 +640,54 @@ function normalizeConfig(merged: JSONObjectLike): RealtimeCoAgentConfig {
         section.turnTaking = turnTaking;
     }
 
+    const sessionTuning = normalizeSession(rawRealtime['session']);
+    if (sessionTuning) {
+        section.session = sessionTuning;
+    }
+
     return Object.keys(section).length > 0 ? { realtime: section } : { realtime: {} };
+}
+
+/**
+ * Normalizes the `realtime.session` tuning sub-object from a merged config layer, keeping ONLY the
+ * recognized, correctly-typed knobs (the input is parsed JSON of unknown shape). Returns
+ * `undefined` when nothing valid is present so {@link normalizeConfig} omits the key entirely.
+ *
+ * Per-key deep-merge across layers is handled upstream by {@link DeepMergeConfigs} (plain-object
+ * layers merge; the merged blob is what this normalizer sees), so this only validates + projects.
+ *
+ * @param raw The raw `session` value from a merged config layer.
+ * @returns The normalized tuning config, or `undefined` when empty/invalid.
+ */
+function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined {
+    if (!isPlainObject(raw)) {
+        return undefined;
+    }
+    const tuning: RealtimeSessionTuningConfig = {};
+
+    const effort = raw['effortLevel'];
+    if (typeof effort === 'string' && effort.trim().length > 0) {
+        tuning.effortLevel = effort.trim();
+    }
+    else if (typeof effort === 'number' && Number.isFinite(effort)) {
+        tuning.effortLevel = effort;
+    }
+
+    if (typeof raw['parallelToolCalls'] === 'boolean') {
+        tuning.parallelToolCalls = raw['parallelToolCalls'];
+    }
+
+    const mcpTools = raw['mcpTools'];
+    if (Array.isArray(mcpTools) && mcpTools.length > 0 && mcpTools.every(isPlainObject)) {
+        tuning.mcpTools = mcpTools as JSONObjectLike[];
+    }
+
+    const itModel = raw['inputTranscriptionModel'];
+    if (typeof itModel === 'string' && itModel.trim().length > 0) {
+        tuning.inputTranscriptionModel = itModel.trim();
+    }
+
+    return Object.keys(tuning).length > 0 ? tuning : undefined;
 }
 
 /** Normalizes the `turnTaking` block (participation mode + room moderator); returns `null` when nothing usable survives. */

@@ -233,6 +233,23 @@ describe('RealtimeSessionService — per-plugin tool routing + host context', ()
     ]);
   });
 
+  it('marks a channel USED on its first tool call (the overlay tabs it on first use)', async () => {
+    expect(service.HasChannelBeenUsed('Echo')).toBe(false);
+    expect([...service.UsedChannelNames]).toEqual([]);
+
+    await internals(service).handleToolCall({ CallID: 'call-1', ToolName: 'Echo.Say', ArgumentsJson: '{}' });
+
+    expect(service.HasChannelBeenUsed('Echo')).toBe(true);
+    expect([...service.UsedChannelNames]).toEqual(['Echo']);
+  });
+
+  it('UsedChannelNames is a snapshot — mutating it does not affect the service', async () => {
+    await internals(service).handleToolCall({ CallID: 'call-1', ToolName: 'Echo.Say', ArgumentsJson: '{}' });
+    const snapshot = service.UsedChannelNames as Set<string>;
+    snapshot.delete('Echo');
+    expect(service.HasChannelBeenUsed('Echo')).toBe(true);
+  });
+
   it('hands each plugin a context whose AgentName matches the session agent', () => {
     expect(plugin.Ctx?.AgentName).toBe(service.CurrentAgentName);
   });

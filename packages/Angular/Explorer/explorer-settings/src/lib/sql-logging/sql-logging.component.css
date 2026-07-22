@@ -13,10 +13,6 @@
 
 /* Small-viewport adjustments for the collapsible stats toggle. */
 @media (max-width: 639px) {
-  .stats-toggle-button {
-    padding: 0.875rem 1rem;
-  }
-
   .stats-toggle-icon {
     width: 40px;
     height: 40px;
@@ -30,10 +26,6 @@
   .stats-toggle-subtitle {
     font-size: 0.75rem;
   }
-
-  .stats-toggle-arrow {
-    font-size: 1.125rem;
-  }
 }
 
 /* -----------------------------------------------------------------------------
@@ -43,38 +35,7 @@
   margin-bottom: 1.5rem;
 }
 
-.stats-toggle-button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.5rem;
-  background: var(--mj-bg-surface-sunken);
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-lg);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 56px;
-}
-
-.stats-toggle-button:hover {
-  background: var(--mj-bg-surface-active);
-  border-color: var(--mj-brand-primary);
-  box-shadow: var(--mj-shadow-sm);
-}
-
-.stats-toggle-button.expanded {
-  border-color: var(--mj-brand-primary);
-  background: var(--mj-brand-accent-subtle);
-  margin-bottom: 1rem;
-}
-
-.stats-toggle-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
+/* .stats-toggle-button / -left / -arrow chrome is now owned by <mj-accordion-panel>. */
 .stats-toggle-icon {
   width: 48px;
   height: 48px;
@@ -86,11 +47,6 @@
   justify-content: center;
   font-size: 1.25rem;
   flex-shrink: 0;
-}
-
-.stats-toggle-button.expanded .stats-toggle-icon {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
 }
 
 .stats-toggle-text {
@@ -106,43 +62,18 @@
   margin: 0;
 }
 
-.stats-toggle-button.expanded .stats-toggle-title {
-  color: var(--mj-brand-primary);
-}
-
 .stats-toggle-subtitle {
   font-size: 0.8125rem;
   color: var(--mj-text-secondary);
   margin: 0;
 }
 
-.stats-toggle-arrow {
-  font-size: 1.25rem;
-  color: var(--mj-text-secondary);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.stats-toggle-button.expanded .stats-toggle-arrow {
-  transform: rotate(180deg);
-  color: var(--mj-brand-primary);
-}
-
+/* .stats-grid collapse is now owned by <mj-accordion-panel>; grid layout only below. */
 .stats-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.75rem;
   width: 100%;
-  overflow: hidden;
-  max-height: 0;
-  opacity: 0;
-  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.stats-grid.visible {
-  max-height: 1000px;
-  opacity: 1;
-  margin-bottom: 1.5rem;
 }
 
 @media (min-width: 640px) {

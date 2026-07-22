@@ -50,44 +50,6 @@
 /* ===========================
    Error Banner
    =========================== */
-.error-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 12px 20px;
-  background: var(--test-error);
-  color: var(--mj-text-inverse);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--test-transition);
-  animation: slideDown 0.3s ease-out;
-}
-
-.error-banner:hover {
-  background: var(--mj-status-error);
-}
-
-.error-banner i {
-  font-size: 16px;
-}
-
-.retry-btn {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: var(--mj-text-inverse);
-  padding: 6px 12px;
-  border-radius: var(--test-radius-sm);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  transition: var(--test-transition);
-}
-
-.retry-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
 
 @keyframes slideDown {
   from {

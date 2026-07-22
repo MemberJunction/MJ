@@ -3,6 +3,7 @@ export * from './generated/entity_subclasses.js'
 export * from './generated/remote_operations.js'
 
 export * from "./custom/MJUserViewEntityExtended";
+export * from "./custom/ReadOnlyExternalBaseEntity";
 export * from './custom/MJDashboardEntityExtended';
 export * from './custom/MJListDetailEntityExtended';
 export * from './custom/MJScheduledActionEntityExtended';
@@ -29,6 +30,7 @@ export * from './engines/dashboards';
 export * from './engines/EncryptionEngineBase';
 export * from './engines/RemoteOperationEngineBase';
 export * from './engines/UserInfoEngine';
+export * from './engines/UserRoutineEngine';
 export * from './engines/ApplicationSettingEngine';
 export * from './engines/UserViewEngine';
 export * from './engines/FileStorageEngine';

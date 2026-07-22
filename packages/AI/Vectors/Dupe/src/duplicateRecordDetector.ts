@@ -30,7 +30,6 @@ import {
     PotentialDuplicate,
     DuplicateDetectionOptions,
     DuplicateDetectionProgress,
-    RunView,
 } from "@memberjunction/core";
 import { BaseResponse, VectorDBBase, VectorDatabaseConfiguration } from "@memberjunction/ai-vectordb";
 import { MJGlobal, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
@@ -39,7 +38,6 @@ import {
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
     MJEntityDocumentEntity,
-    MJListDetailEntity,
     MJListEntity,
     KnowledgeHubMetadataEngine,
 } from "@memberjunction/core-entities";
@@ -47,7 +45,14 @@ import { VectorBase } from "@memberjunction/ai-vectors";
 import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import type { MJTemplateEntityExtended, MJTemplateContentEntity } from "@memberjunction/core-entities";
-import { ComputeRRF, ScoredCandidate } from "@memberjunction/core";
+import { DuplicateReasoningProvider } from "./reasoning/DuplicateReasoningProvider";
+import {
+    DuplicateReasoningInput,
+    DuplicateReasoningOutput,
+    ReasoningCandidate,
+    ReasoningFieldDelta,
+} from "./reasoning/DuplicateReasoningTypes";
+import { MatchedSetDeltaBuilder } from "./reasoning/MatchedSetDeltaBuilder";
 
 /** Default number of nearest neighbors to retrieve per record */
 const DEFAULT_TOP_K = 5;
@@ -95,6 +100,19 @@ interface RecordQueryResult {
 }
 
 /**
+ * A matched set's reasoning verdict together with the detector-resolved literal survivor
+ * field map. The provider returns the verdict (with per-field {@link DuplicateReasoningFieldChoice}
+ * choices addressed by record id); the detector resolves those choices to literal
+ * `{FieldName, Value}` entries (ready for {@link RecordMergeRequest.FieldMap}) by reading the
+ * chosen record's value out of the matched-set deltas it already loaded for the prompt.
+ */
+interface SetReasoning {
+    Output: DuplicateReasoningOutput;
+    /** FieldChoices resolved to literal values; empty when the reasoner proposed none. */
+    FieldMap: { FieldName: string; Value: unknown }[];
+}
+
+/**
  * Modernized duplicate record detection engine.
  *
  * Supports:
@@ -108,8 +126,20 @@ interface RecordQueryResult {
 export class DuplicateRecordDetector extends VectorBase {
     private vectorDB: VectorDBBase;
     private embedding: BaseEmbeddings;
+    /**
+     * The embedding model's API identifier (e.g. 'Xenova/gte-small', 'text-embedding-3-small'),
+     * resolved from the entity document's AIModel. Passed to `EmbedTexts` — required by local
+     * providers (which load the named ONNX pipeline) and honored by cloud providers.
+     */
+    private embeddingModelAPIName: string | null = null;
     /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
     private indexName: string;
+    /**
+     * The EntityDocumentID for this run. Passed as the vector query `id` for providers that key
+     * by EntityDocumentID (the in-process SimpleVectorServiceProvider — see
+     * {@link VectorDBBase.QueryKeyIsEntityDocumentID}) instead of the logical index name.
+     */
+    private entityDocumentID: string;
     /**
      * Tracks already-seen source↔match pairs across the entire run to suppress inverse duplicates.
      * If A→B is persisted, B→A is skipped. Key format: "smallerID::largerID" for consistent ordering.
@@ -287,7 +317,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const record = records.Results[0];
         const templateParser = EntityDocumentTemplateParser.CreateInstance();
         const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, [record], ContextUser);
-        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: null });
+        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: this.embeddingModelAPIName });
 
         const topK = options.TopK ?? DEFAULT_TOP_K;
         const queryResults = await this.QueryDuplicatesForRecords(
@@ -295,7 +325,20 @@ export class DuplicateRecordDetector extends VectorBase {
             this.GetQueryConcurrency(entityDocument)
         );
 
-        return queryResults.length > 0 ? queryResults[0].Duplicates : new PotentialDuplicateResult();
+        if (queryResults.length === 0) {
+            return new PotentialDuplicateResult();
+        }
+
+        // Annotate the (non-persisted) single-record result with LLM reasoning when the entity
+        // has it enabled and the set clears the gate — same gate as the batch path. There are no
+        // match rows to stamp run ids onto here; the verdict rides on the returned result so a
+        // real-time "is this a duplicate?" caller gets recommendation + resolved field map too.
+        const single = queryResults[0];
+        const reasoning = await this.RunReasoningForSet(single, entityInfo, entityDocument, ContextUser);
+        if (reasoning) {
+            this.applyReasoningToResult(single.Duplicates, reasoning.Output, reasoning.FieldMap);
+        }
+        return single.Duplicates;
     }
 
     // ─────────────────────────────────────────────
@@ -371,7 +414,7 @@ export class DuplicateRecordDetector extends VectorBase {
             // Embed this sub-batch
             this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
-            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: null });
+            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: this.embeddingModelAPIName });
 
             // Query vector DB for each record in the sub-batch with concurrency control
             this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
@@ -389,7 +432,7 @@ export class DuplicateRecordDetector extends VectorBase {
         // 6e: Persist match results and update run details
         this.reportProgress(options, 'Matching', totalRecords, processedSoFar + records.length, matchesSoFar, startTime);
         const results = await this.PersistMatchResults(
-            allQueryResults, duplicateRunDetails, entityDocument, options, startTime
+            allQueryResults, duplicateRunDetails, entityInfo, entityDocument, options, startTime, contextUser
         );
 
         const batchMatches = results.reduce((sum, r) => sum + r.Duplicates.length, 0);
@@ -510,6 +553,11 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const aiModel = this.GetAIModel(entityDocument.AIModelID);
+        // The embedding model's API name (e.g. 'Xenova/gte-small') — local providers REQUIRE it
+        // to load the right ONNX pipeline; cloud providers fall back to their own default if absent.
+        this.embeddingModelAPIName = aiModel.APIName;
+        // Captured for the vector query id when the provider keys by EntityDocumentID (SVS).
+        this.entityDocumentID = entityDocument.ID;
         const vectorDB = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
 
         // Resolve API keys. Empty/null is legitimate for local providers — local
@@ -864,6 +912,11 @@ export class DuplicateRecordDetector extends VectorBase {
         topK: number,
         options: DuplicateDetectionOptions
     ): Promise<BaseResponse> {
+        // Providers that store vectors in MJ keyed by EntityDocumentID (the in-process
+        // SimpleVectorServiceProvider) need the EntityDocumentID as the query id; external/
+        // colocated providers key by the logical index name. See VectorDBBase.QueryKeyIsEntityDocumentID.
+        const queryId = this.vectorDB.QueryKeyIsEntityDocumentID ? this.entityDocumentID : this.indexName;
+
         if (this.vectorDB.SupportsHybridSearch && templateText) {
             return this.vectorDB.HybridQuery({
                 vector,
@@ -873,16 +926,16 @@ export class DuplicateRecordDetector extends VectorBase {
                 FusionMethod: options.FusionMethod ?? 'rrf',
                 includeMetadata: true,
                 includeValues: false,
-            });
+            }, this.CurrentUser);
         }
 
         return this.vectorDB.QueryIndex({
-            id: this.indexName,
+            id: queryId,
             vector,
             topK,
             includeMetadata: true,
             includeValues: false,
-        });
+        }, this.CurrentUser);
     }
 
     /**
@@ -903,7 +956,14 @@ export class DuplicateRecordDetector extends VectorBase {
             }
 
             const duplicate = new PotentialDuplicate();
-            duplicate.LoadFromConcatenatedString(match.metadata.RecordID);
+            this.loadCandidateKey(duplicate, match.metadata.RecordID, sourceKey);
+            // Upstream self-match filter: every record is its own nearest neighbor (cosine ~1.0),
+            // so the source record itself comes back as a top "match". Drop it here, the moment we
+            // parse it, with a normalized key-string compare that does NOT depend on
+            // CompositeKey.Equals downstream — a record must never be flagged as its own duplicate.
+            if (sourceKey && this.isSameRecord(duplicate, sourceKey)) {
+                continue;
+            }
             duplicate.ProbabilityScore = match.score;
             // Capture the full vector metadata for rich UI display
             duplicate.VectorMetadata = { ...match.metadata } as Record<string, string>;
@@ -911,6 +971,44 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         return result;
+    }
+
+    /**
+     * True when two composite keys identify the same record. Compares the normalized
+     * (trimmed, lower-cased) URL-segment representation, so it is robust to UUID-casing
+     * differences across platforms (SQL Server upper- vs PostgreSQL lower-case) and to a
+     * bare-PK vs concatenated key shape.
+     */
+    protected isSameRecord(a: CompositeKey, b: CompositeKey): boolean {
+        return a.Values().trim().toLowerCase() === b.Values().trim().toLowerCase();
+    }
+
+    /**
+     * Populate a candidate's composite key from a vector match's RecordID, tolerant of the two
+     * formats different vector providers emit:
+     *   - **Concatenated** ("ID|<guid>", or "F1|v1||F2|v2" for composite PKs) — e.g. providers that
+     *     stored the full key. Parsed via {@link CompositeKey.LoadFromConcatenatedString}.
+     *   - **Bare primary-key value** ("<guid>") — what the in-process SimpleVectorServiceProvider
+     *     returns, since it stores `MJ: Entity Record Documents.RecordID` as the raw PK value. For
+     *     this form we rebuild the key using the source record's PK field name(s).
+     *
+     * Getting this wrong leaves `KeyValuePairs` empty (the bare value has no field delimiter, so
+     * `LoadFromConcatenatedString` no-ops), which silently breaks self-match filtering, candidate
+     * field-delta loading (the reasoner sees an empty candidate), and `MatchRecordID` persistence.
+     */
+    protected loadCandidateKey(candidate: PotentialDuplicate, recordID: string, sourceKey?: CompositeKey): void {
+        if (recordID.includes(CompositeKey.DefaultValueDelimiter)) {
+            candidate.LoadFromConcatenatedString(recordID);
+            return;
+        }
+        const pkFieldNames = sourceKey?.KeyValuePairs?.map(kv => kv.FieldName) ?? [];
+        if (pkFieldNames.length === 1) {
+            // Bare single-column PK value — pair it with the source's PK field name.
+            candidate.KeyValuePairs = [{ FieldName: pkFieldNames[0], Value: recordID }];
+            return;
+        }
+        // Composite PK delivered without delimiters, or unknown field names — best effort.
+        candidate.LoadFromConcatenatedString(recordID);
     }
 
     /**
@@ -1113,53 +1211,38 @@ export class DuplicateRecordDetector extends VectorBase {
 
     /**
      * Persist match results and update run detail records.
+     *
+     * When LLM reasoning is enabled on the entity document AND a matched set clears the
+     * reasoning gate (top vector score >= ReasoningThreshold), reasoning runs ONCE for the
+     * whole set; the verdict is written onto every match row's LLM* columns and carried on
+     * the result for the auto-merge step. When reasoning is disabled the loop is unchanged.
      */
     protected async PersistMatchResults(
         queryResults: RecordQueryResult[],
         duplicateRunDetails: MJDuplicateRunDetailEntity[],
+        entityInfo: EntityInfo,
         entityDocument: MJEntityDocumentEntity,
         options: DuplicateDetectionOptions,
-        startTime: number
+        startTime: number,
+        contextUser?: UserInfo
     ): Promise<PotentialDuplicateResult[]> {
         const results: PotentialDuplicateResult[] = [];
         let matchesFound = 0;
 
         for (const qr of queryResults) {
-            // Filter out inverse duplicates: if A→B was already persisted, skip B→A
-            const sourceId = qr.SourceKey.Values();
-            qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.filter(dupe => {
-                const matchId = dupe.Values();
-                const pairKey = sourceId < matchId ? `${sourceId}::${matchId}` : `${matchId}::${sourceId}`;
-                if (this._seenPairs.has(pairKey)) {
-                    return false; // Inverse already recorded
-                }
-                this._seenPairs.add(pairKey);
-                return true;
-            });
+            this.suppressInverseDuplicates(qr);
 
             results.push(qr.Duplicates);
             matchesFound += qr.Duplicates.Duplicates.length;
 
-            const sourceKey = qr.SourceKey;
-            const detail = duplicateRunDetails.find(
-                (d) => {
-                    const detailKey = new CompositeKey();
-                    detailKey.LoadFromConcatenatedString(d.RecordID);
-                    return detailKey.Equals(sourceKey);
-                }
-            );
-
-            if (detail) {
-                const matchRecords = await this.CreateMatchRecordsForDetail(detail.ID, qr.Duplicates);
-                qr.Duplicates.DuplicateRunDetailMatchRecordIDs = matchRecords.map((m) => m.ID);
-                detail.MatchStatus = 'Complete';
-                const success = await this.SaveEntity(detail);
-                if (!success) {
-                    LogError(`Failed to update Duplicate Run Detail record ${detail.ID}`);
-                }
-            } else {
-                LogError(`No Duplicate Run Detail found for ${qr.SourceKey.ToString()}`);
+            // Reasoning gate: runs once per set, only when enabled + above threshold.
+            // Returns undefined (and is byte-for-byte inert) when reasoning is disabled.
+            const reasoning = await this.RunReasoningForSet(qr, entityInfo, entityDocument, contextUser);
+            if (reasoning) {
+                this.applyReasoningToResult(qr.Duplicates, reasoning.Output, reasoning.FieldMap);
             }
+
+            await this.persistDetailMatches(qr, duplicateRunDetails, reasoning?.Output);
 
             this.reportProgress(options, 'Matching', queryResults.length, results.length, matchesFound, startTime);
         }
@@ -1168,11 +1251,63 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /**
+     * Drop inverse duplicates in place: if A→B was already persisted this run, skip B→A.
+     */
+    protected suppressInverseDuplicates(qr: RecordQueryResult): void {
+        const sourceId = qr.SourceKey.Values();
+        qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.filter(dupe => {
+            const matchId = dupe.Values();
+            const pairKey = sourceId < matchId ? `${sourceId}::${matchId}` : `${matchId}::${sourceId}`;
+            if (this._seenPairs.has(pairKey)) {
+                return false; // Inverse already recorded
+            }
+            this._seenPairs.add(pairKey);
+            return true;
+        });
+    }
+
+    /**
+     * Locate the matching run-detail row, create the per-candidate match records (carrying
+     * the set's LLM verdict when present), mark the detail complete, and stamp the created
+     * match-record IDs back onto the result (kept in lockstep with Duplicates for auto-merge).
+     */
+    protected async persistDetailMatches(
+        qr: RecordQueryResult,
+        duplicateRunDetails: MJDuplicateRunDetailEntity[],
+        reasoning?: DuplicateReasoningOutput
+    ): Promise<void> {
+        const sourceKey = qr.SourceKey;
+        const detail = duplicateRunDetails.find((d) => {
+            const detailKey = new CompositeKey();
+            detailKey.LoadFromConcatenatedString(d.RecordID);
+            return detailKey.Equals(sourceKey);
+        });
+
+        if (!detail) {
+            LogError(`No Duplicate Run Detail found for ${qr.SourceKey.ToString()}`);
+            return;
+        }
+
+        const matchRecords = await this.CreateMatchRecordsForDetail(detail.ID, qr.Duplicates, reasoning);
+        qr.Duplicates.DuplicateRunDetailMatchRecordIDs = matchRecords.map((m) => m.ID);
+        detail.MatchStatus = 'Complete';
+        const success = await this.SaveEntity(detail);
+        if (!success) {
+            LogError(`Failed to update Duplicate Run Detail record ${detail.ID}`);
+        }
+    }
+
+    /**
      * Create match records for a single run detail, saving in parallel batches.
+     *
+     * When a per-set {@link DuplicateReasoningOutput} is supplied, each match row gets THIS
+     * candidate's own verdict (recommendation / confidence / reasoning), while the set-level
+     * proposed survivor / field map / run id ride along on every row.
      */
     protected async CreateMatchRecordsForDetail(
         duplicateRunDetailID: string,
-        duplicateResult: PotentialDuplicateResult
+        duplicateResult: PotentialDuplicateResult,
+        reasoning?: DuplicateReasoningOutput
     ): Promise<MJDuplicateRunDetailMatchEntity[]> {
         const matchRecords: MJDuplicateRunDetailMatchEntity[] = [];
 
@@ -1191,6 +1326,9 @@ export class DuplicateRecordDetector extends VectorBase {
                     match.ApprovalStatus = 'Pending';
                     match.MergeStatus = 'Pending';
                     match.RecordMetadata = dupe.VectorMetadata ? JSON.stringify(dupe.VectorMetadata) : null;
+                    if (reasoning && reasoning.Success) {
+                        this.applyReasoningToMatch(match, reasoning, dupe.Values());
+                    }
                     const success = await this.SaveEntity(match);
                     return success ? match : null;
                 })
@@ -1201,6 +1339,252 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         return matchRecords;
+    }
+
+    /**
+     * Write the LLM verdict + run id onto a single match row's generated columns. The
+     * recommendation / confidence / reasoning are taken from THIS candidate's own verdict (judged
+     * independently), so a false-positive candidate reads NotDuplicate even when another candidate
+     * in the same set is a confident Merge. Falls back to the set-level summary only when the
+     * reasoner returned no per-candidate verdict for this record. The proposed survivor + field
+     * map stay set-level (they describe the merge of the set's true duplicates).
+     *
+     * @param candidateRecordID this candidate's record id (matches the input candidate RecordID)
+     */
+    protected applyReasoningToMatch(
+        match: MJDuplicateRunDetailMatchEntity,
+        reasoning: DuplicateReasoningOutput,
+        candidateRecordID: string
+    ): void {
+        const verdict = reasoning.CandidateVerdicts.find(v => this.recordIdMatches(v.RecordID, candidateRecordID));
+        match.LLMRecommendation = verdict ? verdict.Recommendation : reasoning.Recommendation;
+        match.LLMConfidence = verdict ? verdict.Confidence : reasoning.Confidence;
+        match.LLMReasoning = (verdict?.Reasoning || reasoning.Reasoning) || null;
+        match.LLMProposedSurvivorRecordID = reasoning.SurvivorRecordID;
+        match.LLMProposedFieldMap = reasoning.FieldChoices.length > 0
+            ? JSON.stringify(reasoning.FieldChoices)
+            : null;
+        match.AIPromptRunID = reasoning.AIPromptRunID ?? null;
+        match.AIAgentRunID = reasoning.AIAgentRunID ?? null;
+    }
+
+    // ─────────────────────────────────────────────
+    // LLM Reasoning (gated, per matched set)
+    // ─────────────────────────────────────────────
+
+    /**
+     * Run LLM reasoning for one source record's matched set, ONCE, only when:
+     *   1. the entity document has EnableLLMReasoning = true, AND
+     *   2. the set is non-empty, AND
+     *   3. the set's top MatchProbability >= the (non-null) ReasoningThreshold.
+     *
+     * Returns `undefined` in every other case — including when reasoning is disabled — so
+     * the surrounding persist/merge path stays byte-for-byte identical to the vector-only
+     * behavior. A failed reasoning call returns an output with Success = false (never throws),
+     * so one bad set never aborts the run.
+     */
+    protected async RunReasoningForSet(
+        qr: RecordQueryResult,
+        entityInfo: EntityInfo,
+        entityDocument: MJEntityDocumentEntity,
+        contextUser?: UserInfo
+    ): Promise<SetReasoning | undefined> {
+        if (!this.IsReasoningGateOpen(qr, entityDocument)) {
+            return undefined;
+        }
+
+        const provider = this.ResolveReasoningProvider(entityDocument);
+        if (!provider) {
+            return undefined;
+        }
+
+        const input = await this.BuildReasoningInput(qr, entityInfo, entityDocument, contextUser);
+        const output = await provider.Reason(input, { Provider: this._provider, ContextUser: contextUser });
+        if (!output.Success) {
+            LogError(`Reasoning failed for set ${qr.SourceKey.ToString()}: ${output.ErrorMessage ?? 'unknown error'}`);
+            return { Output: output, FieldMap: [] };
+        }
+        // Guard the LLM's structured choices against the actual set before persisting/merging:
+        //  - a SurvivorRecordID that isn't one of the set's records is hallucinated → null it out.
+        //  - per-field choices are resolved to literal values (and empty overrides dropped) below.
+        this.validateSurvivor(output, input);
+        // Resolve the reasoner's per-field choices to literal survivor values now, while the
+        // matched-set deltas (loaded for the prompt) are in hand.
+        const fieldMap = this.resolveReasoningFieldMap(output, input.FieldDeltas);
+        return { Output: output, FieldMap: fieldMap };
+    }
+
+    /**
+     * Null out a hallucinated survivor: the reasoner can return a SurvivorRecordID that isn't
+     * any record in the set (a made-up GUID, or a candidate that was filtered out). Persisting
+     * it would carry a phantom id to the UI and auto-merge. Validate against the set's record
+     * ids (source + candidates) and drop it if it doesn't match.
+     */
+    protected validateSurvivor(output: DuplicateReasoningOutput, input: DuplicateReasoningInput): void {
+        if (!output.SurvivorRecordID) {
+            return;
+        }
+        const setRecordIDs = [input.SourceRecord.RecordID, ...input.Candidates.map(c => c.RecordID)];
+        const matches = setRecordIDs.some(id => this.recordIdMatches(id, output.SurvivorRecordID!));
+        if (!matches) {
+            LogError(`Reasoning returned a SurvivorRecordID not in the set ('${output.SurvivorRecordID}') — ignoring.`);
+            output.SurvivorRecordID = null;
+        }
+    }
+
+    /**
+     * Resolve the reasoner's per-field survivor choices ({FieldName, SourceRecordID}) into
+     * literal `{FieldName, Value}` entries for {@link RecordMergeRequest.FieldMap}, by reading
+     * the chosen record's value out of the matched-set deltas. Choices whose field or record
+     * can't be located in the deltas are skipped (the survivor's existing value then stands),
+     * so a partial/garbled choice can never inject an undefined override into the merge.
+     */
+    protected resolveReasoningFieldMap(
+        output: DuplicateReasoningOutput,
+        fieldDeltas: ReasoningFieldDelta[]
+    ): { FieldName: string; Value: unknown }[] {
+        const resolved: { FieldName: string; Value: unknown }[] = [];
+        for (const choice of output.FieldChoices ?? []) {
+            const delta = fieldDeltas.find(d => d.FieldName === choice.FieldName);
+            const cell = delta?.Values.find(v => this.recordIdMatches(v.RecordID, choice.SourceRecordID));
+            // Skip a choice whose resolved value is empty: overriding the survivor's field with an
+            // empty value would BLANK OUT good data. An empty override carries no information, so
+            // the survivor's existing value should stand.
+            if (cell && cell.Value != null && cell.Value.trim().length > 0) {
+                resolved.push({ FieldName: choice.FieldName, Value: cell.Value });
+            }
+        }
+        return resolved;
+    }
+
+    /** Case-insensitive, trimmed equality of two record-id (URL-segment) strings. */
+    protected recordIdMatches(a: string, b: string): boolean {
+        return a.trim().toLowerCase() === b.trim().toLowerCase();
+    }
+
+    /**
+     * Gate predicate: reasoning enabled + non-empty set + top score clears the threshold.
+     * A null ReasoningThreshold means "no gate" — reasoning runs for any non-empty set.
+     */
+    protected IsReasoningGateOpen(qr: RecordQueryResult, entityDocument: MJEntityDocumentEntity): boolean {
+        if (!entityDocument.EnableLLMReasoning) {
+            return false;
+        }
+        const dupes = qr.Duplicates.Duplicates;
+        if (dupes.length === 0) {
+            return false;
+        }
+        const threshold = entityDocument.ReasoningThreshold;
+        if (threshold == null) {
+            return true;
+        }
+        const topScore = Math.max(...dupes.map(d => d.ProbabilityScore));
+        return topScore >= threshold;
+    }
+
+    /**
+     * Resolve the reasoning provider for this entity document's ReasoningMode via the
+     * ClassFactory. Returns null when ClassFactory falls back to the abstract base (no
+     * implementation registered for the mode) so the caller can skip gracefully.
+     */
+    protected ResolveReasoningProvider(entityDocument: MJEntityDocumentEntity): DuplicateReasoningProvider | null {
+        const provider = MJGlobal.Instance.ClassFactory.CreateInstance<DuplicateReasoningProvider>(
+            DuplicateReasoningProvider, entityDocument.ReasoningMode
+        );
+        // A bare abstract-base instance means no concrete provider was registered for the
+        // mode (CreateInstance falls back to the base class). Its Reason() is abstract, so
+        // treat it as "no provider" rather than calling and throwing.
+        if (!provider || provider.constructor === DuplicateReasoningProvider) {
+            LogError(`No DuplicateReasoningProvider registered for ReasoningMode '${entityDocument.ReasoningMode}'`);
+            return null;
+        }
+        return provider;
+    }
+
+    /**
+     * Assemble the reasoning input for a matched set: source description, candidate
+     * descriptions, and the differing-field deltas loaded for the whole set.
+     */
+    protected async BuildReasoningInput(
+        qr: RecordQueryResult,
+        entityInfo: EntityInfo,
+        entityDocument: MJEntityDocumentEntity,
+        contextUser?: UserInfo
+    ): Promise<DuplicateReasoningInput> {
+        // Load the field deltas first — the same pass yields a record-id → name label map, which
+        // gives BOTH the source and the candidates real names (loaded from the records) instead of
+        // raw GUIDs. The vector-metadata name is a weaker fallback; the GUID is the last resort.
+        const deltaBuilder = new MatchedSetDeltaBuilder(this.RunView);
+        const allKeys = [qr.SourceKey, ...qr.Duplicates.Duplicates];
+        const { FieldDeltas: fieldDeltas, Labels: labels } = await deltaBuilder.Build(entityInfo, allKeys, contextUser);
+
+        const candidates: ReasoningCandidate[] = qr.Duplicates.Duplicates.map(d => ({
+            RecordID: d.Values(),
+            Label: this.resolveRecordLabel(labels, d.Values(), this.reasoningLabel(d.VectorMetadata)),
+            VectorScore: d.ProbabilityScore,
+            Provenance: 'Local',
+            DependentCount: entityInfo.RelatedEntities.length,
+        }));
+
+        const sourceRecordID = qr.SourceKey.Values();
+        return {
+            EntityName: entityInfo.Name,
+            EntityDescription: entityInfo.Description ?? null,
+            EntityDocument: entityDocument,
+            SourceRecord: {
+                RecordID: sourceRecordID,
+                Label: this.resolveRecordLabel(labels, sourceRecordID, null),
+                Provenance: 'Local',
+                DependentCount: entityInfo.RelatedEntities.length,
+            },
+            Candidates: candidates,
+            FieldDeltas: fieldDeltas,
+        };
+    }
+
+    /**
+     * Resolve a record's display label: prefer the name loaded from the record (via the delta
+     * builder), then a secondary fallback (e.g. a candidate's vector-metadata name), then the
+     * raw record-id key as a last resort. Guards against the loaded label itself being the
+     * record key (the engine's own fallback) so we still try the secondary source.
+     */
+    protected resolveRecordLabel(labels: Map<string, string>, recordID: string, fallback: string | null): string {
+        const loaded = labels.get(recordID);
+        if (loaded && loaded.trim().length > 0 && loaded !== recordID) {
+            return loaded;
+        }
+        if (fallback && fallback.trim().length > 0) {
+            return fallback;
+        }
+        return recordID;
+    }
+
+    /** Extract a display label from a candidate's vector metadata snapshot, if present. */
+    protected reasoningLabel(metadata?: Record<string, string>): string | null {
+        if (metadata && typeof metadata['Name'] === 'string' && metadata['Name'].trim().length > 0) {
+            return metadata['Name'];
+        }
+        return null;
+    }
+
+    /**
+     * Carry the set-level verdict + resolved survivor field map onto the result so the
+     * auto-merge step (AutoMergeAboveAbsolute) can consult the recommendation and apply the
+     * literal {FieldName, Value} overrides via {@link RecordMergeRequest.FieldMap}. The UI
+     * still reads the persisted per-row {@link MJDuplicateRunDetailMatchEntity.LLMProposedFieldMap}
+     * (the raw choices) and lets the reviewer override before a manual merge.
+     */
+    protected applyReasoningToResult(
+        result: PotentialDuplicateResult,
+        output: DuplicateReasoningOutput,
+        fieldMap: { FieldName: string; Value: unknown }[]
+    ): void {
+        if (!output.Success) {
+            return;
+        }
+        result.ReasoningRecommendation = output.Recommendation;
+        result.ReasoningFieldMap = fieldMap.length > 0 ? fieldMap : undefined;
+        result.ReasoningText = output.Reasoning?.trim() ? output.Reasoning : undefined;
     }
 
     // ─────────────────────────────────────────────
@@ -1228,28 +1612,70 @@ export class DuplicateRecordDetector extends VectorBase {
         const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
         for (const dupeResult of response.PotentialDuplicateResult) {
             for (const [index, dupe] of dupeResult.Duplicates.entries()) {
-                if (dupe.ProbabilityScore < absoluteThreshold) {
+                if (!this.IsAutoMergeEligible(dupe, dupeResult, entityDocument, absoluteThreshold)) {
                     continue;
                 }
-
-                const mergeParams = new RecordMergeRequest();
-                mergeParams.EntityName = entityDocument.Entity;
-                mergeParams.SurvivingRecordCompositeKey = dupeResult.RecordCompositeKey;
-                mergeParams.RecordsToMerge = [dupe];
-
-                // Guard each merge so a single failure (e.g. a permission or FK issue on
-                // one pair) is logged and skipped rather than aborting the entire run.
-                try {
-                    const mergeResult = await this.Metadata.MergeRecords(mergeParams, this.CurrentUser);
-                    if (mergeResult.Success) {
-                        await this.updateMatchRecordAfterMerge(dupeResult.DuplicateRunDetailMatchRecordIDs[index]);
-                    } else {
-                        LogError(`Failed to merge ${dupeResult.RecordCompositeKey.ToString()} and ${dupe.ToString()}: ${mergeResult.OverallStatus ?? 'unknown error'}`);
-                    }
-                } catch (err) {
-                    LogError(`Auto-merge threw for ${dupeResult.RecordCompositeKey.ToString()} and ${dupe.ToString()}`, undefined, err);
-                }
+                await this.executeAutoMerge(dupe, dupeResult, entityDocument, index);
             }
+        }
+    }
+
+    /**
+     * Decide whether a single candidate is eligible for automatic merge.
+     *
+     * Back-compat path (EnableLLMReasoning = false): eligible iff the vector score meets the
+     * absolute threshold — byte-for-byte the original behavior. `AutomationLevel` is ignored.
+     *
+     * Reasoning path (EnableLLMReasoning = true): `AutomationLevel` governs.
+     *   - ReviewAll / LLMGated → never auto-merge (everything goes to human review).
+     *   - AutoMergeAboveAbsolute → at/above the absolute threshold AND the set's LLM
+     *     recommendation is 'Merge'.
+     */
+    protected IsAutoMergeEligible(
+        dupe: PotentialDuplicate,
+        dupeResult: PotentialDuplicateResult,
+        entityDocument: MJEntityDocumentEntity,
+        absoluteThreshold: number
+    ): boolean {
+        const aboveAbsolute = dupe.ProbabilityScore >= absoluteThreshold;
+        if (!entityDocument.EnableLLMReasoning) {
+            return aboveAbsolute;
+        }
+        if (entityDocument.AutomationLevel !== 'AutoMergeAboveAbsolute') {
+            return false;
+        }
+        return aboveAbsolute && dupeResult.ReasoningRecommendation === 'Merge';
+    }
+
+    /**
+     * Execute one guarded auto-merge for an eligible candidate, applying the LLM's resolved
+     * field map when present, and stamp the match record on success.
+     */
+    protected async executeAutoMerge(
+        dupe: PotentialDuplicate,
+        dupeResult: PotentialDuplicateResult,
+        entityDocument: MJEntityDocumentEntity,
+        index: number
+    ): Promise<void> {
+        const mergeParams = new RecordMergeRequest();
+        mergeParams.EntityName = entityDocument.Entity;
+        mergeParams.SurvivingRecordCompositeKey = dupeResult.RecordCompositeKey;
+        mergeParams.RecordsToMerge = [dupe];
+        if (dupeResult.ReasoningFieldMap && dupeResult.ReasoningFieldMap.length > 0) {
+            mergeParams.FieldMap = dupeResult.ReasoningFieldMap;
+        }
+
+        // Guard each merge so a single failure (e.g. a permission or FK issue on
+        // one pair) is logged and skipped rather than aborting the entire run.
+        try {
+            const mergeResult = await this.Metadata.MergeRecords(mergeParams, this.CurrentUser);
+            if (mergeResult.Success) {
+                await this.updateMatchRecordAfterMerge(dupeResult.DuplicateRunDetailMatchRecordIDs[index]);
+            } else {
+                LogError(`Failed to merge ${dupeResult.RecordCompositeKey.ToString()} and ${dupe.ToString()}: ${mergeResult.OverallStatus ?? 'unknown error'}`);
+            }
+        } catch (err) {
+            LogError(`Auto-merge threw for ${dupeResult.RecordCompositeKey.ToString()} and ${dupe.ToString()}`, undefined, err);
         }
     }
 

@@ -50,12 +50,18 @@ export class KeyedSerialTaskQueue {
      * @param task The work to run.
      * @param opts.label Diagnostic label passed to `onError`.
      * @param opts.isOk Treats a resolved value as a failure when it returns false (e.g. `Save()` → `false`).
+     * @param opts.after Optional dependency key — the task waits for this key's latest task to settle
+     *   before running, in addition to waiting for its own key's prior tasks. Use this to honour
+     *   cross-instance ordering constraints like self-referencing foreign keys (e.g. a child step's
+     *   INSERT must land after its parent step's INSERT).
      */
-    public enqueue<T>(key: object, task: () => Promise<T>, opts?: { label?: string; isOk?: (v: T) => boolean }): Promise<T | undefined> {
+    public enqueue<T>(key: object, task: () => Promise<T>, opts?: { label?: string; isOk?: (v: T) => boolean; after?: object }): Promise<T | undefined> {
         const prior = this.tails.get(key) ?? Promise.resolve();
+        const dependency = opts?.after ? (this.tails.get(opts.after) ?? Promise.resolve()) : Promise.resolve();
 
-        // Run the task exactly once, after `prior` settles, collapsing to a never-rejecting outcome.
-        const settled = prior.then(() => task(), () => task()).then(
+        // Run the task exactly once, after `prior` AND `dependency` settle, collapsing to a never-rejecting outcome.
+        const gate = Promise.all([prior, dependency]);
+        const settled = gate.then(() => task(), () => task()).then(
             (value) => ({ value: value as T | undefined, ok: opts?.isOk ? !!opts.isOk(value) : true, rejected: false, err: undefined as unknown }),
             (err: unknown) => ({ value: undefined as T | undefined, ok: false, rejected: true, err }),
         );

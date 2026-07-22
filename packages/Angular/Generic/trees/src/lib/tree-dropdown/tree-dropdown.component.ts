@@ -93,6 +93,9 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
     /** What types can be selected: 'branch', 'leaf', or 'both' */
     @Input() SelectableTypes: TreeSelectableTypes = 'both';
 
+    /** Initial expansion for the inner tree when it first loads (see TreeComponent.DefaultExpansion). */
+    @Input() DefaultExpansion: 'first-level' | 'all' | 'none' = 'first-level';
+
     // ========================================
     // Value Inputs
     // ========================================

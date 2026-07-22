@@ -1,85 +1,32 @@
 /* Aggregate Panel Component Styles */
 
+/* Layout/positioning only — visual chrome (border, radius, shadow, header,
+   chevron, and .collapsed body-hiding) is now owned by <mj-accordion-panel>. */
 .aggregate-panel {
   display: flex;
   flex-direction: column;
-  background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 /* Position variants */
 .position-right {
   height: 100%;
-  border-left-width: 1px;
-  border-radius: 0 8px 8px 0;
 }
 
 .position-bottom {
   width: 100%;
-  border-top-width: 1px;
-  border-radius: 0 0 8px 8px;
 }
 
-/* Collapsed state */
-.collapsed .panel-content {
-  display: none;
-}
-
-.collapsed.position-right {
-  width: auto !important;
-  min-width: auto !important;
-}
-
-/* Panel Header */
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: var(--mj-bg-surface-card);
-  border-bottom: 1px solid var(--mj-border-default);
-  cursor: pointer;
-  user-select: none;
-}
-
-.panel-header:hover {
-  background: var(--mj-bg-surface-sunken);
-}
-
+/* Title (projected into the accordion title slot) */
 .panel-title {
   font-weight: 600;
   font-size: 14px;
   color: var(--mj-text-primary);
 }
 
-.panel-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
+/* Loading indicator (projected into the accordion actions slot) */
 .loading-indicator {
   color: var(--mj-brand-primary);
   font-size: 14px;
-}
-
-.collapse-toggle {
-  background: none;
-  border: none;
-  padding: 4px 8px;
-  cursor: pointer;
-  color: var(--mj-text-secondary);
-  font-size: 12px;
-  border-radius: 4px;
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.collapse-toggle:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--mj-text-primary);
 }
 
 /* Panel Content */

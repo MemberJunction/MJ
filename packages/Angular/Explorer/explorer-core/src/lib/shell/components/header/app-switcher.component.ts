@@ -96,11 +96,14 @@ export class AppSwitcherComponent {
   }
 
   /**
-   * Handle when config is saved - reload the app list
+   * Handle when config is saved — close the dialog.
+   * The app list refreshes reactively: each UserApplication save fires a BaseEntity
+   * event, UserInfoEngine's debounced refresh (short DebounceTime on the
+   * 'MJ: User Applications' config) emits DataChange$, and
+   * ApplicationManager.syncFromEngine() pushes the new list to applications$,
+   * which the `apps` getter reads. No explicit reload needed here.
    */
   onConfigSaved(): void {
-    // The ApplicationManager will be refreshed by the dialog
-    // Force a re-render by triggering change detection
     this.showConfigDialog = false;
   }
 }

@@ -199,25 +199,9 @@
     min-width: 80px;
 }
 
-/* Messages */
-.message {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
+/* Messages — positioning only; box chrome owned by <mj-alert> */
+.slideout-msg-gap {
     margin: 12px 16px;
-    border-radius: 8px;
-    font-size: 14px;
-}
-
-.message.success {
-    background: var(--mj-status-success-bg);
-    color: var(--mj-status-success-text);
-}
-
-.message.error {
-    background: var(--mj-status-error-bg);
-    color: var(--mj-status-error);
 }
 
 /* Legacy tab styles removed - now using slideout-tabs */
@@ -525,32 +509,6 @@
     cursor: not-allowed;
 }
 
-/* Revoked Notice */
-.revoked-notice {
-    display: flex;
-    gap: 12px;
-    padding: 20px;
-    background: var(--mj-bg-surface-sunken);
-    border-radius: 12px;
-}
-
-.revoked-notice i {
-    font-size: 24px;
-    color: var(--mj-text-secondary);
-}
-
-.revoked-notice strong {
-    display: block;
-    color: var(--mj-text-primary);
-    margin-bottom: 4px;
-}
-
-.revoked-notice p {
-    margin: 0;
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-}
-
 /* Scopes Tab */
 .scopes-tab {
     padding: 16px;
@@ -843,35 +801,3 @@
     min-width: 120px;
 }
 
-/* No Scopes Warning */
-.no-scopes-warning {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 16px;
-    background: var(--mj-status-error-bg);
-    border: 1px solid var(--mj-status-error-border);
-    border-radius: 10px;
-    margin-bottom: 16px;
-    font-size: 13px;
-    color: var(--mj-status-error-text);
-}
-
-.no-scopes-warning i {
-    font-size: 20px;
-    color: var(--mj-status-error);
-    margin-top: 2px;
-    flex-shrink: 0;
-}
-
-.no-scopes-warning strong {
-    display: block;
-    color: var(--mj-status-error-text);
-    font-size: 14px;
-    margin-bottom: 4px;
-}
-
-.no-scopes-warning p {
-    margin: 0;
-    line-height: 1.5;
-}

@@ -5,6 +5,7 @@ import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-reac
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import { isFormRole, getDeclaredFormEntityName } from '@memberjunction/interactive-component-types/forms';
 import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, RunView } from '@memberjunction/core';
+import { InteractiveFormComponent } from '@memberjunction/ng-base-forms';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
 import { evaluateComponentPermissions, PermissionEvaluationResult } from './component-permission-evaluation';
 
@@ -25,6 +26,7 @@ import { evaluateComponentPermissions, PermissionEvaluationResult } from './comp
 @RegisterClass(BaseArtifactViewerPluginComponent, 'ComponentArtifactViewerPlugin')
 export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit, OnChanges {
   @ViewChild('reactComponent') reactComponent?: MJReactComponent;
+  @ViewChild('interactiveForm') interactiveForm?: InteractiveFormComponent;
   @Output() tabsChanged = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
@@ -546,12 +548,83 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     }
   }
 
-  /** Bubble Apply intent up to the host (Form Builder dashboard / Sage chat). */
-  public onApplyClicked(): void {
-    if (!this.component || !this.formEntityInfo) return;
+  /**
+   * Bubble Apply intent up to the host (Form Builder dashboard / Sage chat).
+   *
+   * Resolves the full ComponentSpec (with code) from multiple sources:
+   *   1. resolvedComponentSpec — live React bridge or cached copy (best for non-form artifacts)
+   *   2. Re-parse artifact version Content — the agent stores the full spec including code
+   *   3. DB fallback — fetch from MJ: Components by name
+   *
+   * Source #2 covers the common form-artifact case where the React component lives inside
+   * <mj-interactive-form> and resolvedComponentSpec falls back to the stripped local spec.
+   */
+  public async onApplyClicked(): Promise<void> {
+    if (!this.formEntityInfo) return;
+
+    const spec = await this.resolveSpecWithCode();
+    if (!spec) return;
+
     this.applyFormRequested.emit({
-      spec: this.component,
+      spec,
       entityName: this.formEntityInfo.Name,
     });
+  }
+
+  /**
+   * Resolve a ComponentSpec that includes code, trying multiple sources in order.
+   */
+  private async resolveSpecWithCode(): Promise<ComponentSpec | null> {
+    // 1. Prefer the live React bridge's resolved spec (non-form path).
+    const resolved = this.resolvedComponentSpec;
+    if (resolved?.code) return resolved;
+
+    // 2. For form artifacts, the React component lives inside <mj-interactive-form>.
+    //    Reach into it to get the resolved spec from the component registry.
+    const formReactSpec = this.interactiveForm?.reactComponent?.resolvedComponentSpec;
+    if (formReactSpec?.code) return formReactSpec;
+
+    // 3. Re-parse the artifact version's Content directly — the agent stores the
+    //    full spec including code. This handles the case where loadComponentSpec()
+    //    parsed early (before Content was fully populated) and the in-memory
+    //    `this.component` ended up without code.
+    if (this.artifactVersion?.Content) {
+      const freshParse = SafeJSONParse(this.artifactVersion.Content) as ComponentSpec | null;
+      if (freshParse?.code) return freshParse;
+    }
+
+    // 4. DB fallback — fetch from MJ: Components by name.
+    const name = resolved?.name ?? this.component?.name;
+    if (name) {
+      const dbSpec = await this.fetchFullSpecByName(name);
+      if (dbSpec?.code) return dbSpec;
+    }
+
+    LogError('ComponentArtifactViewer: could not resolve spec with code for Apply');
+    return null;
+  }
+
+  /**
+   * Fetch the full ComponentSpec (including code) from the MJ: Components table
+   * by component name. Returns null if not found or on error.
+   */
+  private async fetchFullSpecByName(name: string): Promise<ComponentSpec | null> {
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<{ Specification: string }>({
+        EntityName: 'MJ: Components',
+        ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
+        Fields: ['Specification'],
+        OrderBy: 'VersionSequence DESC',
+        MaxRows: 1,
+        ResultType: 'simple',
+      });
+      if (result.Success && result.Results?.length > 0 && result.Results[0].Specification) {
+        return JSON.parse(result.Results[0].Specification) as ComponentSpec;
+      }
+    } catch (err) {
+      LogError(`ComponentArtifactViewer: failed to fetch full spec for '${name}': ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return null;
   }
 }

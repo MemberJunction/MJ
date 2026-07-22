@@ -7,6 +7,8 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
+import { buildListBrowseAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 interface ListViewModel {
   list: MJListEntity;
   itemCount: number;
@@ -100,14 +102,14 @@ interface CategoryNode {
             <button
               class="view-toggle"
               [class.active]="viewMode === 'grid'"
-              (click)="viewMode = 'grid'"
+              (click)="setViewMode('grid')"
               title="Grid view">
               <i class="fa-solid fa-grip"></i>
             </button>
             <button
               class="view-toggle"
               [class.active]="viewMode === 'list'"
-              (click)="viewMode = 'list'"
+              (click)="setViewMode('list')"
               title="List view">
               <i class="fa-solid fa-list"></i>
             </button>
@@ -1133,6 +1135,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   async ngOnInit() {
     super.ngOnInit();
     await this.loadData();
+    this.registerAgentTools();
+    this.publishAgentContext();
     this.NotifyLoadComplete();
   }
 
@@ -1140,6 +1144,94 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  // ================================================================
+  // AI Agent Context & Client Tools
+  //
+  // SAFETY BOUNDARY: SAFE (open / search / view) operations plus ONE
+  // bounded-mutation tool (CreateList) that opens the dialog-validated
+  // create flow. INTENTIONALLY EXCLUDED — must NOT be wired in:
+  //   - EditList   (editList)             — mutates an existing record
+  //   - DeleteList (confirmDeleteList)    — destructive
+  // ================================================================
+
+  /** Report the My-Lists surface's salient state to the AI agent. */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, buildListBrowseAgentContext({
+      SearchTerm: this.searchTerm,
+      ViewMode: this.viewMode,
+      AllListCount: this.allLists.length,
+      FilteredListCount: this.filteredLists.length,
+      // Deep context: the NAMES of the user's currently-visible lists (bounded),
+      // so the agent can open them by name rather than an opaque GUID.
+      VisibleListNames: this.filteredLists.map(i => i.list.Name),
+    }));
+  }
+
+  /**
+   * Resolve an agent-supplied reference (a list ID or NAME, exact or partial) to
+   * one of the user's loaded lists via the pure {@link resolveNamedRecord} helper.
+   */
+  private resolveMyListItem(input: string): ListViewModel | null {
+    const match = resolveNamedRecord(input, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })));
+    if (!match) {
+      return null;
+    }
+    return this.allLists.find(i => UUIDsEqual(i.list.ID, match.ID)) ?? null;
+  }
+
+  /** Register the My-Lists surface's agent-actionable tools. */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'OpenList',
+        Description: 'Open one of my lists in a new tab by its ID or name. Pass the list name the user says (see VisibleListNames) — the tool resolves an exact ID, an exact name, or a partial name match.',
+        ParameterSchema: { type: 'object', properties: { list: { type: 'string', description: 'The list ID or name to open' }, listId: { type: 'string', description: 'Deprecated alias for "list".' } } },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['list'] ?? params['listId'], 'list');
+          if (!check.ok) return check.result;
+          const item = this.resolveMyListItem(check.value);
+          if (!item) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })), 'list') };
+          this.openList(item.list);
+          return { Success: true, Data: { listName: item.list.Name } };
+        },
+      },
+      {
+        Name: 'SearchLists',
+        Description: 'Set the search term that filters my lists.',
+        ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['searchTerm'], 'searchTerm');
+          if (!check.ok) return check.result;
+          this.searchTerm = check.value;
+          this.onSearchChange(check.value);
+          this.publishAgentContext();
+          return { Success: true, Data: { resultCount: this.filteredLists.length } };
+        },
+      },
+      {
+        Name: 'SetViewMode',
+        Description: 'Set the view mode: "grid" or "list".',
+        ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['grid', 'list'] } }, required: ['mode'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateEnumParam(params['mode'], ['grid', 'list'] as const, 'mode');
+          if (!check.ok) return check.result;
+          this.setViewMode(check.value);
+          return { Success: true };
+        },
+      },
+      {
+        // BOUNDED MUTATION: opens the dialog-validated create flow only.
+        Name: 'CreateList',
+        Description: 'Open the "Create New List" dialog. Nothing is saved until the user confirms the name and entity.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.createNewList();
+          return { Success: true };
+        },
+      },
+    ]);
   }
 
   async loadData() {
@@ -1155,8 +1247,10 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         return;
       }
 
-      // Load lists, categories, and item counts in parallel
-      const [listsResult, categoriesResult, detailsResult] = await rv.RunViews([
+      // Load lists and categories in parallel; item counts follow as a
+      // batched set of count_only queries (index-seek COUNTs server-side)
+      // instead of transferring every membership row to the client.
+      const [listsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Lists',
           ExtraFilter: `UserID = '${userId}'`,
@@ -1167,11 +1261,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
           EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'MJ: List Details',
-          ExtraFilter: `ListID IN (SELECT ID FROM __mj.List WHERE UserID = '${userId}')`,
-          ResultType: 'simple'
         }
       ]);
 
@@ -1182,7 +1271,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
       const lists = listsResult.Results as MJListEntity[];
       this.categories = categoriesResult.Results as MJListCategoryEntity[];
-      const details = detailsResult.Results as Array<{ ListID: string }>;
 
       // Build category map
       this.categoryMap.clear();
@@ -1190,11 +1278,17 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         this.categoryMap.set(cat.ID, cat);
       }
 
-      // Count items per list
+      // Count items per list — one batched round trip
       const itemCounts = new Map<string, number>();
-      for (const detail of details) {
-        const count = itemCounts.get(detail.ListID) || 0;
-        itemCounts.set(detail.ListID, count + 1);
+      if (lists.length > 0) {
+        const countResults = await rv.RunViews(lists.map(list => ({
+          EntityName: 'MJ: List Details',
+          ExtraFilter: `ListID = '${list.ID}'`,
+          ResultType: 'count_only' as const
+        })));
+        countResults.forEach((res, idx) => {
+          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+        });
       }
 
       // Build entity info
@@ -1302,6 +1396,13 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   onSearchChange(_term: string) {
     this.applyFilter();
     this.buildCategoryTree();
+    this.publishAgentContext();
+  }
+
+  /** Set the grid/list view mode and refresh agent context. */
+  setViewMode(mode: 'grid' | 'list') {
+    this.viewMode = mode;
+    this.publishAgentContext();
   }
 
   clearSearch() {

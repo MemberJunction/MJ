@@ -153,7 +153,10 @@ export class ActiveTasksService {
   updateStatus(id: string, status: string): void {
     const current = this._tasks$.value;
     const task = current.get(id);
-    if (task) {
+    // Same-value updates are no-ops so high-frequency callers (e.g. the streamed
+    // final-response render path, which fires per content delta) don't re-emit
+    // the whole task map to every subscriber on each token.
+    if (task && task.status !== status) {
       task.status = status;
       this._tasks$.next(new Map(current));
     }

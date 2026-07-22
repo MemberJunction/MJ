@@ -27,11 +27,18 @@ import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJCont
 import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
-import { MJLeftNavItem, MJLeftNavSection, TabConfig } from '@memberjunction/ng-ui-components';
+import { MJLeftNavItem, MJLeftNavSection, TabConfig, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { WordCloudItem } from '@memberjunction/ng-word-cloud';
+import {
+    buildTagsAgentContext,
+    isValidTagsTab,
+    resolveTaxNode,
+    TaxNodeCandidate,
+} from './tags-agent-context';
+import { validateStringParam } from '../../../shared/agent-tool-validation';
 
 // ── Tab type ──
 
@@ -392,6 +399,7 @@ type FormMode = 'none' | 'add-source' | 'edit-source' | 'add-type' | 'edit-type'
 export class TagsResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     protected override destroy$ = new Subject<void>();
     private cdr = inject(ChangeDetectorRef);
+    private confirmService = inject(MJConfirmService);
     private activityService = inject(ActivityService);
     protected override navigationService = inject(NavigationService);
 
@@ -1130,34 +1138,67 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         this.destroy$.complete();
     }
 
-    /** Report current classify dashboard state to the agent */
+    /** Report current Tags dashboard state to the agent (deep, bounded). */
     private emitAgentContext(): void {
-        this.navigationService.SetAgentContext(this, {
+        const selected = this.TaxSelectedNode;
+        this.navigationService.SetAgentContext(this, buildTagsAgentContext({
             ActiveTab: this.ActiveTab,
             SourceCount: this.contentSourcesRaw.length,
             ContentItemCount: this.contentItemsRaw.length,
-            TagCount: this.contentTagsRaw.length,
-            PipelineStatus: this.IsRunning ? 'running' : 'idle',
+            ContentTagCount: this.contentTagsRaw.length,
+            TagLibraryCount: this.TagRows.length,
+            FilteredTagCount: this.FilteredTagRows.length,
+            TagSearchQuery: this.TagSearchQuery,
+            TaxonomyNodeCount: this.TaxFlatNodes.length,
+            SelectedTaxNodeID: selected?.ID ?? null,
+            SelectedTaxNodeName: selected ? (selected.DisplayName || selected.Name) : null,
+            SuggestionCount: this.SuggestionRows.length,
+            IsRunning: this.IsRunning,
             PipelineProgress: this.RunProgress,
             ShowPipelineConfig: this.ShowPipelineConfig,
-        });
+            TagLibraryNames: this.TagRows.map(t => t.Tag),
+            TaxonomyNodeNames: this.TaxFlatNodes.map(n => n.DisplayName || n.Name),
+        }));
     }
 
-    /** Register client tools the agent can invoke on the Classify dashboard */
+    /** Build the resolver candidate list from the flattened taxonomy tree. */
+    private getTaxNodeCandidates(): TaxNodeCandidate[] {
+        return this.TaxFlatNodes.map(n => ({ ID: n.ID, Name: n.Name, DisplayName: n.DisplayName }));
+    }
+
+    /**
+     * 🚨 SAFETY BOUNDARY 🚨
+     * Register client tools the agent can invoke on the Tags dashboard. Exposed:
+     *  - SwitchClassifyTab (read-only tab navigation; tolerant tab validation)
+     *  - SearchClassifyTags (filters the tag library — read-only)
+     *  - RunClassificationPipeline (the documented "run autotagging" happy path — parallels
+     *    RunDuplicateDetection)
+     *  - SelectTaxonomyTag (id/name resolution → selects a taxonomy node, read-only)
+     *  - OpenTagRecord (id/name resolution → opens the tag entity record for VIEWING)
+     *  - RefreshTags / RefreshTaxonomy (read-only reloads)
+     *
+     * INTENTIONALLY NOT EXPOSED (gated): create / rename / edit / delete / move / merge tag,
+     * promote-to-global, synonym add/remove, scope edits, and suggestion approve/merge/reject —
+     * all destructive taxonomy mutations the user owns via the governance UI.
+     */
     private registerAgentTools(): void {
         this.navigationService.SetAgentClientTools(this, [
             {
                 Name: 'SwitchClassifyTab',
-                Description: 'Switch to a specific tab in the Classify dashboard',
+                Description: 'Switch to a specific tab in the Tags dashboard (tags, taxonomy, suggestions, health, etc.)',
                 ParameterSchema: {
                     type: 'object',
                     properties: {
-                        tab: { type: 'string', enum: ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'history'], description: 'The tab to switch to' },
+                        tab: { type: 'string', enum: ['pipeline', 'sources', 'types', 'tags', 'taxonomy', 'history', 'suggestions', 'health'], description: 'The tab to switch to' },
                     },
                     required: ['tab'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    await this.SwitchTab(params['tab'] as TabName);
+                    const tab = params['tab'];
+                    if (!isValidTagsTab(tab)) {
+                        return { Success: false, ErrorMessage: `Invalid tab "${String(tab)}". Expected one of: pipeline, sources, types, tags, taxonomy, history, suggestions, health.` };
+                    }
+                    await this.SwitchTab(tab as TabName);
                     return { Success: true, Data: { ActiveTab: this.ActiveTab } };
                 },
             },
@@ -1187,9 +1228,76 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                     required: ['query'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    this.TagSearchQuery = String(params['query'] ?? '');
+                    const v = validateStringParam(params['query'], 'query');
+                    if (!v.ok) return v.result;
+                    this.TagSearchQuery = v.value;
                     this.FilterTags();
                     return { Success: true, Data: { MatchCount: this.FilteredTagRows.length } };
+                },
+            },
+            {
+                Name: 'SelectTaxonomyTag',
+                Description: 'Select a tag in the taxonomy tree by its ID or name (switches to the Taxonomy tab if needed).',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { tag: { type: 'string', description: 'Tag ID or name' } },
+                    required: ['tag'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['tag'], 'tag');
+                    if (!v.ok) return v.result;
+                    if (this.ActiveTab !== 'taxonomy') {
+                        await this.SwitchTab('taxonomy');
+                        this.cdr.detectChanges();
+                    }
+                    const resolved = resolveTaxNode(v.value, this.getTaxNodeCandidates());
+                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
+                    const node = this.TaxFlatNodes.find(n => UUIDsEqual(n.ID, resolved.value.ID));
+                    if (!node) return { Success: false, ErrorMessage: 'Resolved tag is no longer loaded.' };
+                    this.SelectTaxNode(node);
+                    this.emitAgentContext();
+                    return { Success: true, Data: { SelectedTaxNodeID: node.ID, SelectedTaxNodeName: node.DisplayName || node.Name } };
+                },
+            },
+            {
+                Name: 'OpenTagRecord',
+                Description: 'Open the entity record for a tag (for viewing) by its ID or name.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { tag: { type: 'string', description: 'Tag ID or name' } },
+                    required: ['tag'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['tag'], 'tag');
+                    if (!v.ok) return v.result;
+                    const resolved = resolveTaxNode(v.value, this.getTaxNodeCandidates());
+                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
+                    this.navigationService.OpenEntityRecord(
+                        'MJ: Tags',
+                        CompositeKey.FromID(resolved.value.ID),
+                    );
+                    return { Success: true, Data: { TagID: resolved.value.ID, TagName: resolved.value.DisplayName || resolved.value.Name } };
+                },
+            },
+            {
+                Name: 'RefreshTags',
+                Description: 'Reload the tag library and pipeline base data from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.LoadPipelineData();
+                    await this.loadTagLibraryData();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { TagLibraryCount: this.TagRows.length } };
+                },
+            },
+            {
+                Name: 'RefreshTaxonomy',
+                Description: 'Reload the taxonomy tree from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.RefreshTaxonomyData();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { TaxonomyNodeCount: this.TaxFlatNodes.length } };
                 },
             },
         ]);
@@ -2063,7 +2171,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     }
 
     public async DeleteSource(card: SourceCard): Promise<void> {
-        if (!confirm(`Delete source "${card.Name}"? This cannot be undone.`)) return;
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Source', message: `Delete source "${card.Name}"?`, detail: 'This action cannot be undone.' }))) return;
 
         try {
             const md = this.ProviderToUse;
@@ -2183,7 +2291,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
      */
     public async RemoveSchedule(card: SourceCard): Promise<void> {
         if (!card.ScheduledActionID) return;
-        if (!confirm(`Remove the schedule "${card.ScheduleDescription ?? 'schedule'}" from "${card.Name}"?`)) return;
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Schedule', message: `Remove the schedule "${card.ScheduleDescription ?? 'schedule'}" from "${card.Name}"?`, confirmText: 'Remove' }))) return;
 
         try {
             await this.linkScheduleToSource(card.ID, null);
@@ -3865,7 +3973,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     public async RemoveSynonym(row: SynonymRow): Promise<void> {
         if (!this.TaxSelectedNode) return;
-        if (!confirm(`Remove synonym "${row.Synonym}"?`)) return;
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Synonym', message: `Remove synonym "${row.Synonym}"?`, confirmText: 'Remove' }))) return;
         try {
             const md = this.ProviderToUse;
             const syn = await md.GetEntityObject<MJTagSynonymEntity>('MJ: Tag Synonyms', md.CurrentUser);
@@ -3902,12 +4010,12 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         // will be folded in on the next iteration of this dashboard.
         if (this.SelectedTagScopes.length === 0 && !this.SelectedTagFull.IsGlobal) {
             // Empty scope + non-global = currently unreachable. Promote to global.
-            if (!confirm('This tag has no scope rows and is not global — it is currently unreachable. Promote to global?')) return;
+            if (!(await this.confirmService.Confirm({ title: 'Promote to global?', message: 'This tag has no scope rows and is not global — it is currently unreachable. Promote to global?' }))) return;
             await this.persistTagField(this.TaxSelectedNode.ID, 'IsGlobal', true);
             return;
         }
         if (this.SelectedTagScopes.length > 0) {
-            if (!confirm(`Remove all ${this.SelectedTagScopes.length} scope row(s) and promote to global? This makes the tag visible to all tenants.`)) return;
+            if (!(await this.confirmService.Confirm({ title: 'Promote to global?', message: `Remove all ${this.SelectedTagScopes.length} scope row(s) and promote to global? This makes the tag visible to all tenants.` }))) return;
             try {
                 const md = this.ProviderToUse;
                 for (const sc of this.SelectedTagScopes) {
@@ -5439,7 +5547,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     public async BulkApprove(): Promise<void> {
         const selected = this.SuggestionRowsFiltered.filter(r => r.selected);
         if (selected.length === 0) return;
-        if (!confirm(`Approve ${selected.length} suggestion(s)? Each will merge into its best match (when available) or be created as a new tag.`)) return;
+        if (!(await this.confirmService.Confirm({ title: 'Approve suggestions', message: `Approve ${selected.length} suggestion(s)? Each will merge into its best match (when available) or be created as a new tag.` }))) return;
         this.SuggestionBulkInProgress = true;
         for (const row of selected) {
             const kind = row.BestMatchTagID ? 'merge' : 'create-new';
@@ -5451,7 +5559,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     public async BulkReject(): Promise<void> {
         const selected = this.SuggestionRowsFiltered.filter(r => r.selected);
         if (selected.length === 0) return;
-        if (!confirm(`Reject ${selected.length} suggestion(s)?`)) return;
+        if (!(await this.confirmService.Confirm({ title: 'Reject suggestions', message: `Reject ${selected.length} suggestion(s)?` }))) return;
         this.SuggestionBulkInProgress = true;
         for (const row of selected) await this.DispositionSuggestion(row, 'reject');
         this.SuggestionBulkInProgress = false;
@@ -5533,7 +5641,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     public async RebuildEmbeddings(): Promise<void> {
         if (this.RebuildEmbeddingsRunning) return;
-        if (!confirm('Rebuild embeddings for all tags whose model doesn\'t match the configured embedding model? This can take time.')) return;
+        if (!(await this.confirmService.Confirm({ title: 'Rebuild embeddings', message: 'Rebuild embeddings for all tags whose model doesn\'t match the configured embedding model? This can take time.' }))) return;
         this.RebuildEmbeddingsRunning = true;
         this.cdr.detectChanges();
         try {

@@ -315,15 +315,11 @@
               </div>
             }
             <!-- Security Notice -->
-            <div class="security-notice">
-              <i class="fa-solid fa-shield-check"></i>
-              <div class="notice-content">
-                <strong>Security Best Practices:</strong>
-                API keys should be rotated regularly and revoked when no longer needed.
-                Keys are hashed and stored securely - the raw key is only shown once at creation time.
-                All API key usage is logged for audit purposes.
-              </div>
-            </div>
+            <mj-alert Variant="info" Icon="fa-solid fa-shield-check" Title="Security Best Practices">
+              API keys should be rotated regularly and revoked when no longer needed.
+              Keys are hashed and stored securely - the raw key is only shown once at creation time.
+              All API key usage is logged for audit purposes.
+            </mj-alert>
           }
           <!-- List View -->
           @if (CurrentView === 'list') {

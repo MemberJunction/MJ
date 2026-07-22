@@ -862,22 +862,6 @@
     background: var(--mj-brand-primary-hover);
 }
 
-.suggestion-error {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-    border-radius: 6px;
-    background: var(--mj-status-error-bg);
-    color: var(--mj-status-error-text);
-    border: 1px solid var(--mj-status-error-border);
-    font-size: 13px;
-    line-height: 1.4;
-}
-
-.suggestion-error i {
-    flex-shrink: 0;
-}
 
 .suggest-submit-btn:disabled {
     opacity: 0.5;

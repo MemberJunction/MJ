@@ -1,0 +1,10 @@
+:host {
+    display: block;
+    height: 100%;
+}
+
+.routines-cc {
+    display: block;
+    height: 100%;
+    min-height: 0;
+}

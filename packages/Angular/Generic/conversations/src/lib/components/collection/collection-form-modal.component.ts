@@ -53,10 +53,7 @@ import { UUIDsEqual } from '@memberjunction/global';
             </div>
           }
           @if (errorMessage) {
-            <div class="form-error">
-              <i class="fas fa-exclamation-circle"></i>
-              {{ errorMessage }}
-            </div>
+            <mj-alert Variant="error">{{ errorMessage }}</mj-alert>
           }
         </div>
         <mj-dialog-actions>
@@ -110,22 +107,6 @@ import { UUIDsEqual } from '@memberjunction/global';
 
     .parent-info i {
       color: var(--mj-brand-primary);
-    }
-
-    .form-error {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px;
-      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
-      border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
-      border-radius: 6px;
-      color: var(--mj-status-error);
-      font-size: 14px;
-    }
-
-    .form-error i {
-      flex-shrink: 0;
     }
   `]
 })

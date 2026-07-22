@@ -121,20 +121,31 @@ ConversationsRuntime.Instance.UseSessionsAdapter(myCustomSessionsAdapter);
 ## 5. Default-agent resolution
 
 The runtime answers "what agent should reply to this user message?" through a
-4-step chain. The widget exposes step 1 via `[defaultAgentId]`; steps 2–3 are
-configured per-app; step 4 is the global fallback.
+5-step chain. The widget exposes step 1 via `[defaultAgentId]`; step 2 is the
+app's own first-class agent config; steps 3–4 are the legacy Application Setting
+key; step 5 is the global code fallback.
 
 ```
 1. Explicit input  →  [defaultAgentId] on <mj-conversation-chat-area>
-2. App-scoped      →  Application Setting key 'Conversations.DefaultAgentID'
-                       where ApplicationID = <current app>
-3. Global          →  Application Setting key 'Conversations.DefaultAgentID'
+2. App AgentSettings →  Application.AgentSettings.DefaultAgentID
+                       (the first-class app agent config — JSONType column;
+                        read query-light by ID, cache-served on repeat)
+3. App-scoped      →  Application Setting key 'Conversations.DefaultAgentID'
+                       where ApplicationID = <current app>   [legacy fallback]
+4. Global          →  Application Setting key 'Conversations.DefaultAgentID'
                        where ApplicationID IS NULL
                        (metadata-seeded to Sage at
                         metadata/application-settings/.sage-default-conversation-manager.json)
-4. Code-const Sage →  Agents.find(a.Name === 'Sage')  — last-resort fallback
+5. Code-const Sage →  Agents.find(a.Name === 'Sage')  — last-resort fallback
                        (kept so installs without metadata sync still work)
 ```
+
+`Application.AgentSettings` (a JSONType column, shape `IAgentSettings`) is the
+single first-class place an app declares its default/lead agent, the agents
+relevant to it (`RelevantAgents` — the realtime co-agent's allowed-delegation
+union), app-scoped client tools, and realtime persona/disclosure overrides. The
+legacy `Conversations.DefaultAgentID` Application Setting still works as a
+fallback for installs that configured it that way.
 
 **Setting a different default for one app:**
 
@@ -508,7 +519,9 @@ async function main() {
 | `INotificationAdapter` + default | `packages/ConversationsRuntime/src/adapters/INotificationAdapter.ts` |
 | `IActiveTaskTracker` + default | `packages/ConversationsRuntime/src/adapters/IActiveTaskTracker.ts` |
 | `ISessionsAdapter` + default | `packages/ConversationsRuntime/src/adapters/ISessionsAdapter.ts` |
-| Default-agent resolver | `packages/ConversationsRuntime/src/default-agent/DefaultAgentResolver.ts` |
+| Default-agent resolver (5-step chain incl. `Application.AgentSettings.DefaultAgentID`) | `packages/ConversationsRuntime/src/default-agent/DefaultAgentResolver.ts` |
+| Unified client-tool resolver (`ResolveClientTools` — one tier-agnostic merge: override > session > app > static — used by the async agent prompt builder, the realtime path, and conversations) | `packages/AI/CorePlus/src/client-tool-resolver.ts` |
+| App-context snapshot (`AppContextSnapshot` + `View`/`Capabilities` + `FormatAppContextNote`) — fed to async agents (system prompt) and realtime (mint + streaming) | `packages/AI/CorePlus/src/app-context.ts` |
 | Angular bootstrap (adapter registration + token CSS injection) | `packages/Angular/Generic/conversations/src/lib/services/conversations-runtime-bootstrap.service.ts` |
 | Slot directive + name union | `packages/Angular/Generic/conversations/src/lib/directives/chat-slot.directive.ts` |
 | Slot interfaces + defaults | `packages/Angular/Generic/conversations/src/lib/components/slots/` |

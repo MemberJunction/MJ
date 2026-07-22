@@ -55,6 +55,8 @@ vi.mock('../install/config-manager.js', () => ({
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
+    AddExcludeSchema: vi.fn(() => ({ Success: true })),
+    RemoveExcludeSchema: vi.fn(() => ({ Success: true })),
 }));
 vi.mock('../install/history-recorder.js', () => ({
     RecordAppInstallation: vi.fn(),
@@ -62,6 +64,7 @@ vi.mock('../install/history-recorder.js', () => ({
     RecordAppDependencies: vi.fn(),
     DeleteAppDependencies: vi.fn(),
     SetAppStatus: vi.fn(),
+    SetAppStep: vi.fn(),
     FindInstalledApp: vi.fn(),
     FindDependentApps: vi.fn(),
     ListInstalledApps: vi.fn(),
@@ -471,7 +474,7 @@ describe('InstallApp — npm-install failure disables the app AND its dynamicPac
         // The app's dynamicPackages entries are flipped off (array-agnostic by AppName → both
         // server and client) so `mj codegen manifest --open-app-client-bootstrap` emits commented
         // imports — a static import of a not-yet-installed package would break the MJExplorer build.
-        expect(vi.mocked(ToggleServerDynamicPackages)).toHaveBeenCalledWith(expect.anything(), 'app-x', false);
+        expect(vi.mocked(ToggleServerDynamicPackages)).toHaveBeenCalledWith(expect.anything(), 'app-x', false, undefined);
     });
 });
 

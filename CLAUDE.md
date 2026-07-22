@@ -62,6 +62,34 @@ Sub-directory CLAUDE.md files extend this root guide with topic-specific rules. 
   - The types don't exist yet because CodeGen hasn't run — wait for it before writing dependent code
 - **Why**: `.Get()`/`.Set()` fail silently on typos, have no IntelliSense, no refactoring support, and no compile-time checking. They are the `any` of the entity world.
 
+### 2c. DERIVE FIELD TYPES FROM THE ENTITY — NEVER HAND-COPY A VALUE-LIST UNION
+- **When you need the TYPE of an entity field, derive it from the generated entity class (`SomeEntity['FieldName']`) or its underlying Zod schema — NEVER re-type the union by hand.**
+- This matters most for **value-list / dropdown fields**, whose TypeScript union (e.g. `'Action' | 'Agent' | 'Infer' | 'FieldRules'`) is **CodeGen-generated from the column's CHECK constraint**. The union is a moving target: the moment a migration adds a value to the CHECK and CodeGen re-runs, the generated union grows. A hand-copied union does **not** grow with it.
+- A hand-copied union is the typed equivalent of a magic string — it looks safe but **silently drifts** from the source of truth. The two real failure modes (both caught in this codebase when `'ML Model'` was added to `RecordProcess.WorkType`):
+  1. **Assignment break** — copying `entity.WorkType` (the now-5-value generated union) into a projection/DTO/interface field still typed with the old 4 values fails to compile (`Type '"ML Model"' is not assignable to ...`).
+  2. **Non-exhaustive switch** — a `switch (workType)` that returned for each of the old 4 cases now falls through on the new value (`Function lacks ending return statement`). Deriving the parameter type from the entity is precisely what surfaces this at compile time so you handle the new case.
+- **The pattern:**
+  ```typescript
+  import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
+
+  // ✅ CORRECT — tracks the CodeGen union forever; new CHECK values flow through automatically
+  interface FeaturePipelineSummary {
+      WorkType: MJRecordProcessEntity['WorkType'];   // entity field type
+  }
+  // ✅ ALSO CORRECT — derive from another type that already derives from the entity
+  interface FeaturePipelineCandidate {
+      WorkType: FeaturePipelineSummary['WorkType'];  // stays in lockstep with the summary
+  }
+
+  // ❌ WRONG — a frozen copy; breaks (or goes non-exhaustive) the next time CodeGen widens the union
+  interface FeaturePipelineSummary {
+      WorkType: 'Action' | 'Agent' | 'FieldRules' | 'Infer';
+  }
+  ```
+- This applies to **projection types, DTOs, view-models, agent-context shapes, AND test mock interfaces** — anywhere you'd otherwise restate an entity field's literal union. Indexed access (`Entity['Field']`) is zero-cost and erased at runtime; `import type { ... }` adds no runtime dependency.
+- For switches over such a field, derive the parameter type from the entity **and** add a `default` branch — so the function stays total when CodeGen adds a value, while still giving known values explicit handling.
+- **Related**: the CHECK constraint is the source of truth for the value list — see the value-list rule in [`migrations/CLAUDE.md`](migrations/CLAUDE.md) (drop + re-add the CHECK in one migration, then `mj codegen`).
+
 ### 3. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
 - **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
 - **NEVER run `git reset --hard`** without explicit approval
@@ -267,6 +295,8 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - Angular template binding patterns
   - Automated enforcement tests
 
+- **[PostgreSQL Schema Casing Guide](guides/POSTGRES_SCHEMA_CASING_GUIDE.md)**: Why entity `ClassName`/`CodeName` and GraphQL type names go lowercase-broken on PostgreSQL (unquoted DDL folds schema names to lowercase, so `__mj_BizAppsCommon` → `mjbizappscommon…Entity` instead of the published `mjBizAppsCommon…Entity` → TS2724 build break), and how MJ fixes it with a case-stable `SchemaInfo.CanonicalSchemaName` (sourced from `mj-app.json` `schema.name` via the `OpenApp` record, backfilled by CodeGen's metadata-sync proc) preferred via `COALESCE`/`??` in BOTH the `vwEntities` SQL view and the runtime GraphQL prefix. Net-zero on SQL Server. **Read before touching schema-prefixed identifiers, the OpenApp install path, or `spUpdateSchemaInfoFromDatabase` — and note that proc lives in TWO synced copies (SS baseline/migration + PG `metadataSupportObjects.ts`).** Includes the remediation runbook for existing PG installs (seed the `OpenApp` row).
+
 - **[Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md)**: Comprehensive patterns for building MJ dashboards including:
   - Architecture and naming conventions
   - State management with getter/setters
@@ -287,10 +317,15 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
 - **[BaseEntity Server-Side Patterns](guides/BASE_ENTITY_SERVER_PATTERNS.md)**: Use **before** writing a new server-side entity subclass under `MJCoreEntitiesServer`. Covers the persisted-embedding pattern (`Save()` + `EmbedTextLocal` + engine cache sync), cross-record invariants via `ValidateAsync` (NOT DB triggers), and FK cleanup before delete. Reference implementations: `MJAIAgentNoteEntityServer`, `MJTagEntityServer`, `MJTagScopeEntityServer`. Lift the recipes from there — don't reinvent.
 
 - **[Magic Link Access Guide](guides/MAGIC_LINK_GUIDE.md)**: How to share an app-scoped, passwordless session with **external** users (MJ-issued RS256 magic links). Covers enabling the feature, the **two-layer model** (framework mechanism vs. per-deployment scenario config vs. runtime-provisioned users), and the **recipe for defining an external-access scenario** via metadata (restricted role + entity permissions + application role). Read before wiring up external/guest access — external user *accounts* are runtime-provisioned, but the role + permissions that scope them are version-controlled metadata.
+- **[Unified Permissions Guide](guides/UNIFIED_PERMISSIONS_GUIDE.md)**: How MJ answers *"can this user do this?"* across every resource type (agents, artifacts, dashboards, queries, collections, entity rows, and anything you add) through **one normalized model**. Covers the **three-concerns mental model** — **Authorizations** (named capability/feature gates via `AuthorizationEvaluator`), **Entity Permissions / RLS** (row-level CRUD filtering via `getRowLevelSecurityWhereClause`), and the **unified `PermissionEngine`** (per-record sharing/access) — and how to pick the right layer; the `PermissionProviderBase` contract + normalized vocabulary (`PermissionAction` = Read/Create/Update/Delete/Share/Execute/Admin, `GranteeType`, `NormalizedPermission`); the `PermissionEngine` aggregator that reads the `MJ: Permission Domains` catalog and ClassFactory-instantiates each `@RegisterClass(PermissionProviderBase, …)` provider (adding a domain is **data + a class**, never an engine edit); the 9 shipping domains + backing storage; the **two access paths** (cached runtime helper like `AIAgentPermissionHelper`, open-by-default, hot path — vs. the unified provider, closed-by-default, Sharing Center/audit) and why they differ; a **recipe to add permissions to a new resource type** (worked example); and mermaid diagrams (decision flow, provider fan-out, add-a-domain). **Read before gating any action, building a sharing UI, auditing access, or adding a new permissioned resource.**
 - **[Search Overview Guide](guides/SEARCH_OVERVIEW_GUIDE.md)**: Decision tree across MJ's search/lookup APIs — `EntityByName`/`EntityByID` (definition lookup), `SearchEntity`/`SearchEntities` (per-entity ranked hybrid search, see [ENTITY_SEARCH_GUIDE](guides/ENTITY_SEARCH_GUIDE.md)), `FullTextSearch` (multi-entity DB-level FTS, see [FULL_TEXT_SEARCH_GUIDE](packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)), and `SearchEngine.Search` (cross-source unified search with scopes, see [SEARCH_SCOPES_AND_RAG_GUIDE](guides/SEARCH_SCOPES_AND_RAG_GUIDE.md)). Read this first when you need to find records / definitions / cross-source matches — picking the wrong API can mean wasted round-trips or missed semantic matches.
+- **[External Data Sources Guide](guides/EXTERNAL_DATA_SOURCES_GUIDE.md)**: Backing an MJ Entity or Query with a **remote** system (Snowflake / MongoDB / external PostgreSQL / …) read **live** through a pluggable driver — no replication into the MJ DB (Linked-Server-style). Covers the engine → provider-dispatch → router → driver layering, configuring an `ExternalDataSourceType` + `ExternalDataSource` + credentials, read-only enforcement (`ReadOnlyExternalBaseEntity`), TTL caching, the RLS-refusal / injection-safe-filter / unsupported-param (AfterKey/aggregates/search) guards, connection auth self-heal, **how to add a driver**, and known limitations. Read before touching anything under `packages/ExternalDataSources/` or wiring an entity/query to a remote source. Distinct from **Integrations** (scheduled pull-sync into MJ) and **Materialization** (`plans/query-entity-materialization.md`, persist hot results into MJ tables).
 
 - **[Agent Memory Guide](guides/AGENT_MEMORY_GUIDE.md)**: The complete agent-memory architecture — note lifecycle (Provisional → Active → Archived), injection (strategies, recency-wins precedence, scoping), in-flight `memoryWrites` with its framework guard pipeline, and the Memory Manager's hardening/consolidation/decay phases. Read before touching anything under agent notes/examples or the `memoryWrites` capability.
 
+- **[Agent Skills & Plan Mode Guide](guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)**: Two `BaseAgent`-framework capabilities that ship together (one migration). **Skills** (`MJ: AI Skills`) = reusable capability bundles (Instructions + bundled Actions + bundled sub-agents) an agent activates mid-run via a **progressive-disclosure catalog** (only name+description in the prompt until activation); resolved by `AIEngineBase.GetSkillsForAgent` through a **three-layer gate** (`AIAgent.AcceptsSkills` None/All/Limited × `AISkill.Status` × per-grant `MJ: AI Agent Skills.Status`); activation appends Instructions + widens the tool surface via a **`'specific'`-scoped** `ActionChange`/`SubAgentChange` targeting the activating agent (applies at any depth, never cascades — a `'root'` scope would be a bug for sub-agents). **Permissions use full agent parity**: a dedicated **`MJ: AI Skill Permissions`** table (User xor Role grantee × View/Run/Edit/Delete) with **two access paths over one table** — the cached, **open-by-default** `AISkillPermissionHelper` (`@memberjunction/ai-engine-base`, the runtime gate) and the **closed-by-default** `AISkillPermissionProvider` (`@RegisterClass(PermissionProviderBase,'MJAISkillPermissionProvider')`, the unified `PermissionEngine`/Sharing-Center view) — grantee-exclusivity enforced by `MJAISkillPermissionEntityServer.Validate()`; sharing gated by the **`Can Share Skills`** authorization (the old `AI Skills` Resource-Type sharing was retired). `AIEngineBase.GetSkillsForAgent(agent, user?)` takes an optional user to intersect the agent gate with the user's Run permission, so the model's skill catalog is permission-filtered. Users invoke a skill by typing **`/skill-name`** in the composer (mirrors `@agent`/`#entity`; picker filtered by the helper, chips use `AISkill.IconClass`/`Color`); selected IDs thread as **`ExecuteAgentParams.requestedSkillIDs`** (same client→resolver→runtime chain as `planMode`) and `BaseAgent.preActivateRequestedSkills` activates them at run start **only if they survive the guard** (agent-accepted ∩ user-permitted). Portable via **SKILL.md** (`SkillMarkdownConverter` + `SkillImportExportService` + the `AISkill.ExportMarkdown`/`ImportMarkdown` Remote Operations — names not IDs, unresolved bundle members become non-fatal warnings); see the **[Unified Permissions Guide](guides/UNIFIED_PERMISSIONS_GUIDE.md)** for the two-access-path pattern. **Plan Mode** = a per-request HITL gate (`AIAgent.SupportsPlanMode` capability default-ON/opt-out × `ExecuteAgentParams.planMode` per-request default-OFF, root-agent-only) that blocks Actions/Sub-Agent until the agent presents a `'Plan'` step and a human approves it via the existing `MJ: AI Agent Requests` pause/resume flow; **rejection forces a re-plan** because `resumeAgent` re-enables `planMode` only for `Plan`-step-originated resumes. Both `'Skill'` and `'Plan'` are **non-terminal steps** — deliberately NOT in the DB-CHECK-constrained `AIAgentRun.FinalStep` union (mirror the existing `'ClientTools'` cast), but they ARE in `AIAgentRunStep.StepType`. **v5.45 governance & observability**: self-activation additionally requires the **double activation gate** — `AISkill.ActivationMode` × `AIAgent.SkillActivationMode`, both `'Auto'`/`'RequestedOnly'` defaulting to **`'RequestedOnly'`** (resolved by `GetAutoActivatableSkillsForAgent`; the `/skill` requested path ignores ActivationMode but honors all availability gates); `AIAgent.RequirePlanMode` forces plan mode on every root run (SupportsPlanMode moot); runs stamp `AIAgentRun.PlanMode`; in plan mode, skill activations are legal only **before** approval (post-approval → Retry demanding a re-plan); every step touched by a skill records `AIAgentRunStep.Skills` (JSON `Array<AgentSkillInvocation>` — activation type, provenance-of-authority gate values, agent-stated `reason` from `skills:[{name, reason}]`; Actions/Sub-Agent steps carry skill attribution with native-grant precedence = NULL). **Read before touching anything under Skills, `AcceptsSkills`/`SupportsPlanMode`/`ActivationMode`/`RequirePlanMode`, the skill-step/plan-step loop wiring, skill observability, or SKILL.md.**
+
+- **[User Routines Guide](guides/USER_ROUTINES_GUIDE.md)**: The user-owned "agents on my schedule" layer (P1.5, 5.45) — `MJ: User Routines`/`Recipients`/`Runs`, the single 1-minute **dispatcher** scheduled job (`UserRoutineDispatcherDriver`: claim-by-advancing-NextRunAt before running, `ConcurrencyMode=Skip`, bounded concurrency, per-routine isolation, runs AS the owner), pure schedule math in `UserRoutineProcessor` (shared with `MJUserRoutineEntityServer` so save-path and dispatcher agree), `Scheduled` vs `Monitoring` (OnChange via result hash), activation windows (`StartAt`/`EndAt`), Template-driven notifications (metadata-seeded default), linkage-only telemetry (`AgentRunID`/`PromptRunID`/`ActionExecutionLogID` — no duplicated token/cost), `RequestedSkillIDs` pre-arming, the non-startup `UserRoutineEngine`, the `ng-user-routines` widget set + conversations bottom-sidebar entry (gated by `ShowRoutines` prop AND entity-Read permission). **Read before touching anything under routines, the dispatcher, or the conversations routines section.**
 - **[Forms Architecture Guide](guides/FORMS_ARCHITECTURE_GUIDE.md)**: How MJ renders/edits entity records across **all** surfaces from one set of forms — full-page tabs, modal dialogs, and slide-in panels. Covers:
   - The 4-layer architecture (`MjEntityFormHostComponent` → presentation shells → `MJFormPresenterService`), all in `@memberjunction/ng-base-forms` with zero Explorer/Router coupling
   - How **generated**, **custom (`*Extended`)**, and **interactive (`EntityFormOverride`)** forms coexist, plus the variant picker
@@ -316,6 +351,9 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
 - **[Remote Browser Channel Guide](guides/REMOTE_BROWSER_GUIDE.md)**: The in-house realtime **channel** where an agent drives a real, live browser while it talks (sales demo, support walkthrough, **trainer agent** — demonstrate then "your turn, you try"). Built on the principle that every backend exposes the same primitive (a CDP endpoint), so the browser work lives **once, generically, in `@memberjunction/computer-use`** (enriched additively with selector-aware actions, screencast, `MouseMove`, accessibility/element perception) and the Remote Browser layer just maps vocabulary + manages session lifecycle. Covers: the layer cake (`computer-use` → `remote-browser-base` universal contracts + `RemoteBrowserEngineBase` registry → `remote-browser-cdp` shared `CdpRemoteBrowserSession` kit + lossless `mapRemoteBrowserAction` → 5 thin backends → `remote-browser-server` `RemoteBrowserEngine`/`RemoteBrowserChannel`); the `AIRemoteBrowserProvider` registry + `IRemoteBrowserProviderFeatures` capability gating (two-layer, like bridges); **control modes** (`AgentOnly`/`ViewOnly`/`Collaborative`) vs **control strategies** (`ComputerUse` default vs `NativeAI`/Stagehand, capability-gated); **goal-driven control** (§9 — set a high-level goal instead of granular clicks: `browser_AchieveGoal` → `ExecuteRemoteBrowserGoal` → `RemoteBrowserEngine.AchieveGoal` → pure `dispatchRemoteBrowserGoal` strategy switch → `RunComputerUseGoal` on the session's OWN adapter; **model-blind credentials** via `{{label}}` context injection resolved at the CDP keystroke boundary; Collaborative pause-on-takeover; vision-model auto-selection + the `MJProgressComputerUseEngine` startup binding); and **how to add a backend** (subclass `BaseCdpRemoteBrowserProvider`, implement `AcquireSession` + a 3-method `ICdpSessionBackend`, `@RegisterClass(BaseRemoteBrowserProvider, '<X>RemoteBrowser')`, seed a row). **Read before touching anything under `packages/AI/RemoteBrowser/` or before adding a browser backend.**
 
 - **[Conversations UX Stack Guide](guides/CONVERSATIONS_UX_STACK_GUIDE.md)**: The 3-layer architecture for every chat surface in MJ — `@memberjunction/conversations-runtime` (pure-TS engine: agent dispatch, default-agent resolution, mentions, bridge, streaming, client tools, sessions observability) ↔ adapters (`INotificationAdapter` / `IActiveTaskTracker` / `ISessionsAdapter`) ↔ `@memberjunction/ng-conversations` (Angular widget) ↔ your app. Covers: when to use each layer, the slot system (6 slots: `header` / `agentPresence` / `emptyState` / `messageRenderer` / `messageExtra` / `demonstrationSurface` with project / wrap / subclass modes), Before/After cancelable events (`beforeAgentTurn`, `beforeToolInvoked`, `beforeResponseFormSubmitted` with `event.Cancel = true` enforced; `sessionStarted` / `sessionChannelStateChanged` / `sessionEnded` informational), persona inputs (`[showAgentCharacter]` + `agentCharacterConfig`), `--mj-chat-*` design tokens, default-agent resolution chain (explicit → app-scoped → global → code-const Sage fallback), sessions adapter bridging to PR #2787's `VoiceSessionService`, multi-provider scoping, runtime pre-warming via `@RegisterForStartup`. **Read before building any chat surface (overlay, full workspace, embedded panel) OR before forking the widget — slots + events almost certainly cover the use case.**
+
+- **[Integration Testing Quickstart](guides/INTEGRATION_TESTING_QUICKSTART.md)**: The integration-test tier — real provider stack (live DB + GraphQL, real cache managers/engines), headless, sitting between unit tests (mocked) and browser/computer-use regression ("mock the top layer, keep everything else real"). Covers: the one-library-two-front-ends architecture (`@memberjunction/testing-integration` check bundles on one `IntegrationCheckRegistry`, consumed identically by the `tsx` suite scripts / `run-all.ts` aggregator AND the metadata-driven **"Integration Test" `TestType`** dispatched by `IntegrationTestDriver` through `mj test`); the dedicated-process rule (the instrumented cache MUST be `LocalCacheManager`'s first caller — `MJ_INTEGRATION_TEST=1` on the CLI; server-transport suites refuse to run inside a live MJAPI); the two proof techniques (`UniqueFilter` cold-cache determinism with zero mutation + `InstrumentedLocalStorageProvider` per-category counters); tiers/gating (deterministic / mutation / live-model via `RUN_MUTATION_TESTS` / `RUN_AGENT_TESTS`, plus `PS_INTEGRATION` flows); every way to run it (`npm run test:integration`, per-suite `tsx`, `mj test run`/`suite`, the smoke test, the cross-server rig, the golden diff, the CI PR gate) and all four authoring methods (add a check to a bundle · new bundle + Test row + suite membership · metadata-only composition · standalone script). **Read before running or extending the integration suites, or touching anything under `packages/TestingFramework/testing-integration/`.**
+- **[Predictive Studio Guide](guides/PREDICTIVE_STUDIO_GUIDE.md)**: How MJ **trains predictive models on a client's own data** (member retention/renewal, lapse/lead scoring) and scores records with them — core MJ, not an OpenApp, composed onto existing substrates. Covers the **4-layer architecture** (data → feature → model → inference); the **self-managing Python sidecar** (`MLSidecar` in `@memberjunction/predictive-studio-sidecar` — the sqlglot-ts bundled-microservice pattern: managed child-process spawn on an ephemeral port is the **default, Docker-free**; remote-URL mode for scaled deployments; `npm run setup:python`; the `/train`+`/predict`+`/health` contract defined once in `@memberjunction/predictive-studio-core`); the **`FeatureAssemblyExecutor`** correctness backbone (one code path × three contexts; the raw-vs-preprocessing **fit-once/apply-everywhere** anti-skew split with `fitted_preprocessing` travelling with the model; first-class point-in-time **as-of** assembly; the `LeakageGuardEnforcer` deny-list + post-train single-feature-dominance flag → plain-language warning + blocked promotion); **training** (`TrainingEngine` → immutable, versioned `MJ: ML Models` distinct from `MJ: AI Models`, with a **locked holdout** for honest metrics + full lineage); **scoring** (`MLModelInferenceProcessor` — a new **`'ML Model'` Record Set Processing work type** registered via `@RegisterClass` without forking the substrate; ephemeral by default, write-back via `OutputMapping`; on-demand + scheduled); the **generic `Experiment` → `ExperimentSession` → `ExperimentSessionIteration`** primitive + the `ExperimentOrchestrator` **wave loop** (leaderboard / pruning / budget gate, run through RSP waves — reusable beyond ML); the **`MJ: ML Algorithms` / `Use Cases` / `Use Case Rankings`** 6×7 guidance matrix; the (planned) **Remote Operations + Actions + Model Development Agent**; the **lazy-loaded Studio dashboard** (`PredictiveStudioDashboardComponent` + `PredictiveStudioEngine` + 6 panels + embedded `mj-conversation-chat-area` copilot); a train+score walkthrough; and the live integration test (`PS_INTEGRATION=1`). **Read before touching anything under `packages/AI/PredictiveStudio/**`, the `MJ: ML *` / `MJ: Experiment*` entities, the Predictive Studio dashboard, or before adding a trained-model / feature-assembly / experiment-search capability.**
 
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
@@ -379,6 +417,29 @@ If `my-feature` tracks `origin/next`:
 - Requires reverts and cleanup to fix
 
 **This is a non-negotiable safety requirement.**
+
+## 🚨 Integration Testing — REQUIRED Before Any Project Is "Done" 🚨
+
+MemberJunction has a **live, headless integration suite** that exercises real server componentry against the live dev database (real SQLServerDataProvider, real engines, real entity saves — no mocks, no LLM calls in the deterministic tier). It sits between unit tests and the browser regression suite and catches the **seams between packages** that unit tests mock away.
+
+**The rule: no feature/PR is considered DONE until the deterministic integration tier has been run headless and passes.** Unit tests passing is necessary but NOT sufficient.
+
+```bash
+# The whole deterministic tier (from repo root) — REQUIRED before declaring done
+npm run test:integration          # = MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"
+
+# A single bundle while iterating (by its IT record name)
+npx mj test run "IT30 - Conversation Compaction (assembly layer)"
+```
+
+- **Where things live (July-2026 restructure):** the check *logic* lives once, as registry bundles in the **private, never-published** [`@memberjunction/integration-test-suite`](packages/TestingFramework/integration-test-suite/) package (`src/checks/*.checks.ts`); the shippable **framework** (registry, check contracts, `TestRunner`, bootstraps, `IntegrationTestDriver`) is [`@memberjunction/testing-integration`](packages/TestingFramework/testing-integration/), deliberately content-free. Special rigs (two-server cross-invalidation, `ps-*` flows, agent-memory live-model) are standalone scripts under the suite package's `rigs/` — not catalog entry paths.
+- **Single entry path: `mj test`.** The per-bundle tsx dispatchers and `run-all.ts` were deleted — do not recreate them. `mj test` loads the private suite package at runtime via the `testing.checkModules` key in `mj.config.cjs` (the sanctioned config-driven plugin seam; external adopters point it at their own check packages).
+- **Metadata is load-bearing:** `mj test` dispatches from `MJ: Tests` / `MJ: Test Suites` records. Every environment (fresh dev DB, CI) must seed them once: `npx mj sync push --dir=metadata-optional/integration-test`. See the pointer README at [`packages/MJServer/integration-test-scripts/`](packages/MJServer/integration-test-scripts/README.md) (the suite's former home) for troubleshooting.
+- The **deterministic tier** runs by default: credential-light, self-cleaning fixtures, no LLM cost. The **live-model tier** (real agent/prompt runs) is gated behind `RUN_AGENT_TESTS=1`; the mutation axis behind `RUN_MUTATION_TESTS=1`; the **Predictive Studio tier** behind `PS_INTEGRATION=1`.
+- **Extend the suite with every feature.** When you ship server-side capability, add deterministic checks to the matching `*.checks.ts` bundle in the suite package (or create one and register it in the suite's `index.ts`). New bundles must be **self-cleaning** (create + delete their own fixtures, tagged `(mj-integration-test — safe to delete)`) and reference-only toward existing records.
+- **A bundle MUST have its metadata sibling — an `MJ: Tests` (IT) record.** The bundle logic + a `.IT##-<bundle>.json` under [`metadata-optional/integration-test/tests/integration/`](metadata-optional/integration-test/tests/integration/), joined to the "Integration Tests — Deterministic" suite in [`.integration-suite.json`](metadata-optional/integration-test/test-suites/.integration-suite.json). Enforced automatically: the suite package's `sibling-parity.test.ts` fails the build if a bundle lacks its IT record, an IT record points at a non-existent bundle, a record isn't joined to a suite, or `mj.config.cjs` stops loading the suite package. Also update the coverage-loss count table in `check-registry.test.ts`.
+- Suites run against the real DB, so run them AFTER migrations + CodeGen have been applied — they double as a smoke test that the schema, generated types, and engines agree.
+- **Transport doctrine — write integration checks CLIENT-FIRST, over the GraphQL wire.** Prefer exercising capability through the **client layer** — `GraphQLDataProvider` and the other non-visual client-side objects in `@memberjunction/graphql-dataprovider` (NOT Angular), against a running MJAPI (`bootstrapIntegrationClient`). Driving BaseEntity CRUD, `RunView`/`RunViews`/`RunQuery`, and Remote Operations over the real wire exercises serialization, the resolver auth/scope layer, field mapping, and transport framing — where a large class of bugs lives that in-process server calls never touch. **Use `bootstrapIntegrationServer` (in-process) ONLY where there is no client surface.** When an otherwise server-only capability needs coverage, **prefer adding a typed Remote Operation** and invoking it client-side. Full doctrine: [`plans/integration-test-expansion/`](plans/integration-test-expansion/README.md).
 
 ## Unit Testing
 
@@ -684,6 +745,15 @@ The local check requires your changes to be committed (it diffs against `origin/
 
 The two checker scripts live at `.github/scripts/check-css-hex-tokens.sh` and `.github/scripts/check-mj-btn-override.sh`. Both also accept `--file <path>` for single-file checks.
 
+## Native-ESM Import Guard (Local — Mirror of CI Gate)
+
+The unit-test workflow imports every built `"type": "module"` package's entry point in a fresh native-ESM Node process and fails on the extensionless-relative-specifier signature in a package's own `dist/` (the `ERR_MODULE_NOT_FOUND` bug class that `tsc` + bundler builds tolerate but plain Node / Vitest-externalized deps / non-symlinked installs reject). Run it locally before pushing a `type: module` package change:
+
+- `npm run check:esm` — sweep all built `type: module` packages under `packages/` (needs a prior `npm run build`; unbuilt packages classify `NOT_BUILT` and skip)
+- `npm run check:esm:test` — the guard's own vitest suite (entry-point resolution, failure classification, CLI contract)
+
+The guard lives at `.github/scripts/check-esm-imports.mjs`. Only `OWN_DIST_MISSING_EXT` fails the gate; dependency failures, side-effect crashes, and unbuilt packages are reported but non-gating.
+
 ## Code Style Guide
 - Use TypeScript strict mode and explicit typing
 - Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing
@@ -821,15 +891,21 @@ protected generateSingleOperation(operation: Operation): string {
 
 ## Entity Metadata Best Practices (CRITICAL)
 
+### 🚨 GROUND TRUTH FOR SCHEMA IS THE ORM LAYER — NOT MIGRATIONS 🚨
+- **When you need to know an entity's real schema — its fields, types, nullability, value-lists, relationships, primary keys — read the generated ORM layer in `packages/MJCoreEntities` (the `entity_subclasses.ts` classes + their Zod schemas), NOT the migration SQL.**
+- **Why**: migrations are an *append-only history* of changes over time. The current true shape of a table/entity is the sum of the baseline plus every subsequent ALTER — reconstructing it from migrations is error-prone and often wrong. CodeGen regenerates `MJCoreEntities` from the live database after every schema change, so the generated entity classes are the **authoritative, current** projection of the schema. A field you see added in one migration may have been altered or dropped in a later one; the ORM class reflects the net result.
+- **Practical rule**: to answer "what fields does entity X have / what type is field Y / what are the allowed values / what does it relate to", open the `X`-entity class in `packages/MJCoreEntities/src/generated/entity_subclasses.ts`. Use `SomeEntity['FieldName']` for a field's type (see rule 2c). Only read migration SQL when you specifically need the *history* of a change, the *view/stored-proc body* (which isn't in the ORM), or to author a *new* migration.
+
 ### Finding Entity Names
 - **ALWAYS** use `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` to find correct entity names
 - Entity names are in the `@RegisterClass` decorator JSDoc comments
 - Examples:
-  - `AIPromptEntity` → `"AI Prompts"`
-  - `AIAgentEntity` → `"AI Agents"`
-  - `AIModelEntity` → `"AI Models"`
-  - `AIPromptRunEntity` → `"MJ: AI Prompt Runs"` (newer entities use "MJ: " prefix)
-  - `AIAgentRunEntity` → `"MJ: AI Agent Runs"`
+  - `MJAIPromptEntity` → `"MJ: AI Prompts"`
+  - `MJAIAgentEntity` → `"MJ: AI Agents"`
+  - `MJAIModelEntity` → `"MJ: AI Models"`
+  - `MJAIPromptRunEntity` → `"MJ: AI Prompt Runs"`
+  - `MJAIAgentRunEntity` → `"MJ: AI Agent Runs"`
+- **As of v5.0, ALL core entities use the `MJ: ` prefix** (and `MJ*` class names) — an unprefixed name like `'AI Agents'` no longer resolves and throws `Entity AI Agents not found in metadata`
 
 ### Using Metadata Class
 - Create a single instance: `const md = new Metadata()`
@@ -898,9 +974,9 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 
 ### 🚨 CRITICAL: Entity Naming Convention Warning
 
-**ALWAYS** use the correct entity names with the "MJ: " prefix where required. To prevent naming collisions on client systems, all new core entities use the "MJ: " prefix, while older entities do not.
+**ALWAYS** use the correct entity names with the "MJ: " prefix. To prevent naming collisions on client systems, ALL core entities use the "MJ: " prefix as of v5.0 — pre-v5 unprefixed names (e.g. `'AI Agents'`) no longer resolve in metadata.
 
-#### Core Entities with "MJ: " Prefix (MUST use full name):
+#### Examples of Core Entities with "MJ: " Prefix (MUST use full name):
 - **AI Entities**: `MJ: AI Agent Prompts`, `MJ: AI Agent Run Steps`, `MJ: AI Agent Runs`, `MJ: AI Agent Types`, `MJ: AI Configuration Params`, `MJ: AI Configurations`, `MJ: AI Model Costs`, `MJ: AI Model Price Types`, `MJ: AI Model Price Unit Types`, `MJ: AI Model Vendors`, `MJ: AI Prompt Models`, `MJ: AI Prompt Runs`, `MJ: AI Vendor Type Definitions`, `MJ: AI Vendor Types`, `MJ: AI Vendors`
 - **Artifact Entities**: `MJ: Artifact Types`, `MJ: Conversation Artifact Permissions`, `MJ: Conversation Artifact Versions`, `MJ: Conversation Artifacts`
 - **Dashboard Entities**: `MJ: Dashboard User Preferences`, `MJ: Dashboard User States`
@@ -909,12 +985,12 @@ function gateCacheWrite(name: string, provider?: IMetadataProvider) {
 #### Common Mistakes to Avoid:
 ```typescript
 // ❌ WRONG - Missing "MJ: " prefix
-const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', contextUser);
-const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('AI Agent Prompts', contextUser);
+const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('AI Agent Runs', contextUser);
+const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('AI Agent Prompts', contextUser);
 
 // ✅ CORRECT - Full entity name with "MJ: " prefix
-const agentRun = await md.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
-const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
+const agentRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
 ```
 
 **Always verify entity names** by checking `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` or the `@RegisterClass` decorator JSDoc comments.
@@ -937,6 +1013,14 @@ The key APIs (see [packages/MJCore/src/generic/baseEngine.ts](packages/MJCore/sr
 - **Lazy-load pattern**: every caller does `await MyEngine.Instance.Config(false, user, provider)` at entry — no-op when already loaded; never penalizes users who don't touch the feature.
 
 **Reference implementations**: `ConversationEngine`, `InteractiveFormsEngine`, `ComponentMetadataEngine`, `UserInfoEngine`, `KnowledgeHubMetadataEngine`. Copy the shape — `Config()` declares `BaseEnginePropertyConfig[]`; engine exposes `get Forms` (sync array) and `get Forms$` (RxJS observable). Angular components use `async` pipe on the observable.
+
+**Getter pattern**: Engine getters MUST use `GetConfigData<E>(propertyName)` to return their backing arrays. This method checks the data map for permission denial and throws `PermissionConstrainedError` if the user lacks read access — preventing consumers from silently operating on empty arrays. Example:
+```typescript
+public get Models(): MJAIModelEntityExtended[] {
+    return this.GetConfigData<MJAIModelEntityExtended>('_models');
+}
+```
+Consumers that want graceful degradation check `engine.IsPermissionConstrained` before accessing properties. See [plans/base-engine-permission-constrained.md](plans/base-engine-permission-constrained.md) for the full design.
 
 **Caching boundary**: If the entity has a huge column (e.g., `Specification` text) AND many rows, don't bulk-load — punt to `RunView` with targeted filters (see `ComponentMetadataEngine`'s comment about why `MJ: Components` isn't fully cached there). If the entity is small or you can narrow with `Filter`, do cache it.
 
@@ -1458,6 +1542,41 @@ module.exports = {
 - **Webhook Testing**: Receive callbacks from remote services during development
 - **Hybrid Deployments**: Mix local and cloud services during development/testing
 
+## Startup Mode (`startup.mode` / `MJ_STARTUP_MODE`)
+
+Every server-side MJ process boots through `StartupManager.Instance.Startup()`, which by default pre-warms every imported `@RegisterForStartup` engine. The **startup mode** makes that configurable so short-lived CLI/script processes skip the pre-warm tax:
+
+| Mode | Behavior | Default for |
+|---|---|---|
+| `full` | All registered engines run at boot — sync engines awaited in priority groups, then deferred engines fire (pre-change behavior, byte-for-byte) | MJAPI (SQL Server and PG paths) |
+| `task` | **No** registered engines execute (sync or deferred); every engine lazy-loads on first touch via its own `Config()`/`EnsureLoaded()` call. `LocalCacheManager` init still runs | MJCLI, mj-sync (`initializeProvider`), CodeGen |
+
+Skipping pre-warm is safe by construction: MJ's convention is that every engine consumer calls `await Engine.Instance.Config(false, user, provider)` at entry, which no-ops if loaded and loads on demand otherwise. Startup registration is an optimization, not a correctness requirement.
+
+### Mode resolution precedence (highest wins)
+
+1. **`MJ_STARTUP_MODE` env var** — per-invocation override, e.g. `MJ_STARTUP_MODE=full npx mj sync push`. Invalid values warn and fall through (never crash).
+2. **Programmatic option** passed by the entry point (e.g. `setupSQLServerClient(cfg, { mode: 'task' })`).
+3. **`mj.config.cjs` → `startup.mode`** — note this file is shared by every process in a repo, which is why the env var and programmatic levels outrank it.
+4. **Entry-point default** — `full` for MJAPI, `task` for CLI-style processes.
+
+Resolution lives in ONE shared helper — `ResolveStartupMode()` in `@memberjunction/core` — so every entry point behaves identically. It returns `{ mode, source }` and logs the outcome (non-verbose when an env/config override won, so a server silently switched to task mode by a shared config is visible at boot).
+
+```javascript
+// mj.config.cjs
+module.exports = {
+  startup: {
+    mode: 'task',   // 'full' | 'task' — omit to use each entry point's default
+  },
+};
+```
+
+### Trade-offs to know
+
+- **Fail-fast validators don't run in `task` mode.** `EncryptionStartupValidator` (priority 200, severity `error`) is a boot-time misconfiguration check, not a cache — in `task` mode encryption misconfiguration surfaces at first use instead of at startup. `full` mode (servers) keeps the fail-fast guarantee.
+- **First touch pays the load.** A `task`-mode process's first AI call absorbs the deferred cost — including the ~50MB local-embeddings model download/load on the first `FindSimilar*`-style call (`AIEngine.ensureEmbeddingsGenerated`). The boot log line `MJ startup: task mode — engine pre-warm skipped (N engine(s) deferred to first use)` makes this discoverable.
+- **Opt-up escape hatch**: a process booted in `task` mode can later run `StartupManager.Instance.Startup(true, user, provider, { mode: 'full' })` (`forceRefresh` bypasses the cached result). Client-side startup (`GraphQLDataProvider`, Angular shell) passes no options and always gets `full`.
+
 ## MetadataSync Package
 
 ### Validation System
@@ -1804,8 +1923,13 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Common scenarios: clearing inputs, focus management, dynamic content updates
 
 ### MJ UI Components (`@memberjunction/ng-ui-components`)
-- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material
-- Available components: `mjButton`, `mj-dialog`, `MJDialogService`, `mj-window`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `mj-progress-bar`, `mj-accordion-panel` (with `mjAccordionTitle` for rich HTML titles)
+- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material. **Never hand-roll a feature-specific equivalent of anything this package already provides** — check the catalog before building any control, layout region, overlay, or pattern.
+- **Canonical catalog with full APIs and usage examples: `packages/Angular/Generic/ui-components/README.md`**
+- Component overview:
+  - **Controls**: `button[mjButton]`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `[mjClickable]`
+  - **Layout & chrome**: `mj-page-layout`, `mj-page-header`, `mj-page-body` (+ `-interior` variants for left-nav shells), `mj-left-nav(-content)`, `mj-tab-nav`, `mj-page-search`, `mj-slide-panel`
+  - **Overlays**: `mj-dialog` + `MJDialogService`, `mj-confirm-dialog` + `MJConfirmService` (Promise-based `Confirm`/`ConfirmDelete`), `mj-window`, `mj-filter-popover`
+  - **Patterns**: `mj-empty-state`, `mj-stat-badge`, `mj-alert`, `mj-progress-bar`, `mj-view-toggle`, `mj-refresh-button`, `mj-filter-chip`, `mj-filter-field`, `mj-filter-panel`, `mj-applied-filters`, `mj-accordion-panel` (with `mjAccordionTitle`/`mjAccordionActions` and lazy `mjAccordionBody`)
 - Splitters: Use `angular-split` (`as-split` + `as-split-area`)
 - Grids: Use AG Grid (`ag-grid-angular`)
 - CSS classes: `.mj-input`, `.mj-textarea`, `.mj-checkbox` for styled native form elements
@@ -1940,6 +2064,14 @@ export class EntityFormComponentExtended extends EntityFormComponent {
 - Examples of existing custom forms
 
 ## Metadata Files and mj-sync
+
+### 🚨 Release-Time Sync — Do NOT Author Metadata_Sync Migrations 🚨
+Metadata changes (new AI models, prompts, agents, lookup rows, etc.) ship as **declarative JSON only**:
+- New records include a `primaryKey` whose UUID is generated at the CLI with **`uuidgen`** (never invented/inferred) so IDs are deterministic across environments.
+- New records must **omit the `sync` block** entirely.
+- **Never hand-author a `*__Metadata_Sync.sql` migration for a PR.** At release time the build engineer takes all merged PRs on `next` and runs `mj sync push` against a clean DB at the last released version — generating ONE consolidated metadata-sync migration per build (SQL Server + PostgreSQL) and writing the `sync` blocks back into the JSON. Per-PR sync migrations duplicate that step and fragment the release into many small migrations.
+
+See `metadata/CLAUDE.md` rules 1/1b for details.
 
 ### Metadata File Organization
 The `/metadata/` directory contains declarative JSON files used by mj-sync to manage database records. Follow these conventions:

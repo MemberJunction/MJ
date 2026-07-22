@@ -146,30 +146,6 @@
 
 /* ── Success card ─────────────────────────────────────────────────────────── */
 
-.success-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 24px;
-  background: var(--mj-status-success-bg);
-  border: 1px solid var(--mj-status-success-border);
-  border-radius: 8px;
-  text-align: center;
-}
-
-.success-icon {
-  font-size: 2rem;
-  color: var(--mj-status-success);
-}
-
-.success-title {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--mj-status-success-text);
-}
-
 .success-path {
   margin: 0;
   font-family: monospace;
@@ -193,30 +169,6 @@
 }
 
 /* ── Error card ───────────────────────────────────────────────────────────── */
-
-.error-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 24px;
-  background: var(--mj-status-error-bg);
-  border: 1px solid var(--mj-status-error-border);
-  border-radius: 8px;
-  text-align: center;
-}
-
-.error-icon {
-  font-size: 2rem;
-  color: var(--mj-status-error);
-}
-
-.error-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--mj-status-error-text);
-}
 
 .error-message {
   margin: 0;

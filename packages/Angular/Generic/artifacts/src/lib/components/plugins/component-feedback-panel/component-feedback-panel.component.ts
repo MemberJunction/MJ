@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 
 /**
  * Flattened tree item for rendering the component hierarchy
@@ -24,7 +24,7 @@ interface TreeItem {
 @Component({
   selector: 'mj-component-feedback-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, MarkdownModule, MJEmptyStateComponent],
+  imports: [CommonModule, FormsModule, MarkdownModule, MJEmptyStateComponent, MJAlertComponent],
   templateUrl: './component-feedback-panel.component.html',
   styleUrls: ['./component-feedback-panel.component.css']
 })

@@ -1,0 +1,142 @@
+import { describe, it, expect } from "vitest";
+import { assertReadOnlyNativeQuery, assertReadOnlyClause } from "../sqlReadOnlyScreen";
+
+/**
+ * Read-only screen for the native-query path (EDS is read-only by contract). Fail-closed:
+ * only single, parseable, write-free statements are allowed through.
+ */
+describe("assertReadOnlyNativeQuery", () => {
+    describe("allows read-only statements", () => {
+        it("a plain SELECT (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("SELECT id, name FROM orders WHERE id = 1", "ansi")).not.toThrow();
+        });
+        it("a CTE feeding a SELECT (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("WITH t AS (SELECT 1 AS x) SELECT x FROM t", "ansi")).not.toThrow();
+        });
+        it("a join aggregation (ansi)", () => {
+            expect(() =>
+                assertReadOnlyNativeQuery(
+                    "SELECT r.name, COUNT(*) AS n FROM regions r JOIN nations n ON n.region_id = r.id GROUP BY r.name",
+                    "ansi",
+                ),
+            ).not.toThrow();
+        });
+        it("T-SQL SELECT TOP with bracketed identifiers (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("SELECT TOP 10 [Name] FROM [dbo].[Orders]", "sqlserver")).not.toThrow();
+        });
+        it("a column whose name begins with 'grant' — the DCL backstop is start-anchored, no false-positive", () => {
+            expect(() => assertReadOnlyNativeQuery("SELECT grant_date FROM permits", "ansi")).not.toThrow();
+        });
+        it("a comment-prefixed SELECT is allowed (comment-stripping doesn't over-reject reads)", () => {
+            expect(() => assertReadOnlyNativeQuery("/* report header */ SELECT id FROM orders", "ansi")).not.toThrow();
+        });
+        it("a read-only CTE feeding a SELECT is allowed (deep write-walk must not over-reject)", () => {
+            expect(() => assertReadOnlyNativeQuery("WITH t AS (SELECT id FROM orders WHERE status = 'a') SELECT * FROM t", "ansi")).not.toThrow();
+        });
+        it("a UNION of reads is allowed", () => {
+            expect(() => assertReadOnlyNativeQuery("SELECT id FROM a UNION SELECT id FROM b", "ansi")).not.toThrow();
+        });
+    });
+
+    describe("rejects writes / DDL (read-only enforcement)", () => {
+        it.each([
+            ["DELETE", "DELETE FROM orders WHERE id = 1"],
+            ["UPDATE", "UPDATE orders SET status = 'x' WHERE id = 1"],
+            ["INSERT", "INSERT INTO orders (id) VALUES (1)"],
+            ["DROP", "DROP TABLE orders"],
+            ["data-modifying CTE", "WITH t AS (SELECT 1 AS x) DELETE FROM orders"],
+        ])("rejects %s", (_label, sql) => {
+            expect(() => assertReadOnlyNativeQuery(sql, "ansi")).toThrow();
+        });
+        // Writable CTE bodies parse as a top-level `select`, so HasWriteStatement misses them — the deep
+        // AST write-walk catches the nested INSERT/UPDATE.
+        it("rejects an INSERT nested in a CTE body (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("WITH t AS (INSERT INTO logs VALUES (1) RETURNING *) SELECT * FROM t", "ansi")).toThrow(/read-only|write/i);
+        });
+        it("rejects an UPDATE nested in a CTE body (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("WITH t AS (UPDATE accounts SET balance = 0 RETURNING *) SELECT * FROM t", "ansi")).toThrow(/read-only|write/i);
+        });
+        // T-SQL WITH...INSERT mis-parses to an array of type:null nodes — the single-typed-statement guard catches it.
+        it("rejects a T-SQL WITH ... INSERT (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("WITH t AS (SELECT * FROM x) INSERT INTO y SELECT * FROM t", "sqlserver")).toThrow(/read-only|write|single/i);
+        });
+        it("rejects TRUNCATE (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("TRUNCATE TABLE orders", "ansi")).toThrow();
+        });
+        it("rejects a CALL of a stored procedure (ansi) — a proc can mutate", () => {
+            expect(() => assertReadOnlyNativeQuery("CALL do_write()", "ansi")).toThrow();
+        });
+        it("rejects a T-SQL EXEC of a stored procedure (sqlserver) — a proc can mutate", () => {
+            expect(() => assertReadOnlyNativeQuery("EXEC dbo.DoSomething @a = 1", "sqlserver")).toThrow();
+        });
+        // Regression: SELECT ... INTO parses as a `select` (HasWriteStatement=false) but creates a
+        // table — it must still be rejected (caught via StatementKind, not HasWriteStatement).
+        it("rejects T-SQL SELECT ... INTO (creates a table) (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("SELECT * INTO new_orders FROM orders", "sqlserver")).toThrow(/INTO|read-only/i);
+        });
+        // DCL: the underlying parser doesn't reliably type GRANT/REVOKE as a write, so a start-anchored
+        // backstop catches them (they'd otherwise slip past HasWriteStatement).
+        it("rejects a GRANT (DCL) statement (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("GRANT SELECT ON dbo.Orders TO reader", "sqlserver")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
+        });
+        it("rejects a REVOKE (DCL) statement (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("REVOKE SELECT ON orders FROM reader", "ansi")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
+        });
+        // Regression: a leading SQL comment must not slip a DCL statement past the backstop. On the
+        // T-SQL dialect the parser doesn't type GRANT/DENY as a write, so the comment-stripping DCL
+        // check is the only thing that catches these.
+        it("rejects a block-comment-prefixed GRANT (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("/* c */ GRANT SELECT ON dbo.Orders TO reader", "sqlserver")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
+        });
+        it("rejects a line-comment-prefixed DENY (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("-- grant access\nDENY SELECT ON dbo.Orders TO reader", "sqlserver")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
+        });
+        it("rejects a stacked-comment-prefixed REVOKE (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("/*a*/ /*b*/ REVOKE SELECT ON orders FROM reader", "ansi")).toThrow(/GRANT|REVOKE|DENY|read-only/i);
+        });
+    });
+
+    describe("rejects injection / unverifiable input (fail-closed)", () => {
+        it("stacked statements", () => {
+            expect(() => assertReadOnlyNativeQuery("SELECT 1; DROP TABLE orders", "ansi")).toThrow();
+        });
+        it("unparseable SQL", () => {
+            expect(() => assertReadOnlyNativeQuery("this is not valid sql @#$%", "ansi")).toThrow();
+        });
+    });
+});
+
+describe("assertReadOnlyClause", () => {
+    describe("allows legitimate filter / order-by fragments", () => {
+        it("a simple WHERE predicate", () => {
+            expect(() => assertReadOnlyClause("Status = 'Active'", "ansi", "where")).not.toThrow();
+        });
+        it("a compound WHERE predicate", () => {
+            expect(() => assertReadOnlyClause("Score >= 10 AND Region = 'East'", "ansi", "where")).not.toThrow();
+        });
+        it("a read subquery in the WHERE (still read-only)", () => {
+            expect(() => assertReadOnlyClause("id IN (SELECT id FROM other_t)", "ansi", "where")).not.toThrow();
+        });
+        it("an ORDER BY with direction", () => {
+            expect(() => assertReadOnlyClause("Name DESC", "ansi", "orderby")).not.toThrow();
+        });
+        it("a multi-column ORDER BY (PK-style)", () => {
+            expect(() => assertReadOnlyClause("id, name", "ansi", "orderby")).not.toThrow();
+        });
+    });
+
+    describe("rejects injection vectors (fail-closed)", () => {
+        it("comment marker in WHERE (would truncate the rest of the query)", () => {
+            expect(() => assertReadOnlyClause("1=1 --", "ansi", "where")).toThrow(/comment/i);
+        });
+        it("statement separator in WHERE", () => {
+            expect(() => assertReadOnlyClause("1=1; DROP TABLE orders", "ansi", "where")).toThrow(/separator/i);
+        });
+        it("statement separator in ORDER BY", () => {
+            expect(() => assertReadOnlyClause("name; DROP TABLE orders", "ansi", "orderby")).toThrow(/separator/i);
+        });
+        it("parenthesis break-out attempt in WHERE", () => {
+            expect(() => assertReadOnlyClause("1=1) UNION SELECT password FROM users WHERE ('x'='x'", "ansi", "where")).toThrow();
+        });
+    });
+});

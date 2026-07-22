@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { UserInfo } from '@memberjunction/core';
+import { CompositeKey, UserInfo } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { NavigationTab } from '../../models/conversation-state.model';
 
 @Component({
@@ -31,6 +32,16 @@ import { NavigationTab } from '../../models/conversation-state.model';
           </mj-collection-tree>
         </div>
       }
+
+      <!-- Routines — pinned at the very bottom of the sidebar. Gated by the
+           ShowRoutines opt-out AND the user's Read permission on
+           'MJ: User Routines' (checked inside the section component). -->
+      <mj-conversation-routines-section
+        [Provider]="Provider"
+        [ShowRoutines]="ShowRoutines"
+        (openEntityRecord)="openEntityRecord.emit($event)"
+        (openConversation)="conversationSelected.emit($event)">
+      </mj-conversation-routines-section>
     </div>
     `,
   styles: [`
@@ -59,7 +70,7 @@ import { NavigationTab } from '../../models/conversation-state.model';
     }
   `]
 })
-export class ConversationSidebarComponent {
+export class ConversationSidebarComponent extends BaseAngularComponent {
   @Input() activeTab: NavigationTab = 'conversations';
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
@@ -67,8 +78,12 @@ export class ConversationSidebarComponent {
   @Input() renamedConversationId: string | null = null;
   @Input() isSidebarPinned: boolean = true;
   @Input() isMobileView: boolean = false;
+  /** Show the Routines section at the bottom of the sidebar (bubbled from the workspace; default true). */
+  @Input() ShowRoutines: boolean = true;
 
   @Output() conversationSelected = new EventEmitter<string>();
+  /** Forwarded from the routines section — a run's linked execution record was clicked. */
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
   @Output() newConversationRequested = new EventEmitter<void>();
   @Output() pinSidebarRequested = new EventEmitter<void>();
   @Output() unpinSidebarRequested = new EventEmitter<void>();

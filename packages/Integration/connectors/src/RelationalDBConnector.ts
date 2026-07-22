@@ -29,6 +29,13 @@ export interface ConnectionConfig {
  * Abstract base class for connectors that read from relational databases via mssql.
  * Handles connection management, object/field discovery, and connection testing.
  * Subclasses must implement FetchChanges to define record extraction logic.
+ *
+ * @deprecated SQL-Server-only, inline-`mssql`, read-only, and carries its own connection from
+ * `CompanyIntegration.Configuration`. Superseded by {@link BaseSqlExternalDataSourceConnector} (and the
+ * family-neutral {@link BaseExternalDataSourceConnector}), which consume the shared External Data Sources
+ * connection layer — every engine's connect/introspect/read single-sourced in the EDS drivers, credentials
+ * via CredentialEngine. Prefer the per-engine leaves (`SQLServerConnector`, `PostgresConnector`, …). Kept
+ * for backward compatibility; do not build new connectors on it.
  */
 export abstract class RelationalDBConnector extends BaseIntegrationConnector {
     /** Cache of open connection pools keyed by "server|database" */

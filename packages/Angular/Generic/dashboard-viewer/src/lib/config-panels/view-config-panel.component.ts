@@ -210,13 +210,6 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
         this.emitConfigChanged();
     }
 
-    public toggleDisplayOptions(): void {
-        this.showDisplayOptions = !this.showDisplayOptions;
-    }
-
-    public toggleAdvancedOptions(): void {
-        this.showAdvancedOptions = !this.showAdvancedOptions;
-    }
 
     public getDisplayModeDescription(): string {
         switch (this.displayMode) {

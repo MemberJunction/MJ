@@ -19,8 +19,15 @@ export class WriteBackProcessor implements IRecordProcessor {
     /**
      * @param inner - The processor that produces the work result.
      * @param outputMapping - The `OutputMapping` config to apply to each successful result.
+     * @param dryRun - When true, the inner work still runs but the write-back only computes a
+     *   preview (no entity is saved / no child is created), so a dry-run of any wrapped work type
+     *   reports its effect without mutating data. Mirrors `FieldRulesProcessor`'s dry-run.
      */
-    constructor(private readonly inner: IRecordProcessor, private readonly outputMapping: OutputMappingConfig) {}
+    constructor(
+        private readonly inner: IRecordProcessor,
+        private readonly outputMapping: OutputMappingConfig,
+        private readonly dryRun: boolean = false,
+    ) {}
 
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
         const result = await this.inner.ProcessRecord(record, context);
@@ -34,6 +41,7 @@ export class WriteBackProcessor implements IRecordProcessor {
                 record,
                 contextUser: context.contextUser,
                 provider: context.provider,
+                dryRun: this.dryRun,
             });
             return { ...result, ResultPayload: { output: result.ResultPayload, writeBack } };
         } catch (e) {

@@ -264,17 +264,13 @@
                   </div>
                 }
               } @else {
-                <div style="padding: 20px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; margin: 12px;">
-                  <div style="color: #721c24;">
-                    <i class="fa-solid fa-exclamation-circle"></i>
-                    <strong>Query execution failed</strong>
-                  </div>
+                <mj-alert Variant="error" Title="Query execution failed">
                   @if (runResult.ErrorMessage) {
                     <div style="margin-top: 8px; font-family: 'Courier New', monospace; font-size: 0.9em;">
                       {{ runResult.ErrorMessage }}
                     </div>
                   }
-                </div>
+                </mj-alert>
               }
             </div>
           </mj-accordion-panel>

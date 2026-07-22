@@ -1216,6 +1216,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   @Output() AddToListButtonClick = new EventEmitter<Record<string, unknown>[]>();
   @Output() DuplicateSearchButtonClick = new EventEmitter<Record<string, unknown>[]>();
   @Output() CommunicationButtonClick = new EventEmitter<Record<string, unknown>[]>();
+  /** Raised when the user clicks the column-chooser / "Manage Columns" toolbar affordance. The host opens its column-management UI (see {@link onColumnChooserClick}). */
+  @Output() ManageColumnsRequested = new EventEmitter<void>();
 
   // Navigation Events
   /**
@@ -4354,8 +4356,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
+  /**
+   * "Manage Columns" / column-chooser toolbar affordance. The grid is generic and doesn't own a
+   * column-management UI, so it raises {@link ManageColumnsRequested} for its host to handle —
+   * in the entity-viewer/workspace this opens the view's config panel (Columns tab), the canonical
+   * column editor backed by `UserView.GridState`. Hosts that embed the grid standalone can handle
+   * this to surface their own column UI.
+   */
   onColumnChooserClick(): void {
-    // TODO: Implement column chooser dialog
+    this.ManageColumnsRequested.emit();
   }
 
   /**

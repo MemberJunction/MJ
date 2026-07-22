@@ -1,0 +1,37 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on AgentSettings (MJ: Applications entity) so CodeGen emits",
+      "a typed AgentSettingsObject accessor returning MJApplicationEntity_IAgentSettings.",
+      "The EntityField row must exist (created by a CodeGen pass over the new column) before",
+      "this @lookup resolves on push."
+    ],
+    "fields": {
+      "Name": "MJ: Applications"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAgentSettings",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAgentSettings.ts"
+          },
+          "_comments": [
+            "AgentSettings field — app-scoped agent configuration object"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Applications&Name=AgentSettings"
+          },
+          "sync": {
+            "lastModified": "2026-07-01T17:33:48.663Z",
+            "checksum": "7ffc2aad3a90e414abbc7156898f6b68ea5007f679a4fa976dc12600605b12f0"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Applications"
+    }
+  }
+]

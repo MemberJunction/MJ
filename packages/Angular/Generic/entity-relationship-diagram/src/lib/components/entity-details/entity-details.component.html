@@ -29,17 +29,12 @@
     }
   </div>
 
-  <div class="fields-section" [class.section-expanded]="fieldsSectionExpanded" [class.section-collapsed]="!fieldsSectionExpanded">
-    <div class="section-header extra-padding">
-      <div class="section-title-group" (click)="toggleFieldsSection()">
-        <button
-          class="expand-btn"
-          [class.expanded]="fieldsSectionExpanded"
-          title="Toggle fields section">
-          <span class="fa-solid fa-chevron-right"></span>
-        </button>
-        <h4>Fields ({{ selectedEntity ? getEntityFields(selectedEntity.ID).length : 0 }})</h4>
-      </div>
+  <mj-accordion-panel class="erd-details-accordion" Size="sm" [Fill]="true" [FlushBody]="true"
+    [Expanded]="fieldsSectionExpanded" (ExpandedChange)="toggleFieldsSection()">
+    <ng-template mjAccordionTitle>
+      <span class="erd-section-title">Fields ({{ selectedEntity ? getEntityFields(selectedEntity.ID).length : 0 }})</span>
+    </ng-template>
+    <ng-template mjAccordionActions>
       @if (fieldsSectionExpanded) {
         <div class="field-filters">
           <button
@@ -72,7 +67,7 @@
           </button>
         </div>
       }
-    </div>
+    </ng-template>
     @if (fieldsSectionExpanded) {
       <div class="fields-list" #fieldsListContainer>
         @for (field of getEntityFields(selectedEntity?.ID || ''); track field.ID) {
@@ -242,20 +237,13 @@
         }
       </div>
     }
-  </div>
+  </mj-accordion-panel>
 
-  <div class="relationships-section" [class.section-expanded]="relationshipsSectionExpanded" [class.section-collapsed]="!relationshipsSectionExpanded">
-    <div class="section-header extra-padding">
-      <div class="section-title-group" (click)="toggleRelationshipsSection()">
-        <button
-          class="expand-btn"
-          [class.expanded]="relationshipsSectionExpanded"
-          title="Toggle relationships section">
-          <span class="fa-solid fa-chevron-right"></span>
-        </button>
-        <h4>Related Entities ({{ selectedEntity ? getRelatedEntities(selectedEntity.ID).length : 0 }})</h4>
-      </div>
-    </div>
+  <mj-accordion-panel class="erd-details-accordion" Size="sm" [Fill]="true" [FlushBody]="true"
+    [Expanded]="relationshipsSectionExpanded" (ExpandedChange)="toggleRelationshipsSection()">
+    <ng-template mjAccordionTitle>
+      <span class="erd-section-title">Related Entities ({{ selectedEntity ? getRelatedEntities(selectedEntity.ID).length : 0 }})</span>
+    </ng-template>
     @if (relationshipsSectionExpanded) {
       <div class="related-entities-list" #relationshipsListContainer>
         @for (relatedEntity of getRelatedEntities(selectedEntity?.ID || ''); track relatedEntity.ID) {
@@ -267,5 +255,5 @@
         }
       </div>
     }
-  </div>
+  </mj-accordion-panel>
 </div>

@@ -1,0 +1,130 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Home</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+  .home-grid { display:grid; grid-template-columns:1.55fr 1fr; gap:16px; margin-top:18px; align-items:start; }
+  .exp-card { border:1px solid var(--mj-border-default); border-radius:var(--radius); background:var(--mj-bg-surface); padding:14px 15px; }
+  .exp-card + .exp-card { margin-top:14px; }
+  .lead { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
+  .lead td { padding:5px 6px; border-bottom:1px solid var(--mj-border-subtle); }
+  .lead td.num { text-align:right; font-variant-numeric:tabular-nums; font-weight:650; }
+  .gauge-sm { width:74px; height:74px; }
+  .gauge-sm::after { inset:9px; }
+  .gauge-sm .g-val { font-size:15px; }
+  .qa { display:flex; gap:12px; flex-wrap:wrap; }
+  .qa .tile { flex:1; min-width:180px; display:flex; align-items:center; gap:12px; padding:14px; border:1px solid var(--mj-border-default); border-radius:var(--radius); background:var(--mj-bg-surface); cursor:pointer; }
+  .qa .tile:hover { background:var(--mj-bg-surface-hover); border-color:var(--mj-border-strong); box-shadow:var(--shadow-sm); }
+  .qa .tile .ic { width:40px; height:40px; border-radius:10px; display:grid; place-items:center; font-size:17px; background:var(--mj-brand-soft); color:var(--mj-brand-primary); flex:0 0 auto; }
+  .algo-chip { display:flex; align-items:center; gap:8px; padding:7px 4px; }
+  .algo-chip .nm { width:120px; font-weight:600; font-size:12.5px; }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav">
+  <div class="group">Build</div>
+  <a class="active"><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a><i class="fa-solid fa-cubes"></i> Model Registry</a>
+  <a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div>
+  <a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><h1>Studio Home</h1><div class="crumb">Member Renewal Prediction · Workspace overview</div></div>
+  <div class="spacer"></div>
+  <button class="btn ghost sm"><i class="fa-regular fa-calendar"></i> Last 7 days</button>
+  <button class="btn"><i class="fa-solid fa-robot"></i> Ask the Agent</button>
+  <button class="btn primary"><i class="fa-solid fa-plus"></i> New Training Pipeline</button>
+</div><div class="ps-content">
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="ic"><i class="fa-solid fa-cubes"></i></div><div class="label">Published Models</div><div class="val">7</div><div class="delta up"><i class="fa-solid fa-arrow-up"></i> +2 this month</div></div>
+    <div class="kpi"><div class="ic" style="background:var(--mj-warning-bg);color:var(--mj-warning-text)"><i class="fa-solid fa-flask"></i></div><div class="label">Active Experiments</div><div class="val">2</div><div class="delta muted" style="color:var(--mj-text-muted)">12 runs in flight</div></div>
+    <div class="kpi"><div class="ic" style="background:var(--mj-success-bg);color:var(--mj-success-text)"><i class="fa-solid fa-bullseye"></i></div><div class="label">Best Holdout AUC</div><div class="val">0.864</div><div class="delta up"><i class="fa-solid fa-arrow-up"></i> +0.018 vs. baseline</div></div>
+    <div class="kpi"><div class="ic"><i class="fa-solid fa-table-list"></i></div><div class="label">Records Scored / wk</div><div class="val">48,210</div><div class="delta up"><i class="fa-solid fa-arrow-up"></i> +6.4%</div></div>
+  </div>
+
+  <div class="home-grid">
+    <!-- LEFT: recent models -->
+    <div class="col">
+      <div class="card">
+        <div class="card-head"><i class="fa-solid fa-cubes" style="color:var(--mj-brand-primary)"></i><h3>Recent ML Models</h3><div class="spacer"></div><a class="small">View registry →</a></div>
+        <table class="table">
+          <thead><tr><th>Model</th><th>Ver</th><th>Algorithm</th><th class="num">Holdout AUC</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><strong>Renewal Propensity</strong><div class="muted small">Champion · serving prod</div></td><td class="mono">v4</td><td>XGBoost</td><td class="num"><strong>0.864</strong></td><td><span class="badge green"><span class="dot" style="background:var(--mj-success)"></span> Published</span></td><td><a class="small">Open</a></td></tr>
+            <tr><td><strong>Renewal Propensity</strong><div class="muted small">Shadow challenger</div></td><td class="mono">v5-rc</td><td>LightGBM</td><td class="num">0.861</td><td><span class="badge blue"><span class="dot" style="background:var(--mj-info)"></span> Staging</span></td><td><a class="small">Open</a></td></tr>
+            <tr><td><strong>Lapse Risk Tier</strong><div class="muted small">Segment classifier</div></td><td class="mono">v2</td><td>Random Forest</td><td class="num">0.842</td><td><span class="badge green"><span class="dot" style="background:var(--mj-success)"></span> Published</span></td><td><a class="small">Open</a></td></tr>
+            <tr><td><strong>Engagement Score</strong><div class="muted small">Regression baseline</div></td><td class="mono">v1</td><td>Ridge Regression</td><td class="num">0.799</td><td><span class="badge amber"><span class="dot" style="background:var(--mj-warning)"></span> Review</span></td><td><a class="small">Open</a></td></tr>
+            <tr><td><strong>Renewal Propensity</strong><div class="muted small">Interpretable variant</div></td><td class="mono">v3</td><td>Logistic Regression</td><td class="num">0.831</td><td><span class="badge gray"><span class="dot" style="background:var(--mj-text-disabled)"></span> Archived</span></td><td><a class="small">Open</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><i class="fa-solid fa-shapes" style="color:var(--mj-brand-primary)"></i><h3>Algorithms in Use</h3><div class="spacer"></div><span class="muted small">across 7 models</span></div>
+        <div class="card-body" style="padding-top:8px">
+          <div class="algo-chip"><span class="nm">XGBoost</span><div class="bar" style="flex:1"><span style="width:84%"></span></div><span class="muted small" style="width:54px;text-align:right">3 models</span></div>
+          <div class="algo-chip"><span class="nm">LightGBM</span><div class="bar" style="flex:1"><span style="width:60%"></span></div><span class="muted small" style="width:54px;text-align:right">2 models</span></div>
+          <div class="algo-chip"><span class="nm">Random Forest</span><div class="bar" style="flex:1"><span style="width:42%"></span></div><span class="muted small" style="width:54px;text-align:right">1 model</span></div>
+          <div class="algo-chip"><span class="nm">Logistic Reg.</span><div class="bar" style="flex:1"><span style="width:30%"></span></div><span class="muted small" style="width:54px;text-align:right">1 model</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: active experiments + quick actions -->
+    <div class="col">
+      <div class="section-title">Active Experiments</div>
+
+      <div class="exp-card">
+        <div class="row" style="align-items:flex-start;justify-content:space-between">
+          <div><strong>Renewal v5 — Algorithm Sweep</strong><div class="muted small">Goal: beat 0.864 AUC on FY25 holdout</div></div>
+          <span class="badge blue"><i class="fa-solid fa-circle-notch fa-spin" style="font-size:9px"></i> Running</span>
+        </div>
+        <div class="row" style="margin-top:10px;align-items:center;gap:18px">
+          <table class="lead" style="flex:1">
+            <tr><td><span class="rank gold">1</span> LightGBM</td><td class="num">0.861</td></tr>
+            <tr><td><span class="rank">2</span> XGBoost</td><td class="num">0.858</td></tr>
+            <tr><td><span class="rank">3</span> MLP</td><td class="num">0.844</td></tr>
+          </table>
+          <div style="text-align:center"><div class="gauge gauge-sm" style="--p:62"><span class="g-val">62%</span></div><div class="muted small" style="margin-top:4px">budget burn</div></div>
+        </div>
+        <div class="row" style="margin-top:10px;gap:8px"><button class="btn sm ghost"><i class="fa-solid fa-pause"></i> Pause</button><button class="btn sm"><i class="fa-solid fa-chart-column"></i> Leaderboard</button></div>
+      </div>
+
+      <div class="exp-card">
+        <div class="row" style="align-items:flex-start;justify-content:space-between">
+          <div><strong>Lapse Tier — Feature Pruning</strong><div class="muted small">Goal: hold 0.84 AUC with ≤20 features</div></div>
+          <span class="badge amber"><i class="fa-solid fa-triangle-exclamation" style="font-size:10px"></i> Budget 89%</span>
+        </div>
+        <div class="row" style="margin-top:10px;align-items:center;gap:18px">
+          <table class="lead" style="flex:1">
+            <tr><td><span class="rank gold">1</span> Random Forest</td><td class="num">0.842</td></tr>
+            <tr><td><span class="rank">2</span> XGBoost</td><td class="num">0.838</td></tr>
+            <tr><td><span class="rank">3</span> Logistic Reg.</td><td class="num">0.821</td></tr>
+          </table>
+          <div style="text-align:center"><div class="gauge gauge-sm" style="--p:89"><span class="g-val">89%</span></div><div class="muted small" style="margin-top:4px">budget burn</div></div>
+        </div>
+        <div class="row" style="margin-top:10px;gap:8px"><button class="btn sm ghost"><i class="fa-solid fa-pause"></i> Pause</button><button class="btn sm"><i class="fa-solid fa-chart-column"></i> Leaderboard</button></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><i class="fa-solid fa-bolt" style="color:var(--mj-brand-primary)"></i><h3>Quick Actions</h3></div>
+        <div class="card-body" style="padding-top:12px">
+          <div class="qa">
+            <div class="tile"><div class="ic"><i class="fa-solid fa-diagram-project"></i></div><div><div style="font-weight:650">New Training Pipeline</div><div class="muted small">Pick data, target & algorithms</div></div></div>
+            <div class="tile"><div class="ic"><i class="fa-solid fa-robot"></i></div><div><div style="font-weight:650">Ask the Model Dev Agent</div><div class="muted small">"Improve renewal AUC for Q3"</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div></main>
+</div></body></html>

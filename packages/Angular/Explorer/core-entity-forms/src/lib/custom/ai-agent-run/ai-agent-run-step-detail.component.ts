@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { TimelineItem } from './ai-agent-run-timeline.component';
-import { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunStepEntity, MJAIAgentRunStepEntity_AgentSkillInvocation } from '@memberjunction/core-entities';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
 interface ScratchpadSnapshotView {
@@ -26,7 +26,7 @@ export class AIAgentRunStepDetailComponent {
   @Output() copyToClipboard = new EventEmitter<string>();
 
   selectedItemJsonString = '{}';
-  detailPaneTab: 'json' | 'diff' | 'scratchpad' = 'diff';
+  detailPaneTab: 'json' | 'diff' | 'scratchpad' | 'skills' = 'diff';
   scratchpadSubTab: 'input' | 'output' | 'diff' = 'diff';
 
   constructor(private cdr: ChangeDetectorRef) {}
@@ -34,11 +34,16 @@ export class AIAgentRunStepDetailComponent {
   ngOnChanges() {
     if (this.selectedTimelineItem) {
       this.selectedItemJsonString = this.getSelectedItemJson();
-      // Default to diff tab if step has payload diff, scratchpad if available, otherwise json
+      // Default to diff tab if step has payload diff, skills for Skill steps (the activation IS
+      // the story there), scratchpad if available, otherwise json
       if (this.showStepPayloadDiff) {
         this.detailPaneTab = 'diff';
+      } else if (this.showSkillsTab && this.selectedTimelineItem.data?.StepType === 'Skill') {
+        this.detailPaneTab = 'skills';
       } else if (this.showScratchpadTab) {
         this.detailPaneTab = 'scratchpad';
+      } else if (this.showSkillsTab) {
+        this.detailPaneTab = 'skills';
       } else {
         this.detailPaneTab = 'json';
       }
@@ -163,6 +168,38 @@ export class AIAgentRunStepDetailComponent {
 
   onCopyToClipboard() {
     this.copyToClipboard.emit(this.getSelectedItemJson());
+  }
+
+  /**
+   * Whether the Skills tab should be shown — true when the step has skill-invocation records
+   * on its `Skills` column (Skill steps, Prompt steps with skills in effect, and Actions/
+   * Sub-Agent steps whose tool was granted through a skill).
+   */
+  get showSkillsTab(): boolean {
+    return this.stepSkillInvocations.length > 0;
+  }
+
+  /**
+   * Parsed {@link MJAIAgentRunStepEntity_AgentSkillInvocation} records from the step's `Skills`
+   * JSON column. Empty array when the step has no skill linkage or the JSON is malformed.
+   */
+  get stepSkillInvocations(): MJAIAgentRunStepEntity_AgentSkillInvocation[] {
+    if (!this.selectedTimelineItem || this.selectedTimelineItem.type !== 'step') {
+      return [];
+    }
+    const raw = this.selectedTimelineItem.data?.Skills;
+    if (!raw) return [];
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Human-readable label for an invocation's activation type. */
+  public GetActivationTypeLabel(inv: MJAIAgentRunStepEntity_AgentSkillInvocation): string {
+    return inv.ActivationType === 'requested' ? 'User Requested' : 'Agent Self-Activated';
   }
 
   /**

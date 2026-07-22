@@ -5,6 +5,7 @@ import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.compo
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { IArtifactPreviewComponent } from '../../interfaces/artifact-viewer-plugin.interface';
 import { VideoArtifactPreviewComponent } from '../previews/video-artifact-preview.component';
+import { MJMediaPlayerComponent, MediaTrack } from '@memberjunction/ng-media-player';
 
 /**
  * Minimal full-size viewer plugin for video artifacts. Renders a `<video controls>` player that
@@ -26,7 +27,7 @@ import { VideoArtifactPreviewComponent } from '../previews/video-artifact-previe
                     <span>{{ errorMessage }}</span>
                 </div>
             } @else if (videoUrl) {
-                <video class="video-viewer__video" controls preload="metadata" [src]="videoUrl" (error)="onMediaError()"></video>
+                <mj-media-player class="video-viewer__player" [Tracks]="MediaTracks" (Ended)="onMediaEnded()"></mj-media-player>
             } @else {
                 <div class="video-viewer__state">
                     <i class="fa-solid fa-spinner fa-spin"></i>
@@ -51,7 +52,10 @@ import { VideoArtifactPreviewComponent } from '../previews/video-artifact-previe
                 background: var(--mj-bg-surface-sunken);
             }
 
-            .video-viewer__video {
+            .video-viewer__player {
+                display: block;
+                width: 100%;
+                height: 100%;
                 max-width: 100%;
                 max-height: 100%;
                 border-radius: 4px;
@@ -82,6 +86,28 @@ export class VideoArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     public errorMessage = '';
 
     /**
+     * Single-track input for the generic {@link MJMediaPlayerComponent}. Rebuilt whenever
+     * {@link videoUrl} is (re)resolved via {@link setVideoUrl}; empty until a URL exists so the
+     * player shows its own empty state.
+     */
+    public MediaTracks: MediaTrack[] = [];
+
+    /** Set the resolved URL and recompute the single-element {@link MediaTracks} array in lockstep. */
+    private setVideoUrl(url: string): void {
+        this.videoUrl = url;
+        this.MediaTracks = url
+            ? [
+                  {
+                      Id: this.artifactVersion?.ID ?? 'video',
+                      Kind: 'video',
+                      Url: url,
+                      MimeType: this.artifactVersion?.MimeType ?? undefined,
+                  },
+              ]
+            : [];
+    }
+
+    /**
      * Inline-preview component for video artifacts ({@link IArtifactViewerPluginPreviewStatics}).
      * STATIC so the resolver reads it off the constructor without instantiating this DI-using component.
      */
@@ -103,11 +129,11 @@ export class VideoArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     async ngOnInit(): Promise<void> {
         try {
             if (this.artifactVersion?.ContentMode === 'File' && this.artifactVersion.ID) {
-                this.videoUrl = await this.fileService.getDownloadUrl(this.artifactVersion.ID);
+                this.setVideoUrl(await this.fileService.getDownloadUrl(this.artifactVersion.ID));
             } else {
                 const content = this.artifactVersion?.Content;
                 if (content) {
-                    this.videoUrl = content;
+                    this.setVideoUrl(content);
                 } else {
                     this.errorMessage = 'This artifact has no video content.';
                 }
@@ -121,8 +147,13 @@ export class VideoArtifactViewerComponent extends BaseArtifactViewerPluginCompon
 
     public onMediaError(): void {
         this.errorMessage = 'The video could not be played. It may be corrupt or in an unsupported format.';
-        this.videoUrl = '';
+        this.setVideoUrl('');
         this.cdr.markForCheck();
+    }
+
+    /** Fired when the generic player reaches the end of the track. No-op affordance hook. */
+    public onMediaEnded(): void {
+        // Playback finished — nothing to persist for a one-shot artifact viewer.
     }
 
     public override GetCurrentStateSnapshot(): DataSnapshot | null {

@@ -644,42 +644,54 @@ export abstract class BaseIntegrationConnector {
         // `discoveryMaxRecords` knob. Sampling itself is the FALLBACK path — used only when the source lacks a
         // describe endpoint that yields pk+type+columns; a describe-capable connector returns here-unused.
         const maxRecords = opts.MaxRecords ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
-        const self = this;
-        async function* readPathStream(): AsyncGenerator<Record<string, unknown>> {
-            let ctx: FetchContext = {
-                CompanyIntegration: companyIntegration,
-                ObjectName: objectName,
-                WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
-                BatchSize: batchSize,
-                ContextUser: contextUser,
-            };
-            let yielded = 0;
-            for (;;) {
-                const batch = await self.FetchChanges(ctx);
-                for (const rec of batch.Records) {
-                    yield rec.Fields;
-                    if (++yielded >= maxRecords) return;
-                }
-                if (!batch.HasMore) break;
-                ctx = {
-                    ...ctx,
-                    WatermarkValue: null,
-                    CurrentPage: batch.NextPage,
-                    CurrentOffset: batch.NextOffset,
-                    CurrentCursor: batch.NextCursor,
-                    AfterKeyValue: batch.NextAfterKeyValue ?? ctx.AfterKeyValue,
-                };
-            }
-        }
         try {
-            return await this.DiscoverFieldsViaStream(readPathStream(), {
-                Discovery: { TimeBudgetMs: timeBudgetMs },
-                ReadOnly: true,
-            });
+            return await this.DiscoverFieldsViaStream(
+                this.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords),
+                { Discovery: { TimeBudgetMs: timeBudgetMs }, ReadOnly: true },
+            );
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.warn(`[DiscoverFieldsViaFetch] read-path discovery failed for "${objectName}" (${msg}); falling back to single-sample DiscoverFields.`);
             return this.DiscoverFields(companyIntegration, objectName, contextUser);
+        }
+    }
+
+    /**
+     * The record source `DiscoverFieldsViaFetch` streams for field/PK inference. Default: loop
+     * `FetchChanges` (full fetch), yielding each record's fields until `maxRecords`. A protocol subclass
+     * (e.g. REST) overrides this to sample a template-var CHILD with the correct record-constrained,
+     * recursive stream. Yields plain field maps; the caller stops it at `maxRecords`.
+     */
+    protected async *DiscoverySampleRecordStream(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo,
+        batchSize: number,
+        maxRecords: number,
+    ): AsyncGenerator<Record<string, unknown>> {
+        let ctx: FetchContext = {
+            CompanyIntegration: companyIntegration,
+            ObjectName: objectName,
+            WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
+            BatchSize: batchSize,
+            ContextUser: contextUser,
+        };
+        let yielded = 0;
+        for (;;) {
+            const batch = await this.FetchChanges(ctx);
+            for (const rec of batch.Records) {
+                yield rec.Fields;
+                if (++yielded >= maxRecords) return;
+            }
+            if (!batch.HasMore) break;
+            ctx = {
+                ...ctx,
+                WatermarkValue: null,
+                CurrentPage: batch.NextPage,
+                CurrentOffset: batch.NextOffset,
+                CurrentCursor: batch.NextCursor,
+                AfterKeyValue: batch.NextAfterKeyValue ?? ctx.AfterKeyValue,
+            };
         }
     }
 
@@ -885,6 +897,8 @@ export abstract class BaseIntegrationConnector {
                     objectName: obj.Name, total, error: msg, durationMs: Date.now() - objStart,
                 }));
                 skipped++;
+                // U11 — determinate discovery progress: a skipped object still advances the bar.
+                try { options?.OnProgress?.(succeeded + skipped, total); } catch { /* progress must never break introspection */ }
                 // A real rate-limit failure cuts the in-flight cap (AIMD); a plain describe error does not.
                 return { ok: false, throttled: this.ExtractRetryAfterMs(err) !== undefined };
             }
@@ -911,10 +925,13 @@ export abstract class BaseIntegrationConnector {
                     Precision: f.Precision ?? null,
                     Scale: f.Scale ?? null,
                     DefaultValue: f.DefaultValue ?? null,
-                    IsPrimaryKey: f.IsPrimaryKey ?? false,
+                    // U1 — propagate `undefined` (source had no opinion), never coerce to false:
+                    // `?? false` here turned a sample's SILENCE into a hard "not a PK/FK" that the
+                    // persist overlay then treated as a Discovered opinion, wiping declared flags.
+                    IsPrimaryKey: f.IsPrimaryKey,
                     IsUniqueKey: f.IsUniqueKey,
                     IsReadOnly: f.IsReadOnly,
-                    IsForeignKey: f.IsForeignKey ?? false,
+                    IsForeignKey: f.IsForeignKey,
                     ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                 })),
                 // Honest PK selection: only IsPrimaryKey=true fields qualify (an object can have several
@@ -930,6 +947,8 @@ export abstract class BaseIntegrationConnector {
             if (done % 100 === 0 || done === total) {
                 console.log(`[IntrospectSchema] progress: ${done}/${total} (ok=${succeeded}, skipped=${skipped}) — ${((Date.now() - startMs) / 1000).toFixed(1)}s elapsed`);
             }
+            // U11 — determinate discovery progress (scanned of total) for the caller's progress bar.
+            try { options?.OnProgress?.(done, total); } catch { /* progress must never break introspection */ }
             return { ok: true, throttled: false };
         };
 

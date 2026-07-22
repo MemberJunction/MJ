@@ -39,6 +39,16 @@ export interface RecordingInfo {
   RoomName: string;
   /** The raw egress status string. */
   Status: string;
+  /**
+   * The output file's path/key in the egress storage sink, once the egress has produced a result
+   * (populated on stop/complete). This is what a caller copies into MJStorage + records as the
+   * Conversation's recording. `undefined` while the recording is still in progress.
+   */
+  OutputLocation?: string;
+  /** The output file size in bytes, when the egress result reports it. */
+  OutputSizeBytes?: number;
+  /** The recording duration in milliseconds, when the egress result reports it. */
+  OutputDurationMs?: number;
 }
 
 /** Starts/stops/lists LiveKit room recordings (composite egress). */
@@ -94,6 +104,26 @@ export class LiveKitEgressService {
 
   /** Maps an SDK `EgressInfo` to the normalized {@link RecordingInfo}. */
   private toRecordingInfo(info: EgressInfo, roomName: string): RecordingInfo {
-    return { EgressID: info.egressId, RoomName: info.roomName || roomName, Status: String(info.status ?? 'unknown') };
+    const result: RecordingInfo = {
+      EgressID: info.egressId,
+      RoomName: info.roomName || roomName,
+      Status: String(info.status ?? 'unknown'),
+    };
+    // Once the egress has produced its file (on stop/complete), surface the output path + size +
+    // duration so a caller can copy the MP4 into MJStorage and record it on the Conversation.
+    const fileResult = info.fileResults?.[0];
+    if (fileResult) {
+      if (fileResult.filename) {
+        result.OutputLocation = fileResult.filename;
+      }
+      if (fileResult.size != null) {
+        result.OutputSizeBytes = Number(fileResult.size);
+      }
+      if (fileResult.duration != null) {
+        // EncodedFileResult.duration is reported in nanoseconds — normalize to milliseconds.
+        result.OutputDurationMs = Math.round(Number(fileResult.duration) / 1_000_000);
+      }
+    }
+    return result;
   }
 }

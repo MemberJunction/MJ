@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<title>Option A — Inline Ritual · User Routines</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+/* ── MJ token snapshot ─────────────────────────────────────────── */
+:root{color-scheme:light;
+--mj-color-brand-300:#4dabd5;--mj-color-brand-400:#2699cc;--mj-color-brand-500:#0076b6;--mj-color-brand-600:#006aa3;--mj-color-brand-700:#005a8a;--mj-color-brand-900:#092340;
+--mj-color-accent-300:#aae7fd;--mj-color-accent-400:#5cc0ed;
+--mj-color-neutral-0:#fff;--mj-color-neutral-50:#f8fafc;--mj-color-neutral-100:#f1f5f9;--mj-color-neutral-200:#e2e8f0;--mj-color-neutral-300:#cbd5e1;--mj-color-neutral-400:#94a3b8;--mj-color-neutral-500:#64748b;--mj-color-neutral-600:#475569;--mj-color-neutral-700:#334155;--mj-color-neutral-800:#1e293b;--mj-color-neutral-900:#0f172a;--mj-color-neutral-950:#020617;
+--mj-color-success-500:#22c55e;--mj-color-success-700:#15803d;--mj-color-success-50:#f0fdf4;
+--mj-color-warning-500:#f59e0b;--mj-color-warning-700:#b45309;--mj-color-warning-50:#fffbeb;
+--mj-color-error-500:#ef4444;--mj-color-error-700:#b91c1c;--mj-color-error-50:#fef2f2;
+--mj-color-violet-600:#7c3aed;
+--mj-bg-page:var(--mj-color-neutral-50);--mj-bg-surface:var(--mj-color-neutral-0);--mj-bg-surface-card:var(--mj-color-neutral-50);--mj-bg-surface-sunken:var(--mj-color-neutral-100);--mj-bg-surface-hover:var(--mj-color-neutral-100);--mj-bg-surface-elevated:var(--mj-color-neutral-0);
+--mj-text-primary:var(--mj-color-neutral-800);--mj-text-secondary:var(--mj-color-neutral-600);--mj-text-muted:var(--mj-color-neutral-500);--mj-text-inverse:#fff;
+--mj-border-default:var(--mj-color-neutral-200);--mj-border-subtle:var(--mj-color-neutral-100);--mj-border-strong:var(--mj-color-neutral-300);
+--mj-brand-primary:var(--mj-color-brand-500);--mj-brand-primary-hover:var(--mj-color-brand-600);
+--mj-status-success:var(--mj-color-success-500);--mj-status-success-text:var(--mj-color-success-700);--mj-status-success-bg:var(--mj-color-success-50);
+--mj-status-warning:var(--mj-color-warning-500);--mj-status-warning-text:var(--mj-color-warning-700);--mj-status-warning-bg:var(--mj-color-warning-50);
+--mj-status-error:var(--mj-color-error-500);--mj-status-error-text:var(--mj-color-error-700);--mj-status-error-bg:var(--mj-color-error-50);
+--shadow-1:0 1px 2px rgba(15,23,42,.06),0 1px 3px rgba(15,23,42,.08);--shadow-2:0 4px 12px rgba(15,23,42,.10);}
+[data-theme="dark"]{color-scheme:dark;
+--mj-bg-page:var(--mj-color-neutral-900);--mj-bg-surface:var(--mj-color-neutral-800);--mj-bg-surface-card:#253347;--mj-bg-surface-sunken:var(--mj-color-neutral-950);--mj-bg-surface-hover:var(--mj-color-neutral-600);--mj-bg-surface-elevated:var(--mj-color-neutral-700);
+--mj-text-primary:var(--mj-color-neutral-100);--mj-text-secondary:var(--mj-color-neutral-300);--mj-text-muted:var(--mj-color-neutral-400);--mj-text-inverse:var(--mj-color-neutral-900);
+--mj-border-default:var(--mj-color-neutral-700);--mj-border-subtle:var(--mj-color-neutral-800);--mj-border-strong:var(--mj-color-neutral-600);
+--mj-brand-primary:var(--mj-color-brand-400);--mj-brand-primary-hover:var(--mj-color-brand-300);
+--mj-status-success-bg:rgba(34,197,94,.15);--mj-status-success-text:#dcfce7;
+--mj-status-warning-bg:rgba(245,158,11,.15);--mj-status-warning-text:#fef3c7;
+--mj-status-error-bg:rgba(239,68,68,.15);--mj-status-error-text:#fee2e2;
+--shadow-1:0 1px 2px rgba(0,0,0,.4);--shadow-2:0 4px 14px rgba(0,0,0,.5);}
+/* ── base ─────────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--mj-bg-page);color:var(--mj-text-primary);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+/* thesis banner */
+.thesis{background:linear-gradient(90deg,var(--mj-color-brand-900),var(--mj-color-brand-700));color:#fff;padding:10px 20px;display:flex;gap:18px;align-items:center;font-size:13px;flex:0 0 auto}
+.thesis b{font-size:14px}.thesis .tag{background:rgba(255,255,255,.15);padding:2px 10px;border-radius:10px;font-size:11px;letter-spacing:.4px}
+.thesis .spacer{flex:1}
+.theme-btn{background:rgba(255,255,255,.15);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px}
+/* app shell */
+.app{flex:1;display:flex;min-height:0}
+.sidebar{width:272px;background:var(--mj-bg-surface);border-right:1px solid var(--mj-border-default);display:flex;flex-direction:column}
+.sb-head{padding:14px 14px 8px;display:flex;align-items:center;gap:8px}
+.sb-head h2{font-size:15px;flex:1}
+.icon-btn{width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--mj-text-secondary)}
+.icon-btn:hover{background:var(--mj-bg-surface-hover);color:var(--mj-text-primary)}
+.sb-search{margin:4px 12px 10px;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-subtle);border-radius:8px;padding:7px 10px;color:var(--mj-text-muted);font-size:13px;display:flex;gap:8px;align-items:center}
+.convo{padding:9px 14px;margin:1px 8px;border-radius:8px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.convo:hover{background:var(--mj-bg-surface-hover)}
+.convo.active{background:color-mix(in srgb,var(--mj-brand-primary) 10%,transparent)}
+.convo .t{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.convo .s{font-size:12px;color:var(--mj-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-user{margin-top:auto;border-top:1px solid var(--mj-border-default);padding:12px 14px;display:flex;gap:10px;align-items:center;font-size:13px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--mj-color-brand-500);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto}
+/* chat column */
+.chat{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--mj-bg-page)}
+.chat-head{background:var(--mj-bg-surface);border-bottom:1px solid var(--mj-border-default);padding:10px 20px;display:flex;align-items:center;gap:12px}
+.chat-head h1{font-size:15px;font-weight:650}
+.agent-chip{display:inline-flex;gap:6px;align-items:center;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-subtle);padding:3px 10px;border-radius:12px;font-size:12px;color:var(--mj-text-secondary)}
+.agent-chip .dot{width:7px;height:7px;border-radius:50%;background:var(--mj-status-success)}
+/* ⟡ A: routines pill in header */
+.routines-pill{margin-left:auto;position:relative}
+.routines-pill>button{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--mj-border-default);background:var(--mj-bg-surface);padding:6px 14px;border-radius:16px;font-size:12.5px;font-weight:600;color:var(--mj-text-secondary);box-shadow:var(--shadow-1)}
+.routines-pill>button:hover{border-color:var(--mj-brand-primary);color:var(--mj-brand-primary)}
+.routines-pill .count{background:var(--mj-brand-primary);color:#fff;font-size:10.5px;padding:1px 7px;border-radius:9px}
+/* flyout */
+.flyout{position:absolute;top:40px;right:0;width:360px;background:var(--mj-bg-surface-elevated);border:1px solid var(--mj-border-default);border-radius:12px;box-shadow:var(--shadow-2);z-index:30;overflow:hidden}
+.flyout h3{font-size:12px;letter-spacing:.6px;color:var(--mj-text-muted);padding:12px 16px 6px;text-transform:uppercase}
+.fly-item{padding:10px 16px;display:flex;gap:10px;align-items:center;border-top:1px solid var(--mj-border-subtle)}
+.fly-item:hover{background:var(--mj-bg-surface-hover)}
+.fly-item .st{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.st.ok{background:var(--mj-status-success)}.st.warn{background:var(--mj-status-warning)}.st.err{background:var(--mj-status-error)}.st.pause{background:var(--mj-text-muted)}
+.fly-item .fi-main{flex:1;min-width:0}
+.fly-item .fi-name{font-size:13px;font-weight:600}
+.fly-item .fi-sub{font-size:11.5px;color:var(--mj-text-muted)}
+.fly-item .fi-actions{display:flex;gap:2px;opacity:.85}
+.fly-foot{padding:10px 16px;border-top:1px solid var(--mj-border-default);font-size:12.5px;color:var(--mj-brand-primary);font-weight:600;display:flex;justify-content:space-between}
+/* messages */
+.msgs{flex:1;overflow-y:auto;padding:22px 0}
+.mrow{max-width:820px;margin:0 auto 18px;padding:0 24px;display:flex;gap:12px;position:relative}
+.mrow .bubble{background:var(--mj-bg-surface);border:1px solid var(--mj-border-subtle);border-radius:12px;padding:12px 16px;box-shadow:var(--shadow-1);flex:1}
+.mrow.user .bubble{background:color-mix(in srgb,var(--mj-brand-primary) 7%,var(--mj-bg-surface));}
+.mname{font-size:12px;font-weight:700;margin-bottom:4px;color:var(--mj-text-secondary)}
+.mtime{font-size:11px;color:var(--mj-text-muted);font-weight:400;margin-left:6px}
+/* hover toolbar w/ repeat affordance */
+.msg-tools{position:absolute;top:-12px;right:34px;background:var(--mj-bg-surface-elevated);border:1px solid var(--mj-border-default);border-radius:8px;box-shadow:var(--shadow-2);display:flex;padding:2px;z-index:5}
+.msg-tools button{width:28px;height:26px;border-radius:6px;font-size:12px;color:var(--mj-text-secondary);display:inline-flex;align-items:center;justify-content:center}
+.msg-tools button:hover{background:var(--mj-bg-surface-hover)}
+.msg-tools .highlight{color:var(--mj-brand-primary);background:color-mix(in srgb,var(--mj-brand-primary) 10%,transparent);border-radius:6px}
+.tools-hint{position:absolute;top:-40px;right:30px;background:var(--mj-color-neutral-900);color:#fff;font-size:11px;padding:4px 10px;border-radius:6px;z-index:6}
+[data-theme="dark"] .tools-hint{background:var(--mj-color-neutral-950)}
+/* ⟡ A: the inline creation card */
+.ritual-card{max-width:820px;margin:6px auto 18px;padding:0 24px}
+.rc{border:1.5px solid var(--mj-brand-primary);border-radius:14px;background:var(--mj-bg-surface);box-shadow:var(--shadow-2);overflow:hidden}
+.rc-head{display:flex;align-items:center;gap:10px;padding:13px 18px;background:color-mix(in srgb,var(--mj-brand-primary) 7%,var(--mj-bg-surface));border-bottom:1px solid var(--mj-border-subtle)}
+.rc-head .ic{width:30px;height:30px;border-radius:9px;background:var(--mj-brand-primary);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+.rc-head b{font-size:14px}
+.rc-head .sub{font-size:12px;color:var(--mj-text-muted)}
+.rc-body{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.rc-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.rc-label{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--mj-text-muted);width:76px;flex:0 0 auto}
+.rc-name{flex:1;border:1px solid var(--mj-border-default);background:var(--mj-bg-surface-sunken);border-radius:8px;padding:8px 12px;font-size:13.5px;font-weight:600}
+.sched-chip{border:1px solid var(--mj-border-default);border-radius:16px;padding:6px 14px;font-size:12.5px;color:var(--mj-text-secondary);background:var(--mj-bg-surface)}
+.sched-chip:hover{border-color:var(--mj-brand-primary)}
+.sched-chip.sel{background:var(--mj-brand-primary);border-color:var(--mj-brand-primary);color:#fff;font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--mj-border-default);border-radius:9px;overflow:hidden}
+.seg button{padding:6px 13px;font-size:12.5px;color:var(--mj-text-secondary);border-right:1px solid var(--mj-border-default)}
+.seg button:last-child{border-right:none}
+.seg button.sel{background:color-mix(in srgb,var(--mj-brand-primary) 12%,transparent);color:var(--mj-brand-primary);font-weight:650}
+.advanced{border-top:1px dashed var(--mj-border-default);padding-top:12px;font-size:12.5px;color:var(--mj-text-secondary);display:flex;align-items:center;gap:8px}
+.advanced i{font-size:11px}
+.summary-line{background:var(--mj-bg-surface-sunken);border-radius:9px;padding:9px 13px;font-size:12.5px;color:var(--mj-text-secondary)}
+.summary-line b{color:var(--mj-text-primary)}
+.rc-foot{display:flex;gap:10px;padding:13px 18px;border-top:1px solid var(--mj-border-subtle)}
+.btn{border-radius:9px;padding:8px 18px;font-size:13px;font-weight:600}
+.btn.primary{background:var(--mj-brand-primary);color:#fff}
+.btn.primary:hover{background:var(--mj-brand-primary-hover)}
+.btn.ghost{color:var(--mj-text-secondary)}
+.btn.ghost:hover{background:var(--mj-bg-surface-hover)}
+/* routine digest message */
+.digest .bubble{border-left:3px solid var(--mj-color-violet-600)}
+.digest-badge{display:inline-flex;gap:6px;align-items:center;background:color-mix(in srgb,var(--mj-color-violet-600) 12%,transparent);color:var(--mj-color-violet-600);font-size:11px;font-weight:700;padding:2px 10px;border-radius:10px;margin-left:8px}
+[data-theme="dark"] .digest-badge{color:#c4b5fd}
+.digest table{border-collapse:collapse;margin:8px 0;font-size:12.5px}
+.digest td,.digest th{border:1px solid var(--mj-border-default);padding:5px 12px;text-align:left}
+.digest th{background:var(--mj-bg-surface-sunken);font-weight:650}
+.digest .up{color:var(--mj-status-success-text);font-weight:600}
+.digest .down{color:var(--mj-status-error-text);font-weight:600}
+.view-run{font-size:12px;color:var(--mj-brand-primary);font-weight:600}
+/* composer */
+.composer{padding:14px 24px 18px;max-width:868px;margin:0 auto;width:100%}
+.comp-box{background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:14px;box-shadow:var(--shadow-1);padding:12px 14px}
+.comp-box .ph{color:var(--mj-text-muted);font-size:13.5px;padding:2px 2px 12px}
+.comp-icons{display:flex;gap:4px;align-items:center}
+.comp-icons .spacer{flex:1}
+.send{width:32px;height:32px;border-radius:9px;background:var(--mj-brand-primary);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+.tip{position:relative}
+.tip .tiptext{position:absolute;bottom:38px;left:50%;transform:translateX(-50%);background:var(--mj-color-neutral-900);color:#fff;font-size:11px;white-space:nowrap;padding:4px 10px;border-radius:6px}
+[data-theme="dark"] .tip .tiptext{background:var(--mj-color-neutral-950)}
+</style>
+</head>
+<body>
+<div class="thesis">
+  <span class="tag">OPTION A</span>
+  <div><b>Inline Ritual</b> — routines are just scheduled messages. Creation happens <i>in the thread</i> via a compact card; results arrive as normal agent messages wearing a routine badge; a header pill gives a glanceable flyout. <b>Best for:</b> chat-first business users, minimal new UI. <b>Tradeoff:</b> shallow management depth (the Routines app carries the power tools); busy threads accumulate digests.</div>
+  <div class="spacer"></div>
+  <button class="theme-btn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'"><i class="fa-solid fa-circle-half-stroke"></i> Toggle dark</button>
+</div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sb-head"><h2>Conversations</h2><button class="icon-btn"><i class="fa-solid fa-pen-to-square"></i></button></div>
+    <div class="sb-search"><i class="fa-solid fa-search"></i> Search conversations…</div>
+    <div class="convo active"><span class="t">Pipeline review with Query Builder</span><span class="s">You: how did new pipeline do this week?</span></div>
+    <div class="convo"><span class="t">Competitor pricing research</span><span class="s">Research Agent: I found 3 price changes…</span></div>
+    <div class="convo"><span class="t">Q3 membership renewals</span><span class="s">Skip: The renewal forecast shows…</span></div>
+    <div class="convo"><span class="t">Draft: partner newsletter</span><span class="s">Marketing Agent: Here's the revised…</span></div>
+    <div class="sb-user"><span class="avatar">AN</span> <div>Amith Nagarajan<br><span style="font-size:11px;color:var(--mj-text-muted)">Blue Cypress</span></div></div>
+  </aside>
+  <main class="chat">
+    <div class="chat-head">
+      <h1>Pipeline review with Query Builder</h1>
+      <span class="agent-chip"><span class="dot"></span> Query Builder</span>
+      <!-- ⟡ header pill + open flyout -->
+      <div class="routines-pill">
+        <button><i class="fa-solid fa-rotate"></i> Routines <span class="count">4</span> <i class="fa-solid fa-chevron-down" style="font-size:10px"></i></button>
+        <div class="flyout">
+          <h3>My routines</h3>
+          <div class="fly-item"><span class="st ok"></span><div class="fi-main"><div class="fi-name">Morning Pipeline Digest</div><div class="fi-sub">Query Builder · weekdays 7:00 AM · next in 9h 12m</div></div><div class="fi-actions"><button class="icon-btn" title="Run now"><i class="fa-solid fa-play"></i></button><button class="icon-btn" title="Pause"><i class="fa-solid fa-pause"></i></button></div></div>
+          <div class="fly-item"><span class="st ok"></span><div class="fi-main"><div class="fi-name">Competitor Price Watch</div><div class="fi-sub">Research Agent · every 4 hrs · watching for changes</div></div><div class="fi-actions"><button class="icon-btn"><i class="fa-solid fa-play"></i></button><button class="icon-btn"><i class="fa-solid fa-pause"></i></button></div></div>
+          <div class="fly-item"><span class="st err"></span><div class="fi-main"><div class="fi-name">Weekly Churn Snapshot</div><div class="fi-sub">Skip · Mondays 6:00 AM · last run failed</div></div><div class="fi-actions"><button class="icon-btn"><i class="fa-solid fa-play"></i></button><button class="icon-btn"><i class="fa-solid fa-pause"></i></button></div></div>
+          <div class="fly-item"><span class="st pause"></span><div class="fi-main"><div class="fi-name">AP Invoice Anomaly Watch</div><div class="fi-sub">Paused · every hour · resumes when you do</div></div><div class="fi-actions"><button class="icon-btn" title="Resume"><i class="fa-solid fa-play"></i></button></div></div>
+          <div class="fly-foot"><span>Open Routines app <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px"></i></span><span style="color:var(--mj-text-muted);font-weight:400">4 active · 1 paused</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="msgs">
+      <!-- user message with hover toolbar showing the ⟲ affordance -->
+      <div class="mrow user">
+        <span class="avatar">AN</span>
+        <div class="bubble">
+          <div class="mname">You <span class="mtime">7:02 AM</span></div>
+          Show me yesterday's new pipeline by source, compare to trailing 7-day average, and flag anything unusual.
+        </div>
+        <div class="tools-hint">Repeat this on a schedule</div>
+        <div class="msg-tools">
+          <button><i class="fa-regular fa-copy"></i></button>
+          <button><i class="fa-solid fa-quote-left"></i></button>
+          <button class="highlight" title="Make this a routine"><i class="fa-solid fa-rotate"></i></button>
+          <button><i class="fa-regular fa-pen-to-square"></i></button>
+        </div>
+      </div>
+      <div class="mrow">
+        <span class="avatar" style="background:var(--mj-color-violet-600)">QB</span>
+        <div class="bubble">
+          <div class="mname">Query Builder <span class="mtime">7:02 AM</span></div>
+          Yesterday you added <b>$412K across 14 opportunities</b> — 22% above the trailing 7-day average. Referral-source pipeline is the outlier: 3.1× its usual volume, driven by two enterprise deals from the Chicago event. Full breakdown in the data grid. ↗
+        </div>
+      </div>
+      <!-- ⟡ THE INLINE RITUAL CARD (opened by clicking ⟲) -->
+      <div class="ritual-card">
+        <div class="rc">
+          <div class="rc-head">
+            <span class="ic"><i class="fa-solid fa-rotate"></i></span>
+            <div><b>Make this a routine</b><div class="sub">Query Builder will run your message on a schedule and post results here</div></div>
+          </div>
+          <div class="rc-body">
+            <div class="rc-row"><span class="rc-label">Name</span><span class="rc-name">Morning Pipeline Digest</span></div>
+            <div class="rc-row"><span class="rc-label">When</span>
+              <button class="sched-chip sel"><i class="fa-solid fa-mug-hot"></i> Weekday mornings · 7:00</button>
+              <button class="sched-chip">Every day</button>
+              <button class="sched-chip">Weekly · Mon</button>
+              <button class="sched-chip">Custom…</button>
+            </div>
+            <div class="rc-row"><span class="rc-label">Notify</span>
+              <span class="seg"><button class="sel">Every run</button><button>Only changes</button><button>Failures only</button></span>
+              <span class="seg" style="margin-left:6px"><button class="sel"><i class="fa-solid fa-bell"></i> In-app</button><button><i class="fa-regular fa-envelope"></i> Email</button></span>
+            </div>
+            <div class="summary-line"><i class="fa-regular fa-calendar-check"></i>&nbsp; Runs <b>Mon–Fri at 7:00 AM</b> (America/Chicago) · posts into <b>this conversation</b> · notifies you <b>in-app every run</b></div>
+            <div class="advanced"><i class="fa-solid fa-chevron-right"></i> Advanced — timezone, start/end window, more recipients, pre-armed skills, watch-mode</div>
+          </div>
+          <div class="rc-foot">
+            <button class="btn primary"><i class="fa-solid fa-rotate"></i>&nbsp; Create routine</button>
+            <button class="btn ghost">Cancel</button>
+            <span style="flex:1"></span>
+            <span style="font-size:12px;color:var(--mj-text-muted);align-self:center">First run: tomorrow 7:00 AM</span>
+          </div>
+        </div>
+      </div>
+      <!-- a later routine digest message -->
+      <div class="mrow digest">
+        <span class="avatar" style="background:var(--mj-color-violet-600)">QB</span>
+        <div class="bubble">
+          <div class="mname">Query Builder <span class="mtime">Yesterday · 7:00 AM</span><span class="digest-badge"><i class="fa-solid fa-rotate"></i> Morning Pipeline Digest</span></div>
+          Pipeline added <b>$188K across 9 opportunities</b> — in line with the 7-day average (−4%). Nothing unusual to flag.
+          <table>
+            <tr><th>Source</th><th>New pipeline</th><th>vs 7-day avg</th></tr>
+            <tr><td>Referral</td><td>$84K</td><td class="up">+12%</td></tr>
+            <tr><td>Web / inbound</td><td>$61K</td><td class="down">−9%</td></tr>
+            <tr><td>Events</td><td>$43K</td><td class="down">−15%</td></tr>
+          </table>
+          <span class="view-run">View full run <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px"></i></span>
+        </div>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="comp-box">
+        <div class="ph">Message Query Builder…  (@ agents · / skills · # records)</div>
+        <div class="comp-icons">
+          <button class="icon-btn" title="Plan mode"><i class="fa-solid fa-clipboard-check"></i></button>
+          <button class="icon-btn tip" title="New routine"><i class="fa-solid fa-rotate"></i><span class="tiptext">New routine from scratch</span></button>
+          <button class="icon-btn"><i class="fa-solid fa-paperclip"></i></button>
+          <span class="spacer"></span>
+          <button class="icon-btn"><i class="fa-solid fa-microphone"></i></button>
+          <button class="send"><i class="fa-solid fa-arrow-up"></i></button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

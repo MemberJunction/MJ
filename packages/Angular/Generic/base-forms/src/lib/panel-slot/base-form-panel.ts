@@ -45,9 +45,12 @@ export type FormPanelSlot =
  * `<mj-form-panel-slot>` host filters registrations by matching against this
  * shape — registrations without it are silently ignored.
  *
- *   - `entity` — the `MJContentSourceEntity_IContentSourceConfiguration`-style
- *                entity name. Must match the entity-form's record entity exactly
- *                (case-sensitive trim-equality enforced by the slot host).
+ *   - `entity` — the exact entity name (case-sensitive equality enforced by the
+ *                slot host), OR the wildcard `'*'` to register an
+ *                **entity-agnostic** panel that mounts on EVERY entity's form.
+ *                Wildcard panels are expected to self-hide (render nothing) when
+ *                they don't apply to the current record, so the cross-cutting
+ *                registration stays unobtrusive on forms it has no business on.
  *   - `slot`   — which slot the panel renders into.
  *   - `sortKey`— higher = earlier within the slot. Defaults to 0 if omitted.
  *                Use ranges (e.g., 100/50/10) so future panels can wedge in

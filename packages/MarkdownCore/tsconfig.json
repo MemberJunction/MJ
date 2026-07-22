@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.server.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    // This package is published with "type": "module" and loaded by Node's
+    // native ESM resolver. nodenext makes tsc enforce explicit .js extensions
+    // on relative specifiers, which the base config's "bundler" resolution
+    // would silently tolerate (GitHub issue #3137).
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "src/__tests__"]
+}

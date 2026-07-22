@@ -32,6 +32,7 @@ const DOMAIN_TO_AUDIT_ENTITIES: Record<string, string[]> = {
     'Artifact Permissions': ['MJ: Artifact Permissions'],
     'Collection Permissions': ['MJ: Collection Permissions'],
     'AI Agent Permissions': ['MJ: AI Agent Permissions'],
+    'AI Skill Permissions': ['MJ: AI Skill Permissions'],
     'Query Permissions': ['MJ: Query Permissions'],
     'Access Control Rules': ['MJ: Access Control Rules'],
 };
@@ -51,6 +52,7 @@ export const PERMISSION_DOMAIN_ICONS: Record<string, string> = {
     'Artifact Permissions': 'fa-solid fa-file-lines',
     'Collection Permissions': 'fa-solid fa-folder-open',
     'AI Agent Permissions': 'fa-solid fa-robot',
+    'AI Skill Permissions': 'fa-solid fa-wand-magic-sparkles',
     'Query Permissions': 'fa-solid fa-magnifying-glass',
     'Access Control Rules': 'fa-solid fa-lock',
 };
@@ -116,16 +118,22 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
         const activeDomains = this._domains.filter((d) => d.IsActive);
         for (const domain of activeDomains) {
             try {
-                const instance = MJGlobal.Instance.ClassFactory.CreateInstance<PermissionProviderBase>(
+                // TryCreateInstance (NOT CreateInstance) because CreateInstance never returns null
+                // for an unregistered key — it falls back to the anchor base class. Using the
+                // explicit-result API is what makes the "skip unresolvable domains" branch below
+                // actually reachable, instead of installing a method-less abstract-base stub as a
+                // live provider (which then poisons every fan-out in this engine).
+                const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<PermissionProviderBase>(
                     PermissionProviderBase,
                     domain.ProviderClassName
                 );
-                if (instance) {
-                    this._providers.set(domain.Name, instance);
+                if (resolution.Resolved && resolution.Instance) {
+                    this._providers.set(domain.Name, resolution.Instance);
                 } else {
                     LogError(
                         `PermissionEngine: no provider registered for ProviderClassName '${domain.ProviderClassName}' ` +
-                            `(domain '${domain.Name}'). Domain will be skipped until a provider is registered.`
+                            `(domain '${domain.Name}'). Domain will be skipped until a provider is registered. ` +
+                            `${resolution.Reason ?? ''}`
                     );
                 }
             } catch (err) {
@@ -169,8 +177,28 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
      * Powers the Sharing Center "User Access Report" view.
      */
     public async GetAllUserPermissions(user: UserInfo): Promise<NormalizedPermission[]> {
+        return this.fanOutAcrossProviders('GetAllUserPermissions', (p) => p.GetUserResources(user));
+    }
+
+    /**
+     * Runs `invoke` against every registered provider in parallel and concatenates the results,
+     * isolating per-provider failures so one broken domain degrades to "contributes nothing"
+     * rather than rejecting the whole aggregate.
+     *
+     * The `Promise.resolve().then(...)` wrapper is load-bearing and NOT ceremony: `allSettled`
+     * only isolates *rejections*, but a mapper that throws SYNCHRONOUSLY (the classic case being a
+     * provider whose method is `undefined`, e.g. a hollow stub) throws inside `.map()` — before
+     * `allSettled` is ever called — and rejects the entire call. Deferring the invocation into a
+     * promise body converts that synchronous throw into a rejection `allSettled` can contain.
+     * Defense in depth: `instantiateProviders` should prevent hollow providers from being
+     * installed at all, but this fan-out must not be the thing that fails if one ever slips in.
+     */
+    private async fanOutAcrossProviders(
+        callerName: string,
+        invoke: (provider: PermissionProviderBase) => Promise<NormalizedPermission[]>
+    ): Promise<NormalizedPermission[]> {
         const providers = Array.from(this._providers.values());
-        const settled = await Promise.allSettled(providers.map((p) => p.GetUserResources(user)));
+        const settled = await Promise.allSettled(providers.map((p) => Promise.resolve().then(() => invoke(p))));
 
         const results: NormalizedPermission[] = [];
         settled.forEach((outcome, i) => {
@@ -178,7 +206,7 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
             if (outcome.status === 'fulfilled') {
                 if (outcome.value?.length) results.push(...outcome.value);
             } else {
-                LogError(`PermissionEngine.GetAllUserPermissions: provider '${provider.DomainName}' threw: ${outcome.reason}`);
+                LogError(`PermissionEngine.${callerName}: provider '${provider?.DomainName}' threw: ${outcome.reason}`);
             }
         });
         return results;
@@ -193,21 +221,7 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
      * Providers are queried in parallel; failures are logged and skipped.
      */
     public async GetPermissionsGrantedByUser(grantor: UserInfo): Promise<NormalizedPermission[]> {
-        const providers = Array.from(this._providers.values());
-        const settled = await Promise.allSettled(providers.map((p) => p.GetPermissionsGrantedByUser(grantor)));
-
-        const results: NormalizedPermission[] = [];
-        settled.forEach((outcome, i) => {
-            const provider = providers[i];
-            if (outcome.status === 'fulfilled') {
-                if (outcome.value?.length) results.push(...outcome.value);
-            } else {
-                LogError(
-                    `PermissionEngine.GetPermissionsGrantedByUser: provider '${provider.DomainName}' threw: ${outcome.reason}`
-                );
-            }
-        });
-        return results;
+        return this.fanOutAcrossProviders('GetPermissionsGrantedByUser', (p) => p.GetPermissionsGrantedByUser(grantor));
     }
 
     /**
@@ -216,21 +230,7 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
      * access. Providers are queried in parallel; failures are logged and skipped.
      */
     public async GetPermissionsSharedWithUser(grantee: UserInfo): Promise<NormalizedPermission[]> {
-        const providers = Array.from(this._providers.values());
-        const settled = await Promise.allSettled(providers.map((p) => p.GetPermissionsSharedWithUser(grantee)));
-
-        const results: NormalizedPermission[] = [];
-        settled.forEach((outcome, i) => {
-            const provider = providers[i];
-            if (outcome.status === 'fulfilled') {
-                if (outcome.value?.length) results.push(...outcome.value);
-            } else {
-                LogError(
-                    `PermissionEngine.GetPermissionsSharedWithUser: provider '${provider.DomainName}' threw: ${outcome.reason}`
-                );
-            }
-        });
-        return results;
+        return this.fanOutAcrossProviders('GetPermissionsSharedWithUser', (p) => p.GetPermissionsSharedWithUser(grantee));
     }
 
     /**
@@ -249,7 +249,7 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
 
     /** All active, loaded domain catalog records. */
     public get Domains(): MJPermissionDomainEntity[] {
-        return this._domains.filter((d) => d.IsActive);
+        return this.GetConfigData<MJPermissionDomainEntity>('_domains').filter((d) => d.IsActive);
     }
 
     /** Look up the provider for a specific domain by name; returns undefined when not loaded. */

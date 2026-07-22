@@ -50,17 +50,17 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
     }
 
     public get ArtifactTypes(): MJArtifactTypeEntity[] {
-        return this._artifactTypes;
+        return this.GetConfigData<MJArtifactTypeEntity>('_artifactTypes');
     }
 
     /** All artifacts in the system */
     public get Artifacts(): MJArtifactEntity[] {
-        return this._artifacts;
+        return this.GetConfigData<MJArtifactEntity>('_artifacts');
     }
 
     /** All artifact versions in the system */
     public get ArtifactVersions(): MJArtifactVersionEntity[] {
-        return this._artifactVersions;
+        return this.GetConfigData<MJArtifactVersionEntity>('_artifactVersions');
     }
 
     /**

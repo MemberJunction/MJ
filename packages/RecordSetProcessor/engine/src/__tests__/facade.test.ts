@@ -3,13 +3,15 @@
  * and the output-mapping write-back applier. No database — providers/entities are faked.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
     ArraySource,
     FilterSource,
+    IRecordProcessor,
     ListSource,
+    RecordProcessorRegistry,
     RecordRef,
     ViewSource,
 } from '@memberjunction/record-set-processor-base';
@@ -125,6 +127,48 @@ describe('RecordProcessExecutor.buildProcessor', () => {
             expect(() => exec.buildProcessor(rp({ WorkType: 'FieldRules', Configuration: '{"foo":1}' }))).toThrow(/Rules array/);
         });
     });
+
+    // The pluggable registry seam: a work type the built-in switch doesn't know about is resolved via
+    // the RecordProcessorRegistry (how external packages — e.g. Predictive Studio's 'ML Model' scoring —
+    // teach the substrate a new work type without this package depending on them).
+    describe('pluggable processor registry', () => {
+        class CustomProcessor implements IRecordProcessor {
+            constructor(public readonly workType: string) {}
+            async ProcessRecord() { return { Status: 'Succeeded' as const }; }
+        }
+
+        afterEach(() => RecordProcessorRegistry.Instance.Unregister('My Custom Work'));
+
+        it('resolves a registered processor for a non-built-in work type', () => {
+            RecordProcessorRegistry.Instance.Register('My Custom Work', (c) => new CustomProcessor(c.WorkType));
+            const proc = exec.buildProcessor(rp({ WorkType: 'My Custom Work' }));
+            expect(proc).toBeInstanceOf(CustomProcessor);
+            expect((proc as CustomProcessor).workType).toBe('My Custom Work');
+        });
+
+        it('passes the Record Process config through the build context to the factory', () => {
+            let seenConfig: string | null | undefined;
+            RecordProcessorRegistry.Instance.Register('My Custom Work', (c) => {
+                seenConfig = c.Configuration;
+                return new CustomProcessor(c.WorkType);
+            });
+            exec.buildProcessor(rp({ WorkType: 'My Custom Work', Configuration: '{"modelId":"m1"}' }));
+            expect(seenConfig).toBe('{"modelId":"m1"}');
+        });
+
+        it('wraps a registered processor with WriteBackProcessor when OutputMapping is set', () => {
+            RecordProcessorRegistry.Instance.Register('My Custom Work', (c) => new CustomProcessor(c.WorkType));
+            const proc = exec.buildProcessor(rp({
+                WorkType: 'My Custom Work',
+                OutputMapping: JSON.stringify({ fields: { S: '$.s' } }),
+            }));
+            expect(proc).toBeInstanceOf(WriteBackProcessor);
+        });
+
+        it('still throws "unsupported WorkType" when nothing is registered for the work type', () => {
+            expect(() => exec.buildProcessor(rp({ WorkType: 'Totally Unknown' }))).toThrow(/unsupported WorkType/);
+        });
+    });
 });
 
 // --- write-back applier --------------------------------------------------------------------------
@@ -177,5 +221,53 @@ describe('applyOutputMapping', () => {
         });
         expect(out.createdChildID).toBe('child-1');
         expect(created[0].sets).toEqual({ CustomerID: 'c1', Summary: 'great' });
+    });
+
+    it('dry-run resolves field values into previewFields but saves NOTHING', async () => {
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: { fields: { Satisfaction: '$.satisfaction', Sentiment: '$.sentiment' } },
+            result: { satisfaction: 'High', sentiment: 0.8 },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+        expect(out.dryRun).toBe(true);
+        expect(out.updatedRecord).toBe(false);
+        expect(out.previewFields).toEqual({ Satisfaction: 'High', Sentiment: 0.8 });
+        // No entity object is even created on a dry-run (nothing loaded, nothing saved).
+        expect(created.length).toBe(0);
+    });
+
+    it('dry-run previews the child record values but creates NOTHING', async () => {
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: { childRecord: { entity: 'Customer Insights', parentField: 'CustomerID', map: { Summary: '$.summary' } } },
+            result: { summary: 'great' },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+        expect(out.dryRun).toBe(true);
+        expect(out.createdChildID).toBeUndefined();
+        expect(out.previewChild).toEqual({ CustomerID: 'c1', Summary: 'great' });
+        expect(created.length).toBe(0);
+    });
+
+    it('WriteBackProcessor threads dryRun through so the inner work runs but nothing is saved', async () => {
+        const { provider, created } = fakeProvider();
+        const inner: IRecordProcessor = {
+            ProcessRecord: async () => ({ Status: 'Succeeded', ResultPayload: { satisfaction: 'High' } }),
+        };
+        const proc = new WriteBackProcessor(inner, { fields: { Satisfaction: '$.satisfaction' } }, true);
+        const result = await proc.ProcessRecord(record, { contextUser: USER, provider } as unknown as RecordProcessorContext);
+        expect(result.Status).toBe('Succeeded');
+        // The write-back payload carries the dry-run preview; the entity was never created/saved.
+        const writeBack = (result.ResultPayload as { writeBack: { dryRun?: boolean; previewFields?: Record<string, unknown> } }).writeBack;
+        expect(writeBack.dryRun).toBe(true);
+        expect(writeBack.previewFields).toEqual({ Satisfaction: 'High' });
+        expect(created.length).toBe(0);
     });
 });

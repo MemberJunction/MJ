@@ -32,6 +32,7 @@ export type SyncErrorCode =
     | 'TRANSFORM_ERROR'
     | 'MATCH_RESOLUTION_ERROR'
     | 'DATABASE_ERROR'
+    | 'WRITE_VERIFICATION_ERROR'
     | 'WATERMARK_INVALID'
     | 'CONFIGURATION_ERROR'
     | 'UNKNOWN_ERROR';
@@ -61,6 +62,19 @@ export function ClassifyError(error: unknown): { Code: SyncErrorCode; Severity: 
     if (lower.includes('duplicate') || lower.includes('unique constraint') || lower.includes('primary key')) {
         return { Code: 'DUPLICATE_KEY', Severity: 'Warning' };
     }
+    // "no rows returned" from a Create's mandatory read-back (spCreate's `SELECT * FROM vw... WHERE
+    // <key columns>`) is a DETERMINISTIC failure — almost always a null/mismatched key-column value
+    // (the U1 class of bug: a PK column silently absent from the generated INSERT/EXEC call, so
+    // `WHERE col = NULL` matches zero rows). Retrying the SAME write with the SAME inputs reproduces
+    // the SAME miss every time — this is NOT a transient condition. Checked BEFORE the generic
+    // 'sql'-substring catch-all below (which this message would otherwise match, since the mssql
+    // driver's own error text is "SQL Error: ..."), and deliberately excluded from
+    // `IsRetryableError` — misclassifying it as `DATABASE_ERROR` sends it through exponential-backoff
+    // retry for the full retry budget before dead-lettering, burning many minutes for a failure that
+    // was never going to resolve on retry.
+    if (lower.includes('no rows returned')) {
+        return { Code: 'WRITE_VERIFICATION_ERROR', Severity: 'Critical' };
+    }
     if (lower.includes('validation') || lower.includes('validate')) {
         return { Code: 'VALIDATION_ERROR', Severity: 'Warning' };
     }
@@ -76,7 +90,11 @@ export function ClassifyError(error: unknown): { Code: SyncErrorCode; Severity: 
     if (lower.includes('configuration') || lower.includes('config')) {
         return { Code: 'CONFIGURATION_ERROR', Severity: 'Critical' };
     }
-    if (lower.includes('connect') || lower.includes('econnrefused') || lower.includes('sql')) {
+    // Genuinely transient/connection-level signals only — NOT a bare 'sql' substring, which matches
+    // almost any DB-flavored error message (including the deterministic one above) and made this
+    // catch-all classify far too much as retryable.
+    if (lower.includes('connect') || lower.includes('econnrefused') || lower.includes('deadlock')
+        || lower.includes('connection') || lower.includes('pool')) {
         return { Code: 'DATABASE_ERROR', Severity: 'Critical' };
     }
     if (lower.includes('connector')) {
@@ -122,6 +140,28 @@ export interface MappedRecord {
     UnmappedFields?: Record<string, unknown>;
 }
 
+/**
+ * Per-key statistics for CUSTOM (unmapped) source keys observed during a sync — aggregated
+ * IN MEMORY across every fetched record, REGARDLESS of whether the row was written or the
+ * content-hash fast path skipped it. Custom-overflow behaviour: a newly-appearing custom
+ * column must NOT affect the row-hash match (so unchanged rows stay skip-cheap), yet its
+ * presence + sizing statistics must still surface as a promotion candidate at sync end. This
+ * out-of-band aggregation is what makes both true at once — candidates and generous sizing
+ * stats exist even when every row was skipped.
+ */
+export interface CustomKeyStat {
+    /** The unmapped source key as it appears in `ExternalRecord.Fields`. */
+    Key: string;
+    /** Records in which the key appeared with a non-null value. */
+    Occurrences: number;
+    /** Total records scanned for this entity map this run. */
+    TotalRecords: number;
+    /** Longest observed String(value).length — sizes the future column generously. */
+    MaxLength: number;
+    /** Bounded sample of observed values, for type inference at promotion time. */
+    SampleValues: unknown[];
+}
+
 /** Aggregate result of a sync operation */
 export interface SyncResult {
     /** Whether the overall sync completed without fatal errors */
@@ -162,6 +202,12 @@ export interface SyncResult {
      * case). Lets the resolver surface SchemaUpdatePending to the client.
      */
     SchemaUpdate?: SchemaPromotionResult;
+    /**
+     * Custom (unmapped) source keys observed this run, keyed by target MJ entity name — the
+     * out-of-band candidate statistics gathered regardless of row writes/skips (see
+     * {@link CustomKeyStat}). Undefined for a customs-free sync.
+     */
+    CustomKeyStats?: Record<string, CustomKeyStat[]>;
 }
 
 /** Outcome of the post-sync custom-column promotion pass (gaps.md §2 / M2). */
@@ -202,6 +248,13 @@ export type PostSyncSchemaPromotionCallback = (ctx: {
     ContextUser: unknown;
     SyncedEntityNames: string[];
     Provider?: unknown;
+    /**
+     * The sync's in-memory custom-key statistics (keyed by entity name). Supplements the
+     * overflow-column scan: with the Content-hash basis (overflow excluded from matching),
+     * unchanged rows never write their overflow JSON, so the column scan alone under-reports —
+     * these stats carry the candidates + sizing evidence for exactly those skipped rows.
+     */
+    CustomKeyStats?: Record<string, CustomKeyStat[]>;
 }) => Promise<SchemaPromotionResult>;
 
 /** Per-entity-map result within a sync run */
@@ -348,6 +401,13 @@ export interface IntrospectSchemaOptions {
      * user-selected subset whenever possible.
      */
     ObjectNames?: string[];
+    /**
+     * U11 — optional live progress callback: invoked after each object's describe completes
+     * (or is skipped) with (scanned, total). Lets a caller drive a DETERMINATE discovery bar
+     * ("scanned N of M objects") instead of an indeterminate spinner. Best-effort — the
+     * default IntrospectSchema invokes it; connector overrides may or may not.
+     */
+    OnProgress?: (scanned: number, total: number) => void;
 }
 
 /** One source object (table, API entity) discovered during introspection. */
@@ -403,8 +463,17 @@ export interface SourceFieldInfo {
     Scale: number | null;
     /** Default value expression (null if none). */
     DefaultValue: string | null;
-    /** Whether this field is part of the primary key. */
-    IsPrimaryKey: boolean;
+    /**
+     * Whether this field is part of the primary key.
+     *
+     * `undefined` means the SOURCE HAD NO OPINION (a sample/list API that doesn't
+     * report PKs) — semantically distinct from an explicit `false` (the source
+     * affirmed it is NOT a PK). The persist overlay (`decideBooleanOverlay`)
+     * treats `undefined` as no-opinion so a Declared `true` survives; coercing
+     * silence to `false` here is the U1 bug that wiped declared PKs (the
+     * keyless-entity root). Never write `?? false` when mapping into this field.
+     */
+    IsPrimaryKey?: boolean;
     /**
      * Whether this field is constrained as unique. Distinct from IsPrimaryKey —
      * an object can have several unique fields (email, phone) of which only one
@@ -418,8 +487,11 @@ export interface SourceFieldInfo {
      * Create/Update operation bodies.
      */
     IsReadOnly?: boolean;
-    /** Whether this field is a foreign key. */
-    IsForeignKey: boolean;
+    /**
+     * Whether this field is a foreign key. `undefined` = the source had no
+     * opinion (see IsPrimaryKey) — distinct from an affirmed `false`.
+     */
+    IsForeignKey?: boolean;
     /** If FK, which source object it references (null if not a FK). */
     ForeignKeyTarget: string | null;
 }

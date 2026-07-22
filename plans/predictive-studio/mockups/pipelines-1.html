@@ -1,0 +1,247 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Pipeline Builder</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .builder { display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
+  .canvas-wrap { display: flex; flex-direction: column; min-width: 0; }
+  .flow.big { min-height: 620px; }
+  .node.selected { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent), var(--shadow); }
+  .node .nb .nb-row { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; }
+  .node .nb .nb-row .k { color: var(--mj-text-muted); }
+  .flow-toolbar { display: flex; align-items: center; gap: 8px; padding: 11px 14px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-top: none; border-radius: 0 0 var(--radius) var(--radius); }
+  .flow-toolbar .spacer { flex: 1; }
+  .palette { display: flex; gap: 6px; align-items: center; padding: 9px 12px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-bottom: none; border-radius: var(--radius) var(--radius) 0 0; flex-wrap: wrap; }
+  .pchip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; border: 1px dashed var(--mj-border-strong); font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); cursor: grab; background: var(--mj-bg-surface-card); }
+  .pchip i { font-size: 11px; }
+  .pchip.s i { color: #6b7280; } .pchip.f i { color: #2050c8; } .pchip.e i { color: #7b3ff0; } .pchip.t i { color: #1f9d57; } .pchip.a i { color: #d98213; }
+  .insp { position: sticky; top: 86px; align-self: start; }
+  .insp .ihead { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .insp .ihead .ic { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #fff; background: var(--mj-brand-primary); font-size: 13px; }
+  .field { margin-bottom: 13px; } .field:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 11.5px; font-weight: 700; color: var(--mj-text-secondary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .04em; }
+  .ctrl { width: 100%; padding: 7px 10px; border: 1px solid var(--mj-border-default); border-radius: 8px; font-size: 13px; background: var(--mj-bg-surface); color: var(--mj-text-primary); }
+  .seg { display: inline-flex; border: 1px solid var(--mj-border-default); border-radius: 8px; overflow: hidden; }
+  .seg button { border: none; background: var(--mj-bg-surface); padding: 6px 11px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--mj-text-secondary); }
+  .seg button.on { background: var(--mj-brand-primary); color: #fff; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--mj-text-secondary); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a class="active"><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div><a><i class="fa-solid fa-flask"></i> Experiments</a><a><i class="fa-solid fa-cubes"></i> Model Registry</a><a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main">
+ <div class="ps-topbar">
+   <h1>Member Renewal Predictor</h1>
+   <span class="badge blue"><i class="fa-solid fa-diagram-project"></i> DAG canvas</span>
+   <span class="crumb">Training Pipelines / Member Renewal Predictor / <b style="color:var(--mj-text-secondary)">v4 draft</b></span>
+   <div class="spacer"></div>
+   <span class="small muted"><i class="fa-regular fa-clock"></i> autosaved 2m ago</span>
+   <button class="btn"><i class="fa-solid fa-code-branch"></i> Versions</button>
+   <button class="btn"><i class="fa-regular fa-circle-check"></i> Validate</button>
+   <button class="btn primary"><i class="fa-solid fa-play"></i> Train</button>
+ </div>
+ <div class="ps-content">
+  <div class="builder">
+   <!-- ===== CANVAS ===== -->
+   <div class="canvas-wrap">
+     <div class="palette">
+       <span class="small muted" style="margin-right:4px;font-weight:700">Drag to add:</span>
+       <span class="pchip s"><i class="fa-solid fa-database"></i> Source</span>
+       <span class="pchip f"><i class="fa-solid fa-sliders"></i> Feature step</span>
+       <span class="pchip e"><i class="fa-solid fa-vector-square"></i> Embedding</span>
+       <span class="pchip t"><i class="fa-solid fa-bullseye"></i> Target</span>
+       <span class="pchip a"><i class="fa-solid fa-shapes"></i> Algorithm</span>
+       <div style="flex:1"></div>
+       <span class="small muted"><i class="fa-solid fa-circle-nodes"></i> 13 nodes</span>
+     </div>
+
+     <div class="flow big">
+       <svg class="edges" viewBox="0 0 940 620" preserveAspectRatio="none">
+         <!-- sources -> select numeric -->
+         <path d="M 196,72 C 250,72 250,150 300,150"/>
+         <path d="M 196,182 C 250,182 250,164 300,164"/>
+         <path d="M 196,292 C 250,292 250,178 300,178"/>
+         <!-- select numeric -> impute -> onehot -> recency -> standardize (vertical feature chain) -->
+         <path d="M 488,164 C 520,164 520,164 560,164"/>
+         <!-- standardize -> merge -->
+         <path d="M 748,164 C 790,164 790,300 820,300"/>
+         <!-- embedding -> merge -->
+         <path d="M 488,398 C 640,398 720,330 820,312"/>
+         <!-- target -> merge -->
+         <path d="M 488,520 C 660,520 760,340 820,326"/>
+       </svg>
+
+       <!-- SOURCES -->
+       <div class="node src" style="left:18px;top:36px">
+         <div class="nh"><i class="fa-solid fa-table"></i> Members <span style="flex:1"></span><span class="tag">entity</span></div>
+         <div class="nb"><div class="nb-row"><span class="k">rows</span><span>48,210</span></div><div class="nb-row"><span class="k">primary</span><span>Renewed</span></div></div>
+         <span class="port out"></span>
+       </div>
+       <div class="node src" style="left:18px;top:146px">
+         <div class="nh"><i class="fa-solid fa-magnifying-glass-chart"></i> Event Attendance <span style="flex:1"></span><span class="tag">query</span></div>
+         <div class="nb"><div class="nb-row"><span class="k">join</span><span>MemberID</span></div><div class="nb-row"><span class="k">agg</span><span>count, last</span></div></div>
+         <span class="port out"></span>
+       </div>
+       <div class="node src" style="left:18px;top:256px">
+         <div class="nh"><i class="fa-solid fa-arrows-turn-to-dots"></i> External CRM <span style="flex:1"></span><span class="tag">#2449</span></div>
+         <div class="nb"><div class="nb-row"><span class="k">type</span><span>external entity</span></div><div class="nb-row"><span class="k">link</span><span>CRM_ContactID</span></div></div>
+         <span class="port out"></span>
+       </div>
+
+       <!-- FEATURE CHAIN (selected = recency) -->
+       <div class="node feat" style="left:300px;top:130px">
+         <div class="nh"><i class="fa-solid fa-list-check"></i> Select numeric</div>
+         <div class="nb"><div class="nb-row"><span class="k">cols</span><span>tenure, events…</span></div></div>
+         <span class="port in"></span><span class="port out"></span>
+       </div>
+       <div class="node feat" style="left:560px;top:130px">
+         <div class="nh"><i class="fa-solid fa-fill-drip"></i> Impute</div>
+         <div class="nb"><div class="nb-row"><span class="k">age</span><span>→ mean</span></div></div>
+         <span class="port in"></span><span class="port out"></span>
+       </div>
+
+       <!-- second row feature steps -->
+       <svg class="edges" viewBox="0 0 940 620" preserveAspectRatio="none" style="z-index:0">
+         <path d="M 654,196 C 654,230 360,230 360,250"/>
+         <path d="M 360,316 C 360,348 620,348 620,372"/>
+       </svg>
+       <div class="node feat" style="left:266px;top:230px">
+         <div class="nh"><i class="fa-solid fa-table-cells"></i> One-hot</div>
+         <div class="nb"><div class="nb-row"><span class="k">city</span><span>→ 18 cols</span></div></div>
+         <span class="port in"></span><span class="port out"></span>
+       </div>
+       <div class="node feat selected" style="left:526px;top:230px">
+         <div class="nh"><i class="fa-solid fa-clock-rotate-left"></i> Recency (as-of)</div>
+         <div class="nb"><div class="nb-row"><span class="k">feat</span><span>days_since_last</span></div><div class="nb-row"><span class="k">as-of</span><span>decision date</span></div></div>
+         <span class="port in"></span><span class="port out"></span>
+       </div>
+       <div class="node feat" style="left:526px;top:352px">
+         <div class="nh"><i class="fa-solid fa-ruler-combined"></i> Standardize</div>
+         <div class="nb"><div class="nb-row"><span class="k">scaler</span><span>z-score</span></div></div>
+         <span class="port in"></span><span class="port out"></span>
+       </div>
+
+       <!-- EMBEDDING -->
+       <div class="node emb" style="left:300px;top:362px">
+         <div class="nh"><i class="fa-solid fa-vector-square"></i> Member embedding</div>
+         <div class="nb"><div class="nb-row"><span class="k">dims</span><span>384</span></div><div class="nb-row"><span class="k">state</span><span>persisted · pinned</span></div></div>
+         <span class="port in"></span><span class="port out"></span>
+       </div>
+
+       <!-- TARGET -->
+       <div class="node target" style="left:300px;top:484px">
+         <div class="nh"><i class="fa-solid fa-bullseye"></i> Target: Renewed</div>
+         <div class="nb"><div class="nb-row"><span class="k">type</span><span>binary</span></div><div class="nb-row"><span class="k">pos. rate</span><span>0.71</span></div></div>
+         <span class="port out"></span>
+       </div>
+
+       <!-- MERGE -->
+       <div class="node feat" style="left:820px;top:270px">
+         <div class="nh"><i class="fa-solid fa-object-group"></i> Assemble matrix</div>
+         <div class="nb"><div class="nb-row"><span class="k">features</span><span>411</span></div><div class="nb-row"><span class="k">incl. emb</span><span>384</span></div></div>
+         <span class="port in"></span><span class="port out"></span>
+       </div>
+
+       <!-- ALGORITHM + MODEL (lower right) -->
+       <svg class="edges" viewBox="0 0 940 620" preserveAspectRatio="none" style="z-index:0">
+         <path d="M 1010,298 C 1010,430 760,430 760,452"/>
+       </svg>
+       <div class="node algo" style="left:660px;top:452px">
+         <div class="nh"><i class="fa-solid fa-shapes"></i> XGBoost</div>
+         <div class="nb"><div class="nb-row"><span class="k">n_estimators</span><span>300</span></div><div class="nb-row"><span class="k">max_depth</span><span>6</span></div><div class="nb-row"><span class="k">lr</span><span>0.1</span></div></div>
+         <span class="port in"></span><span class="port out"></span>
+       </div>
+       <div class="node" style="left:660px;top:556px;border-color:var(--mj-success)">
+         <div class="nh"><i class="fa-solid fa-cube" style="background:var(--mj-success)"></i> Model output</div>
+         <div class="nb"><div class="nb-row"><span class="k">artifact</span><span>renewal_v4</span></div></div>
+         <span class="port in" style="border-color:var(--mj-success)"></span>
+       </div>
+     </div>
+
+     <div class="flow-toolbar">
+       <div class="legend">
+         <span><i style="background:#6b7280"></i> Source</span>
+         <span><i style="background:#2050c8"></i> Feature</span>
+         <span><i style="background:#7b3ff0"></i> Embedding</span>
+         <span><i style="background:#1f9d57"></i> Target</span>
+         <span><i style="background:#d98213"></i> Algorithm</span>
+       </div>
+       <div class="spacer"></div>
+       <button class="btn sm ghost"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+       <span class="small muted">100%</span>
+       <button class="btn sm ghost"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+       <button class="btn sm"><i class="fa-solid fa-arrows-to-dot"></i> Fit</button>
+       <button class="btn sm"><i class="fa-regular fa-circle-check"></i> Validate</button>
+       <button class="btn sm primary"><i class="fa-solid fa-play"></i> Train</button>
+     </div>
+   </div>
+
+   <!-- ===== INSPECTOR ===== -->
+   <div class="col">
+     <div class="card insp">
+       <div class="ihead">
+         <div class="ic" style="background:#2050c8"><i class="fa-solid fa-clock-rotate-left"></i></div>
+         <div><h3 style="font-size:14px">Recency (as-of)</h3><div class="small muted">Feature step · selected</div></div>
+       </div>
+       <div class="card-body">
+         <div class="field">
+           <label>Output feature</label>
+           <input class="ctrl" value="days_since_last_activity">
+         </div>
+         <div class="field">
+           <label>As-of strategy</label>
+           <div class="seg"><button class="on">Offset</button><button>Snapshot</button><button>Event time</button></div>
+         </div>
+         <div class="field">
+           <label>Offset before renewal</label>
+           <div class="row" style="gap:8px"><input class="ctrl" value="90" style="width:80px"><select class="ctrl"><option>days</option><option>weeks</option></select></div>
+         </div>
+         <div class="callout warn" style="margin-top:4px">
+           <i class="fa-solid fa-triangle-exclamation"></i>
+           <div class="small"><b>Leakage guard:</b> <code>days_since_last_activity</code> must be computed as-of the decision date to avoid peeking at the future.</div>
+         </div>
+       </div>
+     </div>
+
+     <div class="card">
+       <div class="card-head"><i class="fa-solid fa-shield-halved" style="color:var(--mj-brand-primary)"></i><h3>Leakage guard</h3></div>
+       <div class="card-body col" style="gap:10px">
+         <div class="row" style="justify-content:space-between"><span class="small">Deny-list columns</span><span class="badge gray">3</span></div>
+         <div class="row wrap" style="gap:6px"><span class="tag">renewal_date</span><span class="tag">paid_at</span><span class="tag">status_post</span></div>
+         <div class="divider"></div>
+         <div class="field" style="margin:0">
+           <label>Single-feature dominance</label>
+           <div class="row" style="align-items:center;gap:10px">
+             <div class="bar" style="flex:1"><span style="width:60%;background:var(--mj-warning)"></span></div>
+             <span class="mono">0.60</span>
+           </div>
+           <div class="small muted" style="margin-top:6px">Block training if any feature exceeds this importance share.</div>
+         </div>
+       </div>
+     </div>
+
+     <div class="card">
+       <div class="card-head"><i class="fa-solid fa-scissors" style="color:var(--mj-brand-primary)"></i><h3>Validation</h3></div>
+       <div class="card-body col" style="gap:10px">
+         <div class="row" style="justify-content:space-between"><span class="small muted">Train / test split</span><b>0.20</b></div>
+         <div class="row" style="justify-content:space-between"><span class="small muted">Locked holdout</span><b>0.15</b></div>
+         <div class="row" style="justify-content:space-between"><span class="small muted">Stratify on</span><span class="tag">Renewed</span></div>
+         <div class="divider"></div>
+         <div class="small muted">65% train · 20% test · <span style="color:var(--mj-text-secondary)">15% locked holdout</span></div>
+         <div class="bar"><span style="width:65%;background:linear-gradient(90deg,#3a6df0,#6f9bff)"></span></div>
+       </div>
+     </div>
+   </div>
+  </div>
+ </div>
+</main>
+</div></body></html>

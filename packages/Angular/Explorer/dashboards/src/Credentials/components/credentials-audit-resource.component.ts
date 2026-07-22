@@ -248,8 +248,14 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
         this.cdr.markForCheck();
     }
 
-    public toggleLogExpand(logId: string): void {
-        this.expandedLogId = this.expandedLogId === logId ? null : logId;
+    /**
+     * Accordion ExpandedChange handler for an audit timeline row. Single-expand
+     * (radio-like) model: expanding a row sets it as the sole open row (the
+     * template's `expandedLogId === log.ID` binding collapses the prior one);
+     * collapsing the open row clears it. OnPush — drives change detection.
+     */
+    public onLogExpandedChange(logId: string, expanded: boolean): void {
+        this.expandedLogId = expanded ? logId : null;
         this.cdr.markForCheck();
     }
 

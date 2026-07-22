@@ -332,9 +332,12 @@ graph LR
 
 The index is rebuilt from the registry on startup and maintained during Set/Invalidate/Evict operations.
 
-### Important: Derived rowCount
+### Important: Derived `rowCount` vs. maintained `totalRowCount`
 
-`rowCount` in the registry is **always derived from `results.length`**, never persisted independently. This prevents stale data bugs where the count and actual data could diverge. On every read, `rowCount` is computed fresh from the stored results array.
+Two distinct counts, and the distinction is load-bearing:
+
+- **`rowCount` — the number of *cached* rows.** This is **always derived from `results.length`**, never persisted independently. On every read it's computed fresh from the stored results array, so the count and the actual cached data can never diverge.
+- **`totalRowCount` — the total number of rows matching the query in the database.** For a **full-dataset** slot this equals `rowCount`, but for a **subset slot** (a paginated / `MaxRows`-limited RunView) the total is *larger* than the cached-rows count. It therefore **must be maintained separately** — carried from the server's authoritative `COUNT(*)` on the initial store, and updated across the net row delta on differential updates and in-place upsert/remove. **Deriving `totalRowCount` from `results.length` is a bug**: on a subset slot it collapses the reported total to the cached-subset size the first time a mutation touches the entry, so a cached paginated read under-reports its total (while `count_only`, which is cache-ineligible and always runs a fresh COUNT, stays correct). See the `localCacheManager` `totalRowCount` maintenance in `ApplyDifferentialUpdate` / `storeCachedResults`.
 
 ---
 
@@ -354,7 +357,7 @@ flowchart TD
     E --> F[Apply updates/inserts: merge into Map]
     F --> G[Convert Map back to array]
     G --> H[Persist with new maxUpdatedAt]
-    H --> I[Update registry with derived rowCount]
+    H --> I[Update registry: derived rowCount + maintained totalRowCount across the net delta]
     I --> J[Return merged CachedRunViewResult]
 ```
 
@@ -494,17 +497,23 @@ flowchart TD
     C -->|No| Z[Ignore]
     C -->|Yes| D{Can use immediate mutation?}
     D -->|"Yes: No Filter, No OrderBy,<br/>No AdditionalLoading override"| E[Synchronous array mutation]
-    D -->|No| F[Debounced full refresh]
+    D -->|No| F[Buffer ALL events<br/>in the debounce window]
 
     E --> G[Update in-memory array<br/>push/splice/replace]
-    G --> H[NotifyDataChange via DataChange$]
+    G --> H[NotifyDataChange via DataChange$<br/>+ emitPropertyChange]
     G --> I{CacheLocal enabled?}
     I -->|Yes| J[syncLocalCacheForConfig]
     J --> K[UpsertSingleEntity or RemoveSingleEntity<br/>using CompositeKey]
 
-    F -->|1.5s debounce| L[LoadSingleConfig from server]
+    F -->|"debounce elapses<br/>(default 1.5s, per-config DebounceTime)"| N{Any event in the batch NOT yet<br/>reflected in the array?}
+    N -->|Yes| L[LoadSingleConfig from server<br/>one refresh covers the whole batch]
     L --> M[RunView → updates cache naturally]
     L --> H
+    L -.->|transient failure| R[scheduleEventRefreshRetry<br/>bounded backoff 2s/4s]
+    R -.-> L
+    N -->|"No — every change already applied<br/>(in-place save / manual push)"| S[notifyAlreadyAppliedMutation]
+    S --> H
+    N -->|"Only deletes of rows<br/>absent from the array"| T[Silent — manual-splice engine code<br/>owns the notification]
 ```
 
 **Note**: LocalCacheManager also independently subscribes to MJGlobal events (including `remote-invalidate`) and updates its own caches. The `syncLocalCacheForConfig` path is only for local save/delete events where BaseEngine handles the immediate mutation — remote events are handled by LocalCacheManager's own `HandleRemoteInvalidateEvent`.
@@ -830,7 +839,7 @@ Behind the scenes:
 
 - `ObserveProperty(propertyName)` is **lazy-created on first call** — engines whose properties are never observed pay zero runtime cost for the observable.
 - `BehaviorSubject` semantics: subscribers receive the current array immediately on subscribe, then re-receive the same array reference on every mutation.
-- The mutation triggers come from BaseEngine's built-in BaseEntity event handler — `DebounceIndividualBaseEntityEvent` → `ProcessEntityEvent` → either an in-place array mutation (when no `Filter`/`OrderBy`/`AdditionalLoading` are set, so MJ can safely splice) or a full refresh (when a filter is set so MJ can't determine whether the saved row still belongs). Either way, `emitPropertyChange(propertyName)` fires and the observable re-emits.
+- The mutation triggers come from BaseEngine's built-in BaseEntity event handler — `DebounceIndividualBaseEntityEvent` buffers **all** events in the debounce window and delivers the batch to `ProcessEntityEvents` (`ProcessEntityEvent` is a back-compat single-event wrapper), which per config either applies in-place array mutations (when no `Filter`/`OrderBy`/`AdditionalLoading` are set, so MJ can safely splice), runs one full refresh covering the batch (when a filter is set so MJ can't determine whether the saved row still belongs), or — when every event's changes are **already reflected** in the array (an in-place save of the array's own cached instance, a manually-pushed create) — skips the redundant refresh but still notifies via `notifyAlreadyAppliedMutation`. In all three cases `emitPropertyChange(propertyName)` fires and the observable re-emits. The only silent case is a delete of a row absent from the config's array (indistinguishable from "never matched the Filter") — engine code that manually splices must call `notifyAlreadyAppliedMutation(config, 'delete', entity)` itself (see `UserInfoEngine.UninstallApplication` for the reference pattern).
 - `DataChange$: Observable<EngineDataChangeEvent>` is the engine-wide complement — emits one event per refresh with the config + new data.
 
 **When to build a new engine vs. reuse an existing service**:
@@ -1002,14 +1011,19 @@ this._eventListener.subscribe(async (event) => {
 
 **`skipAdditionalLoadingCheck` parameter**: Callers that invoke `AdditionalLoading()` themselves after applying mutations can pass `canUseImmediateMutation(config, true)` to skip the override check. This is used by `applyRemoteRecordData` which applies all config mutations first, then calls `AdditionalLoading()` once at the end.
 
-**Debounced refresh** (server round-trip, 1.5s debounce):
+**Debounced batch refresh** (server round-trip; default 1.5s debounce, per-config `DebounceTime` override):
 - Used when immediate mutation isn't safe (filtered/sorted data, post-processing)
-- Uses RxJS `Subject` per entity name with `debounceTime` operator
-- Re-fetches from server via `LoadSingleConfig`
+- An RxJS `Subject` per entity name **buffers every event raised during the window** and delivers the batch to `ProcessEntityEvents` (the override seam; `ProcessEntityEvent` is a back-compat single-event wrapper)
+- Per config, the decision is an **OR over the whole batch** — judging only the last event would let an already-applied write mask a coalesced fresh-instance save:
+  - ANY event not yet reflected in the array → one `LoadSingleConfig` refresh covers the batch
+  - else, any event already applied (in-place save of the array's own cached instance, manual push after create) → `notifyAlreadyAppliedMutation` emits `DataChange$` + `ObserveProperty` without a refresh — the refresh is redundant but the notification is not
+  - deletes of rows absent from the array stay **silent** ("already spliced by engine code" is indistinguishable from "never matched the Filter", and notifying would assert phantom deletes to filtered configs' observers) — **engine code that manually splices must call `notifyAlreadyAppliedMutation(config, 'delete', entity)` itself**; `UserInfoEngine.UninstallApplication` is the reference pattern
+- Delete membership checks key off the event payload's pre-delete `OldValues` snapshot — `BaseEntity.Delete()` calls `NewRecord()` (regenerating the PK) before the debounced handler runs, so matching by the live entity's key can never identify the deleted row
+- A transiently-failed refresh schedules a bounded, backed-off retry (`scheduleEventRefreshRetry`: 2s/4s, max `MaxEventRefreshRetries` = 2 overridable, one pending per property). Permission denials are recorded as loaded-empty and never retried
 
 ### DataChange$ Observable
 
-After any array mutation (immediate or debounced), BaseEngine emits through `DataChange$`:
+After any array change (immediate mutation, debounced refresh, or a skipped refresh whose changes were already applied), BaseEngine emits through `DataChange$`:
 
 ```typescript
 // Components can subscribe for reactive updates
@@ -1895,7 +1909,7 @@ const status = LocalCacheManager.Instance.GetRunViewCacheStatus(fingerprint);
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `ServerAutoCacheMaxRows` | 250 | Max row count for auto-caching unfiltered RunView results (0 = disabled) |
-| `DedupLingerMs` | 5,000 ms | How long resolved RunViews results stay available for instant replay |
+| `DedupLingerMs` | 5,000 ms | How long resolved RunViews results stay available for instant replay. Entries are **write-invalidated**: a BaseEntity save/delete/remote-invalidate for any entity a batch's params touch drops its lingered AND in-flight entries, so an identical call after a write always re-executes instead of replaying pre-write rows. Params addressed only by ViewID/ViewName (no EntityName) are not tracked. |
 
 ### ProviderBase Client-Side Fast-Start
 

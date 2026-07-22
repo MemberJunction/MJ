@@ -240,6 +240,64 @@ describe('EntitySubClassGeneratorBase', () => {
             expect(result).toContain('set Description(value:');
             expect(result).not.toContain('Description_');
         });
+
+        // ── Base-class selection for external data source entities ──
+        const makeEntity = (overrides: Record<string, unknown>) => ({
+            Name: 'Snowflake Sales',
+            ClassName: 'SnowflakeSales',
+            PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', TSType: 'string', IsPrimaryKey: true, AutoIncrement: false }],
+            Fields: [
+                { Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', AllowsNull: false, ReadOnly: false, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true },
+                { Name: 'Amount', CodeName: 'Amount', Type: 'decimal', SQLFullType: 'decimal(18,2)', AllowsNull: true, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: false }
+            ],
+            EntityObjectSubclassName: '',
+            EntityObjectSubclassImport: '',
+            ExternalDataSourceID: null,
+            ExternalObjectName: null,
+            AllowDeleteAPI: false,
+            AllowCreateAPI: false,
+            AllowUpdateAPI: false,
+            CascadeDeletes: false,
+            IsChildType: false,
+            Status: 'Active',
+            SchemaName: '__mj',
+            BaseTable: 'SnowflakeSales',
+            BaseView: 'vwSnowflakeSales',
+            Description: '',
+            ...overrides
+        });
+
+        const generate = async (entity: Record<string, unknown>) =>
+            generator.generateEntitySubClass(
+                {} as Parameters<typeof generator.generateEntitySubClass>[0],
+                entity as Parameters<typeof generator.generateEntitySubClass>[1],
+                false,
+                true
+            );
+
+        it('should extend ReadOnlyExternalBaseEntity when entity has an ExternalDataSourceID', async () => {
+            const result = await generate(makeEntity({ ExternalDataSourceID: 'ds-123', ExternalObjectName: 'SALES_FACT' }));
+            expect(result).toContain('extends ReadOnlyExternalBaseEntity');
+            expect(result).toContain("import { ReadOnlyExternalBaseEntity } from '@memberjunction/core-entities';");
+            expect(result).not.toContain('extends BaseEntity<');
+        });
+
+        it('should extend BaseEntity for a normal (non-external) entity', async () => {
+            const result = await generate(makeEntity({ ExternalDataSourceID: null }));
+            expect(result).toContain('extends BaseEntity<');
+            expect(result).not.toContain('ReadOnlyExternalBaseEntity');
+        });
+
+        it('should prefer an explicit custom subclass over the external base class', async () => {
+            const result = await generate(makeEntity({
+                ExternalDataSourceID: 'ds-123',
+                EntityObjectSubclassName: 'MyCustomBase',
+                EntityObjectSubclassImport: '@my/pkg'
+            }));
+            expect(result).toContain('extends MyCustomBase');
+            expect(result).toContain("import { MyCustomBase } from '@my/pkg';");
+            expect(result).not.toContain('ReadOnlyExternalBaseEntity');
+        });
     });
 
     describe('GenerateSchemaAndType', () => {

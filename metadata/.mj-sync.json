@@ -26,6 +26,9 @@
     "ai-model-types",
     "ai-vendors",
     "ai-models",
+    "ml-algorithms",
+    "ml-algorithm-use-cases",
+    "ml-algorithm-use-case-rankings",
     "ai-configurations",
     "artifact-types",
     "authorizations",
@@ -43,6 +46,7 @@
     "agent-types",
     "client-tool-definitions",
     "agents",
+    "ai-skills",
     "vector-databases",
     "vector-indexes",
     "entity-document-types",
@@ -67,7 +71,8 @@
     "entity-form-overrides",
     "entity-settings",
     "roles",
-    "entity-permissions"
+    "entity-permissions",
+    "widget-instances"
   ],
   "sqlLogging": {
     "enabled": true,

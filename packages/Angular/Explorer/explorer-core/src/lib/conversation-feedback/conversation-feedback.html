@@ -23,11 +23,7 @@
       </div>
 
       @if (error) {
-        <div class="error-banner">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          {{ error }}
-          <button (click)="error = null" aria-label="Dismiss error">×</button>
-        </div>
+        <mj-alert Variant="error" class="feedback-error-spacing" Dismissible (Dismissed)="error = null">{{ error }}</mj-alert>
       }
 
       <div class="stats-grid">

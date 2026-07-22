@@ -93,20 +93,6 @@
   color: var(--mat-sys-on-surface-variant);
 }
 
-/* Error message */
-.error-message {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: var(--mat-sys-error-container);
-  color: var(--mat-sys-on-error-container);
-  border-bottom: 1px solid var(--mat-sys-error);
-}
-
-.error-message i {
-  font-size: 1.1rem;
-}
 
 /* Config content */
 .config-content {

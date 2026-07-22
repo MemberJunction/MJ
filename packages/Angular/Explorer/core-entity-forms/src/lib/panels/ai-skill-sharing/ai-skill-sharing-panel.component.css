@@ -1,0 +1,16 @@
+.ai-skill-sharing-hint {
+    color: var(--mj-text-muted);
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.ai-skill-sharing-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.ai-skill-sharing-file-input {
+    display: none;
+}

@@ -156,7 +156,7 @@
       recordIds: [EffectiveRecord.PrimaryKey.Values()[0]],
       allowCreate: true
     }"
-    (complete)="OnListManagementClosed()"
+    (complete)="OnListManagementComplete($event)"
     (cancel)="OnListManagementClosed()">
   </mj-list-management-dialog>
 }

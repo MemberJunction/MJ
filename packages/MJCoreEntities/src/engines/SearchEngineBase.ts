@@ -123,7 +123,7 @@ export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
 
     /** All search provider records (any status) */
     public get Providers(): MJSearchProviderEntity[] {
-        return this._providers || [];
+        return this.GetConfigData<MJSearchProviderEntity>('_providers');
     }
 
     /** Only active search providers, sorted by Priority ascending */
@@ -144,7 +144,7 @@ export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
 
     /** All scope records (any status). */
     public get Scopes(): MJSearchScopeEntity[] {
-        return this._scopes || [];
+        return this.GetConfigData<MJSearchScopeEntity>('_scopes');
     }
 
     /**
@@ -158,27 +158,27 @@ export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
 
     /** All scope-provider join rows. */
     public get ScopeProviders(): MJSearchScopeProviderEntity[] {
-        return this._scopeProviders || [];
+        return this.GetConfigData<MJSearchScopeProviderEntity>('_scopeProviders');
     }
 
     /** All scope-external-index rows. */
     public get ScopeExternalIndexes(): MJSearchScopeExternalIndexEntity[] {
-        return this._scopeExternalIndexes || [];
+        return this.GetConfigData<MJSearchScopeExternalIndexEntity>('_scopeExternalIndexes');
     }
 
     /** All scope-entity rows. */
     public get ScopeEntities(): MJSearchScopeEntityEntity[] {
-        return this._scopeEntities || [];
+        return this.GetConfigData<MJSearchScopeEntityEntity>('_scopeEntities');
     }
 
     /** All scope-storage-account rows. */
     public get ScopeStorageAccounts(): MJSearchScopeStorageAccountEntity[] {
-        return this._scopeStorageAccounts || [];
+        return this.GetConfigData<MJSearchScopeStorageAccountEntity>('_scopeStorageAccounts');
     }
 
     /** All agent-scope assignment rows. */
     public get AgentScopes(): MJAIAgentSearchScopeEntity[] {
-        return this._agentScopes || [];
+        return this.GetConfigData<MJAIAgentSearchScopeEntity>('_agentScopes');
     }
 
     // ================================================================

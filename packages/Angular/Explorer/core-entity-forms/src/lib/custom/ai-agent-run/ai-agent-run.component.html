@@ -44,6 +44,12 @@
           </div>
         </div>
         <div class="header-right">
+          @if (record.PlanMode) {
+            <div class="plan-mode-badge" title="This run executed in Plan Mode — the agent presented a plan for human approval before executing actions or sub-agents">
+              <i class="fas fa-clipboard-check"></i>
+              Plan Mode
+            </div>
+          }
           <div class="status-badge" [attr.data-status]="record.Status">
             <i class="fas" [ngClass]="getStatusIcon(record.Status || '')"></i>
             {{ record.Status }}
@@ -174,16 +180,18 @@
         </div>
       }
 
-      <!-- Visualization Tab -->
+      <!-- Visualization Tab (animated flow views + static flowchart) -->
       @if (activeTab === 'visualization') {
         <div class="tab-content" style="height: 100%;">
           @if (visualizationLoaded) {
-            <mj-ai-agent-run-visualization
-              #visualizationComponent
+            <mj-ai-agent-run-flow
               [aiAgentRunId]="record.ID"
               [dataHelper]="dataHelper"
-              >
-            </mj-ai-agent-run-visualization>
+              [agentName]="agent?.Name || null"
+              [runStatus]="record.Status || ''"
+              [agentIconClass]="agent?.IconClass || null"
+              [agentLogoUrl]="agent?.LogoURL || null">
+            </mj-ai-agent-run-flow>
           }
         </div>
       }

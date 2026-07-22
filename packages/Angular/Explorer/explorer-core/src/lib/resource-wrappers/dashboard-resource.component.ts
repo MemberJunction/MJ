@@ -869,9 +869,9 @@ export class DashboardResource extends BaseResourceComponent {
                 this.categories = DashboardEngine.Instance.DashboardCategories;
             }
 
-            // Set the dashboard entity directly on the viewer
-            // We provide our own external toolbar, so disable the viewer's internal toolbar
-            instance.dashboard = dashboard;
+            // Configure the viewer before assigning the dashboard. The dashboard input
+            // starts the layout lifecycle synchronously, so event handlers need to be
+            // wired first.
             instance.showToolbar = false;         // We provide external toolbar
             instance.showBreadcrumb = false;      // Already in its own tab, no breadcrumb needed
             instance.showOpenInTabButton = false; // Already in its own tab
@@ -898,11 +898,12 @@ export class DashboardResource extends BaseResourceComponent {
                 console.error('Dashboard error:', errorEvent.message, errorEvent.error);
             });
 
-            // Notify load complete after a brief delay to let Golden Layout initialize
-            setTimeout(() => {
-                this.NotifyLoadComplete();
-                this.cdr.detectChanges();
-            }, 150);
+            // Set the dashboard entity directly on the viewer and wait for Golden Layout
+            // to initialize against a real container before clearing the resource loader.
+            instance.dashboard = dashboard;
+            await instance.waitForLayoutReady();
+            this.NotifyLoadComplete();
+            this.cdr.detectChanges();
 
         } catch (error) {
             console.error('Error loading config-based dashboard:', error);

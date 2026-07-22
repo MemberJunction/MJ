@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, AfterViewInit, ChangeDetectorRef, inject } from '@angular/core';
 import { MJTemplateEntity, MJTemplateContentEntity, MJTemplateCategoryEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
@@ -11,6 +11,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { TemplateEditorConfig } from '../../shared/components/template-editor.component';
 
 @RegisterClass(BaseFormComponent, 'MJ: Templates') 
@@ -56,6 +57,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     
     private destroy$ = new Subject<void>();
     private activeTimeouts: number[] = [];
+    private confirmService = inject(MJConfirmService);
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -131,10 +133,14 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         this.syncEditorValue();
     }
 
-    selectTemplateContent(index: number, confirmSwitch: boolean = true) {
+    async selectTemplateContent(index: number, confirmSwitch: boolean = true): Promise<void> {
         // If we're adding new content and user clicks on existing content, ask for confirmation
         if (this.isAddingNewContent && confirmSwitch) {
-            if (!confirm('You have unsaved changes to a new content version. Are you sure you want to switch? Your changes will be lost.')) {
+            if (!(await this.confirmService.Confirm({
+                title: 'Discard changes?',
+                message: 'Switch content version and lose your unsaved changes?',
+                detail: 'Your changes to the new content version will be lost.'
+            }))) {
                 return;
             }
         }

@@ -199,6 +199,11 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
     public isLoading = false;
     private searchTerm = '';
 
+    /** The current free-text search applied to the template list (read-only, for agent context). */
+    public get SearchText(): string {
+        return this.searchTerm;
+    }
+
     constructor(private cdr: ChangeDetectorRef, private navService: NavigationService) {
         super();
     }

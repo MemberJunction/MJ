@@ -5,6 +5,12 @@ vi.mock('@memberjunction/core', () => ({
     protected async Load(_configs: unknown[], _provider?: unknown, _forceRefresh?: boolean, _contextUser?: unknown) {
       // no-op for tests
     }
+    // Stubbed so the SchedulingEngineBase override can call super. The real base
+    // reconciles cached arrays here; for these tests it's a no-op that returns true,
+    // which lets us assert the subclass's post-super reconcile + notify behavior.
+    protected async HandleIndividualBaseEntityEvent(_event: unknown): Promise<boolean> {
+      return true;
+    }
     static getInstance<T>(): T {
       return new (this as unknown as new () => T)();
     }
@@ -69,6 +75,74 @@ describe('SchedulingEngineBase', () => {
       // ScheduledJobs starts empty
       engine.UpdatePollingInterval();
       expect(engine.ActivePollingInterval).toBeNull();
+    });
+  });
+
+  describe('HandleIndividualBaseEntityEvent (scheduled-jobs reconcile + notify)', () => {
+    // Reach the private array and the protected handler without `any`.
+    type EngineInternals = {
+      _scheduledJobs: Array<{ ID: string; Status: string }>;
+      HandleIndividualBaseEntityEvent: (event: unknown) => Promise<boolean>;
+    };
+    const asInternals = (e: SchedulingEngineBase) => e as unknown as EngineInternals;
+
+    const scheduledJobsEvent = (type: string) => ({
+      type,
+      baseEntity: { EntityInfo: { Name: 'MJ: Scheduled Jobs' } },
+    });
+
+    it('re-applies the Active-only filter and emits JobsChanged$ on a Scheduled Jobs save', async () => {
+      const internals = asInternals(engine);
+      // Seed a set polluted with an inactive job (as the base's immediate-mutation
+      // path would leave it after an activation/deactivation).
+      internals._scheduledJobs = [
+        { ID: 'a', Status: 'Active' },
+        { ID: 'b', Status: 'Inactive' },
+      ];
+
+      let fired = 0;
+      const sub = engine.JobsChanged$.subscribe(() => fired++);
+
+      await internals.HandleIndividualBaseEntityEvent(scheduledJobsEvent('save'));
+
+      expect(fired).toBe(1);
+      expect(engine.ScheduledJobs).toEqual([{ ID: 'a', Status: 'Active' }]);
+      sub.unsubscribe();
+    });
+
+    it('resolves the entity name from the remote-invalidate event shape', async () => {
+      const internals = asInternals(engine);
+      internals._scheduledJobs = [{ ID: 'a', Status: 'Active' }];
+
+      let fired = 0;
+      const sub = engine.JobsChanged$.subscribe(() => fired++);
+
+      // remote-invalidate events carry `entityName` (a string), not `baseEntity`.
+      await internals.HandleIndividualBaseEntityEvent({ type: 'remote-invalidate', entityName: 'MJ: Scheduled Jobs' });
+
+      expect(fired).toBe(1);
+      sub.unsubscribe();
+    });
+
+    it('ignores events for unrelated entities (no filter, no notify)', async () => {
+      const internals = asInternals(engine);
+      internals._scheduledJobs = [
+        { ID: 'a', Status: 'Active' },
+        { ID: 'b', Status: 'Inactive' },
+      ];
+
+      let fired = 0;
+      const sub = engine.JobsChanged$.subscribe(() => fired++);
+
+      await internals.HandleIndividualBaseEntityEvent({
+        type: 'save',
+        baseEntity: { EntityInfo: { Name: 'MJ: AI Agents' } },
+      });
+
+      expect(fired).toBe(0);
+      // Untouched — the reconcile only runs for scheduled-jobs events.
+      expect(engine.ScheduledJobs.length).toBe(2);
+      sub.unsubscribe();
     });
   });
 });

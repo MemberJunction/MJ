@@ -15,10 +15,7 @@
     </mj-window-titlebar>
     <div class="share-dialog-body">
       @if (Error) {
-        <div class="share-alert share-alert-error">
-          <i class="fa-solid fa-exclamation-triangle"></i>
-          <span>{{ Error }}</span>
-        </div>
+        <mj-alert Variant="error">{{ Error }}</mj-alert>
       }
       <!-- Add Users Section -->
       <div class="share-section">

@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT35 - RunQuery Feature Surface",
+    "Description": "RunQuery feature surface server-side: ad-hoc SQL contract incl. read-only rejection of mutations, MaxRows/StartRow paging with TotalRowCount, CacheLocal CacheHit/CacheKey/ExecutionTime contract, since|sqlDate injection guard pin, ValidationFilters enforcement pins driving QueryParameterProcessor directly. 10 checks (QF1-QF10), self-cleaning fixture query. Server transport (CacheHit/CacheKey stripped by the GraphQL client).",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "RunQuery feature surface server-side: ad-hoc SQL contract incl. read-only rejection of mutations, MaxRows/StartRow paging with TotalRowCount, CacheLocal CacheHit/CacheKey/ExecutionTime contract, since|sqlDate injection guard pin, ValidationFilters enforcement pins driving QueryParameterProcessor directly. 10 checks (QF1-QF10), self-cleaning fixture query. Server transport (CacheHit/CacheKey stripp"
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "runquery-features"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "1E1124C2-115E-4EFE-8C96-C72BFFCE69B8"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:28:04.765Z",
+    "checksum": "00fcea5109901ba45efa09fe451e2d0842161caa4ee9ad67bd66b1fc3ebb360c"
+  }
+}

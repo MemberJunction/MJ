@@ -121,15 +121,9 @@
   z-index: 50;
 }
 
-.error-banner {
-  padding: 8px 12px;
-  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-  border-bottom: 1px solid var(--mj-status-warning);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--mj-status-warning);
+/* Positioning only — mj-alert owns its own box (bg/border/radius/padding/icon). */
+.data-artifact-alert-pos {
+  margin: 0 0 8px;
 }
 
 .fallback-note {

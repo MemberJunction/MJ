@@ -374,41 +374,11 @@
   cursor: not-allowed;
 }
 
-/* Messages */
-.message {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 6px;
-  font-size: 14px;
-  animation: slideDown 0.3s ease-out;
-}
-
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.success-message {
-  background-color: var(--mj-status-success-bg);
-  color: var(--mj-status-success-text);
-  border: 1px solid var(--mj-status-success-border);
-}
-
-.success-message i {
-  color: var(--mj-status-success);
-}
-
-.error-message {
-  background-color: var(--mj-status-error-bg);
-  color: var(--mj-status-error-text);
-  border: 1px solid var(--mj-status-error-border);
-}
-
-.error-message i {
-  color: var(--mj-status-error);
-}
 
 /* Scrollbar Styling */
 .panel-content::-webkit-scrollbar {

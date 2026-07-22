@@ -238,28 +238,30 @@
 
             <!-- Cluster Members -->
             <div class="detail-members-section">
-                <button class="detail-members-toggle" (click)="ToggleClusterMembers()">
-                    <i class="fa-solid"
-                       [class.fa-chevron-down]="ClusterMembersExpanded"
-                       [class.fa-chevron-right]="!ClusterMembersExpanded"></i>
-                    <span>Cluster Members</span>
-                    <span class="detail-members-count">{{ ClusterMembers.length }}</span>
-                </button>
-
-                @if (ClusterMembersExpanded) {
-                    <div class="detail-members-list">
-                        @for (member of ClusterMembers; track TrackMemberBy($index, member)) {
-                            <div class="detail-member-row"
-                                 [class.active]="member.VectorKey === SelectedPoint.VectorKey"
-                                 (click)="OnClusterMemberClick(member)">
-                                @if (member.Metadata?.['EntityIcon']) {
-                                    <i [class]="member.Metadata['EntityIcon']" class="member-icon"></i>
-                                }
-                                <span class="member-label">{{ member.Label }}</span>
-                            </div>
-                        }
-                    </div>
-                }
+                <mj-accordion-panel
+                    Size="sm"
+                    [Fill]="true"
+                    [FlushBody]="true"
+                    [(Expanded)]="ClusterMembersExpanded">
+                    <ng-template mjAccordionTitle>
+                        Cluster Members
+                        <span class="mj-accordion-badge mj-accordion-badge--right">{{ ClusterMembers.length }}</span>
+                    </ng-template>
+                    <ng-template mjAccordionBody>
+                        <div class="detail-members-list">
+                            @for (member of ClusterMembers; track TrackMemberBy($index, member)) {
+                                <div class="detail-member-row"
+                                     [class.active]="member.VectorKey === SelectedPoint?.VectorKey"
+                                     (click)="OnClusterMemberClick(member)">
+                                    @if (member.Metadata?.['EntityIcon']) {
+                                        <i [class]="member.Metadata['EntityIcon']" class="member-icon"></i>
+                                    }
+                                    <span class="member-label">{{ member.Label }}</span>
+                                </div>
+                            }
+                        </div>
+                    </ng-template>
+                </mj-accordion-panel>
             </div>
 
             <!-- Open Record button -->

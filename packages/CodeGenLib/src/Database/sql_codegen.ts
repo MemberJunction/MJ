@@ -757,6 +757,15 @@ export class SQLCodeGenBase {
         entity: EntityInfo,
         willRegenerate: Set<string> | undefined
     ): Promise<PhasedExecutionResult> {
+        // External-data-source entities have no physical MJ table/view/sproc — their data is
+        // proxied live. Skip all DDL generation/execution (mirrors the early-return in
+        // generateSingleEntitySQLToSeparateFiles). Without this, the view phase would
+        // CREATE VIEW against a non-existent base table and fail the entity on PostgreSQL,
+        // since this method regenerates the SQL pieces itself rather than reusing that path's output.
+        if (entity.ExternalDataSourceID) {
+            return { success: true, phase: null };
+        }
+
         // Pieces needed for the phased executor. Empty string when the entity
         // doesn't warrant that phase's DDL (e.g. virtual entities don't have
         // views; entities with AllowCreateAPI=false don't get fn_create_*).
@@ -853,6 +862,20 @@ export class SQLCodeGenBase {
 
         try {
             const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
+
+            // PostgreSQL: pg_get_viewdef() returns a heavily reformatted definition (re-qualified
+            // columns, normalized whitespace/casing, re-ordered expressions) that never byte-matches
+            // our generated CREATE VIEW text — so the SELECT-body text comparison below falsely flags
+            // nearly every view "changed", turning each PG CodeGen run into a full ~380-entity
+            // regeneration. Instead compare the view's EXPOSED COLUMN SET against the entity's expected
+            // fields: deterministic, immune to pg_get_viewdef reformatting, and it still catches a
+            // stale view whose columns drifted from metadata (e.g. a migration that adds a column but
+            // doesn't bake the view — the v5.46 OpenApp outage), including the missing-view self-heal.
+            // SQL Server stores the view definition verbatim, so its text comparison stays valid.
+            if (configInfo.dbPlatform === 'postgresql') {
+                return await this.checkBaseViewColumnsChangedPG(pool, entity, viewName);
+            }
+
             const viewDefSQL = this._dbProvider.getViewDefinitionSQL(entity.SchemaName, viewName);
             const result = await pool.query(viewDefSQL);
             const dbDefinition = result.recordset?.[0]?.ViewDefinition;
@@ -880,6 +903,47 @@ export class SQLCodeGenBase {
             logIf(configInfo.verboseOutput, `Could not compare base view for ${entity.Name}: ${e}`);
             return false;
         }
+    }
+
+    /**
+     * PostgreSQL base-view change detection by COLUMN SET rather than text.
+     *
+     * pg_get_viewdef() re-qualifies columns and normalizes whitespace/casing, so the SELECT-body
+     * text comparison used on SQL Server never byte-matches on PG and false-flags nearly every view.
+     * The base view exposes exactly the entity's fields, so comparing the view's live column set
+     * (information_schema.columns) against the entity's expected field set is deterministic, immune
+     * to that reformatting, and still catches the cases that matter:
+     *   - a stale view missing a field that metadata now declares (the v5.46 OpenApp outage: a
+     *     migration added the column + EntityField but never re-baked the view), and
+     *   - a missing view entirely (empty column set → force-recreate; the documented self-heal for a
+     *     view that a prior run dropped but failed to recreate).
+     * A pure Sequence renumber does not change the column set, so it correctly does NOT flag.
+     *
+     * NOT caught (by design — a tradeoff vs. SQL Server's text comparison): a view-BODY change that
+     * leaves the exposed column NAMES identical — e.g. a `RelatedEntityNameFieldMap` re-pointed to a
+     * different source column under the same output alias, or a codegen view-template change that
+     * rewrites the SELECT without renaming columns. Those alter the SELECT text but not the column set,
+     * so they must be forced through the metadata-driven modifiedEntityList (or an explicit
+     * EntitiesRequiringViewRegen entry), not this column-set check.
+     * @returns true if the view's column set differs from the entity's fields (or the view is missing)
+     */
+    protected async checkBaseViewColumnsChangedPG(pool: CodeGenConnection, entity: EntityInfo, viewName: string): Promise<boolean> {
+        const sql = `SELECT column_name FROM information_schema.columns WHERE table_schema = '${entity.SchemaName}' AND table_name = '${viewName}'`;
+        const result = await pool.query(sql);
+        const dbCols = new Set((result.recordset ?? []).map((r: { column_name: string }) => r.column_name.toLowerCase()));
+
+        // Empty set = the view does not exist → force-recreate (missing-view self-heal).
+        if (dbCols.size === 0) {
+            return true;
+        }
+
+        // The base view exposes exactly the entity's fields; compare the two sets.
+        const expectedCols = entity.Fields.map(f => f.Name.toLowerCase());
+        const changed = expectedCols.length !== dbCols.size || expectedCols.some(c => !dbCols.has(c));
+        if (changed) {
+            logStatus(`  Base view columns changed for ${entity.Name} — logging view SQL`);
+        }
+        return changed;
     }
 
     /**
@@ -1033,6 +1097,15 @@ export class SQLCodeGenBase {
     }): Promise<{sql: string, permissionsSQL: string, files: string[]}> {
         const files: string[] = [];
         try {
+            // External-data-source entities are backed by a remote system (Snowflake/MongoDB/
+            // Postgres) and have NO table, view, stored proc, or index in the MJ database. Skip
+            // all SQL object generation entirely — including the permissions-only pass, since
+            // there is no view/sproc to grant on. (This is the total-skip analogue of the
+            // per-object VirtualEntity guards below.)
+            if (options.entity.ExternalDataSourceID) {
+                return { sql: '', permissionsSQL: '', files };
+            }
+
             // create the directory if it doesn't exist
             if (options.writeFiles && !fs.existsSync(options.directory))
                 fs.mkdirSync(options.directory, { recursive: true });

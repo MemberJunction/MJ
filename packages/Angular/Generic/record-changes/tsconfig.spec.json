@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/lib/restore-preview-panel/restore-preview-panel.component.ts",
+    "src/lib/restore-preview-panel/restore-preview-panel.component.dom.test.ts",
+    "src/lib/ng-record-changes.component.ts",
+    "src/lib/ng-record-changes.component.dom.test.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

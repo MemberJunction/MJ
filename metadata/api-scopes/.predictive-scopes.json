@@ -1,0 +1,42 @@
+[
+  {
+    "fields": {
+      "Name": "predictive",
+      "FullPath": "predictive",
+      "ParentID": null,
+      "Category": "Predictive Studio",
+      "Description": "Parent scope for Predictive Studio operations (train, score, experiment, promote, and feature pipelines via Remote Operations).",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-flask-vial",
+        "color": "#8b5cf6"
+      }
+    },
+    "primaryKey": {
+      "ID": "A5BA44EF-9077-4B28-81A4-2B804C095F17"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:30.250Z",
+      "checksum": "1de96de52a41b2ebe717ebd800bc897212bb4a47390fe69ec182c9c3808d6fbd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "predictive:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=predictive",
+      "Category": "Predictive Studio",
+      "Description": "Execute Predictive Studio Remote Operations — TrainModel / ScoreRecordSet / RunFeaturePipeline / StartExperimentSession / ControlExperimentSession / PromoteModel.",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "2D7A1FAB-7E7F-4082-B705-20FD3DED1484"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:30.280Z",
+      "checksum": "969ed1639937cd5568b924ad068ee7b078af3a08b16852a48828f72254eb64ab"
+    }
+  }
+]
