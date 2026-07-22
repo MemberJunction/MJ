@@ -19,11 +19,12 @@ import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { Session as InspectorSession } from 'node:inspector';
 import { sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
-import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
+import { BuildSchemaOptions, buildSchemaSync, getMetadataStorage, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
 import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
@@ -852,29 +853,90 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   lap('Resolver + Middleware Discovery', tServe);
   tServe = startupLog.BeginPhase('Building GraphQL schema');
 
+  // ── Scale-runtime instrumentation (fix #1 profiling) ─────────────────────────
+  // Split the previously-monolithic "Schema Build" phase into its three real
+  // sub-steps so we can see which one dominates at high entity counts, and capture
+  // the type-graphql metadata cardinality (the O(entities×fields) signal). Guarded
+  // by MJ_SCHEMA_PROFILE, and emits ONE explicit console line (independent of the
+  // startup logger's level, and NOT via EndPhase, so the "schema" summary token and
+  // its total math stay clean). No-op in normal deployments.
+  const schemaProfile = process.env.MJ_SCHEMA_PROFILE === '1';
+  let objectTypeCount = -1, fieldCount = -1;
+  if (schemaProfile) {
+    try {
+      const meta = getMetadataStorage();
+      // Read BEFORE buildSchemaSync — buildSchemaSync's internal build() resets these arrays.
+      objectTypeCount = meta.objectTypes.length;
+      fieldCount = meta.fields.length;
+    } catch {
+      /* metadata cardinality is best-effort; leave sentinels */
+    }
+  }
+
+  // Surgical CPU profile of ONLY buildSchemaSync (behind MJ_SCHEMA_CPUPROF=1), so we can see
+  // whether the ~66s at scale is uniform per-field work (cache is the only fix) or a patchable
+  // hotspot in type-graphql's generator. Deterministic flush (writes before serve continues) —
+  // no dependency on --cpu-prof surviving a process kill.
+  const cpuProf = process.env.MJ_SCHEMA_CPUPROF === '1';
+  let profSession: InspectorSession | undefined;
+  if (cpuProf) {
+    profSession = new InspectorSession();
+    profSession.connect();
+    await new Promise<void>((res, rej) => profSession!.post('Profiler.enable', (e) => (e ? rej(e) : res())));
+    await new Promise<void>((res, rej) => profSession!.post('Profiler.start', (e) => (e ? rej(e) : res())));
+  }
+
+  const tBuild = performance.now();
+  const builtSchema = buildSchemaSync({
+    resolvers: allResolvers,
+    validate: false,
+    scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
+    emitSchemaFile: websiteRunFromPackage !== 1,
+    pubSub,
+    globalMiddlewares: [variablesLoggingMiddleware],
+  });
+  const buildMs = performance.now() - tBuild;
+
+  if (cpuProf && profSession) {
+    const profile = await new Promise<unknown>((res, rej) =>
+      profSession!.post('Profiler.stop', (e, r) => (e ? rej(e) : res((r as { profile: unknown }).profile)))
+    );
+    const outPath = `/tmp/mjapi_schema_build_${process.pid}.cpuprofile`;
+    writeFileSync(outPath, JSON.stringify(profile));
+    profSession.disconnect();
+    // eslint-disable-next-line no-console
+    console.log(`[SCHEMA-CPUPROF] wrote ${outPath} (buildSchemaSync=${buildMs.toFixed(0)}ms)`);
+  }
+
+  const tMerge = performance.now();
   let schema = mergeSchemas({
-    schemas: [
-      buildSchemaSync({
-        resolvers: allResolvers,
-        validate: false,
-        scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
-        emitSchemaFile: websiteRunFromPackage !== 1,
-        pubSub,
-        globalMiddlewares: [variablesLoggingMiddleware],
-      }),
-    ],
+    schemas: [builtSchema],
     typeDefs: [requireSystemUserDirective.typeDefs, publicDirective.typeDefs],
   });
+  const mergeMs = performance.now() - tMerge;
 
   // Verbose-mode-only diagnostic: name custom-resolver args that aren't metadata-bound
   // and aren't @NoLog-marked. No-op in default config (logVariables=false).
   auditResolversForUndecoratedArgs();
+
+  const tTransform = performance.now();
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
   // Apply middleware-contributed schema transformers (after built-in directive transformers)
   for (const transformer of mwSchemaTransformers) {
     schema = transformer(schema);
+  }
+  const transformMs = performance.now() - tTransform;
+
+  if (schemaProfile) {
+    const typeMapSize = Object.keys(schema.getTypeMap()).length;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[SCHEMA-PROFILE] resolvers=${allResolvers.length} objectTypes=${objectTypeCount} fields=${fieldCount} ` +
+      `typeMap=${typeMapSize} | buildSchemaSync=${buildMs.toFixed(0)}ms mergeSchemas=${mergeMs.toFixed(0)}ms ` +
+      `transformers=${transformMs.toFixed(0)}ms`
+    );
   }
 
   lap('Schema Build', tServe);

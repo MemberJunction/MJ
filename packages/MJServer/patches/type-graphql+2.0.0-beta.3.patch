@@ -1,0 +1,255 @@
+--- a/node_modules/type-graphql/build/esm/metadata/metadata-storage.js
++++ b/node_modules/type-graphql/build/esm/metadata/metadata-storage.js
+@@ -90,6 +90,7 @@
+         this.fieldDirectives.reverse();
+         this.classExtensions.reverse();
+         this.fieldExtensions.reverse();
++        this._mjBuildIndexes(); // [MJ scale patch] index target/name keyed arrays once (O(1) lookups below)
+         this.buildClassMetadata(this.objectTypes);
+         this.buildClassMetadata(this.inputTypes);
+         this.buildClassMetadata(this.argumentTypes);
+@@ -120,17 +121,47 @@
+         this.resolverClasses = [];
+         this.fields = [];
+         this.params = [];
++    }
++    // [MJ scale patch] O(N^2)→O(N): the build* methods below repeatedly did this.<arr>.filter(target/name)
++    // per-field / per-def over global arrays. Pre-group each once into target→(name→list) maps.
++    _mjGroup2(arr) {
++        const idx = new Map();
++        for (const it of arr) {
++            let byName = idx.get(it.target);
++            if (!byName) { byName = new Map(); idx.set(it.target, byName); }
++            const n = it.fieldName !== undefined ? it.fieldName : it.methodName;
++            let list = byName.get(n);
++            if (!list) { list = []; byName.set(n, list); }
++            list.push(it);
++        }
++        return idx;
++    }
++    _mjLookup2(idx, target, name) {
++        const byName = idx && idx.get(target);
++        const list = byName && byName.get(name);
++        return list || [];
++    }
++    _mjBuildIndexes() {
++        this._mjFieldsByTarget = new Map();
++        for (const f of this.fields) {
++            let list = this._mjFieldsByTarget.get(f.target);
++            if (!list) { list = []; this._mjFieldsByTarget.set(f.target, list); }
++            list.push(f);
++        }
++        this._mjParamsIdx = this._mjGroup2(this.params);
++        this._mjMiddlewaresIdx = this._mjGroup2(this.middlewares);
++        this._mjFieldDirectivesIdx = this._mjGroup2(this.fieldDirectives);
++        this._mjAuthIdx = this._mjGroup2(this.authorizedFields);
+     }
+     buildClassMetadata(definitions) {
+         definitions.forEach(def => {
+             if (!def.fields) {
+-                const fields = this.fields.filter(field => field.target === def.target);
++                const fields = this._mjFieldsByTarget.get(def.target) || [];
+                 fields.forEach(field => {
+                     field.roles = this.findFieldRoles(field.target, field.name);
+-                    field.params = this.params.filter(param => param.target === field.target && field.name === param.methodName);
+-                    field.middlewares = mapMiddlewareMetadataToArray(this.middlewares.filter(middleware => middleware.target === field.target && middleware.fieldName === field.name));
+-                    field.directives = this.fieldDirectives
+-                        .filter(it => it.target === field.target && it.fieldName === field.name)
++                    field.params = this._mjLookup2(this._mjParamsIdx, field.target, field.name);
++                    field.middlewares = mapMiddlewareMetadataToArray(this._mjLookup2(this._mjMiddlewaresIdx, field.target, field.name));
++                    field.directives = this._mjLookup2(this._mjFieldDirectivesIdx, field.target, field.name)
+                         .map(it => it.directive);
+                     field.extensions = this.findExtensions(field.target, field.name);
+                 });
+@@ -150,11 +181,10 @@
+         definitions.forEach(def => {
+             const resolverClassMetadata = this.resolverClasses.find(resolver => resolver.target === def.target);
+             def.resolverClassMetadata = resolverClassMetadata;
+-            def.params = this.params.filter(param => param.target === def.target && def.methodName === param.methodName);
++            def.params = this._mjLookup2(this._mjParamsIdx, def.target, def.methodName);
+             def.roles = this.findFieldRoles(def.target, def.methodName);
+-            def.middlewares = mapMiddlewareMetadataToArray(this.middlewares.filter(middleware => middleware.target === def.target && def.methodName === middleware.fieldName));
+-            def.directives = this.fieldDirectives
+-                .filter(it => it.target === def.target && it.fieldName === def.methodName)
++            def.middlewares = mapMiddlewareMetadataToArray(this._mjLookup2(this._mjMiddlewaresIdx, def.target, def.methodName));
++            def.directives = this._mjLookup2(this._mjFieldDirectivesIdx, def.target, def.methodName)
+                 .map(it => it.directive);
+             def.extensions = this.findExtensions(def.target, def.methodName);
+         });
+@@ -163,8 +193,7 @@
+         this.buildResolversMetadata(definitions);
+         definitions.forEach(def => {
+             def.roles = this.findFieldRoles(def.target, def.methodName);
+-            def.directives = this.fieldDirectives
+-                .filter(it => it.target === def.target && it.fieldName === def.methodName)
++            def.directives = this._mjLookup2(this._mjFieldDirectivesIdx, def.target, def.methodName)
+                 .map(it => it.directive);
+             def.extensions = this.findExtensions(def.target, def.methodName);
+             def.getObjectType =
+@@ -238,7 +267,8 @@
+         });
+     }
+     findFieldRoles(target, fieldName) {
+-        const authorizedField = this.authorizedFields.find(authField => authField.target === target && authField.fieldName === fieldName);
++        const list = this._mjLookup2(this._mjAuthIdx, target, fieldName);
++        const authorizedField = list.length > 0 ? list[0] : undefined;
+         if (!authorizedField) {
+             return undefined;
+         }
+--- a/node_modules/type-graphql/build/cjs/metadata/metadata-storage.js
++++ b/node_modules/type-graphql/build/cjs/metadata/metadata-storage.js
+@@ -93,6 +93,7 @@
+         this.fieldDirectives.reverse();
+         this.classExtensions.reverse();
+         this.fieldExtensions.reverse();
++        this._mjBuildIndexes(); // [MJ scale patch] index target/name keyed arrays once (O(1) lookups below)
+         this.buildClassMetadata(this.objectTypes);
+         this.buildClassMetadata(this.inputTypes);
+         this.buildClassMetadata(this.argumentTypes);
+@@ -123,17 +124,47 @@
+         this.resolverClasses = [];
+         this.fields = [];
+         this.params = [];
++    }
++    // [MJ scale patch] O(N^2)→O(N): the build* methods below repeatedly did this.<arr>.filter(target/name)
++    // per-field / per-def over global arrays. Pre-group each once into target→(name→list) maps.
++    _mjGroup2(arr) {
++        const idx = new Map();
++        for (const it of arr) {
++            let byName = idx.get(it.target);
++            if (!byName) { byName = new Map(); idx.set(it.target, byName); }
++            const n = it.fieldName !== undefined ? it.fieldName : it.methodName;
++            let list = byName.get(n);
++            if (!list) { list = []; byName.set(n, list); }
++            list.push(it);
++        }
++        return idx;
++    }
++    _mjLookup2(idx, target, name) {
++        const byName = idx && idx.get(target);
++        const list = byName && byName.get(name);
++        return list || [];
++    }
++    _mjBuildIndexes() {
++        this._mjFieldsByTarget = new Map();
++        for (const f of this.fields) {
++            let list = this._mjFieldsByTarget.get(f.target);
++            if (!list) { list = []; this._mjFieldsByTarget.set(f.target, list); }
++            list.push(f);
++        }
++        this._mjParamsIdx = this._mjGroup2(this.params);
++        this._mjMiddlewaresIdx = this._mjGroup2(this.middlewares);
++        this._mjFieldDirectivesIdx = this._mjGroup2(this.fieldDirectives);
++        this._mjAuthIdx = this._mjGroup2(this.authorizedFields);
+     }
+     buildClassMetadata(definitions) {
+         definitions.forEach(def => {
+             if (!def.fields) {
+-                const fields = this.fields.filter(field => field.target === def.target);
++                const fields = this._mjFieldsByTarget.get(def.target) || [];
+                 fields.forEach(field => {
+                     field.roles = this.findFieldRoles(field.target, field.name);
+-                    field.params = this.params.filter(param => param.target === field.target && field.name === param.methodName);
+-                    field.middlewares = (0, utils_1.mapMiddlewareMetadataToArray)(this.middlewares.filter(middleware => middleware.target === field.target && middleware.fieldName === field.name));
+-                    field.directives = this.fieldDirectives
+-                        .filter(it => it.target === field.target && it.fieldName === field.name)
++                    field.params = this._mjLookup2(this._mjParamsIdx, field.target, field.name);
++                    field.middlewares = (0, utils_1.mapMiddlewareMetadataToArray)(this._mjLookup2(this._mjMiddlewaresIdx, field.target, field.name));
++                    field.directives = this._mjLookup2(this._mjFieldDirectivesIdx, field.target, field.name)
+                         .map(it => it.directive);
+                     field.extensions = this.findExtensions(field.target, field.name);
+                 });
+@@ -153,11 +184,10 @@
+         definitions.forEach(def => {
+             const resolverClassMetadata = this.resolverClasses.find(resolver => resolver.target === def.target);
+             def.resolverClassMetadata = resolverClassMetadata;
+-            def.params = this.params.filter(param => param.target === def.target && def.methodName === param.methodName);
++            def.params = this._mjLookup2(this._mjParamsIdx, def.target, def.methodName);
+             def.roles = this.findFieldRoles(def.target, def.methodName);
+-            def.middlewares = (0, utils_1.mapMiddlewareMetadataToArray)(this.middlewares.filter(middleware => middleware.target === def.target && def.methodName === middleware.fieldName));
+-            def.directives = this.fieldDirectives
+-                .filter(it => it.target === def.target && it.fieldName === def.methodName)
++            def.middlewares = (0, utils_1.mapMiddlewareMetadataToArray)(this._mjLookup2(this._mjMiddlewaresIdx, def.target, def.methodName));
++            def.directives = this._mjLookup2(this._mjFieldDirectivesIdx, def.target, def.methodName)
+                 .map(it => it.directive);
+             def.extensions = this.findExtensions(def.target, def.methodName);
+         });
+@@ -166,8 +196,7 @@
+         this.buildResolversMetadata(definitions);
+         definitions.forEach(def => {
+             def.roles = this.findFieldRoles(def.target, def.methodName);
+-            def.directives = this.fieldDirectives
+-                .filter(it => it.target === def.target && it.fieldName === def.methodName)
++            def.directives = this._mjLookup2(this._mjFieldDirectivesIdx, def.target, def.methodName)
+                 .map(it => it.directive);
+             def.extensions = this.findExtensions(def.target, def.methodName);
+             def.getObjectType =
+@@ -241,7 +270,8 @@
+         });
+     }
+     findFieldRoles(target, fieldName) {
+-        const authorizedField = this.authorizedFields.find(authField => authField.target === target && authField.fieldName === fieldName);
++        const list = this._mjLookup2(this._mjAuthIdx, target, fieldName);
++        const authorizedField = list.length > 0 ? list[0] : undefined;
+         if (!authorizedField) {
+             return undefined;
+         }
+--- a/node_modules/type-graphql/build/esm/schema/schema-generator.js
++++ b/node_modules/type-graphql/build/esm/schema/schema-generator.js
+@@ -151,9 +151,25 @@
+                         }
+                         fieldsMetadata.push(...objectType.fields);
+                         let fields = fieldsMetadata.reduce((fieldsMap, field) => {
+-                            const { fieldResolvers } = getMetadataStorage();
+-                            const filteredFieldResolversMetadata = fieldResolvers.filter(it => it.kind === "internal" || resolvers.includes(it.target));
+-                            const fieldResolverMetadata = filteredFieldResolversMetadata.find(it => it.getObjectType() === field.target && it.methodName === field.name);
++                            // [MJ scale patch] O(N^2) fix: the filtered field-resolver list is loop-invariant
++                            // (depends only on fieldResolvers + resolvers), yet the original recomputed it — with an
++                            // O(resolvers) `.includes` — for every one of ~98k fields. Build a memoized
++                            // Set + Map<target, Map<methodName, meta>> index once per schema build (O(1) lookup).
++                            if (!this._mjFieldResolverIndex) {
++                                const _resolversSet = new Set(resolvers);
++                                const _idx = new Map();
++                                for (const it of getMetadataStorage().fieldResolvers) {
++                                    if (it.kind === "internal" || _resolversSet.has(it.target)) {
++                                        const _t = it.getObjectType();
++                                        let _m = _idx.get(_t);
++                                        if (!_m) { _m = new Map(); _idx.set(_t, _m); }
++                                        _m.set(it.methodName, it);
++                                    }
++                                }
++                                this._mjFieldResolverIndex = _idx;
++                            }
++                            const _byMethod = this._mjFieldResolverIndex.get(field.target);
++                            const fieldResolverMetadata = _byMethod ? _byMethod.get(field.name) : undefined;
+                             const type = this.getGraphQLOutputType(field.target, field.name, field.getType(), field.typeOptions);
+                             const isSimpleResolver = field.simple !== undefined
+                                 ? field.simple === true
+--- a/node_modules/type-graphql/build/cjs/schema/schema-generator.js
++++ b/node_modules/type-graphql/build/cjs/schema/schema-generator.js
+@@ -154,9 +154,22 @@
+                         }
+                         fieldsMetadata.push(...objectType.fields);
+                         let fields = fieldsMetadata.reduce((fieldsMap, field) => {
+-                            const { fieldResolvers } = (0, getMetadataStorage_1.getMetadataStorage)();
+-                            const filteredFieldResolversMetadata = fieldResolvers.filter(it => it.kind === "internal" || resolvers.includes(it.target));
+-                            const fieldResolverMetadata = filteredFieldResolversMetadata.find(it => it.getObjectType() === field.target && it.methodName === field.name);
++                            // [MJ scale patch] O(N^2) fix — see esm build for rationale. Memoized index.
++                            if (!this._mjFieldResolverIndex) {
++                                const _resolversSet = new Set(resolvers);
++                                const _idx = new Map();
++                                for (const it of (0, getMetadataStorage_1.getMetadataStorage)().fieldResolvers) {
++                                    if (it.kind === "internal" || _resolversSet.has(it.target)) {
++                                        const _t = it.getObjectType();
++                                        let _m = _idx.get(_t);
++                                        if (!_m) { _m = new Map(); _idx.set(_t, _m); }
++                                        _m.set(it.methodName, it);
++                                    }
++                                }
++                                this._mjFieldResolverIndex = _idx;
++                            }
++                            const _byMethod = this._mjFieldResolverIndex.get(field.target);
++                            const fieldResolverMetadata = _byMethod ? _byMethod.get(field.name) : undefined;
+                             const type = this.getGraphQLOutputType(field.target, field.name, field.getType(), field.typeOptions);
+                             const isSimpleResolver = field.simple !== undefined
+                                 ? field.simple === true
