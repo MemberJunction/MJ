@@ -586,6 +586,18 @@ def _rewrite_boolean_defaults(node: exp.Expression) -> exp.Expression:
     return node
 
 
+def _strip_default_constraint_names(node: exp.Expression) -> exp.Expression:
+    """T-SQL permits a NAME on a column default (`CONSTRAINT [DF_x] DEFAULT (75)`); PG does
+    NOT — it errors at `CONSTRAINT`. Strip the name from a DEFAULT column-constraint, leaving
+    a bare unnamed `DEFAULT (75)` (issue #3252 RC3, the inline-column form; the standalone
+    `ADD CONSTRAINT ... DEFAULT ... FOR col` form is handled by _transpile_default_constraint).
+    Named CHECK/FK/UNIQUE column constraints are valid PG and are left untouched."""
+    if isinstance(node, exp.ColumnConstraint) and isinstance(node.kind, exp.DefaultColumnConstraint) \
+            and node.args.get("this") is not None:
+        node.set("this", None)
+    return node
+
+
 import re as _re
 
 # `GO` is a batch separator (SSMS/sqlcmd tooling), not SQL — split on it before parsing.
@@ -752,8 +764,56 @@ class _IfExistsMatch:
         return self._text[self._start:self._end] if key == 0 else self._groups[key]
 
 
+def _scan_block_less_body(text: str, i: int) -> tuple[int, bool]:
+    """From i (start of a block-less IF's single governed statement), scan atom-aware to the
+    statement's terminating top-level ';'. Returns (end, is_if_else):
+      - end: index just past ';' (or at a top-level ELSE, or len(text) if it runs to the end).
+      - is_if_else: True when a top-level ELSE (outside any CASE…END) is reached before ';'
+        — i.e. this is an IF … ELSE, which we don't model and must NOT capture.
+    CASE…END nesting is tracked so a CASE-expression ELSE does not falsely trip the bail."""
+    n = len(text)
+    case_depth = 0
+    while i < n:
+        j = _scan_atom(text, i)
+        if j != i:
+            i = j
+            continue
+        w = _WORD.match(text, i)
+        if w:
+            kw = w.group(0).upper()
+            if kw == "CASE":
+                case_depth += 1
+            elif kw == "END" and case_depth > 0:
+                case_depth -= 1
+            elif kw == "ELSE" and case_depth == 0:
+                return i, True
+            i = w.end()
+            continue
+        if text[i] == ";":
+            return i + 1, False
+        i += 1
+    return n, False
+
+
+def _next_keyword(text: str, i: int) -> str:
+    """The next SQL word at/after i, skipping whitespace and comments, uppercased ('' if none)."""
+    n = len(text)
+    while i < n:
+        if text[i].isspace():
+            i += 1
+            continue
+        j = _scan_atom(text, i)
+        if j != i and text[i] in ("-", "/"):  # comments
+            i = j
+            continue
+        break
+    m = _WORD.match(text, i)
+    return m.group(0).upper() if m else ""
+
+
 def _find_if_exists_begin(text: str, pos: int = 0) -> _IfExistsMatch | None:
-    """Find the next `IF [NOT] EXISTS (<select>) BEGIN <body> END` block at/after pos."""
+    """Find the next `IF [NOT] EXISTS (<select>) BEGIN <body> END` block — OR the block-less
+    `IF [NOT] EXISTS (<select>) <single-statement>;` form (issue #3252 RC1) — at/after pos."""
     for head in _IF_EXISTS_HEAD.finditer(text, pos):
         cond_close = _match_paren(text, head.end() - 1)
         if cond_close < 0:
@@ -761,7 +821,7 @@ def _find_if_exists_begin(text: str, pos: int = 0) -> _IfExistsMatch | None:
         cond = text[head.end():cond_close - 1]
         if not _re.match(r"\s*SELECT\b", _strip_leading_sql_comments(cond), _re.IGNORECASE):
             continue
-        # Expect the block's BEGIN next (skipping whitespace/comments).
+        # Skip whitespace/comments after the condition to the first real token.
         i, n = cond_close, len(text)
         while i < n:
             if text[i].isspace():
@@ -773,12 +833,21 @@ def _find_if_exists_begin(text: str, pos: int = 0) -> _IfExistsMatch | None:
                 continue
             break
         m = _WORD.match(text, i)
-        if not m or m.group(0).upper() != "BEGIN":
+        if m and m.group(0).upper() == "BEGIN":
+            body_end, block_end = _match_block_end(text, m.end())
+            if body_end < 0:
+                continue
+            return _IfExistsMatch(text, head.start(), block_end, head.group("neg"), cond, text[m.end():body_end])
+        # Block-less form: capture the single governed statement (to its terminating ';').
+        # IF/ELSE is not modeled — bail so it falls to the plain path, where the 1b If/IfBlock
+        # guard reports it and never silently drops it. Detect ELSE both mid-statement (the
+        # governed statement has no trailing ';' before ELSE) and after a terminating ';'.
+        if not m or m.group(0).upper() in ("ELSE", "END"):
             continue
-        body_end, block_end = _match_block_end(text, m.end())
-        if body_end < 0:
+        stmt_end, is_if_else = _scan_block_less_body(text, i)
+        if is_if_else or _next_keyword(text, stmt_end) == "ELSE":
             continue
-        return _IfExistsMatch(text, head.start(), block_end, head.group("neg"), cond, text[m.end():body_end])
+        return _IfExistsMatch(text, head.start(), stmt_end, head.group("neg"), cond, text[i:stmt_end])
     return None
 
 
@@ -1107,25 +1176,46 @@ def _parse_resilient(protected: str) -> list[tuple[exp.Expression | None, str]]:
     return results
 
 
-def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
-    """Transpile a chunk of regular SQL via the AST dialect; report unparseable bits."""
-    out, unhandled = [], []
+def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], list[dict]]:
+    """Transpile a chunk of regular SQL via the AST dialect; report unparseable bits.
+
+    Returns (sql, unhandled, dropped). `dropped` records every INTENTIONAL drop (batch-control
+    noise, swallowed routine `END`, statement-level RAISERROR, actionless ALTER, …) so that
+    accounting reconciles: parsed == emitted + unhandled + dropped (issue #3252 1d). The
+    reconciliation is SOFT — a mismatch appends an ACCOUNTING-LEAK gap to `unhandled`, it
+    never raises (a raise would crash the transpiler and, via the CLI catch, lose all
+    artifacts — the exact RC3 pathology this fix eliminates)."""
+    out, unhandled, dropped = [], [], []
+    parsed = 0
     protected = sql.replace(FLYWAY_MACRO, FLYWAY_SENTINEL)
     # Set after reporting a CREATE PROCEDURE/FUNCTION/TRIGGER: the routine's closing
     # `END` often parses as its own dangling statement — it belongs to the routine we
     # just reported, not to a new gap.
     swallow_routine_end = False
     for stmt, raw in _parse_resilient(protected):
+        parsed += 1
         if swallow_routine_end:
             swallow_routine_end = False
             tail = (raw or (stmt.sql(dialect="tsql") if stmt is not None else "")).strip().rstrip(";").strip()
             if tail.upper() == "END":
+                dropped.append({"kind": "ROUTINE-END", "snippet": tail[:80]})
                 continue
         if stmt is None:
             unhandled.append({"kind": "parse-error", "snippet": raw.strip()[:80]})
             continue
+        # A T-SQL `IF …` statement that the IF-EXISTS envelope did NOT capture (e.g. a
+        # block-less IF/ELSE — issue #3252 RC1) reaches here as exp.If/exp.IfBlock. sqlglot's
+        # PG generator emits an EMPTY string for these, which is a SILENT DROP (the six bare
+        # `;` of the original bug). Report it as a gap; never let it emit nothing.
+        if isinstance(stmt, (exp.If, exp.IfBlock)):
+            txt = stmt.sql(dialect="tsql")
+            unhandled.append({"kind": "IF-BLOCK", "snippet": txt[:80]})
+            continue
         # Standalone seed of schema-derived metadata → drop; CodeGen regenerates it.
+        # (The _METADATA_TABLES matcher is intentionally disabled today; instrumented for
+        # accounting completeness should it ever be re-enabled.)
         if isinstance(stmt, exp.Insert) and _METADATA_TABLES.search(stmt.sql(dialect="tsql")):
+            dropped.append({"kind": "METADATA-INSERT", "snippet": stmt.sql(dialect="tsql")[:80]})
             continue
         # T-SQL procedural glue with no standalone PG equivalent — DECLARE @v / SET @v /
         # SELECT @v = ... / IF @v ... EXEC('...'). In Category-B (regular DDL/DML) these
@@ -1185,6 +1275,7 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
                 continue
             # SQL Server batch-control noise — not needed on PG, drop silently.
             if _re.match(r"^\s*(BEGIN\s+TRY|END\s+TRY|BEGIN\s+CATCH|END\s+CATCH|SET\s+NOEXEC|GO)\b", txt, _re.IGNORECASE):
+                dropped.append({"kind": "BATCH-CONTROL", "snippet": txt[:80]})
                 continue
             unhandled.append({"kind": _first_keyword(txt), "snippet": txt[:80]})
             continue
@@ -1194,10 +1285,12 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
             r"\b(NOEXEC|NOCOUNT|XACT_ABORT|QUOTED_IDENTIFIER|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|"
             r"ARITHABORT|CONCAT_NULL_YIELDS_NULL|NUMERIC_ROUNDABORT)\b",
             stmt.sql(dialect="tsql"), _re.IGNORECASE):
+            dropped.append({"kind": "SET-NOISE", "snippet": stmt.sql(dialect="tsql")[:80]})
             continue
         # RAISERROR(...) at statement level is invalid PG outside a function — drop it
         # (inside an IF…BEGIN guard it is handled as RAISE EXCEPTION by the DO-block path).
         if isinstance(stmt, exp.Anonymous) and (stmt.name or "").upper() == "RAISERROR":
+            dropped.append({"kind": "RAISERROR", "snippet": stmt.sql(dialect="tsql")[:80]})
             continue
         # `ALTER TABLE t ALTER COLUMN c <type>` with NO nullability spec parses cleanly
         # (unlike the `… NULL`/`… NOT NULL` forms, which land as opaque Commands). Route
@@ -1219,6 +1312,7 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
             .transform(_fix_misparsed_table_constraint)
             .transform(_rewrite_functions)
             .transform(_rewrite_boolean_defaults)
+            .transform(_strip_default_constraint_names)  # PG has no named column defaults
             .transform(_rewrite_string_concat)
             .transform(_strip_national)
             .transform(_strip_collate)
@@ -1231,7 +1325,15 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
         )
         # An ALTER TABLE whose only action was dropped (e.g. an ISJSON ADD CONSTRAINT)
         # is left actionless — emitting bare `ALTER TABLE x` is a PG syntax error. Skip.
+        # NOTE: do NOT render the actionless ALTER to T-SQL for the snippet — sqlglot's
+        # tsql alter_sql does actions[0] and raises IndexError on an empty action list.
+        # Use the (safe) table name instead.
         if isinstance(stmt, exp.Alter) and not stmt.args.get("actions"):
+            tbl = stmt.find(exp.Table)
+            dropped.append({
+                "kind": "ALTER-ACTIONLESS",
+                "snippet": (tbl.sql(dialect="tsql") if tbl is not None else "ALTER TABLE")[:80],
+            })
             continue
         # Behavioral self-check: any `boolean = integer` comparison the coercion pass didn't
         # eliminate would abort on PG. Surface it as a gap (not silent output) so the gap
@@ -1240,8 +1342,29 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
         if residual:
             unhandled.append({"kind": "BOOL-INT-RESIDUAL", "snippet": "; ".join(residual)[:120]})
             continue
-        out.append(stmt.sql(dialect=MJPostgres, pretty=pretty, identify=True))
-    return (";\n".join(out) + (";" if out else "")), unhandled
+        # EMPTY-EMISSION postcondition (issue #3252 1b): sqlglot's generator treats an
+        # unsupported node as a WARNING and returns "" — which would append a bare `;` and
+        # vanish the source statement silently. Any non-empty source statement that renders
+        # to empty/whitespace is REPORTED as a gap, never emitted. This closes the whole
+        # class of "generator warned and returned nothing", not just the IfBlock instance.
+        rendered = stmt.sql(dialect=MJPostgres, pretty=pretty, identify=True)
+        if not rendered.strip().strip(";").strip():
+            txt = stmt.sql(dialect="tsql")
+            unhandled.append({"kind": "EMPTY-EMISSION", "snippet": txt[:80]})
+            continue
+        out.append(rendered)
+    # SOFT reconciliation (issue #3252 1d): every parsed statement must land in exactly one
+    # bucket. A mismatch means a drop site was missed — surface it as a gap so it is loud and
+    # gets artifacts, but NEVER raise (a raise would abort the whole conversion run with zero
+    # artifacts). `emitted` is counted at source-statement granularity (len(out)), NOT by
+    # re-splitting the emitted body — a single statement can expand to a multi-`;` DO block.
+    accounted = len(out) + len(unhandled) + len(dropped)
+    if parsed != accounted:
+        unhandled.append({
+            "kind": "ACCOUNTING-LEAK",
+            "snippet": f"parsed={parsed} but emitted={len(out)}+unhandled={len(unhandled)}+dropped={len(dropped)}={accounted}",
+        })
+    return (";\n".join(out) + (";" if out else "")), unhandled, dropped
 
 
 _RAISERROR = _re.compile(r"RAISERROR\s*\(\s*(N?'(?:[^']|'')*'|@?\w+)", _re.IGNORECASE)
@@ -1260,12 +1383,14 @@ _RAISERROR = _re.compile(r"RAISERROR\s*\(\s*(N?'(?:[^']|'')*'|@?\w+)", _re.IGNOR
 _METADATA_TABLES = _re.compile(r"(?!x)x")
 
 
-def _transpile_extprop_segment(text: str, pretty: bool = False) -> tuple[str, list[dict]]:
+def _transpile_extprop_segment(text: str, pretty: bool = False) -> tuple[str, list[dict], list[dict]]:
     """Transpile a text segment that may interleave sp_add/dropextendedproperty envelopes
     with plain SQL — used for IF…BEGIN bodies, where a guarded INSERT can sit next to an
-    extprop EXEC (the top-level batch walker handles the same mix outside blocks)."""
+    extprop EXEC (the top-level batch walker handles the same mix outside blocks).
+    Returns (sql, unhandled, dropped) — `dropped` accumulated from the plain-SQL gaps."""
     out: list[str] = []
     unhandled: list[dict] = []
+    dropped: list[dict] = []
     pos = 0
     while pos < len(text):
         ext = _SP_EXTPROP.search(text, pos)
@@ -1273,10 +1398,11 @@ def _transpile_extprop_segment(text: str, pretty: bool = False) -> tuple[str, li
         nxt = min([x for x in (ext, dxp) if x], key=lambda x: x.start(), default=None)
         gap = text[pos:] if nxt is None else text[pos:nxt.start()]
         if gap.strip():
-            s, u = _transpile_plain(gap, pretty)
+            s, u, d = _transpile_plain(gap, pretty)
             if s.strip():
                 out.append(s)
             unhandled.extend(u)
+            dropped.extend(d)
         if nxt is None:
             break
         if nxt is ext:
@@ -1292,7 +1418,7 @@ def _transpile_extprop_segment(text: str, pretty: bool = False) -> tuple[str, li
             elif comment is None:
                 unhandled.append({"kind": "sp_dropextendedproperty", "snippet": nxt.group(0)[:80]})
         pos = nxt.end()
-    return "\n".join(out), unhandled
+    return "\n".join(out), unhandled, dropped
 
 
 # SS catalog references in a guard condition (sys.* views / OBJECT_ID()) — meaningless
@@ -1380,12 +1506,13 @@ def _translate_sys_guard(cond: str, neg: bool) -> str | None:
     return None
 
 
-def _transpile_if_exists_begin(m: _IfExistsMatch) -> tuple[str, list[dict]]:
-    """IF [NOT] EXISTS(<sel>) BEGIN <body> END → PG DO $$ … IF … THEN … END IF; … $$;"""
+def _transpile_if_exists_begin(m: _IfExistsMatch) -> tuple[str, list[dict], list[dict]]:
+    """IF [NOT] EXISTS(<sel>) BEGIN <body> END → PG DO $$ … IF … THEN … END IF; … $$;
+    Returns (sql, unhandled, dropped) — see _transpile_plain for the accounting contract."""
     raw_body = m.group("body").strip()
     # Idempotent seed of schema-derived metadata → drop; CodeGen regenerates it.
     if _METADATA_TABLES.search(raw_body):
-        return "", []
+        return "", [], [{"kind": "IF-GUARD-METADATA", "snippet": m.group(0)[:80]}]
     # Extended-property comment dance: a guard whose body consists EXCLUSIVELY of
     # sp_add/dropextendedproperty EXECs (plus PRINT/comment noise) is SQL-Server-only —
     # PG `COMMENT ON … IS …` overwrites unconditionally and `mj codegen` re-syncs every
@@ -1401,18 +1528,19 @@ def _transpile_if_exists_begin(m: _IfExistsMatch) -> tuple[str, list[dict]]:
             and not _re.match(r"\s*PRINT\b", _strip_leading_sql_comments(s), _re.IGNORECASE)
         ]
         if not leftover:
-            return "", []
+            return "", [], [{"kind": "IF-GUARD-EXTPROP", "snippet": m.group(0)[:80]}]
     neg = "NOT " if m.group("neg") else ""
     cond_raw = m.group("cond").strip()
     u1: list[dict] = []
+    d1: list[dict] = []
     # SS catalog guards (sys.* / OBJECT_ID()) fail at apply on PG — translate the common
     # shapes; anything unrecognized is reported whole, never emitted as sys.* SQL.
     if _SYS_CATALOG_REF.search(cond_raw):
         cond_full = _translate_sys_guard(cond_raw, bool(m.group("neg")))
         if cond_full is None:
-            return "", [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}]
+            return "", [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}], []
     else:
-        cond_sql, u1 = _transpile_plain(cond_raw)
+        cond_sql, u1, d1 = _transpile_plain(cond_raw)
         cond_inner = cond_sql.rstrip(";").strip()
         cond_full = f"{neg}EXISTS ({cond_inner})" if cond_inner else None
     # Guard blocks (IF EXISTS(...) BEGIN RAISERROR('conflict') END) → RAISE EXCEPTION.
@@ -1420,18 +1548,18 @@ def _transpile_if_exists_begin(m: _IfExistsMatch) -> tuple[str, list[dict]]:
     if rr:
         msg = rr.group(1)
         msg = _pg_string(_unquote_tsql_string(msg)) if msg.lstrip("Nn").startswith("'") else "'migration guard failed'"
-        body_sql, u2 = f"RAISE EXCEPTION {msg};", []
+        body_sql, u2, d2 = f"RAISE EXCEPTION {msg};", [], []
     else:
-        body_sql, u2 = _transpile_extprop_segment(raw_body)
+        body_sql, u2, d2 = _transpile_extprop_segment(raw_body)
     if not cond_full or not body_sql.strip():
-        return "", (u1 + u2 + [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}])
+        return "", (u1 + u2 + [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}]), (d1 + d2)
     do = (
         "DO $$\nBEGIN\n"
         f"  IF {cond_full} THEN\n"
         f"    {body_sql.strip()}\n"
         "  END IF;\nEND $$;"
     )
-    return do, (u1 + u2)
+    return do, (u1 + u2), (d1 + d2)
 
 
 def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dict:
@@ -1474,12 +1602,14 @@ def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dic
         except Exception:  # noqa: BLE001
             pass
 
+    dropped: list[dict] = []
     for batch in _GO_SPLIT.split(sql):
         if not batch.strip():
             continue
-        out_sql, u = _transpile_batch(batch, pretty)
+        out_sql, u, d = _transpile_batch(batch, pretty)
         out.extend(out_sql)
         unhandled.extend(u)
+        dropped.extend(d)
 
     # Final safety net: the macro is protected to FLYWAY_SENTINEL by a blanket text
     # replace before parsing, and restored at the AST level in identifier_sql (identifier
@@ -1496,8 +1626,16 @@ def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dic
         {**u, "snippet": u["snippet"].replace(FLYWAY_SENTINEL, FLYWAY_MACRO)}
         for u in unhandled
     ]
+    dropped = [
+        {**d, "snippet": d["snippet"].replace(FLYWAY_SENTINEL, FLYWAY_MACRO)}
+        for d in dropped
+    ]
 
-    return {"sql": out, "unhandled": unhandled}
+    # `dropped` lists every INTENTIONALLY-discarded statement (batch-control noise, swallowed
+    # routine `END`, metadata-guard drops, …) so the TS/CLI reconciliation layer (issue #3252
+    # Phase 3) can account for what the dialect discarded. Backward-compatible: existing
+    # consumers read only `sql`/`unhandled`.
+    return {"sql": out, "unhandled": unhandled, "dropped": dropped}
 
 
 # Baseline extended-property EXECs come wrapped in per-statement error handling:
@@ -1520,10 +1658,12 @@ def _strip_catch_noise(batch: str) -> str:
     return _CATCH_BLOCK.sub(repl, batch)
 
 
-def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[dict]]:
-    """Scan one GO batch into envelope chunks + plain SQL, transpiling each in order."""
+def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[dict], list[dict]]:
+    """Scan one GO batch into envelope chunks + plain SQL, transpiling each in order.
+    Returns (sql_list, unhandled, dropped) — see _transpile_plain for the accounting contract."""
     out: list[str] = []
     unhandled: list[dict] = []
+    dropped: list[dict] = []
 
     # Extended-property batches: drop the SS error-handling plumbing around the EXECs
     # (see _strip_catch_noise), then let the walk below handle EVERYTHING in the batch —
@@ -1541,17 +1681,19 @@ def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[
         if nxt is None:
             gap = batch[pos:]
             if gap.strip():
-                s, u = _transpile_plain(gap, pretty)
+                s, u, d = _transpile_plain(gap, pretty)
                 if s.strip():
                     out.append(s)
                 unhandled.extend(u)
+                dropped.extend(d)
             break
         gap = batch[pos:nxt.start()]
         if gap.strip():
-            s, u = _transpile_plain(gap, pretty)
+            s, u, d = _transpile_plain(gap, pretty)
             if s.strip():
                 out.append(s)
             unhandled.extend(u)
+            dropped.extend(d)
         if nxt is ext:
             comment = _transpile_sp_addextendedproperty(nxt.group("args"))
             if comment:
@@ -1565,12 +1707,13 @@ def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[
             elif comment is None:
                 unhandled.append({"kind": "sp_dropextendedproperty", "snippet": nxt.group(0)[:80]})
         else:
-            do, u = _transpile_if_exists_begin(nxt)
+            do, u, d = _transpile_if_exists_begin(nxt)
             if do.strip():
                 out.append(do)
             unhandled.extend(u)
+            dropped.extend(d)
         pos = nxt.end()
-    return out, unhandled
+    return out, unhandled, dropped
 
 
 if __name__ == "__main__":

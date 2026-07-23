@@ -539,6 +539,53 @@ check("unrecognized sys.* guard → whole IF routed to unhandled, sys.* never em
       must_not_contain=["sys.", "DO $$", "DROP CONSTRAINT"],
       expect_unhandled=1)
 
+# --- BLOCK-LESS IF guards (issue #3252 RC1): the v5.49 FK-index migration shape.
+# `IF NOT EXISTS (...sys.indexes...) CREATE INDEX ...;` (no BEGIN/END) previously
+# fell through to sqlglot, parsed as exp.IfBlock, and emitted a bare `;` with
+# unhandled:[]. It must translate exactly like the BEGIN…END form. ------------------
+check("block-less IF NOT EXISTS(sys.indexes) CREATE INDEX → pg_indexes DO block, no bare ;",
+      "IF NOT EXISTS (\n"
+      "    SELECT 1 FROM sys.indexes\n"
+      "    WHERE name = 'IDX_AUTO_MJ_FKEY_CompanyIntegrationRun_ScheduledJobRunID'\n"
+      "      AND object_id = OBJECT_ID('${flyway:defaultSchema}.CompanyIntegrationRun'))\n"
+      "    CREATE INDEX IDX_AUTO_MJ_FKEY_CompanyIntegrationRun_ScheduledJobRunID\n"
+      "        ON ${flyway:defaultSchema}.CompanyIntegrationRun ([ScheduledJobRunID]);",
+      must_contain=["DO $$", "pg_indexes", "schemaname = '${flyway:defaultSchema}'",
+                    "tablename = 'CompanyIntegrationRun'",
+                    "indexname = 'IDX_AUTO_MJ_FKEY_CompanyIntegrationRun_ScheduledJobRunID'",
+                    "CREATE INDEX", "END IF;"],
+      must_not_contain=["sys.", "OBJECT_ID"],
+      expect_unhandled=0)
+
+# Inline named DEFAULT constraint (issue #3252 RC3): T-SQL allows a name on a column
+# default (`CONSTRAINT [DF_x] DEFAULT (75)`); PG does NOT — it is a `syntax error at or
+# near "CONSTRAINT"`. The name must be stripped, leaving a bare (unnamed) DEFAULT.
+check("inline named column DEFAULT → name stripped (PG has no named defaults)",
+      "ALTER TABLE ${flyway:defaultSchema}.AIAgentType ADD "
+      "CompactionTriggerPercent INT NOT NULL CONSTRAINT DF_AIAgentType_CompactionTriggerPercent DEFAULT (75);",
+      must_contain=['ADD COLUMN "CompactionTriggerPercent" INT NOT NULL', "DEFAULT (75)"],
+      must_not_contain=['CONSTRAINT "DF_AIAgentType_CompactionTriggerPercent" DEFAULT',
+                        "DF_AIAgentType_CompactionTriggerPercent"],
+      expect_unhandled=0)
+
+# A named column CHECK constraint is valid PG and must NOT be stripped (only DEFAULT names go).
+check("inline named CHECK constraint is preserved (only DEFAULT names are stripped)",
+      "ALTER TABLE ${flyway:defaultSchema}.AIAgentType ADD "
+      "Pct INT NOT NULL CONSTRAINT CK_AIAgentType_Pct CHECK (Pct BETWEEN 0 AND 100);",
+      must_contain=['CONSTRAINT "CK_AIAgentType_Pct" CHECK'],
+      must_not_contain=[],
+      expect_unhandled=0)
+
+# A block-less IF/ELSE is not modeled by the envelope (RC1 1a bails on ELSE); it must be
+# REPORTED by the plain path's If/IfBlock guard, never emitted as an empty `;`.
+check("block-less IF … ELSE → reported (If/IfBlock guard), not silently dropped",
+      "IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Widget WHERE ID = 'a')\n"
+      "    CREATE TABLE ${flyway:defaultSchema}.Widget (ID UNIQUEIDENTIFIER NOT NULL)\n"
+      "ELSE\n"
+      "    CREATE TABLE ${flyway:defaultSchema}.Other (ID UNIQUEIDENTIFIER NOT NULL);",
+      must_not_contain=["sys."],
+      expect_unhandled=1)
+
 # --- IF…BEGIN body scanner: CASE…END and in-string END don't truncate the block -----
 check("CASE…END (and 'END' in a literal) inside a guarded UPDATE; same-batch DDL after survives",
       "IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Widget WHERE ID = 'a')\n"
@@ -566,6 +613,60 @@ check("bare CREATE FUNCTION → unhandled (T-SQL body is not transpilable)",
       "RETURNS NVARCHAR(100) AS BEGIN RETURN 'x'; END;",
       must_not_contain=["CREATE FUNCTION"],
       expect_unhandled=1)
+
+
+# --- Issue #3252 1d: drop accounting + SOFT reconciliation (never raises) --------------
+# mj_transpile records every INTENTIONAL drop in result["dropped"] and self-checks
+# parsed == emitted + unhandled + dropped, appending a soft ACCOUNTING-LEAK gap (never a
+# raise) if a drop site was missed. These assert the result shape + the no-leak invariant.
+def check_accounting(name, sql, expect_dropped_kinds=(), forbid_leak=True):
+    global _failures
+    r = mj_transpile(sql)
+    errs = []
+    if "dropped" not in r:
+        errs.append("result has no 'dropped' key")
+    else:
+        kinds = [d["kind"] for d in r["dropped"]]
+        for k in expect_dropped_kinds:
+            if k not in kinds:
+                errs.append(f"expected dropped kind {k!r}; got {kinds}")
+    if forbid_leak:
+        leaks = [u for u in r["unhandled"] if u["kind"] == "ACCOUNTING-LEAK"]
+        if leaks:
+            errs.append(f"unexpected ACCOUNTING-LEAK (a drop site is uninstrumented): {leaks}")
+    if errs:
+        _failures += 1
+        print(f"FAIL {name}")
+        for e in errs:
+            print(f"     {e}")
+    else:
+        print(f"ok   {name}")
+
+
+check_accounting("SET NOCOUNT batch noise is recorded as a drop (not silent, no leak)",
+                 "SET NOCOUNT ON;\nCREATE TABLE ${flyway:defaultSchema}.T (ID UNIQUEIDENTIFIER NOT NULL);",
+                 expect_dropped_kinds=["SET-NOISE"])
+
+# When the resilient parser falls back to per-statement splitting (forced here by a poison
+# statement), a routine body's dangling `END` is isolated and swallowed. That swallow is a
+# genuine 1→0 drop — it MUST be recorded as ROUTINE-END, else accounting would falsely leak.
+check_accounting("swallowed routine END is recorded as ROUTINE-END (no false leak)",
+                 "CREATE PROCEDURE ${flyway:defaultSchema}.p AS BEGIN "
+                 "UPDATE ${flyway:defaultSchema}.t SET a = 1; END;\nSELECT CAST(",
+                 expect_dropped_kinds=["ROUTINE-END"])
+
+# The real hand-written trigger from the v5.49 ledger (issue #3252 RC2) must NOT produce a
+# false ACCOUNTING-LEAK — the exact regression BLOCKER-2 guards against (a leak would raise
+# under the original hard-assert design and lose all artifacts).
+with open(str(Path(__file__).parents[4] / "migrations" / "v5"
+               / "V202607202110__v5.49.x__Fix_ConversationDetail_Sequence_Deadlock.sql")) as _f:
+    _trg_sql = _f.read()
+check_accounting("real hand trigger (Fix_ConversationDetail) reconciles with NO leak, NO raise",
+                 _trg_sql)
+
+check_accounting("plain DDL reconciles with zero drops and no leak",
+                 "ALTER TABLE ${flyway:defaultSchema}.APIKey ADD KeyPrefix NVARCHAR(20) NULL;")
+
 
 if _failures:
     print(f"\n{_failures} test(s) FAILED")

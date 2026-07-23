@@ -126,6 +126,15 @@ const STATEMENT_MODE_KEEP: ReadonlySet<StatementKind> = new Set<StatementKind>([
   'hand-procedural',
 ]);
 
+/**
+ * Batch-evidence prefixes that mark a GENUINE squashed snapshot (baseline / old-style file):
+ * a generated VIEW or CRUD PROCEDURE/FUNCTION. `MigrationStatementSplitter` sets a codegen-object
+ * batch's `evidence` to `"<KEYWORD> <name>"` (e.g. `"VIEW vwFoo"`, `"PROCEDURE spCreateFoo"`),
+ * so this keys off the keyword. Triggers and auto-FK indexes are deliberately EXCLUDED — they are
+ * not sufficient evidence of a snapshot (issue #3252 RC2).
+ */
+const SNAPSHOT_CODEGEN_OBJECT = /^(?:VIEW|PROCEDURE|PROC|FUNCTION)\b/i;
+
 /** Classify a migration and return the kept T-SQL to transpile — the single classification entry point. */
 export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   const split = splitMigration(sql, fileName);
@@ -134,9 +143,18 @@ export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   // Baselines and old-style migrations have NO banner but DO contain generated
   // objects (squashed snapshots). Banner-based splitting can't separate them — use
   // statement-level classification instead.
+  //
+  // A genuine snapshot always carries generated VIEWS and CRUD PROCEDURES/FUNCTIONS. We gate
+  // the statement-mode flip on the presence of such an object — matched on the batch EVIDENCE
+  // string (a `kind` of 'codegen-object' alone can't discriminate: it also covers triggers and
+  // auto-FK indexes). This stops a LONE codegen-named trigger/index in an otherwise
+  // hand-authored file from flipping the whole file into statement-mode, where its other
+  // batches would be dropped (issue #3252 RC2 defense-in-depth). Such a file stays banner-mode,
+  // where a stray hand routine is flagged needs-hand-authoring instead of silently dropped.
   const stmts = splitByStatement(sql);
   const isUnbanneredSnapshot =
-    split.boundaryMethod === 'no-codegen-block' && stmts.some((s) => s.kind === 'codegen-object');
+    split.boundaryMethod === 'no-codegen-block' &&
+    stmts.some((s) => s.kind === 'codegen-object' && SNAPSHOT_CODEGEN_OBJECT.test(s.evidence));
   if (isUnbanneredSnapshot) {
     return classifyStatementMode(split, stmts, droppedCodeGenLines);
   }
