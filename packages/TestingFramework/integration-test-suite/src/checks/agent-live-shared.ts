@@ -50,19 +50,33 @@ export interface AgentInvoker {
  * Build a server-in-process agent invoker bound to the run-scoped provider + the run's context
  * user. `user` is REQUIRED (pass `ctx.User`): the agent runs in-process via AgentRunner.RunAgent,
  * so a null contextUser dies in BaseEngine.Load ("For server-side use of all engine classes...").
- * `provider.CurrentUser` is only a last-resort fallback — it is null on the CLI's SQL provider, so
- * relying on it (as the pre-#3251 code did) failed every server-in-process run. If no user can be
- * resolved at all we throw a harness-attributed error rather than hand a null user to BaseAgent.
+ * The contract is `params.contextUser ?? user`, else a REJECTED promise with a harness-attributed
+ * error — deliberately NO fallback to `provider.CurrentUser` (null on the CLI's SQL provider; the
+ * pre-#3251 code relied on it and failed every server-in-process run, and borrowing the provider's
+ * ambient identity could silently run as the wrong user on a client provider).
  */
+/**
+ * The ONE contextUser-resolution policy for the server-in-process agent invokers (makeAIClient
+ * here, resolveClient in _it-live-agent-harness.ts): `params.contextUser ?? boundUser`, else throw
+ * a harness-attributed error. Shared so the two invokers' fallback policy and error message cannot
+ * drift (#3251 review follow-up). Callers are async, so the throw always surfaces as a rejection.
+ */
+export function resolveContextUserOrThrow(explicitUser: UserInfo | undefined, boundUser: UserInfo, invokerName: string): UserInfo {
+    const contextUser = explicitUser ?? boundUser;
+    if (!contextUser) {
+        throw new Error(
+            'integration harness: no contextUser available for the server-in-process agent run — ' +
+            `pass ctx.User to ${invokerName} (there is deliberately no provider.CurrentUser fallback). (issue #3251)`);
+    }
+    return contextUser;
+}
+
 export function makeAIClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
     return {
-        RunAIAgent: (params: ExecuteAgentParams) => {
-            const contextUser = params.contextUser ?? user ?? provider.CurrentUser;
-            if (!contextUser) {
-                throw new Error(
-                    'integration harness: no contextUser available for the server-in-process agent run — ' +
-                    'pass ctx.User to makeAIClient (provider.CurrentUser is null on a database provider). (issue #3251)');
-            }
+        // async so a missing user surfaces as a REJECTION, never a sync throw — RunAIAgent
+        // returns a Promise, and a sync throw would escape a `.catch(...)`-style caller.
+        RunAIAgent: async (params: ExecuteAgentParams) => {
+            const contextUser = resolveContextUserOrThrow(params.contextUser, user, 'makeAIClient');
             // base-agent stamps AIAgentRun.ConversationID from params.data.conversationId
             // (base-agent.ts:7893), while carry-forward reads the top-level params.conversationId
             // (:5714) — so a conversation-linked run must carry it in BOTH places.
@@ -96,8 +110,9 @@ export interface WireRunOptions {
 
 /**
  * Run an agent server-in-process (via the makeAIClient invoker) and return the ExecuteAgentResult.
- * A run error normally becomes `result.success === false`, but the invoker throws if no contextUser
- * can be resolved (issue #3251) — call sites pass ctx.User, so that path indicates a harness bug.
+ * A run error normally becomes `result.success === false`, but the invoker REJECTS if no
+ * contextUser can be resolved (issue #3251) — call sites pass ctx.User, so that path indicates a
+ * harness bug.
  */
 export async function runAgentOverWire(
     client: AgentInvoker,

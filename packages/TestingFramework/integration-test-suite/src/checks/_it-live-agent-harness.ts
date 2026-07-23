@@ -21,6 +21,7 @@
  */
 import { RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
+import { resolveContextUserOrThrow } from './agent-live-shared';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
@@ -91,20 +92,17 @@ export interface AgentInvoker {
  * Build a server-in-process agent invoker bound to the run-scoped provider + the run's context
  * user. `user` is REQUIRED (pass `ctx.User`): the agent runs in-process via AgentRunner.RunAgent,
  * so a null contextUser dies in BaseEngine.Load ("For server-side use of all engine classes...").
- * `provider.CurrentUser` is only a last-resort fallback — it is null on the CLI's SQL provider, so
- * relying on it (as the pre-#3251 code did) failed every server-in-process run. Always returns an
- * invoker (never undefined — the run always executes in-process); a genuinely unresolvable user
- * throws a harness-attributed error rather than handing a null user to BaseAgent.
+ * The contract is `params.contextUser ?? user`, else a REJECTED promise with a harness-attributed
+ * error — deliberately NO fallback to `provider.CurrentUser` (null on the CLI's SQL provider; the
+ * pre-#3251 code relied on it and failed every server-in-process run). Always returns an invoker
+ * (never undefined — the run always executes in-process).
  */
 export function resolveClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
     return {
-        RunAIAgent: (params: ExecuteAgentParams) => {
-            const contextUser = params.contextUser ?? user ?? provider.CurrentUser;
-            if (!contextUser) {
-                throw new Error(
-                    'integration harness: no contextUser available for the server-in-process agent run — ' +
-                    'pass ctx.User to resolveClient (provider.CurrentUser is null on a database provider). (issue #3251)');
-            }
+        // async so a missing user surfaces as a REJECTION, never a sync throw — RunAIAgent
+        // returns a Promise, and a sync throw would escape a `.catch(...)`-style caller.
+        RunAIAgent: async (params: ExecuteAgentParams) => {
+            const contextUser = resolveContextUserOrThrow(params.contextUser, user, 'resolveClient');
             return new AgentRunner(provider).RunAgent({
                 ...params,
                 contextUser,
