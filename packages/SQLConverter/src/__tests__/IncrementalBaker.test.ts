@@ -165,6 +165,57 @@ describe('IncrementalBaker', () => {
     expect(r.handProcedural.length).toBeGreaterThan(0);
   });
 
+  describe('forward-mode gap gate (issue #3252 RC3 / Phase 4)', () => {
+    const gapTranspiler: TSQLToPGTranspiler = {
+      async transpile(tsql: string) {
+        return { sql: [tsql], unhandled: [{ kind: 'IF-EXISTS-BEGIN', snippet: 'sys.foo guard' }] };
+      },
+    };
+
+    it('does NOT apply gappy SQL to the working DB; returns mode gap-no-bake', async () => {
+      // RC3: FORWARD mode used to apply the transpiled hand body even when it carried gaps,
+      // crashing the working DB / corrupting later bakes. The gate must skip apply + capture.
+      const db = new FakeDB(capturedFor);
+      const baker = new IncrementalBaker({ transpiler: gapTranspiler, db });
+      const sql = ssMigration('ALTER TABLE [${flyway:defaultSchema}].[AIAgentRun] ADD X INT NULL;', ['MJ: AI Agent Runs']);
+
+      const r = await baker.bakeMigration(sql, 'V1__Gappy.sql');
+
+      expect(r.mode).toBe('gap-no-bake');
+      expect(db.calls).not.toContain('apply');
+      expect(db.calls.filter((c) => c.startsWith('capture:'))).toHaveLength(0);
+      expect(r.unhandled.length).toBeGreaterThan(0);
+    });
+
+    it('bakes normally (mode baked, apply called) when the conversion is clean', async () => {
+      const db = new FakeDB(capturedFor);
+      const baker = new IncrementalBaker({ transpiler: echoTranspiler, db });
+      const sql = ssMigration('ALTER TABLE [${flyway:defaultSchema}].[AIAgentRun] ADD X INT NULL;', ['MJ: AI Agent Runs']);
+
+      const r = await baker.bakeMigration(sql, 'V1__Clean.sql');
+
+      expect(r.mode).toBe('baked');
+      expect(db.calls).toContain('apply');
+    });
+
+    it('does NOT gate a baseline that carries hand-utility gaps (baseline exemption, MAJOR-3)', async () => {
+      // A baseline legitimately carries needs-hand-authoring hand utilities yet bakes completely
+      // via the baseline branch (it never applies the hand body). It must NOT be halted.
+      const db = new FakeDB(capturedFor);
+      db.bakeable = ['Widgets'];
+      const baker = new IncrementalBaker({ transpiler: gapTranspiler, db });
+      const baselineSql = [
+        'CREATE TABLE [${flyway:defaultSchema}].[Widget] (ID UNIQUEIDENTIFIER NOT NULL);',
+        'GO',
+        'CREATE OR ALTER PROCEDURE [${flyway:defaultSchema}].[spHandUtil] AS BEGIN SELECT 1; END;',
+      ].join('\n');
+
+      const r = await baker.bakeMigration(baselineSql, 'B202607091514__v5.46.x__Baseline.sql');
+
+      expect(r.mode).toBe('baked');
+    });
+  });
+
   describe('baseline mode (B… snapshot)', () => {
     /** A minimal bannerless baseline: hand DDL + metadata seed, no CodeGen banners. Its
      *  affectedEntities is empty, so the baker must bake the FULL listBakeableEntities set. */

@@ -82,6 +82,32 @@ export interface KeptTSQL {
   droppedCodeGenLines: number;
 }
 
+/**
+ * A coarse source→output statement-count reconciliation for one migration (issue #3252
+ * Phase 3, fix direction #2). Deliberately NOT an exact per-statement byte-balance — the
+ * dialect emits multi-statement `DO $$…$$` expansions and GO-batching changes chunk counts,
+ * so an exact balance is fragile and false-positive-prone (matches the design of the external
+ * `check-pg-migration-content.mjs` detector, which also counts coarsely). The load-bearing
+ * signal is `suspiciousEmptyOutput`: substantive T-SQL went to the dialect but nothing came
+ * back — the RC1/RC2 silent-drop signature — which the caller surfaces as a gap.
+ */
+export interface ConversionReconciliation {
+  /** Content (non-noise) source statements in the whole file, GO-batch granularity. */
+  sourceStatements: number;
+  /** Content statements in the emitted PG body (coarse chunk count; 0 for a marker). */
+  emittedStatements: number;
+  /** Statements surfaced as gaps for a human: `unhandled.length + handProcedural.length`. */
+  gaps: number;
+  /** The dialect's own per-call self-check reported an ACCOUNTING-LEAK (a missed drop site). */
+  accountingLeak: boolean;
+  /**
+   * The classifier fed SUBSTANTIVE T-SQL to the dialect, yet the dialect emitted nothing AND
+   * reported no gap — content vanished without a trace. Belt-and-suspenders beyond the dialect's
+   * own EMPTY-EMISSION guard; when true the caller appends a `RECONCILIATION-EMPTY-OUTPUT` gap.
+   */
+  suspiciousEmptyOutput: boolean;
+}
+
 export interface MigrationConversionResult {
   fileName: string;
   status: ConversionStatus;
@@ -99,6 +125,8 @@ export interface MigrationConversionResult {
   droppedObjects: string[];
   /** Human-readable notes describing what happened to each category. */
   notes: string[];
+  /** Coarse source→output statement-count reconciliation (issue #3252 Phase 3). */
+  reconciliation: ConversionReconciliation;
 }
 
 export interface ConvertMigrationOptions {
@@ -271,8 +299,12 @@ export async function convertMigration(
   options: ConvertMigrationOptions = {},
 ): Promise<MigrationConversionResult> {
   const kept = extractKeptTSQL(sql, fileName);
+  const sourceStatements = splitByStatement(sql).filter((s) => s.kind !== 'noise').length;
 
   if (!kept.tsql.trim()) {
+    // Marker path: the classifier found nothing translatable. Trust it — the emptiness is
+    // explained by CodeGen-block / metadata-sync / baseline routing, which the (Phase-2-fixed)
+    // classifier owns. Reconciliation reports the counts but does not second-guess the routing.
     return {
       fileName: kept.fileName,
       status: kept.status,
@@ -283,6 +315,13 @@ export async function convertMigration(
       handProcedural: kept.handProcedural,
       droppedObjects: kept.droppedObjects,
       notes: kept.notes,
+      reconciliation: {
+        sourceStatements,
+        emittedStatements: 0,
+        gaps: kept.handProcedural.length,
+        accountingLeak: false,
+        suspiciousEmptyOutput: false,
+      },
     };
   }
 
@@ -295,7 +334,25 @@ export async function convertMigration(
 
   const transpiled = await options.transpiler.transpile(kept.tsql);
   const schema = options.schema ?? '__mj';
-  const pgSQL = assemblePgSQL(kept, transpiled, schema, options.includeHeader ?? true);
+
+  const emittedStatements = transpiled.sql.filter((s) => s.trim().length > 0).length;
+  const accountingLeak = transpiled.unhandled.some((u) => u.kind === 'ACCOUNTING-LEAK');
+  // The RC1/RC2 signature: substantive T-SQL went in, nothing came out AND nothing was
+  // reported. The dialect's EMPTY-EMISSION guard should make this impossible, so this is a
+  // second net — flag it and surface a gap so the run fails rather than emitting an empty file.
+  const suspiciousEmptyOutput = emittedStatements === 0 && transpiled.unhandled.length === 0;
+
+  const unhandled: UnhandledStatement[] = [...transpiled.unhandled];
+  const notes = [...kept.notes];
+  if (suspiciousEmptyOutput) {
+    unhandled.push({
+      kind: 'RECONCILIATION-EMPTY-OUTPUT',
+      snippet: `${sourceStatements} source statement(s) classified as translatable produced NO PG output and NO reported gap — content vanished; hand-author the PG form.`,
+    });
+    notes.push('Reconciliation: kept T-SQL produced empty output with no reported gap — surfaced as a conversion gap.');
+  }
+
+  const pgSQL = assemblePgSQL(kept, { ...transpiled, unhandled }, schema, options.includeHeader ?? true);
 
   return {
     fileName: kept.fileName,
@@ -303,10 +360,17 @@ export async function convertMigration(
     pgSQL,
     split: kept.split,
     droppedCodeGenLines: kept.droppedCodeGenLines,
-    unhandled: transpiled.unhandled,
+    unhandled,
     handProcedural: kept.handProcedural,
     droppedObjects: kept.droppedObjects,
-    notes: kept.notes,
+    notes,
+    reconciliation: {
+      sourceStatements,
+      emittedStatements,
+      gaps: unhandled.length + kept.handProcedural.length,
+      accountingLeak,
+      suspiciousEmptyOutput,
+    },
   };
 }
 

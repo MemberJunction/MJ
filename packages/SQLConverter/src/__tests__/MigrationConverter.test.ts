@@ -19,6 +19,52 @@ const passthrough: TSQLToPGTranspiler = {
   transpile: async (tsql) => ({ sql: tsql.split(/\nGO\n/), unhandled: [] }),
 };
 
+describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
+  it('flags suspiciousEmptyOutput when substantive kept T-SQL vanishes (no output, no gaps)', async () => {
+    // A "vanishing" transpiler simulates the RC1 failure mode at the conversion layer: the
+    // classifier fed real DDL to the dialect, but nothing came out and nothing was reported.
+    // The dialect's own EMPTY-EMISSION guard should prevent this, but convertMigration must
+    // catch it as belt-and-suspenders — never a clean result over content that disappeared.
+    const vanishing: TSQLToPGTranspiler = { transpile: async () => ({ sql: [], unhandled: [] }) };
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: vanishing });
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
+    // …and it is surfaced as a gap so the CLI fails the run rather than shipping an empty file.
+    expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+  });
+
+  it('does NOT flag a normal conversion; reports source/emitted counts', async () => {
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough });
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
+    expect(r.reconciliation.sourceStatements).toBeGreaterThan(0);
+    expect(r.reconciliation.emittedStatements).toBeGreaterThan(0);
+  });
+
+  it('does NOT flag a legitimate reseed/regen marker (classifier found nothing translatable)', async () => {
+    // A pure mj-sync metadata file legitimately produces an empty marker — trust the
+    // classifier, do not second-guess it at the reconciliation layer.
+    const sql = [
+      '-- MetadataSync push operation',
+      "DECLARE @Name_da319a9d NVARCHAR(100) = N'X';",
+      "INSERT INTO [__mj].[AIModel] ([ID],[Name]) VALUES ('aaaa', @Name_da319a9d);",
+    ].join('\n');
+    const r = await convertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
+    expect(r.status).toBe('reseed-or-regen-only');
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
+    expect(r.reconciliation.emittedStatements).toBe(0);
+  });
+
+  it('reflects a dialect ACCOUNTING-LEAK in reconciliation', async () => {
+    const leaky: TSQLToPGTranspiler = {
+      transpile: async (t) => ({ sql: [t], unhandled: [{ kind: 'ACCOUNTING-LEAK', snippet: 'parsed=3 but …' }] }),
+    };
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: leaky });
+    expect(r.reconciliation.accountingLeak).toBe(true);
+  });
+});
+
 describe('convertMigration', () => {
   it('transpiles regular DDL and drops the CodeGen block', async () => {
     const sql = [

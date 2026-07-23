@@ -15,6 +15,7 @@ import type {
   BatchConverterResult,
   ConversionStats,
   MigrationConversionResult,
+  BakedMigrationResult,
   BakerWorkingDB,
 } from '@memberjunction/sql-converter';
 import { MJPostgresTranspiler } from '@memberjunction/sqlglot-ts';
@@ -22,9 +23,39 @@ import { MJPostgresTranspiler } from '@memberjunction/sqlglot-ts';
 // by a plain `convert --split` — only the dynamic import() inside buildBaker() loads it.
 import type { DataSourceResult } from '@memberjunction/codegen-lib';
 
-/** The fields runSplit consumes from a per-migration conversion, shared by the
- *  transpile-only path (convertMigration) and the inline-baking path (IncrementalBaker). */
-type ConvertedShape = Pick<MigrationConversionResult, 'status' | 'pgSQL' | 'unhandled' | 'handProcedural'>;
+/**
+ * The fields runSplit consumes from a per-migration conversion, shared by the transpile-only
+ * path (`convertMigration` → no `mode`) and the inline-baking path (`IncrementalBaker` → carries
+ * `mode`). An INTERSECTION (not a bare `Pick`) because `MigrationConversionResult` has no `mode`
+ * field — the baker's `mode`/`reconciliation` are optional here (issue #3252 Phase 4b).
+ */
+type ConvertedShape = Pick<MigrationConversionResult, 'status' | 'pgSQL' | 'unhandled' | 'handProcedural'> & {
+  mode?: BakedMigrationResult['mode'];
+  reconciliation?: MigrationConversionResult['reconciliation'];
+};
+
+/**
+ * Decide how to write and gate one per-migration conversion result (issue #3252 Phase 4d).
+ * Pure — no I/O — so the write/halt policy is unit-testable apart from the oclif command.
+ *
+ * - `writeAsNeedsHand`: a needs-hand-authoring file OR any bake-mode `gap-no-bake` result is
+ *   written `<name>.pg.sql.needs-hand` (never a discoverable `.pg.sql`), so an incomplete
+ *   migration stays visibly unconverted. A non-bake `converted`+unhandled file keeps the
+ *   existing behavior (a discoverable `.pg.sql` with embedded gap comments).
+ * - `isGap`: needs-hand, any unhandled statement, or a bake `gap-no-bake` — anything that must
+ *   fail the run unless `--allow-gaps` (which is disallowed in bake mode, 4f).
+ * - `haltBake`: in bake mode a gap means the working DB was NOT advanced past this migration, so
+ *   later bakes would run against a stale schema — halt the batch here.
+ */
+export function decideConvertWrite(
+  result: { status: string; unhandled: unknown[]; mode?: string },
+  bakeCodegen: boolean,
+): { isGap: boolean; writeAsNeedsHand: boolean; haltBake: boolean } {
+  const isNoBakeGate = result.mode === 'gap-no-bake';
+  const writeAsNeedsHand = result.status === 'needs-hand-authoring' || isNoBakeGate;
+  const isGap = writeAsNeedsHand || result.unhandled.length > 0;
+  return { isGap, writeAsNeedsHand, haltBake: bakeCodegen && isGap };
+}
 
 /**
  * CLI command to discover and convert T-SQL migrations to PostgreSQL.
@@ -119,6 +150,10 @@ export default class MigrateConvert extends Command {
     if (flags['bake-codegen']) {
       if (!flags.split) this.error('--bake-codegen requires --split.');
       if (flags['dry-run']) this.error('--bake-codegen mutates a live working DB and is incompatible with --dry-run.');
+      // A baked set must deploy standalone via `mj migrate` alone, so it cannot ship with
+      // accepted gaps — `--allow-gaps` contradicts the bake contract (issue #3252 Phase 4f).
+      if (flags['allow-gaps'])
+        this.error('--bake-codegen produces standalone migrations and cannot accept gaps; --allow-gaps is incompatible. Resolve the gaps and re-run.');
     }
 
     if (flags.split) {
@@ -289,24 +324,47 @@ export default class MigrateConvert extends Command {
       unhandled: { kind: string; snippet: string }[];
     }[] = [];
 
+    // Set when a bake-mode gap or a conversion failure halts the batch: the working DB was
+    // NOT advanced past this migration, so later bakes must not run against a stale schema.
+    let halted: { file: string; reason: string } | null = null;
+
     for (const m of unconverted) {
       const sql = fs.readFileSync(path.join(sourceDir, m.SourceFile), 'utf8');
       let result: ConvertedShape;
       try {
         result = await convertOne(sql, m.SourceFile);
       } catch (err) {
-        this.error(`Conversion failed for ${m.SourceFile}: ${err instanceof Error ? err.message : String(err)}`);
+        // NEVER `this.error` with zero artifacts (issue #3252 Phase 4e). Whatever threw
+        // (missing transpiler, a working-DB apply/capture failure in bake mode, infra), write
+        // a .needs-hand stub carrying the error + record the gap, THEN halt after the loop.
+        const msg = err instanceof Error ? err.message : String(err);
+        const failName = `${m.OutputFile}.needs-hand`;
+        if (!flags['dry-run']) {
+          fs.writeFileSync(
+            path.join(outputDir, failName),
+            `-- CONVERSION FAILED for ${m.SourceFile}\n-- ${msg}\n-- Hand-author the PostgreSQL form, then rename to .pg.sql.\n`,
+          );
+        }
+        gapReport.push({
+          sourceFile: m.SourceFile,
+          outputFile: failName,
+          status: 'conversion-failed',
+          handProcedural: [],
+          unhandled: [{ kind: 'CONVERSION-ERROR', snippet: msg.slice(0, 300) }],
+        });
+        withUnhandled.push({ file: m.SourceFile, count: 1 });
+        halted = { file: m.SourceFile, reason: msg };
+        break;
       }
 
-      // A needs-hand migration is NEVER written as a discoverable .pg.sql — that
-      // would mark it converted forever and let Skyway apply an incomplete file.
-      // The .needs-hand artifact carries the transpiled DDL + gap comments for the
-      // human (or LLM last-mile pass) to finish, then rename to .pg.sql.
-      const isNeedsHand = result.status === 'needs-hand-authoring';
-      const outName = isNeedsHand ? `${m.OutputFile}.needs-hand` : m.OutputFile;
+      const decision = decideConvertWrite(result, bakeCodegen);
+      // A needs-hand / gap-no-bake migration is NEVER written as a discoverable .pg.sql — that
+      // would mark it converted forever and let Skyway apply an incomplete file. The .needs-hand
+      // artifact carries the transpiled DDL + gap comments for a human (or LLM pass) to finish.
+      const outName = decision.writeAsNeedsHand ? `${m.OutputFile}.needs-hand` : m.OutputFile;
       const outPath = path.join(outputDir, outName);
       if (!flags['dry-run']) {
-        if (isNeedsHand && fs.existsSync(outPath)) {
+        if (decision.writeAsNeedsHand && fs.existsSync(outPath)) {
           // Someone may be mid-edit on the artifact — never clobber it on a re-run.
           this.warn(`${outName} already exists — not overwritten (delete it to regenerate).`);
         } else {
@@ -324,7 +382,7 @@ export default class MigrateConvert extends Command {
       if (result.unhandled.length > 0) {
         withUnhandled.push({ file: m.SourceFile, count: result.unhandled.length });
       }
-      if (result.status === 'needs-hand-authoring' || result.unhandled.length > 0) {
+      if (decision.isGap) {
         gapReport.push({
           sourceFile: m.SourceFile,
           outputFile: outName,
@@ -332,6 +390,13 @@ export default class MigrateConvert extends Command {
           handProcedural: result.handProcedural,
           unhandled: result.unhandled,
         });
+      }
+
+      // Halt-at-first-gap in bake mode (issue #3252 Phase 4d): the working DB was not advanced
+      // past this migration, so continuing would bake later migrations against a stale schema.
+      if (decision.haltBake) {
+        halted = { file: m.SourceFile, reason: 'conversion gap — the working DB was not advanced past this migration' };
+        break;
       }
     }
 
@@ -351,6 +416,17 @@ export default class MigrateConvert extends Command {
     }
 
     this.printSplitSummary(converted, regenReseed, needsHand, withUnhandled, flags['dry-run'], bakeCodegen);
+
+    // A halt (bake-mode gap or a conversion failure) ALWAYS ends the run non-zero, BEFORE the
+    // unconditional `process.exit(0)` below — otherwise a bake run could exit 0 despite a gap
+    // (issue #3252 Phase 4d, MAJOR-2). this.error throws a CLIError → non-zero exit.
+    if (halted) {
+      this.error(
+        `Halted at ${halted.file}: ${halted.reason}. Resolve the gap (see conversion-gaps.report.json ` +
+          'and the .needs-hand file), apply the finished .pg.sql to the working DB, then re-run ' +
+          '(already-converted files are skipped).',
+      );
+    }
 
     const gapCount = needsHand.length + withUnhandled.length;
     if (gapCount > 0 && !flags['allow-gaps']) {

@@ -73,8 +73,10 @@ export interface BakedMigrationResult {
    * `'baked'` — native CodeGen captured + assembled into `pgSQL`.
    * `'preserved'` — a transpile gap (unhandled statement / hand-procedural) made an auto-bake
    * unsafe, so `pgSQL` is the hand-verified committed file (re-bake mode only).
+   * `'gap-no-bake'` — FORWARD mode hit a gap, so the working DB was NOT touched (no apply, no
+   * capture) and `pgSQL` is the transpile-only artifact for hand-authoring (issue #3252 RC3).
    */
-  mode: 'baked' | 'preserved';
+  mode: 'baked' | 'preserved' | 'gap-no-bake';
 }
 
 const DEFAULT_SCHEMA = '__mj';
@@ -149,6 +151,15 @@ export class IncrementalBaker {
       const allEntities = await this.opts.db.listBakeableEntities();
       const captured = await this.captureEntities(allEntities);
       return { ...base, affectedEntities: allEntities, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
+    }
+
+    // FORWARD mode. Gate BEFORE any apply/capture: a gappy conversion must NOT touch the
+    // working DB — applying gappy hand DDL crashed the DB or corrupted later bakes (issue
+    // #3252 RC3). Placed strictly here (after RE-BAKE and BASELINE, which are legitimately
+    // exempt), so those paths are untouched. The transpile-only artifact (header + gap
+    // comments + transpiled DDL, no CodeGen) is returned for the caller to write as .needs-hand.
+    if (conv.status === 'needs-hand-authoring' || conv.unhandled.length > 0) {
+      return { ...base, pgSQL: this.assemble(fileName, handBody, []), mode: 'gap-no-bake' };
     }
 
     if (handBody) {
