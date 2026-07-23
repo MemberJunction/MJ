@@ -5,7 +5,7 @@
     "Description": "Per-column formatting (type/decimals/currency/date-format/alignment/colors + live preview) is a distinct rich sub-feature; existing column-management coverage only exercises show/hide/reorder.",
     "InputDefinition": {
       "goal": "Open the application switcher dropdown next to the logo and go to Data Explorer > Data. Open the 'Products' entity via the LEFT sidebar 'Search entities...' box (type 'Products', click the exact match). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Open Configure View (sliders icon in the view toolbar) and stay on the 'Columns' tab. Each visible column row has a paintbrush 'Format column' button — click it for any column. Success is the column format-editor sub-panel opening with a 'Format Type' dropdown (Text / Number / Currency / Date / Boolean / etc.), an alignment toggle, header/cell style buttons, and a live Preview. Seeing the format editor render is success — you do NOT need to save formatting.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/data-explorer",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

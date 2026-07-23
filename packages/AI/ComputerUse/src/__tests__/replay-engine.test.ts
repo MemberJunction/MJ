@@ -12,6 +12,7 @@ import {
 import { RunComputerUseParams } from '../types/params.js';
 import { AppProfile, SettleConfig } from '../types/app-profile.js';
 import { ComputerUseTrace, TraceStep, TraceTarget, StepPostcondition, GoalPostcondition } from '../types/trace.js';
+import { JudgePromptRequest, JudgePromptResponse } from '../types/controller.js';
 
 /**
  * Scriptable fake adapter for driving the replay loop without a real browser.
@@ -113,6 +114,27 @@ function trace(steps: TraceStep[]): ComputerUseTrace {
     t.TestId = 'T1';
     t.Steps = steps;
     return t;
+}
+
+/**
+ * Engine with a scriptable end-state judge verdict so the replay goal-scoring
+ * path (Option 1) is deterministic. The end-state judge sets
+ * ControllerRequestedJudgement=true, so HybridJudge goes straight to the LLM
+ * seam — this override — skipping heuristics.
+ */
+class JudgeScriptEngine extends ComputerUseEngine {
+    public judgeCalls = 0;
+    constructor(private readonly done: boolean, private readonly confidence = 0.9) { super(); }
+    protected async executeJudgePrompt(_r: JudgePromptRequest): Promise<JudgePromptResponse> {
+        this.judgeCalls++;
+        const resp = new JudgePromptResponse();
+        resp.RawResponse = JSON.stringify({
+            done: this.done,
+            confidence: this.confidence,
+            reason: this.done ? 'goal met' : 'goal not met',
+        });
+        return resp;
+    }
 }
 
 describe('ComputerUseEngine.Replay (CU-C2)', () => {
@@ -235,5 +257,51 @@ describe('ComputerUseEngine.Replay (CU-C2)', () => {
         const result = await engine.Replay(t, baseParams());
         expect(result.Status).toBe('Failed');
         expect(result.Replay?.AllStepsSucceeded).toBe(true);   // steps hit — the GOAL check failed
+    });
+});
+
+describe('ComputerUseEngine.Replay end-state judge (Option 1 — goal-completion parity)', () => {
+    function dataGridTrace(): ComputerUseTrace {
+        return trace([clickStep('#nav', { postUrl: '/app/data' })]);
+    }
+    function withGrid(engine: ComputerUseEngine): FakeAdapter {
+        const adapter = new FakeAdapter();
+        adapter.visible.set('#nav', true);
+        adapter.clickNavigates.set('#nav', 'http://localhost:4200/app/data');
+        engine.SetBrowserAdapter(adapter);
+        return adapter;
+    }
+
+    it('passes a clean replay when the judge confirms the goal (ValidationCriteria set)', async () => {
+        const engine = new JudgeScriptEngine(true);
+        withGrid(engine);
+        const params = baseParams();
+        params.ValidationCriteria = ['the data grid is visible'];
+        const result = await engine.Replay(dataGridTrace(), params);
+        expect(result.Status).toBe('Completed');
+        expect(result.Success).toBe(true);
+        expect(result.FinalJudgeVerdict?.Done).toBe(true);
+        expect(engine.judgeCalls).toBe(1);
+    });
+
+    it('fails a mechanically-clean replay when the judge rejects the goal (→ driver LLM fallback)', async () => {
+        const engine = new JudgeScriptEngine(false);
+        withGrid(engine);
+        const params = baseParams();
+        params.ValidationCriteria = ['the data grid is visible'];
+        const result = await engine.Replay(dataGridTrace(), params);
+        expect(result.Status).toBe('Failed');                  // driver keys LLM fallback on non-Completed
+        expect(result.Replay?.AllStepsSucceeded).toBe(true);   // steps hit — the JUDGE rejected the goal
+        expect(result.FinalJudgeVerdict?.Done).toBe(false);
+    });
+
+    it('skips the judge entirely when no ValidationCriteria are supplied', async () => {
+        // The scripted judge would REJECT — proving the gate: with no rubric it is never called.
+        const engine = new JudgeScriptEngine(false);
+        withGrid(engine);
+        const result = await engine.Replay(dataGridTrace(), baseParams());
+        expect(result.Status).toBe('Completed');
+        expect(engine.judgeCalls).toBe(0);
+        expect(result.FinalJudgeVerdict).toBeUndefined();
     });
 });

@@ -5,7 +5,7 @@
     "Description": "Exercises the container's two-section switching AND the second resource component (BulkOperationsRunHistory → RecordProcessHistoryComponent), a separate query path (MJ: Process Runs) from the Operations studio.",
     "InputDefinition": {
       "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo and choose 'Bulk Operations'. Once the Operations section renders, click the 'Run History' item in the left-nav rail. The Run History surface should render with a 'Run history' heading, a 'Refresh' button, and either a run list (columns When / Operation / Entity / By / Status / Counts) or a 'No runs yet.' message. Then click 'Operations' in the rail to switch back and confirm the operations studio returns. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing both sections render when selected is success.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/bulk-operations",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

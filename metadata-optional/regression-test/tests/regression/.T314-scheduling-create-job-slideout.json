@@ -5,7 +5,7 @@
     "Description": "Exercises the generic ScheduledJobSlidePanel + ScheduledJobEditor create form (cron/timezone/concurrency scheduling inputs) — a custom slide-in editor, not the generated entity form used elsewhere.",
     "InputDefinition": {
       "goal": "Open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Jobs' section. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Click the 'New Job' button (plus icon) in the header. A slide-in panel titled for a new scheduled job should open, containing an editor form with a General section (Name, Description, Job Type, Status), a Schedule section with a 'Cron Expression' text field (hint: 'second minute hour day month weekday'), a Timezone dropdown and a Concurrency dropdown, plus a Configuration JSON area and Notification toggles. Success is the create form rendering with the Cron Expression and Concurrency fields visible — you do NOT need to actually create a job. You may close/Cancel the panel afterward.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/scheduling",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

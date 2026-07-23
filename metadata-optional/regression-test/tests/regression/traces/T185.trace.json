@@ -1,0 +1,153 @@
+{
+  "TestId": "80A591EF-51CC-439C-8105-EE3CC9F0C12C",
+  "AppBuildHash": "454f1c42c7ee-dirty:3dd8345bcce2d83a",
+  "AppVersion": "",
+  "GoalHash": "3c249a2d",
+  "RecordedAt": "2026-07-23T05:35:10.134Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I am already in the Admin application and the 'Identity & Access' section is open. My next step is to navigate to the 'App Roles' sub-section as per the goal.",
+      "UrlBefore": "http://localhost:4200/app/admin",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "App Roles\nRole assignments per application",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[4]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 313,
+            "XMax": 231,
+            "YMax": 380
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=app-roles"
+      }
+    },
+    {
+      "Instruction": "I have successfully navigated to the 'App Roles' sub-section. Now I need to expand an application accordion to reveal the role management controls. I will click on the 'Admin' application accordion.",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=app-roles",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Admin\n2 roles assigned",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-application-roles-resource[1]/mj-page-body-interior[1]/div[1]/mj-accordion-panel[2]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 273,
+            "YMin": 358,
+            "XMax": 1211,
+            "YMax": 393
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=app-roles"
+      }
+    },
+    {
+      "Instruction": "The 'Admin' application accordion is expanded. I can see the 'Select a role to add...' dropdown and 'Add Role' button in the interactive elements list. I will now select 'Agent Administrator' from the",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=app-roles",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Select a role to add...\nAgent Administrator\nMagic Link Baseline\nUI\nWidget Guest",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-application-roles-resource[1]/mj-page-body-interior[1]/div[1]/mj-accordion-panel[2]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/select[1]",
+          "BoundingBox": {
+            "XMin": 301,
+            "YMin": 554,
+            "XMax": 601,
+            "YMax": 592
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=app-roles"
+      }
+    },
+    {
+      "Instruction": "The 'Admin' application accordion is expanded. I can see the 'Select a role to add...' dropdown and 'Add Role' button in the interactive elements list. I will now select 'Agent Administrator' from the",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=app-roles",
+      "Action": {
+        "Method": "type",
+        "Text": "Agent Administrator"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The 'Admin' application accordion is expanded. I can see the 'Select a role to add...' dropdown and 'Add Role' button in the interactive elements list. I will now select 'Agent Administrator' from the",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=app-roles",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The 'Admin' application accordion is expanded. I can see the 'Select a role to add...' dropdown and 'Add Role' button in the interactive elements list. I will now select 'Agent Administrator' from the",
+      "UrlBefore": "http://localhost:4200/app/admin/Identity%20&%20Access?section=app-roles",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add Role",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-admin-identity-access[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-application-roles-resource[1]/mj-page-body-interior[1]/div[1]/mj-accordion-panel[2]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 609,
+            "YMin": 551,
+            "XMax": 736,
+            "YMax": 595
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/admin/Identity%20&%20Access?section=app-roles",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

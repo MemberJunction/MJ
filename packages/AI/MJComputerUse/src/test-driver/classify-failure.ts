@@ -14,7 +14,7 @@
  * function only decides.
  */
 
-import type { ComputerUseStatus, ComputerUseFailureReason } from '@memberjunction/computer-use';
+import type { ComputerUseStatus, ComputerUseFailureReason, BrowserDiagnosticEvent } from '@memberjunction/computer-use';
 
 /** The failure taxonomy. `null` (not a member) is reserved for success. */
 export type ComputerUseFailureClass =
@@ -40,7 +40,14 @@ export interface FailureSignals {
     failureReason?: ComputerUseFailureReason;
     /** A page-crash diagnostic occurred. */
     hasCrash: boolean;
-    /** Any signal-bearing browser diagnostic occurred (console error / pageerror / failed request). */
+    /**
+     * A SEVERE, likely-deterministic browser fault occurred — an uncaught page
+     * exception or a genuine (non-aborted) request failure (see
+     * {@link isSevereBrowserFault}). Deliberately NOT triggered by console errors
+     * or navigation-aborted requests: a live SPA emits those constantly during
+     * normal agent navigation, so keying the zero-retry `app-error` class on them
+     * mislabeled flaky agent failures (loop/timeout) as deterministic app faults.
+     */
     hasAppError: boolean;
     /** The settle loop gave up (`budget`) on the final step(s) — the page never settled. */
     settleBudgetExhausted: boolean;
@@ -55,11 +62,45 @@ export interface FailureSignals {
 }
 
 /**
+ * Regex matching the benign network-abort/cancel error texts Playwright reports
+ * for requests cancelled by navigation (Chromium `net::ERR_ABORTED`, Firefox
+ * `NS_BINDING_ABORTED`, the `ERR_CANCELED`/`ERR_CANCELLED` variants). These are
+ * routine in an SPA the agent navigates heavily — not app faults.
+ */
+const BENIGN_ABORT_RE = /ERR_ABORTED|NS_BINDING_ABORTED|ERR_CANCELL?ED/i;
+
+/**
+ * Whether a browser diagnostic represents a SEVERE, likely-deterministic app
+ * fault worth the zero-retry `app-error` class. TRUE for an uncaught page
+ * exception (`pageerror`) or a genuine request failure; FALSE for console errors
+ * (too noisy to imply a deterministic fault) and navigation-aborted requests
+ * (routine SPA churn). `crash` is excluded — it's handled upstream as `infra`.
+ */
+export function isSevereBrowserFault(d: BrowserDiagnosticEvent): boolean {
+    if (d.type === 'pageerror') {
+        return true;
+    }
+    if (d.type === 'requestfailed') {
+        return !BENIGN_ABORT_RE.test(d.message ?? '');
+    }
+    return false;
+}
+
+/**
  * Classify a finished run, or return `null` when it succeeded. Ordered decision
- * list — the FIRST match wins, so order encodes precedence. `infra` and
- * `app-error` come first deliberately: an app/infrastructure fault that happens
- * to also look like a loop or a stall should be reported as the fault, not the
- * symptom (the CU-F5 risk note: "app-error first").
+ * list — the FIRST match wins, so order encodes precedence.
+ *
+ * `infra` and `auth-detour` come first: a renderer crash / engine error, or an
+ * auth detour, is the authoritative root cause. Then the engine's own EXPLICIT
+ * terminal verdicts (`LoopDetected`, `Cancelled`, `Impossible`,
+ * `TimeBudgetExceeded`) — these are deliberate conclusions and must outrank
+ * `hasAppError`, which is only a passive observation that the app logged
+ * something. (Previously `hasAppError` came 3rd and masked those verdicts as
+ * `app-error`; because `app-error` gets ZERO retries, that turned flaky agent
+ * loops/timeouts into hard failures and cratered the suite pass rate.)
+ * `app-error` still outranks the softer symptom heuristics below it (a severe
+ * app fault is a better explanation than "the page looked stuck" or "the judge
+ * disagreed").
  */
 export function classifyFailure(s: FailureSignals): ComputerUseFailureClass | null {
     if (s.status === 'Completed') {
@@ -77,26 +118,28 @@ export function classifyFailure(s: FailureSignals): ComputerUseFailureClass | nu
     if (s.failureReason === 'AuthDetour') {
         return 'auth-detour';
     }
-    // 3. Application error — console errors / failed requests / page errors.
-    //    First among the remaining: it's the root cause behind many blank-page loops/stalls.
-    if (s.hasAppError) {
-        return 'app-error';
-    }
-    // 4. Engine-detected navigation loop.
+    // 3. Engine-detected navigation loop — an explicit engine verdict, and a
+    //    retryable (LLM-nondeterministic) one, so it must beat incidental app noise.
     if (s.failureReason === 'LoopDetected') {
         return 'loop-detected';
     }
-    // 5. Externally cancelled.
+    // 4. Externally cancelled.
     if (s.status === 'Cancelled') {
         return 'cancelled';
     }
-    // 6. Judge declared the goal impossible.
+    // 5. Judge declared the goal impossible.
     if (s.status === 'Impossible') {
         return 'impossible';
     }
-    // 7. Time budget expired — split by whether the page was still changing.
+    // 6. Time budget expired — split by whether the page was still changing.
     if (s.status === 'TimeBudgetExceeded') {
         return s.tailHashStable ? 'timeout-stuck' : 'timeout-progressing';
+    }
+    // 7. Application error — a severe page exception / request failure with no
+    //    more-specific engine verdict above. Still ranks above the soft symptom
+    //    heuristics: it's the likelier root cause behind a stall or bad oracle.
+    if (s.hasAppError) {
+        return 'app-error';
     }
     // 8. Page never settled and the frame was frozen — a stuck page.
     if (s.settleBudgetExhausted && s.tailHashStable) {

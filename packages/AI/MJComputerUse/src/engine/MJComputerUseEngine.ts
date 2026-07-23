@@ -45,8 +45,10 @@ import {
     JsonSchemaProperty,
     StepRecord,
     ModelConfig,
+    InteractiveElement,
+    TraceTarget,
 } from '@memberjunction/computer-use';
-import type { JsonSchemaType, AuthMethod } from '@memberjunction/computer-use';
+import type { JsonSchemaType, AuthMethod, ComputerUseTrace } from '@memberjunction/computer-use';
 
 import { MJRunComputerUseParams, MJDomainAuthBinding, ActionRef, PromptEntityRef } from '../types/mj-params.js';
 import { AgentRunStepTracker } from './agent-run-step-tracker.js';
@@ -63,6 +65,15 @@ export const DEFAULT_CONTROLLER_PROMPT_NAME = 'Computer Use - Controller';
  * the "Computer Use - Judge" metadata prompt. See the FLIP in {@link MJComputerUseEngine.Run}.
  */
 export const DEFAULT_JUDGE_PROMPT_NAME = 'Computer Use - Judge';
+
+/**
+ * Default stored-prompt name for the self-heal LLM disambiguation seam (RI-C2 /
+ * CU-C3 leg 1b). Resolved from metadata like the controller/judge prompts;
+ * absent → {@link MJComputerUseEngine.healTargetViaLLM} keeps the base behavior
+ * (deterministic heal only, confidence 0). Only invoked on the replay-with-heal
+ * tier when deterministic role+name re-resolution is ambiguous.
+ */
+export const DEFAULT_HEAL_PROMPT_NAME = 'Computer Use - Heal';
 
 /**
  * Picks the highest-power LLM that supports Image **input** (a vision-capable controller), or `undefined`
@@ -119,6 +130,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     /** Resolved prompt entities — populated in Run() from PromptEntityRef refs */
     private controllerPromptEntity: MJAIPromptEntityExtended | undefined;
     private judgePromptEntity: MJAIPromptEntityExtended | undefined;
+    private healPromptEntity: MJAIPromptEntityExtended | undefined;
 
     /** Per-test controller generation overrides (CU-E6), populated in Run(). */
     private controllerGeneration?: { temperature?: number; effortLevel?: number };
@@ -131,6 +143,37 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     // ═══════════════════════════════════════════════════════════
     // PUBLIC API OVERRIDE
     // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Replay a recorded trace on the deterministic tier. The RI-C1 driver
+     * dispatch calls this instead of {@link Run} when a valid trace exists; the
+     * base {@link ComputerUseEngine.Replay} owns the full replay/heal/postcondition
+     * loop. This override primes the MJ-specific fields the replay tier needs:
+     * `contextUser`, the resolved "Computer Use - Heal" prompt (so
+     * {@link healTargetViaLLM} can disambiguate a drifted target through
+     * AIPromptRunner instead of its confidence-0 no-op), and the "Computer Use -
+     * Judge" prompt so the base loop can score the replayed end-state for
+     * goal-completion parity with the LLM tier — the driver returns a Completed
+     * replay directly with no LLM leg, so the goal verdict must originate here.
+     * Run()'s controller/tools setup is deliberately skipped — replay never
+     * invokes the controller.
+     */
+    public override async Replay(trace: ComputerUseTrace, params: MJRunComputerUseParams): Promise<ComputerUseResult> {
+        this.contextUser = params.ContextUser;
+        this.agentRunId = params.AgentRunId;
+        // Resolve the heal-disambiguation prompt (non-throwing; absent ⇒ deterministic-only heal).
+        if (!this.healPromptEntity) {
+            this.healPromptEntity = await this.resolveDefaultPromptByName(DEFAULT_HEAL_PROMPT_NAME);
+        }
+        // Resolve the judge prompt exactly as Run() does — the base replay loop now
+        // judges the end-state, and without a judge prompt (nor a JudgeModel) the
+        // goal-completion oracle has no verdict and every replayed test auto-fails.
+        this.judgePromptEntity = await this.resolvePromptRef(params.JudgePromptRef);
+        if (!this.judgePromptEntity && !params.JudgeModel) {
+            this.judgePromptEntity = await this.resolveDefaultPromptByName(DEFAULT_JUDGE_PROMPT_NAME);
+        }
+        return super.Replay(trace, params);
+    }
 
     /**
      * Execute a Computer Use run with MJ infrastructure integration.
@@ -173,6 +216,12 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         }
         if (!this.judgePromptEntity && !params.JudgeModel) {
             this.judgePromptEntity = await this.resolveDefaultPromptByName(DEFAULT_JUDGE_PROMPT_NAME);
+        }
+        // Self-heal disambiguation prompt (RI-C2) — resolved like controller/judge.
+        // Absent is fine: healTargetViaLLM then keeps the base confidence-0 behavior
+        // (deterministic heal only). Non-throwing.
+        if (!this.healPromptEntity) {
+            this.healPromptEntity = await this.resolveDefaultPromptByName(DEFAULT_HEAL_PROMPT_NAME);
         }
 
         // If STILL no controller prompt or model (the stored default is missing too), auto-select the best
@@ -335,6 +384,85 @@ export class MJComputerUseEngine extends ComputerUseEngine {
             response.Reason = `MJ judge prompt error: ${message}`;
             response.RawResponse = response.Reason;
             return response;
+        }
+    }
+
+    /**
+     * LLM heal disambiguation (RI-C2 / CU-C3 leg 1b). Overrides the base no-op:
+     * when deterministic role+name re-resolution can't uniquely re-find a drifted
+     * target, ask the cheap "Computer Use - Heal" prompt which of the CURRENT
+     * indexed elements is the intended one, returning `{ index, confidence }`. The
+     * caller's `shouldAcceptHeal` gate (0.6) decides whether to trust it — a
+     * low-confidence heal still fails the step rather than guessing.
+     *
+     * Fail-soft everywhere: no heal prompt in metadata, a failed/errored prompt
+     * run, or an unparseable response all return confidence 0 — heal then only
+     * succeeds on the deterministic path, exactly as before this override existed.
+     *
+     * NOTE (RI-C2): this AIPromptRunner routing mirrors the proven controller/judge
+     * path. It runs on the replay-with-heal tier, which the RI-C1 driver dispatch
+     * now reaches; the MJ {@link Replay} override primes `healPromptEntity` so this
+     * override is live rather than the base confidence-0 no-op. The response parser
+     * below is pure + tested.
+     */
+    protected override async healTargetViaLLM(request: {
+        instruction: string;
+        goal: string;
+        elements: InteractiveElement[];
+        recorded: TraceTarget;
+    }): Promise<{ index?: number; confidence: number }> {
+        if (!this.healPromptEntity) {
+            return { confidence: 0 };
+        }
+        try {
+            const result = await this.executePromptViaRunner(this.healPromptEntity, {
+                goal: request.goal,
+                instruction: request.instruction,
+                recordedTarget: {
+                    role: request.recorded.Role,
+                    name: request.recorded.Name,
+                    selector: request.recorded.Selector,
+                },
+                elements: request.elements.map((e, index) => ({
+                    index,
+                    role: e.Role,
+                    name: e.Name,
+                    selector: e.Selector,
+                })),
+            });
+            if (!result.success) {
+                this.logError(`Heal prompt failed: ${result.errorMessage ?? 'unknown error'}`);
+                return { confidence: 0 };
+            }
+            return MJComputerUseEngine.parseHealResponse(result.rawResult ?? '');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logError(`MJ heal prompt threw: ${message}`);
+            return { confidence: 0 };
+        }
+    }
+
+    /**
+     * Parse the heal prompt's JSON `{ index, confidence }` response (RI-C2). Pure +
+     * static so it is unit-testable without an engine. Tolerant: strips a fenced
+     * code block; a missing / non-integer / negative index or non-numeric
+     * confidence yields `{ confidence: 0 }` (no disambiguation); confidence is
+     * clamped to [0, 1]. A confident heal MUST name an index.
+     */
+    public static parseHealResponse(raw: string): { index?: number; confidence: number } {
+        try {
+            const jsonText = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+            const parsed = JSON.parse(jsonText) as { index?: unknown; confidence?: unknown };
+            const index = typeof parsed.index === 'number' && Number.isInteger(parsed.index) && parsed.index >= 0
+                ? parsed.index
+                : undefined;
+            if (index === undefined) {
+                return { confidence: 0 };
+            }
+            const rawConfidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0;
+            return { index, confidence: Math.max(0, Math.min(1, rawConfidence)) };
+        } catch {
+            return { confidence: 0 };
         }
     }
 

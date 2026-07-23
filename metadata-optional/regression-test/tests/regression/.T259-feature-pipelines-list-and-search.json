@@ -5,7 +5,7 @@
     "Description": "Exercises the feature-pipeline card list + client-side search (SearchQuery/FilteredPipelines) with its status-aware Run buttons — a bespoke card grid distinct from other KH surfaces.",
     "InputDefinition": {
       "goal": "Switch to the Knowledge Hub app (application switcher dropdown next to the logo) and click 'Feature Pipelines' in the left nav (fa-diagram-project icon). Success is that the pipelines screen renders as a card grid (each card showing target entity, output attribute, last-run status, and Run/Edit buttons) OR a clear empty-state inviting you to create a pipeline. Then type into the 'Search by name, entity, or attribute…' box and confirm the card grid narrows to matching pipelines (or shows a 'No matching pipelines' state). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/knowledge-hub",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

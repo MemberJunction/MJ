@@ -5,7 +5,7 @@
     "Description": "Verifies the Communication app's Templates section renders its template list and that opening a template shows its editor/detail view without crashing.",
     "InputDefinition": {
       "goal": "Using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Communication app, then open its Templates section. Confirm the templates list renders (it has many template rows), then open one template and confirm its editor/detail view appears showing the template's CONTENT — a 'Contents' section with the template Text (which may include {{ placeholder }} parameters) and possibly a 'Template Includes' area. (These are MJ Templates whose body is the Contents/Text — there is NOT a separate 'subject'+'body' field pair, so do not look for those.) Pages can take 10-30s to load in this resource-constrained environment - wait, do not navigate away.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/communication",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

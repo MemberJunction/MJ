@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { classifyFailure, FailureSignals } from '../test-driver/classify-failure.js';
+import { classifyFailure, isSevereBrowserFault, FailureSignals } from '../test-driver/classify-failure.js';
+import type { BrowserDiagnosticEvent } from '@memberjunction/computer-use';
 
 function sig(overrides: Partial<FailureSignals> = {}): FailureSignals {
     return {
@@ -26,14 +27,30 @@ describe('classifyFailure (CU-F5)', () => {
         expect(classifyFailure(sig({ status: 'Error' }))).toBe('infra');
     });
 
-    it('app-error outranks loop / stuck symptoms (risk-note precedence)', () => {
-        // An app error that also tripped the loop detector reports as the cause.
-        expect(classifyFailure(sig({ hasAppError: true, failureReason: 'LoopDetected' }))).toBe('app-error');
-        expect(classifyFailure(sig({ hasAppError: true, settleBudgetExhausted: true, tailHashStable: true }))).toBe('app-error');
+    it('explicit engine terminal verdicts outrank incidental app-error noise (Jul-22 fix)', () => {
+        // A flaky agent loop/timeout/cancel/impossible that ALSO logged a severe app
+        // fault must classify by the ENGINE's verdict — not be masked as the zero-retry
+        // `app-error`, which turned these into hard failures and cratered the pass rate.
+        expect(classifyFailure(sig({ hasAppError: true, failureReason: 'LoopDetected' }))).toBe('loop-detected');
+        expect(classifyFailure(sig({ hasAppError: true, status: 'TimeBudgetExceeded', tailHashStable: false }))).toBe('timeout-progressing');
+        expect(classifyFailure(sig({ hasAppError: true, status: 'Cancelled' }))).toBe('cancelled');
+        expect(classifyFailure(sig({ hasAppError: true, status: 'Impossible' }))).toBe('impossible');
     });
 
-    it('infra still outranks app-error', () => {
+    it('app-error still outranks the softer symptom heuristics (stuck-page / judge / assertion)', () => {
+        // With no more-specific engine verdict, a severe app fault is the better
+        // explanation than "the page looked stuck" or "the judge disagreed".
+        expect(classifyFailure(sig({ status: 'Failed', hasAppError: true, settleBudgetExhausted: true, tailHashStable: true }))).toBe('app-error');
+        expect(classifyFailure(sig({ status: 'Failed', hasAppError: true, oraclesFailed: true }))).toBe('app-error');
+    });
+
+    it('infra still outranks app-error and auth-detour', () => {
         expect(classifyFailure(sig({ hasCrash: true, hasAppError: true }))).toBe('infra');
+    });
+
+    it('auth-detour outranks app-error', () => {
+        // The detour is the root cause; its own failed auth requests are the symptom.
+        expect(classifyFailure(sig({ failureReason: 'AuthDetour', hasAppError: true }))).toBe('auth-detour');
     });
 
     it('classifies an engine loop terminate as loop-detected', () => {
@@ -83,5 +100,33 @@ describe('classifyFailure (CU-F5)', () => {
 
     it('falls back to unknown when no signal matches', () => {
         expect(classifyFailure(sig({ status: 'MaxStepsReached' }))).toBe('unknown');
+    });
+});
+
+describe('isSevereBrowserFault (hasAppError tightening — Jul-22 fix)', () => {
+    const diag = (o: Partial<BrowserDiagnosticEvent>): BrowserDiagnosticEvent =>
+        ({ timestamp: '', type: 'console', message: '', ...o });
+
+    it('counts an uncaught page exception', () => {
+        expect(isSevereBrowserFault(diag({ type: 'pageerror', message: 'TypeError: x is undefined' }))).toBe(true);
+    });
+
+    it('counts a genuine (non-aborted) request failure', () => {
+        expect(isSevereBrowserFault(diag({ type: 'requestfailed', message: 'GET https://api/x — net::ERR_CONNECTION_REFUSED' }))).toBe(true);
+    });
+
+    it('ignores navigation-aborted / cancelled requests (routine SPA churn)', () => {
+        expect(isSevereBrowserFault(diag({ type: 'requestfailed', message: 'GET https://api/x — net::ERR_ABORTED' }))).toBe(false);
+        expect(isSevereBrowserFault(diag({ type: 'requestfailed', message: 'GET https://api/x — NS_BINDING_ABORTED' }))).toBe(false);
+        expect(isSevereBrowserFault(diag({ type: 'requestfailed', message: 'GET https://api/x — net::ERR_CANCELED' }))).toBe(false);
+    });
+
+    it('ignores console errors (too noisy to imply a deterministic fault)', () => {
+        expect(isSevereBrowserFault(diag({ type: 'console', level: 'error', message: 'a component logged an error' }))).toBe(false);
+    });
+
+    it('ignores non-fault diagnostics (warnings, crash — crash is handled as infra upstream)', () => {
+        expect(isSevereBrowserFault(diag({ type: 'console', level: 'warning', message: 'heads up' }))).toBe(false);
+        expect(isSevereBrowserFault(diag({ type: 'crash', message: 'Page crashed' }))).toBe(false);
     });
 });

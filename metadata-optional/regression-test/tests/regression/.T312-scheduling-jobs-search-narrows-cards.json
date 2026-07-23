@@ -5,7 +5,7 @@
     "Description": "Exercises SchedulingJobsComponent.applyFilters free-text search over its custom card grid (matches name/type/description) — a different code path from ag-grid quick-search on the generic entity grid.",
     "InputDefinition": {
       "goal": "Open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Jobs' left-nav section. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. The Jobs view shows scheduled jobs as CARDS (each with a status chip, Type/Schedule/Last-Run/Next-Run meta and a Success Rate bar). Type a query into the 'Search jobs...' box and verify the card grid RESPONDS — the visible cards narrow to matches, OR a clear 'No jobs found' no-results state appears. Then clear the search and confirm the fuller list returns. Seeing the grid react to the search input is success regardless of how many jobs exist.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/scheduling",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

@@ -1,0 +1,55 @@
+{
+  "TestId": "F898218D-1D60-4100-B327-105AB3C722A8",
+  "AppBuildHash": "454f1c42c7ee-dirty:3dd8345bcce2d83a",
+  "AppVersion": "",
+  "GoalHash": "6c28555e",
+  "RecordedAt": "2026-07-23T05:19:31.190Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I am already in the Bulk Operations application and the Operations section. I will click the 'New operation' button as instructed to open the authoring editor.",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New operation",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1087,
+            "YMin": 161,
+            "XMax": 1260,
+            "YMax": 205
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/bulk-operations/Bulk%20Operations?section=operations"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/bulk-operations/Bulk%20Operations?section=operations",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

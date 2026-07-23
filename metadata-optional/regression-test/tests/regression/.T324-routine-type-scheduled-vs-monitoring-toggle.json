@@ -5,7 +5,7 @@
     "Description": "Exercises the RoutineType segmented control and its reactive RoutineTypeHelp text inside the advanced section — a domain concept (report-on-schedule vs watch-for-change) unique to routines.",
     "InputDefinition": {
       "goal": "In the Routines app, click 'New Routine', then expand the 'Advanced options' section (a collapsible toggle with a chevron near the bottom of the editor). Inside the Details area find the 'Routine type' segmented control with 'Scheduled' and 'Monitoring' options. Click 'Monitoring' and observe the help/hint text below the control change to describe monitoring (watch-for-change) behavior, then click 'Scheduled' and observe it change back. Success is seeing the two-option toggle switch and the accompanying help text update — you do NOT need to save.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/routines",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

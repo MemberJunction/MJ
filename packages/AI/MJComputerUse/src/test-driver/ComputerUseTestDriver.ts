@@ -55,6 +55,7 @@ import {
     ValidationError,
     ValidationWarning,
     TestRunOutputItem,
+    ReplayTelemetry,
 } from '@memberjunction/testing-engine';
 
 import {
@@ -73,8 +74,12 @@ import {
     SettleConfig,
     AuthDetourConfig,
     hashesSimilar,
+    decideReplayTier,
+    recordTrace,
+    isRecordableRun,
+    distillGoalPostconditions,
 } from '@memberjunction/computer-use';
-import type { AuthMethod, ComputerUseResult, BrowserDiagnosticEvent } from '@memberjunction/computer-use';
+import type { AuthMethod, ComputerUseResult, BrowserDiagnosticEvent, ReplayTier, ReplayInfo } from '@memberjunction/computer-use';
 import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
@@ -88,6 +93,8 @@ import type {
     ComputerUseExpectedOutcomes,
     ComputerUseOracleConfig,
 } from './types.js';
+import { readSuiteComputerUseConfig, mergeComputerUseConfig } from './suite-config.js';
+import { loadTrace, persistCandidateTrace, traceFileName } from './trace-store.js';
 
 import { GoalCompletionOracle } from './oracles/GoalCompletionOracle.js';
 import { UrlMatchOracle } from './oracles/UrlMatchOracle.js';
@@ -95,7 +102,7 @@ import { StepCountOracle } from './oracles/StepCountOracle.js';
 import { NoConsoleErrorsOracle } from './oracles/NoConsoleErrorsOracle.js';
 import { DomAssertOracle } from './oracles/DomAssertOracle.js';
 import { isOracleAdvisory, partitionGatingOracles } from './oracle-scoring.js';
-import { classifyFailure, FailureSignals } from './classify-failure.js';
+import { classifyFailure, isSevereBrowserFault, FailureSignals } from './classify-failure.js';
 import { ArtifactRetentionPolicy, shouldCaptureArtifact, shouldRetainArtifact } from './artifact-retention.js';
 import { computeDivergence } from './divergence.js';
 import { promises as fs } from 'node:fs';
@@ -163,6 +170,16 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             let input = this.parseInputDefinition<ComputerUseTestInput>(context.test);
             let expected = this.parseExpectedOutcomes<ComputerUseExpectedOutcomes>(context.test);
 
+            // 1a. Fold in suite-level Computer Use policy (RI-E3 / Decision D7):
+            // baked defaults ← suite `computerUse` block ← per-test Configuration.
+            // The regression suite sets its profile (grounding on, temperature 0,
+            // trace policy) once on the suite instead of on 380 files; per-test
+            // config always wins. No-op when the suite defines no block.
+            const suiteCU = readSuiteComputerUseConfig(context.suiteContext);
+            if (suiteCU) {
+                config = mergeComputerUseConfig(suiteCU, config);
+            }
+
             // 1b. Apply {{var}} substitution so test JSONs are reusable across targets
             // (e.g., startUrl: "{{baseUrl}}" → "http://localhost:4200" for local,
             //  "http://byo-app:3000" for a remote-target profile pointing at the BYO app).
@@ -199,6 +216,14 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
             // 2. Build engine params
             const runParams = this.buildRunParams(config, input, context);
+
+            // RI-C1: the resolved {{variables}} feed the replay tier's %placeholder%
+            // substitution into recorded Text/Url steps (harmless on the LLM tier,
+            // which ignores VariableValues). Fresh values each run, tokens in the trace.
+            const runVariableValues = this.coerceVariableValues(variableValues);
+            if (Object.keys(runVariableValues).length > 0) {
+                runParams.VariableValues = runVariableValues;
+            }
             if (applicationContext) {
                 runParams.ApplicationContext = applicationContext;
             }
@@ -230,10 +255,30 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             // outer failsafe that only fires if the engine is genuinely hung.
             const effectiveTimeout = this.getEffectiveTimeout(context.test, config);
             runParams.MaxExecutionTimeMs = effectiveTimeout;
-            const { result, timedOut, browserDiagnostics } = await this.executeWithTimeout(runParams, effectiveTimeout, context, config);
+            const { result, timedOut, browserDiagnostics, tier, replayInfo, fellBackToLlm } =
+                await this.executeWithTimeout(runParams, effectiveTimeout, context, config);
 
             // 4. Build actual output with execution configuration
             const actualOutput = this.buildActualOutput(result);
+
+            // RI-C1/RI-D4: tier telemetry. `tier` is the tier that produced this
+            // result (a diverged replay that fell back reports 'llm'); `replay`
+            // is present whenever a replay was ATTEMPTED, so the drift signal
+            // (Diverged > 0) survives even a green LLM-fallback result.
+            (actualOutput as Record<string, unknown>).tier = tier;
+            const replayTelemetry: ReplayTelemetry | undefined = replayInfo
+                ? {
+                    tier: replayInfo.Tier,
+                    steps: replayInfo.Steps.length,
+                    healed: replayInfo.Healed,
+                    diverged: replayInfo.Diverged,
+                    allStepsSucceeded: replayInfo.AllStepsSucceeded,
+                    fellBackToLlm,
+                }
+                : undefined;
+            if (replayTelemetry) {
+                (actualOutput as Record<string, unknown>).replay = replayTelemetry;
+            }
 
             // Attach browser diagnostics (console errors, network failures, crashes)
             if (browserDiagnostics.length > 0) {
@@ -314,6 +359,12 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             const outputs = this.buildOutputs(result);
             await this.appendTraceArtifact(outputs, result, tracePolicy, status === 'Passed', context);
 
+            // 7b. RI-B1: record a replay-trace CANDIDATE from a green, recordable LLM
+            //     leg (never from a pure replay — that would launder healed selectors
+            //     without fresh derivation). Written to the per-run out dir; a human
+            //     lands it in the committed store via `mj test regression promote-traces`.
+            await this.maybeRecordTrace({ result, status, gating, tier, fellBackToLlm, runParams, input, variableValues, context });
+
             // 8. Build result
             const driverResult: DriverExecutionResult = {
                 targetType: 'Computer Use',
@@ -330,6 +381,9 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 durationMs: result.TotalDurationMs,
                 outputs,
                 failureClass,
+                failureMemo: result.FailureMemo,
+                tier,
+                replay: replayTelemetry,
             };
 
             this.logToTestRun(context, 'info', `Computer Use test completed: ${status} (Score: ${score.toFixed(2)})`);
@@ -532,6 +586,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             this.logToTestRun(context, level, message);
         };
 
+        // RI-D2: non-blind retry. On a retry, feed the most recent failed attempt's
+        // memo to the controller so attempt 2+ isn't a blind re-roll — the engine
+        // renders it into the controller prompt (PreviousAttemptSummary). Empty/first
+        // attempt → undefined → identical to today's behavior.
+        const lastPrior = context.priorAttempts?.[context.priorAttempts.length - 1];
+        if (lastPrior?.failureMemo) {
+            params.PreviousAttemptSummary = lastPrior.failureMemo;
+        }
+
         return params;
     }
 
@@ -588,7 +651,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         timeoutMs: number,
         context: DriverExecutionContext,
         config: ComputerUseTestConfig
-    ): Promise<{ result: ComputerUseResult; timedOut: boolean; browserDiagnostics: BrowserDiagnosticEvent[] }> {
+    ): Promise<{ result: ComputerUseResult; timedOut: boolean; browserDiagnostics: BrowserDiagnosticEvent[]; tier: ReplayTier; replayInfo?: ReplayInfo; fellBackToLlm: boolean }> {
         const engine = new MJComputerUseEngine();
 
         // Resolve browser session strategy. For the default "new" strategy,
@@ -633,7 +696,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         }
 
         try {
-            const result = await engine.Run(params);
+            // RI-C1: replay-first tier dispatch (load trace → decide tier → Replay
+            // or Run, with in-attempt LLM fallback on divergence).
+            const dispatch = await this.dispatchRun(engine, params, config, context);
+            const result = dispatch.result;
 
             // Collect browser diagnostics (console errors, network failures, crashes).
             // The engine now drains them per step (CU-A7), so the authoritative
@@ -644,7 +710,14 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 this.logToTestRun(context, 'warn', `Browser captured ${browserDiagnostics.length} diagnostic event(s) across ${result.Steps.length} step(s)`);
             }
 
-            return { result, timedOut, browserDiagnostics };
+            return {
+                result,
+                timedOut,
+                browserDiagnostics,
+                tier: dispatch.tier,
+                replayInfo: dispatch.replayInfo,
+                fellBackToLlm: dispatch.fellBackToLlm,
+            };
         } finally {
             if (timeoutId) {
                 clearTimeout(timeoutId);
@@ -658,6 +731,129 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 await this.releaseIsolatedIfApplicable(adapter, context);
             }
         }
+    }
+
+    /**
+     * RI-C1 tier dispatch. Loads this test's committed trace, decides the tier
+     * (`config.forceTier` override, else `decideReplayTier` over build/goal), and:
+     *  - replay/replay-with-heal (trace present) → `engine.Replay`; on divergence
+     *    (Status ≠ Completed) fall back to `engine.Run` WITHIN this attempt, feeding
+     *    the replay's memo forward — the returned `replayInfo` still carries the
+     *    divergence so the drift signal survives a green fallback;
+     *  - llm (no trace / goal reword / heal-rate demote) → `engine.Run`.
+     * Returns the tier that PRODUCED the result (a fallback reports 'llm') so the
+     * caller can correctly gate recording and stamp telemetry.
+     */
+    private async dispatchRun(
+        engine: MJComputerUseEngine,
+        params: MJRunComputerUseParams,
+        config: ComputerUseTestConfig,
+        context: DriverExecutionContext
+    ): Promise<{ result: ComputerUseResult; tier: ReplayTier; replayInfo?: ReplayInfo; fellBackToLlm: boolean }> {
+        const trace = await loadTrace(traceFileName(context.test));
+        const appBuildHash = process.env.APP_BUILD_HASH ?? '';
+        const decision = config.forceTier
+            ? { tier: config.forceTier, reason: 'forced by config.forceTier' }
+            : decideReplayTier({ trace, currentGoal: params.Goal, currentBuildHash: appBuildHash });
+
+        if (decision.tier !== 'llm' && trace) {
+            this.logToTestRun(context, 'info', `Tier: ${decision.tier} — ${decision.reason}`);
+            const replayResult = await engine.Replay(trace, params);
+            if (replayResult.Status === 'Completed') {
+                return { result: replayResult, tier: decision.tier, replayInfo: replayResult.Replay, fellBackToLlm: false };
+            }
+            // Divergence → fall back to the LLM leg in the SAME attempt.
+            this.logToTestRun(context, 'warn',
+                `Replay diverged (${replayResult.Replay?.Diverged ?? 0} step(s)) — falling back to LLM in-attempt`);
+            if (replayResult.FailureMemo) {
+                params.PreviousAttemptSummary = replayResult.FailureMemo;
+            }
+            const llmResult = await engine.Run(params);
+            return { result: llmResult, tier: 'llm', replayInfo: replayResult.Replay, fellBackToLlm: true };
+        }
+
+        if (decision.tier !== 'llm') {
+            this.logToTestRun(context, 'info', `Tier: llm — '${decision.tier}' requested but no trace exists for this test`);
+        }
+        const result = await engine.Run(params);
+        return { result, tier: 'llm', fellBackToLlm: false };
+    }
+
+    /**
+     * RI-B1: record a replay-trace candidate when a green LLM leg is recordable.
+     * Gate (ALL required): the executing leg was LLM (a pure replay is never
+     * re-recorded — it would launder healed selectors), status Passed, every
+     * gating oracle green (the Layer-2 fact the recorder can't see), and the
+     * engine's own `isRecordableRun` (clean Completed run, only replayable
+     * actions). Writes an atomic candidate to the per-run out dir; never throws.
+     */
+    private async maybeRecordTrace(args: {
+        result: ComputerUseResult;
+        status: string;
+        gating: OracleResult[];
+        tier: ReplayTier;
+        fellBackToLlm: boolean;
+        runParams: MJRunComputerUseParams;
+        input: ComputerUseTestInput;
+        variableValues: Record<string, unknown>;
+        context: DriverExecutionContext;
+    }): Promise<void> {
+        const { result, status, gating, tier, fellBackToLlm, runParams, input, variableValues, context } = args;
+
+        const ranLlmLeg = tier === 'llm' || fellBackToLlm;
+        if (!ranLlmLeg || status !== 'Passed') {
+            return;
+        }
+        if (gating.length > 0 && !gating.every(r => r.passed)) {
+            return;
+        }
+        const recordable = isRecordableRun(result);
+        if (!recordable.recordable) {
+            this.logToTestRun(context, 'info', `Not recording trace: ${recordable.reason}`);
+            return;
+        }
+
+        try {
+            const volatileParams = runParams.AppProfile?.Loop?.VolatileParams ?? [];
+            const varMap = this.coerceVariableValues(variableValues);
+            const finalStep = result.Steps.length > 0 ? result.Steps[result.Steps.length - 1] : undefined;
+            const goalPostconditions = distillGoalPostconditions({
+                finalStep,
+                finalUrl: result.FinalUrl,
+                volatileParams,
+            });
+            const trace = recordTrace({
+                result,
+                testId: context.test.ID,
+                goal: input.goal,
+                appBuildHash: process.env.APP_BUILD_HASH ?? '',
+                recordedAt: new Date().toISOString(),
+                variables: Object.keys(varMap),
+                variableValues: varMap,
+                volatileParams,
+                viewport: {
+                    width: runParams.BrowserConfig?.ViewportWidth ?? 1280,
+                    height: runParams.BrowserConfig?.ViewportHeight ?? 720,
+                },
+                goalPostconditions,
+            });
+            const written = await persistCandidateTrace(trace, traceFileName(context.test));
+            this.logToTestRun(context, 'info',
+                `Recorded replay-trace candidate (${trace.Steps.length} step(s), ${goalPostconditions.length} postcondition(s)) → ${written}`);
+        } catch (e) {
+            this.logToTestRun(context, 'warn', `Trace recording failed (non-fatal): ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /** Coerce the driver's resolved variable map to the string map replay/record consume. */
+    private coerceVariableValues(values: Record<string, unknown>): Record<string, string> {
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(values)) {
+            if (v != null) {
+                out[k] = typeof v === 'string' ? v : String(v);
+            }
+        }
+        return out;
     }
 
     /**
@@ -842,6 +1038,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         // classifier and for at-a-glance triage of the raw output.
         if (result.FailureReason) {
             output.failureReason = result.FailureReason;
+        }
+
+        // Non-blind retry memo (RI-D2 / CU-B6), when the engine produced one. Also
+        // surfaced on DriverExecutionResult.failureMemo so the retry loop can feed
+        // it to the next attempt as PreviousAttemptSummary.
+        if (result.FailureMemo) {
+            output.failureMemo = result.FailureMemo;
         }
 
         // Final-step interactive elements (CU-A4 recording) exposed as a recorded
@@ -1075,6 +1278,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             errorMessage: `Test execution timed out after ${timeoutMs}ms`,
             outputs,
             failureClass,
+            failureMemo: result.FailureMemo,
         };
     }
 
@@ -1115,6 +1319,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             errorMessage: `Test execution was cancelled after ${result.TotalSteps} step(s)`,
             outputs,
             failureClass,
+            failureMemo: result.FailureMemo,
         };
     }
 
@@ -1331,7 +1536,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             status: statusOverride ?? result.Status,
             failureReason: result.FailureReason,
             hasCrash: anyDiag(d => d.type === 'crash'),
-            hasAppError: anyDiag(d => d.type === 'pageerror' || d.type === 'requestfailed' || (d.type === 'console' && d.level === 'error')),
+            hasAppError: anyDiag(isSevereBrowserFault),
             settleBudgetExhausted: steps.length > 0 && steps[steps.length - 1].SettleReason === 'budget',
             tailHashStable: this.tailHashStable(steps.map(s => s.ScreenshotHash)),
             beaconConfigured,

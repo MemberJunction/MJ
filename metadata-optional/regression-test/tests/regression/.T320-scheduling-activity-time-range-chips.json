@@ -5,7 +5,7 @@
     "Description": "Tests the OnTimeRangeChange chip control that re-drives the service date range and reloads executions/trends — a scheduling-specific time-window selector with no analogue in the generic grid tests.",
     "InputDefinition": {
       "goal": "Open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Activity' section. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. In the toolbar there are time-range chips: '24 Hours', '7 Days', '30 Days', '90 Days' (7 Days is active by default). Click a different range chip (e.g. '30 Days') and verify the chip becomes the active/selected one and the activity view reloads for that window (the executions list and/or trends chart refresh). Seeing the selected chip change and the view respond is success — the exact number of rows is irrelevant and an empty state is acceptable.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/scheduling",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

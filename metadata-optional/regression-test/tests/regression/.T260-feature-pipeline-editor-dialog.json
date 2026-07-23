@@ -5,7 +5,7 @@
     "Description": "Exercises the pipeline editor dialog (ShowEditor, mj-record-process-editor) — a distinct modal/editor code path from the list+search view.",
     "InputDefinition": {
       "goal": "In the Knowledge Hub 'Feature Pipelines' screen (via application switcher then Feature Pipelines), click the primary '+ New Pipeline' button in the header (or the 'Edit' button on an existing pipeline card). Success is that a modal dialog titled 'Feature Pipeline' opens containing the record-process editor form. You do NOT need to save; confirm the editor renders inside the dialog and can be cancelled/closed. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/knowledge-hub",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

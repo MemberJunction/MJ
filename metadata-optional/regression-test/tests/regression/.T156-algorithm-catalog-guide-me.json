@@ -5,7 +5,7 @@
     "Description": "Exercises the use-case ranking matrix drive: scenario-chip selection re-sorting cards by RecommendationLevel and rendering the guide banner — a distinct data-driven interaction, robust because the algorithm catalog is seeded fixed metadata.",
     "InputDefinition": {
       "goal": "In the Predictive Studio app, open the 'Studio' door and select the 'Algorithm Catalog' section. Pages can take 10-30s to load — wait, don't navigate away. Verify the algorithm card gallery renders (cards like XGBoost, LightGBM, Random Forest, Logistic Regression with problem-type tags). Then, in the 'Guide me' scenario picker, click one or more scenario chips. Success is the catalog RESPONDING: a recommendation banner appears naming top-fit algorithm(s) for the chosen scenario, and the cards re-order/highlight so the stronger fits are pulled to the front (a 'Primary' ribbon or fit label appears). Then click 'Clear' and verify the highlighting resets.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/predictive-studio",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

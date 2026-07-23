@@ -5,7 +5,7 @@
     "Description": "Drives mj-view-toggle which selects between two distinct render branches (.labels-list card grid vs .labels-table) via SetViewMode — a code path unique to this surface.",
     "InputDefinition": {
       "goal": "In the Version History app (application switcher dropdown next to the logo → 'Version History'), on the Labels surface locate the view toggle control (grid vs list icons) in the toolbar. Switch to list view and confirm a table layout with column headers (Name, Entity, Status, Items, Created) appears; then switch back to card view and confirm the card layout returns. Pages can take 10-30s to load — wait, don't navigate away. If no labels exist, the toggle should still switch the underlying layout mode with an empty state shown.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/version-history",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

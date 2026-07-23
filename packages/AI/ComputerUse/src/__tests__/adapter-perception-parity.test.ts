@@ -67,3 +67,34 @@ describe('adapter perception parity (CU-A3)', () => {
         }
     });
 });
+
+/**
+ * RI-C4.1 warm-seed parity. The warm-seed (CU-G4) capture/restore was overridden
+ * only on PlaywrightBrowserAdapter; SCBA — the adapter the suite runs on —
+ * inherited the base no-op (`CaptureContextSeed` → null, `SeedContext` → no-op),
+ * so the whole warm-seed optimization silently did nothing in suite mode. Both
+ * now delegate to the SAME shared page-storage helpers; this gate keeps them at
+ * parity and fails if a future change drops SCBA's override and reintroduces the
+ * silent gap.
+ */
+const WARM_SEED_SURFACE = ['CaptureContextSeed', 'SeedContext'] as const;
+
+describe('adapter warm-seed parity (RI-C4.1)', () => {
+    it('BaseBrowserAdapter defines both warm-seed methods (the no-op baseline)', () => {
+        for (const m of WARM_SEED_SURFACE) {
+            expect(typeof proto(BaseBrowserAdapter)[m]).toBe('function');
+        }
+    });
+
+    it('PlaywrightBrowserAdapter overrides the warm-seed surface', () => {
+        for (const m of WARM_SEED_SURFACE) {
+            expect(overrides(PlaywrightBrowserAdapter, m), `PBA must override ${m}`).toBe(true);
+        }
+    });
+
+    it('SharedContextBrowserAdapter overrides the warm-seed surface', () => {
+        for (const m of WARM_SEED_SURFACE) {
+            expect(overrides(SharedContextBrowserAdapter, m), `SCBA must override ${m}`).toBe(true);
+        }
+    });
+});

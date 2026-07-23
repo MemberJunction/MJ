@@ -6,7 +6,7 @@
  * resolution, profile selection, error reporting) lives here so the same
  * conventions apply across every subcommand.
  */
-import { spawn, type SpawnOptions } from 'node:child_process';
+import { spawn, execFileSync, type SpawnOptions } from 'node:child_process';
 import { existsSync, mkdirSync, createWriteStream, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -276,6 +276,57 @@ export function formsFingerprintStatus(root: string = process.cwd()): FormsFinge
     };
   }
   return { fresh: true, reason: '', current, recorded };
+}
+
+// ─── RI-A1: composite build identity (APP_BUILD_HASH) ────────────────────────
+
+/**
+ * `git rev-parse --short=12 HEAD` for `root`, with a `-dirty` suffix when the
+ * working tree has uncommitted changes (so local iteration never exact-matches a
+ * committed build). Returns null when git is unavailable or `root` isn't a repo —
+ * the caller then keys build identity on the schema hash alone.
+ */
+export function gitRevisionShort(root: string = process.cwd()): string | null {
+  try {
+    const sha = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString().trim();
+    if (!sha) return null;
+    const dirty = execFileSync('git', ['status', '--porcelain'], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString().trim().length > 0;
+    return dirty ? `${sha}-dirty` : sha;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Mint the composite build identity the replay tier keys on (RI-A1 / Decision
+ * D2). Layer 1's `decideReplayTier` treats it as an OPAQUE string: an exact match
+ * across runs unlocks the zero-heal `replay` fast path; any change demotes to the
+ * safe `replay-with-heal` default. Shape:
+ *
+ *     <gitSha>:<schemaHash>          (e.g. "a1b2c3d4e5f6:9f8e7d6c5b4a3210")
+ *     <gitSha>-dirty:<schemaHash>    (uncommitted working tree)
+ *     <schemaHash>                   (git unavailable — graceful fallback)
+ *
+ * where `gitSha` captures source changes (TS logic, prompts) and `schemaHash` is
+ * the DR-C5 forms fingerprint.
+ *
+ * NOTE: Decision D2 named THREE components — gitSha, the gen-forms fingerprint,
+ * and the DB-snapshot hash. In THIS codebase the latter two are the SAME hash by
+ * construction: `computeFormsFingerprint` explicitly mirrors `db-snapshot.cjs`
+ * `computeHash` over the same inputs (migrations + Demos/AssociationDB + build
+ * version). So they collapse to a single `schemaHash` rather than a redundant
+ * duplicated third segment — two meaningful components, not three.
+ */
+export function computeAppBuildHash(root: string = process.cwd()): string {
+  const git = gitRevisionShort(root);
+  const schema = computeFormsFingerprint(root); // == the DB-snapshot hash, by construction
+  return git ? `${git}:${schema}` : schema;
 }
 
 // ─── DR-F5: resource sizing ──────────────────────────────────────────────────

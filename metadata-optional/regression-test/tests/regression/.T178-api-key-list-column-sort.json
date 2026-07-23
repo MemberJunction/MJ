@@ -5,7 +5,7 @@
     "Description": "Exercises the custom toggleSort()/getSortIcon() sort logic in the bespoke API key grid (not AG Grid), a distinct code path from generic grid sorting.",
     "InputDefinition": {
       "goal": "Assume you are already logged in at http://localhost:4200. Switch to the Admin application via the application switcher dropdown next to the logo, open 'Identity & Access', and select the 'API Keys' sub-section, then reach the full key list ('View All Keys' or a KPI card). The grid header has sortable columns (Key, Owner, Status, Expires, Last Used, Created). Click a sortable column header such as 'Owner' or 'Created', then click it again to reverse. Verify a sort indicator icon appears on that column and the row order changes accordingly (or a valid empty state shows if there are no keys). Seeing the sort indicator and reordering is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/admin",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

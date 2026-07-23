@@ -161,6 +161,26 @@ RUN_ID="${RUN_ID:-run-${TIMESTAMP}}"
 RUN_DIR="/app/test-results/${RUN_ID}"
 mkdir -p "$RUN_DIR/screenshots"
 
+# RI-C1/B1/B2: replay-trace store wiring for the ComputerUseTestDriver.
+#  - CU_TRACE_OUT_DIR — where a green, recordable LLM-tier pass RECORDS a
+#    candidate trace (RI-B1). Under this run's dir so it survives to the host and
+#    `mj test regression promote-traces` finds it at
+#    test-results/<RUN_ID>/traces-out/.
+#  - CU_TRACE_DIR — the committed store the driver REPLAYS from (RI-B2),
+#    delivered read-only via the metadata-optional mount. (Matches the driver's
+#    cwd-relative default; set explicitly so it's independent of cwd.)
+export CU_TRACE_OUT_DIR="$RUN_DIR/traces-out"
+export CU_TRACE_DIR="/app/metadata-optional/regression-test/tests/regression/traces"
+mkdir -p "$CU_TRACE_OUT_DIR"
+
+# Security: feed the {{authUsername}}/{{authPassword}} test variables from the
+# single credential source (.env.test → TEST_UID/TEST_PWD). Test auth bindings
+# reference these variables instead of a git-committed literal password, so the
+# real password lives ONLY in the gitignored .env.test. An explicitly-set
+# MJ_TEST_VAR_* (host env) still wins.
+export MJ_TEST_VAR_authUsername="${MJ_TEST_VAR_authUsername:-${TEST_UID:-}}"
+export MJ_TEST_VAR_authPassword="${MJ_TEST_VAR_authPassword:-${TEST_PWD:-}}"
+
 # DR-F2: tee everything from here on to the bind-mounted run dir, so a detached
 # (`up -d`) or crashed/OOM-killed run still leaves a complete console record on
 # disk — not only in `docker logs` (which a killed run loses). Append (-a) so a
@@ -216,6 +236,12 @@ SUITE_NAME="${TEST_SUITE_NAME:-MJ Explorer Regression Suite}"
 # is reported as flaky so genuine regressions stay visible. Override via MAX_RETRIES.
 RETRIES=${MAX_RETRIES:-2}
 echo "Running '${SUITE_NAME}' (${WORKERS} parallel workers, up to ${RETRIES} retries on failure)..."
+# RI-A1: surface the build identity the container actually received, so an empty
+# value (→ Computer Use replay falls back to replay-with-heal instead of the
+# zero-heal replay tier) is visible in the run log rather than a silent mystery.
+# Empty is expected for a dirty tree or a non-CLI launch; the composite hash only
+# unlocks exact-match replay on a clean, CLI-launched build.
+echo "  Build (APP_BUILD_HASH): ${APP_BUILD_HASH:-<empty — replay will use replay-with-heal>}"
 
 # Optional --oracles-module arg (Phase 5): BYO custom IOracle implementations.
 build_oracles_args

@@ -5,7 +5,7 @@
     "Description": "Exercises the bespoke hand-rolled <table> with client-side applyFilter (Status exact-match chips + multi-field substring search across provider/type/status/error) — a different code path from the generic ag-grid filter.",
     "InputDefinition": {
       "goal": "Assume you are already logged in at http://localhost:4200. Using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Communication app, then open its Message Logs section. Open the Filter control (funnel icon) and apply a Status filter such as 'Failed' (or 'Sent'/'Pending'), and/or type a term in the 'Search messages, providers, recipients...' box. Success = the log table RESPONDS — rows narrow to matches OR a clear 'No logs found' empty state appears. Then clear the filter/search and confirm the fuller list returns. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/communication",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

@@ -5,7 +5,7 @@
     "Description": "Exercises OnResetFilters, which clears DomainFilter/UserFilter/StartDate/EndDate, empties Entries, and sets HasRunQuery=false — flipping the view back to the pre-query empty-state. This reset-to-initial-state branch is distinct from running a query.",
     "InputDefinition": {
       "goal": "You are logged in at http://localhost:4200. Open the Permissions app via the application switcher next to the logo, then click 'Audit Log' in the left nav. Pages can take 10-30s to load — wait, don't navigate away. First set at least one filter (for example pick a value in the 'Domain:' dropdown or set a 'From' date) and click 'Query' so results (or a no-results state) appear. Then click the 'Reset' button. Success is that Reset clears the filters back to their defaults ('All domains', 'Any user', empty dates) AND returns the surface to the 'No query yet' empty-state — the previously shown results table disappears. Seeing the filters and results reset is success.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/permissions",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

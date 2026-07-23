@@ -5,7 +5,7 @@
     "Description": "Exercises the @if(SelectedEntityName) conditional that mounts FieldRulesBuilderComponent, plus the onEntityChange → resolveEntityName wiring — a branch that renders nothing until an entity is chosen.",
     "InputDefinition": {
       "goal": "Assume you are already logged in at http://localhost:4200. Open 'Bulk Operations', click 'New operation' to open the editor. Before choosing an entity, confirm the Rules section shows a hint like 'choose an entity first' and no rule builder. Then, in the '2 What it acts on' section, pick any entity from the 'Entity' dropdown. After selecting an entity, verify the '3 Rules' section now renders the visual field-rules builder (a 'Field rules' heading with an 'Add rule' button and a 'No rules yet' hint). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing the builder appear only after an entity is chosen is success.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/bulk-operations",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

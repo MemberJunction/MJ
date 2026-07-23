@@ -486,7 +486,7 @@ Then delete `clear-baseline-suite-members.cjs`.
 
 #### DR-E3 — Secrets hygiene
 
-**Problem.** `.env.test` contains live-looking Gemini/Anthropic keys and the test password in plaintext (gitignored, but its own header calls it a "template" — one `git add -f` from leaking); keys duplicate root `.env` and drift; `.env.test.example` is referenced by three docs and **does not exist**; `auth-bootstrap.cjs:27-28` contains hardcoded fallback credentials, one of which is *wrong* vs `.env.test` (`computerpassword2!` vs `computerusepassword2!`) — a missing env var silently attempts a wrong password 3× instead of failing fast.
+**Problem.** `.env.test` contains live-looking Gemini/Anthropic keys and the test password in plaintext (gitignored, but its own header calls it a "template" — one `git add -f` from leaking); keys duplicate root `.env` and drift; `.env.test.example` is referenced by three docs and **does not exist**; `auth-bootstrap.cjs:27-28` contains hardcoded fallback credentials, one of which is *wrong* vs `.env.test` (the fallback password differed from the real one) — a missing env var silently attempts a wrong password 3× instead of failing fast.
 
 **Proposal.** Restore `.env.test.example` (placeholders only); support `env:VAR` indirection in `.env.test` values (the loader pattern already exists for target profiles — `load-target-profile.cjs` `resolveEnvRef`); delete the hardcoded credential fallbacks (fail fast on missing env); rotate the currently-sitting keys; fix the `.env.test` header's false claim that compose auto-reads it.
 

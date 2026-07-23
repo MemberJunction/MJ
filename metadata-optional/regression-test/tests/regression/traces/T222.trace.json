@@ -1,0 +1,80 @@
+{
+  "TestId": "509D0B75-1D81-4011-9B66-C5CF02CD75AC",
+  "AppBuildHash": "454f1c42c7ee-dirty:3dd8345bcce2d83a",
+  "AppVersion": "",
+  "GoalHash": "2fd292d7",
+  "RecordedAt": "2026-07-23T05:29:21.427Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I am currently in the Permissions app on the 'User Access' tab. I need to navigate to the 'Resource Access' tab as per the goal.",
+      "UrlBefore": "http://localhost:4200/app/permissions",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Resource Access",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 338,
+            "YMin": 13,
+            "XMax": 514,
+            "YMax": 47
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/permissions/Resource%20Access"
+      }
+    },
+    {
+      "Instruction": "I am on the Resource Access page. The 'Resource ID' field is currently blank, while 'Resource Type' is filled with 'AI Skills'. The goal requires at least one to be blank to test the validation. I wil",
+      "UrlBefore": "http://localhost:4200/app/permissions/Resource%20Access",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Lookup",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-permissions-resource-access-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 24,
+            "YMin": 411,
+            "XMax": 142,
+            "YMax": 455
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions/Resource%20Access"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/permissions/Resource%20Access",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

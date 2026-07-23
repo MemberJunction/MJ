@@ -80,8 +80,8 @@ Every test file has the same top-level shape (system fields like `primaryKey` an
       "domains": ["localhost", "*.auth0.com"],
       "method": {
         "Type": "Basic",
-        "Username": "computeruse@bluecypress.io",
-        "Password": "computerusepassword2!",
+        "Username": "{{authUsername}}",
+        "Password": "{{authPassword}}",
         "Strategy": "FormLogin"
       }
     }]

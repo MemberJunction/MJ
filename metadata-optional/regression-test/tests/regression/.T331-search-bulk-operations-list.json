@@ -5,7 +5,7 @@
     "Description": "Exercises the studio's client-side Filtered getter (case-insensitive name/entity substring match) and onSearch handler — a self-contained filter feature, not the generic grid quick-search.",
     "InputDefinition": {
       "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher and choose 'Bulk Operations' so the Operations studio list is showing. Type a query into the 'Search bulk operations…' box at the top of the list. Verify the list RESPONDS — the visible rows narrow to operations whose name or entity matches, OR a clear empty result appears if nothing matches. Then clear the box and confirm the full list returns. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. This is data-agnostic: a narrowed list, an empty result, or the empty-state (if there are no operations at all) are all valid responses to the search.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/bulk-operations",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

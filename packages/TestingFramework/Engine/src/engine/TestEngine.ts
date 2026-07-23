@@ -35,6 +35,7 @@ import {
     SuiteRunOptions,
     DriverExecutionResult,
     TestRunResult,
+    PriorAttemptSummary,
     TestSuiteRunResult,
     TestLogMessage,
     ResolvedTestVariables,
@@ -806,9 +807,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             })
             : fixedRetries(options.maxRetries ?? 0);
         const result = await runWithRetries(
-            (attempt) => this.runSingleTestIteration(
+            (attempt, priorAttempts) => this.runSingleTestIteration(
                 test, suiteRunId, suiteTestSequence, options, contextUser,
-                attempt === 1 ? startTime : Date.now(), tags, suiteVariablesJson, workerIndex, suiteContext
+                attempt === 1 ? startTime : Date.now(), tags, suiteVariablesJson, workerIndex, suiteContext, priorAttempts
             ),
             policy,
             (nextAttempt, last) => this.log(`[retry] "${test.Name}" was ${last.status} (${last.failureCategory ?? 'unknown'}) on attempt ${nextAttempt - 1} — retrying`)
@@ -1353,7 +1354,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         tags?: string,
         suiteVariablesJson?: string | null,
         workerIndex?: number,
-        suiteContext?: Record<string, unknown>
+        suiteContext?: Record<string, unknown>,
+        priorAttempts?: PriorAttemptSummary[]
     ): Promise<TestRunResult> {
         // Get test type
         const testType = this.GetTestTypeByID(test.TypeID);
@@ -1467,7 +1469,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                     resolvedVariables,
                     workerIndex,
                     suiteContext,
-                    fixtures
+                    fixtures,
+                    priorAttempts
                 }),
                 watchdogMs,
                 { onTimeout: () => this.logError(`Watchdog fired: ${testType.DriverClass} did not settle within ${watchdogMs}ms for "${test.Name}" — abandoning (zombie may continue in background)`) }
@@ -1558,6 +1561,15 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             startedAt: testRun.StartedAt!,
             completedAt: testRun.CompletedAt!,
             errorMessage: driverResult.errorMessage,
+            // RI-D2: surface the driver's non-blind retry memo so the retry loop
+            // can feed it to the next attempt (fed back in as PreviousAttemptSummary).
+            failureMemo: driverResult.failureMemo,
+            // RI-C1/RI-D4: carry the execution tier + replay telemetry into the
+            // persisted result so results.json/JSONL/report can segment tier mix
+            // and surface replay hit/heal/diverge (previously only on actualOutput,
+            // which the results.json testResults array never carried).
+            tier: driverResult.tier,
+            replay: driverResult.replay,
             resolvedVariables
         };
 

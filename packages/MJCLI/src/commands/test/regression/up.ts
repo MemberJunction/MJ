@@ -5,6 +5,7 @@ import {
   AGENTIC_TEST_RUNNER_IMAGE,
   BACPAC_OVERLAY,
   BACPAC_STANDALONE_COMPOSE,
+  computeAppBuildHash,
   dockerComposeArgs,
   formsFingerprintStatus,
   FULL_INFRA_SERVICES,
@@ -110,6 +111,14 @@ export default class TestRegressionUp extends Command {
     childEnv.RUN_ID = runId;
     this.log(`▶ Run: ${runId}`);
     this.log(`  Output: ${runDirFor(runId)}`);
+
+    // RI-A1: mint the composite build identity (git SHA + schema fingerprint) and
+    // thread it to the runner. The Computer Use replay tier keys on it — an exact
+    // match across runs unlocks the zero-heal `replay` fast path; any source or
+    // schema change demotes to `replay-with-heal`. Opaque to Layer 1. Honor a
+    // caller-preset value (e.g. a reproducible CI pin).
+    childEnv.APP_BUILD_HASH = process.env.APP_BUILD_HASH || computeAppBuildHash();
+    this.log(`  Build: ${childEnv.APP_BUILD_HASH}`);
 
     if (flags.bacpac) {
       const abs = path.resolve(flags.bacpac as string);

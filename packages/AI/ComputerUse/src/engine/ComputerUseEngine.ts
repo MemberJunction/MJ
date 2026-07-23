@@ -1032,15 +1032,40 @@ export class ComputerUseEngine {
 
         replay.AllStepsSucceeded = true;
 
-        // CU-C5: score deterministically by the distilled goal postconditions —
-        // free, and more trustworthy than a judge float. All steps hitting is
-        // necessary but not sufficient; the end-state must also satisfy the goal.
+        // CU-C5: deterministic fail-fast on the distilled goal postconditions —
+        // free, and a cheap gate before paying for the judge. All steps hitting
+        // is necessary but not sufficient; the end-state must also satisfy the
+        // goal. A miss short-circuits to Failed so the driver falls back to LLM.
         if (trace.GoalPostconditions.length > 0) {
             const gp = await this.scoreGoalPostconditions(trace, volatile);
             if (!gp.passed) {
                 return this.buildReplayResult(context, replay, false, `goal postconditions failed: ${gp.detail}`);
             }
             this.log(`Replay — all ${trace.GoalPostconditions.length} goal postconditions met (CU-C5)`);
+        }
+
+        // Judge the replayed end-state for goal-completion parity with the LLM
+        // tier — but ONLY when a validation rubric was supplied. The judge scores
+        // the goal AGAINST ValidationCriteria, and this is exactly the path (MJ
+        // regression) where the driver returns a 'Completed' replay directly with
+        // no LLM leg, so the goal-completion oracle needs a verdict or the test
+        // auto-fails ("no judge verdict available"). Standalone/mechanics callers
+        // supply no rubric — they keep the deterministic steps-hit result and pay
+        // no judge/LLM cost (nor a settle on a profile-less run). A replay passes
+        // iff the judge confirms the goal; a not-Done/absent verdict returns Failed
+        // so the driver falls back to the LLM tier.
+        if (context.Params.ValidationCriteria && context.Params.ValidationCriteria.length > 0) {
+            const verdict = await this.judgeReplayEndState(context, trace.Steps.length);
+            const goalMet = verdict?.Done === true;
+            return this.buildReplayResult(
+                context,
+                replay,
+                goalMet,
+                goalMet
+                    ? 'all steps hit — goal confirmed by judge'
+                    : `all steps hit but goal not confirmed by judge${verdict ? `: ${verdict.Reason}` : ' (no verdict)'}`,
+                verdict
+            );
         }
         return this.buildReplayResult(context, replay, true, 'all steps hit');
     }
@@ -1068,6 +1093,31 @@ export class ComputerUseEngine {
         });
         const failed = results.filter(r => !r.met).map(r => r.detail).join('; ');
         return { passed, detail: failed || 'all met' };
+    }
+
+    /**
+     * Judge the fully-replayed end-state so a 'Completed' replay carries the goal
+     * verdict the scoring oracle needs (Option 1 — parity with the LLM tier). The
+     * driver returns a Completed replay directly with no LLM leg, so the verdict
+     * has to originate here. Per-step screenshots are captured PRE-action, so this
+     * settles and captures a FRESH final frame, judged against the same
+     * ValidationCriteria the LLM path uses. Never throws — a judge failure yields
+     * undefined and the caller treats the end-state as goal-not-confirmed.
+     */
+    private async judgeReplayEndState(
+        context: RunContext,
+        stepNumber: number
+    ): Promise<JudgeVerdict | undefined> {
+        try {
+            await this.settleBeforePerception(context);
+            const screenshot = await this.captureScreenshot(context);
+            context.AddScreenshot(screenshot);
+            context.CurrentUrl = this.browserAdapter.CurrentUrl;
+            return await this.evaluateJudge(context, stepNumber, true, computePerceptualHash(screenshot), '');
+        } catch (error) {
+            this.logError('Replay end-state judge evaluation failed', error);
+            return undefined;
+        }
     }
 
     /**
@@ -1342,9 +1392,10 @@ export class ComputerUseEngine {
         context: RunContext,
         replay: ReplayInfo,
         success: boolean,
-        note: string
+        note: string,
+        verdict?: JudgeVerdict
     ): ComputerUseResult {
-        const result = this.buildResult(context, success ? 'Completed' : 'Failed', success);
+        const result = this.buildResult(context, success ? 'Completed' : 'Failed', success, verdict);
         result.Replay = replay;
         this.log(`Replay ${result.Status}: ${note} (${replay.Steps.length} steps, ${replay.Healed} healed, ${replay.Diverged} diverged)`);
         this.onRunComplete(result);

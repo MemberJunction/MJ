@@ -5,7 +5,7 @@
     "Description": "Exercises the accordion-based review-queue write path (SubmitReview → instrumentation submitFeedback) with reason badges — a distinct human-in-the-loop form, different code from the Runs detail-panel feedback form.",
     "InputDefinition": {
       "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher next to the logo, choose \"Testing\", then click the \"Review\" tab. The Human Review view shows a KPI summary and a Review Queue. If pending items exist, expand one accordion item, pick a Rating number, click a correctness button (Correct or Incorrect), optionally type a note, then click Submit and verify the item is accepted (it leaves the queue or shows a submitted state). If the queue is empty, confirming the \"All caught up!\" empty state renders correctly is also success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/testing",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

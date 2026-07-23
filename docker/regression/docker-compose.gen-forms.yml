@@ -13,6 +13,20 @@
 # gen-forms containers and volumes are fully separate from the real stack, so its
 # `down -v` can only ever remove its own throwaway resources. The generated forms
 # live on a host bind-mount, so they survive the teardown regardless.
+#
+# It ALSO clears the SQL Server HOST-PORT publish. gen-forms containers reach SQL
+# over the compose network (`DB_HOST: sqlserver`, the *db-env anchor) — never the
+# host port — so publishing 11433 serves no purpose here, and it caused a real
+# collision: an interrupted gen-forms run (its `down -v` teardown never reached)
+# left a sqlserver squatting on 11433 and blocked the real suite's `up`. Isolating
+# the project + volumes wasn't enough; the port has to be isolated too.
+# `!override []` REPLACES the base `- "11433:1433"` with no host ports — a plain
+# `ports: []` would MERGE with the base (Compose appends list fields) and leave
+# 11433 published. Requires Compose ≥ 2.24 (this repo runs v5.x).
+services:
+  sqlserver:
+    ports: !override []
+
 volumes:
   mssql-data:
     name: mj-regression-genforms-mssql-data

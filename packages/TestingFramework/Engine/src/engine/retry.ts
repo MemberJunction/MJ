@@ -47,22 +47,27 @@ const HARD_ATTEMPT_CAP = 50;
  * Run a test (via `runOnce`) with retries governed by `policy`.
  *
  * @param runOnce     Executes one attempt. Receives the 1-based attempt number so the
- *                    caller can stamp a fresh start time / iteration per attempt.
+ *                    caller can stamp a fresh start time / iteration per attempt, and
+ *                    the running list of prior failed attempts (RI-D2) so the attempt
+ *                    can feed the last failure's memo forward (non-blind retry). The
+ *                    list is empty on attempt 1 and grows by one each retry.
  * @param policy      Decides after each failure whether to retry and how long to wait.
  * @param onBeforeRetry Optional hook fired just before each retry (for logging).
  * @returns The final result: the first passing attempt if any, else the last failure.
  *          `attempts` is the total runs; `flaky` is true when it failed then passed.
  */
 export async function runWithRetries(
-    runOnce: (attempt: number) => Promise<TestRunResult>,
+    runOnce: (attempt: number, priorAttempts: PriorAttemptSummary[]) => Promise<TestRunResult>,
     policy: RetryPolicy,
     onBeforeRetry?: (nextAttempt: number, lastResult: TestRunResult) => void
 ): Promise<TestRunResult> {
-    let result = await runOnce(1);
-    let attempts = 1;
     // CU-F3: preserve why each superseded attempt failed before it's overwritten,
     // so flakiness (the suite's #1 signal) is diagnosable from the final result.
+    // RI-D2: this same list is fed to each attempt so a retry can see the prior
+    // failure's memo (non-blind retry). Empty on attempt 1.
     const priorAttempts: PriorAttemptSummary[] = [];
+    let result = await runOnce(1, priorAttempts);
+    let attempts = 1;
 
     while (isRetriableFailure(result) && attempts < HARD_ATTEMPT_CAP) {
         const decision = policy(result, attempts);
@@ -75,7 +80,9 @@ export async function runWithRetries(
         if (decision.backoffMs && decision.backoffMs > 0) {
             await new Promise(resolve => setTimeout(resolve, decision.backoffMs));
         }
-        result = await runOnce(nextAttempt);
+        // Pass the accumulated prior attempts (RI-D2) so this attempt can feed the
+        // last failure's memo to its engine as non-blind context.
+        result = await runOnce(nextAttempt, priorAttempts);
         attempts = nextAttempt;
 
         if (!isRetriableFailure(result)) {
@@ -103,5 +110,9 @@ function summarizeAttempt(result: TestRunResult, attempt: number): PriorAttemptS
         score: result.score,
         durationMs: result.durationMs,
         errorMessage: result.errorMessage,
+        // RI-D2: carry the classification + engine memo forward so the next
+        // attempt (and reporting) isn't blind to why the last one failed.
+        failureCategory: result.failureCategory,
+        failureMemo: result.failureMemo,
     };
 }

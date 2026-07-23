@@ -5,7 +5,7 @@
     "Description": "Exercises OnUserChanged -> loadPermissionsForSelectedUser: re-hydrating the target user's roles from MJ: User Roles and re-running GetAllUserPermissions for a non-current user. Different code branch from the initial current-user load (resolvePermissionsUser role-fetch path) and distinct from any generic grid interaction.",
     "InputDefinition": {
       "goal": "You are logged in at http://localhost:4200. Open the application switcher next to the logo, choose 'Permissions', and stay on the 'User Access' tab. Pages can take 10-30s to load — wait, don't navigate away. Open the 'User:' dropdown at the top and select a DIFFERENT user than the one currently selected. Success is that the report RESPONDS to the change: a brief 'Loading permissions...' state may appear, then the domain accordion groups / summary count update to reflect the newly selected user (or a valid 'No permissions' empty-state appears for that user). If the user has assigned roles, a roles badge (user-tag icon) shows their role names next to the picker. Seeing the report re-query and re-render for the new user is success.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/permissions",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

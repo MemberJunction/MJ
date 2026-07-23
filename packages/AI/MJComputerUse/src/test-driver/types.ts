@@ -69,6 +69,7 @@ export interface ComputerUseOracleConfig {
  * Stored as JSON in TestEntity.Configuration.
  */
 import type { ArtifactRetentionPolicy } from './artifact-retention.js';
+import type { ReplayTier } from '@memberjunction/computer-use';
 
 export interface ComputerUseTestConfig {
     /** Run browser in headless mode (default: true) */
@@ -233,6 +234,15 @@ export interface ComputerUseTestConfig {
      * enabling suite-wide (hence the default is `off`).
      */
     trace?: ArtifactRetentionPolicy;
+
+    /**
+     * Force a replay tier for this test (RI-C1 / RI-C6 canary override), bypassing
+     * `decideReplayTier`. `'llm'` runs the full agent (the `rerun-failures --llm`
+     * / canary escape hatch); `'replay'` / `'replay-with-heal'` force the
+     * deterministic tier when a trace exists (no trace ⇒ still falls to LLM).
+     * Unset (default) ⇒ the tier is decided per build/goal/heal-rate.
+     */
+    forceTier?: ReplayTier;
 }
 
 // ─── Input Definition (TestEntity.InputDefinition JSON) ───────────

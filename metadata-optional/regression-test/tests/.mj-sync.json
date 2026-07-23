@@ -1,6 +1,7 @@
 {
   "entity": "MJ: Tests",
   "filePattern": "**/.*.json",
+  "ignoreDirectories": ["regression/traces"],
   "pull": {
     "filter": "TypeID IN (SELECT ID FROM __mj.TestType WHERE Name = 'Computer Use')",
     "lookupFields": {

@@ -23,6 +23,7 @@ import {
     AccessibilityNode,
     ElementInfo,
     InteractiveElement,
+    ContextSeed,
 } from '../types/browser.js';
 import {
     getVisibleText,
@@ -37,6 +38,8 @@ import {
     clickInteractiveElement,
     typeIntoInteractiveElement,
 } from './element-extraction.js';
+// CU-G4 warm-seed in-page storage helpers, shared with PlaywrightBrowserAdapter (RI-C4.1).
+import { StorageSnapshot, captureStorageInPage, restoreStorageInPage } from './page-storage.js';
 
 export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
     private sharedContext: BrowserContext;
@@ -595,6 +598,43 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 url: page.url(),
             });
         });
+    }
+
+    // ─── Warm-Seed Context Storage (CU-G4 / RI-C4.1) ───────
+    // The suite adapter previously inherited BaseBrowserAdapter's no-op here, so
+    // the warm seed silently did nothing in suite mode. These delegate to the
+    // SAME page-storage helpers PlaywrightBrowserAdapter uses, on this adapter's
+    // own page — identical behavior, now at parity (asserted by the parity gate).
+
+    public override async CaptureContextSeed(origin: string): Promise<ContextSeed | null> {
+        this.requirePage();
+        try {
+            const snap = await this.page!.evaluate(captureStorageInPage);
+            const seed = new ContextSeed();
+            seed.Origin = origin;
+            seed.LocalStorage = snap.localStorage;
+            if (snap.databases.length > 0) {
+                seed.IndexedDB = { Databases: snap.databases };
+            }
+            return seed;
+        } catch {
+            return null;   // capture is best-effort; a failure just means no seed
+        }
+    }
+
+    public override async SeedContext(seed: ContextSeed): Promise<void> {
+        this.requirePage();
+        const snap: StorageSnapshot = {
+            localStorage: seed.LocalStorage ?? [],
+            databases: seed.IndexedDB?.Databases ?? [],
+        };
+        if (snap.localStorage.length === 0 && snap.databases.length === 0) {
+            return;
+        }
+        // addInitScript so the restore runs BEFORE the app's scripts on the next
+        // navigation to the seed origin — the app then finds a warm cache instead
+        // of cold-booting it. Restore is cold-boot-safe (deletes a DB on failure).
+        await this.page!.addInitScript(restoreStorageInPage, snap);
     }
 
     // ─── Internal ──────────────────────────────────────────

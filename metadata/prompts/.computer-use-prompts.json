@@ -314,5 +314,61 @@
       "lastModified": "2026-06-25T01:11:13.570Z",
       "checksum": "6ae78c41c4d5ce1c0122d327f6b39d85e8be2b211c4c4aa5e084e7338a716726"
     }
+  },
+  {
+    "fields": {
+      "Name": "Computer Use - Heal",
+      "Description": "Focused disambiguation prompt for the Computer Use self-heal ladder (RI-C2 / CU-C3 leg 1b). Invoked only during deterministic replay when a recorded target drifted and role+name re-resolution is ambiguous: given the recorded step's intent and the page's current indexed interactive elements, it returns {index, confidence} naming the best-matching current element (or confidence 0 to decline). A cheap, text-only call (no screenshot).",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/computer-use/heal.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "OutputType": "object",
+      "OutputExample": "{\"index\":2,\"confidence\":0.86}",
+      "Temperature": 0,
+      "Seed": 42,
+      "EffortLevel": 1
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 100
+          },
+          "primaryKey": {
+            "ID": "52126C66-A473-45BA-AC19-02B113A9AA0B"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 90
+          },
+          "primaryKey": {
+            "ID": "049C0A93-64A5-4E94-B0FD-915F0747AAFA"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3DBE55A9-A97A-4437-953F-DFB9FFBA2B4C"
+    }
   }
 ]

@@ -5,7 +5,7 @@
     "Description": "Exercises the cluster-generation pipeline (OnRunClustering) and the scatter/metrics rendering with its run-error handling — distinct from the tag-cloud and other visualization code.",
     "InputDefinition": {
       "goal": "In the Knowledge Hub app (application switcher dropdown next to the logo), open 'Visualize' and select the 'Clusters' mode. Use the floating cluster config panel to pick a source entity/document and click the control that runs the clustering (Run/Generate). Success is that the analysis kicks off — a loading state on the scatter area appears and then a scatter plot with cluster metrics (Records / Clusters / Silhouette) renders, OR a clear run-error banner explains why (e.g. multi-entity embedding mismatch). You do NOT need to save the visualization. Also confirm the 'Saved Visualizations' sidebar is present. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/knowledge-hub",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

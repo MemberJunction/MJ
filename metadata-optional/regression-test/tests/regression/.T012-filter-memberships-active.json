@@ -5,7 +5,7 @@
     "Description": "Verifies that a column/value filter on the Memberships grid can restrict results to Status = Active.",
     "InputDefinition": {
       "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K global search) and go to Data Explorer, then its Data section. In the left-hand entity tree open the 'Memberships' entity. Wait patiently if the grid is slow to load (10-30s in this resource-constrained environment). Then apply a filter on the Status column (or via the grid's search/filter controls) so that only records with Status = 'Active' are shown. Success is reached when the grid is visibly filtered to active memberships.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/data-explorer",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

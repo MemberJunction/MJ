@@ -5,7 +5,7 @@
     "Description": "Exercises the custom tag-library table search (FilterTags) plus per-tag drill-down (DrillDownTag) — a bespoke table, not the generic entity grid quick-search.",
     "InputDefinition": {
       "goal": "In the Knowledge Hub app (application switcher dropdown next to the logo), open 'Tags' and go to the 'Tag Library' (tags) section. Type a term into the 'Search tags...' box in the section toolbar and confirm the tag table narrows to matching rows (or shows a clear empty result). Then clear the search and click a tag row. Success is that clicking a tag opens a drill-down panel listing content items tagged with that tag (or a 'No content items found for this tag' empty state). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/knowledge-hub",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

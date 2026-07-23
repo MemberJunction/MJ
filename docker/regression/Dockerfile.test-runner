@@ -36,6 +36,14 @@ RUN --mount=type=cache,target=/root/.npm npm ci
 # the compose stack bind-mounts the live tree over it at runtime.
 COPY packages/ ./packages/
 COPY metadata/ ./metadata/
+# The 380-test regression suite + membership live in the opt-in metadata-optional
+# sibling root (kept out of the base metadata tree, like integration-test). The
+# entrypoint pushes them via `mj sync push --dir=metadata-optional/regression-test`,
+# so the directory must exist in the container — the runtime :ro mount in
+# docker-compose.test.yml shadows this for the live-mount flow, and this COPY keeps
+# a plain `docker run` (no compose volumes) working too. Without it the suite push
+# finds nothing and the DR-E1 preflight gate aborts the run.
+COPY metadata-optional/ ./metadata-optional/
 
 # Build all packages (turbo handles dependency order)
 # --concurrency=2 limits parallel tsc processes to avoid OOM in Docker's memory-constrained environment

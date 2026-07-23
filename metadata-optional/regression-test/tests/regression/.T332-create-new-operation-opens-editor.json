@@ -5,7 +5,7 @@
     "Description": "Exercises the studio Mode='edit' flip mounting RecordProcessEditorComponent in new-draft mode (NewRecord path), distinct from opening an existing record's generic form.",
     "InputDefinition": {
       "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher and choose 'Bulk Operations'. In the Operations section, click the 'New operation' button (plus icon, top-right of the studio bar). The view should switch to the authoring editor showing numbered sections: '1 Basics' (Name / Status / Description fields), '2 What it acts on' (Entity, Default scope, Work type dropdowns), and a toolbar with 'Save', 'Preview changes', and 'Cancel'. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Seeing the multi-section editor render is success — you do NOT need to fill it in or save.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/bulk-operations",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

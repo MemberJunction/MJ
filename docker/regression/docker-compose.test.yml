@@ -62,7 +62,14 @@ services:
     ports:
       - "11433:1433"
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
+      # -S 127.0.0.1 (NOT localhost): on hosts where the container resolves
+      # `localhost` to IPv6 `::1` first (e.g. SQL Server 2022 under x86 emulation
+      # on Apple Silicon), the ODBC 18 driver hangs on ::1 until the login timeout
+      # instead of falling back to IPv4 — so every 5s probe times out and the
+      # (healthy, listening) server never goes healthy, aborting the whole stack.
+      # 127.0.0.1 connects in ~100ms and is identical to localhost on native
+      # x86/CI (where localhost already resolved to IPv4). SELECT 1 = readiness.
+      test: /opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
       interval: 10s
       timeout: 5s
       retries: 15
@@ -304,6 +311,12 @@ services:
       # so it owns the run's output dir (test-results/<RUN_ID>/) from launch;
       # the entrypoint falls back to a container-minted id for direct `docker run`.
       RUN_ID: "${RUN_ID:-}"
+      # RI-A1: composite build identity (git SHA + schema fingerprint), minted
+      # host-side by the CLI. The Computer Use replay tier keys on it — an exact
+      # match unlocks the zero-heal replay fast path; any change demotes to
+      # replay-with-heal. Empty when run outside the CLI (Layer 1 treats "" as the
+      # safe replay-with-heal default).
+      APP_BUILD_HASH: "${APP_BUILD_HASH:-}"
       # DR-F4: comma-separated test NAMES to restrict the run to (rerun-failures /
       # ad-hoc selection). Empty = run the whole suite. Passed through to
       # `mj test suite --tests`.
@@ -347,6 +360,12 @@ services:
       # loud failure instead of silent repo pollution, and makes "what's in the DB"
       # a pure function of the working tree at run start.
       - ../../metadata:/app/metadata:ro
+      # The regression suite (380 tests + membership) lives in the opt-in
+      # metadata-optional sibling root; the entrypoint pushes it via
+      # `mj sync push --dir=metadata-optional/regression-test`. Mounted :ro like
+      # metadata (pushes use --no-write-back). WITHOUT this the suite never loads
+      # and the DR-E1 preflight gate aborts the run.
+      - ../../metadata-optional:/app/metadata-optional:ro
       - ./test-metadata:/app/test-metadata:ro
 
 # DR-B2: named volume for the SQL Server data dir. Explicitly named so it's

@@ -5,7 +5,7 @@
     "Description": "Tests ToggleJobStatus (updateJobStatus) — an in-place operational state mutation on the card, distinct from any form save/edit round-trip test.",
     "InputDefinition": {
       "goal": "Open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Jobs' section. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. On a job card footer there is a 'Pause' or 'Resume' button (pause/play icon). Click it on one job and verify the job responds: an 'Active' job's status chip changes to 'Paused' and its button relabels to 'Resume' (or vice-versa). This is a real state round-trip. If NO job cards exist, seeing the empty state ('Create your first scheduled job') is acceptable instead. Toggling it back to the original state afterward is a bonus.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/scheduling",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

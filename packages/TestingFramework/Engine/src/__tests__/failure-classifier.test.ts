@@ -34,6 +34,20 @@ describe('normalizeFailureClass', () => {
         expect(normalizeFailureClass('infeasible')).toBe('impossible');
     });
 
+    it('round-trips the full CU failure taxonomy (Jul-22 fix — no CU class falls through to unknown)', () => {
+        // The engine's classifyFailure emits these exact strings; each must reach the
+        // intended retry budget. Critically, both timeout variants → 'timeout' (full
+        // budget), not 'unknown' (1 retry) — otherwise flaky timeouts are under-retried.
+        expect(normalizeFailureClass('loop-detected')).toBe('nav-loop');
+        expect(normalizeFailureClass('timeout-stuck')).toBe('timeout');
+        expect(normalizeFailureClass('timeout-progressing')).toBe('timeout');
+        expect(normalizeFailureClass('judge-disagreement')).toBe('assertion');
+        expect(normalizeFailureClass('app-error')).toBe('app-error');
+        expect(normalizeFailureClass('auth-detour')).toBe('auth-detour');
+        expect(normalizeFailureClass('impossible')).toBe('impossible');
+        expect(normalizeFailureClass('infra')).toBe('infra');
+    });
+
     it('is case- and punctuation-insensitive', () => {
         expect(normalizeFailureClass('Blank Page')).toBe('blank-page');
         expect(normalizeFailureClass('AUTH')).toBe('auth-detour');

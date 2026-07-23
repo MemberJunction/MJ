@@ -33,11 +33,15 @@ export function normalizeFailureClass(raw: string | undefined | null): FailureCa
     const key = raw.toLowerCase().replace(/[^a-z]/g, '');
     const synonyms: Record<string, FailureCategory> = {
         timeout: 'timeout', timedout: 'timeout', deadline: 'timeout',
+        // CU taxonomy: both timeout variants are env/transient → full retry budget.
+        timeoutstuck: 'timeout', timeoutprogressing: 'timeout',
         navloop: 'nav-loop', navigationloop: 'nav-loop', loop: 'nav-loop',
+        loopdetected: 'nav-loop', // CU taxonomy: 'loop-detected'
         blankpage: 'blank-page', stuckpage: 'blank-page', emptypage: 'blank-page', whitescreen: 'blank-page',
         apperror: 'app-error', applicationerror: 'app-error', servererror: 'app-error',
         authdetour: 'auth-detour', auth: 'auth-detour', login: 'auth-detour', unauthorized: 'auth-detour',
         assertion: 'assertion', assert: 'assertion', oraclefailed: 'assertion',
+        judgedisagreement: 'assertion', // CU taxonomy: 'judge-disagreement' (output judged wrong)
         impossible: 'impossible', infeasible: 'impossible', gaveup: 'impossible',
         infra: 'infra', infrastructure: 'infra', envstall: 'infra', environment: 'infra', network: 'infra',
         unknown: 'unknown',

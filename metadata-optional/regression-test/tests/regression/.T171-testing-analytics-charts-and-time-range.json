@@ -5,7 +5,7 @@
     "Description": "Renders the bespoke CSS-bar analytics surface + version-comparison table driven by SelectedDays time-range chips (OnTimeRangeSelect) — distinct from the AI Analytics dashboard and generic aggregates.",
     "InputDefinition": {
       "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher next to the logo, choose \"Testing\", then click the \"Analytics\" tab. Verify the analytics view renders its sections: a Trend Overview (Pass Rate, Run Volume, Score, Cost bar charts), an Insights grid (Top Failing / Slowest / Most Expensive tests), a Score Distribution chart, and a Version Comparison table. Then click a different time-range filter chip (e.g. 7 / 30 / 90 days) and confirm the chip becomes active and the charts re-render for that window. Seeing the sections render (with data or valid empty states) and responding to the time-range change is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/testing",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

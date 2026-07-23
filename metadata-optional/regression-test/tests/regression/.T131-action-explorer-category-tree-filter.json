@@ -5,7 +5,7 @@
     "Description": "Bespoke tree-panel selection + descendant-category filtering (getDescendantCategoryIds/applyFilters) and breadcrumb sync — not AG-Grid column filtering.",
     "InputDefinition": {
       "goal": "Open the application switcher dropdown next to the logo, switch to the 'Actions' application, and open the 'Explorer' nav item. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. The Explorer has a category tree panel on the LEFT. Click a category node in that tree and verify the main action list RESPONDS — it narrows to actions in that category (and its sub-categories), the breadcrumb updates to show the selected category, OR a clear 'no actions match' empty-state appears. Then click back to 'All' (root/all categories) and verify the full list returns. The list responding to the category selection is success.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/actions",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

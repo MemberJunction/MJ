@@ -5,7 +5,7 @@
     "Description": "Tests the ScheduledJobEditor CanSave gating (form-level required-field enablement of the Create button) — a distinct client-side validation path from the generated form's save-blocked-with-message validation.",
     "InputDefinition": {
       "goal": "Open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Jobs' section. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Click 'New Job' to open the create slide-in editor. With the required fields (Name, Job Type, Cron Expression — each marked with a red asterisk) left blank, verify the 'Create' button is DISABLED (not clickable). Then type a value into the Name field (and if easy, pick a Job Type and enter a cron like '0 0 * * * *') and verify the 'Create' button becomes ENABLED. Observing the enabled-state change gated by the required fields is success — you do NOT need to finish creating the job.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/scheduling",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

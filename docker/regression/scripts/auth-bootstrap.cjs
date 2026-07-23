@@ -24,12 +24,11 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 
 const BASE = process.env.AUTH_BOOTSTRAP_URL || 'http://localhost:4200';
-// DR-E3: NO hardcoded credential fallbacks. The previous defaults
-// ('computeruse@bluecypress.io' / 'computerpassword2!') were a real hazard —
-// the password fallback was even WRONG vs .env.test ('computerpassword2!' vs
-// 'computerusepassword2!'), so a missing env var silently attempted a wrong
-// password 3× instead of failing fast. Creds come from the environment only;
-// the guard below fails fast when they're absent.
+// DR-E3: NO hardcoded credential fallbacks. Earlier versions carried default
+// creds inline — a hazard, and one default was even WRONG vs .env.test, so a
+// missing env var silently retried a bad password 3× instead of failing fast.
+// Creds come from the environment only (TEST_UID/TEST_PWD, from the gitignored
+// .env.test); the guard below fails fast when they're absent.
 const USER = process.env.MJ_TEST_VAR_authUsername || process.env.TEST_UID;
 const PWD = process.env.MJ_TEST_VAR_authPassword || process.env.TEST_PWD;
 const OUT = process.env.MJ_TEST_AUTH_STATE_FILE || '/tmp/mj-auth-state.json';
@@ -53,9 +52,33 @@ async function clickFirst(page, selectors) {
   return false;
 }
 
+// On a failed attempt, capture WHY we're stuck on the Auth0 page — the script
+// otherwise fails blind. Distinguishes an Auth0 bot/rate challenge (tenant-config
+// fix) from a credential error or a changed login form (code fix). Body text is
+// logged (always reaches runner.log); a screenshot is best-effort to the run dir.
+async function captureFailureDiagnostics(page, attempt) {
+  try {
+    const title = (await page.title().catch(() => '')) || '';
+    const body = ((await page.textContent('body').catch(() => '')) || '').replace(/\s+/g, ' ').trim();
+    const hasUser = !!(await page.$('input#username, input[name=username], input[type=email], input[name=email]'));
+    const hasPwd = !!(await page.$('input#password, input[name=password], input[type=password]'));
+    const signals = [];
+    if (/verify (your|it'?s you)|are you human|not a robot|captcha|recaptcha|hcaptcha|unusual|suspicious|too many|rate.?limit|blocked|try again later|temporarily/i.test(body)) signals.push('BOT/RATE CHALLENGE');
+    if (/wrong (email|password)|incorrect|invalid (email|password|credential)|does not match|check your (email|password)/i.test(body)) signals.push('CREDENTIAL ERROR');
+    if (!hasUser && !hasPwd && /auth0|\/u\//.test(page.url())) signals.push('NO LOGIN FORM FIELDS (unexpected page/selectors)');
+    log(`diag[${attempt}] title="${title.slice(0, 80)}" fields{user:${hasUser},pwd:${hasPwd}} signals=[${signals.join('; ') || 'none'}]`);
+    log(`diag[${attempt}] body(400): ${body.slice(0, 400)}`);
+    const dir = process.env.RUN_DIR || (process.env.RUN_ID ? `/app/test-results/${process.env.RUN_ID}` : require('os').tmpdir());
+    const shot = require('path').join(dir, `auth-bootstrap-fail-${attempt}.png`);
+    await page.screenshot({ path: shot, fullPage: true }).then(() => log(`diag[${attempt}] screenshot → ${shot}`)).catch(() => {});
+  } catch (e) {
+    log(`diag[${attempt}] capture error: ${(e && e.message) || e}`);
+  }
+}
+
 // Drives the proven MJ Explorer → Auth0 Universal Login flow, then verifies the
 // app reached an authenticated state before capturing storageState.
-async function attemptLogin(browser) {
+async function attemptLogin(browser, attempt) {
   let ctx;
   try {
     ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -115,6 +138,7 @@ async function attemptLogin(browser) {
     }
 
     log(`not authenticated after login (url=${url} token=${hasToken} onAuth=${onAuth} onLanding=${onLanding})`);
+    await captureFailureDiagnostics(page, attempt);
     return false;
   } finally {
     if (ctx) await ctx.close().catch(() => {});
@@ -137,7 +161,7 @@ async function attemptLogin(browser) {
   try {
     for (let i = 1; i <= ATTEMPTS && !ok; i++) {
       log(`attempt ${i}/${ATTEMPTS}`);
-      ok = await attemptLogin(browser).catch((e) => { log('attempt error: ' + ((e && e.message) || e)); return false; });
+      ok = await attemptLogin(browser, i).catch((e) => { log('attempt error: ' + ((e && e.message) || e)); return false; });
       if (!ok && i < ATTEMPTS) await new Promise((r) => setTimeout(r, 5000));
     }
   } finally {

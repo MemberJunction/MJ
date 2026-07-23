@@ -77,14 +77,24 @@ const { sql, connect } = require('./lib/db.cjs');
         }
     }
 
-    // 3. Pin ONLY the test-relevant applications; deactivate the rest.
-    // A short, focused switcher list keeps every app the tests target visible
-    // WITHOUT scrolling. Pinning ALL ~22 active apps made the dropdown long enough
-    // that the last app (Integrations, highest DefaultSequence) sat clipped at the
-    // bottom edge, so the LLM agent intermittently failed to reach it. Apps not in
-    // this list are set IsActive=0 (they move to the Configure "Available" list, out
-    // of the switcher) — an FK-safe UPDATE, no deletes.
-    const TEST_APPS = ['Home', 'Data Explorer', 'AI', 'Admin', 'Integrations', 'Communication', 'Lists', 'AssociationDemo'];
+    // 3. Pin the test-relevant applications active; deactivate the rest.
+    // RI-E1: deep-linking a test straight to `/app/<slug>` requires that app to be
+    // IsActive=1 in the user's UserApplication (else the route pops the app-access
+    // dialog instead of loading). Now that tests carry `startUrl` deep links
+    // (metadata-optional/.../tests/regression/.T*.json), they no longer hunt the
+    // app switcher, so the earlier trim-to-8 (which existed only because a long
+    // switcher dropdown clipped its bottom entry for the LLM agent) is obsolete for
+    // deep-linked tests. Pin every app the suite targets so its deep links resolve.
+    // The few remaining switcher-navigation tests (Section 1, kept on bare starts)
+    // navigate to top-of-list apps, so a longer dropdown doesn't strand them.
+    // Apps not listed are set IsActive=0 (moved to the Configure "Available" list) —
+    // an FK-safe UPDATE, no deletes.
+    const TEST_APPS = [
+        'Home', 'Data Explorer', 'AI', 'Admin', 'Integrations', 'Communication', 'Lists', 'AssociationDemo',
+        // RI-E1 deep-link targets (were IsActive=0 before, stranding /app/<slug> navigations):
+        'Testing', 'Knowledge Hub', 'Actions', 'Permissions', 'Scheduling', 'Predictive Studio',
+        'Routines', 'Version History', 'Component Studio', 'Bulk Operations', 'Chat',
+    ];
     const appList = TEST_APPS.map(n => `'${n.replace(/'/g, "''")}'`).join(', ');
     const appPin = await pool.request()
         .input('userId', sql.UniqueIdentifier, userId)

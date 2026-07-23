@@ -1,0 +1,118 @@
+{
+  "TestId": "28ADC23A-8A75-4E40-8F09-4E041B1CE362",
+  "AppBuildHash": "454f1c42c7ee-dirty:3dd8345bcce2d83a",
+  "AppVersion": "",
+  "GoalHash": "0ceb2560",
+  "RecordedAt": "2026-07-23T05:10:03.522Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I am in the Data Explorer application. I will use the sidebar search box to find the 'Memberships' entity as per the application guide.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer",
+      "Action": {
+        "Method": "type",
+        "Text": "Memberships",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search entities...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 340,
+            "YMin": 156,
+            "XMax": 940,
+            "YMax": 207
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      }
+    },
+    {
+      "Instruction": "I have searched for 'Memberships' and the search results show three entities. I will click on the 'Memberships' entity card to open its data grid.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "BoundingBox": {
+            "XMin": 667,
+            "YMin": 355,
+            "XMax": 922,
+            "YMax": 408
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Memberships"
+      }
+    },
+    {
+      "Instruction": "The grid has loaded and shows various membership records. I need to filter for Status = 'Active'. I will use the 'Filter records...' box to quickly filter the grid results to only show 'Active' member",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Memberships",
+      "Action": {
+        "Method": "type",
+        "Text": "Active",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Filter records... (press / to focus)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[2]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 498,
+            "YMin": 121,
+            "XMax": 1098,
+            "YMax": 159
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Memberships"
+      }
+    },
+    {
+      "Instruction": "I typed 'Active' into the quick filter box in the previous step, but 'Lapsed' records are still visible in the grid (e.g., rows 66, 82, 90). I will press Enter to ensure the filter is applied. If that",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Memberships",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Memberships"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Memberships",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

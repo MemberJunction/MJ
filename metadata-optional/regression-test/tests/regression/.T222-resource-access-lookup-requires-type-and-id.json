@@ -5,7 +5,7 @@
     "Description": "Exercises the client-side required-field guard in OnLookupResource ('Resource type and resource ID are both required.') before any engine call. This is a distinct validation-block behavior, data-agnostic, and separate from the successful-lookup path.",
     "InputDefinition": {
       "goal": "You are logged in at http://localhost:4200. Open the Permissions app via the application switcher next to the logo, then click 'Resource Access' in the left nav. Pages can take 10-30s to load — wait, don't navigate away. Without filling in the 'Resource Type:' combobox and 'Resource ID:' field (leave at least one blank), click the 'Lookup' button. Success is that the lookup is BLOCKED with a validation error message stating that resource type and resource ID are both required (an error alert appears at the top of the page) — the grantee results table does NOT appear. Seeing the guard prevent the empty lookup with a clear message is success.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/permissions",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }

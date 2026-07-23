@@ -338,6 +338,19 @@ export interface PriorAttemptSummary {
   durationMs: number;
   /** Error/diagnostic message from this attempt, if any. */
   errorMessage?: string;
+  /**
+   * Normalized failure category of this superseded attempt (RI-D2), when it was
+   * classified. Lets the next attempt and reporting see *what kind* of failure
+   * preceded it without retaining the full result.
+   */
+  failureCategory?: FailureCategory;
+  /**
+   * The driver's non-blind retry memo for this attempt (RI-D2) — a short,
+   * payload-free "here's what went wrong last time" the driver can feed to the
+   * next attempt (as `PreviousAttemptSummary`) so attempt 2+ isn't a blind
+   * re-roll. Present only when the driver produced one.
+   */
+  failureMemo?: string;
 }
 
 /**
@@ -501,6 +514,49 @@ export interface TestRunResult {
    * tally by it. See {@link FailureCategory}.
    */
   failureCategory?: FailureCategory;
+
+  /**
+   * The driver's non-blind retry memo for a non-passing result (RI-D2), surfaced
+   * from the engine (e.g. Computer Use's `ComputerUseResult.FailureMemo`). Copied
+   * into each {@link PriorAttemptSummary} so `runWithRetries` can feed it forward
+   * to the next attempt. Absent on success or when the driver produced none.
+   */
+  failureMemo?: string;
+
+  /**
+   * Execution-tier label a tiered driver reports (RI-C1) — e.g. Computer Use's
+   * `'replay'` / `'replay-with-heal'` / `'llm'`. The tier that PRODUCED this
+   * result: a replay that diverged and fell back reports `'llm'`. Reporting
+   * segments tier mix / replay share by it. Absent for single-tier drivers.
+   */
+  tier?: string;
+
+  /**
+   * Replay telemetry (RI-C1/RI-D4), present whenever a replay was ATTEMPTED —
+   * so the drift signal (`diverged` > 0) survives even a green LLM-fallback
+   * result. Absent on pure-LLM runs. See {@link ReplayTelemetry}.
+   */
+  replay?: ReplayTelemetry;
+}
+
+/**
+ * Compact per-attempt replay outcome a tiered driver may surface (RI-C1/RI-D4).
+ * Mirrors the engine's replay counts so the report's replay-health panel and the
+ * "is replay lying to us?" check can be computed without the full step list.
+ */
+export interface ReplayTelemetry {
+  /** The replay sub-tier the run dispatched into. */
+  tier: 'replay' | 'replay-with-heal';
+  /** Number of trace steps replayed. */
+  steps: number;
+  /** Steps that self-healed (recorded target drifted, re-resolved). */
+  healed: number;
+  /** Steps that diverged (replay+heal failed) — the UI-drift signal. */
+  diverged: number;
+  /** Whether every step hit or healed (no unrecovered divergence). */
+  allStepsSucceeded: boolean;
+  /** Whether a divergence forced an in-attempt fall back to the LLM tier. */
+  fellBackToLlm: boolean;
 }
 
 /**

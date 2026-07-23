@@ -5,7 +5,7 @@
     "Description": "Exercises togglePin and the conditional Pinned-section render — a distinct state/branch in ConversationListComponent not covered by rename/delete or favorites.",
     "InputDefinition": {
       "goal": "Open the Chat application and wait for the workspace. In the sidebar, open a conversation's '...' menu and click 'Pin'. Verify a 'Pinned' section appears at the top of the list containing that conversation. Then open its menu again and click 'Unpin', and verify it returns to the normal (Messages/Ungrouped) section. If no conversations exist, create one first by sending a message. The conversation moving into and out of the Pinned section is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
-      "startUrl": "http://localhost:4200",
+      "startUrl": "http://localhost:4200/app/chat",
       "allowedDomains": [
         "localhost",
         "*.auth0.com"
@@ -19,8 +19,8 @@
             ],
             "method": {
               "Type": "Basic",
-              "Username": "computeruse@bluecypress.io",
-              "Password": "computerpassword2!",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
               "Strategy": "FormLogin"
             }
           }
