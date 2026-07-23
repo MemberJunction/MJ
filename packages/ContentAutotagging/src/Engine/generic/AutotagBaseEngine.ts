@@ -1700,13 +1700,22 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         await this.commitChunkReplacement(contentItemID, existing.Results, newRows);
     }
 
-    /** Build (in-memory only — no DB access) the replacement ContentItemChunk rows for an item. */
+    /**
+     * Build (in-memory only — no DB access) the replacement ContentItemChunk rows for an item.
+     * These rows are created only after the chunk's vector has been successfully embedded and
+     * upserted (see persistVectorReferences), so each row is stamped EmbeddingStatus='Complete'
+     * with LastEmbeddedAt=now — mirroring how the parent ContentItem is stamped on a successful
+     * embed. TaggingStatus is left at its 'Pending' default (chunks are not tagged individually;
+     * tagging happens at the Content Item level) and DeleteStatus is left null (not slated for
+     * deletion).
+     */
     private async buildChunkRows(
         contentItemID: string,
         chunks: { chunkIndex: number; text: string; vectorRecordID: string }[],
         contextUser: UserInfo
     ): Promise<MJContentItemChunkEntity[]> {
         const md = this.ProviderToUse;
+        const now = new Date();
         const rows: MJContentItemChunkEntity[] = [];
         for (const chunk of chunks) {
             const row = await md.GetEntityObject<MJContentItemChunkEntity>('MJ: Content Item Chunks', contextUser);
@@ -1715,6 +1724,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             row.Sequence = chunk.chunkIndex;
             row.Text = chunk.text;
             row.VectorRecordID = chunk.vectorRecordID;
+            row.EmbeddingStatus = 'Complete';
+            row.LastEmbeddedAt = now;
             rows.push(row);
         }
         return rows;

@@ -1034,6 +1034,8 @@ describe('AutotagBaseEngine', () => {
               Sequence: 0,
               Text: '',
               VectorRecordID: '',
+              EmbeddingStatus: 'Pending' as string,
+              LastEmbeddedAt: null as Date | null,
               LatestResult: { CompleteMessage: 'simulated chunk save failure' },
             };
             if (entityName === 'MJ: Content Item Chunks') {
@@ -1084,10 +1086,12 @@ describe('AutotagBaseEngine', () => {
         expect(item.VectorRecordID).toBeNull();
         expect(item.EmbeddingStatus).toBe('Complete');
         expect(created.length).toBeGreaterThan(1);
-        // Rows are ordered by sequence, carry the parent id, and are each saved.
+        // Rows are ordered by sequence, carry the parent id, are stamped as embedded, and saved.
         created.forEach((row, i) => {
           expect(row.ContentItemID).toBe('item-multi');
           expect(row.Sequence).toBe(i);
+          expect(row.EmbeddingStatus).toBe('Complete');
+          expect(row.LastEmbeddedAt).toBeInstanceOf(Date);
           expect(row.Save).toHaveBeenCalledTimes(1);
         });
         // Chunk 0 uses the base vector id; later chunks get the _chunkN suffix.

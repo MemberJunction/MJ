@@ -34107,6 +34107,27 @@ export class MJContentItemChunk_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Embedding lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.`}) 
+    @MaxLength(20)
+    EmbeddingStatus: string;
+        
+    @Field({description: `Tagging lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.`}) 
+    @MaxLength(20)
+    TaggingStatus: string;
+        
+    @Field({nullable: true, description: `Deletion lifecycle state of this chunk's vector: NULL when not slated for deletion, Pending when vector removal is queued, or Deleted once the vector has been removed from the vector database.`}) 
+    @MaxLength(20)
+    DeleteStatus?: string;
+        
+    @Field({nullable: true, description: `Timestamp of the last successful embedding of this chunk.`}) 
+    LastEmbeddedAt?: Date;
+        
+    @Field({nullable: true, description: `Timestamp of the last successful tagging of this chunk.`}) 
+    LastTaggedAt?: Date;
+        
+    @Field({nullable: true, description: `Timestamp of the last successful deletion of this chunk's vector from the vector database.`}) 
+    LastDeletedAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     ContentItem?: string;
@@ -34133,6 +34154,24 @@ export class CreateMJContentItemChunkInput {
     @Field({ nullable: true })
     VectorRecordID: string | null;
 
+    @Field({ nullable: true })
+    EmbeddingStatus?: string;
+
+    @Field({ nullable: true })
+    TaggingStatus?: string;
+
+    @Field({ nullable: true })
+    DeleteStatus: string | null;
+
+    @Field({ nullable: true })
+    LastEmbeddedAt: Date | null;
+
+    @Field({ nullable: true })
+    LastTaggedAt: Date | null;
+
+    @Field({ nullable: true })
+    LastDeletedAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -34157,6 +34196,24 @@ export class UpdateMJContentItemChunkInput {
 
     @Field({ nullable: true })
     VectorRecordID?: string | null;
+
+    @Field({ nullable: true })
+    EmbeddingStatus?: string;
+
+    @Field({ nullable: true })
+    TaggingStatus?: string;
+
+    @Field({ nullable: true })
+    DeleteStatus?: string | null;
+
+    @Field({ nullable: true })
+    LastEmbeddedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastTaggedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastDeletedAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -34749,6 +34806,14 @@ export class MJContentItem_ {
     VectorRecordID?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field({nullable: true, description: `Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`}) 
+    @MaxLength(2000)
+    DisplayLink?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(255)
     ContentSource?: string;
         
@@ -34772,6 +34837,14 @@ export class MJContentItem_ {
     @MaxLength(50)
     EmbeddingModel?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(250)
+    Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
+        
     @Field(() => [MJContentItemAttribute_])
     MJContentItemAttributes_ContentItemIDArray: MJContentItemAttribute_[]; // Link to MJContentItemAttributes
     
@@ -34789,6 +34862,9 @@ export class MJContentItem_ {
     
     @Field(() => [MJTagSuggestion_])
     MJTagSuggestions_SourceContentItemIDArray: MJTagSuggestion_[]; // Link to MJTagSuggestions
+    
+    @Field(() => [MJContentItem_])
+    MJContentItems_ParentIDArray: MJContentItem_[]; // Link to MJContentItems
     
 }
 
@@ -34847,6 +34923,12 @@ export class CreateMJContentItemInput {
 
     @Field({ nullable: true })
     VectorRecordID: string | null;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    DisplayLink: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -34908,6 +34990,12 @@ export class UpdateMJContentItemInput {
 
     @Field({ nullable: true })
     VectorRecordID?: string | null;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    DisplayLink?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -35030,6 +35118,16 @@ export class MJContentItemResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagSuggestions')} WHERE ${provider.QuoteIdentifier('SourceContentItemID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Suggestions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjcontentitem_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Suggestions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJContentItem_])
+    async MJContentItems_ParentIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Items', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItems')} WHERE ${provider.QuoteIdentifier('ParentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Items', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjcontentitem_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Items', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

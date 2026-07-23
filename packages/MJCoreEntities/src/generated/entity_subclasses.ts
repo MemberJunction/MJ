@@ -12003,7 +12003,7 @@ export const MJContentItemChunkSchema = z.object({
         * * Default Value: newsequentialid()`),
     ContentItemID: z.string().describe(`
         * * Field Name: ContentItemID
-        * * Display Name: Content Item ID
+        * * Display Name: Content Item
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)`),
     Sequence: z.number().describe(`
@@ -12013,7 +12013,7 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.`),
     Text: z.string().describe(`
         * * Field Name: Text
-        * * Display Name: Text
+        * * Display Name: Text Content
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector.`),
     VectorRecordID: z.string().nullable().describe(`
@@ -12031,9 +12031,63 @@ export const MJContentItemChunkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EmbeddingStatus: z.union([z.literal('Active'), z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processed'), z.literal('Processing'), z.literal('Skipped')]).describe(`
+        * * Field Name: EmbeddingStatus
+        * * Display Name: Embedding Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processed
+    *   * Processing
+    *   * Skipped
+        * * Description: Embedding lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.`),
+    TaggingStatus: z.union([z.literal('Active'), z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processed'), z.literal('Processing'), z.literal('Skipped')]).describe(`
+        * * Field Name: TaggingStatus
+        * * Display Name: Tagging Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processed
+    *   * Processing
+    *   * Skipped
+        * * Description: Tagging lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.`),
+    DeleteStatus: z.union([z.literal('Deleted'), z.literal('Pending')]).nullable().describe(`
+        * * Field Name: DeleteStatus
+        * * Display Name: Delete Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Deleted
+    *   * Pending
+        * * Description: Deletion lifecycle state of this chunk's vector: NULL when not slated for deletion, Pending when vector removal is queued, or Deleted once the vector has been removed from the vector database.`),
+    LastEmbeddedAt: z.date().nullable().describe(`
+        * * Field Name: LastEmbeddedAt
+        * * Display Name: Last Embedded At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the last successful embedding of this chunk.`),
+    LastTaggedAt: z.date().nullable().describe(`
+        * * Field Name: LastTaggedAt
+        * * Display Name: Last Tagged At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the last successful tagging of this chunk.`),
+    LastDeletedAt: z.date().nullable().describe(`
+        * * Field Name: LastDeletedAt
+        * * Display Name: Last Deleted At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the last successful deletion of this chunk's vector from the vector database.`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
-        * * Display Name: Content Item
+        * * Display Name: Content Item Name
         * * SQL Data Type: nvarchar(250)`),
 });
 
@@ -12250,7 +12304,7 @@ export const MJContentItemSchema = z.object({
         * * Description: The source location URL where this content was retrieved from.`),
     Text: z.string().nullable().describe(`
         * * Field Name: Text
-        * * Display Name: Text
+        * * Display Name: Extracted Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The extracted text content from the source document or file.`),
     __mj_CreatedAt: z.date().describe(`
@@ -12316,6 +12370,16 @@ export const MJContentItemSchema = z.object({
         * * Display Name: Vector Record ID
         * * SQL Data Type: nvarchar(100)
         * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)`),
+    DisplayLink: z.string().nullable().describe(`
+        * * Field Name: DisplayLink
+        * * Display Name: Display Link
+        * * SQL Data Type: nvarchar(2000)
+        * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source Name
@@ -12340,6 +12404,14 @@ export const MJContentItemSchema = z.object({
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent Name
+        * * SQL Data Type: nvarchar(250)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type MJContentItemEntityType = z.infer<typeof MJContentItemSchema>;
@@ -43932,9 +44004,8 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agent Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * CompactionTargetPercent: Compaction target percentage must be a value between 1 and 100 percent.
-    * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than zero.
-    * * Table-Level: The compaction target percentage must be strictly less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
+    * * CompactionTargetPercent: The compaction target percentage must be a valid percentage value between 1 and 100 inclusive.
+    * * ContextWindowMaxTokens: The maximum tokens allowed in the context window must be a positive number greater than zero, if it is specified.
     * @public
     * @method
     * @override
@@ -43942,15 +44013,14 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateCompactionTargetPercentRange(result);
-        this.ValidateContextWindowMaxTokensPositive(result);
-        this.ValidateCompactionTargetPercentLessThanTriggerPercent(result);
+        this.ValidateContextWindowMaxTokensGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * Compaction target percentage must be a value between 1 and 100 percent.
+    * The compaction target percentage must be a valid percentage value between 1 and 100 inclusive.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
@@ -43959,7 +44029,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
         if (this.CompactionTargetPercent != null && (this.CompactionTargetPercent < 1 || this.CompactionTargetPercent > 100)) {
             result.Errors.push(new ValidationErrorInfo(
                 "CompactionTargetPercent",
-                "Compaction Target Percent must be between 1 and 100.",
+                "Compaction target percent must be between 1 and 100.",
                 this.CompactionTargetPercent,
                 ValidationErrorType.Failure
             ));
@@ -43967,39 +44037,20 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
-    * The maximum tokens for the context window must be a positive number greater than zero.
+    * The maximum tokens allowed in the context window must be a positive number greater than zero, if it is specified.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateContextWindowMaxTokensPositive(result: ValidationResult) {
+    public ValidateContextWindowMaxTokensGreaterThanZero(result: ValidationResult) {
     	if (this.ContextWindowMaxTokens != null && this.ContextWindowMaxTokens <= 0) {
     		result.Errors.push(new ValidationErrorInfo(
     			"ContextWindowMaxTokens",
-    			"The maximum tokens for the context window must be greater than zero.",
+    			"The Context Window Max Tokens must be greater than 0.",
     			this.ContextWindowMaxTokens,
     			ValidationErrorType.Failure
     		));
     	}
-    }
-
-    /**
-    * The compaction target percentage must be strictly less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateCompactionTargetPercentLessThanTriggerPercent(result: ValidationResult) {
-        if (this.CompactionTargetPercent != null && this.CompactionTriggerPercent != null) {
-            if (this.CompactionTargetPercent >= this.CompactionTriggerPercent) {
-                result.Errors.push(new ValidationErrorInfo(
-                    "CompactionTargetPercent",
-                    "Compaction Target Percent must be less than Compaction Trigger Percent.",
-                    this.CompactionTargetPercent,
-                    ValidationErrorType.Failure
-                ));
-            }
-        }
     }
 
     /**
@@ -44422,9 +44473,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * CompactionTargetPercent: The compaction target percentage must be between 1 and 100 percent.
+    * * CompactionTargetPercent: The compaction target percentage must be a value between 1 and 100 percent.
     * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100.
-    * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than zero.
+    * * ContextWindowMaxTokens: The maximum tokens for the context window must be greater than zero if a value is specified.
     * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
     * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
     * * MaxMessages: This rule ensures that the maximum number of messages, if specified, must be greater than zero.
@@ -44454,7 +44505,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     }
 
     /**
-    * The compaction target percentage must be between 1 and 100 percent.
+    * The compaction target percentage must be a value between 1 and 100 percent.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
@@ -44476,19 +44527,19 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     * @public
     * @method
     */
-    	public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
-    		if (this.CompactionTriggerPercent != null && (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100)) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"CompactionTriggerPercent",
-    				"Compaction trigger percentage must be between 1 and 100.",
-    				this.CompactionTriggerPercent,
-    				ValidationErrorType.Failure
-    			));
-    		}
+    public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
+    	if (this.CompactionTriggerPercent != null && (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CompactionTriggerPercent",
+    			"Compaction trigger percentage must be between 1 and 100.",
+    			this.CompactionTriggerPercent,
+    			ValidationErrorType.Failure
+    		));
     	}
+    }
 
     /**
-    * The maximum tokens for the context window must be a positive number greater than zero.
+    * The maximum tokens for the context window must be greater than zero if a value is specified.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
@@ -44497,7 +44548,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     	if (this.ContextWindowMaxTokens != null && this.ContextWindowMaxTokens <= 0) {
     		result.Errors.push(new ValidationErrorInfo(
     			"ContextWindowMaxTokens",
-    			"The maximum tokens for the context window must be greater than zero.",
+    			"Context Window Max Tokens must be greater than 0.",
     			this.ContextWindowMaxTokens,
     			ValidationErrorType.Failure
     		));
@@ -64777,7 +64828,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: ContentItemID
-    * * Display Name: Content Item ID
+    * * Display Name: Content Item
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
     */
@@ -64803,7 +64854,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: Text
-    * * Display Name: Text
+    * * Display Name: Text Content
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector.
     */
@@ -64848,8 +64899,110 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     }
 
     /**
+    * * Field Name: EmbeddingStatus
+    * * Display Name: Embedding Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processed
+    *   * Processing
+    *   * Skipped
+    * * Description: Embedding lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.
+    */
+    get EmbeddingStatus(): 'Active' | 'Complete' | 'Failed' | 'Pending' | 'Processed' | 'Processing' | 'Skipped' {
+        return this.Get('EmbeddingStatus');
+    }
+    set EmbeddingStatus(value: 'Active' | 'Complete' | 'Failed' | 'Pending' | 'Processed' | 'Processing' | 'Skipped') {
+        this.Set('EmbeddingStatus', value);
+    }
+
+    /**
+    * * Field Name: TaggingStatus
+    * * Display Name: Tagging Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processed
+    *   * Processing
+    *   * Skipped
+    * * Description: Tagging lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.
+    */
+    get TaggingStatus(): 'Active' | 'Complete' | 'Failed' | 'Pending' | 'Processed' | 'Processing' | 'Skipped' {
+        return this.Get('TaggingStatus');
+    }
+    set TaggingStatus(value: 'Active' | 'Complete' | 'Failed' | 'Pending' | 'Processed' | 'Processing' | 'Skipped') {
+        this.Set('TaggingStatus', value);
+    }
+
+    /**
+    * * Field Name: DeleteStatus
+    * * Display Name: Delete Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Deleted
+    *   * Pending
+    * * Description: Deletion lifecycle state of this chunk's vector: NULL when not slated for deletion, Pending when vector removal is queued, or Deleted once the vector has been removed from the vector database.
+    */
+    get DeleteStatus(): 'Deleted' | 'Pending' | null {
+        return this.Get('DeleteStatus');
+    }
+    set DeleteStatus(value: 'Deleted' | 'Pending' | null) {
+        this.Set('DeleteStatus', value);
+    }
+
+    /**
+    * * Field Name: LastEmbeddedAt
+    * * Display Name: Last Embedded At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the last successful embedding of this chunk.
+    */
+    get LastEmbeddedAt(): Date | null {
+        return this.Get('LastEmbeddedAt');
+    }
+    set LastEmbeddedAt(value: Date | null) {
+        this.Set('LastEmbeddedAt', value);
+    }
+
+    /**
+    * * Field Name: LastTaggedAt
+    * * Display Name: Last Tagged At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the last successful tagging of this chunk.
+    */
+    get LastTaggedAt(): Date | null {
+        return this.Get('LastTaggedAt');
+    }
+    set LastTaggedAt(value: Date | null) {
+        this.Set('LastTaggedAt', value);
+    }
+
+    /**
+    * * Field Name: LastDeletedAt
+    * * Display Name: Last Deleted At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the last successful deletion of this chunk's vector from the vector database.
+    */
+    get LastDeletedAt(): Date | null {
+        return this.Get('LastDeletedAt');
+    }
+    set LastDeletedAt(value: Date | null) {
+        this.Set('LastDeletedAt', value);
+    }
+
+    /**
     * * Field Name: ContentItem
-    * * Display Name: Content Item
+    * * Display Name: Content Item Name
     * * SQL Data Type: nvarchar(250)
     */
     get ContentItem(): string | null {
@@ -65393,7 +65546,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: Text
-    * * Display Name: Text
+    * * Display Name: Extracted Text
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The extracted text content from the source document or file.
     */
@@ -65534,6 +65687,32 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     }
 
     /**
+    * * Field Name: ParentID
+    * * Display Name: Parent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: DisplayLink
+    * * Display Name: Display Link
+    * * SQL Data Type: nvarchar(2000)
+    * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.
+    */
+    get DisplayLink(): string | null {
+        return this.Get('DisplayLink');
+    }
+    set DisplayLink(value: string | null) {
+        this.Set('DisplayLink', value);
+    }
+
+    /**
     * * Field Name: ContentSource
     * * Display Name: Content Source Name
     * * SQL Data Type: nvarchar(255)
@@ -65585,6 +65764,24 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     */
     get EmbeddingModel(): string | null {
         return this.Get('EmbeddingModel');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent Name
+    * * SQL Data Type: nvarchar(250)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 

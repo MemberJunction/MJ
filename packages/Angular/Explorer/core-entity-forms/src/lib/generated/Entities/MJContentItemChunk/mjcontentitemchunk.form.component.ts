@@ -18,6 +18,7 @@ export class MJContentItemChunkFormComponent extends BaseFormComponent {
             { sectionKey: 'contentAssociation', sectionName: 'Content Association', isExpanded: true },
             { sectionKey: 'chunkDetails', sectionName: 'Chunk Details', isExpanded: true },
             { sectionKey: 'vectorIntegration', sectionName: 'Vector Integration', isExpanded: true },
+            { sectionKey: 'processingStatus', sectionName: 'Processing Status', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
