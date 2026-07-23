@@ -1,4 +1,4 @@
-import { BaseEntity, BaseEntityResult, EntityDeleteOptions, LogError, RunView } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, EntityDeleteOptions, LogError } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJListDetailEntityExtended, MJListEntityExtended } from '@memberjunction/core-entities';
 
@@ -53,7 +53,10 @@ export class MJListDetailEntityServer extends MJListDetailEntityExtended {
             return null;
         }
         try {
-            const rv = new RunView();
+            // Use the provider bound to THIS entity instance (not the global default) so the lookup
+            // targets the correct server/tenant in multi-provider setups — mirrors the sibling
+            // MJListDetailEntityExtended.Save() and CLAUDE.md's per-provider rule.
+            const rv = this.RunViewProviderToUse;
             const result = await rv.RunView<{ ID: string; UserID: string }>({
                 EntityName: 'MJ: Lists',
                 ExtraFilter: `ID = '${this.ListID}'`,

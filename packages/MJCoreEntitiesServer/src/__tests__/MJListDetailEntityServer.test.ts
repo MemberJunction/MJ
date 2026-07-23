@@ -20,7 +20,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     return { ...actual, RegisterClass: () => (target: unknown) => target };
 });
 
-// Controllable RunView + LogError. RunView's instance method is reassigned per-test.
+// Controllable RunView + LogError. The RunView call is driven through the entity's
+// RunViewProviderToUse (see the mock base below); `runViewMock` is what that provider returns.
 const runViewMock = vi.fn();
 const logErrorMock = vi.fn();
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -28,11 +29,6 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return {
         ...actual,
         LogError: (...args: unknown[]) => logErrorMock(...args),
-        RunView: class {
-            public RunView(...args: unknown[]) {
-                return runViewMock(...args);
-            }
-        },
     };
 });
 
@@ -45,6 +41,10 @@ vi.mock('@memberjunction/core-entities', () => {
     class MockMJListDetailEntityExtended {
         public ListID: string | null = null;
         public ContextCurrentUser: unknown = null;
+        // Entity-bound RunView provider — what the server subclass uses to resolve the parent owner.
+        public get RunViewProviderToUse(): { RunView: (...args: unknown[]) => unknown } {
+            return { RunView: (...args: unknown[]) => runViewMock(...args) };
+        }
         public RegisterResultHistoryEntry(result: unknown): void {
             registerResultMock(result);
         }
