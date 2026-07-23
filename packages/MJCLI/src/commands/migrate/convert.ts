@@ -48,7 +48,7 @@ type ConvertedShape = Pick<MigrationConversionResult, 'status' | 'pgSQL' | 'unha
  *   later bakes would run against a stale schema — halt the batch here.
  */
 export function decideConvertWrite(
-  result: { status: string; unhandled: unknown[]; mode?: string },
+  result: { status: string; unhandled: MigrationConversionResult['unhandled']; mode?: string },
   bakeCodegen: boolean,
 ): { isGap: boolean; writeAsNeedsHand: boolean; haltBake: boolean } {
   const isNoBakeGate = result.mode === 'gap-no-bake';
@@ -339,9 +339,12 @@ export default class MigrateConvert extends Command {
         // a .needs-hand stub carrying the error + record the gap, THEN halt after the loop.
         const msg = err instanceof Error ? err.message : String(err);
         const failName = `${m.OutputFile}.needs-hand`;
-        if (!flags['dry-run']) {
+        const failPath = path.join(outputDir, failName);
+        // Same "never clobber on re-run" guard as the normal write path — a human may have
+        // started hand-authoring the stub from a prior failed run; don't overwrite their work.
+        if (!flags['dry-run'] && !fs.existsSync(failPath)) {
           fs.writeFileSync(
-            path.join(outputDir, failName),
+            failPath,
             `-- CONVERSION FAILED for ${m.SourceFile}\n-- ${msg}\n-- Hand-author the PostgreSQL form, then rename to .pg.sql.\n`,
           );
         }
@@ -372,7 +375,10 @@ export default class MigrateConvert extends Command {
         }
       }
 
-      if (result.status === 'needs-hand-authoring') {
+      // Bucket by the WRITE decision, not the raw status: a bake-mode `gap-no-bake` file can
+      // carry status 'converted' yet is written .needs-hand and halts, so it must be summarized
+      // as a gap, never counted as a clean transpile (issue #3252 — summary honesty).
+      if (decision.writeAsNeedsHand) {
         needsHand.push({ file: m.SourceFile, routines: result.handProcedural });
       } else if (result.status === 'reseed-or-regen-only') {
         regenReseed.push(m.SourceFile);

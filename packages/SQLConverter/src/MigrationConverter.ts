@@ -49,6 +49,12 @@ export interface MJTranspileResult {
   sql: string[];
   /** Per-statement T-SQL the transpiler refused to emit — the gap report. */
   unhandled: UnhandledStatement[];
+  /**
+   * Statements the dialect INTENTIONALLY discarded (batch-control noise, an actionless ALTER,
+   * a swallowed routine `END`, …) — accounted, not vanished (issue #3252 1d). Optional so a test
+   * stub can omit it; when absent it is treated as empty.
+   */
+  dropped?: UnhandledStatement[];
 }
 
 /**
@@ -337,10 +343,13 @@ export async function convertMigration(
 
   const emittedStatements = transpiled.sql.filter((s) => s.trim().length > 0).length;
   const accountingLeak = transpiled.unhandled.some((u) => u.kind === 'ACCOUNTING-LEAK');
-  // The RC1/RC2 signature: substantive T-SQL went in, nothing came out AND nothing was
-  // reported. The dialect's EMPTY-EMISSION guard should make this impossible, so this is a
-  // second net — flag it and surface a gap so the run fails rather than emitting an empty file.
-  const suspiciousEmptyOutput = emittedStatements === 0 && transpiled.unhandled.length === 0;
+  // The RC1/RC2 signature: substantive T-SQL went in, nothing came out, nothing was reported,
+  // AND nothing was intentionally dropped — the content VANISHED. An all-dropped file (e.g. a
+  // lone actionless ALTER PG discards) legitimately emits nothing and must NOT be flagged, so
+  // the guard also requires zero drops. The dialect's EMPTY-EMISSION guard should make a true
+  // vanish impossible; this is the second net that surfaces a gap so the run fails loudly.
+  const suspiciousEmptyOutput =
+    emittedStatements === 0 && transpiled.unhandled.length === 0 && (transpiled.dropped?.length ?? 0) === 0;
 
   const unhandled: UnhandledStatement[] = [...transpiled.unhandled];
   const notes = [...kept.notes];

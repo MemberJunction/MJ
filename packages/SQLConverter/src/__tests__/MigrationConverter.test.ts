@@ -55,6 +55,19 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.reconciliation.emittedStatements).toBe(0);
   });
 
+  it('does NOT flag suspiciousEmptyOutput when the dialect intentionally DROPPED the content', async () => {
+    // An all-dropped file (e.g. kept T-SQL is only an actionless ALTER that PG discards) emits
+    // nothing and reports nothing, but the content did not VANISH — it was accounted as dropped.
+    // The guard must look at `dropped` too, or it false-positives on a legitimate empty output.
+    const allDropped: TSQLToPGTranspiler = {
+      transpile: async () => ({ sql: [], unhandled: [], dropped: [{ kind: 'ALTER-ACTIONLESS', snippet: 'ALTER TABLE x' }] }),
+    };
+    const sql = 'ALTER TABLE [__mj].[Widget] ADD CONSTRAINT CK CHECK (ISJSON([X]) = 1);';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: allDropped });
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
+    expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(false);
+  });
+
   it('reflects a dialect ACCOUNTING-LEAK in reconciliation', async () => {
     const leaky: TSQLToPGTranspiler = {
       transpile: async (t) => ({ sql: [t], unhandled: [{ kind: 'ACCOUNTING-LEAK', snippet: 'parsed=3 but …' }] }),
