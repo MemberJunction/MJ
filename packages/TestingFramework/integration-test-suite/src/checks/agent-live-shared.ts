@@ -1,18 +1,20 @@
 /**
- * agent-live-shared.ts — shared helpers for the LIVE-MODEL, CLIENT-TRANSPORT agent bundles
+ * agent-live-shared.ts — shared helpers for the LIVE-MODEL agent bundles
  * (agent-loop-live, shipped-agents-live, agent-carry-forward).
  *
- * NOT a check bundle — registers nothing; imported by the sibling bundles so the wire-run
- * mechanics, run-id resolution, prompt-message reads, token rollups, and FK-safe purge live
- * once. Mirrors the precedent rig (rigs/agent-memory-tests.ts): agents run over the GraphQL
- * wire (GraphQLAIClient → live MJAPI) and EVERY assertion is on process-level, framework-
- * produced observables (AIAgentRun/Step lineage + Status, AIPromptRun.Messages, token
- * arithmetic) — never the model's prose.
+ * NOT a check bundle — registers nothing; imported by the sibling bundles so the run mechanics,
+ * run-id resolution, prompt-message reads, token rollups, and FK-safe purge live once. EVERY
+ * assertion is on process-level, framework-produced observables (AIAgentRun/Step lineage + Status,
+ * AIPromptRun.Messages, token arithmetic) — never the model's prose.
  *
- * Transport: CLIENT. These helpers construct a GraphQLAIClient from the run-scoped
- * ctx.Provider (a GraphQLDataProvider in the client suite), the doctrine-aligned choice
- * (plans/integration-test-expansion §3.6/Q8). Reads use BypassCache so post-mutation /
- * post-run DB truth is observed (the server wrote the rows via a different provider).
+ * TRANSPORT: SERVER-IN-PROCESS (Q8). Despite the "live" naming, these agents run in-process via
+ * AgentRunner.RunAgent — NOT over the GraphQL wire. The wire RunAIAgent mutation is fire-and-forget
+ * over PubSub the headless integration client cannot consume, and the correlation-heavy checks need
+ * a synchronous run handle (proposal §3.6/Q8; the dedicated wire path is IT63 agent-wire-callback).
+ * Because it runs in-process against the CLI's SQL provider, `makeAIClient` REQUIRES the run's
+ * `ctx.User` — `provider.CurrentUser` is null on a database provider, so a run without an explicit
+ * contextUser dies in BaseEngine.Load (issue #3251). Reads use BypassCache so post-run DB truth is
+ * observed regardless of any cache the run populated.
  */
 import { RunView, CompositeKey } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
@@ -44,10 +46,23 @@ export interface AgentInvoker {
     RunAIAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult>;
 }
 
-/** Build a server-in-process agent invoker bound to the run-scoped provider + its CurrentUser. */
-export function makeAIClient(provider: IMetadataProvider): AgentInvoker {
+/**
+ * Build a server-in-process agent invoker bound to the run-scoped provider + the run's context
+ * user. `user` is REQUIRED (pass `ctx.User`): the agent runs in-process via AgentRunner.RunAgent,
+ * so a null contextUser dies in BaseEngine.Load ("For server-side use of all engine classes...").
+ * `provider.CurrentUser` is only a last-resort fallback — it is null on the CLI's SQL provider, so
+ * relying on it (as the pre-#3251 code did) failed every server-in-process run. If no user can be
+ * resolved at all we throw a harness-attributed error rather than hand a null user to BaseAgent.
+ */
+export function makeAIClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
     return {
         RunAIAgent: (params: ExecuteAgentParams) => {
+            const contextUser = params.contextUser ?? user ?? provider.CurrentUser;
+            if (!contextUser) {
+                throw new Error(
+                    'integration harness: no contextUser available for the server-in-process agent run — ' +
+                    'pass ctx.User to makeAIClient (provider.CurrentUser is null on a database provider). (issue #3251)');
+            }
             // base-agent stamps AIAgentRun.ConversationID from params.data.conversationId
             // (base-agent.ts:7893), while carry-forward reads the top-level params.conversationId
             // (:5714) — so a conversation-linked run must carry it in BOTH places.
@@ -56,7 +71,7 @@ export function makeAIClient(provider: IMetadataProvider): AgentInvoker {
             return new AgentRunner(provider).RunAgent({
                 ...params,
                 data,
-                contextUser: params.contextUser ?? provider.CurrentUser,
+                contextUser,
                 provider,
             });
         },
@@ -79,7 +94,11 @@ export interface WireRunOptions {
     requestedSkillIDs?: string[];
 }
 
-/** Run an agent over the wire; returns the ExecuteAgentResult (never throws — errors become success=false). */
+/**
+ * Run an agent server-in-process (via the makeAIClient invoker) and return the ExecuteAgentResult.
+ * A run error normally becomes `result.success === false`, but the invoker throws if no contextUser
+ * can be resolved (issue #3251) — call sites pass ctx.User, so that path indicates a harness bug.
+ */
 export async function runAgentOverWire(
     client: AgentInvoker,
     agent: MJAIAgentEntityExtended,

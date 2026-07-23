@@ -20,13 +20,26 @@ const TERMINAL = new Set(['Completed', 'Failed', 'Cancelled']);
 /** An agent run "ran without error" if it completed or intentionally suspended (awaiting feedback/paused). */
 const RAN_OK = new Set(['Completed', 'AwaitingFeedback', 'Paused']);
 
+/** Fixed inter-attempt delay (ms) for the bounded poll. */
+const FETCH_POLL_INTERVAL_MS = 500;
+/** Default total poll budget (ms). Overridable per-run via MJ_IT_FETCH_POLL_MS for loaded boxes. */
+const FETCH_POLL_DEFAULT_BUDGET_MS = 12000;
+
+/** Resolve the poll budget from MJ_IT_FETCH_POLL_MS (positive finite ms), else the default. */
+function resolveFetchPollBudgetMs(): number {
+    const raw = Number(process.env.MJ_IT_FETCH_POLL_MS);
+    return Number.isFinite(raw) && raw > 0 ? raw : FETCH_POLL_DEFAULT_BUDGET_MS;
+}
+
 /** Fetches a single row by ID via the real RunView pipeline (BypassCache = true DB state), asserting one match. */
 async function fetchById(entity: string, id: string, user: UserInfo): Promise<Row> {
     // Bounded poll: the rows this verifies (Action Execution Logs, child AI Prompt Runs) are
     // written by the agent loop's FIRE-AND-FORGET save queue, which can land AFTER the run
     // handle returns — especially under the fast server-in-process transport. A single-shot read
-    // raced that write (agent-loop-live AL2). Retry up to ~12s before failing.
-    for (let attempt = 0; attempt < 24; attempt++) {
+    // raced that write (agent-loop-live AL2). Budget is MJ_IT_FETCH_POLL_MS-tunable (default 12s).
+    const budgetMs = resolveFetchPollBudgetMs();
+    const attempts = Math.max(1, Math.round(budgetMs / FETCH_POLL_INTERVAL_MS));
+    for (let attempt = 0; attempt < attempts; attempt++) {
         const result = await new RunView().RunView({ EntityName: entity, ExtraFilter: `ID='${id}'`, ResultType: 'simple', BypassCache: true }, user);
         Assert(result.Success, `RunView('${entity}') failed: ${result.ErrorMessage}`);
         if (result.Results.length === 1) {
@@ -35,9 +48,12 @@ async function fetchById(entity: string, id: string, user: UserInfo): Promise<Ro
         if (result.Results.length > 1) {
             Assert(false, `${entity} ${id}: expected 1 row, got ${result.Results.length}`);
         }
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, FETCH_POLL_INTERVAL_MS));
     }
-    Assert(false, `${entity} ${id} not found after bounded poll (fire-and-forget write never landed)`);
+    // NOT a claim of data loss: on a loaded box (MJAPI + runner + SQL Server co-hosted) the
+    // fire-and-forget write commonly commits just after the window closes (verified in the v5.49.0
+    // build: the rows landed, the poll simply closed first). State the bound and name the knob.
+    Assert(false, `${entity} ${id} not found within ${budgetMs}ms bounded poll — the fire-and-forget write may still be in flight on a loaded box; raise MJ_IT_FETCH_POLL_MS (and consider AGENT_LIVE_SETTLE_MS for the pre-poll settle)`);
     throw new Error('unreachable');
 }
 
