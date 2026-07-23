@@ -55,7 +55,11 @@ A red check is one of three things — classify it, don't reflexively "fix the t
 2. **Environment gap** → stale migration (`codegen-determinism` mismatch), MJAPI down (client-transport bundles error), or un-seeded metadata (`mj sync push` not run). Fix the environment and re-run.
 3. **Check bug / flake** → fix the check, then re-run that single bundle to confirm.
 
-Re-run one bundle with `MJ_INTEGRATION_TEST=1 npx mj test run "IT## - <name>"` before re-running the whole tier.
+Re-run one bundle with `MJ_INTEGRATION_TEST=1 npx mj test run "IT## - <name>"` before re-running the whole tier. Single-bundle runs are equivalent to the in-suite run for every bundle with a declared transport (the driver enforces the declared `transport` against the resolved provider and aborts loudly on a mismatch), so a red single-bundle re-run is genuine signal.
+
+**Transport is server-in-process for the live-agent bundles (Q8), not the wire.** Despite the "live" naming, `agent-loop-live`, `shipped-agents-live`, `agent-carry-forward`, `agent-payload-guards`, and `agent-artifact-tools` run the agent in-process via `AgentRunner.RunAgent` (the headless client can't consume the wire's fire-and-forget PubSub; the dedicated wire path is IT63). These bundles pass `ctx.User` explicitly — `provider.CurrentUser` is null on the CLI's SQL provider, so a missing contextUser dies in `BaseEngine.Load`.
+
+**Distinguish `agent-run-failed:` from `model-noncompliance:`.** The former is an execution failure (the run never landed a run id) — read the run's `ErrorMessage`; the latter is accepted model variance after 3 bounded attempts. Before #3251 the two were conflated (a no-run was retried as non-compliance), which turned a `contextUser` harness defect into phantom model-variance reports during the v5.49.0 build. Post-mortem + mechanism: [`plans/integration-test-expansion/fix-3251-live-agent-contextuser-and-transport-guard.md`](../../../../plans/integration-test-expansion/fix-3251-live-agent-contextuser-and-transport-guard.md).
 
 ## Notes for maintainers
 

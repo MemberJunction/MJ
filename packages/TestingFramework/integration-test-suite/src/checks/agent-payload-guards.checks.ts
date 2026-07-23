@@ -414,8 +414,7 @@ for (const check of PayloadGuardsChecks) {
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-payload-guards', {
     Setup: async (ctx: IntegrationCheckContext) => {
         fixture = { ChildID: '', ScopedChildID: '', CreatedRootRunIds: [] };
-        const client = resolveClient(ctx.Provider);
-        if (!client) { fixture.Skip = 'not client transport (GraphQLDataProvider required for the live wire path)'; return; }
+        const client = resolveClient(ctx.Provider, ctx.User);
         const [parent, child, scoped, selfWrite] = await Promise.all([
             loadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Parent'),
             loadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Child'),
