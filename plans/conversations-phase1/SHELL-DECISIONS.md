@@ -66,7 +66,31 @@ top nav might serve some purpose later — parked, no action now.
 
 ## Parking lot (v2 candidates — one line each, no reopening)
 
-- (empty)
+- Agent-to-agent @-mention injection into a RUNNING agent session as the universal steering
+  primitive (from Buzz study 2026-07-23, see BUZZ-STUDY.md P-1) — agent-framework lane
+  (P1.0.3 concurrency ADR / P2), not shell UX.
+- Agents as first-class workspace MEMBERS w/ presence in rosters (Buzz P-2) — fold into
+  P1.8's Conversation Participants model when it lands.
+- "Who did this, under whose authority" surfaced as a first-class UI answer in run inspector +
+  memory ledger (Buzz P-3) — polish-pass candidate on existing provenance substrate.
+- **Agents discovery surface** (Matt, 2026-07-23, prompted by Buzz's agents page — he likes it):
+  card grid "meet the team" — logo, name, "good for…" tagline, Start-chat via the existing
+  agent-pill pre-address seam; sidebar gains an `Agents` nav item (candidate frame W4).
+  Framing rule if built: discovery/education that COMPLEMENTS Sage-first routing, never a
+  choose-correctly-first burden; Front Door's locked 3 sections untouched. Fully backed by
+  existing data + permission catalog (no §E entry needed). Leans on file: flat grid w/ Sage
+  first · cards = tagline + 2-3 example-prompt chips that prefill the composer · straight to
+  chat, no profile layer. Two-way door — ratify as D-S10 + mockup pass (W4) when picked up.
+- **Agents page, layer 2: catalog/upsell section** (Matt, 2026-07-23): the same landing page
+  doubles as the storefront shelf — a separate, clearly-labeled "Available to add" section
+  showing agents the ORG hasn't licensed (Skip-class commercial/proxy agents), selling via
+  discovery not interruption. Guardrails on file: (1) route interest to the buyer ("ask your
+  administrator" / Learn more; admin sees purchase path) — staff users are not the buyers;
+  (2) NEVER blur license-gated (show, upsell) with permission-gated (stay hidden, fail-closed
+  as today); (3) locked agents live only in their own section — never mixed into the working
+  roster, composer, or sidebar. Backend dependency: registry/MJ Central catalog feed w/
+  entitlement state (unlicensed agents aren't local DB rows) — P1.9 proxy/registry lane.
+  Product/monetization call → Amith agenda.
 
 ## Open items carried from elsewhere (not shell decisions, tracked where they live)
 
