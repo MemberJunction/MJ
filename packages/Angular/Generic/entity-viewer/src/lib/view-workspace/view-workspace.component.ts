@@ -20,6 +20,9 @@ import {
   MJUserViewEntity_ISortStateItem
 } from '@memberjunction/core-entities';
 import { CompositeFilterDescriptor, FilterFieldInfo } from '@memberjunction/ng-filter-builder';
+import { ExportDialogConfig, ExportDialogResult } from '@memberjunction/ng-export-service';
+import { ExportColumn } from '@memberjunction/export-engine';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import {
   RecordSelectedEvent,
@@ -447,6 +450,79 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
   constructor(private cdr: ChangeDetectorRef) {
     super();
+  }
+
+  /** Controls the workspace-level export dialog (the same generic dialog the grid uses). */
+  public showExportDialog: boolean = false;
+  public exportDialogConfig: ExportDialogConfig | null = null;
+
+  /**
+   * Handles the toolbar's Export button (the `<mj-view-selector>` `ExportRequested` output). This is
+   * the always-visible, view-type-agnostic export for the workspace — previously the event wasn't
+   * wired at all, so the button did nothing on every view type. It fetches the FULL result set via the
+   * inner viewer's capped, filter/sort-aware fetch (bounded + warns past the cap), then opens the SAME
+   * generic export dialog the grid uses — with format (Excel/CSV/JSON), sampling, and file-name
+   * options. Because the dialog only needs data + columns (it has no view-type dependency), this works
+   * identically for Grid, Cards, Map and Timeline. Never fails silently — every path notifies.
+   */
+  public async onExportRequested(): Promise<void> {
+    const viewer = this.entityViewerRef;
+    if (!viewer || !this._entity) {
+      console.error('[ViewWorkspace] Export: viewer not ready', { hasViewer: !!viewer, hasEntity: !!this._entity });
+      MJNotificationService.Instance.CreateSimpleNotification('Export is not ready yet — try again in a moment.', 'error', 5000);
+      return;
+    }
+    MJNotificationService.Instance.CreateSimpleNotification('Preparing your export…', 'info', 2000);
+    try {
+      const rows = await viewer.FetchAllRowsForExport();
+      if (!rows || rows.length === 0) {
+        MJNotificationService.Instance.CreateSimpleNotification('Nothing to export — the view returned no records.', 'warning', 5000);
+        return;
+      }
+      this.exportDialogConfig = {
+        data: rows,
+        columns: this.buildExportColumns(),
+        defaultFileName: this.buildExportFileName(),
+        availableFormats: ['excel', 'csv', 'json'],
+        defaultFormat: 'excel',
+        showSamplingOptions: true,
+        defaultSamplingMode: 'all',
+        dialogTitle: `Export ${this._entity.Name}`
+      };
+      this.showExportDialog = true;
+      this.cdr.detectChanges();
+    } catch (e) {
+      MJNotificationService.Instance.CreateSimpleNotification('Error preparing export — see console for details.', 'error', 5000);
+      console.error('[ViewWorkspace] Export error:', e);
+    }
+  }
+
+  /** Closes the workspace export dialog (the dialog performs the export + download itself). */
+  public onExportDialogClosed(_result: ExportDialogResult): void {
+    this.showExportDialog = false;
+    this.exportDialogConfig = null;
+    this.cdr.detectChanges();
+  }
+
+  /** Columns to export — from the active grid state, else the view's columns, else the entity fields. */
+  private buildExportColumns(): ExportColumn[] {
+    if (!this._entity) {
+      return [];
+    }
+    const gridCols = this.currentGridState?.columnSettings;
+    if (gridCols && gridCols.length > 0) {
+      return gridCols
+        .filter(c => c.hidden !== true)
+        .map(c => ({ name: c.Name, displayName: c.DisplayName || c.Name }));
+    }
+    return this._entity.Fields
+      .filter(f => !f.IsVirtual)
+      .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
+  }
+
+  private buildExportFileName(): string {
+    const viewName = this.currentViewEntity?.Name || 'Data';
+    return `${this._entity!.Name}_${viewName}_${new Date().toISOString().split('T')[0]}`;
   }
 
   // ========================================

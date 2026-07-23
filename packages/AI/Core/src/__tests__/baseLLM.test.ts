@@ -237,6 +237,73 @@ describe('BaseLLM', () => {
         });
     });
 
+    describe('Streaming thinking-tag boundary handling (bug A5)', () => {
+        // Helper: feed a sequence of chunks through processStreamChunkWithThinking and
+        // return the concatenated user-visible emission + the captured thinking.
+        function stream(instance: TestLLM, chunks: string[]): { emitted: string; thinking: string } {
+            const obj = instance as unknown as Record<string, (arg?: unknown) => unknown>;
+            obj['initializeThinkingStreamState']();
+            let emitted = '';
+            for (const c of chunks) {
+                emitted += obj['processStreamChunkWithThinking'](c) as string;
+            }
+            // Mirror the orchestrator's end-of-stream flush: any content held back waiting for more
+            // chunks (a trailing partial-tag fragment that turned out to be real content) is emitted.
+            emitted += obj['flushThinkingStreamRemainder']() as string;
+            const state = (instance as unknown as { thinkingStreamState: { accumulatedThinking: string } }).thinkingStreamState;
+            return { emitted, thinking: state.accumulatedThinking };
+        }
+
+        it('does not leak a partial open tag split across chunk boundaries', () => {
+            // "<think>" arrives split as "Hello <thi" | "nk>reasoning</think> World"
+            const { emitted, thinking } = stream(llm, ['Hello <thi', 'nk>reasoning</think> World']);
+            expect(emitted).not.toContain('<thi');
+            expect(emitted).not.toContain('<think');
+            expect(emitted).toBe('Hello  World');
+            expect(thinking).toBe('reasoning');
+        });
+
+        it('does not leak a partial close tag split across chunk boundaries', () => {
+            // "</think>" arrives split as "...text</thi" | "nk>answer"
+            const { emitted, thinking } = stream(llm, ['<think>reasoning</thi', 'nk>answer']);
+            expect(emitted).toBe('answer');
+            expect(thinking).toBe('reasoning');
+        });
+
+        it('emits normal content that merely contains a lone "<" without holding it forever', () => {
+            const { emitted } = stream(llm, ['a < b and c ', '> d']);
+            expect(emitted).toBe('a < b and c > d');
+        });
+
+        it('passes through content unchanged when there is no thinking block', () => {
+            const { emitted, thinking } = stream(llm, ['plain ', 'streamed ', 'text']);
+            expect(emitted).toBe('plain streamed text');
+            expect(thinking).toBe('');
+        });
+
+        it('flushes a trailing partial open-tag fragment as real content at end of stream (bug A5 tail)', () => {
+            // The stream ENDS on "answer <". Mid-stream the "<" is held back (it could begin "<think>"),
+            // but with no further chunk it is real content and must be emitted — not silently dropped.
+            const { emitted, thinking } = stream(llm, ['answer <']);
+            expect(emitted).toBe('answer <');
+            expect(thinking).toBe('');
+        });
+
+        it('flushes a longer trailing tag-prefix fragment split across chunks at end of stream', () => {
+            // "<thi" spans the chunk boundary and never completes into "<think>" — it is the real tail.
+            const { emitted } = stream(llm, ['done ', '<thi']);
+            expect(emitted).toBe('done <thi');
+        });
+
+        it('does not surface an unterminated thinking block as visible content', () => {
+            // An open "<think>" with no closing tag before the stream ends: the buffered text is
+            // reasoning, so it stays as thinking and is NOT flushed to the user-visible output.
+            const { emitted, thinking } = stream(llm, ['<think>still thinking']);
+            expect(emitted).toBe('');
+            expect(thinking).toBe('still thinking');
+        });
+    });
+
     describe('Streaming state reset (memory-leak fix R2-C5)', () => {
         // Subclass that tracks resetStreamingState calls + accumulates buffer
         // so we can assert the base orchestrator resets it on success AND error.
