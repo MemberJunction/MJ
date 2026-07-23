@@ -100,3 +100,28 @@ export interface IMJChatMessageRendererComponent {
     /** The conversation detail row to render. */
     Message: import('@memberjunction/core-entities').MJConversationDetailEntity | null;
 }
+
+/**
+ * Template context for the `rail` slot — a right-side companion surface
+ * rendered as the last child of the chat content area (a sibling of the
+ * message pane and the artifact pane).
+ *
+ * Unlike the other slots, `rail` has NO default component: when no consumer
+ * projects an `mjChatSlot="rail"` template, nothing renders and the chat-area
+ * lays out exactly as it did before the slot existed. Hosts own the rail's
+ * entire appearance and behavior (when it slides in/out, what it shows);
+ * the chat-area only supplies placement and this context.
+ *
+ * Deliberately minimal for now — the composed-shell work (slice S6) extends
+ * it as the Companion Rail design requires; keep additions additive.
+ */
+export interface IMJChatRailSlotContext {
+    /** The active conversation (also supplied as `$implicit`). */
+    Conversation: import('@memberjunction/core-entities').MJConversationEntity | null;
+    /**
+     * True while the artifact viewer pane is open (the "studio" state) —
+     * lets a rail render compactly, overlay, or defer when the artifact
+     * pane owns the right side of the layout.
+     */
+    IsArtifactOpen: boolean;
+}

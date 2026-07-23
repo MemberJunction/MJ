@@ -38,7 +38,9 @@ import type {
     IMJChatMessageExtraComponent,
     IMJChatDemonstrationSurfaceComponent,
     IMJChatMessageRendererComponent,
+    IMJChatRailSlotContext,
 } from '../lib/components/slots/slot-interfaces';
+import { ChatSlotDirective, type MJChatSlotName } from '../lib/directives/chat-slot.directive';
 
 describe('Slot default components — exports + interface conformance', () => {
     it('MJChatEmptyStateDefaultComponent is exported as a class', () => {
@@ -97,5 +99,49 @@ describe('Slot default components — exports + interface conformance', () => {
             : never;
         const _interfaceCheck: _Check = true;
         expect(_interfaceCheck).toBe(true);
+    });
+});
+
+describe('rail slot — name registration + context contract (S0, composed shell)', () => {
+    it("'rail' is a valid MJChatSlotName and the directive accepts it", () => {
+        // Type-level: the union must include 'rail'.
+        const name: MJChatSlotName = 'rail';
+        expect(name).toBe('rail');
+
+        // Runtime: the directive stores it like any other slot name.
+        const fakeTemplate = {} as ConstructorParameters<typeof ChatSlotDirective>[0];
+        const directive = new ChatSlotDirective(fakeTemplate);
+        directive.SlotName = 'rail';
+        expect(directive.SlotName).toBe('rail');
+        expect(directive.Template).toBe(fakeTemplate);
+    });
+
+    it('IMJChatRailSlotContext contract holds (Conversation + IsArtifactOpen)', () => {
+        // Mirrors exactly what conversation-chat-area.component.html supplies
+        // to the outlet. If the template's context and this interface drift,
+        // fix one or the other — consumers type their let-bindings against it.
+        const context: IMJChatRailSlotContext = {
+            Conversation: null,
+            IsArtifactOpen: false,
+        };
+        expect(context.IsArtifactOpen).toBe(false);
+        expect(context.Conversation).toBeNull();
+    });
+
+    it('rail deliberately has NO default slot component', () => {
+        // Design contract (SLICE-S0): with no consumer projection the chat-area
+        // renders nothing for this slot — existing consumers are unaffected.
+        // This test documents the absence; if a default is ever added, that is
+        // a conscious contract change and this expectation should be updated
+        // alongside the slot-interfaces JSDoc.
+        const slotDefaultModules = [
+            'mj-chat-empty-state-default.component',
+            'mj-chat-agent-presence-default.component',
+            'mj-chat-header-default.component',
+            'mj-chat-message-extra-default.component',
+            'mj-chat-demonstration-surface-default.component',
+            'mj-chat-message-bubble-default.component',
+        ];
+        expect(slotDefaultModules).not.toContain('mj-chat-rail-default.component');
     });
 });

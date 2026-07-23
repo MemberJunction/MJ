@@ -33,7 +33,8 @@ export type MJChatSlotName =
     | 'header'
     | 'messageExtra'
     | 'demonstrationSurface'
-    | 'messageRenderer';
+    | 'messageRenderer'
+    | 'rail';
 
 /**
  * Marks an `<ng-template>` as a slot fill for the chat-area.

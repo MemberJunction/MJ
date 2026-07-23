@@ -398,6 +398,19 @@
       </div>
     }
 
+    <!-- rail slot — right-side companion surface (Companion Rail seam).
+         Renders ONLY when a consumer projects an mjChatSlot="rail" template;
+         there is no default component, so with no projection this block is
+         inert and every pre-slot consumer lays out byte-for-byte as before.
+         Context contract: IMJChatRailSlotContext (slot-interfaces). -->
+    @if (slotTemplate('rail'); as railTemplate) {
+      <ng-container *ngTemplateOutlet="railTemplate; context: {
+        $implicit: conversation,
+        Conversation: conversation,
+        IsArtifactOpen: showArtifactPanel && !!selectedArtifactId
+      }"></ng-container>
+    }
+
     <!-- Artifact Share Modal -->
     <mj-artifact-share-modal
       [isOpen]="isArtifactShareModalOpen"
