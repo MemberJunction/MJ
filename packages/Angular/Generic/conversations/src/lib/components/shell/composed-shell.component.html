@@ -1,0 +1,133 @@
+<div class="shell-frame">
+  <mj-shell-sidebar
+    [Provider]="Provider"
+    [EnvironmentId]="environmentId"
+    [ActiveView]="CurrentView"
+    [ActiveConversationId]="SelectedConversationId"
+    [ShowProjects]="ShowProjects"
+    [Density]="Density"
+    (ViewSelected)="OnViewSelected($event)"
+    (ConversationSelected)="OnConversationSelected($event)"
+    (NewConversationClicked)="OnNewConversation()"
+    (SettingsClicked)="OnSettingsToggled()"
+    (CreateProjectClicked)="OnViewSelected('projects')">
+  </mj-shell-sidebar>
+
+  <main class="shell-main">
+    @if (CurrentView === 'chat') {
+      <mj-conversation-chat-area
+        [environmentId]="environmentId"
+        [currentUser]="currentUser"
+        [conversationId]="SelectedConversationId"
+        [conversation]="SelectedConversation"
+        [isNewConversation]="IsNewConversation"
+        (conversationCreated)="OnConversationCreated($event)">
+      </mj-conversation-chat-area>
+    } @else if (ActivePlaceholder; as ph) {
+      <!-- Honest interim panes — content arrives with the named slice. -->
+      <div class="shell-placeholder">
+        <i class="fa-solid" [ngClass]="ph.Icon"></i>
+        <h2>{{ ph.Title }}</h2>
+        <p>{{ ph.Detail }}</p>
+      </div>
+    }
+  </main>
+
+  <!-- Settings slide-in (D-S8) — chrome from the shared mj-slide-panel; content
+       inlined here so the frame's state binds directly (the former
+       mj-shell-settings-panel wrapper was a pure pass-through, dissolved in
+       S1 review). Panel stays OPEN on toggle flips (mockup correction #7). -->
+  @if (SettingsOpen) {
+    <mj-slide-panel
+      Title="Settings"
+      [Visible]="SettingsOpen"
+      [Resizable]="false"
+      [WidthPx]="360"
+      [MinWidthPx]="360"
+      (Closed)="SettingsOpen = false">
+      <div class="set-body">
+        <p class="set-sub">Applies to you, across this workspace.</p>
+
+        <div class="set-lbl">Sidebar</div>
+        <div class="set-group">
+          <div class="set-row">
+            <span class="t">
+              <span class="n">Show Projects</span>
+              <span class="d">Group related chats, memory, and deliverables into projects</span>
+            </span>
+            <button
+              type="button"
+              class="tgl"
+              [class.on]="ShowProjects"
+              role="switch"
+              [attr.aria-checked]="ShowProjects"
+              (click)="OnShowProjectsChanged(!ShowProjects)"></button>
+          </div>
+          <div class="set-row">
+            <span class="t">
+              <span class="n">Sidebar density</span>
+              <span class="d">Row spacing</span>
+            </span>
+            <select
+              class="f-select"
+              [value]="Density === 'compact' ? 'Compact' : 'Comfortable'"
+              (change)="OnDensitySelected($any($event.target).value)">
+              <option>Comfortable</option>
+              <option>Compact</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="set-lbl">Preferences</div>
+        <div class="set-group">
+          <div class="set-row">
+            <span class="t">
+              <span class="n">Default agent</span>
+              <span class="d">New conversations start here — the per-conversation choice still wins</span>
+            </span>
+            <span class="ro-value">{{ DefaultAgentName || '—' }}</span>
+          </div>
+          <div class="set-row">
+            <span class="t">
+              <span class="n">Notifications</span>
+              <span class="d">In-app + email when a run needs you</span>
+            </span>
+          </div>
+          <div class="set-row">
+            <span class="t">
+              <span class="n">Appearance</span>
+              <span class="d">Light and dark are both first-class</span>
+            </span>
+            <select
+              class="f-select"
+              [value]="Appearance === 'light' ? 'Light' : Appearance === 'dark' ? 'Dark' : 'System'"
+              (change)="OnAppearanceSelected($any($event.target).value)">
+              <option>System</option>
+              <option>Light</option>
+              <option>Dark</option>
+            </select>
+          </div>
+          <div class="set-row">
+            <span class="t">
+              <span class="n">Refresh agent cache</span>
+              <span class="d">Re-sync available agents and skills from the server</span>
+            </span>
+            <button
+              type="button"
+              class="refresh-btn"
+              [disabled]="RefreshState === 'refreshing'"
+              (click)="OnRefreshAgentCache()">
+              @switch (RefreshState) {
+                @case ('refreshing') { <i class="fa-solid fa-rotate fa-spin"></i> Refreshing }
+                @case ('done') { <i class="fa-solid fa-check"></i> Refreshed }
+                @default { Refresh }
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    </mj-slide-panel>
+  }
+
+  <mj-toast></mj-toast>
+</div>

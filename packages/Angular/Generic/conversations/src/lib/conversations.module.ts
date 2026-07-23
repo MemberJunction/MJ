@@ -5,7 +5,7 @@ import { RouterModule } from '@angular/router';
 import { OverlayModule } from '@angular/cdk/overlay';
 
 // MJ UI Components
-import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -77,6 +77,10 @@ import { GlobalTasksPanelComponent } from './components/global-tasks/global-task
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
 import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
 import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.component';
+// Composed shell (SLICE-S1) — frame is module-declared (mounts chat-area/toast +
+// the shared mj-slide-panel for Settings); sidebar is a standalone leaf component.
+import { ComposedShellComponent } from './components/shell/composed-shell.component';
+import { ShellSidebarComponent } from './components/shell/shell-sidebar.component';
 import { RealtimeAgentPickerComponent } from './components/realtime/realtime-agent-picker.component';
 import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
 import { RealtimeWhiteboardHostComponent } from '@memberjunction/ng-whiteboard';
@@ -167,7 +171,8 @@ const COMPONENTS = [
   GlobalTasksPanelComponent,
   ImageViewerComponent,
   PinnedMessagesPanelComponent,
-  ChatAgentsOverlayComponent
+  ChatAgentsOverlayComponent,
+  ComposedShellComponent
 ];
 
 @NgModule({
@@ -218,7 +223,10 @@ const COMPONENTS = [
     RealtimeWhiteboardHostComponent,
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
-    RealtimeEvidencePlaybackComponent
+    RealtimeEvidencePlaybackComponent,
+    // Composed shell (SLICE-S1) — standalone pieces used by the frame's template
+    ShellSidebarComponent,
+    MjSlidePanelComponent
   ],
   exports: [
     ...COMPONENTS,
@@ -242,7 +250,9 @@ const COMPONENTS = [
     RealtimeWhiteboardHostComponent,
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
-    RealtimeEvidencePlaybackComponent
+    RealtimeEvidencePlaybackComponent,
+    // Composed shell (SLICE-S1)
+    ShellSidebarComponent
   ]
 })
 export class ConversationsModule { }

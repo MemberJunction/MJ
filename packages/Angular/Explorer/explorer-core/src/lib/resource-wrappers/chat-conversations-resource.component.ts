@@ -27,6 +27,16 @@ import { Subject, takeUntil } from 'rxjs';
   selector: 'mj-chat-conversations-resource',
   template: `
     @if (isReady) {
+      <!-- SLICE-S1 dev mount (TEMPORARY, removed at cutover S8): append ?shell=v2
+           to the Conversations URL to review the composed shell against real data.
+           Unreachable otherwise — the default path below is byte-for-byte unchanged. -->
+      @if (useShellV2 && currentUser) {
+        <mj-composed-shell
+          [environmentId]="environmentId"
+          [currentUser]="currentUser"
+          [initialConversationId]="selectedConversationId">
+        </mj-composed-shell>
+      } @else {
       <div class="chat-conversations-container">
         <!-- Mobile backdrop: tap to close the slide-over sidebar -->
         @if (isMobileView && !isSidebarCollapsed && isSidebarSettingsLoaded) {
@@ -102,6 +112,7 @@ import { Subject, takeUntil } from 'rxjs';
           }
         </div>
       </div>
+      }
     } @else {
       <div class="initializing-container">
         <mj-loading text="Initializing..." size="large"></mj-loading>
@@ -267,6 +278,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // Ready flag - blocks child rendering until AIEngine is initialized
   public isReady: boolean = false;
+  /** SLICE-S1 dev gate (temporary, removed at cutover S8): ?shell=v2 mounts the composed shell. */
+  public useShellV2: boolean = false;
 
   // LOCAL SELECTION STATE - each wrapper instance manages its own selection
   public selectedConversationId: string | null = null;
@@ -520,6 +533,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Check queryParams first (shell populates these from the URL for deep-linking)
     const qp = config['queryParams'] as Record<string, string> | undefined;
+
+    // SLICE-S1 dev gate (temporary, removed at cutover S8): ?shell=v2 swaps in
+    // the composed shell for in-app review. One-way per tab load by design.
+    if (qp?.['shell'] === 'v2' || config['shell'] === 'v2') {
+      this.useShellV2 = true;
+    }
     this.applyAgentParam(qp?.['agent'], qp?.['agentReq']);
     const conversationId = qp?.['conversationId'] || (config.conversationId as string);
     const artifactId = qp?.['artifactId'] || (config.artifactId as string);
@@ -575,6 +594,13 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * was already open instead of the pinned one.
    */
   protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    // SLICE-S1 dev gate (temporary, removed at cutover S8): honor ?shell=v2 on
+    // cached-tab reattach / back-forward too, per the query-param round-trip rule.
+    const wantShellV2 = params['shell'] === 'v2';
+    if (wantShellV2 !== this.useShellV2) {
+      this.useShellV2 = wantShellV2;
+      this.cdr.detectChanges();
+    }
     this.applyAgentParam(params['agent'], params['agentReq']);
     const realtimeSessionId = params['realtimeSessionId'] || null;
     if (realtimeSessionId) {

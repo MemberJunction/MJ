@@ -1,0 +1,211 @@
+/* mj-shell-sidebar — visual spec ported from the accepted functional mockup
+   (template.html .side/.side-nav-it/.s-row2/.pdot/.udot/.s-lbl/.side-teach/
+   .side-foot), all --mj-* semantic tokens. */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  width: 268px;
+  flex: none;
+  min-height: 0;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  border-right: 1px solid var(--mj-border-default);
+}
+
+.shell-side {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 10px 10px 0;
+}
+
+.side-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 2px 10px;
+}
+
+/* Layout-only: the New-conversation mjButton fills the sidebar width.
+   (Chrome comes from the directive — never override .mj-btn here.) */
+.side-top > button {
+  width: 100%;
+}
+
+.side-filter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 7px;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-muted);
+}
+.side-filter i {
+  font-size: 10px;
+}
+.side-filter input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--mj-text-primary);
+}
+
+.side-nav-it {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+.side-nav-it i {
+  width: 16px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--mj-text-muted);
+}
+.side-nav-it:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.side-nav-it.on {
+  background: var(--mj-bg-surface-active);
+  color: var(--mj-text-primary);
+  font-weight: 600;
+}
+.side-nav-it.on i {
+  color: var(--mj-brand-primary);
+}
+
+.side-teach {
+  margin: -2px 4px 6px 35px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--mj-text-muted);
+}
+.side-teach span {
+  color: var(--mj-text-link);
+  cursor: pointer;
+}
+.side-teach span:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.side-tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+.s-lbl {
+  padding: 12px 4px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+}
+
+.s-row2 {
+  display: block;
+  padding: 5px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.s-row2:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.s-row2.on {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+.s-row2 .tt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  white-space: nowrap;
+}
+.s-row2 .tt .t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.s-row2:hover .tt,
+.s-row2.on .tt {
+  color: var(--mj-text-primary);
+}
+.density-compact .s-row2 {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.pdot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.pdot.hollow {
+  background: transparent;
+  border: 1.5px solid var(--mj-border-strong);
+}
+
+/* Quiet activity dot — a dot, never a count (ratified position 9). */
+.udot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mj-brand-primary);
+  display: inline-block;
+  margin-left: 6px;
+}
+
+.s-empty {
+  padding: 8px 12px 4px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--mj-text-muted);
+}
+
+.side-foot {
+  border-top: 1px solid var(--mj-border-default);
+  margin: 0 -10px;
+  padding: 11px 18px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  /* Tinted strip so the footer reads as its own zone, not more sidebar. */
+  background: var(--mj-bg-surface-card);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+}
+.side-foot i {
+  color: var(--mj-text-muted);
+}
+.side-foot:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+.side-foot:hover i {
+  color: var(--mj-brand-primary);
+}

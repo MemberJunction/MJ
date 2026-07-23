@@ -1,0 +1,179 @@
+/* mj-composed-shell — the frame grid. Tokens only. */
+
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.shell-frame {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: var(--mj-bg-page);
+  position: relative;
+}
+
+.shell-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Page-tinted, per the mockup: the sidebar sits on surface, the main area on
+     page, and content (chat column, cards) paints its own surfaces on top —
+     that tint difference is what separates the two regions, not just the border. */
+  background: var(--mj-bg-page);
+}
+
+.shell-main > mj-conversation-chat-area {
+  flex: 1;
+  min-height: 0;
+}
+
+.shell-placeholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 40px;
+  color: var(--mj-text-muted);
+}
+.shell-placeholder i {
+  font-size: 26px;
+  color: var(--mj-text-disabled);
+}
+.shell-placeholder h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--mj-text-secondary);
+}
+.shell-placeholder p {
+  margin: 0;
+  max-width: 420px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.set-body {
+  padding: 4px 18px 24px;
+}
+
+.set-sub {
+  font-size: 12px;
+  color: var(--mj-text-muted);
+  margin: 2px 0 0;
+}
+
+.set-lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+  margin: 20px 2px 6px;
+}
+
+.set-group {
+  border: 1px solid var(--mj-border-default);
+  border-radius: 12px;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+.set-row:last-child {
+  border-bottom: 0;
+}
+.set-row .t {
+  flex: 1;
+  min-width: 0;
+}
+.set-row .t .n {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+.set-row .t .d {
+  display: block;
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  margin-top: 1px;
+}
+
+.ro-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+}
+
+.tgl {
+  border: 0;
+  padding: 0;
+  font: inherit;
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--mj-border-strong);
+  position: relative;
+  cursor: pointer;
+  flex: none;
+  transition: background 0.15s;
+}
+.tgl::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--mj-bg-surface);
+  transition: left 0.15s;
+}
+.tgl.on {
+  background: var(--mj-brand-primary);
+}
+.tgl.on::after {
+  left: 15px;
+}
+
+.f-select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 7px;
+  padding: 4px 8px;
+}
+
+.refresh-btn {
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.refresh-btn:hover:not(:disabled) {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.refresh-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+/* (settings content styles above were folded in from the dissolved mj-shell-settings-panel) */

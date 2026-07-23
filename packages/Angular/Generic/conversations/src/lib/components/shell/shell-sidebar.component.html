@@ -1,0 +1,89 @@
+<aside class="shell-side" [class.density-compact]="Density === 'compact'">
+  <div class="side-top">
+    <button mjButton variant="primary" size="sm" (click)="NewConversationClicked.emit()">
+      <i class="fa-solid fa-plus"></i> New conversation
+    </button>
+    <label class="side-filter">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input
+        type="text"
+        placeholder="Filter conversations..."
+        [(ngModel)]="FilterText"
+        (ngModelChange)="OnFilterChanged()" />
+    </label>
+  </div>
+
+  <nav class="side-nav" aria-label="Workspace">
+    @for (item of NavItems; track item.View) {
+      @if (NavVisible(item)) {
+        <div
+          class="side-nav-it"
+          [class.on]="ActiveView === item.View"
+          role="button"
+          tabindex="0"
+          (click)="ViewSelected.emit(item.View)"
+          (keydown.enter)="ViewSelected.emit(item.View)">
+          <i class="fa-solid" [ngClass]="item.Icon"></i>{{ item.Label }}
+        </div>
+        @if (item.View === 'projects' && ShowTeachingLine) {
+          <!-- F0 teaching line (D-S7): Projects' entire pre-use footprint. -->
+          <div class="side-teach">
+            Group related chats, memory, and deliverables ·
+            <span role="button" tabindex="0" (click)="CreateProjectClicked.emit()">Create your first project</span>
+          </div>
+        }
+      }
+    }
+  </nav>
+
+  <div class="side-tree">
+    @if (PinnedConversations.length) {
+      <div class="s-lbl">Pinned</div>
+      @for (c of PinnedConversations; track c.ID) {
+        <ng-container *ngTemplateOutlet="row; context: { $implicit: c }"></ng-container>
+      }
+    }
+    @if (RecentConversations.length) {
+      <div class="s-lbl">Recents</div>
+      @for (c of RecentConversations; track c.ID) {
+        <ng-container *ngTemplateOutlet="row; context: { $implicit: c }"></ng-container>
+      }
+    }
+    @if (FilterText.trim() && !PinnedConversations.length && !RecentConversations.length) {
+      <div class="s-empty">Nothing matches "{{ FilterText.trim() }}".</div>
+    }
+  </div>
+
+  <div
+    class="side-foot"
+    role="button"
+    tabindex="0"
+    (click)="SettingsClicked.emit()"
+    (keydown.enter)="SettingsClicked.emit()">
+    <i class="fa-solid fa-gear"></i> Settings
+  </div>
+</aside>
+
+<ng-template #row let-c>
+  <div
+    class="s-row2"
+    [class.on]="ActiveConversationId === c.ID"
+    role="button"
+    tabindex="0"
+    (click)="OnRowClicked(c)"
+    (keydown.enter)="OnRowClicked(c)">
+    <span class="tt">
+      @if (ShowProjects) {
+        @if (ProjectColor(c); as color) {
+          <span class="pdot" [style.background]="color" [title]="ProjectName(c)"></span>
+        } @else {
+          <span class="pdot hollow" title="Ungrouped"></span>
+        }
+      }
+      <span class="t">{{ c.Name || 'Untitled conversation' }}</span>
+      @if (HasActivity(c)) {
+        <span class="udot" title="New activity"></span>
+      }
+    </span>
+  </div>
+</ng-template>

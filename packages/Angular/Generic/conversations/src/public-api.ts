@@ -87,6 +87,12 @@ export * from './lib/components/global-tasks/global-tasks-panel.component';
 export * from './lib/components/attachment/image-viewer.component';
 export * from './lib/components/overlay/chat-overlay.component';
 
+// Composed shell (SLICE-S1+)
+export * from './lib/components/shell/shell-types';
+export * from './lib/components/shell/composed-shell.component';
+export * from './lib/components/shell/shell-sidebar.component';
+export * from './lib/utils/shell-preferences';
+
 // Components declared AND exported by ConversationsModule but previously missing
 // from public-api. They are used in the templates of exported components (e.g.
 // mj-conversation-chat-area), so a consumer app compiling in Angular's
