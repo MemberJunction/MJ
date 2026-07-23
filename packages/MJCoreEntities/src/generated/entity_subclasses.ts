@@ -12013,7 +12013,7 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.`),
     Text: z.string().describe(`
         * * Field Name: Text
-        * * Display Name: Text Content
+        * * Display Name: Chunk Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector.`),
     VectorRecordID: z.string().nullable().describe(`
@@ -12021,16 +12021,6 @@ export const MJContentItemChunkSchema = z.object({
         * * Display Name: Vector Record ID
         * * SQL Data Type: nvarchar(100)
         * * Description: The identifier of this chunk's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the chunk's embedding under. Provides traceability from the chunk back to its stored vector.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
     EmbeddingStatus: z.union([z.literal('Active'), z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processed'), z.literal('Processing'), z.literal('Skipped')]).describe(`
         * * Field Name: EmbeddingStatus
         * * Display Name: Embedding Status
@@ -12085,6 +12075,16 @@ export const MJContentItemChunkSchema = z.object({
         * * Display Name: Last Deleted At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp of the last successful deletion of this chunk's vector from the vector database.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
         * * Display Name: Content Item Name
@@ -12372,7 +12372,7 @@ export const MJContentItemSchema = z.object({
         * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent Content
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)`),
     DisplayLink: z.string().nullable().describe(`
@@ -44004,53 +44004,36 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agent Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * CompactionTargetPercent: The compaction target percentage must be a valid percentage value between 1 and 100 inclusive.
-    * * ContextWindowMaxTokens: The maximum tokens allowed in the context window must be a positive number greater than zero, if it is specified.
+    * * Table-Level: The compaction target percentage must be strictly less than the compaction trigger percentage to ensure logical consistency in compaction settings.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateCompactionTargetPercentRange(result);
-        this.ValidateContextWindowMaxTokensGreaterThanZero(result);
+        this.ValidateCompactionTargetPercentLessThanTriggerPercent(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * The compaction target percentage must be a valid percentage value between 1 and 100 inclusive.
+    * The compaction target percentage must be strictly less than the compaction trigger percentage to ensure logical consistency in compaction settings.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateCompactionTargetPercentRange(result: ValidationResult) {
-        if (this.CompactionTargetPercent != null && (this.CompactionTargetPercent < 1 || this.CompactionTargetPercent > 100)) {
-            result.Errors.push(new ValidationErrorInfo(
-                "CompactionTargetPercent",
-                "Compaction target percent must be between 1 and 100.",
-                this.CompactionTargetPercent,
-                ValidationErrorType.Failure
-            ));
+    public ValidateCompactionTargetPercentLessThanTriggerPercent(result: ValidationResult) {
+        if (this.CompactionTargetPercent != null && this.CompactionTriggerPercent != null) {
+            if (this.CompactionTargetPercent >= this.CompactionTriggerPercent) {
+                result.Errors.push(new ValidationErrorInfo(
+                    "CompactionTargetPercent",
+                    "The compaction target percentage must be less than the compaction trigger percentage.",
+                    this.CompactionTargetPercent,
+                    ValidationErrorType.Failure
+                ));
+            }
         }
-    }
-
-    /**
-    * The maximum tokens allowed in the context window must be a positive number greater than zero, if it is specified.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateContextWindowMaxTokensGreaterThanZero(result: ValidationResult) {
-    	if (this.ContextWindowMaxTokens != null && this.ContextWindowMaxTokens <= 0) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"ContextWindowMaxTokens",
-    			"The Context Window Max Tokens must be greater than 0.",
-    			this.ContextWindowMaxTokens,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**
@@ -44474,8 +44457,8 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     /**
     * Validate() method override for MJ: AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CompactionTargetPercent: The compaction target percentage must be a value between 1 and 100 percent.
-    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100.
-    * * ContextWindowMaxTokens: The maximum tokens for the context window must be greater than zero if a value is specified.
+    * * CompactionTriggerPercent: Compaction trigger percentage must be a value between 1 and 100.
+    * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than zero.
     * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
     * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
     * * MaxMessages: This rule ensures that the maximum number of messages, if specified, must be greater than zero.
@@ -44522,7 +44505,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     }
 
     /**
-    * The compaction trigger percentage must be a value between 1 and 100.
+    * Compaction trigger percentage must be a value between 1 and 100.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
@@ -44539,7 +44522,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     }
 
     /**
-    * The maximum tokens for the context window must be greater than zero if a value is specified.
+    * The maximum tokens for the context window must be a positive number greater than zero.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
@@ -44548,7 +44531,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     	if (this.ContextWindowMaxTokens != null && this.ContextWindowMaxTokens <= 0) {
     		result.Errors.push(new ValidationErrorInfo(
     			"ContextWindowMaxTokens",
-    			"Context Window Max Tokens must be greater than 0.",
+    			"Context Window Max Tokens must be a positive number greater than zero.",
     			this.ContextWindowMaxTokens,
     			ValidationErrorType.Failure
     		));
@@ -64854,7 +64837,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: Text
-    * * Display Name: Text Content
+    * * Display Name: Chunk Text
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector.
     */
@@ -64876,26 +64859,6 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     }
     set VectorRecordID(value: string | null) {
         this.Set('VectorRecordID', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
     }
 
     /**
@@ -64998,6 +64961,26 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     }
     set LastDeletedAt(value: Date | null) {
         this.Set('LastDeletedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 
     /**
@@ -65688,7 +65671,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent Content
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
     */

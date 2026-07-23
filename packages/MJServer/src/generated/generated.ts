@@ -34101,12 +34101,6 @@ export class MJContentItemChunk_ {
     @MaxLength(100)
     VectorRecordID?: string;
         
-    @Field() 
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    _mj__UpdatedAt: Date;
-        
     @Field({description: `Embedding lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.`}) 
     @MaxLength(20)
     EmbeddingStatus: string;
@@ -34127,6 +34121,12 @@ export class MJContentItemChunk_ {
         
     @Field({nullable: true, description: `Timestamp of the last successful deletion of this chunk's vector from the vector database.`}) 
     LastDeletedAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
         
     @Field({nullable: true}) 
     @MaxLength(250)
@@ -34857,14 +34857,14 @@ export class MJContentItem_ {
     @Field(() => [MJContentItemDuplicate_])
     MJContentItemDuplicates_ContentItemBIDArray: MJContentItemDuplicate_[]; // Link to MJContentItemDuplicates
     
-    @Field(() => [MJContentItemChunk_])
-    MJContentItemChunks_ContentItemIDArray: MJContentItemChunk_[]; // Link to MJContentItemChunks
+    @Field(() => [MJContentItem_])
+    MJContentItems_ParentIDArray: MJContentItem_[]; // Link to MJContentItems
     
     @Field(() => [MJTagSuggestion_])
     MJTagSuggestions_SourceContentItemIDArray: MJTagSuggestion_[]; // Link to MJTagSuggestions
     
-    @Field(() => [MJContentItem_])
-    MJContentItems_ParentIDArray: MJContentItem_[]; // Link to MJContentItems
+    @Field(() => [MJContentItemChunk_])
+    MJContentItemChunks_ContentItemIDArray: MJContentItemChunk_[]; // Link to MJContentItemChunks
     
 }
 
@@ -35101,13 +35101,13 @@ export class MJContentItemResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJContentItemChunk_])
-    async MJContentItemChunks_ContentItemIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Content Item Chunks', userPayload);
+    @FieldResolver(() => [MJContentItem_])
+    async MJContentItems_ParentIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Items', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemChunks')} WHERE ${provider.QuoteIdentifier('ContentItemID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Chunks', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItems')} WHERE ${provider.QuoteIdentifier('ParentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Items', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjcontentitem_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Chunks', rows, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Items', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -35121,13 +35121,13 @@ export class MJContentItemResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJContentItem_])
-    async MJContentItems_ParentIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Content Items', userPayload);
+    @FieldResolver(() => [MJContentItemChunk_])
+    async MJContentItemChunks_ContentItemIDArray(@Root() mjcontentitem_: MJContentItem_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Chunks', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItems')} WHERE ${provider.QuoteIdentifier('ParentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Items', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemChunks')} WHERE ${provider.QuoteIdentifier('ContentItemID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Chunks', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjcontentitem_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Items', rows, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Chunks', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

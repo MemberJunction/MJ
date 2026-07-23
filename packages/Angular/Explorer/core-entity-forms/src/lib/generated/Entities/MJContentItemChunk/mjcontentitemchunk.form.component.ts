@@ -15,10 +15,11 @@ export class MJContentItemChunkFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'contentAssociation', sectionName: 'Content Association', isExpanded: true },
             { sectionKey: 'chunkDetails', sectionName: 'Chunk Details', isExpanded: true },
-            { sectionKey: 'vectorIntegration', sectionName: 'Vector Integration', isExpanded: true },
-            { sectionKey: 'processingStatus', sectionName: 'Processing Status', isExpanded: true },
+            { sectionKey: 'chunkContent', sectionName: 'Chunk Content', isExpanded: true },
+            { sectionKey: 'vectorInformation', sectionName: 'Vector Information', isExpanded: true },
+            { sectionKey: 'lifecycleStatus', sectionName: 'Lifecycle Status', isExpanded: true },
+            { sectionKey: 'lifecycleTimestamps', sectionName: 'Lifecycle Timestamps', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

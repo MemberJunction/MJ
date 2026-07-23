@@ -188,7 +188,7 @@
     <mj-collapsible-panel
         SectionKey="relationships"
         SectionName="Relationships"
-        Icon="fa fa-sitemap"
+        Icon="fa fa-project-diagram"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -343,25 +343,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Content Item Chunks Section -->
+    <!-- Content Items Section -->
     <mj-collapsible-panel
-        SectionKey="mJContentItemChunks"
-        SectionName="Content Item Chunks"
+        SectionKey="mJContentItems"
+        SectionName="Content Items"
         Icon="fa fa-file-alt"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJContentItemChunks')"
+        [BadgeCount]="GetSectionRowCount('mJContentItems')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Chunks','ContentItemID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Item Chunks')"
-                [AllowLoad]="IsSectionExpanded('mJContentItemChunks')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Items','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Items')"
+                [AllowLoad]="IsSectionExpanded('mJContentItems')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJContentItemChunks', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentItems', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -393,25 +393,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Content Items Section -->
+    <!-- Content Item Chunks Section -->
     <mj-collapsible-panel
-        SectionKey="mJContentItems"
-        SectionName="Content Items"
-        Icon="fa fa-file-alt"
+        SectionKey="mJContentItemChunks"
+        SectionName="Content Item Chunks"
+        Icon="fa fa-layer-group"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJContentItems')"
+        [BadgeCount]="GetSectionRowCount('mJContentItemChunks')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Items','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Items')"
-                [AllowLoad]="IsSectionExpanded('mJContentItems')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Chunks','ContentItemID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Chunks')"
+                [AllowLoad]="IsSectionExpanded('mJContentItemChunks')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJContentItems', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentItemChunks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
