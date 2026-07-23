@@ -47,6 +47,10 @@ describe('IsRetryableError', () => {
         expect(IsRetryableError('CONFIGURATION_ERROR')).toBe(false);
     });
 
+    it('should return false for WRITE_VERIFICATION_ERROR', () => {
+        expect(IsRetryableError('WRITE_VERIFICATION_ERROR')).toBe(false);
+    });
+
     it('should return false for UNKNOWN_ERROR', () => {
         expect(IsRetryableError('UNKNOWN_ERROR')).toBe(false);
     });
@@ -210,10 +214,45 @@ describe('ClassifyError', () => {
             expect(result.Severity).toBe('Critical');
         });
 
-        it('should classify "sql" messages as DATABASE_ERROR', () => {
-            const result = ClassifyError(new Error('SQL Server error 50000'));
+        it('should classify "deadlock" messages as DATABASE_ERROR', () => {
+            const result = ClassifyError(new Error('Transaction was deadlocked on lock resources'));
             expect(result.Code).toBe('DATABASE_ERROR');
             expect(result.Severity).toBe('Critical');
+        });
+
+        it('should classify "connection lost" messages as DATABASE_ERROR', () => {
+            const result = ClassifyError(new Error('SQL Server connection lost'));
+            expect(result.Code).toBe('DATABASE_ERROR');
+            expect(result.Severity).toBe('Critical');
+        });
+
+        it('should NOT classify a bare "SQL" mention with no transient signal as DATABASE_ERROR', () => {
+            // A generic 'sql' substring match is too broad — it matched deterministic failures
+            // (e.g. "SQL Error: no rows returned") just as readily as real transient connection
+            // issues, sending non-retryable bugs through the retry-with-backoff path for no reason.
+            const result = ClassifyError(new Error('SQL Server error 50000'));
+            expect(result.Code).toBe('UNKNOWN_ERROR');
+            expect(result.Severity).toBe('Critical');
+        });
+    });
+
+    describe('WRITE_VERIFICATION_ERROR detection', () => {
+        it('should classify "no rows returned" messages as WRITE_VERIFICATION_ERROR', () => {
+            const result = ClassifyError(new Error('SQL Error: Error creating new record, no rows returned from SQL: ...'));
+            expect(result.Code).toBe('WRITE_VERIFICATION_ERROR');
+            expect(result.Severity).toBe('Critical');
+        });
+
+        it('should be non-retryable — retrying an identical write reproduces the identical miss', () => {
+            const classified = ClassifyError(new Error('Error creating new record, no rows returned from SQL: ...'));
+            expect(IsRetryableError(classified.Code)).toBe(false);
+        });
+
+        it('should take priority over the generic DATABASE_ERROR "sql" signal', () => {
+            // The mssql driver's own error text is "SQL Error: ...", which would otherwise match
+            // the DATABASE_ERROR catch-all — this case must resolve to WRITE_VERIFICATION_ERROR.
+            const result = ClassifyError(new Error('SQL Error: Error creating new record, no rows returned from SQL: SELECT ...'));
+            expect(result.Code).toBe('WRITE_VERIFICATION_ERROR');
         });
     });
 

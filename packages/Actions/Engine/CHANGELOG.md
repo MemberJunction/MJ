@@ -1,5 +1,44 @@
 # Change Log - @memberjunction/actions
 
+## 5.49.0
+
+### Patch Changes
+
+- 7db8ef5: Fix the broken unit tests on `next` caused by `vi.mock('@memberjunction/global')` factories that don't expose `RequiresSubclass`. The module graphs under test now declare `@RequiresSubclass()`, so a mock omitting it throws `No "RequiresSubclass" export is defined on the mock` at module init.
+
+  This covers the **complete** set of currently-failing suites (verified by a full `turbo run test` — exactly these two packages fail on this gap): `@memberjunction/actions` (`ActionEngine` / `EntityActionEngine` tests) and `@memberjunction/ai-vector-sync` (`entityDocumentConfig` test). Added the missing no-op decorator to each. Test-only change.
+
+  Note: ~200 other test files also mock `@memberjunction/global` without listing `RequiresSubclass`, but they pass today — their module-under-test never imports a `@RequiresSubclass()`-decorated class (or they spread the real module). Those are latent, not failing, and are intentionally left untouched to keep this fix reviewable; a shared-mock refactor to kill the latent class is a separate cleanup.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/code-execution@5.49.0
+  - @memberjunction/action-runtime@5.49.0
+  - @memberjunction/doc-utils@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes
