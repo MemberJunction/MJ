@@ -447,16 +447,22 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Resolves the latest version number and compares saved query SQL.
    */
   private async InitQuerySyncState(): Promise<void> {
-    // Ensure artifact cache is loaded (not registered for startup)
+    // Ensure the artifact-type registry is loaded (not registered for startup).
     await ArtifactMetadataEngine.Instance.Config(false);
+
+    // Load THIS artifact's versions on demand (including Content, which
+    // resolveEffectiveSavedAtVersion parses). Versions are no longer bulk-loaded
+    // at boot — the payload here is bounded to a single artifact's versions.
+    if (this.artifactVersion?.ArtifactID) {
+      await ArtifactMetadataEngine.Instance.LoadVersionsForArtifact(this.artifactVersion.ArtifactID);
+    }
 
     this.LatestVersionNumber = this.resolveLatestVersionNumber();
 
-    // If cache is stale (doesn't know about the version we're viewing),
-    // force-refresh and re-resolve. This happens when new versions are
-    // created during a conversation after the cache was first loaded.
-    if (this.LatestVersionNumber < this.CurrentVersionNumber) {
-      await ArtifactMetadataEngine.Instance.Config(true);
+    // If the loaded versions don't yet include the one we're viewing (a newer
+    // version was created after we first loaded), force a re-fetch and re-resolve.
+    if (this.LatestVersionNumber < this.CurrentVersionNumber && this.artifactVersion?.ArtifactID) {
+      await ArtifactMetadataEngine.Instance.LoadVersionsForArtifact(this.artifactVersion.ArtifactID, undefined, undefined, true);
       this.LatestVersionNumber = this.resolveLatestVersionNumber();
     }
 
