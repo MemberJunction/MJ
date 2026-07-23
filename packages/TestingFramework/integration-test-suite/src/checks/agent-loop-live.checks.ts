@@ -1,9 +1,10 @@
 /**
- * agent-loop-live.checks.ts — the 'agent-loop-live' bundle (AL1–AL7): the LIVE-MODEL, CLIENT-
- * TRANSPORT loop foundation (plans/integration-test-expansion/agents-extended-suite-proposal.md §5).
+ * agent-loop-live.checks.ts — the 'agent-loop-live' bundle (AL1–AL7): the LIVE-MODEL loop
+ * foundation (plans/integration-test-expansion/agents-extended-suite-proposal.md §5).
  *
- * Runs the seeded imperative test agents over the GraphQL wire (GraphQLAIClient → live MJAPI) and
- * asserts ONLY deterministic, framework-produced observables — never the model's prose (§3):
+ * Runs the seeded imperative test agents SERVER-IN-PROCESS (AgentRunner.RunAgent via makeAIClient,
+ * passing ctx.User — NOT over the GraphQL wire; Q8, the dedicated wire path is IT63) and asserts
+ * ONLY deterministic, framework-produced observables — never the model's prose (§3):
  *   - AIAgentRun.Status settled + every AIAgentRunStep terminal with CompletedAt (verifyAgentRun),
  *   - loop step lineage/order (Prompt → Actions → Prompt) + action-step TargetLogID linkage,
  *   - the deterministic ACTION output (42 for 6*7) carried into a later AIPromptRun.Messages,
@@ -106,7 +107,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const echo = await agentByName('IT: Echo Agent', ctx.User);
-            const result = await runAgentOverWire(makeAIClient(ctx.Provider), echo, userTurn('ping'));
+            const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), echo, userTurn('ping'));
             const runId = await landRun(ctx, result, `AgentID='${echo.ID}' AND Status<>'Running'`, 'AL1');
             // Deep pass: run settled + EVERY step terminal with CompletedAt (the ai-verify.ts:96 invariant).
             const v = await verifyAgentRun(runId, ctx.User, true);
@@ -119,7 +120,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const toolLoop = await agentByName('IT: Tool Loop Agent', ctx.User);
-            const result = await runAgentOverWire(makeAIClient(ctx.Provider), toolLoop, userTurn('Calculate 6*7 using your action.'));
+            const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), toolLoop, userTurn('Calculate 6*7 using your action.'));
             const runId = await landRun(ctx, result, `AgentID='${toolLoop.ID}' AND Status<>'Running'`, 'AL2');
             // deep=false: the Actions step's Action Execution Log is written by the fire-and-forget
             // queue and can land arbitrarily late — its finalization is pinned by actions-pipeline
@@ -144,7 +145,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const toolLoop = await agentByName('IT: Tool Loop Agent', ctx.User);
-            const result = await runAgentOverWire(makeAIClient(ctx.Provider), toolLoop, userTurn('Calculate 6*7 using your action.'));
+            const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), toolLoop, userTurn('Calculate 6*7 using your action.'));
             const runId = await landRun(ctx, result, `AgentID='${toolLoop.ID}' AND Status<>'Running'`, 'AL3');
 
             const steps = await getRunSteps(runId, ctx.User);
@@ -165,7 +166,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const toolLoop = await agentByName('IT: Tool Loop Agent', ctx.User);
-            const result = await runAgentOverWire(makeAIClient(ctx.Provider), toolLoop, userTurn('Calculate 6*7 using your action.'));
+            const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), toolLoop, userTurn('Calculate 6*7 using your action.'));
             const runId = await landRun(ctx, result, `AgentID='${toolLoop.ID}' AND Status<>'Running'`, 'AL4');
 
             const promptRuns = await getPromptRuns(runId, ctx.User);
@@ -194,7 +195,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
             // asserts the conversation-run linkage the carry-forward + compaction bundles depend on.
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `AL5 conversation plumbing ${fixture(ctx).Marker}`);
-            const result = await runAgentOverWire(makeAIClient(ctx.Provider), echo, userTurn('ping'), { conversationDetailId: turn.detailId, conversationId: turn.conversationId });
+            const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), echo, userTurn('ping'), { conversationDetailId: turn.detailId, conversationId: turn.conversationId });
             const runId = await landRun(ctx, result, `ConversationID='${turn.conversationId}' AND AgentID='${echo.ID}'`, 'AL5');
 
             const run = await new RunView().RunView<{ ConversationID: string | null }>({
@@ -229,7 +230,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
                 for (const b of bindings) { b.Status = 'Inactive'; Assert(await b.Save(), `AL6: disable binding ${b.ID}: ${b.LatestResult?.CompleteMessage}`); }
                 await sleep(AGENT_LIVE_SETTLE_MS);
 
-                const result = await runAgentOverWire(makeAIClient(ctx.Provider), failover, userTurn('ping'));
+                const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), failover, userTurn('ping'));
                 const runId = await resolveRunId(result, ctx.User, `AgentID='${failover.ID}'`);
                 if (runId) {
                     fixture(ctx).LiveRunIds.push(runId);
@@ -270,7 +271,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
                 Assert(await primary.Save(), `AL7: disable primary binding ${primary.ID}: ${primary.LatestResult?.CompleteMessage}`);
                 await sleep(AGENT_LIVE_SETTLE_MS);
 
-                const result = await runAgentOverWire(makeAIClient(ctx.Provider), failover, userTurn('ping'));
+                const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), failover, userTurn('ping'));
                 const runId = await landRun(ctx, result, `AgentID='${failover.ID}' AND Status<>'Running'`, 'AL7');
                 await verifyAgentRun(runId, ctx.User, true);
 
