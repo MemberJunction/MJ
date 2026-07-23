@@ -15,6 +15,9 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 /** Sidebar row-spacing options surfaced in Settings → Sidebar density. */
 export type ShellSidebarDensity = 'comfortable' | 'compact';
 
+/** W0a Chats-surface grouping mode (S2). */
+export type ShellChatsGroupMode = 'project' | 'flat';
+
 /** Static utility — all state lives in UserInfoEngine's cache; this class only parses/writes. */
 export class ShellPreferences {
   /** `MJ: User Settings` key for the Show Projects opt-out toggle (D-S7; default ON). */
@@ -50,6 +53,25 @@ export class ShellPreferences {
 
   public static SetSidebarDensity(value: ShellSidebarDensity): void {
     this.write(this.DensityKey, value);
+  }
+
+  /** `MJ: User Settings` key for the W0a Chats grouping mode (S2). */
+  private static readonly ChatsGroupKey = 'mj.conversations.chatsGroup.v1';
+
+  /**
+   * W0a grouping mode. Default 'project'. NOTE: callers must force 'flat' when
+   * ShowProjects is off (the mockup's gating) — this getter returns the raw pref.
+   */
+  public static get ChatsGroupMode(): ShellChatsGroupMode {
+    try {
+      return UserInfoEngine.Instance.GetSetting(this.ChatsGroupKey) === 'flat' ? 'flat' : 'project';
+    } catch {
+      return 'project';
+    }
+  }
+
+  public static SetChatsGroupMode(value: ShellChatsGroupMode): void {
+    this.write(this.ChatsGroupKey, value);
   }
 
   /** Warm the UserInfoEngine cache. Fire-and-forget from shell init; failures leave defaults. */

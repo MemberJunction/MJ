@@ -14,7 +14,16 @@
   </mj-shell-sidebar>
 
   <main class="shell-main">
-    @if (CurrentView === 'chat') {
+    @if (CurrentView === 'chats') {
+      <mj-shell-chats-surface
+        [Provider]="Provider"
+        [EnvironmentId]="environmentId"
+        [CurrentUser]="currentUser"
+        [ShowProjects]="ShowProjects"
+        (ConversationSelected)="OnConversationSelected($event)"
+        (NewConversationClicked)="OnNewConversation()">
+      </mj-shell-chats-surface>
+    } @else if (CurrentView === 'chat') {
       <mj-conversation-chat-area
         [environmentId]="environmentId"
         [currentUser]="currentUser"
@@ -55,26 +64,21 @@
               <span class="n">Show Projects</span>
               <span class="d">Group related chats, memory, and deliverables into projects</span>
             </span>
-            <button
-              type="button"
-              class="tgl"
-              [class.on]="ShowProjects"
-              role="switch"
-              [attr.aria-checked]="ShowProjects"
-              (click)="OnShowProjectsChanged(!ShowProjects)"></button>
+            <mj-switch
+              [ngModel]="ShowProjects"
+              (ngModelChange)="OnShowProjectsChanged($event)"></mj-switch>
           </div>
           <div class="set-row">
             <span class="t">
               <span class="n">Sidebar density</span>
               <span class="d">Row spacing</span>
             </span>
-            <select
-              class="f-select"
-              [value]="Density === 'compact' ? 'Compact' : 'Comfortable'"
-              (change)="OnDensitySelected($any($event.target).value)">
-              <option>Comfortable</option>
-              <option>Compact</option>
-            </select>
+            <mj-dropdown
+              class="set-dd"
+              [Data]="DensityOptions"
+              [ValuePrimitive]="true"
+              [ngModel]="Density === 'compact' ? 'Compact' : 'Comfortable'"
+              (ngModelChange)="OnDensitySelected($event)"></mj-dropdown>
           </div>
         </div>
 
@@ -98,14 +102,12 @@
               <span class="n">Appearance</span>
               <span class="d">Light and dark are both first-class</span>
             </span>
-            <select
-              class="f-select"
-              [value]="Appearance === 'light' ? 'Light' : Appearance === 'dark' ? 'Dark' : 'System'"
-              (change)="OnAppearanceSelected($any($event.target).value)">
-              <option>System</option>
-              <option>Light</option>
-              <option>Dark</option>
-            </select>
+            <mj-dropdown
+              class="set-dd"
+              [Data]="AppearanceOptions"
+              [ValuePrimitive]="true"
+              [ngModel]="Appearance === 'light' ? 'Light' : Appearance === 'dark' ? 'Dark' : 'System'"
+              (ngModelChange)="OnAppearanceSelected($event)"></mj-dropdown>
           </div>
           <div class="set-row">
             <span class="t">
@@ -113,8 +115,9 @@
               <span class="d">Re-sync available agents and skills from the server</span>
             </span>
             <button
-              type="button"
-              class="refresh-btn"
+              mjButton
+              variant="secondary"
+              size="sm"
               [disabled]="RefreshState === 'refreshing'"
               (click)="OnRefreshAgentCache()">
               @switch (RefreshState) {

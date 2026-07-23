@@ -1,0 +1,323 @@
+/* mj-shell-chats-surface — visual spec ported from the functional mockup
+   (.surf/.surf-bar/.seg/.grp-lbl/.surf-list/.surf-item/.rowck families),
+   all --mj-* semantic tokens. Row menu mirrors the app's quiet menu idiom. */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.surf {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.surf-body {
+  flex: 1;
+  overflow: auto;
+  padding: 26px 24px 28px;
+}
+
+.surf-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 900px;
+  margin: 0 auto 16px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.sb-title {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: var(--mj-text-primary);
+}
+
+.grow {
+  flex: 1;
+}
+
+.sb-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mj-text-link);
+  cursor: pointer;
+}
+
+/* Layout-only wrapper: field chrome comes from the shared .mj-input. */
+.filter-wrap {
+  position: relative;
+  flex: 0 1 240px;
+  min-width: 130px;
+}
+.filter-wrap i {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--mj-text-muted);
+  pointer-events: none;
+}
+.filter-wrap .mj-input {
+  padding-left: 28px;
+}
+
+.seg {
+  display: inline-flex;
+  background: var(--mj-bg-surface-sunken);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
+}
+.seg span {
+  padding: 4px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--mj-text-muted);
+  font-weight: 500;
+  cursor: pointer;
+}
+.seg span.on {
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  box-shadow: var(--mj-shadow-sm, 0 1px 2px color-mix(in srgb, var(--mj-text-primary) 10%, transparent));
+  font-weight: 600;
+}
+
+.grp-lbl {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 900px;
+  margin: 0 auto 8px;
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+.grp-lbl .lbl-ic {
+  font-size: 10px;
+}
+.grp-lbl.drop-hover {
+  color: var(--mj-brand-primary);
+  outline: 1px dashed var(--mj-brand-primary);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.surf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 900px;
+  margin: 0 auto 16px;
+}
+
+.surf-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 11px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.surf-item:hover {
+  border-color: var(--mj-border-strong);
+}
+.surf-item.sel {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+.surf-item[draggable='true']:active {
+  cursor: grabbing;
+}
+
+.surf-item .si-ic {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--mj-text-muted);
+}
+.surf-item .si-t {
+  flex: 1;
+  min-width: 0;
+}
+.surf-item .si-t .n {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+}
+.surf-item .si-t .n .txt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.surf-item .si-t .d {
+  display: block;
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.surf-item .si-m {
+  flex: none;
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+/* Hover-reveal is BEHAVIOR (layout-scoped); the button's chrome comes from
+   mjButton variant="icon" — never restyled here. */
+.surf-item .row-menu-btn {
+  visibility: hidden;
+}
+.surf-item:hover .row-menu-btn,
+.surf-item .row-menu-btn:focus-visible,
+.surf-item .row-menu-btn.always {
+  visibility: visible;
+}
+
+.rowck {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--mj-border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: transparent;
+}
+.rowck.on {
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+}
+
+.pdot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.pdot.hollow {
+  background: transparent;
+  border: 1.5px solid var(--mj-border-strong);
+}
+
+.udot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mj-brand-primary);
+  display: inline-block;
+}
+
+.menu-anchor {
+  position: relative;
+  flex: none;
+}
+
+.row-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  min-width: 180px;
+  background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  box-shadow: var(--mj-shadow-lg, 0 8px 24px color-mix(in srgb, var(--mj-text-primary) 16%, transparent));
+  padding: 4px;
+}
+
+.row-submenu {
+  border-top: 1px solid var(--mj-border-subtle);
+  margin: 4px 0;
+  padding-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+}
+.menu-item i {
+  width: 14px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+.menu-item .sub-ic {
+  margin-left: auto;
+  font-size: 9px;
+}
+.menu-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.menu-item.danger {
+  color: var(--mj-status-error-text, var(--mj-status-error));
+}
+.menu-item.danger i {
+  color: var(--mj-status-error);
+}
+.menu-item.danger:hover {
+  background: color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface));
+}
+
+.surf-note {
+  max-width: 900px;
+  margin: 12px auto 0;
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+.surf-note.center {
+  text-align: center;
+  margin-top: 48px;
+}
+
+.surf-empty {
+  margin-top: 64px;
+  text-align: center;
+}
+.surf-empty .big {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mj-text-secondary);
+}
+.surf-empty .sub {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}

@@ -34,29 +34,23 @@
   width: 100%;
 }
 
-.side-filter {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  height: 28px;
-  padding: 0 9px;
-  border: 1px solid var(--mj-border-default);
-  border-radius: 7px;
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-muted);
+/* Layout-only wrapper: field chrome comes from the shared .mj-input; the
+   wrapper just overlays the search icon and makes room for it. */
+.filter-wrap {
+  position: relative;
+  display: block;
 }
-.side-filter i {
+.filter-wrap i {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 10px;
+  color: var(--mj-text-muted);
+  pointer-events: none;
 }
-.side-filter input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  font: inherit;
-  font-size: 11.5px;
-  color: var(--mj-text-primary);
+.filter-wrap .mj-input {
+  padding-left: 28px;
 }
 
 .side-nav-it {

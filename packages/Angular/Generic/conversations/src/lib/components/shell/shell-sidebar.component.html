@@ -3,14 +3,15 @@
     <button mjButton variant="primary" size="sm" (click)="NewConversationClicked.emit()">
       <i class="fa-solid fa-plus"></i> New conversation
     </button>
-    <label class="side-filter">
+    <span class="filter-wrap">
       <i class="fa-solid fa-magnifying-glass"></i>
       <input
         type="text"
+        class="mj-input"
         placeholder="Filter conversations..."
         [(ngModel)]="FilterText"
         (ngModelChange)="OnFilterChanged()" />
-    </label>
+    </span>
   </div>
 
   <nav class="side-nav" aria-label="Workspace">

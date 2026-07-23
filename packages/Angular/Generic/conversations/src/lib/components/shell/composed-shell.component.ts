@@ -82,16 +82,15 @@ export class ComposedShellComponent extends BaseAngularComponent {
 
   private readonly cdr = inject(ChangeDetectorRef);
 
+  /** Display options for the Settings mj-dropdowns (primitive string lists). */
+  public readonly DensityOptions = ['Comfortable', 'Compact'];
+  public readonly AppearanceOptions = ['System', 'Light', 'Dark'];
+
   public readonly Placeholders: Partial<Record<ShellView, ShellPlaceholder>> = {
     frontdoor: {
       Icon: 'fa-door-open',
       Title: 'Front Door',
       Detail: 'Your landing surface — needs-you, continue, and ran-overnight arrive with slice S3. Pick a conversation from the sidebar, or start a new one.',
-    },
-    chats: {
-      Icon: 'fa-comments',
-      Title: 'Chats',
-      Detail: 'The full conversation workspace — grouping, filtering, and management arrive with slice S2.',
     },
     projects: {
       Icon: 'fa-folder',

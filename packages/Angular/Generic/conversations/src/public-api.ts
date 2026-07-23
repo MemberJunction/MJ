@@ -91,6 +91,7 @@ export * from './lib/components/overlay/chat-overlay.component';
 export * from './lib/components/shell/shell-types';
 export * from './lib/components/shell/composed-shell.component';
 export * from './lib/components/shell/shell-sidebar.component';
+export * from './lib/components/shell/shell-chats-surface.component';
 export * from './lib/utils/shell-preferences';
 
 // Components declared AND exported by ConversationsModule but previously missing

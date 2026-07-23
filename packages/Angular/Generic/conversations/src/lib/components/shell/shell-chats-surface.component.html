@@ -1,0 +1,164 @@
+<div class="surf">
+  <div class="surf-body">
+    <header class="surf-bar">
+      <span class="sb-title">Chats</span>
+      <span class="grow"></span>
+      <span class="filter-wrap">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input
+          type="text"
+          class="mj-input"
+          placeholder="Filter titles &amp; descriptions…"
+          [(ngModel)]="FilterText"
+          autocomplete="off" />
+      </span>
+      @if (ShowProjects) {
+        <span class="seg">
+          <span [class.on]="GroupMode === 'project'" role="button" tabindex="0" (click)="SetGroupMode('project')">By project</span>
+          <span [class.on]="GroupMode === 'flat'" role="button" tabindex="0" (click)="SetGroupMode('flat')">Flat</span>
+        </span>
+      }
+      @if (SelectMode) {
+        <span class="sb-link" role="button" tabindex="0" (click)="SelectAllVisible()">Select all</span>
+        <button mjButton variant="secondary" size="sm" (click)="BulkDelete()">
+          Delete{{ SelectedIds.size ? ' (' + SelectedIds.size + ')' : '' }}
+        </button>
+        <button mjButton variant="secondary" size="sm" (click)="ToggleSelectMode()">Done</button>
+      } @else {
+        <button mjButton variant="secondary" size="sm" (click)="ToggleSelectMode()">
+          <i class="fa-regular fa-square-check"></i> Select
+        </button>
+      }
+      <button mjButton variant="primary" size="sm" (click)="NewConversationClicked.emit()">
+        <i class="fa-solid fa-plus"></i> New chat
+      </button>
+    </header>
+
+    @if (HasAnyRows) {
+      @if (GroupMode === 'flat') {
+        <div class="surf-list">
+          @for (c of FlatRows; track c.ID) {
+            <ng-container *ngTemplateOutlet="row; context: { $implicit: c, showDot: true }"></ng-container>
+          }
+        </div>
+      } @else {
+        @if (PinnedRows.length) {
+          <div class="grp-lbl"><i class="fa-solid fa-thumbtack lbl-ic"></i> Pinned</div>
+          <div class="surf-list">
+            @for (c of PinnedRows; track c.ID) {
+              <ng-container *ngTemplateOutlet="row; context: { $implicit: c, showDot: true }"></ng-container>
+            }
+          </div>
+        }
+        @for (g of ProjectGroups; track g.Project.ID) {
+          <div
+            class="grp-lbl"
+            [class.drop-hover]="DragOverTarget === g.Project.ID"
+            (dragover)="OnDragOver(g.Project.ID, $event)"
+            (dragleave)="OnDragLeave(g.Project.ID)"
+            (drop)="OnDrop(g.Project.ID, $event)">
+            <span class="pdot" [style.background]="g.Project.Color || 'var(--mj-brand-primary)'"></span>
+            {{ g.Project.Name }}
+          </div>
+          <div class="surf-list">
+            @for (c of g.Rows; track c.ID) {
+              <ng-container *ngTemplateOutlet="row; context: { $implicit: c, showDot: false }"></ng-container>
+            }
+          </div>
+        }
+        @if (UngroupedRows.length) {
+          <div
+            class="grp-lbl"
+            [class.drop-hover]="DragOverTarget === UNGROUPED"
+            (dragover)="OnDragOver(UNGROUPED, $event)"
+            (dragleave)="OnDragLeave(UNGROUPED)"
+            (drop)="OnDrop(UNGROUPED, $event)">
+            Ungrouped
+          </div>
+          <div class="surf-list">
+            @for (c of UngroupedRows; track c.ID) {
+              <ng-container *ngTemplateOutlet="row; context: { $implicit: c, showDot: false }"></ng-container>
+            }
+          </div>
+        }
+        <p class="surf-note">Drag a conversation onto a group label to move it · activity is a quiet dot — no counts, no badges.</p>
+      }
+    } @else if (FilterText.trim()) {
+      <p class="surf-note center">Nothing matches "{{ FilterText.trim() }}".</p>
+    } @else {
+      <div class="surf-empty">
+        <p class="big">No conversations yet</p>
+        <p class="sub">Start one from the Front Door — quick questions never need a project.</p>
+      </div>
+    }
+  </div>
+</div>
+
+<ng-template #row let-c let-showDot="showDot">
+  <div
+    class="surf-item"
+    [class.sel]="IsSelected(c)"
+    draggable="true"
+    (dragstart)="OnDragStart(c, $event)"
+    (click)="OnRowClicked(c)">
+    @if (SelectMode) {
+      <span class="rowck" [class.on]="IsSelected(c)"><i class="fa-solid fa-check"></i></span>
+    }
+    <span class="si-ic"><i [ngClass]="c.IsPinned ? 'fa-solid fa-thumbtack' : 'fa-regular fa-comment'"></i></span>
+    <span class="si-t">
+      <span class="n">
+        @if (showDot && ShowProjects) {
+          @if (ProjectColor(c); as color) {
+            <span class="pdot" [style.background]="color" [title]="ProjectName(c)"></span>
+          } @else {
+            <span class="pdot hollow" title="Ungrouped"></span>
+          }
+        }
+        <span class="txt">{{ c.Name || 'Untitled conversation' }}</span>
+        @if (HasActivity(c)) {
+          <span class="udot" title="New activity"></span>
+        }
+      </span>
+      @if (c.Description) {
+        <span class="d">{{ c.Description }}</span>
+      }
+    </span>
+    <span class="si-m">{{ TimeLabel(c) }}</span>
+    <span class="menu-anchor">
+      <button mjButton variant="icon" size="sm" class="row-menu-btn" [class.always]="OpenMenuId === c.ID" ariaLabel="Conversation options" (click)="ToggleMenu(c, $event)">
+        <i class="fa-solid fa-ellipsis"></i>
+      </button>
+      @if (OpenMenuId === c.ID) {
+        <div class="row-menu" (click)="$event.stopPropagation()">
+          <button type="button" class="menu-item" (click)="TogglePin(c, $event)">
+            <i class="fa-solid fa-thumbtack"></i> {{ c.IsPinned ? 'Unpin' : 'Pin' }}
+          </button>
+          @if (ShowProjects) {
+            <button type="button" class="menu-item" (click)="ToggleMoveSubmenu($event)">
+              <i class="fa-solid fa-folder-open"></i> Move to project
+              <i class="fa-solid fa-chevron-right sub-ic"></i>
+            </button>
+            @if (MoveSubmenuOpen) {
+              <div class="row-submenu">
+                @for (p of Projects; track p.ID) {
+                  <button type="button" class="menu-item" (click)="MoveTo(c, p.ID, $event)">
+                    <span class="pdot" [style.background]="p.Color || 'var(--mj-brand-primary)'"></span> {{ p.Name }}
+                  </button>
+                }
+                <button type="button" class="menu-item" (click)="MoveTo(c, null, $event)">
+                  <span class="pdot hollow"></span> Ungrouped
+                </button>
+              </div>
+            }
+          }
+          <button type="button" class="menu-item" (click)="Rename(c, $event)">
+            <i class="fa-solid fa-pen"></i> Rename
+          </button>
+          <button type="button" class="menu-item danger" (click)="Delete(c, $event)">
+            <i class="fa-solid fa-trash"></i> Delete
+          </button>
+        </div>
+      }
+    </span>
+  </div>
+</ng-template>

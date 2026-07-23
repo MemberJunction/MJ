@@ -5,7 +5,7 @@ import { RouterModule } from '@angular/router';
 import { OverlayModule } from '@angular/cdk/overlay';
 
 // MJ UI Components
-import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MjSlidePanelComponent, MJSwitchComponent, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -81,6 +81,7 @@ import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.co
 // the shared mj-slide-panel for Settings); sidebar is a standalone leaf component.
 import { ComposedShellComponent } from './components/shell/composed-shell.component';
 import { ShellSidebarComponent } from './components/shell/shell-sidebar.component';
+import { ShellChatsSurfaceComponent } from './components/shell/shell-chats-surface.component';
 import { RealtimeAgentPickerComponent } from './components/realtime/realtime-agent-picker.component';
 import { RealtimeSessionOverlayComponent } from './components/realtime/realtime-session-overlay.component';
 import { RealtimeWhiteboardHostComponent } from '@memberjunction/ng-whiteboard';
@@ -224,9 +225,12 @@ const COMPONENTS = [
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
     RealtimeEvidencePlaybackComponent,
-    // Composed shell (SLICE-S1) — standalone pieces used by the frame's template
+    // Composed shell (SLICE-S1/S2) — standalone pieces used by the frame's template
     ShellSidebarComponent,
-    MjSlidePanelComponent
+    ShellChatsSurfaceComponent,
+    MjSlidePanelComponent,
+    MJSwitchComponent,
+    MJDropdownComponent
   ],
   exports: [
     ...COMPONENTS,
@@ -251,8 +255,9 @@ const COMPONENTS = [
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
     RealtimeEvidencePlaybackComponent,
-    // Composed shell (SLICE-S1)
-    ShellSidebarComponent
+    // Composed shell (SLICE-S1/S2)
+    ShellSidebarComponent,
+    ShellChatsSurfaceComponent
   ]
 })
 export class ConversationsModule { }

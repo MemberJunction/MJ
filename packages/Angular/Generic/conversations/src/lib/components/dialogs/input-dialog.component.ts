@@ -69,23 +69,9 @@ import { Component, Input } from '@angular/core';
       color: var(--mj-status-error);
       margin-left: 2px;
     }
-    .mj-input,
-    .mj-textarea {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1px solid var(--mj-border-default);
-      border-radius: 4px;
-      font-size: 14px;
-      font-family: inherit;
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-primary);
-    }
-    .mj-input:focus,
-    .mj-textarea:focus {
-      outline: none;
-      border-color: var(--mj-brand-primary);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-    }
+    /* Field CHROME comes from the global ui-components .mj-input/.mj-textarea
+       styles — never redefine them here (component-scoped copies override the
+       shared system and drift; same rule as .mj-btn). Layout-only additions: */
     .mj-textarea {
       min-height: 80px;
       resize: vertical;
