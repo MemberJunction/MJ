@@ -21,6 +21,10 @@ on:
       - '.github/scripts/check-esm-imports.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # The PG migration content detector's unit suite lives in __tests__ above but the
+      # script itself lives in scripts/ — without this entry a detector-only PR never
+      # runs its tests.
+      - 'scripts/check-pg-migration-content.mjs'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
