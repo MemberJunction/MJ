@@ -8,14 +8,18 @@
 
 ## 0. Ground rules
 
-- **Branch model (Matt's call, 2026-07-22):** one long-lived integration branch —
-  **`conversations-shell`** — cut from `conversations-phase1-prototype` (so design docs and
-  code travel together), tracking `origin/conversations-shell`. Slices are short-lived
-  branches off it, PR'd INTO it; one final PR merges it to `next` at cutover. **Discipline
-  that makes this safe: merge `next` into `conversations-shell` at least weekly** (and the
-  morning any slice starts), running the BASELINE drift-check rule each time. Exception:
-  **schema rides ahead** — the D-S9 migration goes to `next` via its own normal PR (CodeGen
-  and other lanes depend on schema landing in release flow, not sitting on a feature branch).
+- **Branch model (Matt's calls, 2026-07-22 + simplified 2026-07-23):** one long-lived
+  integration branch — **`conversations-shell`** — cut from `conversations-phase1-prototype`
+  (design docs and code travel together), tracking `origin/conversations-shell`. **Slices
+  commit DIRECTLY to this branch** (single-builder workflow; the slice-spec + in-session
+  review gates replace per-slice PRs — S0 briefly used a slice branch/PR (#3263), folded in
+  and retired). One final PR merges `conversations-shell` to `next` at cutover — that PR is
+  where CI gates (unit tests, `check:ui`) run against the whole body of work, so every slice
+  still runs them LOCALLY as part of its definition of done. **Discipline that makes this
+  safe: merge `next` into `conversations-shell` at least weekly** (and the morning any slice
+  starts), running the BASELINE drift-check rule each time. Exception: **schema rides ahead**
+  — the D-S9 migration goes to `next` via its own normal PR (CodeGen and other lanes depend
+  on schema landing in release flow, not sitting on a feature branch).
 - **The mockup is the acceptance spec.** A slice is reviewable when its surfaces match the
   mockup's behavior and states (light + dark, per persona where relevant). Full-page
   screenshots at review, per standing practice.
