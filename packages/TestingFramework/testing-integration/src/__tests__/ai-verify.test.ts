@@ -48,4 +48,13 @@ describe('ai-verify fetchById bounded poll (WI4, #3251)', () => {
         // pre-fix code always ran, which ignored this env var entirely).
         expect(runViewMock).toHaveBeenCalledTimes(2);
     });
+
+    it('states the ACTUAL polled bound, not the nominal budget, for a non-multiple-of-500ms budget', async () => {
+        // 700ms nominal → round(700/500)=1 attempt → the poll actually waits 500ms. The message
+        // must report what it waited (500ms), not the nominal 700ms it was configured with.
+        process.env.MJ_IT_FETCH_POLL_MS = '700';
+        const err: Error = await verifyPromptRun('missing-id', user).catch((e: Error) => e);
+        expect(err.message).toMatch(/within 500ms/);
+        expect(err.message).not.toMatch(/within 700ms/);
+    });
 });

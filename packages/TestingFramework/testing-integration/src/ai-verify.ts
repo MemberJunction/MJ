@@ -37,8 +37,11 @@ async function fetchById(entity: string, id: string, user: UserInfo): Promise<Ro
     // written by the agent loop's FIRE-AND-FORGET save queue, which can land AFTER the run
     // handle returns — especially under the fast server-in-process transport. A single-shot read
     // raced that write (agent-loop-live AL2). Budget is MJ_IT_FETCH_POLL_MS-tunable (default 12s).
-    const budgetMs = resolveFetchPollBudgetMs();
-    const attempts = Math.max(1, Math.round(budgetMs / FETCH_POLL_INTERVAL_MS));
+    const attempts = Math.max(1, Math.round(resolveFetchPollBudgetMs() / FETCH_POLL_INTERVAL_MS));
+    // The bound we ACTUALLY wait is attempts × interval, which can differ from the nominal env
+    // budget when it isn't a multiple of the interval (e.g. 700ms → 1 attempt → 500ms) — report
+    // the real bound, not the configured one.
+    const budgetMs = attempts * FETCH_POLL_INTERVAL_MS;
     for (let attempt = 0; attempt < attempts; attempt++) {
         const result = await new RunView().RunView({ EntityName: entity, ExtraFilter: `ID='${id}'`, ResultType: 'simple', BypassCache: true }, user);
         Assert(result.Success, `RunView('${entity}') failed: ${result.ErrorMessage}`);
