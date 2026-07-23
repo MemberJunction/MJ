@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/ng-simple-record-list
 
+## 5.49.0
+
+### Patch Changes
+
+- d3f9d77: Angular DOM unit-testing — Phase 3 (`Angular/Explorer/**`) complete: 100% in-scope
+  component coverage (129/129 unit-DOM-testable components; deferred buckets catalogued in the
+  Phase-3 deferral register, no silent gaps). Test-only additions — no runtime/API change.
+
+  Build hygiene (the one shipped-artifact change): each DOM-testing Explorer package's build
+  `tsconfig.json` now excludes `*.test.ts` / `*.spec.ts` / `__tests__/**` (previously several
+  compiled specs into `dist`). Specs are type-checked via each package's `tsconfig.spec.json` and
+  run under the vitest DOM preset; they are no longer emitted into the published output.
+
+- 14e2117: Explorer performance quick wins:
+  - **Omnibar `#` jump-to-record**: debounce trigger-mode keystrokes (150ms) instead of issuing a `RunView` on every character, which flooded MJAPI during a typing burst. The intentional empty-term "browse top 5" behavior is preserved, and the existing stale-response guard / on-destroy timer cleanup already cover the deferred fire.
+  - **List detail "Add from views"**: batch the per-view lookups into a single `RunViews` call instead of a sequential `RunView` per selected view (N round-trips → 1).
+  - **Simple record list**: use `EntityByName` (O(1), case-insensitive) instead of the O(N) `Entities.find` scan, per the metadata-lookup convention.
+
+  No API or behavior changes beyond the debounce timing.
+
+- Updated dependencies [d3f9d77]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/ng-entity-form-dialog@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ng-shared-generic@5.49.0
+  - @memberjunction/ng-ui-components@5.49.0
+  - @memberjunction/ng-base-types@5.49.0
+  - @memberjunction/ng-container-directives@5.49.0
+  - @memberjunction/ng-notifications@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes

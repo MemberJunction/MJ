@@ -448,8 +448,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-artifact-tools', {
             ReaderID: '', TypeIds: {}, CreatedRootRunIds: [],
             ConversationIds: [], ArtifactIds: [], ArtifactVersionIds: [], JunctionIds: []
         };
-        const client = resolveClient(ctx.Provider);
-        if (!client) { fixture.Skip = 'not client transport (GraphQLDataProvider required for the live wire path)'; return; }
+        const client = resolveClient(ctx.Provider, ctx.User);
         const reader = await loadAgentByName(ctx.Provider, ctx.User, 'IT: Artifact Reader');
         if (!reader) {
             fixture.Skip = 'IT: Artifact Reader not seeded — run: npx mj sync push --dir=metadata-optional/integration-test';
