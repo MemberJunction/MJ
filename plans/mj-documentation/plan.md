@@ -62,7 +62,28 @@ Non-goals also unchanged: not a CMS, not versioned, not a forum, and **never** a
 - **Phase 3 — CNAME flip (open).** Add `docs-site/public/CNAME` (`docs.memberjunction.org`), set the custom domain in the repo's Pages settings, drop DNS TTL, switch the `docs` CNAME to `memberjunction.github.io`, wait for cert, QA, restore TTL. Then set `DOCS_BASE=/` and `DOCS_SITE=https://docs.memberjunction.org` in `docs.yml` — content needs no changes (all internal links are relative). Old `memberjunction.github.io/MJ/` links keep working via GitHub Pages' domain redirect.
 - **Phase 4 — Sunset (open).** After ≥30 days: confirm zero legacy traffic, cancel the readme.com subscription, archive the export privately.
 
-## 6. Open questions
+## 6. Versioned docs for LTS (designed, not built)
+
+The original non-goal "not versioned" gets re-evaluated when the LTS line cuts (planned: first LTS ~Aug 2026, 6.x after). The architecture already supports versioning cheaply because the site owns no content — **repo branches are the version snapshots**, so "docs for version X" = the same build run against that line's branch. No Docusaurus-style content snapshots inside the docs site.
+
+Target shape (one Pages artifact, built N times in `docs.yml`):
+
+```
+/MJ/          ← built from main       (current line)
+/MJ/5.x/      ← built from lts/5.x    (LTS)
+```
+
+Same build with a different `DOCS_BASE` per line — all generated cross-links are relative, so identical content works under any prefix unchanged. Add a header version-switcher (config-driven list of lines) when the second line exists.
+
+Design decisions settled in advance:
+
+1. **The current branch's `docs-site/` builds ALL lines** (checkout the LTS content tree via `git worktree`, point ingest at it) — site improvements apply to every version; old branches never need docs-site backports. Prerequisite: make ingest's repo root an env override instead of "two dirs up".
+2. **TypeDoc per line is the cost driver** (monorepo build + TypeDoc dominate CI). First cut: full TypeDoc for current; for LTS, build only on LTS release events or reuse a stashed artifact.
+3. **URL slug is the version, not "lts"** (`/5.x/`, not `/lts/`) — a second LTS line later must not force a rename.
+
+Implementation becomes possible the day the LTS branch exists; nothing to do before then.
+
+## 7. Open questions
 
 1. Analytics — Plausible / GoatCounter / nothing? (Nothing is the current state.)
 2. Branded OG image for social cards (`docs-site/public/og-image.png`) — needs a designed asset.
