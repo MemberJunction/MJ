@@ -1,0 +1,26 @@
+/*
+ * MemberJunction docs theme — accent ramp ported from the design prototype
+ * that preceded this site (plans/mj-documentation, PR #2526): indigo brand
+ * on Starlight's neutral gray scale.
+ */
+:root {
+  --sl-color-accent-low: #e0e7ff;
+  --sl-color-accent: #4f46e5;
+  --sl-color-accent-high: #3730a3;
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #312e81;
+  --sl-color-accent: #818cf8;
+  --sl-color-accent-high: #c7d2fe;
+}
+
+/* Mermaid diagrams: center, breathe, and never overflow the content column. */
+pre.mermaid {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  background: none;
+  border: none;
+  padding: 1rem 0;
+}
