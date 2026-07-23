@@ -549,6 +549,10 @@ export class MagicLinkService {
       // resolves this user without a full cache refresh.
       this.pushUserToCache(user, role);
 
+      // Deliberately NOT verbose-gated, unlike the MagicLink startup notices (2ddb865e40):
+      // provisioning a new external account via magic-link redemption is a security-relevant
+      // event that belongs in the default server log. At-scale deployments can revisit
+      // tapering this if volume ever makes it noise.
       LogStatus(`[MagicLink] Provisioned external user ${email} with role '${role.Name}'.`);
       return { success: true, userId: user.ID, email, firstName, lastName };
     } catch (txErr) {

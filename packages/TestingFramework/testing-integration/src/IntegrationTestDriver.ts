@@ -30,7 +30,7 @@ import {
     OracleResult,
     SuiteFixtureContext
 } from '@memberjunction/testing-engine';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, ProviderType } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import type sql from 'mssql';
@@ -39,16 +39,16 @@ import {
     getActiveIntegrationBootstrap,
     getActiveIntegrationClientBootstrap,
     bootstrapIntegrationServer,
-    bootstrapIntegrationClient,
     serverProcessAlreadyClaimed
 } from './bootstrap';
+import { bootstrapIntegrationClient } from './bootstrap-client';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import type { IntegrationCheckContext, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
 import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
 import { TestOutcome, writeOutcomesFile } from './test-runner';
-import { discoverRlsFixture } from './checks/rls-isolation.checks';
+import { discoverRlsFixture } from './rls-fixture';
 
 const TARGET_TYPE = 'Integration Check Bundle';
 /** Bundles that run against the GraphQL client transport (everything else: SQL server). */
@@ -177,7 +177,17 @@ export class IntegrationTestDriver extends BaseTestDriver {
             }
         } catch (bootErr) {
             clearTimeout(timer);
-            return this.buildErrorResult(context, startTime, `Bootstrap failed: ${(bootErr as Error).message}`);
+            const msg = (bootErr as Error).message ?? String(bootErr);
+            // ENVIRONMENT GAP, not a product defect: client-transport bundles need a live MJAPI.
+            // When the preflight says the server is simply absent (CI runs no MJAPI), skip-as-pass
+            // loudly — the same contract the old per-bundle tsx dispatchers honored with exit 0.
+            // Any OTHER bootstrap failure (bad credentials, cache ownership, config) stays a
+            // hard error.
+            if (transport === 'client' && /MJAPI is not reachable/i.test(msg)) {
+                return this.buildSkipResult(context, startTime,
+                    `SKIPPED (environment gap): ${msg} Client-transport checks need a live MJAPI; start it and re-run for full coverage.`);
+            }
+            return this.buildErrorResult(context, startTime, `Bootstrap failed: ${msg}`);
         }
         clearTimeout(timer);
 
@@ -213,7 +223,11 @@ export class IntegrationTestDriver extends BaseTestDriver {
     ): Promise<void> {
         const bundle = IntegrationCheckRegistry.Instance.GetBundle(bundleType);
         if (bundle.length === 0) {
-            const message = `Unknown integration check bundle '${bundleType}'`;
+            const message = `Unknown integration check bundle '${bundleType}'. ` +
+                `Check bundles register via import side effects — MJ's own bundles live in the private ` +
+                `@memberjunction/integration-test-suite package, loaded through mj.config.cjs ` +
+                `\`testing.checkModules\` (or the --checks-module flag). If this bundle should exist, ` +
+                `verify that config key is present, the module is built, and the bundle name matches.`;
             oracleResults.push({ oracleType: bundleType, passed: false, score: 0, message, details: { DurationMs: 0 } });
             outcomes.push({ Name: bundleType, Passed: false, DurationMs: 0, Error: message });
             this.logToTestRun(context, 'error', `✗ ${message}`);
@@ -389,6 +403,20 @@ export class IntegrationTestDriver extends BaseTestDriver {
             pool = ic.Pool;
             schema = ic.Db.Schema;
             provider = ic.Provider;
+        }
+        // #3251: a server-transport bundle MUST resolve a DATABASE provider. If the process-global
+        // provider was rebound to a client (GraphQL/Network) provider — because a client-transport
+        // bundle ran earlier in this same process (setupGraphQLClient calls SetProvider) — then a
+        // server bundle would silently execute over the wire and its checks would fail in
+        // product-shaped ways. Fail loudly instead of degrading silently. The throw is caught by
+        // Execute's bootstrap try/catch → an 'Error' result, never a wedged 'Running' run. Guarded on
+        // ProviderType being present so a facade/unset global provider (e.g. in unit tests) is a no-op.
+        if (provider?.ProviderType && provider.ProviderType !== ProviderType.Database) {
+            throw new Error(
+                `transport 'server' resolved a '${provider.ProviderType}' provider — the process-global ` +
+                `provider was rebound (a client-transport bundle ran earlier in this process). ` +
+                `Server-transport bundles must be sequenced BEFORE all client-transport bundles in a ` +
+                `suite, or run in their own process. (issue #3251)`);
         }
         return {
             User: context.contextUser,

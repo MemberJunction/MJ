@@ -613,6 +613,16 @@ const configInfoSchema = z.object({
      */
     ssl: z.union([z.boolean(), z.record(z.string(), z.unknown())]).optional(),
   }).optional(),
+  /**
+   * Startup mode for engine pre-warm during CodeGen's provider bootstrap: 'full'
+   * pre-warms all @RegisterForStartup engines; 'task' (CodeGen's entry-point default)
+   * skips pre-warm — engines lazy-load on first touch. Because mj.config.cjs is shared
+   * by every process in a repo, the MJ_STARTUP_MODE env var overrides this per
+   * invocation (highest precedence).
+   */
+  startup: z.object({
+    mode: z.enum(['full', 'task']).optional(),
+  }).optional(),
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
@@ -622,6 +632,22 @@ const configInfoSchema = z.object({
   ]).default('mj_generatedentities'),
 
   verboseOutput: z.boolean().optional().default(false),
+
+  /**
+   * Number of metadata `INSERT` statements CodeGen joins into a single batched
+   * round-trip when syncing newly-discovered entity fields into the metadata
+   * tables (`createNewEntityFieldsFromSchema`). Each row's INSERT SQL is
+   * unchanged and conflict-guarded; this knob only controls how many are
+   * terminated, joined, and sent — plus logged to the migration file — per DB
+   * round-trip.
+   *
+   * Larger values mean fewer round-trips but a larger SQL string per batch;
+   * smaller values trade throughput for smaller batches. These are independent
+   * statements (not a multi-row `VALUES`), so no SQL Server row/parameter limit
+   * bounds the value. Defaults to 250, a good balance on large-schema installs
+   * (thousands of tables). Applies to both SQL Server and PostgreSQL.
+   */
+  metadataInsertBatchSize: z.coerce.number().int().positive().default(250),
 });
 
 /**

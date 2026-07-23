@@ -107,6 +107,22 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   @Input() public messageExtraTemplate: TemplateRef<unknown> | null = null;
 
+  // --- Host-level feature gates (forwarded from mj-conversation-chat-area) ---
+  // All default true so existing consumers are unaffected; set false to remove
+  // the affordance entirely (the control is not rendered, not merely disabled).
+  /** Show the per-message agent run-detail grid (run ID, step/token counts, $ cost). */
+  @Input() public showAgentRunDetails: boolean = true;
+  /** Show the per-message reaction buttons (like / comment). */
+  @Input() public showReactions: boolean = true;
+  /** Show the per-message thumbs rating control on completed AI messages. */
+  @Input() public showMessageRating: boolean = true;
+  /** Allow pinning messages (the per-message pin button). */
+  @Input() public allowPinning: boolean = true;
+  /** Allow editing the user's own messages (the per-message edit button). */
+  @Input() public allowMessageEdit: boolean = true;
+  /** Allow deleting the user's own messages (the per-message delete button). */
+  @Input() public allowMessageDelete: boolean = true;
+
   @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public retryClicked = new EventEmitter<MJConversationDetailEntity>();

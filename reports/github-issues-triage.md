@@ -2,7 +2,7 @@
 
 Generated: 2026-07-12 UTC
 
-Source: GitHub Issues API for `MemberJunction/MJ`, open issues only, excluding pull requests. Open snapshot saved in `reports/github_open_issues_snapshot.json`.
+Source: GitHub Issues API for `MemberJunction/MJ`, open issues only, excluding pull requests. (The raw API snapshot was kept out of the source tree — this triage doc is the durable artifact.)
 
 ## Executive Summary
 
@@ -92,7 +92,7 @@ Counts below are the **original triage**, including the 3 issues addressed in th
 
 **Things a reviewer should not be surprised by:**
 
-- The diff is ~+14.5k lines, but ~9.8k of that is the raw `github_open_issues_snapshot.json`. The reviewable code is a small fraction of that number.
+- The original #3129 diff read ~+14.5k lines, but ~9.8k of that was the raw `github_open_issues_snapshot.json` (since removed in a follow-up — this doc is the durable artifact). The reviewable code was a small fraction of that number.
 - `changeset status` errors in this repo (it looks for a `main` baseline; this repo uses `next`). Pre-existing, unrelated to this PR.
 - `check:ui:all` reports pre-existing token violations in files this PR never touched. The CI gate only diffs *changed* files, and those are clean.
 

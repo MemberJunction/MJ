@@ -7,7 +7,7 @@ vi.mock('@memberjunction/global', () => ({
 
 // Mock @memberjunction/ai — provide BaseModel/BaseRealtimeModel base classes only. The realtime
 // type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
-vi.mock('@memberjunction/ai', () => {
+vi.mock('@memberjunction/ai', async () => {
     class BaseModel {
         protected _apiKey: string;
         constructor(apiKey: string) {
@@ -17,7 +17,11 @@ vi.mock('@memberjunction/ai', () => {
     class BaseRealtimeModel extends BaseModel {}
     // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
     const RealtimeDiagLog = () => { /* no-op in tests */ };
-    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog };
+    // IsTranscriptContinuation is a PURE, dependency-free helper — pull in the REAL implementation
+    // rather than stubbing it, so this driver test asserts against shipped behavior. It lives in its
+    // own module precisely so importing it here can't cascade into other mocked packages.
+    const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog, IsTranscriptContinuation };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -533,6 +537,50 @@ describe('OpenAIRealtime', () => {
                 { Role: 'user', Text: 'set a timer', IsFinal: true, ReplacesPrevious: true },
                 { Role: 'user', Text: 'cancel', IsFinal: true, ReplacesPrevious: false },
             ]);
+        });
+
+        it('treats a post-pause caption that CONTINUES the utterance as a replacement, not a new turn (production regression)', () => {
+            // Verbatim from live Grok session 72989D0A: ONE spoken sentence became THREE persisted rows
+            // because the VAD fired speech_started on the speaker's mid-sentence pauses, resetting the
+            // per-turn flag even though the provider kept re-emitting the same (growing) utterance.
+            // Note the re-punctuation across the first boundary ("remote." → "remote,") — a raw prefix
+            // test misses it, which is why the continuation check normalizes.
+            const P1 = 'Okay, fair enough. So hey, I want you to give me a really cool demo of all the features you have, including whiteboarding, uh, remote.';
+            const P2 = 'Okay, fair enough. So hey, I want you to give me a really cool demo of all the features you have, including whiteboarding, uh, remote, so just get going.';
+            const P3 = 'Okay, fair enough. So hey, I want you to give me a really cool demo of all the features you have, including whiteboarding, uh, remote, so just get going. Show me some cool stuff.';
+            const transcripts: Array<{ Text: string; ReplacesPrevious?: boolean }> = [];
+            session.OnTranscript((t) => transcripts.push({ Text: t.Text, ReplacesPrevious: t.ReplacesPrevious }));
+            const completed = (transcript: string) => driver.Fake.Fire({
+                type: 'conversation.item.input_audio_transcription.completed', transcript, content_index: 0, event_id: 'e', item_id: 'i',
+            } as RealtimeServerEvent);
+            const pause = () => driver.Fake.Fire({ type: 'input_audio_buffer.speech_started', audio_start_ms: 1, event_id: 'e', item_id: 'i' } as RealtimeServerEvent);
+
+            completed(P1);
+            pause();        // mid-sentence breath — NOT a real turn boundary
+            completed(P2);
+            pause();        // another breath
+            completed(P3);
+
+            // Only the FIRST is a new turn; the rest replace it → one persisted row, not three.
+            expect(transcripts.map((t) => t.ReplacesPrevious)).toEqual([false, true, true]);
+            expect(transcripts[transcripts.length - 1].Text).toBe(P3);
+        });
+
+        it('a NEW utterance after the model has responded starts a fresh turn (anchor cleared on response.created)', () => {
+            // The continuation window must close when the model takes the floor — otherwise a later
+            // utterance that happens to open with the same words would merge into the previous turn.
+            const transcripts: Array<{ Text: string; ReplacesPrevious?: boolean }> = [];
+            session.OnTranscript((t) => transcripts.push({ Text: t.Text, ReplacesPrevious: t.ReplacesPrevious }));
+            const completed = (transcript: string) => driver.Fake.Fire({
+                type: 'conversation.item.input_audio_transcription.completed', transcript, content_index: 0, event_id: 'e', item_id: 'i',
+            } as RealtimeServerEvent);
+
+            completed('Show me the weather');
+            driver.Fake.Fire({ type: 'response.created', event_id: 'e', response: {} } as RealtimeServerEvent); // model replies → turn over
+            driver.Fake.Fire({ type: 'input_audio_buffer.speech_started', audio_start_ms: 1, event_id: 'e', item_id: 'i' } as RealtimeServerEvent);
+            completed('Show me the weather for Tokyo too'); // extends the words, but it's a NEW turn
+
+            expect(transcripts.map((t) => t.ReplacesPrevious)).toEqual([false, false]);
         });
 
         it('translates a function call to OnToolCall', () => {

@@ -58,6 +58,12 @@ export default class TestSuite extends Command {
       description: 'Retry a FAILED test up to N extra times, passing if any attempt passes (absorbs transient/non-deterministic flakiness). A test that fails then passes is reported as flaky. Default 0 (no retries).',
       default: 0,
     }),
+    'checks-module': Flags.string({
+      description:
+        'Module specifier (package name or path) side-effect-imported before the run so its ' +
+        'integration check bundles register on the IntegrationCheckRegistry. Durable form: ' +
+        "mj.config.cjs `testing.checkModules` (this repo loads '@memberjunction/integration-test-suite' that way).",
+    }),
     'oracles-module': Flags.string({
       description:
         'Path to a JS/TS module that exports custom IOracle classes or instances. ' +
@@ -128,6 +134,7 @@ export default class TestSuite extends Command {
         maxFailures: flags['max-failures'],
         failFast: flags['fail-fast'],
         sequence: flags.sequence,
+        checksModule: flags['checks-module'],
       });
 
     } catch (error) {

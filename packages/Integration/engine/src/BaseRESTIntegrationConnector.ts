@@ -881,7 +881,22 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     ): Promise<void> {
         if (level >= resolutions.length) {
             const fullURL = this.BuildFullURL(baseURL, path);
-            const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
+            // Leaf-scoped context: the outer ctx.BatchSize bounds how many PARENTS this call
+            // processes (see the resumable AfterKeyValue loop above the first call into this
+            // method) — it is NOT a per-parent record cap. Passing ctx as-is here made
+            // FetchPaginatedLoop cap THIS parent's own child collection at ctx.BatchSize and
+            // return HasMore/NextOffset/NextCursor, which this method then discards (only
+            // result.Records is read) before the caller moves on to the next parent — silently
+            // and PERMANENTLY dropping every record beyond the first batch for that parent, with
+            // no bookmark anywhere that would revisit it on a later sync. Live-verified against
+            // real data: Wild Apricot's Donation/Event/Invoice/Payment (all single-parent,
+            // `/accounts/{accountId}/...`) landed exactly 200 rows each — the batch cap — while
+            // Contact (same shape) landed all 1,275 real rows because it happens to bypass this
+            // path via a bespoke override. A per-parent child collection is finite, already-known
+            // data for an item the engine chose to sync this call; drain it to completion instead
+            // of truncating it.
+            const leafCtx: FetchContext = { ...ctx, BatchSize: Number.MAX_SAFE_INTEGER, CurrentPage: undefined, CurrentOffset: undefined, CurrentCursor: undefined };
+            const result = await this.FetchWithPagination(auth, fullURL, obj, leafCtx);
             for (const r of result.Records) {
                 for (const [k, v] of Object.entries(fkTags)) r[k] = v;
                 const transformed = this.applyTransformPreservingKeys(r, obj, fields);

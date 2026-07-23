@@ -87,7 +87,7 @@ export interface EmptyStateConfig {
 }
 
 /** Default width (percentage) for the artifact viewer pane */
-const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
+export const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
 
 @Component({
   standalone: false,
@@ -153,6 +153,57 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * agent's modality support, computed at runtime.
    */
   @Input() allowAttachments = true;
+
+  /**
+   * Host-level cap for the composer's Plan Mode toggle. Defaults true
+   * (current behavior). White-labeled / end-user hosts that don't expose
+   * plan-mode workflows set false to remove the button entirely.
+   */
+  @Input() allowPlanMode = true;
+
+  /**
+   * Host-level cap for the composer's realtime voice-call launcher (and its
+   * options caret). Defaults true (current behavior). Hosts with no voice
+   * experience set false to remove the buttons entirely.
+   */
+  @Input() allowRealtime = true;
+
+  /**
+   * Whether the message list renders its built-in "No messages yet" filler
+   * when a conversation has zero messages. Defaults true. Hosts that render
+   * their own empty-state chrome around the chat area set false.
+   */
+  @Input() showEmptyFill = true;
+
+  /**
+   * Whether the built-in centered loading indicator renders while a
+   * conversation loads. Defaults true. When false the pane stays blank
+   * during the load (the loading branch still short-circuits rendering, so
+   * no premature empty-state flash). Hosts with their own loading chrome
+   * set false.
+   */
+  @Input() showLoadingState = true;
+
+  // --- Additional host-level feature gates (all default true; false removes the
+  //     affordance entirely). Forwarded to the message list / message items / empty
+  //     state so white-labeled end-user surfaces can pare the chat down through the
+  //     component contract instead of CSS on internal class names. ---
+  /** Show the per-message agent run-detail grid (run ID, step/token counts, $ cost). */
+  @Input() showAgentRunDetails = true;
+  /** Show the per-message reaction buttons (like / comment). */
+  @Input() showReactions = true;
+  /** Show the per-message thumbs rating control on completed AI messages. */
+  @Input() showMessageRating = true;
+  /** Allow pinning messages (per-message pin button, the header pin chip, and the pinned-messages panel). */
+  @Input() allowPinning = true;
+  /** Allow editing the user's own messages (per-message edit button). */
+  @Input() allowMessageEdit = true;
+  /** Allow deleting the user's own messages (per-message delete button). */
+  @Input() allowMessageDelete = true;
+  /** Show the empty-state's built-in suggested-prompt chips (and the @mention tip). */
+  @Input() showSuggestedPrompts = true;
+  /** Show the message list's sticky date header + jump-to-date navigation. */
+  @Input() showDateNavigation = true;
 
   private _isNewConversation: boolean = false;
   @Input()
@@ -1285,7 +1336,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.uploadingMessage = '';
     this.intentCheckMessage = null;
 
+    // Reset width along with the flag — otherwise a pane maximized in the
+    // previous conversation leaves artifactPaneWidth at 100, and the next
+    // artifact opens overflowing the viewport (chat area still visible).
+    // Guarded so a non-maximized user-dragged width survives the switch.
+    if (this.isArtifactPaneMaximized) {
+      this.resetArtifactPaneSizing();
+    }
+  }
+
+  private resetArtifactPaneSizing(): void {
     this.isArtifactPaneMaximized = false;
+    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
@@ -2835,8 +2897,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.canShareSelectedArtifact = false;
     this.canEditSelectedArtifact = false;
     // Reset maximize state and width when closing so the next artifact opens at default size
-    this.isArtifactPaneMaximized = false;
-    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
+    this.resetArtifactPaneSizing();
     this.cdr.detectChanges();
   }
 

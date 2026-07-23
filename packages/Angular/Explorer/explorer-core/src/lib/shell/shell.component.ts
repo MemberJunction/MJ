@@ -46,6 +46,20 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
  * - Golden Layout-based tab container
  * - Unified workspace state management
  */
+/**
+ * Instance-config-backed shell chrome flags, resolved once from InstanceConfigEngine
+ * and cached for the component's lifetime. Angular change detection evaluates the
+ * getters that expose these constantly, so a per-read engine lookup would run
+ * thousands of times; resolving the whole set once keeps every read a field access.
+ */
+interface ShellChromeFlags {
+  searchBar: boolean;
+  searchPreview: boolean;
+  notifications: boolean;
+  appSwitcher: boolean;
+  appNav: boolean;
+}
+
 @Component({
   standalone: false,
   selector: 'mj-shell',
@@ -149,12 +163,52 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   // Desktop omnibar-off uses the inline header composite instead.
   LegacySearchOpen = false;
 
-  // Instance configuration feature flags
+  // Instance configuration feature flags — all resolved through the single
+  // memoized `chromeFlags` accessor below (see ShellChromeFlags) so Angular's
+  // change detection reads a cached field instead of hitting the engine per pass.
+  private _chromeFlags: ShellChromeFlags | null = null;
+
+  /**
+   * Resolve the instance-config chrome flags once and cache them. Computed live
+   * from the fail-open defaults until InstanceConfigEngine has loaded, then frozen
+   * on the first post-load read — so the pre-load defaults are never cached over
+   * the real values, and every steady-state read is a plain field access.
+   */
+  private get chromeFlags(): ShellChromeFlags {
+      if (this._chromeFlags) {
+          return this._chromeFlags;
+      }
+      const engine = InstanceConfigEngine.Instance;
+      const flags: ShellChromeFlags = {
+          searchBar: engine.GetBoolean('Shell.SearchBar.Enabled', true),
+          searchPreview: engine.GetBoolean('Shell.SearchBar.EnablePreview', true),
+          notifications: engine.GetBoolean('Shell.Notifications.Enabled', true),
+          appSwitcher: engine.GetBoolean('Shell.AppSwitcher.Enabled', true),
+          appNav: engine.GetBoolean('Shell.AppNav.Enabled', true),
+      };
+      if (engine.Loaded) {
+          this._chromeFlags = flags;
+      }
+      return flags;
+  }
+
   get ShowSearchBar(): boolean {
-      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.Enabled', true);
+      return this.chromeFlags.searchBar;
+  }
+  /** Instance Config gate for the notification bell + unread badge (desktop and mobile). */
+  get ShowNotifications(): boolean {
+      return this.chromeFlags.notifications;
+  }
+  /** Instance Config gate for the app switcher (also the add/configure-apps entry point). */
+  get ShowAppSwitcher(): boolean {
+      return this.chromeFlags.appSwitcher;
+  }
+  /** Instance Config gate for the app navigation strip (desktop and the mobile drawer). */
+  get ShowAppNav(): boolean {
+      return this.chromeFlags.appNav;
   }
   get ShowSearchPreview(): boolean {
-      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
+      return this.chromeFlags.searchPreview;
   }
   /**
    * Two-layer gate for the unified Ctrl+K command palette (omnibar):
@@ -1437,7 +1491,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         case 'records':
           // /app/:appName/record/:entityName/:recordId
           if (entityName && recordId) {
-            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`);
+            // recordId is a CompositeKey URL segment ("ID|<value>") — the '|' MUST be encoded.
+            // Angular's UrlSerializer percent-encodes '|' to %7C in router.url, so if we embed it raw
+            // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
+            // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
+            // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
+            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
           }
           break;
 
@@ -1514,7 +1573,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     switch (resourceType) {
       case 'records':
         if (entityName && recordId) {
-          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${recordId}`);
+          // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
+          // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
+          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
         }
         break;
 

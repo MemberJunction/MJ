@@ -14,7 +14,7 @@ This guide covers the architecture, every way to run the tier, and every way to 
 | Tier | What's real | What stands in | Tooling | Speed |
 |---|---|---|---|---|
 | **Unit tests** | The function under test | Providers, DB, transport (all mocked) | Vitest | ms |
-| **Integration tests** | DB, providers, cache managers, engines, GraphQL transport | *Only the top layer* — the test process stands in for MJAPI/MJExplorer | `tsx` scripts + the Testing Framework | ~10–60s/suite |
+| **Integration tests** | DB, providers, cache managers, engines, GraphQL transport | *Only the top layer* — the test process stands in for MJAPI/MJExplorer | `mj test` (the Testing Framework CLI) | ~10–60s/suite |
 | **Browser / computer-use regression** | Everything, end to end | Nothing | Playwright / CU | minutes |
 
 The guiding principle is **"mock the top layer, keep everything else real."** A mocked provider
@@ -30,48 +30,56 @@ integration coverage.
 
 ## 2. Architecture
 
-### 2.1 One library of checks, two execution front-ends
+### 2.1 Framework and content, one execution front-end
 
-All check logic lives **once**, in
-[`@memberjunction/testing-integration`](../packages/TestingFramework/testing-integration/)
-(`packages/TestingFramework/testing-integration/`). Two front-ends execute the same registered
-checks, so coverage can never drift between them:
+Since the July-2026 restructure, the tier is split into a **framework** package (published,
+content-free) and a **content** package (private, never published) — and there is exactly
+**one** way to execute the catalog: `mj test`.
 
 ```
-                 ┌──────────────────────────────────────────────────────────┐
-                 │            @memberjunction/testing-integration           │
-                 │                                                          │
-                 │  IntegrationCheckRegistry (BaseSingleton)                │
-                 │    · 21 check bundles · ~130 NamedChecks                 │
-                 │    · BundleLifecycles (shared fixtures, setup/teardown)  │
-                 │  bootstrap  (server / client / PostgreSQL)               │
-                 │  InstrumentedLocalStorageProvider + UniqueFilter         │
-                 │  tiers  (IsTierEnabled — the ONE gate predicate)         │
-                 │  TestRunner + Assert helpers · ai-verify                 │
-                 │  IntegrationTestDriver  (@RegisterClass)                 │
-                 └─────────────▲─────────────────────────▲──────────────────┘
-                               │                         │
-        ┌──────────────────────┴───────┐   ┌─────────────┴──────────────────────┐
-        │  Metadata-driven front-end   │   │  Script front-end                  │
-        │  TestEngine → TestType row → │   │  npx tsx <suite>-tests.ts          │
-        │  IntegrationTestDriver       │   │  (one dedicated process per suite) │
-        │  mj test run / mj test suite │   │  run-all.ts aggregator             │
-        │  results → MJ: Test Runs     │   │  (npm run test:integration)        │
-        └──────────────────────────────┘   └────────────────────────────────────┘
+  ┌───────────────────────────────────────────┐   ┌──────────────────────────────────────────┐
+  │   @memberjunction/testing-integration     │   │  @memberjunction/integration-test-suite  │
+  │   (published — FRAMEWORK ONLY)            │   │  (private: true — MJ's OWN test content) │
+  │                                           │   │                                          │
+  │  IntegrationCheckRegistry (BaseSingleton) │◀──┤  src/checks/  · 52 bundles · ~365 checks │
+  │  NamedCheck / BundleLifecycle contracts   │   │  src/index.ts barrel (side-effect-       │
+  │  bootstrap  (server / client / PostgreSQL)│   │    imports every bundle → registers all) │
+  │  InstrumentedLocalStorageProvider         │   │  src/__tests__/  count table + parity    │
+  │  tiers  (IsTierEnabled — the ONE gate)    │   │  rigs/  standalone tsx scripts           │
+  │  TestRunner + Assert helpers · ai-verify  │   │        (NOT catalog entry paths)         │
+  │  IntegrationTestDriver  (@RegisterClass)  │   └──────────────────────────────────────────┘
+  └─────────────────────▲─────────────────────┘                       ▲
+                        │                                             │ loaded at runtime via
+  ┌─────────────────────┴─────────────────────────────────────────────┴──────┐
+  │  The ONE front-end: mj test                                              │
+  │  TestEngine → "Integration Test" TestType → IntegrationTestDriver        │
+  │  mj test run / mj test suite  ·  results → MJ: Test Runs                 │
+  │  mj.config.cjs testing.checkModules (or --checks-module) loads bundles   │
+  └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **The script front-end** (`packages/MJServer/integration-test-scripts/`) runs each suite as
-  its own `tsx` process. Each script bootstraps the provider stack, pulls its bundle from the
-  registry, runs the checks sequentially, and exits `0/1/2`. `run-all.ts` orchestrates all of
-  them and is the CI gate.
-- **The metadata-driven front-end** runs the same bundles through the Testing Framework: a
-  `MJ: Test Types` row named **`Integration Test`** points at `DriverClass:
-  "IntegrationTestDriver"`; `MJ: Tests` rows select bundles via their `Configuration` JSON;
-  suites group tests; results persist as `MJ: Test Runs` rows browsable in the Explorer
-  Testing dashboard.
+- **The framework** (`packages/TestingFramework/testing-integration/`) ships to customers —
+  `@memberjunction/server-bootstrap`'s manifest imports `IntegrationTestDriver` from its
+  barrel — so it deliberately carries **no check bundles and no heavy dependencies**.
+- **The content** (`packages/TestingFramework/integration-test-suite/`, `private: true`) holds
+  every check bundle plus the heavy dependency tree (`ai-agents`, `record-set-processor`,
+  `predictive-studio`, …). Importing its barrel registers the full catalog on the shared
+  registry as a side effect.
+- **The loading seam**: the published `mj` CLI cannot depend on the private package, so
+  `mj test run` / `mj test suite` side-effect-import it at startup via the repo root
+  `mj.config.cjs` — `testing: { checkModules: ['@memberjunction/integration-test-suite'] }` —
+  after the instrumented-cache install and before provider setup. Ad-hoc override:
+  `--checks-module <specifier>`. **External adopters point `checkModules` at their own check
+  packages** — that is the extension point.
+- **Execution is metadata-driven**: a `MJ: Test Types` row named **`Integration Test`** points
+  at `DriverClass: "IntegrationTestDriver"`; `MJ: Tests` rows select bundles via their
+  `Configuration` JSON; suites group tests; results persist as `MJ: Test Runs` rows browsable
+  in the Explorer Testing dashboard.
 
-Both front-ends call the same `IntegrationCheckRegistry.GetBundle(...)`, the same
-`BundleLifecycle` setup/teardown, and the same `IsTierEnabled(...)` gate — one source of truth.
+(The old second front-end — per-suite `tsx` dispatchers + a `run-all.ts` aggregator under
+`packages/MJServer/integration-test-scripts/` — was **deleted by design**; that folder is now a
+pointer README. One registry, one driver, one entry path: coverage cannot drift because there
+is nothing left to drift.)
 
 ### 2.2 The check contract
 
@@ -95,7 +103,7 @@ export interface NamedCheck {
 Checks are grouped into **bundles** — ordered arrays registered under a shared prefix
 (`server-cache`, `rls-isolation`, `ai-skills`, …). **Order is load-bearing**: several checks
 intentionally build on cache state from earlier ones (e.g. one check warms a cache slot that
-the next asserts a hit on), so both front-ends run a bundle's checks strictly in array order.
+the next asserts a hit on), so the driver runs a bundle's checks strictly in array order.
 
 Every check receives one shared **`IntegrationCheckContext`**:
 
@@ -107,20 +115,22 @@ Every check receives one shared **`IntegrationCheckContext`**:
 | `Pool` | Raw `mssql` pool for fixture SQL (server transport only) |
 | `Schema` | Core schema (e.g. `__mj`) |
 | `Config` | The opaque per-bundle `config` bag from the selector (e.g. `datasetName`, `entityName`) |
-| `Fixtures` / `RlsFixture` / `AiSkillsFixture` / … | Typed slots populated by the bundle's lifecycle or the front-end |
+| `Fixtures` / `RlsFixture` / `AiSkillsFixture` / … | Typed slots populated by the bundle's lifecycle or the driver |
 
 **Mutating bundles register a `BundleLifecycle`** — `Setup` creates the bundle's shared fixture
 (throwaway rows, prefixed names) and assigns it onto the context; `Teardown` deletes everything
-in FK-safe order. Both front-ends wrap the bundle's checks in `Setup → run → Teardown
+in FK-safe order. The driver wraps the bundle's checks in `Setup → run → Teardown
 (finally)`, and teardown is best-effort (it never throws, so a failing check still cleans up).
 
 The registry itself
 ([`check-registry.ts`](../packages/TestingFramework/testing-integration/src/check-registry.ts))
 is a `BaseSingleton` with `Register`, `Get(id)`, `GetBundle(prefix)`, `RegisterLifecycle`, and
-`GetLifecycle`. Bundle modules **self-register on import** — the package's
-[`index.ts`](../packages/TestingFramework/testing-integration/src/index.ts) exports every
-`checks/*.checks.ts`, so importing the package (or calling `LoadTestingIntegration()`) loads
-the full catalog and fires the driver's `@RegisterClass` decorator.
+`GetLifecycle` — it lives in the **framework** package. Bundle modules **self-register on
+import** — the **suite** package's
+[`index.ts`](../packages/TestingFramework/integration-test-suite/src/index.ts) exports every
+`checks/*.checks.ts`, so importing `@memberjunction/integration-test-suite` (which the CLI does
+via the `checkModules` seam) loads the full catalog. The driver's `@RegisterClass` decorator
+fires from the framework package's own barrel.
 
 ### 2.3 The bootstrap and the dedicated-process rule
 
@@ -137,7 +147,7 @@ this with three install paths that share one process-global instrumented storage
 
 | Function | Use |
 |---|---|
-| `bootstrapIntegrationServer(opts?)` | Owns the process: instrumented cache first, then the real database provider (SQL Server by default; PostgreSQL when `DB_PLATFORM=postgresql`), user-cache refresh, context-user resolution. Used by the scripts, the smoke test, and as the driver's self-bootstrap fallback. |
+| `bootstrapIntegrationServer(opts?)` | Owns the process: instrumented cache first, then the real database provider (SQL Server by default; PostgreSQL when `DB_PLATFORM=postgresql`), user-cache refresh, context-user resolution. Used by the smoke test, the standalone rigs, and as the driver's self-bootstrap fallback. |
 | `bootstrapIntegrationClient()` | Same first-caller discipline, then `setupGraphQLClient` against a **running MJAPI** (preflights the endpoint first; authenticates via `MJ_API_KEY` → `x-mj-api-key`). |
 | `installInstrumentedCacheFirst()` | Installs ONLY the cache — for the testing CLI, which sets up its own provider afterwards. Triggered by `MJ_INTEGRATION_TEST=1`. |
 
@@ -188,10 +198,10 @@ Every check (and every metadata Test) belongs to a **tier**
 |---|---|---|
 | `deterministic` | Credential-free, read-only or self-cleaning; **the blocking CI gate** | none — always runs |
 | `mutation` | Writes to the DB and cleans up unconditionally | `RUN_MUTATION_TESTS=1` |
-| `live-model` | Real LLM calls — costs tokens, needs model credentials | `RUN_AGENT_TESTS=1` |
+| `live-model` | Real LLM calls — costs tokens, needs model credentials | **default-ON**; opt *out* with `RUN_AGENT_TESTS=0` |
 
-`IsTierEnabled(tier)` is the **single predicate** both front-ends call, so a gate is honored
-identically everywhere. Gating exists at two granularities:
+`IsTierEnabled(tier)` is the **single predicate** every consumer (driver, rigs) calls, so a
+gate is honored identically everywhere. Gating exists at two granularities:
 
 - **Whole-test**: a metadata Test's `Configuration.tier` (or an explicit `requiresEnv` env-var
   override). When gated off, the driver **skips-as-Passed** with one `gate` oracle whose
@@ -201,9 +211,10 @@ identically everywhere. Gating exists at two granularities:
   server-cache bundle). A bundle selector can also opt mutation checks in declaratively via
   `config.runMutationTests: true`, independent of env.
 
-Adjacent gates outside the tier enum: the Predictive Studio *flow* scripts run only under
-`PS_INTEGRATION=1` (they also need the Python sidecar), and client-transport suites self-skip
-when no MJAPI is reachable or `MJ_API_KEY` is unset.
+Adjacent gates outside the tier enum: the Predictive Studio *flow* rigs
+(`integration-test-suite/rigs/ps-*.ts`) run only under `PS_INTEGRATION=1` (they also need the
+Python sidecar), the cross-server rig under `RUN_CROSS_SERVER=1`, and client-transport tests
+need a reachable MJAPI + `MJ_API_KEY`.
 
 ### 2.6 Transports
 
@@ -225,20 +236,22 @@ metadata-driven end to end:
 MJ: Test Types ──▶ "Integration Test"  { DriverClass: "IntegrationTestDriver", Status: Active }
       │                                  metadata/test-types/.integration-test-type.json  (normal metadata — inert type def)
       ▼
-MJ: Tests ───────▶ IT01…IT19            Configuration selects bundles + tier + transport
+MJ: Tests ───────▶ IT01…IT66            Configuration selects bundles + tier + transport
       │                                  metadata-optional/integration-test/tests/integration/.IT*.json
       ▼
-MJ: Test Suites ─▶ "Integration Tests"  (parent)
-                   ├─ "Integration Tests — Deterministic"   IT01–IT15  (the blocking tier)
-                   └─ "Integration Tests — Live Model"      IT16–IT19  (opt-in)
+MJ: Test Suites ─▶ "Integration Tests"  (parent — 0 members; running it errors, exit 1)
+                   ├─ "Integration Tests — Deterministic"   IT01–IT15, IT20–IT52, IT64–IT66  (52 members, the blocking tier)
+                   └─ "Integration Tests — Live Model"      IT16–IT19, IT53–IT63  (15 members)
                                          metadata-optional/integration-test/test-suites/.integration-suite.json
       ▼
 MJ: Test Runs ───▶ one row per execution; ResultDetails = the per-check OracleResult[]
 ```
 
-**How execution works:** `TestEngine` resolves the driver from the TestType's `DriverClass` via
-the ClassFactory (`CreateInstance(BaseTestDriver, 'IntegrationTestDriver')`), then calls
-`Execute()`. The
+**How execution works:** the CLI first side-effect-imports the configured `checkModules`
+(populating the registry — a missing/unbuilt suite package surfaces as an
+`Unknown integration check bundle` failure), then `TestEngine` resolves the driver from the
+TestType's `DriverClass` via the ClassFactory
+(`CreateInstance(BaseTestDriver, 'IntegrationTestDriver')`) and calls `Execute()`. The
 [`IntegrationTestDriver`](../packages/TestingFramework/testing-integration/src/IntegrationTestDriver.ts):
 
 1. parses the Test's `Configuration` (below);
@@ -283,8 +296,8 @@ assertions live in the bundle code.
 
 **Suite mechanics:** suite membership rows (`MJ: Test Suite Tests`) carry a `Sequence` (tests
 run in order — integration suites are serial) and a `Status` — members marked `Skip` are
-excluded from suite runs (the two client-transport tests, IT03 and IT15, ship as `Skip` in the
-deterministic suite because the CI gate has no MJAPI; run them individually with MJAPI up).
+excluded from suite runs (IT03, IT15, and IT23 ship as `Skip` in the deterministic suite; run
+them individually with MJAPI up).
 For suites, the engine also gives drivers **suite-scoped fixtures**: it builds one
 `SuiteFixtureContext` (`{ SuiteRunID, Data, CreatedRecords }`) per suite run, calls each
 distinct driver's `SetupSuite` once before the tests and `TeardownSuite` in a guaranteed
@@ -328,100 +341,72 @@ Everything runs **from the repo root** (`.env` / `mj.config.cjs` resolution is c
 Exit codes are uniform across every entry point: **`0` passed (or cleanly skipped) · `1`
 failures · `2` bootstrap/connectivity error**.
 
-### 3.1 Everything at once — the aggregator
+### 3.1 One-time setup — seed the metadata (load-bearing)
+
+`mj test` is **metadata-driven**: it discovers tests from `MJ: Tests` / `MJ: Test Suites`
+records in the database. Without them it has **nothing to dispatch** — so every environment
+that runs the tier (a fresh dev DB, CI) must seed them once. The "Integration Test" TestType
+lives in the normal `metadata/` tree (an inert type definition), so it lands with a normal
+`metadata/` push; the IT tests, the suite hierarchy, and the RLS fixture
+users/roles/permissions live under the optional sibling root:
 
 ```bash
-npm run test:integration                      # deterministic tier (gated tiers report SKIP)
-RUN_MUTATION_TESTS=1 npm run test:integration # + mutation-gated checks inside the suites
-RUN_AGENT_TESTS=1  npm run test:integration   # + the live-model tier (real LLM calls)
-PS_INTEGRATION=1   npm run test:integration   # + the Predictive Studio flows (needs the sidecar)
-npx tsx packages/MJServer/integration-test-scripts/run-all.ts --verbose   # stream all output
-```
-
-[`run-all.ts`](../packages/MJServer/integration-test-scripts/run-all.ts) spawns each suite as
-its own `tsx` process (dedicated-process rule), groups them by tier, and prints a grouped
-results table with one aggregate exit code:
-
-| Group | Gate | Suites |
-|---|---|---|
-| **Deterministic** | always runs | server-cache, runquery-cache, dataset-cache, aggregates-cache, record-process, record-process-facade, lists, rls-isolation, api-keys, scheduled-jobs, field-rules-bulk-update, open-app-teardown, remote-operations, ai-skills, user-routines, predictive-studio (16) |
-| **Deterministic · client** | spawns; self-skips without a reachable MJAPI / `MJ_API_KEY` | remote-op-wire-progress |
-| **Predictive Studio flows** | `PS_INTEGRATION=1` (else SKIP without spawning) | 10 `ps-inproc-*` / `ps-live-*` scripts |
-| **Live Model** | `RUN_AGENT_TESTS=1` (else SKIP without spawning) | prompt-runner, agent-runner, concurrent, remote-op-ai-authoring |
-
-Suite output is hidden unless the suite fails (or `--verbose` / `INTEGRATION_VERBOSE=1`). A
-suite that exits `0` without printing a `X/Y passed` summary is reported **SKIP**, not PASS —
-that's the self-skip protocol (§4.4).
-
-### 3.2 One suite at a time — the scripts
-
-Every suite in [`packages/MJServer/integration-test-scripts/`](../packages/MJServer/integration-test-scripts/)
-is independently runnable:
-
-```bash
-# Server-transport (database only)
-npx tsx packages/MJServer/integration-test-scripts/server-cache-tests.ts
-npx tsx packages/MJServer/integration-test-scripts/rls-isolation-tests.ts
-npx tsx packages/MJServer/integration-test-scripts/ai-skills-tests.ts
-# … and the rest of the deterministic list in §3.1
-
-# Include the mutation-gated checks (e.g. S17/S23/S24 save/delete invalidation)
-RUN_MUTATION_TESTS=1 npx tsx packages/MJServer/integration-test-scripts/server-cache-tests.ts
-
-# Client transport — start MJAPI first: (cd packages/MJAPI && npm run start)
-npx tsx packages/MJServer/integration-test-scripts/client-cache-tests.ts
-
-# Live model (real LLM calls — costs tokens)
-RUN_AGENT_TESTS=1 npx tsx packages/MJServer/integration-test-scripts/agent-runner-tests.ts
-```
-
-Each script is a thin dispatcher: it bootstraps its transport, pulls its bundle from the
-registry (`IntegrationCheckRegistry.Instance.GetBundle('<bundle>')`), and runs the checks on
-the minimal sequential `TestRunner`. A handful of suites are fully self-contained scripts
-rather than registry bundles — `lists-tests.ts`, `user-routines-tests.ts`,
-`open-app-teardown-tests.ts`, the `ps-*` flow scripts, and the cross-server rig (§3.5).
-
-### 3.3 The metadata-driven path — `mj test`
-
-The same bundles, executed through the Testing Framework with results persisted to
-`MJ: Test Runs`.
-
-**One-time setup — push the metadata.** The "Integration Test" TestType lives in the normal
-`metadata/` tree (an inert type definition), so it lands with a normal `metadata/` push. The IT
-tests, the suite hierarchy, and the RLS fixture users/roles/permissions live under the optional
-sibling root:
-
-```bash
-npx mj sync push --dir=metadata                       # includes the Integration Test TestType
+npx mj sync push --dir=metadata                             # includes the Integration Test TestType
 npx mj sync push --dir=metadata-optional/integration-test   # IT tests + suite + RLS fixtures
 ```
 
-**Run** — two things are load-bearing:
+Two more things are load-bearing on every run:
 
 - **`MJ_INTEGRATION_TEST=1`** makes the CLI install the instrumented cache *first-caller*
   before its own provider setup (otherwise counters silently see nothing) and forces the suite
   serial.
-- **Use the workspace-local `mj`** (`./node_modules/.bin/mj`). A globally-installed `mj` does
-  not carry `@memberjunction/testing-integration`, so the driver's `@RegisterClass` never fires
-  and the run fails with `driver.Execute is not a function`.
+- **Use the workspace-local `mj`** (`./node_modules/.bin/mj`; `npm run` scripts and `npx mj`
+  from the repo root resolve it automatically). A globally-installed `mj` cannot load the
+  private suite package, so every bundle dispatch fails with
+  `Unknown integration check bundle`.
+
+The bundles themselves reach the CLI through the **`checkModules` seam** (§2.1): the repo root
+`mj.config.cjs` carries `testing: { checkModules: ['@memberjunction/integration-test-suite'] }`,
+and the suite package must be **built** (`npm run build` covers it). If `mj test` reports an
+unknown bundle, check — in order — metadata seeded, suite package built, `checkModules`
+configured.
+
+### 3.2 The whole tier
 
 ```bash
-# One test
-MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT01 - Server RunView Cache Integrity"
+npm run test:integration                      # deterministic suite (gated checks skip-as-pass)
+RUN_MUTATION_TESTS=1 npm run test:integration # + mutation-gated checks inside the bundles
+```
+
+`npm run test:integration` is exactly
+`MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"` — the suite runs
+serially, one `MJ: Test Runs` row per test, one exit code for CI.
+
+### 3.3 One test / one suite — `mj test`
+
+The per-bundle iteration loop is `mj test run` with the bundle's IT record name:
+
+```bash
+# One test (the old "run one suite's dispatcher" loop)
+MJ_INTEGRATION_TEST=1 npx mj test run --name "IT01 - Server RunView Cache Integrity"
 
 # A whole suite (runs serially under MJ_INTEGRATION_TEST=1 regardless of --parallel)
-MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test suite --name "Integration Tests — Deterministic"
+MJ_INTEGRATION_TEST=1 npx mj test suite --name "Integration Tests — Deterministic"
 
 # The live-model suite (also needs the tier gate)
-RUN_AGENT_TESTS=1 MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test suite --name "Integration Tests — Live Model"
+RUN_AGENT_TESTS=1 MJ_INTEGRATION_TEST=1 npx mj test suite --name "Integration Tests — Live Model"
+
+# Client-transport tests — start MJAPI first: (cd packages/MJAPI && npm run start)
+MJ_INTEGRATION_TEST=1 npx mj test run --name "IT03 - Client GraphQL Cache Integrity"
 
 # Validate definitions without executing (driver resolvable, Configuration parses)
-./node_modules/.bin/mj test validate --type "Integration Test"
-./node_modules/.bin/mj test run --name "IT01 - Server RunView Cache Integrity" --dry-run
+npx mj test validate --type "Integration Test"
+npx mj test run --name "IT01 - Server RunView Cache Integrity" --dry-run
 ```
 
 Useful extras: `mj test list`, `mj test history`, `mj test suite --flaky-check 3` (runs each
-test N times and reports variance).
+test N times and reports variance), and `--checks-module <specifier>` to preload an ad-hoc
+check package on top of the configured `checkModules`.
 
 ### 3.4 Browsing results — the Explorer Testing dashboard
 
@@ -432,10 +417,16 @@ server-transport tests (§2.3) — the run records an `Error` result whose messa
 the CLI invocation. Treat the dashboard as the observability surface; the CLI and scripts are
 the execution surface.
 
-### 3.5 Special rigs
+### 3.5 Special rigs — standalone by design
+
+Coverage that can't live inside the one-process `mj test` catalog runs as **standalone `tsx`
+scripts** under
+[`packages/TestingFramework/integration-test-suite/rigs/`](../packages/TestingFramework/integration-test-suite/rigs/)
+(with their shared `lib/harness.ts` + `lib/ai-bootstrap.ts`). They are deliberately NOT catalog
+entry paths.
 
 **Bootstrap smoke test** — proves the first-caller invariant end to end (a cold RunView must
-show an instrumented `RunViewCache` write):
+show an instrumented `RunViewCache` write); lives with the framework package:
 
 ```bash
 npx tsx packages/TestingFramework/testing-integration/smoke/bootstrap-smoke.ts
@@ -452,27 +443,32 @@ docker compose -f docker/regression/docker-compose.test.yml \
 
 MJAPI_A_URL=http://localhost:14000/ MJAPI_B_URL=http://localhost:14001/ \
 MJ_API_KEY=<system-api-key> \
-npx tsx packages/MJServer/integration-test-scripts/cross-server-invalidation-tests.ts
+npx tsx packages/TestingFramework/integration-test-suite/rigs/cross-server-invalidation-tests.ts
 ```
 
-(Not part of the aggregate run — it needs the two-server topology provisioned.)
-
-**Front-end equivalence (golden diff)** — both front-ends can emit identical per-check outcome
-files via `EMIT_OUTCOMES=<path>` (`{name, passed, durationMs, error?}[]`);
-[`scripts/integration-golden-diff.mjs`](../scripts/integration-golden-diff.mjs) diffs two such
-files by check id and fails on missing/extra/pass-mismatch (timing differences only warn):
+**Other rigs**: `agent-memory-tests.ts` (live-model, `RUN_AGENT_TESTS=1`),
+`runview-matrix-tests.ts` (client-first RunView sweep across every entity — needs MJAPI +
+`MJ_API_KEY`), and the ten `ps-inproc-*` / `ps-live-*` Predictive Studio flows
+(`PS_INTEGRATION=1` + the Python sidecar). All run the same way:
 
 ```bash
-EMIT_OUTCOMES=/tmp/golden/script.json npx tsx packages/MJServer/integration-test-scripts/server-cache-tests.ts
-EMIT_OUTCOMES=/tmp/golden/driver.json MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT01 - Server RunView Cache Integrity"
-node scripts/integration-golden-diff.mjs /tmp/golden/script.json /tmp/golden/driver.json server-cache
+PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-inproc-operate-flow.ts
 ```
 
-**The package's own unit tests** (registry semantics, config parsing, tier gating, driver
-mapping — mocked, no DB):
+**Outcome files** — a run can emit per-check outcome JSON via `EMIT_OUTCOMES=<path>`
+(`{name, passed, durationMs, error?}[]`);
+[`scripts/integration-golden-diff.mjs`](../scripts/integration-golden-diff.mjs) diffs two such
+files by check id and fails on missing/extra/pass-mismatch (timing differences only warn) —
+originally the front-end-equivalence proof during the migration, still useful for comparing two
+runs.
+
+**The packages' own unit tests** (registry semantics, config parsing, tier gating, driver
+mapping in the framework; per-bundle count table + sibling parity in the suite — mocked, no
+DB):
 
 ```bash
 cd packages/TestingFramework/testing-integration && npm run test
+cd packages/TestingFramework/integration-test-suite && npm run test
 ```
 
 ### 3.6 Environment reference
@@ -483,16 +479,15 @@ cd packages/TestingFramework/testing-integration && npm run test
 | `DB_PLATFORM` | server bootstrap | `sqlserver` (default) or `postgresql` |
 | `MJ_TEST_USER_EMAIL` | server bootstrap | Context-user override (default: Owner-type user, else first user) |
 | `RUN_MUTATION_TESTS=1` | tier gate | Enables the mutation tier / `RequiresMutation` checks |
-| `RUN_AGENT_TESTS=1` | tier gate | Enables the live-model tier / `RequiresLiveModel` checks |
-| `PS_INTEGRATION=1` | run-all + `ps-*` scripts | Enables the Predictive Studio flow scripts |
+| `RUN_AGENT_TESTS` | tier gate | Live-model tier / `RequiresLiveModel` checks. **Default-ON** — `IsTierEnabled` returns `RUN_AGENT_TESTS !== '0'`, so `=1` is a no-op kept for back-compat and only `=0` disables. Note `RUN_MUTATION_TESTS` is the opposite: strictly `=== '1'` |
+| `PS_INTEGRATION=1` | `ps-*` rigs | Enables the Predictive Studio flow rigs |
 | `MJ_API_KEY` | client bootstrap | System API key MJAPI accepts via `x-mj-api-key` |
 | `GRAPHQL_PORT` / `GRAPHQL_ROOT_PATH` / `MJAPI_URL` | client bootstrap | Endpoint resolution; `MJAPI_URL` overrides the composed localhost URL |
 | `MJ_INTEGRATION_TEST=1` | testing CLI | Install instrumented cache first-caller + force serial suite execution |
-| `EMIT_OUTCOMES=<path>` | both front-ends | Write the per-check outcomes JSON for the golden diff |
-| `INTEGRATION_VERBOSE=1` (or `--verbose`) | run-all | Stream every suite's output live |
-| `MJ_TEST_DATASET` | dataset-cache script | Dataset name override (default `MJ_Metadata`) |
+| `EMIT_OUTCOMES=<path>` | driver / TestRunner | Write the per-check outcomes JSON (golden-diff format) |
+| `MJ_TEST_DATASET` | dataset-cache bundle | Dataset name override (default `MJ_Metadata`) |
 | `MJ_CORE_SCHEMA` | client transport | Core schema override (default `__mj`) |
-| `MJAPI_A_URL` / `MJAPI_B_URL` | cross-server rig | The two MJAPI endpoints |
+| `RUN_CROSS_SERVER=1` / `MJAPI_A_URL` / `MJAPI_B_URL` | cross-server rig | Gate + the two MJAPI endpoints |
 
 ### 3.7 CI
 
@@ -501,16 +496,19 @@ home — a **blocking PR gate** into `next` (path-filtered to `packages/**`, the
 metadata dirs, and the workflow itself; also `workflow_dispatch`). The job:
 
 1. starts SQL Server 2022 in Docker on the runner and creates an empty `test` database;
-2. `npm ci`, then builds only the needed graph
-   (`npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/open-app-engine`);
+2. `npm ci`, then builds the needed graph with turbo;
 3. `mj migrate` (applies committed migrations — no live CodeGen), then
-   `mj sync push --dir=metadata --ci` (seeds the full metadata, including the test
-   type/tests/suites and RLS fixture users);
-4. `npm run test:integration` — pass/fail rides the aggregator's `0/1/2` contract.
+   `mj sync push --dir=metadata --ci` (the default metadata, including the inert Integration
+   Test TestType) **and** `mj sync push --dir=metadata-optional/integration-test --ci` (the IT
+   tests, suites, and RLS fixtures — the metadata `mj test` dispatches from);
+4. verifies the RLS fixture users actually landed (a silent no-op seed would let the strongest
+   checks skip-as-pass while the gate stays green);
+5. `npm run test:integration` — the deterministic suite via `mj test`, pass/fail on its exit
+   code.
 
 `PS_INTEGRATION` and `RUN_AGENT_TESTS` are deliberately unset in CI (no token cost, no
-flakiness) and no MJAPI is up, so **the deterministic tier is the gate** and client suites
-self-skip.
+flakiness) and no MJAPI is up, so **the deterministic tier is the gate** and client-transport
+tests are parked/skipped.
 
 ---
 
@@ -521,7 +519,7 @@ self-skip.
 | Add an invariant to an area that already has a bundle | **1 — add a check to the bundle** |
 | Cover a new area (new engine, new subsystem) | **2 — create a new bundle** (+ Test row) |
 | Re-target or recombine existing checks (different dataset/entity, new grouping, new gate) | **3 — metadata only** |
-| Exercise infrastructure that can't share one process (multi-server), or prototype freely | **4 — standalone script** |
+| Exercise infrastructure that can't share one process (multi-server), or prototype freely | **4 — standalone rig** |
 
 ### Rules of the road (all methods)
 
@@ -545,18 +543,18 @@ self-skip.
 - **Teardown never throws.** Best-effort deletes (`.catch(() => undefined)`) so a failing check
   still cleans up.
 - **Read `BypassCache: true`** when a check must observe true DB state.
-- **A new bundle needs BOTH siblings — a `tsx` dispatcher AND an IT `Test` record.** The bundle
-  is the single source of truth; the dispatcher (`<bundle>-tests.ts`) and the metadata record
-  (`.IT##-<bundle>.json` joined to the deterministic suite) are thin pointers to it. Generate both
-  when you add a bundle — the `sibling-parity.test.ts` drift-check fails the build if either is
-  missing (or points at a non-existent bundle). A deliberately dispatcher-less bundle
-  (driver/MJAPI-only) must be listed with a reason in that test's `NO_TSX_DISPATCHER` set and still
-  have an IT record.
+- **A new bundle needs its metadata sibling — an IT `Test` record joined to the suite.** The
+  bundle is the single source of truth; the metadata record (`.IT##-<bundle>.json` + its
+  membership in `.integration-suite.json`) is a thin pointer to it. The suite package's
+  `sibling-parity.test.ts` drift-check fails the build if a bundle lacks its IT record / suite
+  membership, if a record points at a non-existent bundle, or if `mj.config.cjs` stops loading
+  the suite package via `testing.checkModules`. (The old third sibling — a per-bundle `tsx`
+  dispatcher — no longer exists.)
 
 ### Method 1 — add a check to an existing bundle
 
 Find the bundle in
-[`packages/TestingFramework/testing-integration/src/checks/`](../packages/TestingFramework/testing-integration/src/checks/)
+[`packages/TestingFramework/integration-test-suite/src/checks/`](../packages/TestingFramework/integration-test-suite/src/checks/)
 and append a `NamedCheck` to its exported array (the file's registration loop picks it up):
 
 ```typescript
@@ -574,25 +572,27 @@ and append a `NamedCheck` to its exported array (the file's registration loop pi
 }
 ```
 
-That's the whole change — the check now runs in **both** front-ends (the suite's `tsx` script
-and the corresponding ITxx Test) because both expand the bundle at runtime. Mind the ordering:
-add stateful checks after the state they depend on, and keep them self-contained (reset your
-own counters, restore anything you flip). Then verify:
+That's almost the whole change — the corresponding ITxx Test expands the bundle at runtime, so
+the new check runs with no metadata edit. Mind the ordering: add stateful checks after the
+state they depend on, and keep them self-contained (reset your own counters, restore anything
+you flip). Update the bundle's row in the count table in
+[`check-registry.test.ts`](../packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts)
+(the coverage-loss guard). Then verify:
 
 ```bash
-cd packages/TestingFramework/testing-integration && npm run build
-npx tsx packages/MJServer/integration-test-scripts/dataset-cache-tests.ts
-MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT07 - Dataset Cache (DatasetCache category)"
+cd packages/TestingFramework/integration-test-suite && npm run build && npm run test
+MJ_INTEGRATION_TEST=1 npx mj test run --name "IT07 - Dataset Cache (DatasetCache category)"
 ```
 
 ### Method 2 — create a new bundle (new coverage area)
 
-**1. Write the bundle** — `src/checks/<area>.checks.ts`:
+**1. Write the bundle** — `src/checks/<area>.checks.ts` in the **suite package**
+(`packages/TestingFramework/integration-test-suite/`), importing the contracts from the
+framework:
 
 ```typescript
-import { Assert } from '../test-runner';
-import { IntegrationCheckRegistry } from '../check-registry';
-import { NamedCheck, IntegrationCheckContext } from '../check';
+import { Assert, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 export const MyAreaChecks: NamedCheck[] = [
     {
@@ -612,8 +612,8 @@ for (const check of MyAreaChecks) {
 }
 ```
 
-If the checks share created fixtures, register a lifecycle in the same file — both front-ends
-run it identically (setup before the checks, teardown in `finally`):
+If the checks share created fixtures, register a lifecycle in the same file — the driver
+runs it around the bundle (setup before the checks, teardown in `finally`):
 
 ```typescript
 IntegrationCheckRegistry.Instance.RegisterLifecycle('my-area', {
@@ -626,24 +626,24 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('my-area', {
 [`check.ts`](../packages/TestingFramework/testing-integration/src/check.ts) alongside the
 existing ones. Ad-hoc knobs can ride the untyped `ctx.Config` bag instead.)
 
-**2. Export the module** from
-[`src/index.ts`](../packages/TestingFramework/testing-integration/src/index.ts) (this is what
-registers it on import):
+**2. Export the module** from the suite package's
+[`src/index.ts`](../packages/TestingFramework/integration-test-suite/src/index.ts) (this is
+what registers it on import):
 
 ```typescript
 export * from './checks/my-area.checks';
 ```
 
-**3. Build:** `cd packages/TestingFramework/testing-integration && npm run build`.
+**3. Build:** `cd packages/TestingFramework/integration-test-suite && npm run build`.
 
-**4. Add the Test row** — `metadata-optional/integration-test/tests/integration/.IT20-my-area.json` (omit
+**4. Add the Test row** — `metadata-optional/integration-test/tests/integration/.IT31-my-area.json` (omit
 `primaryKey`/`sync`; the sync tool populates them):
 
 ```json
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT20 - My Area",
+    "Name": "IT31 - My Area",
     "Description": "What the checks prove, stated as invariants.",
     "InputDefinition": {},
     "ExpectedOutcomes": { "summary": "One-line statement of the proven behavior." },
@@ -665,22 +665,21 @@ name to the driver's `CLIENT_BUNDLES` set so inference covers it).
 append to the right child suite's `MJ: Test Suite Tests`:
 
 ```json
-{ "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=IT20 - My Area", "Sequence": 16, "Status": "Active" } }
+{ "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=IT31 - My Area", "Sequence": 27, "Status": "Active" } }
 ```
 
-**6. Push and run both front-ends:**
+**6. Update the count table** — add the bundle's row (name, checks array, expected count) to
+[`check-registry.test.ts`](../packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts);
+`sibling-parity.test.ts` will already be asserting the IT record + suite membership exist.
+
+**7. Push and run:**
 
 ```bash
-npx mj sync push --dir=metadata --include=tests,test-suites
-MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT20 - My Area"
+npx mj sync push --dir=metadata-optional/integration-test
+MJ_INTEGRATION_TEST=1 npx mj test run --name "IT31 - My Area"
 ```
 
-**7. (Optional but conventional) Add a standalone dispatcher script** so the suite is also
-independently runnable and part of the aggregate: copy the ~50-line shape of
-[`dataset-cache-tests.ts`](../packages/MJServer/integration-test-scripts/dataset-cache-tests.ts)
-(bootstrap → `GetBundle('my-area')` → `TestRunner` → exit code), then add the filename to the
-right tier group in [`run-all.ts`](../packages/MJServer/integration-test-scripts/run-all.ts)'s
-`GROUPS`. Update the folder README's suite table.
+No dispatcher, no aggregator registration — the metadata record IS the entry point.
 
 ### Method 3 — metadata only (no code)
 
@@ -714,22 +713,22 @@ TypeScript:
 - **Gate specially** with `"requiresEnv": "MY_FLAG"` — the driver then skip-passes unless
   `MY_FLAG=1`, overriding the tier-derived gate.
 
-Push with `npx mj sync push --dir=metadata --include=tests,test-suites` and run via `mj test`.
+Push with `npx mj sync push --dir=metadata-optional/integration-test` and run via `mj test`.
 
-### Method 4 — standalone script
+### Method 4 — standalone rig
 
 For coverage that can't live inside the one-process model — multi-process topologies
 (cross-server invalidation), sidecar-dependent end-to-end flows (`ps-*`), or exploratory work
 that isn't ready to be a bundle — write a self-contained script in
-[`packages/MJServer/integration-test-scripts/`](../packages/MJServer/integration-test-scripts/).
-Use the package's bootstrap + runner so the process discipline stays right:
+[`packages/TestingFramework/integration-test-suite/rigs/`](../packages/TestingFramework/integration-test-suite/rigs/).
+Use the shared harness + the framework bootstrap so the process discipline stays right:
 
 ```typescript
 import { TestRunner, Assert, bootstrapIntegrationServer } from './lib/harness';
 
 async function main(): Promise<void> {
-    // Self-skip protocol: exit 0 WITHOUT printing an "X/Y passed" line when prerequisites
-    // are absent (run-all classifies that as SKIP, and CI stays green on serverless boxes).
+    // Self-skip protocol: exit 0 with a clear SKIPPED message when prerequisites are
+    // absent, so ad-hoc CI wrappers stay green on boxes without the rig's topology.
     if (process.env.MY_PREREQ !== '1') {
         console.log('my-area-tests: SKIPPED — MY_PREREQ not set.');
         process.exit(0);
@@ -749,10 +748,10 @@ async function main(): Promise<void> {
 main().catch(err => { console.error(`\nBootstrap error: ${err}`); process.exit(2); });
 ```
 
-Honor the exit-code contract (`0/1/2`), keep it self-cleaning, and register it in `run-all.ts`
-`GROUPS` under the right tier if it belongs in the aggregate. When a standalone script's
-coverage stabilizes, prefer folding it into a bundle (Method 2) so the metadata path runs it
-too.
+Honor the exit-code contract (`0/1/2`) and keep it self-cleaning. Rigs are **not** part of the
+`mj test` catalog or `npm run test:integration` — they run only when invoked directly. When a
+rig's coverage stabilizes (and it can live in one process), prefer folding it into a bundle
+(Method 2) so the metadata path runs it too.
 
 ---
 
@@ -760,15 +759,20 @@ too.
 
 ### 5.1 Bundle inventory
 
+All bundles live in
+[`packages/TestingFramework/integration-test-suite/src/checks/`](../packages/TestingFramework/integration-test-suite/src/checks/)
+(the per-bundle count table in that package's `check-registry.test.ts` guards against silent
+coverage loss):
+
 | Bundle | Checks | Transport | Lifecycle fixture | Selected by | Notes |
 |---|---|---|---|---|---|
-| `server-cache` | S1–S31 (31; 26 default — S17/S23/S24/S29/S30 mutation-gated) | server | — | IT01 | RunView server cache: shape parity, fingerprint identity, dedup/linger, BypassCache, invalidation |
-| `runquery-cache` | Q1–Q10 (10) | server | Query Category + TTL/validated Queries | IT02 | RunQuery caching (TTL + smart validation); the bundle mutates by design |
+| `server-cache` | 32 (S17/S23/S24/S29/S30/S31b mutation-gated) | server | — | IT01 | RunView server cache: shape parity, fingerprint identity, dedup/linger, BypassCache, invalidation |
+| `runquery-cache` | Q1–Q12 (12) | server | Query Category + TTL/validated Queries | IT02 | RunQuery caching (TTL + smart validation); the bundle mutates by design |
 | `client-cache` | C1–C13 (13; C10 mutation-gated) | client | — | IT03 | `CacheLocal` opt-in caching + smart cache-check over GraphQL |
 | `record-process` | RP1–RP8 (8) | server | — | IT04 | RecordSetProcessor substrate: persistence, isolation, circuit breaker, concurrency |
 | `record-process-facade` | RPF1–RPF2 (2) | server | Record Process definition | IT05 | RecordProcessExecutor facade (`Run`/`RunByID`) |
 | `rls-isolation` | RLS1–RLS6, RLS8–RLS10 (9) | server | discovered + seeded users | IT06 | RLS token substitution, predicate divergence, fingerprint no-leak, live scoping, no-grant negative |
-| `rls-isolation-client` | RLS7 (1) | client | — | *(compose via metadata)* | The client-transport RLS leg |
+| `rls-isolation-client` | RLS7 (1) | client | — | IT23 | The client-transport RLS leg |
 | `dataset-cache` | DS1–DS3 (3) | server | — | IT07 | `GetAndCacheDatasetByName` + status APIs (`datasetName` knob) |
 | `aggregates-cache` | AGG1–AGG3 (3) | server | — | IT08 | Aggregates in the fingerprint + round-trip + ordering (`entityName` knob) |
 | `scheduled-jobs` | SJ1–SJ2 (2) | server | Scheduled Job row | IT09 | Run lifecycle + distributed lease |
@@ -782,11 +786,22 @@ too.
 | `agent-runner` | AR1 (1) | server | lifecycle | IT17 (live-model) | Real agent run, deep-verified (steps → prompt runs → action logs → sub-agents) |
 | `concurrent` | CC1–CC2 (2) | server | lifecycle | IT18 (live-model) | N concurrent prompt/agent runs persist independently |
 | `remote-op-ai-authoring` | RO4-1→RO4-3 (3) | server | AI-generated Remote Operation | IT19 (live-model) | The AI-authored operation loop (save → approve → emit) |
-| `self-test` | cache-warm (1) | server | — | smoke script | Proves the instrumented cache observes RunView traffic |
+| `lists` | LS1–LS3 (3) | server | List fixture | IT20 | Lists substrate + the ListSource keyset-pagination change |
+| `open-app-teardown` | OAT1–OAT2 (2) | server | seeded Open-App metadata | IT21 | Open-App metadata teardown seam |
+| `user-routines` | UR1–UR16 (16) | server | routine fixtures | IT22 | User Routines entity servers + dispatcher, end to end |
+| `metadata-consistency` | 7 | server | — | IT24 | Read-only audit: entity metadata vs the physical DB catalog |
+| `view-execution` | 9 | client | — | IT25 | Viewing-system deterministic tier, over the wire |
+| `app-wiring` | AW1–AW10 (10) | client | — | IT26 | Every shipped app wired correctly (parameterized over all apps) |
+| `entity-writes` | EW1–EW8 (8) | client | — | IT27 | Core data write-side contract over GraphQL |
+| `permission-engine` | 14 | client | — | IT28 | Unified PermissionEngine + scope enforcement, live |
+| `cache-gauntlet` | 8 | server | — | IT29 | The subset-slot × mutation cell that shipped two production cache bugs |
+| `conversation-compaction` | CC1–CC12 (12) | server | — | IT30 | Compaction assembly layer (graduated from PR #2732) |
+| `self-test` | cache-warm (1) | server | — | smoke script | Proves the instrumented cache observes RunView traffic (lives in the framework package) |
 
-Script-only suites (no bundle): `lists-tests.ts`, `user-routines-tests.ts`,
-`open-app-teardown-tests.ts`, `cross-server-invalidation-tests.ts`, and the ten `ps-*` flow
-scripts.
+There are no script-only suites anymore — the former `lists` / `user-routines` /
+`open-app-teardown` scripts graduated to bundles (IT20–IT22), and the multi-process /
+sidecar-dependent scripts (`cross-server-invalidation-tests.ts`, `agent-memory-tests.ts`,
+`runview-matrix-tests.ts`, the ten `ps-*` flows) live on as standalone **rigs** (§3.5).
 
 > Some checks are **executable bug reproductions**: they encode the *correct* invariant and
 > stay red until the product fix lands. Each documents its symptom, root cause, and proposed
@@ -796,21 +811,31 @@ scripts.
 
 | Path | What |
 |---|---|
-| [`packages/TestingFramework/testing-integration/`](../packages/TestingFramework/testing-integration/) | The library: driver, registry, bundles, bootstrap, tiers, instrumented cache |
-| [`packages/MJServer/integration-test-scripts/`](../packages/MJServer/integration-test-scripts/) | Runnable suites + `run-all.ts` aggregator (+ [README](../packages/MJServer/integration-test-scripts/README.md) deep dive) |
+| [`packages/TestingFramework/testing-integration/`](../packages/TestingFramework/testing-integration/) | The **framework** (published): driver, registry, check contracts, bootstraps, tiers, instrumented cache |
+| [`packages/TestingFramework/integration-test-suite/`](../packages/TestingFramework/integration-test-suite/) | The **content** (private, never published): all 30 check bundles, their unit tests, and the standalone rigs |
 | [`metadata/test-types/.integration-test-type.json`](../metadata/test-types/.integration-test-type.json) | The `Integration Test` TestType — an inert type definition, kept in the normal `metadata/` tree |
-| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT19 Tests, the suite hierarchy, AND the seeded RLS test users/role/permission. Kept out of the default-pushed `metadata/` tree so these test-only records never reach production |
+| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT66 Tests (67 records), the suite hierarchy, the seeded RLS test users/role/permission, AND the synthetic AI stack the live tier drives (14 `IT: *` agents, 14 prompts, 42 model bindings, a skill, a search scope). One push seeds 242 records. Kept out of the default-pushed `metadata/` tree so these test-only records never reach production. **Must be seeded once per environment** |
+| `mj.config.cjs` → `testing.checkModules` | The runtime seam that loads the private suite package (or a consumer's own check packages) into `mj test` |
 | [`packages/TestingFramework/Engine/`](../packages/TestingFramework/Engine/) | `TestEngine`, `BaseTestDriver`, suite fixture lifecycle |
 | [`packages/TestingFramework/CLI/`](../packages/TestingFramework/CLI/) | `mj test run` / `suite` / `list` / `validate` / `history` |
 | [`.github/workflows/integration.yml`](../.github/workflows/integration.yml) | The CI gate |
-| [`scripts/integration-golden-diff.mjs`](../scripts/integration-golden-diff.mjs) | Front-end equivalence diff |
+| [`scripts/integration-golden-diff.mjs`](../scripts/integration-golden-diff.mjs) | Per-check outcome diff (`EMIT_OUTCOMES` format) |
 
 ### 5.3 Further reading
 
-- **Suite deep dive:**
+- **The coverage index:**
+  [`packages/TestingFramework/testing-integration/CATALOG.md`](../packages/TestingFramework/testing-integration/CATALOG.md)
+  — the living catalog: transport doctrine, current bundles, expansion roadmap.
+- **Per-sub-suite deep docs:**
+  [`packages/TestingFramework/integration-test-suite/docs/`](../packages/TestingFramework/integration-test-suite/docs/README.md)
+  — mechanism + per-check inventory for every shipped bundle family (cache, data-access,
+  security, writes/transactions, AI, platform), plus the candidate
+  [test-catalog](../packages/TestingFramework/integration-test-suite/docs/test-catalog.md).
+- **The restructure rationale:**
+  [`plans/integration-test-expansion/framework-restructure-proposal.md`](../plans/integration-test-expansion/framework-restructure-proposal.md)
+  (executed 2026-07-20) and the pointer README at
   [`packages/MJServer/integration-test-scripts/README.md`](../packages/MJServer/integration-test-scripts/README.md)
-  — the design under test per suite, the full check inventories, and the hard-won gotchas
-  (linger windows, params mutation, counter categories).
+  for where the old scripts went.
 - **Test metadata authoring:**
   [`metadata-optional/integration-test/tests/integration/README.md`](../metadata-optional/integration-test/tests/integration/README.md).
 - **The Testing Framework generally:**

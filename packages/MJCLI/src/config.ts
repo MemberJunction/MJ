@@ -137,6 +137,12 @@ const mjConfigSchema = z.object({
   baselineOnMigrate: z.boolean().optional().default(true),
   outOfOrder: z.boolean().optional().default(false),
   transactionMode: z.enum(['per-run', 'per-migration']).optional().default('per-migration'),
+  // Startup mode for engine pre-warm during provider bootstrap ('full' | 'task').
+  // CLI commands default to 'task' (no pre-warm; engines lazy-load on first touch);
+  // MJ_STARTUP_MODE overrides per invocation (highest precedence).
+  startup: z.object({
+    mode: z.enum(['full', 'task']).optional(),
+  }).optional(),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),
@@ -168,6 +174,10 @@ const mjConfigSchemaOptional = z.object({
   baselineOnMigrate: z.boolean().optional().default(true),
   outOfOrder: z.boolean().optional().default(false),
   transactionMode: z.enum(['per-run', 'per-migration']).optional().default('per-migration'),
+  // Same startup section as the validated schema — see comment there.
+  startup: z.object({
+    mode: z.enum(['full', 'task']).optional(),
+  }).optional(),
   SQLOutput: z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),

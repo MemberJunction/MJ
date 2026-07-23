@@ -1,0 +1,53 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Integration Test Scope",
+      "Description": "Deterministic keyword-search scope over MJ: AI Agent Notes for the agent-rag-search bundle. Sentinel rows are seeded and cleaned by the checks; the ExtraFilter deliberately excludes rows carrying the IT-SCOPE-EXCLUDED marker so scope-filter enforcement is testable (mj-integration-test — safe to delete)",
+      "Icon": "fa-solid fa-vial",
+      "IsGlobal": false,
+      "IsDefault": false,
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Search Scope Providers": [
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "SearchProviderID": "@lookup:MJ: Search Providers.Name=Database",
+            "Enabled": true
+          },
+          "primaryKey": {
+            "ID": "995FC065-8253-4084-9D8E-F64458169384"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.234Z",
+            "checksum": "f024fd58ab81d438e8b76870c93bb1cd9fefd7af3f3a9137bdb5df76d23c26e5"
+          }
+        }
+      ],
+      "MJ: Search Scope Entities": [
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Notes",
+            "ExtraFilter": "Note NOT LIKE '%IT-SCOPE-EXCLUDED%'"
+          },
+          "primaryKey": {
+            "ID": "BA7BE7CA-ACDD-42D5-B6FB-7D88096A340F"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.259Z",
+            "checksum": "50960def3d0fccdb20afac3b9ec0c0a652790339ec5ef2e4f49b52f8fe9f3135"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8C84CD07-FAD0-42AE-852A-586D9DCF1273"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:41.192Z",
+      "checksum": "ff08a394a686b8edeffbe7052f45318b94170d0828a023a4297af9e2cfe55dde"
+    }
+  }
+]

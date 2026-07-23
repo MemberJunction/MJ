@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { decideBooleanOverlay, decideAbsentDeactivations, decideSchemaLimitViolations, decideLengthOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
+import { decideBooleanOverlay, decidePKPromotion, decideAbsentDeactivations, decideSchemaLimitViolations, decideLengthOverlay, decideSemanticOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
 
 describe('decideLengthOverlay (U2 — width overlay grows, never shrinks)', () => {
     it('GROWS a persisted width when the rediscovered sample is wider', () => {
@@ -238,5 +238,89 @@ describe('decideSchemaLimitViolations (§B — operator/env table+column caps at
     it('within both caps -> no violation', () => {
         const v = decideSchemaLimitViolations({ TableCount: 3, ColumnCountByTable: cols(['a', 10], ['b', 20]), MaxTables: 10, MaxColumnsPerTable: 50 });
         expect(v).toEqual([]);
+    });
+});
+
+describe('decideSemanticOverlay (external-wins-when-present for semantic attributes)', () => {
+    it('a returned description OVERRIDES the curated one (the worked example)', () => {
+        const r = decideSemanticOverlay('Curated description', 'Vendor-returned description');
+        expect(r.value).toBe('Vendor-returned description');
+        expect(r.changed).toBe(true);
+        expect(r.winner).toBe('Discovered');
+    });
+
+    it('a SILENT source keeps the curated value (undefined)', () => {
+        const r = decideSemanticOverlay('Curated description', undefined);
+        expect(r.value).toBe('Curated description');
+        expect(r.changed).toBe(false);
+        expect(r.winner).toBe('Declared');
+    });
+
+    it('a SILENT source keeps the curated value (null)', () => {
+        expect(decideSemanticOverlay('Curated', null).changed).toBe(false);
+    });
+
+    it('an EMPTY string is silence, never an instruction to blank the curated value', () => {
+        const r = decideSemanticOverlay('Curated', '');
+        expect(r.value).toBe('Curated');
+        expect(r.changed).toBe(false);
+        expect(r.winner).toBe('Declared');
+    });
+
+    it('identical values → no change, Declared credited', () => {
+        const r = decideSemanticOverlay('Same', 'Same');
+        expect(r.changed).toBe(false);
+        expect(r.winner).toBe('Declared');
+    });
+
+    it('fills an empty curated slot from the source', () => {
+        const r = decideSemanticOverlay(null, 'From describe');
+        expect(r.value).toBe('From describe');
+        expect(r.changed).toBe(true);
+        expect(r.winner).toBe('Discovered');
+    });
+});
+
+/**
+ * U1 / rsuplan line 29 regression pin for decidePKPromotion — the PK is EITHER declared OR
+ * stream-discovered, never unioned; and a Discovered field wrongly promoted next to a declared PK
+ * is self-healed (demoted). This is the HubSpot id + hs_object_id class of bug.
+ */
+describe('decidePKPromotion', () => {
+    describe('no declared PK — stream picker is the authority', () => {
+        it('discovered=true promotes the field', () => {
+            expect(decidePKPromotion({ objectHasDeclaredPK: false, fieldIsDiscovered: true, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
+                .toEqual({ value: true, winner: 'Discovered' });
+        });
+        it('discovered=false leaves it non-PK', () => {
+            expect(decidePKPromotion({ objectHasDeclaredPK: false, fieldIsDiscovered: true, existingIsPrimaryKey: false, discoveredIsPrimaryKey: false }))
+                .toEqual({ value: false, winner: 'Discovered' });
+        });
+        it('discovered=undefined keeps existing (no fabrication)', () => {
+            expect(decidePKPromotion({ objectHasDeclaredPK: false, fieldIsDiscovered: false, existingIsPrimaryKey: true, discoveredIsPrimaryKey: undefined }))
+                .toEqual({ value: true, winner: 'Declared' });
+        });
+    });
+
+    describe('declared PK exists — either/or (declared wins)', () => {
+        it('the declared PK field itself stays PK', () => {
+            // e.g. HubSpot companies.id (declared, non-discovered) — discovery may not flip it off
+            expect(decidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: false, existingIsPrimaryKey: true, discoveredIsPrimaryKey: undefined }))
+                .toEqual({ value: true, winner: 'Declared' });
+        });
+        it('a NEW discovered field is NOT promoted to PK (blocks fabricated composite)', () => {
+            // e.g. HubSpot companies.hs_object_id first seen by discovery with a declared id present
+            expect(decidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: true, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
+                .toEqual({ value: false, winner: 'Declared' });
+        });
+        it('an already-persisted Discovered PK is DEMOTED (self-heal of prior corruption)', () => {
+            // hs_object_id was wrongly persisted as a Discovered PK next to declared id — heal it
+            expect(decidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: true, existingIsPrimaryKey: true, discoveredIsPrimaryKey: true }))
+                .toEqual({ value: false, winner: 'Declared' });
+        });
+        it('a declared non-PK field is not promoted even if discovery claims PK', () => {
+            expect(decidePKPromotion({ objectHasDeclaredPK: true, fieldIsDiscovered: false, existingIsPrimaryKey: false, discoveredIsPrimaryKey: true }))
+                .toEqual({ value: false, winner: 'Declared' });
+        });
     });
 });

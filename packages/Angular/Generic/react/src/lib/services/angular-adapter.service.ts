@@ -16,7 +16,7 @@ import {
   ExternalLibraryConfig,
   LibraryConfiguration,
   LibraryLoader,
-  SetupStyles
+  BuildStylesFromTheme
 } from '@memberjunction/react-runtime';
 import { ScriptLoaderService } from './script-loader.service';
 import { ComponentStyles } from '@memberjunction/interactive-component-types';
@@ -224,10 +224,12 @@ export class AngularAdapterService {
 
     await this.initialize();
     
-    // Apply default styles if not provided
+    // Apply default styles if not provided — bridge the host's live MJ theme
+    // (--mj-* tokens) so compiled components match the active theme, including
+    // dark mode. Falls back to SetupStyles() defaults when no themed DOM exists.
     const optionsWithDefaults = {
       ...options,
-      styles: options.styles || SetupStyles()
+      styles: options.styles || BuildStylesFromTheme()
     };
 
     return this.runtime!.compiler.compile(optionsWithDefaults);

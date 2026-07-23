@@ -1,6 +1,6 @@
 <div class="message-list-container" #scrollContainer>
   <!-- Sticky Date Header (only show for long conversations spanning multiple days) -->
-  @if (shouldShowDateFilter && messages.length > 0) {
+  @if (showDateNavigation && shouldShowDateFilter && messages.length > 0) {
     <div class="sticky-date-header">
       <div class="sticky-date-wrapper">
         <button class="sticky-date-button" (click)="toggleDateNav()">
@@ -20,7 +20,7 @@
 
   <ng-container #messageContainer></ng-container>
 
-  @if (messages.length === 0) {
+  @if (messages.length === 0 && showEmptyFill) {
     <mj-empty-state
       class="messages-empty-fill"
       Icon="fa-solid fa-comments"

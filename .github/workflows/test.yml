@@ -21,6 +21,10 @@ on:
       - '.github/scripts/check-esm-imports.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # The PG migration content detector's unit suite lives in __tests__ above but the
+      # script itself lives in scripts/ — without this entry a detector-only PR never
+      # runs its tests.
+      - 'scripts/check-pg-migration-content.mjs'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
@@ -124,16 +128,21 @@ jobs:
       - name: Build + run unit tests
         run: |
           # Angular DOM suites each spin heavy AOT-compile + jsdom workers (capped
-          # to 2/package by vitest.dom.shared.ts). The AFFECTED path touches only a
-          # few packages, so it runs at full turbo parallelism (fast — the common
-          # PR case). The FULL-suite backstop can fire all ~8 DOM packages at once,
-          # so it caps turbo `--concurrency` to keep peak workers (concurrency × 2)
-          # well under the 16 GB runner's limit (otherwise: OOM / exit 137).
+          # to 2/package by vitest.dom.shared.ts). The FULL-suite backstop can fire
+          # all ~8 DOM packages at once, so it caps turbo `--concurrency` to keep
+          # peak workers (concurrency × 2) well under the 16 GB runner's limit
+          # (otherwise: OOM / exit 137). The AFFECTED path gets the SAME cap: a PR
+          # touching a root package (@memberjunction/global, core, ...) makes
+          # `...[base]` select essentially the whole repo — a de-facto full suite
+          # that OOM'd exactly as predicted when left uncapped (PR #3231, exit 137
+          # on CoreActions + react-test-harness, twice). The cap costs the common
+          # small-PR case nothing: with fewer than 4 test tasks in scope it never
+          # engages.
           if [ -n "$TURBO_FILTER" ]; then
             echo "::group::Affected build"
             npx turbo run build --log-order=stream "$TURBO_FILTER"
             echo "::endgroup::"
-            npx turbo run test "$TURBO_FILTER"
+            npx turbo run test --concurrency=4 "$TURBO_FILTER"
           else
             npm run build
             npm test -- --concurrency=4

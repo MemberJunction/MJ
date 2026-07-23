@@ -10,7 +10,7 @@
  */
 
 import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
-import { MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/core-entities';
+import { MJVectorIndexEntity, MJVectorDatabaseEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
@@ -319,7 +319,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 fusion: 'rrf',
                 includeMetadata: true,
             }, contextUser);
-            return this.convertMatches(colocated.matches, vectorIndex.Name);
+            const fallbackEntity = await this.getFallbackEntityName(colocated.matches, vectorIndex, contextUser);
+            return this.convertMatches(colocated.matches, vectorIndex.Name, fallbackEntity);
         }
 
         // contextUser is passed as the 2nd arg per VectorDBBase.QueryIndex's
@@ -340,17 +341,66 @@ export class VectorSearchProvider extends BaseSearchProvider {
             return [];
         }
 
-        return this.convertMatches(response.data.matches, vectorIndex.Name);
+        const fallbackEntity = await this.getFallbackEntityName(response.data.matches, vectorIndex, contextUser);
+        return this.convertMatches(response.data.matches, vectorIndex.Name, fallbackEntity);
+    }
+
+    /**
+     * Resolve a fallback entity name for matches whose metadata omits the `Entity` key
+     * (e.g. indexes populated with fieldStrategy 'explicit'). Only does the lookup when
+     * at least one match actually needs it.
+     */
+    private async getFallbackEntityName(
+        matches: Array<{ metadata?: Record<string, unknown> }> | undefined,
+        vectorIndex: MJVectorIndexEntity,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        if (!matches?.some(m => !m.metadata?.['Entity'])) {
+            return null;
+        }
+        return this.resolveIndexEntityName(vectorIndex.ID, contextUser);
+    }
+
+    /**
+     * Resolve the entity name an index serves by inspecting its entity documents.
+     *
+     * Sourced from `KnowledgeHubMetadataEngine` rather than a `RunView` — Entity Documents
+     * are small in number and change infrequently, and the engine already caches them
+     * (event-driven auto-refresh on entity change, per `BaseEngine`), so a per-query RunView
+     * here would be pure waste. `Config()` is a no-op once loaded, so this call is cheap on
+     * every invocation.
+     *
+     * Unambiguous only when every entity document targeting the index vectorizes the same
+     * entity — otherwise returns null and results stay 'Unknown'.
+     */
+    private async resolveIndexEntityName(vectorIndexID: string, contextUser: UserInfo): Promise<string | null> {
+        try {
+            await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
+
+            const distinct = new Set(
+                KnowledgeHubMetadataEngine.Instance.EntityDocuments
+                    .filter(d => UUIDsEqual(d.VectorIndexID, vectorIndexID) && d.Entity)
+                    .map(d => d.Entity)
+            );
+
+            return distinct.size === 1 ? (distinct.values().next().value ?? null) : null;
+        } catch (error) {
+            // A fallback display name is a nice-to-have — never let a resolution failure
+            // sink the actual query results for this index.
+            LogError(`VectorSearchProvider: Failed to resolve entity name for vector index ${vectorIndexID}: ${error}`);
+            return null;
+        }
     }
 
     /** Convert vector DB matches to SearchResultItem[] */
     private convertMatches(
         matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
-        indexName: string
+        indexName: string,
+        fallbackEntityName?: string | null
     ): SearchResultItem[] {
         return matches.map(match => {
             const meta = match.metadata ?? {};
-            const entityName = (meta['Entity'] as string) ?? 'Unknown';
+            const entityName = (meta['Entity'] as string) ?? fallbackEntityName ?? 'Unknown';
             // Vector metadata stores RecordID in CompositeKey URL format: "FieldName|Value" or "F1|V1||F2|V2"
             // Use CompositeKey to properly parse it, then extract just the values for consistent
             // matching with entity search results (which use plain record IDs)

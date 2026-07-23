@@ -4,10 +4,21 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // returns a minimal instrumented-storage stub (only SetCount/ResetCounts are exercised here).
 // serverProcessAlreadyClaimed is a controllable stub (default false = a properly-owned process)
 // so the D1 "can't run inside a live MJAPI" guard can be exercised both ways.
-const { mockServerClaimed } = vi.hoisted(() => ({ mockServerClaimed: vi.fn(() => false) }));
+/** Minimal shape of the active server bootstrap the driver reads (Provider type, pool, schema). */
+interface FakeServerBootstrap {
+    Provider: { ProviderType: string };
+    Pool: undefined;
+    Db: { Schema: string };
+}
+const { mockServerClaimed, mockActiveBootstrap } = vi.hoisted(() => ({
+    mockServerClaimed: vi.fn(() => false),
+    // Default null keeps the server branch resolving Metadata.Provider (unset in unit env), exactly
+    // as before; tests that need a typed provider override this to inject one (#3251 guard).
+    mockActiveBootstrap: vi.fn<() => FakeServerBootstrap | null>(() => null),
+}));
 vi.mock('../bootstrap', () => ({
     getActiveIntegrationStorage: () => ({ SetCount: (_category: string) => 0, ResetCounts: () => { /* no-op */ } }),
-    getActiveIntegrationBootstrap: () => null,
+    getActiveIntegrationBootstrap: () => mockActiveBootstrap(),
     getActiveIntegrationClientBootstrap: () => null,
     bootstrapIntegrationServer: async () => { throw new Error('unit test must not self-bootstrap'); },
     bootstrapIntegrationClient: async () => { throw new Error('unit test must not self-bootstrap'); },
@@ -38,6 +49,7 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         delete process.env.RUN_MUTATION_TESTS;
         delete process.env.RUN_AGENT_TESTS;
         mockServerClaimed.mockReturnValue(false);
+        mockActiveBootstrap.mockReturnValue(null);
         const reg = IntegrationCheckRegistry.Instance;
         // A unique bundle prefix per concern keeps these isolated from the real bundles.
         reg.Register({ Id: 'unitpass.A', Name: 'A', Fn: async () => { /* pass */ } });
@@ -84,7 +96,8 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitmut.M']);
     });
 
-    it("a live-model Test without RUN_AGENT_TESTS skip-passes with a single 'gate' oracle", async () => {
+    it("a live-model Test with RUN_AGENT_TESTS=0 skip-passes with a single 'gate' oracle (explicit opt-out)", async () => {
+        process.env.RUN_AGENT_TESTS = '0';
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ tier: 'live-model', checks: [{ type: 'unitpass' }] }));
         expect(result.status).toBe('Passed');
@@ -93,8 +106,8 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults[0].message).toContain('RUN_AGENT_TESTS');
     });
 
-    it('a live-model Test with RUN_AGENT_TESTS=1 actually runs its checks', async () => {
-        process.env.RUN_AGENT_TESTS = '1';
+    it('a live-model Test runs its checks BY DEFAULT (no env var — the 2026-07-20 inversion)', async () => {
+        delete process.env.RUN_AGENT_TESTS;
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ tier: 'live-model', checks: [{ type: 'unitpass' }] }));
         expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitpass.A', 'unitpass.B']);
@@ -137,6 +150,26 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.totalChecks).toBe(1);
         expect(result.oracleResults[0].oracleType).toBe('error');
         expect(result.oracleResults[0].message).toMatch(/dedicated process|test:integration|mj test suite/);
+    });
+
+    it('server transport that resolves a non-Database (client-rebound) provider → Error naming the rebinding, never runs (#3251)', async () => {
+        // Simulate a client-transport bundle having rebound the process-global provider to a
+        // GraphQL (Network) provider before a server-transport bundle runs. The guard must abort.
+        mockActiveBootstrap.mockReturnValue({ Provider: { ProviderType: 'Network' }, Pool: undefined, Db: { Schema: '__mj' } });
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ transport: 'server', checks: [{ type: 'unitpass' }] }));
+        expect(result.status).toBe('Error');
+        expect(result.oracleResults[0].message).toMatch(/rebound|issue #3251/i);
+        // The bundle's checks must NOT have run (the whole point — no product-shaped output).
+        expect(result.oracleResults.map(o => o.oracleType)).not.toContain('unitpass.A');
+    });
+
+    it('server transport that resolves a Database provider runs normally (guard is inert on the correct provider) (#3251)', async () => {
+        mockActiveBootstrap.mockReturnValue({ Provider: { ProviderType: 'Database' }, Pool: undefined, Db: { Schema: '__mj' } });
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ transport: 'server', checks: [{ type: 'unitpass' }] }));
+        expect(result.status).toBe('Passed');
+        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitpass.A', 'unitpass.B']);
     });
 
     it('empty checks → Passed, score 0, totalChecks 0', async () => {
