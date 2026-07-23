@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Grant UI Role Create/Update/Delete Permissions for Lists & List Details
--- Migration: v5.49.x
--- Date: 2026-07-19
+-- Migration: v5.50.x
+-- Date: 2026-07-23
 -- ============================================================================
 -- Problem (client-reported bug D4): End users assigned the "UI" role cannot
 -- create or populate Lists — a core self-service feature. The seeded

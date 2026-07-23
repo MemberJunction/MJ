@@ -265,6 +265,20 @@ export abstract class BaseLLM extends BaseModel {
                         console.error("Stream aborted while processing chunks:", streamError);
                     }
 
+                    // Flush any content the thinking-tag stripper was holding back waiting for more
+                    // chunks. A trailing fragment that looks like the START of a thinking tag (e.g. a
+                    // response literally ending in "<") is held back mid-stream so it can't leak as a
+                    // partial "<think>"; if the stream then ends, that fragment is real content and
+                    // must be emitted rather than silently dropped (bug A5 tail). Only visible content
+                    // is flushed — an unterminated thinking block stays held back.
+                    const thinkingRemainder = this.flushThinkingStreamRemainder();
+                    if (thinkingRemainder) {
+                        accumulatedContent += thinkingRemainder;
+                        if (params.streamingCallbacks?.OnContent) {
+                            params.streamingCallbacks.OnContent(thinkingRemainder, false);
+                        }
+                    }
+
                     // Stream complete, call OnContent one last time with isComplete=true
                     if (params.streamingCallbacks?.OnContent) {
                         params.streamingCallbacks.OnContent('', true);
@@ -450,6 +464,26 @@ export abstract class BaseLLM extends BaseModel {
      */
     protected resetThinkingStreamState(): void {
         this.thinkingStreamState = null;
+    }
+
+    /**
+     * Returns (and clears) any user-visible content the thinking-tag stripper is still holding back at
+     * the end of a stream. Mid-stream, {@link processStreamChunkWithThinking} holds back a trailing
+     * fragment that could be the start of a `<think>`/`</think>` tag so a split tag never leaks as
+     * partial text; once the stream ends, such a fragment is real content and must be emitted (bug A5).
+     *
+     * Only flushes when NOT inside a thinking block: an unterminated `<think>` block's buffered text is
+     * reasoning, not answer, and is left held back (never surfaced as visible content). Returns `''`
+     * when thinking extraction isn't active (no state) or there's nothing to flush.
+     */
+    protected flushThinkingStreamRemainder(): string {
+        const state = this.thinkingStreamState;
+        if (!state || state.inThinkingBlock) {
+            return '';
+        }
+        const remainder = state.pendingContent;
+        state.pendingContent = '';
+        return remainder;
     }
 
     /**

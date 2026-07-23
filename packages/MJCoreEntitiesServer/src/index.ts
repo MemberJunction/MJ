@@ -9,6 +9,7 @@ export * from './custom/MJQuerySQLEntityServer.server';
 export * from './custom/MJTemplateContentEntityServer.server';
 export * from './custom/MJUserViewEntityServer.server';
 export * from './custom/MJListEntityServer.server';
+export * from './custom/MJListDetailEntityServer.server';
 export * from './custom/MJActionEntityServer.server';
 export * from './custom/MJApplicationEntityServer.server';
 export * from './custom/MJComponentEntityServer.server';

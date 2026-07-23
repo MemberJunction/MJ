@@ -247,6 +247,9 @@ describe('BaseLLM', () => {
             for (const c of chunks) {
                 emitted += obj['processStreamChunkWithThinking'](c) as string;
             }
+            // Mirror the orchestrator's end-of-stream flush: any content held back waiting for more
+            // chunks (a trailing partial-tag fragment that turned out to be real content) is emitted.
+            emitted += obj['flushThinkingStreamRemainder']() as string;
             const state = (instance as unknown as { thinkingStreamState: { accumulatedThinking: string } }).thinkingStreamState;
             return { emitted, thinking: state.accumulatedThinking };
         }
@@ -276,6 +279,28 @@ describe('BaseLLM', () => {
             const { emitted, thinking } = stream(llm, ['plain ', 'streamed ', 'text']);
             expect(emitted).toBe('plain streamed text');
             expect(thinking).toBe('');
+        });
+
+        it('flushes a trailing partial open-tag fragment as real content at end of stream (bug A5 tail)', () => {
+            // The stream ENDS on "answer <". Mid-stream the "<" is held back (it could begin "<think>"),
+            // but with no further chunk it is real content and must be emitted — not silently dropped.
+            const { emitted, thinking } = stream(llm, ['answer <']);
+            expect(emitted).toBe('answer <');
+            expect(thinking).toBe('');
+        });
+
+        it('flushes a longer trailing tag-prefix fragment split across chunks at end of stream', () => {
+            // "<thi" spans the chunk boundary and never completes into "<think>" — it is the real tail.
+            const { emitted } = stream(llm, ['done ', '<thi']);
+            expect(emitted).toBe('done <thi');
+        });
+
+        it('does not surface an unterminated thinking block as visible content', () => {
+            // An open "<think>" with no closing tag before the stream ends: the buffered text is
+            // reasoning, so it stays as thinking and is NOT flushed to the user-visible output.
+            const { emitted, thinking } = stream(llm, ['<think>still thinking']);
+            expect(emitted).toBe('');
+            expect(thinking).toBe('still thinking');
         });
     });
 

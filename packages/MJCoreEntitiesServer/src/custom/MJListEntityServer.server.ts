@@ -1,4 +1,4 @@
-import { BaseEntity, BaseEntityResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, EntityDeleteOptions } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJListEntityExtended } from '@memberjunction/core-entities';
 
@@ -16,7 +16,7 @@ import { MJListEntityExtended } from '@memberjunction/core-entities';
  */
 @RegisterClass(BaseEntity, 'MJ: Lists')
 export class MJListEntityServer extends MJListEntityExtended {
-    public override async Delete(): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (!MJListEntityExtended.UserCanDelete(this.UserID, this.ContextCurrentUser)) {
             const result = new BaseEntityResult();
             result.StartedAt = new Date();
@@ -28,6 +28,6 @@ export class MJListEntityServer extends MJListEntityExtended {
             this.RegisterResultHistoryEntry(result);
             return false;
         }
-        return super.Delete();
+        return super.Delete(options);
     }
 }
