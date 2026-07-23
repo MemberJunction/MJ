@@ -56,10 +56,18 @@ import { fileURLToPath } from 'node:url';
 const SS_DIR = 'migrations/v5';
 const PG_DIR = 'migrations-pg/v5';
 
-/** A source this small can legitimately produce a near-empty counterpart. */
-const SOURCE_STATEMENT_FLOOR = 5;
+/**
+ * A source this small can legitimately FUSE to a single PG statement — e.g. the
+ * committed v5.39 pair where an IF EXISTS guard + sp_dropextendedproperty +
+ * sp_addextendedproperty (4 SS statements) correctly becomes one COMMENT ON TABLE.
+ * The floor applies ONLY to the pg=1 band. A counterpart with ZERO content
+ * statements is suspect at ANY source size: fusion can shrink output, but never
+ * to nothing. Empirically (all 193 committed pairs as of v5.49.0): every real
+ * escape scored pg=0; every legitimately-thin counterpart scored pg=1 with ss<=4.
+ */
+export const SOURCE_STATEMENT_FLOOR = 5;
 /** At/below this many real statements, a counterpart is "effectively empty". */
-const PG_EMPTY_CEILING = 1;
+export const PG_EMPTY_CEILING = 1;
 
 const DESIGN_TOKEN = /^\s*--\s*PG-EMPTY-BY-DESIGN:\s*\S/m;
 
@@ -117,6 +125,14 @@ const BOILERPLATE = [
  * Deliberately counts STATEMENTS, not lines: the v5.49 `Backfill_Missing_FK_Auto_Indexes`
  * failure emitted six bare `;` — 23 lines of "output" carrying zero statements. A
  * line-count heuristic scores that 23 and waves it through; this scores it 0.
+ *
+ * KNOWN HEURISTIC EDGES (accepted — this is a magnitude detector, not a parser):
+ * - `--` or `/*` inside a string literal is mis-stripped as a comment. Worst case a
+ *   statement is miscounted, never zeroed, so the empty-vs-nonempty verdict holds.
+ * - The SS side assumes `;`-terminated statements. A T-SQL file written with bare
+ *   `GO` batches and no semicolons under-counts (each batch scores as one trailing
+ *   block at most). MJ migrations are semicolon-terminated by convention; if that
+ *   ever changes, revisit this before trusting the ss counts.
  */
 export function countContentStatements(sql) {
   const withoutBlockComments = sql.replace(/\/\*[\s\S]*?\*\//g, ' ');
@@ -145,11 +161,44 @@ export function countContentStatements(sql) {
 export function classify(ssSql, pgSql) {
   const ssStmts = countContentStatements(ssSql);
   const pgStmts = countContentStatements(pgSql);
+  const ok = { verdict: 'ok', ssStmts, pgStmts };
+  const emptyVerdict = { verdict: DESIGN_TOKEN.test(pgSql) ? 'documented' : 'suspect', ssStmts, pgStmts };
 
-  if (ssStmts <= SOURCE_STATEMENT_FLOOR) return { verdict: 'ok', ssStmts, pgStmts };
-  if (pgStmts > PG_EMPTY_CEILING) return { verdict: 'ok', ssStmts, pgStmts };
-  if (DESIGN_TOKEN.test(pgSql)) return { verdict: 'documented', ssStmts, pgStmts };
-  return { verdict: 'suspect', ssStmts, pgStmts };
+  if (ssStmts === 0) return ok;                        // comment-only source: nothing to preserve
+  if (pgStmts === 0) return emptyVerdict;              // fusion never reaches zero — suspect at ANY source size
+  if (pgStmts > PG_EMPTY_CEILING) return ok;
+  if (ssStmts <= SOURCE_STATEMENT_FLOOR) return ok;    // pg=1 from a thin source: plausible statement fusion
+  return emptyVerdict;                                 // pg=1 from a big source: near-empty, must declare
+}
+
+/**
+ * The GRANDFATHERED map is load-bearing — the gate is green partly because of it.
+ * An entry whose stem no longer matches a checked pair (renamed/removed file, or a
+ * typo when the entry was added), or whose pair no longer classifies as suspect, is
+ * dead weight that silently misstates what the map shields. Warn, don't fail:
+ * committed `.pg.sql` files are immutable, so a stale entry can't mask a NEW escape
+ * (an unmatched suspect still fails loudly) — it can only lie about history.
+ *
+ * @param {Iterable<string>} grandfatheredStems
+ * @param {Map<string,string>} verdictByStem verdict for every checked pair
+ * @returns {string[]} one warning per stale entry
+ */
+export function staleGrandfatherWarnings(grandfatheredStems, verdictByStem) {
+  const warnings = [];
+  for (const stem of grandfatheredStems) {
+    if (!verdictByStem.has(stem)) {
+      warnings.push(
+        `stale GRANDFATHERED entry "${stem}" — no committed counterpart pair matches it ` +
+        `(file renamed/removed, or a typo in the entry). Remove or correct the entry.`,
+      );
+    } else if (verdictByStem.get(stem) !== 'suspect') {
+      warnings.push(
+        `stale GRANDFATHERED entry "${stem}" — it no longer classifies as suspect ` +
+        `(verdict: ${verdictByStem.get(stem)}), so the entry shields nothing. Remove it.`,
+      );
+    }
+  }
+  return warnings;
 }
 
 function runCheck() {
@@ -159,6 +208,7 @@ function runCheck() {
   }
 
   const suspects = [];
+  const verdictByStem = new Map();
   let checked = 0;
   let documented = 0;
   let grandfathered = 0;
@@ -173,6 +223,7 @@ function runCheck() {
       readFileSync(join(SS_DIR, f), 'utf8'),
       readFileSync(pgPath, 'utf8'),
     );
+    verdictByStem.set(stem, verdict);
     if (verdict === 'documented') {
       documented++;
       console.log(`ok (documented no-op): ${stem}`);
@@ -184,6 +235,11 @@ function runCheck() {
         suspects.push({ stem, ssStmts, pgStmts });
       }
     }
+  }
+
+  for (const w of staleGrandfatherWarnings(GRANDFATHERED.keys(), verdictByStem)) {
+    console.warn(`WARNING: ${w}`);
+    if (process.env.GITHUB_ACTIONS) console.log(`::warning::${w}`);
   }
 
   if (suspects.length === 0) {
@@ -264,18 +320,36 @@ SET standard_conforming_strings = on;
     HEADER + '\n/* CREATE INDEX IX_0 ON __mj.T0 (C0); */\n',
     'content present but entirely commented out');
 
+  assert('suspect',
+    Array.from({ length: 5 }, (_, i) => `CREATE INDEX IX_${i} ON __mj.T${i} (C${i});`).join('\n'),
+    HEADER,
+    '5-statement source emptied — small backfills are exactly the shape that gets silently dropped');
+
+  assert('suspect', 'ALTER TABLE __mj.T ADD C INT NULL;', HEADER,
+    'single-statement source emptied — fusion can shrink output but never to zero');
+
   // ── Must NOT flag ──
   assert('documented', REAL_SOURCE,
     HEADER + '\n-- PG-EMPTY-BY-DESIGN: PG maintains this proc in metadataSupportObjects.ts.\n',
     'intentionally empty WITH the declaration token');
+
+  assert('documented', 'ALTER TABLE __mj.T ADD C INT NULL;',
+    HEADER + '\n-- PG-EMPTY-BY-DESIGN: PG maintains this proc in metadataSupportObjects.ts.\n',
+    'tiny source, intentionally empty WITH the declaration token');
 
   assert('ok', REAL_SOURCE,
     HEADER + Array.from({ length: 12 }, (_, i) =>
       `CREATE INDEX IF NOT EXISTS "IX_${i}" ON __mj."T${i}" USING btree ("C${i}");`).join('\n'),
     'genuine full conversion');
 
-  assert('ok', 'ALTER TABLE __mj.T ADD C INT NULL;', HEADER,
-    'tiny source (1 statement) — must not false-positive on a legitimately thin migration');
+  assert('ok', 'ALTER TABLE __mj.T ADD C INT NULL;',
+    HEADER + 'ALTER TABLE __mj."T" ADD COLUMN "C" INT NULL;\n',
+    'tiny source converted 1:1 — must not false-positive on a legitimately thin migration');
+
+  assert('ok',
+    'IF EXISTS (SELECT 1 FROM x) BEGIN EXEC sp_dropextendedproperty @a = 1; END;\nEXEC sp_addextendedproperty @a = 1;\nGO',
+    HEADER + 'COMMENT ON TABLE __mj."T" IS \'text\';\n',
+    'thin source FUSED to one statement [committed v5.39 extended-property pair] — pg=1 band keeps the floor');
 
   assert('ok', REAL_SOURCE,
     HEADER + '\nDO $mj$\nDECLARE p_ID UUID;\nBEGIN\n  p_ID := gen_random_uuid();\n  PERFORM __mj."spCreateThing"(p_ID := p_ID);\nEND $mj$;\n',

@@ -14,12 +14,16 @@ on:
       - 'packages/SQLConverter/**'
       - 'packages/CodeGenLib/src/Database/providers/postgresql/**'
       - '.github/workflows/pg-migrations.yml'
+      # The content detector runs in this workflow (self-test + verify steps), so a
+      # PR that changes only the detector must still exercise it here.
+      - 'scripts/check-pg-migration-content.mjs'
   push:
     branches: [next]
     paths:
       - 'migrations/**'
       - 'migrations-pg/**'
       - 'packages/SQLConverter/**'
+      - 'scripts/check-pg-migration-content.mjs'
 
 jobs:
   pg-parity:
