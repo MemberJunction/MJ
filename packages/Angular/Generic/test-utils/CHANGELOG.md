@@ -1,5 +1,15 @@
 # @memberjunction/ng-test-utils
 
+## 5.49.0
+
+### Minor Changes
+
+- d3f9d77: Angular DOM unit-testing — Phase 3 (`Angular/Explorer/**` rollout) toolkit growth.
+
+  `createFakeProvider` gains an additive **`roles`** option that populates `provider.Roles`, for DOM
+  specs of permission/role UIs that read `ProviderToUse.Roles` (e.g. the Explorer entity-permissions
+  grid). Mirrors the existing `entities` option; defaults to `[]` when omitted, so it's non-breaking.
+
 ## 5.48.0
 
 ## 5.47.0

@@ -1,5 +1,59 @@
 # @memberjunction/ng-bootstrap
 
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [d3f9d77]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [88d707b]
+- Updated dependencies [02c8a15]
+- Updated dependencies [505c8b5]
+- Updated dependencies [88d707b]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [14e2117]
+- Updated dependencies [3993034]
+- Updated dependencies [9e2278c]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [c220620]
+- Updated dependencies [70c658c]
+- Updated dependencies [b5a8e3f]
+  - @memberjunction/ng-core-entity-forms@5.49.0
+  - @memberjunction/ng-dashboards@5.49.0
+  - @memberjunction/ng-explorer-core@5.49.0
+  - @memberjunction/ng-explorer-settings@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/ng-conversations@5.49.0
+  - @memberjunction/graphql-dataprovider@5.49.0
+  - @memberjunction/communication-types@5.49.0
+  - @memberjunction/ai-realtime-client@5.49.0
+  - @memberjunction/ng-artifacts@5.49.0
+  - @memberjunction/ng-clustering@5.49.0
+  - @memberjunction/ng-dashboard-viewer@5.49.0
+  - @memberjunction/ng-entity-viewer@5.49.0
+  - @memberjunction/ng-file-storage@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/tag-engine-base@5.49.0
+  - @memberjunction/ai-vectors-memory@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/ng-auth-services@5.49.0
+  - @memberjunction/ng-shared@5.49.0
+  - @memberjunction/ng-entity-action-ux@5.49.0
+  - @memberjunction/entity-communications-base@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes
