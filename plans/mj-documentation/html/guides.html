@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guides — MemberJunction Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){const s=localStorage.getItem('mj-docs-theme');const p=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(p?'dark':'light'));})();</script>
+</head>
+<body>
+
+<div class="proto-banner">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+    <span><strong>Prototype</strong> — see <a href="../plan.md">plan.md</a>.</span>
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="../index.html" class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></a>
+        <nav class="site-nav">
+            <a href="getting-started.html">Getting Started</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="guides.html" class="active">Guides</a>
+            <a href="packages.html">Packages</a>
+            <a href="ai-and-agents.html">AI &amp; Agents</a>
+            <a href="ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <button class="search-trigger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="search-text">Search docs…</span><kbd>⌘K</kbd></button>
+            <button class="theme-toggle" onclick="(function(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);localStorage.setItem('mj-docs-theme',t);})()">
+                <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            </button>
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline btn-sm">GitHub</a>
+        </div>
+    </div>
+</header>
+
+<main>
+
+<section class="section" style="padding-bottom: var(--space-8);">
+    <div class="container">
+        <div class="breadcrumb" style="justify-content: center;">
+            <a href="../index.html">Docs</a>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            <span>Guides</span>
+        </div>
+        <div class="section-header">
+            <div class="section-eyebrow">13 Production-tested guides</div>
+            <h1>Guides</h1>
+            <p class="lead">Best-practices walkthroughs, refined through production use. Each guide is rendered live from <code>MJ/guides/</code> — when the source markdown changes, this site updates.</p>
+        </div>
+        <div style="display: flex; justify-content: center; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-8);">
+            <button class="badge badge-brand" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">All (13)</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">Architecture (4)</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">UI &amp; Frontend (4)</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">Data &amp; Entities (3)</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">AI &amp; Tagging (2)</button>
+        </div>
+    </div>
+</section>
+
+<section class="section-sm">
+    <div class="container">
+        <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: var(--space-5); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border-default);">Architecture &amp; Performance</h3>
+        <div class="guide-grid">
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Caching &amp; Pub/Sub Guide</h3>
+                    <span class="badge badge-brand">Foundational</span>
+                </div>
+                <p>Covers the complete caching, pub/sub, and real-time data synchronization architecture. How data stays fresh across multiple servers and connected browser clients, with or without Redis.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">CACHING_AND_PUBSUB_GUIDE.md</span>
+                    <span>~24 min</span>
+                </div>
+            </a>
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Lazy Loading Guide</h3>
+                    <span class="badge">UI</span>
+                </div>
+                <p>MJExplorer uses code-split lazy loading for feature chunks. Instead of loading every component at startup, chunks are loaded on demand. Covers how to make a package lazy-loadable.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">LAZY_LOADING_GUIDE.md</span>
+                    <span>~12 min</span>
+                </div>
+            </a>
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Keyset Pagination Guide</h3>
+                    <span class="badge">Perf</span>
+                </div>
+                <p>Use keyset pagination (<code>RunViewParams.AfterKey</code>) when iterating through all records of a large entity. Stays O(log N) per page regardless of depth.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">KEYSET_PAGINATION_GUIDE.md</span>
+                    <span>~9 min</span>
+                </div>
+            </a>
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Navigation &amp; Routing Guide</h3>
+                    <span class="badge">UI</span>
+                </div>
+                <p>Documents the navigation and URL management architecture in MJ Explorer — how the shell owns URL state, how back/forward navigation works, and how to add URL-synced sub-navigation.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">NAVIGATION_AND_ROUTING_GUIDE.md</span>
+                    <span>~16 min</span>
+                </div>
+            </a>
+
+        </div>
+    </div>
+</section>
+
+<section class="section-sm">
+    <div class="container">
+        <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: var(--space-5); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border-default);">UI &amp; Frontend</h3>
+        <div class="guide-grid">
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Dashboard Best Practices</h3>
+                    <span class="badge badge-brand">Recommended</span>
+                </div>
+                <p>Patterns and best practices for building dashboards in MemberJunction Angular applications, refined through production use and designed to work with MJ's metadata-driven architecture.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">DASHBOARD_BEST_PRACTICES.md</span>
+                    <span>~18 min</span>
+                </div>
+            </a>
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Design Token &amp; Color Architecture</h3>
+                    <span class="badge">UI</span>
+                </div>
+                <p>Dashboard components across MJ Explorer used to hardcode hex colors — over 60 files with 100+ unique hex values. This guide drives the migration to a unified semantic token system that supports dark mode and white-labeling.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">APP_COLOR_ARCHITECTURE.md</span>
+                    <span>~14 min</span>
+                </div>
+            </a>
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>MemberJunction Theming System</h3>
+                    <span class="badge">UI</span>
+                </div>
+                <p>The theming primitives: CSS custom property tokens, light/dark switching, brand customization, and how to extend the system without breaking existing apps.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">THEMING.md</span>
+                    <span>~10 min</span>
+                </div>
+            </a>
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>UUID Comparison Guide</h3>
+                    <span class="badge badge-warn">Critical</span>
+                </div>
+                <p>Critical patterns for comparing UUIDs across SQL Server (uppercase) and PostgreSQL (lowercase). Always use <code>UUIDsEqual()</code> instead of <code>===</code>. Covers Set/Map keys, Angular template binding, and automated enforcement tests.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">UUID_COMPARISON_GUIDE.md</span>
+                    <span>~8 min</span>
+                </div>
+            </a>
+
+        </div>
+    </div>
+</section>
+
+<section class="section-sm">
+    <div class="container">
+        <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: var(--space-5); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border-default);">Data &amp; Entities</h3>
+        <div class="guide-grid">
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>BaseEntity Server-Side Patterns</h3>
+                    <span class="badge badge-brand">Recommended</span>
+                </div>
+                <p>When the database layer needs entity behavior beyond plain CRUD — embeddings, invariants spanning multiple records, FK cleanup before delete, in-memory cache sync — the answer is a server-side <code>BaseEntity</code> subclass registered via <code>@RegisterClass</code>.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">BASE_ENTITY_SERVER_PATTERNS.md</span>
+                    <span>~14 min</span>
+                </div>
+            </a>
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Soft Deletes Guide</h3>
+                    <span class="badge">Data</span>
+                </div>
+                <p>MemberJunction supports soft deletes as a per-entity metadata setting. Calling <code>entity.Delete()</code> marks the row as deleted instead of physically removing it; the framework transparently hides deleted rows.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">SOFT_DELETES_GUIDE.md</span>
+                    <span>~7 min</span>
+                </div>
+            </a>
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Search Scopes &amp; RAG+ Guide</h3>
+                    <span class="badge">AI</span>
+                </div>
+                <p>Implementation guide for MJ's Search Scopes + agent RAG+ architecture. MJ agents have three distinct mechanisms for bringing context into an LLM call — not interchangeable.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">SEARCH_SCOPES_AND_RAG_GUIDE.md</span>
+                    <span>~20 min</span>
+                </div>
+            </a>
+
+        </div>
+    </div>
+</section>
+
+<section class="section-sm" style="padding-bottom: var(--space-20);">
+    <div class="container">
+        <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: var(--space-5); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border-default);">AI &amp; Tagging</h3>
+        <div class="guide-grid">
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Taxonomy &amp; Tagging Guide</h3>
+                    <span class="badge">AI</span>
+                </div>
+                <p>Companion to the Autotagging guide. Covers the tag taxonomy itself — how it is shaped, scoped, governed, grown, embedded, reviewed, and pruned.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">TAXONOMY_TAGGING_GUIDE.md</span>
+                    <span>~15 min</span>
+                </div>
+            </a>
+
+            <a href="#" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Content Autotagging Guide</h3>
+                    <span class="badge">AI</span>
+                </div>
+                <p>The Knowledge Hub content autotagging system is a pluggable, metadata-driven pipeline that automatically analyzes textual content, extracts keywords with relevance weights, and bridges them into MJ's formal Tag taxonomy.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">CONTENT_AUTOTAGGING_GUIDE.md</span>
+                    <span>~17 min</span>
+                </div>
+            </a>
+
+        </div>
+    </div>
+</section>
+
+<section class="section" style="background: var(--bg-surface-2); border-top: 1px solid var(--border-default);">
+    <div class="container-narrow text-center">
+        <div class="section-eyebrow">Want to contribute?</div>
+        <h2>Write a guide</h2>
+        <p class="lead" style="max-width: 560px; margin: var(--space-4) auto var(--space-6);">Guides live in <code>MJ/guides/</code>. Open a PR with new markdown — the site picks it up on the next nightly build, and the front-matter you add becomes the catalog entry on this page.</p>
+        <a href="https://github.com/MemberJunction/MJ/tree/main/guides" class="btn btn-secondary">View source on GitHub →</a>
+    </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand"><div class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></div><p>Open-source, AI-native metadata-driven application platform. MIT licensed.</p></div>
+        <div class="footer-col"><h5>Docs</h5><ul><li><a href="getting-started.html">Getting Started</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="guides.html">Guides</a></li><li><a href="packages.html">Packages</a></li></ul></div>
+        <div class="footer-col"><h5>AI</h5><ul><li><a href="ai-and-agents.html">Providers</a></li><li><a href="ai-and-agents.html">Agent Framework</a></li><li><a href="ai-and-agents.html">MCP &amp; A2A</a></li></ul></div>
+        <div class="footer-col"><h5>Community</h5><ul><li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li><li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li><li><a href="community.html">Contributing</a></li></ul></div>
+        <div class="footer-col"><h5>Resources</h5><ul><li><a href="https://github.com/MemberJunction/MJ">GitHub</a></li><li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li><li><a href="migrations.html">Migrations</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><span>© MemberJunction. MIT licensed.</span><div class="legal-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="https://github.com/MemberJunction/MJ">Source</a></div></div>
+</footer>
+
+</body>
+</html>

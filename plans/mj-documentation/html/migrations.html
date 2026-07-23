@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migrations — MemberJunction Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){const s=localStorage.getItem('mj-docs-theme');const p=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(p?'dark':'light'));})();</script>
+</head>
+<body>
+
+<div class="proto-banner"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg><span><strong>Prototype</strong> — see <a href="../plan.md">plan.md</a>.</span></div>
+
+<header class="site-header"><div class="site-header-inner">
+    <a href="../index.html" class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></a>
+    <nav class="site-nav"><a href="getting-started.html">Getting Started</a><a href="architecture.html">Architecture</a><a href="guides.html">Guides</a><a href="packages.html">Packages</a><a href="ai-and-agents.html">AI &amp; Agents</a><a href="ecosystem.html">Ecosystem</a></nav>
+    <div class="site-nav-right">
+        <button class="search-trigger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="search-text">Search docs…</span><kbd>⌘K</kbd></button>
+        <button class="theme-toggle" onclick="(function(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);localStorage.setItem('mj-docs-theme',t);})()"><svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg><svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+        <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline btn-sm">GitHub</a>
+    </div>
+</div></header>
+
+<div class="docs-layout">
+    <aside class="sidebar">
+        <div class="sidebar-section"><h5>Migrations</h5>
+            <nav class="sidebar-nav">
+                <a href="#overview" class="active">Overview</a>
+                <a href="#flyway">Flyway model</a>
+                <a href="#naming">Naming convention</a>
+                <a href="#codegen-rules">CodeGen rules</a>
+                <a href="#cross-db">SQL Server ↔ PostgreSQL</a>
+                <a href="#metadata-sync">Seed data via mj-sync</a>
+                <a href="#publish-policy">Publish-then-no-break</a>
+            </nav>
+        </div>
+        <div class="sidebar-section"><h5>Related</h5>
+            <nav class="sidebar-nav">
+                <a href="guides.html">UUID Comparison</a>
+                <a href="architecture.html">Architecture</a>
+            </nav>
+        </div>
+    </aside>
+
+    <main class="docs-main">
+        <div class="breadcrumb"><a href="../index.html">Docs</a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg><span>Migrations</span></div>
+
+        <h1>Database migrations</h1>
+        <p class="docs-lede">MJ uses Flyway for forward-only migrations against SQL Server and PostgreSQL. CodeGen owns several columns and behaviors — knowing what to leave to CodeGen prevents the most common migration pitfalls.</p>
+
+        <div class="source-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+            <span>Rendered from</span>
+            <a href="https://github.com/MemberJunction/MJ/blob/main/migrations/CLAUDE.md">migrations/CLAUDE.md</a>
+        </div>
+
+        <h2 id="overview">Overview</h2>
+        <p>MJ ships its core schema migrations under <code>migrations/v5/</code>. Your application adds its own migrations to the highest-numbered <code>v*</code> folder. Migrations are forward-only — no down migrations. Roll forward with a corrective migration if needed.</p>
+
+        <h2 id="flyway">Flyway model</h2>
+        <p>Migrations apply in filename order. Each migration runs in its own transaction (where the database supports DDL transactions). Migration tracking lives in <code>__mj.flyway_schema_history</code>.</p>
+
+        <pre><code><span class="tk-com"># Apply pending migrations</span>
+mj migrate up
+
+<span class="tk-com"># Show current status</span>
+mj migrate info
+
+<span class="tk-com"># Validate that local files match what's been applied</span>
+mj migrate validate</code></pre>
+
+        <h2 id="naming">Naming convention</h2>
+        <p>Use this exact format:</p>
+        <pre><code>VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql
+
+<span class="tk-com"># Example</span>
+V202605290930__v2.46.x_add_project_status_column.sql</code></pre>
+
+        <h2 id="codegen-rules">What CodeGen owns — DON'T put these in your migration</h2>
+
+        <div class="callout callout-warn">
+            <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            <div>
+                <div class="callout-title">CodeGen will conflict with these</div>
+                <p>Including any of the items below will cause CodeGen failures, duplicate indexes, or migration conflicts during the next <code>mj codegen</code> run.</p>
+            </div>
+        </div>
+
+        <ul>
+            <li><strong>Timestamp columns</strong> — <code>__mj_CreatedAt</code> and <code>__mj_UpdatedAt</code> are added by CodeGen with proper defaults and triggers. Don't add them manually.</li>
+            <li><strong>Foreign key indexes</strong> — CodeGen creates these as <code>IDX_AUTO_MJ_FKEY_&lt;table&gt;_&lt;column&gt;</code>. Don't create FK indexes manually.</li>
+            <li><strong>Stored procedures &amp; views</strong> — CodeGen generates <code>spCreate*</code>, <code>spUpdate*</code>, <code>spDelete*</code>, and views per entity.</li>
+        </ul>
+
+        <h2 id="cross-db">SQL Server ↔ PostgreSQL</h2>
+        <p>MJ supports both engines. Migrations use the <code>${flyway:defaultSchema}</code> placeholder and idiomatic SQL for each engine.</p>
+
+        <div class="callout callout-info">
+            <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <div>
+                <div class="callout-title">UUIDs are case-different</div>
+                <p>SQL Server returns UUIDs uppercase; PostgreSQL returns them lowercase. Use <code>UUIDsEqual()</code> instead of <code>===</code> in TypeScript code that runs against both. See the <a href="guides.html" class="inline-link">UUID Comparison guide</a>.</p>
+            </div>
+        </div>
+
+        <h2 id="metadata-sync">Seed data — use mj-sync, not SQL INSERTs</h2>
+        <p>When you create a new lookup or reference table, <strong>never seed it with SQL INSERTs in the migration</strong>. Create a <code>metadata/</code> directory for the entity with declarative <code>.json</code> records, then push:</p>
+
+        <pre><code>npx mj sync push --dir=metadata --include=<span class="tk-str">"agent-request-types"</span></code></pre>
+
+        <p>The metadata-sync system handles upserts cleanly, supports <code>@lookup:</code> references to entity names, and is safe to re-run. SQL INSERTs in migrations cause duplicate-key errors and can't reference other entities by name.</p>
+
+        <h2 id="publish-policy">Publish-then-no-breaking-changes policy</h2>
+        <p>Within a published OpenApp major version, only additive schema changes are allowed:</p>
+        <ul>
+            <li>✅ Adding new tables, columns, indexes</li>
+            <li>✅ Widening types (NVARCHAR(50) → NVARCHAR(200))</li>
+            <li>✅ Adding optional foreign keys</li>
+            <li>❌ Dropping tables or columns</li>
+            <li>❌ Narrowing types</li>
+            <li>❌ Renaming</li>
+            <li>❌ Adding required parameters to existing sprocs</li>
+        </ul>
+        <p>Breaking changes force a major version bump. The full policy is in <a href="https://github.com/MemberJunction/MJ/blob/main/packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md" class="inline-link">PUBLISH_NO_BREAK_POLICY.md</a>.</p>
+
+    </main>
+
+    <aside class="on-this-page">
+        <h5>On this page</h5>
+        <ul>
+            <li><a href="#overview" class="active">Overview</a></li>
+            <li><a href="#flyway">Flyway model</a></li>
+            <li><a href="#naming">Naming</a></li>
+            <li><a href="#codegen-rules">CodeGen rules</a></li>
+            <li><a href="#cross-db">Cross-database</a></li>
+            <li><a href="#metadata-sync">Seed data</a></li>
+            <li><a href="#publish-policy">Publish policy</a></li>
+        </ul>
+    </aside>
+</div>
+
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand"><div class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></div><p>Open-source, AI-native metadata-driven application platform. MIT licensed.</p></div>
+        <div class="footer-col"><h5>Docs</h5><ul><li><a href="getting-started.html">Getting Started</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="guides.html">Guides</a></li><li><a href="packages.html">Packages</a></li></ul></div>
+        <div class="footer-col"><h5>AI</h5><ul><li><a href="ai-and-agents.html">Providers</a></li><li><a href="ai-and-agents.html">Agent Framework</a></li><li><a href="ai-and-agents.html">MCP &amp; A2A</a></li></ul></div>
+        <div class="footer-col"><h5>Community</h5><ul><li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li><li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li><li><a href="community.html">Contributing</a></li></ul></div>
+        <div class="footer-col"><h5>Resources</h5><ul><li><a href="https://github.com/MemberJunction/MJ">GitHub</a></li><li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li><li><a href="migrations.html">Migrations</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><span>© MemberJunction. MIT licensed.</span><div class="legal-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="https://github.com/MemberJunction/MJ">Source</a></div></div>
+</footer>
+
+</body>
+</html>

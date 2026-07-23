@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture — MemberJunction Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){const s=localStorage.getItem('mj-docs-theme');const p=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(p?'dark':'light'));})();</script>
+</head>
+<body>
+
+<div class="proto-banner">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+    <span><strong>Prototype</strong> — see <a href="../plan.md">plan.md</a> for the full migration plan.</span>
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="../index.html" class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></a>
+        <nav class="site-nav">
+            <a href="getting-started.html">Getting Started</a>
+            <a href="architecture.html" class="active">Architecture</a>
+            <a href="guides.html">Guides</a>
+            <a href="packages.html">Packages</a>
+            <a href="ai-and-agents.html">AI &amp; Agents</a>
+            <a href="ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <button class="search-trigger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="search-text">Search docs…</span><kbd>⌘K</kbd></button>
+            <button class="theme-toggle" onclick="(function(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);localStorage.setItem('mj-docs-theme',t);})()">
+                <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            </button>
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline btn-sm">GitHub</a>
+        </div>
+    </div>
+</header>
+
+<div class="docs-layout">
+
+    <aside class="sidebar">
+        <div class="sidebar-section">
+            <h5>Architecture</h5>
+            <nav class="sidebar-nav">
+                <a href="#overview" class="active">Overview</a>
+                <a href="#layers">The seven layers</a>
+                <a href="#metadata">The metadata layer</a>
+                <a href="#providers">Provider architecture</a>
+                <a href="#runtime">Runtime data flow</a>
+                <a href="#protocols">Protocols</a>
+                <a href="#class-system">The class system</a>
+                <a href="#caching">Caching &amp; pub/sub</a>
+            </nav>
+        </div>
+        <div class="sidebar-section">
+            <h5>See also</h5>
+            <nav class="sidebar-nav">
+                <a href="guides.html">All guides</a>
+                <a href="packages.html">Package directory</a>
+                <a href="ai-and-agents.html">AI framework</a>
+            </nav>
+        </div>
+    </aside>
+
+    <main class="docs-main">
+        <div class="breadcrumb">
+            <a href="../index.html">Docs</a>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            <span>Architecture</span>
+        </div>
+
+        <h1>Architecture</h1>
+        <p class="docs-lede">MemberJunction is a metadata-driven Common Data Platform. The schema you put in the database becomes the application — typed entities, GraphQL APIs, Angular forms, validation, audit, and AI capabilities all derive from it. This page walks through the seven layers that make that possible.</p>
+
+        <div class="source-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m7.5 4.27 9 5.15"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+            <span>Rendered from</span>
+            <a href="https://github.com/MemberJunction/MJ/blob/main/README.md">MJ/README.md</a>
+            <span>+ hand-authored prose</span>
+        </div>
+
+        <h2 id="overview">Overview</h2>
+        <p>MemberJunction is split into seven cooperating layers. The lower three (Data &amp; Communication, Metadata, Entity &amp; Actions) form the platform's runtime. The upper three (API &amp; Protocol, AI, Client) expose it to humans, agents, and other systems. The seventh — CodeGen &amp; Tooling — sits across the middle, regenerating the artifacts that connect all the others whenever your schema changes.</p>
+
+        <p>The whole system is held together by one idea: <strong>the database is the source of truth for application shape</strong>. Add a column with the right metadata, and an Angular form field, a GraphQL endpoint, an entity TypeScript property, validation, audit, and AI metadata all show up. You don't write that integration code — CodeGen writes it for you.</p>
+
+        <h2 id="layers">The seven layers</h2>
+
+        <div class="arch-diagram">
+            <div class="arch-layer">
+                <div class="arch-layer-label"><span class="layer-num">1</span>Client</div>
+                <div class="arch-layer-components">
+                    <span class="arch-component">MJ Explorer (Angular)</span>
+                    <span class="arch-component">MJ CLI</span>
+                    <span class="arch-component">Claude Desktop</span>
+                    <span class="arch-component">Cursor</span>
+                    <span class="arch-component">A2A Clients</span>
+                    <span class="arch-component">VSCode Ext</span>
+                </div>
+            </div>
+            <div class="arch-arrow">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto;"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            </div>
+            <div class="arch-layer">
+                <div class="arch-layer-label"><span class="layer-num">2</span>API &amp; Protocol</div>
+                <div class="arch-layer-components">
+                    <span class="arch-component">MJAPI (Apollo GraphQL)</span>
+                    <span class="arch-component">MCP Server</span>
+                    <span class="arch-component">A2A Server</span>
+                    <span class="arch-component">Auth Providers</span>
+                </div>
+            </div>
+            <div class="arch-arrow">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto;"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            </div>
+            <div class="arch-layer">
+                <div class="arch-layer-label"><span class="layer-num">3</span>AI</div>
+                <div class="arch-layer-components">
+                    <span class="arch-component">AI Engine</span>
+                    <span class="arch-component">Agent Framework (Loop/Flow)</span>
+                    <span class="arch-component">Prompt Engine</span>
+                    <span class="arch-component">Vectors / RAG+</span>
+                    <span class="arch-component">26 Providers</span>
+                </div>
+            </div>
+            <div class="arch-arrow">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto;"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            </div>
+            <div class="arch-layer">
+                <div class="arch-layer-label"><span class="layer-num">4</span>Entity &amp; Actions</div>
+                <div class="arch-layer-components">
+                    <span class="arch-component">BaseEntity (generated)</span>
+                    <span class="arch-component">Actions Framework</span>
+                    <span class="arch-component">Validation</span>
+                    <span class="arch-component">Record Changes (audit)</span>
+                </div>
+            </div>
+            <div class="arch-arrow">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto;"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            </div>
+            <div class="arch-layer">
+                <div class="arch-layer-label"><span class="layer-num">5</span>Metadata</div>
+                <div class="arch-layer-components">
+                    <span class="arch-component">Metadata Engine</span>
+                    <span class="arch-component">ClassFactory</span>
+                    <span class="arch-component">Providers</span>
+                    <span class="arch-component">Permissions</span>
+                    <span class="arch-component">Cache</span>
+                </div>
+            </div>
+            <div class="arch-arrow">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto;"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            </div>
+            <div class="arch-layer">
+                <div class="arch-layer-label"><span class="layer-num">6</span>Data &amp; Comms</div>
+                <div class="arch-layer-components">
+                    <span class="arch-component">SQL Server Provider</span>
+                    <span class="arch-component">PostgreSQL Provider</span>
+                    <span class="arch-component">Redis Pub/Sub</span>
+                    <span class="arch-component">Comms (Email/SMS/Push)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="callout callout-info">
+            <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <div>
+                <div class="callout-title">The seventh layer wraps the rest</div>
+                <p><strong>CodeGen &amp; Tooling</strong> — CodeGenLib, MetadataSync, SchemaEngine, DBAutoDoc, and migrations (Flyway) — regenerates entity classes, sprocs, views, GraphQL schemas, and Angular forms whenever the database schema changes. It's how the layers above stay aligned with the database without manual integration code.</p>
+            </div>
+        </div>
+
+        <h2 id="metadata">The metadata layer</h2>
+        <p>Metadata is the system's central nervous system. Every entity, field, relationship, validation rule, permission, dashboard, AI agent, prompt, and action lives in metadata tables. Those tables are described <em>by</em> metadata too — MJ describes itself.</p>
+
+        <p>At runtime, the <code>Metadata</code> class loads this information from a provider (SQL Server, PostgreSQL, or GraphQL) and exposes it to the rest of the system. Application code never instantiates an entity directly:</p>
+
+        <pre><code><span class="tk-com">// Always go through the metadata layer — never `new UserEntity()`</span>
+<span class="tk-kw">const</span> md = <span class="tk-kw">new</span> <span class="tk-ty">Metadata</span>();
+<span class="tk-kw">const</span> user = <span class="tk-kw">await</span> md.<span class="tk-fn">GetEntityObject</span>&lt;<span class="tk-ty">UserEntity</span>&gt;(<span class="tk-str">'Users'</span>);</code></pre>
+
+        <p>This indirection is what lets the same code run on the server (going against SQL Server / PostgreSQL directly) and in the browser (going through GraphQL) without changing application logic.</p>
+
+        <h2 id="providers">Provider architecture</h2>
+        <p>MJ has <strong>three concrete data providers</strong> and a clean abstraction (<code>IMetadataProvider</code>) over them. Each provider handles authentication, query translation, mutation, and caching for its target environment.</p>
+
+        <table class="docs-table">
+            <thead>
+                <tr>
+                    <th>Provider</th>
+                    <th>Where it runs</th>
+                    <th>Talks to</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>SQLServerDataProvider</code></td>
+                    <td>MJAPI &amp; Node scripts</td>
+                    <td>SQL Server directly (mssql driver)</td>
+                </tr>
+                <tr>
+                    <td><code>PostgreSQLDataProvider</code></td>
+                    <td>MJAPI &amp; Node scripts</td>
+                    <td>PostgreSQL directly (pg driver)</td>
+                </tr>
+                <tr>
+                    <td><code>GraphQLDataProvider</code></td>
+                    <td>Angular Explorer &amp; browser apps</td>
+                    <td>MJAPI's GraphQL endpoint</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>A single application registers one provider as the "global default" via <code>Metadata.Provider</code>. Multi-tenant or multi-server clients can hold several provider instances simultaneously — see the <a href="guides.html" class="inline-link">caching guide</a> for how cross-provider invalidation works.</p>
+
+        <h2 id="runtime">Runtime data flow</h2>
+        <p>A typical entity read from a browser:</p>
+        <ol>
+            <li>Angular component calls <code>rv.RunView({ EntityName: 'Users', ... })</code></li>
+            <li>The GraphQL provider checks its local cache. Hit → returns plain objects, transforms to <code>BaseEntity</code> if requested.</li>
+            <li>Miss → sends a single GraphQL query to MJAPI.</li>
+            <li>MJAPI's resolver runs through the SQL Server / PostgreSQL provider, which also checks <em>its</em> server-side cache.</li>
+            <li>Hit → returns cached JSON. Miss → executes the view stored procedure, caches the result, returns it.</li>
+            <li>Result travels back up the stack, hydrating into typed <code>UserEntity</code> instances on the client.</li>
+        </ol>
+
+        <p>Writes are the same pattern in reverse, with one addition: every successful <code>Save()</code> publishes a <code>BaseEntityEvent</code>. Subscribers — including the server's own cache layer and any client that has cached this entity — receive the event and either update in place or invalidate. This is how the system stays coherent across servers and browser tabs.</p>
+
+        <h2 id="protocols">Protocols</h2>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon-tile tile-brand">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+                </div>
+                <h3>GraphQL</h3>
+                <p>The primary protocol. Apollo Server, auto-generated schemas from entity metadata, strongly-typed clients in TypeScript and Angular.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-purple">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                </div>
+                <h3>MCP</h3>
+                <p>Model Context Protocol server. Exposes entities, actions, and queries to Claude Desktop, Cursor, and any MCP-compatible client.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-info">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                </div>
+                <h3>A2A</h3>
+                <p>Agent-to-Agent protocol. MJ's agents can be invoked by, and can invoke, agents on other systems that speak A2A — including other MJ deployments.</p>
+            </div>
+        </div>
+
+        <h2 id="class-system">The class system</h2>
+        <p>MJ uses a <strong>dynamic class factory</strong> (<code>MJGlobal.ClassFactory</code>) wired up via the <code>@RegisterClass</code> decorator. Generated entity classes register themselves under their entity name; custom subclasses can register for the same name with higher priority. Whoever registered most recently with the highest priority wins.</p>
+
+        <p>This is how, for example, you can ship a <code>UserEntityExtended</code> in your application that overrides <code>Save()</code> on the <code>Users</code> entity without modifying generated code. The metadata layer asks the factory for "the right class for Users" and your subclass comes back.</p>
+
+        <div class="callout callout-warn">
+            <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            <div>
+                <div class="callout-title">Class manifest required for tree-shaking</div>
+                <p>Because <code>ClassFactory</code> uses dynamic registration, modern bundlers (ESBuild, Vite) can't see the classes as used and may tree-shake them. The <code>mj codegen manifest</code> command generates a static <code>CLASS_REGISTRATIONS</code> array that the bundler does see — preventing accidental class loss. See the <a href="guides.html" class="inline-link">lazy loading guide</a>.</p>
+            </div>
+        </div>
+
+        <h2 id="caching">Caching &amp; pub/sub</h2>
+        <p>MJ's caching is multi-tier and event-driven:</p>
+
+        <ul>
+            <li><strong>Server cache</strong> — every RunView checks first. Small unfiltered results auto-cache with in-place upsert/remove on entity events.</li>
+            <li><strong>Filtered/sorted caches</strong> are invalidated (not updated) on entity changes — JS can't evaluate SQL predicates safely.</li>
+            <li><strong>Client cache</strong> in <code>GraphQLDataProvider</code> follows the same model.</li>
+            <li><strong>Redis pub/sub</strong> (optional) propagates entity events across multiple API server instances.</li>
+            <li><strong>BaseEngine integration</strong> — engine classes that cache entity arrays auto-subscribe to <code>BaseEntityEvent</code> for their configured entity. Save / delete / remote-invalidate triggers an in-place array update and emits to RxJS observers.</li>
+        </ul>
+
+        <p>The full system is documented in the <a href="guides.html" class="inline-link">Caching &amp; Pub/Sub Guide</a> — about 24 minutes of reading and the single most important architecture document for anyone building on MJ at scale.</p>
+    </main>
+
+    <aside class="on-this-page">
+        <h5>On this page</h5>
+        <ul>
+            <li><a href="#overview" class="active">Overview</a></li>
+            <li><a href="#layers">The seven layers</a></li>
+            <li><a href="#metadata">The metadata layer</a></li>
+            <li><a href="#providers">Provider architecture</a></li>
+            <li><a href="#runtime">Runtime data flow</a></li>
+            <li><a href="#protocols">Protocols</a></li>
+            <li><a href="#class-system">The class system</a></li>
+            <li><a href="#caching">Caching &amp; pub/sub</a></li>
+        </ul>
+    </aside>
+
+</div>
+
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand">
+            <div class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></div>
+            <p>Open-source, AI-native metadata-driven application platform. MIT licensed.</p>
+        </div>
+        <div class="footer-col"><h5>Docs</h5><ul><li><a href="getting-started.html">Getting Started</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="guides.html">Guides</a></li><li><a href="packages.html">Packages</a></li></ul></div>
+        <div class="footer-col"><h5>AI</h5><ul><li><a href="ai-and-agents.html">Providers</a></li><li><a href="ai-and-agents.html">Agent Framework</a></li><li><a href="ai-and-agents.html">MCP &amp; A2A</a></li><li><a href="ai-and-agents.html">Skills</a></li></ul></div>
+        <div class="footer-col"><h5>Community</h5><ul><li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li><li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li><li><a href="community.html">Contributing</a></li></ul></div>
+        <div class="footer-col"><h5>Resources</h5><ul><li><a href="https://github.com/MemberJunction/MJ">GitHub</a></li><li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li><li><a href="migrations.html">Migrations</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><span>© MemberJunction. MIT licensed.</span><div class="legal-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="https://github.com/MemberJunction/MJ">Source</a></div></div>
+</footer>
+
+</body>
+</html>

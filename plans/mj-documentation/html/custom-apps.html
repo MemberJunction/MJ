@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Apps — MemberJunction Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){const s=localStorage.getItem('mj-docs-theme');const p=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(p?'dark':'light'));})();</script>
+</head>
+<body>
+
+<div class="proto-banner"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg><span><strong>Prototype</strong> — see <a href="../plan.md">plan.md</a>.</span></div>
+
+<header class="site-header"><div class="site-header-inner">
+    <a href="../index.html" class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></a>
+    <nav class="site-nav">
+        <a href="getting-started.html">Getting Started</a><a href="architecture.html">Architecture</a><a href="guides.html">Guides</a><a href="packages.html">Packages</a><a href="ai-and-agents.html">AI &amp; Agents</a><a href="ecosystem.html">Ecosystem</a>
+    </nav>
+    <div class="site-nav-right">
+        <button class="search-trigger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="search-text">Search docs…</span><kbd>⌘K</kbd></button>
+        <button class="theme-toggle" onclick="(function(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);localStorage.setItem('mj-docs-theme',t);})()"><svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg><svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+        <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline btn-sm">GitHub</a>
+    </div>
+</div></header>
+
+<div class="docs-layout">
+    <aside class="sidebar">
+        <div class="sidebar-section"><h5>Custom Apps</h5>
+            <nav class="sidebar-nav">
+                <a href="#overview" class="active">Overview</a>
+                <a href="#scaffold">Scaffold a custom app</a>
+                <a href="#dashboards">Building dashboards</a>
+                <a href="#forms">Custom entity forms</a>
+                <a href="#lazy">Lazy-loaded modules</a>
+                <a href="#theming">Theming &amp; white-label</a>
+                <a href="#preferences">User preferences</a>
+                <a href="#actions">Custom actions</a>
+                <a href="#deploy">Deployment</a>
+            </nav>
+        </div>
+        <div class="sidebar-section"><h5>Related guides</h5>
+            <nav class="sidebar-nav">
+                <a href="guides.html">Dashboard Best Practices</a>
+                <a href="guides.html">Lazy Loading</a>
+                <a href="guides.html">Theming</a>
+            </nav>
+        </div>
+    </aside>
+
+    <main class="docs-main">
+        <div class="breadcrumb"><a href="../index.html">Docs</a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg><span>Custom Apps</span></div>
+
+        <h1>Building custom apps on MJ</h1>
+        <p class="docs-lede">MJ Explorer is the reference app — but it's also a template. You can ship your own branded application using the same dashboard framework, the same auto-generated forms, the same lazy-loading infrastructure. This page is the entry point.</p>
+
+        <h2 id="overview">Overview</h2>
+        <p>A "custom app" on MJ is an Angular application that:</p>
+        <ul>
+            <li>Bootstraps with <code>@memberjunction/ng-base-application</code></li>
+            <li>Pulls its data via <code>@memberjunction/graphql-dataprovider</code> from your MJAPI</li>
+            <li>Defines its own navigation, dashboards, and custom forms</li>
+            <li>Inherits MJ's authentication, theming, and component library</li>
+        </ul>
+
+        <h2 id="scaffold">Scaffold a custom app</h2>
+        <pre><code>mj init my-app --template custom-app
+cd my-app
+npm install</code></pre>
+
+        <p>You get a minimal Angular app preconfigured with MJ's auth, design tokens, and a starter dashboard:</p>
+        <pre><code>my-app/
+├── src/
+│   ├── app/
+│   │   ├── dashboards/         <span class="tk-com"># Your custom dashboards</span>
+│   │   ├── custom-forms/       <span class="tk-com"># Your custom entity form overrides</span>
+│   │   ├── app.module.ts
+│   │   └── app.routes.ts
+│   ├── styles.scss              <span class="tk-com"># Brand theme overrides</span>
+│   └── main.ts
+├── metadata/                   <span class="tk-com"># App-specific metadata (Apps, nav items, etc.)</span>
+└── mj.config.cjs</code></pre>
+
+        <h2 id="dashboards">Building dashboards</h2>
+        <p>Dashboards extend <code>BaseDashboard</code> from <code>@memberjunction/ng-dashboards</code>. They get automatic page chrome, loading state, user preference persistence, and lazy-loading wiring.</p>
+
+        <pre><code><span class="tk-kw">import</span> { BaseDashboard, RegisterClass } <span class="tk-kw">from</span> <span class="tk-str">'@memberjunction/ng-dashboards'</span>;
+
+@<span class="tk-fn">RegisterClass</span>(<span class="tk-ty">BaseResourceComponent</span>, <span class="tk-str">'SalesPipelineDashboard'</span>)
+@<span class="tk-fn">Component</span>({
+    <span class="tk-attr">selector</span>: <span class="tk-str">'app-sales-pipeline'</span>,
+    <span class="tk-attr">templateUrl</span>: <span class="tk-str">'./sales-pipeline.component.html'</span>
+})
+<span class="tk-kw">export class</span> <span class="tk-ty">SalesPipelineDashboard</span> <span class="tk-kw">extends</span> <span class="tk-ty">BaseDashboard</span> {
+    <span class="tk-kw">public async</span> <span class="tk-fn">loadData</span>() {
+        <span class="tk-com">// Read entities, build state</span>
+    }
+}</code></pre>
+
+        <p>Read the full <a href="guides.html" class="inline-link">Dashboard Best Practices guide</a> for state management patterns, the engine class approach, and the page chrome (<code>&lt;mj-page-layout&gt;</code> + header/body trio).</p>
+
+        <h2 id="forms">Custom entity forms</h2>
+        <p>Every entity gets an auto-generated form. To customize one, extend the generated form class — this preserves all the wiring while letting you change layout, add tabs, or override behavior:</p>
+
+        <pre><code><span class="tk-kw">import</span> { UserFormComponent } <span class="tk-kw">from</span> <span class="tk-str">'../../generated/Entities/User/user.form.component'</span>;
+
+@<span class="tk-fn">RegisterClass</span>(<span class="tk-ty">BaseFormComponent</span>, <span class="tk-str">'Users'</span>)
+@<span class="tk-fn">Component</span>({ <span class="tk-com">/* ... */</span> })
+<span class="tk-kw">export class</span> <span class="tk-ty">UserFormComponentExtended</span> <span class="tk-kw">extends</span> <span class="tk-ty">UserFormComponent</span> {
+    <span class="tk-com">// Override anything, add new tabs, wire up custom panels</span>
+}</code></pre>
+
+        <h2 id="lazy">Lazy-loaded modules</h2>
+        <p>MJ Explorer and custom apps use code-split lazy loading. To add a new feature module that loads on demand:</p>
+        <ol>
+            <li>Mark your package's <code>package.json</code> with subpath exports so it can be lazy-imported.</li>
+            <li>Decorate your component with <code>@RegisterClass(BaseResourceComponent, 'YourDriverClass')</code>.</li>
+            <li>Run <code>mj codegen manifest --lazy-config</code> — the manifest updates automatically.</li>
+        </ol>
+        <p>See the <a href="guides.html" class="inline-link">Lazy Loading guide</a> for the full pattern.</p>
+
+        <h2 id="theming">Theming &amp; white-label</h2>
+        <p>MJ uses a CSS custom property design token system. Override any token in your app's <code>styles.scss</code> and you've reskinned the entire UI:</p>
+
+        <pre><code><span class="tk-com">/* styles.scss */</span>
+:root {
+    --mj-brand-primary: <span class="tk-num">#0066ff</span>;
+    --mj-brand-primary-hover: <span class="tk-num">#0052cc</span>;
+    --mj-text-primary: <span class="tk-num">#0c1116</span>;
+}
+
+[data-theme=<span class="tk-str">"dark"</span>] {
+    --mj-bg-page: <span class="tk-num">#0a0c10</span>;
+    --mj-bg-surface: <span class="tk-num">#11141a</span>;
+}</code></pre>
+
+        <p>See the <a href="guides.html" class="inline-link">Theming guide</a> and <a href="guides.html" class="inline-link">Design Token guide</a> for the full token list and dark-mode patterns.</p>
+
+        <h2 id="preferences">User preferences</h2>
+        <p>Persist per-user UI state via <code>UserInfoEngine</code> (NEVER <code>localStorage</code> — preferences must follow the user across browsers and devices):</p>
+        <pre><code><span class="tk-kw">import</span> { UserInfoEngine } <span class="tk-kw">from</span> <span class="tk-str">'@memberjunction/core-entities'</span>;
+
+<span class="tk-com">// Read (sync, cached at bootstrap)</span>
+<span class="tk-kw">const</span> raw = UserInfoEngine.<span class="tk-ty">Instance</span>.<span class="tk-fn">GetSetting</span>(<span class="tk-str">'myApp.sidebarCollapsed'</span>);
+
+<span class="tk-com">// Write (debounced, fire-and-forget)</span>
+UserInfoEngine.<span class="tk-ty">Instance</span>.<span class="tk-fn">SetSettingDebounced</span>(<span class="tk-str">'myApp.sidebarCollapsed'</span>, <span class="tk-str">'true'</span>);</code></pre>
+
+        <h2 id="actions">Custom actions</h2>
+        <p>Actions are MJ's pluggable interface for exposing functionality to agents, workflows, and low-code builders. Define an action once and it becomes invokable from the UI, from agents, from the Actions Framework, and from external systems via MCP.</p>
+        <p>See the <a href="packages.html" class="inline-link">Actions documentation</a> for action authoring patterns.</p>
+
+        <h2 id="deploy">Deployment</h2>
+        <p>MJ apps deploy as standard static Angular bundles + a Node MJAPI service. Both run cleanly in Docker. See the <a href="ecosystem.html" class="inline-link">Ecosystem page</a> for Docker images and example compose files.</p>
+    </main>
+
+    <aside class="on-this-page">
+        <h5>On this page</h5>
+        <ul>
+            <li><a href="#overview" class="active">Overview</a></li>
+            <li><a href="#scaffold">Scaffold</a></li>
+            <li><a href="#dashboards">Dashboards</a></li>
+            <li><a href="#forms">Custom forms</a></li>
+            <li><a href="#lazy">Lazy loading</a></li>
+            <li><a href="#theming">Theming</a></li>
+            <li><a href="#preferences">User preferences</a></li>
+            <li><a href="#actions">Custom actions</a></li>
+            <li><a href="#deploy">Deployment</a></li>
+        </ul>
+    </aside>
+</div>
+
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand"><div class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></div><p>Open-source, AI-native metadata-driven application platform. MIT licensed.</p></div>
+        <div class="footer-col"><h5>Docs</h5><ul><li><a href="getting-started.html">Getting Started</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="guides.html">Guides</a></li><li><a href="packages.html">Packages</a></li></ul></div>
+        <div class="footer-col"><h5>AI</h5><ul><li><a href="ai-and-agents.html">Providers</a></li><li><a href="ai-and-agents.html">Agent Framework</a></li><li><a href="ai-and-agents.html">MCP &amp; A2A</a></li></ul></div>
+        <div class="footer-col"><h5>Community</h5><ul><li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li><li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li><li><a href="community.html">Contributing</a></li></ul></div>
+        <div class="footer-col"><h5>Resources</h5><ul><li><a href="https://github.com/MemberJunction/MJ">GitHub</a></li><li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li><li><a href="migrations.html">Migrations</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><span>© MemberJunction. MIT licensed.</span><div class="legal-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="https://github.com/MemberJunction/MJ">Source</a></div></div>
+</footer>
+
+</body>
+</html>
