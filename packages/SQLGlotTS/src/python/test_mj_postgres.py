@@ -52,6 +52,32 @@ def check(name, sql, must_contain=(), must_not_contain=(), expect_unhandled=0, e
         print(f"ok   {name}")
 
 
+def check_raw(name, sql, must_contain=(), must_not_contain=(), expect_unhandled=0):
+    """Whitespace-SENSITIVE variant of check(). Needed where the assertion turns on exact
+    spacing — e.g. verifying `/*` was broken to `/ *` inside a comment, which the
+    whitespace-insensitive check() would collapse back to the same string."""
+    global _failures
+    r = mj_transpile(sql)
+    joined = "\n".join(r["sql"])
+    errs = []
+    for s in must_contain:
+        if s not in joined:
+            errs.append(f"missing (raw) {s!r}")
+    for s in must_not_contain:
+        if s in joined:
+            errs.append(f"should not contain (raw) {s!r}")
+    if len(r["unhandled"]) != expect_unhandled:
+        errs.append(f"unhandled={len(r['unhandled'])} (expected {expect_unhandled}): {r['unhandled']}")
+    if errs:
+        _failures += 1
+        print(f"FAIL {name}")
+        for e in errs:
+            print(f"     {e}")
+        print(f"     output:\n{joined}\n")
+    else:
+        print(f"ok   {name}")
+
+
 # --- AST type / function / boolean encoding ---------------------------------
 check("type mappings",
       "CREATE TABLE ${flyway:defaultSchema}.Foo (ID UNIQUEIDENTIFIER NOT NULL, Notes NVARCHAR(MAX) NULL, Name NVARCHAR(50));",
@@ -647,13 +673,22 @@ check_accounting("SET NOCOUNT batch noise is recorded as a drop (not silent, no 
                  "SET NOCOUNT ON;\nCREATE TABLE ${flyway:defaultSchema}.T (ID UNIQUEIDENTIFIER NOT NULL);",
                  expect_dropped_kinds=["SET-NOISE"])
 
-# When the resilient parser falls back to per-statement splitting (forced here by a poison
-# statement), a routine body's dangling `END` is isolated and swallowed. That swallow is a
-# genuine 1→0 drop — it MUST be recorded as ROUTINE-END, else accounting would falsely leak.
-check_accounting("swallowed routine END is recorded as ROUTINE-END (no false leak)",
+# The routine envelope (issue #3252 heavy smoke) absorbs a hand-routine WHOLE from raw text
+# BEFORE parsing, so its body — including the closing `END` — is never split into dangling
+# statements at all. A trailing poison statement in the same batch (forcing per-statement
+# fallback for the GAP after the routine) must not disturb that containment: the routine is
+# reported once, its body UPDATE never emits, the `END` never leaks as an `END;` COMMIT, and
+# accounting still reconciles with zero drops and no leak. (Previously this input relied on a
+# ROUTINE-END drop to stay balanced; the envelope makes that swallow path unnecessary here and
+# — crucially — makes the outcome identical on pinned 27.18 and local 30.13.)
+check("hand routine absorbed whole; trailing poison does not leak its body",
+      "CREATE PROCEDURE ${flyway:defaultSchema}.p AS BEGIN "
+      "UPDATE ${flyway:defaultSchema}.t SET a = 1; END;\nSELECT CAST(",
+      must_not_contain=["UPDATE", "SET a = 1", "END;"],
+      expect_unhandled=2)  # the whole routine + the poison SELECT CAST(
+check_accounting("hand routine + trailing poison reconciles with zero drops and no leak",
                  "CREATE PROCEDURE ${flyway:defaultSchema}.p AS BEGIN "
-                 "UPDATE ${flyway:defaultSchema}.t SET a = 1; END;\nSELECT CAST(",
-                 expect_dropped_kinds=["ROUTINE-END"])
+                 "UPDATE ${flyway:defaultSchema}.t SET a = 1; END;\nSELECT CAST(")
 
 # The real hand-written trigger from the v5.49 ledger (issue #3252 RC2) must NOT produce a
 # false ACCOUNTING-LEAK — the exact regression BLOCKER-2 guards against (a leak would raise
@@ -666,6 +701,241 @@ check_accounting("real hand trigger (Fix_ConversationDetail) reconciles with NO 
 
 check_accounting("plain DDL reconciles with zero drops and no leak",
                  "ALTER TABLE ${flyway:defaultSchema}.APIKey ADD KeyPrefix NVARCHAR(20) NULL;")
+
+
+# --- Swallowed-rider guard (issue #3252 heavy smoke): sqlglot 30.x's whole-batch parse can
+# absorb the statement FOLLOWING a block-less non-EXISTS IF into the IfBlock node — the
+# unconditional ALTER then neither emits nor appears (visibly) in the gap report. The raw
+# text has no BEGIN, so per-piece splitting restores true statement boundaries: the IF is
+# reported alone and the rider ALTER emits. (27.18 already parses them separately.)
+check("statement after a block-less IF @var guard still EMITS (not swallowed into the gap)",
+      "DECLARE @C NVARCHAR(200);\n"
+      "SELECT @C = cc.name FROM sys.check_constraints cc "
+      "WHERE cc.parent_object_id = OBJECT_ID('${flyway:defaultSchema}.AIAgentNote');\n"
+      "IF @C IS NOT NULL\n"
+      "    EXEC('ALTER TABLE ${flyway:defaultSchema}.AIAgentNote DROP CONSTRAINT [' + @C + ']');\n"
+      "ALTER TABLE ${flyway:defaultSchema}.AIAgentNote\n"
+      "    ADD CONSTRAINT CK_AIAgentNote_Status CHECK (Status IN ('Active', 'Pending'));",
+      must_contain=['ADD CONSTRAINT "CK_AIAgentNote_Status" CHECK'],
+      expect_unhandled=3)  # DECLARE + SELECT @C + the IF guard — each reported separately
+
+# --- Routine-interior envelope guard (issue #3252 heavy smoke): a block-less
+# `IF NOT EXISTS (...) RETURN;` INSIDE a trigger/proc body must not be captured by the
+# IF-EXISTS envelope — cutting a DO $$ fragment out of a routine that is simultaneously
+# reported needs-hand misleads the human porter into thinking that part is handled.
+check("IF EXISTS guard inside a routine body is NOT enveloped into a stray DO block",
+      "CREATE OR ALTER TRIGGER [${flyway:defaultSchema}].[trgConvDetail_Assign]\n"
+      "ON [${flyway:defaultSchema}].[ConversationDetail]\n"
+      "AFTER INSERT AS\n"
+      "BEGIN\n"
+      "    SET NOCOUNT ON;\n"
+      "    IF NOT EXISTS (SELECT 1 FROM inserted)\n"
+      "        RETURN;\n"
+      "    UPDATE [${flyway:defaultSchema}].[ConversationDetail] SET [Sequence] = 1;\n"
+      "END",
+      must_not_contain=["DO $$"],
+      expect_unhandled=1)  # the whole routine, reported once
+
+
+# --- Never-emit-invalid-PG guards (issue #3252 heavy smoke): T-SQL constructs with no
+# mechanical PG translation must be REPORTED (unhandled) rather than emitted as syntactically
+# invalid PostgreSQL. Every case below was confirmed to emit invalid PG (pglast) on BOTH the
+# committed pin (27.18) and local (30.13) before these guards landed.
+
+# DROP PROC — the ONE real invalid-PG emission in the 201-file v5 ledger (V202605091143).
+# sqlglot keeps the T-SQL `PROC` abbreviation, which PG rejects; must spell it PROCEDURE.
+check("DROP PROC IF EXISTS is spelled out to DROP PROCEDURE (valid PG)",
+      'DROP PROC IF EXISTS ${flyway:defaultSchema}."spUpdateExistingEntityFieldsFromSchema";',
+      must_contain=['DROP PROCEDURE IF EXISTS'],
+      must_not_contain=['DROP PROC IF'],  # ws-strips to DROPPROCIF, absent from DROPPROCEDURE…
+      expect_unhandled=0)
+check("bare DROP PROC is spelled out to DROP PROCEDURE",
+      'DROP PROC ${flyway:defaultSchema}."spFoo";',
+      must_contain=['DROP PROCEDURE'],
+      must_not_contain=['DROP PROC "', 'DROP PROC $'],
+      expect_unhandled=0)
+
+# DROP TRIGGER — PG requires `DROP TRIGGER name ON table`; sqlglot (30.x) emits it without the
+# ON clause (invalid), while 27.x parses it as an opaque Command (already unhandled). The guard
+# converges both on a reported gap and never emits the ON-less form.
+check("bare DROP TRIGGER is reported (never emitted ON-less)",
+      'DROP TRIGGER ${flyway:defaultSchema}.trg_x;',
+      must_not_contain=['DROP TRIGGER'],
+      expect_unhandled=1)
+check("DROP TRIGGER IF EXISTS is reported (never emitted ON-less)",
+      'DROP TRIGGER IF EXISTS ${flyway:defaultSchema}.trg_x;',
+      must_not_contain=['DROP TRIGGER'],
+      expect_unhandled=1)
+check_accounting("DROP TRIGGER reconciles with no leak", 'DROP TRIGGER ${flyway:defaultSchema}.trg_x;')
+
+# DELETE TOP (n) — misparses on both versions into a spurious multi-table DELETE
+# (`DELETE "TOP" AS _t0(n) FROM t`); no mechanical PG rewrite. Report it.
+check("DELETE TOP is reported (never emitted as the misparsed garbage)",
+      "DELETE TOP (10) FROM ${flyway:defaultSchema}.ErrorLog WHERE Severity = 'Info';",
+      must_not_contain=['AS _t0', '"TOP"'],
+      expect_unhandled=1)
+check_accounting("DELETE TOP reconciles with no leak",
+                 "DELETE TOP (10) FROM ${flyway:defaultSchema}.ErrorLog WHERE Severity = 'Info';")
+
+# SET IDENTITY_INSERT — no PG equivalent (PG uses OVERRIDING SYSTEM VALUE per-INSERT). The
+# `…OFF` form parses to exp.Set and would emit invalid `SET "IDENTITY_INSERT" = t AS "OFF"`;
+# `…ON` already lands as an unhandled Command. Both must be reported.
+check("SET IDENTITY_INSERT OFF is reported (never emitted as invalid SET assignment)",
+      "SET IDENTITY_INSERT ${flyway:defaultSchema}.Seq OFF;",
+      must_not_contain=['IDENTITY_INSERT'],
+      expect_unhandled=1)
+check("SET IDENTITY_INSERT ON is reported",
+      "SET IDENTITY_INSERT ${flyway:defaultSchema}.Seq ON;",
+      must_not_contain=['IDENTITY_INSERT'],
+      expect_unhandled=1)
+
+# Computed columns — T-SQL `col AS (expr) [PERSISTED]` emits `GENERATED ALWAYS AS (...) STORED`
+# WITHOUT the required PG type (invalid), and a non-persisted computed column has no STORED
+# equivalent anyway. Report the whole statement rather than emit the type-less generated column.
+check("computed column in ALTER ADD is reported (never emits type-less GENERATED)",
+      "ALTER TABLE ${flyway:defaultSchema}.Invoice ADD Total AS (Qty * Price) PERSISTED;",
+      must_not_contain=['GENERATED ALWAYS'],
+      expect_unhandled=1)
+check("computed column in CREATE TABLE is reported (never emits type-less GENERATED)",
+      "CREATE TABLE ${flyway:defaultSchema}.T (ID INT, Total AS (Qty * Price) PERSISTED);",
+      must_not_contain=['GENERATED ALWAYS'],
+      expect_unhandled=1)
+
+# CREATE CLUSTERED INDEX — PG has no CLUSTERED/NONCLUSTERED qualifier on CREATE INDEX; sqlglot
+# emits the keyword verbatim (invalid). Strip it to a plain CREATE INDEX. (The in-CREATE-TABLE
+# and standalone ADD CONSTRAINT … CLUSTERED forms are already handled by sqlglot — see probe.)
+check("CREATE CLUSTERED INDEX drops the CLUSTERED qualifier (valid PG)",
+      'CREATE CLUSTERED INDEX IX_x ON ${flyway:defaultSchema}.T (c);',
+      must_contain=['CREATE INDEX'],
+      must_not_contain=['CLUSTERED'],
+      expect_unhandled=0)
+check("CREATE NONCLUSTERED INDEX drops the NONCLUSTERED qualifier (valid PG)",
+      'CREATE NONCLUSTERED INDEX IX_y ON ${flyway:defaultSchema}.T (c);',
+      must_contain=['CREATE INDEX'],
+      must_not_contain=['NONCLUSTERED'],
+      expect_unhandled=0)
+
+# PK/UNIQUE with a CLUSTERED/NONCLUSTERED qualifier — PG has no such qualifier. sqlglot folds
+# PK+CLUSTERED and UNIQUE+NONCLUSTERED cleanly, but the CROSS pairs (PK+NONCLUSTERED,
+# UNIQUE+CLUSTERED) leak: PK+NONCLUSTERED emits the invalid `PRIMARY KEY, NONCLUSTERED (...)`
+# (spurious comma) and UNIQUE+CLUSTERED keeps the CLUSTERED keyword. Both must fold to the plain
+# constraint. (Synthetic-only — 0 real occurrences even in baselines — but must not emit bad PG.)
+check("PK NONCLUSTERED in CREATE TABLE folds to plain PRIMARY KEY (valid PG)",
+      "CREATE TABLE ${flyway:defaultSchema}.T (ID UNIQUEIDENTIFIER NOT NULL, CONSTRAINT PK_T PRIMARY KEY NONCLUSTERED (ID));",
+      must_contain=['PRIMARY KEY ("ID")'],
+      must_not_contain=['NONCLUSTERED', 'PRIMARY KEY,'],
+      expect_unhandled=0)
+check("PK NONCLUSTERED in ALTER ADD folds to plain PRIMARY KEY (valid PG)",
+      "ALTER TABLE ${flyway:defaultSchema}.T ADD CONSTRAINT PK_T PRIMARY KEY NONCLUSTERED (ID);",
+      must_contain=['PRIMARY KEY ("ID")'],
+      must_not_contain=['NONCLUSTERED', 'PRIMARY KEY,'],
+      expect_unhandled=0)
+check("UNIQUE CLUSTERED in CREATE TABLE folds to plain UNIQUE (valid PG)",
+      "CREATE TABLE ${flyway:defaultSchema}.T (ID UNIQUEIDENTIFIER NOT NULL, CONSTRAINT UQ_T UNIQUE CLUSTERED (ID));",
+      must_contain=['UNIQUE ("ID")'],
+      must_not_contain=['CLUSTERED'],
+      expect_unhandled=0)
+check("UNIQUE CLUSTERED in ALTER ADD folds to plain UNIQUE (valid PG)",
+      "ALTER TABLE ${flyway:defaultSchema}.T ADD CONSTRAINT UQ_T UNIQUE CLUSTERED (ID);",
+      must_contain=['UNIQUE ("ID")'],
+      must_not_contain=['CLUSTERED'],
+      expect_unhandled=0)
+
+# WITH CHECK / WITH NOCHECK ADD CONSTRAINT — the SQL Server enforcement toggle has no PG form.
+# `WITH CHECK` parses to an Alter that emits the invalid `… WITH CHECK ADD …`; `WITH NOCHECK`
+# parses to an opaque Command (unhandled). The pre-parse strip unifies both to a plain,
+# validating `ADD CONSTRAINT …` (safe: MJ CodeGen emits these only for fresh/consistent tables,
+# e.g. the v5.39 Integration_Framework CHECK constraints on brand-new columns).
+check("WITH CHECK ADD CONSTRAINT strips the toggle to a plain validating ADD (valid PG)",
+      "ALTER TABLE ${flyway:defaultSchema}.T WITH CHECK ADD CONSTRAINT CK_x CHECK (c IN ('a','b'));",
+      must_contain=['ADD CONSTRAINT "CK_x" CHECK'],
+      must_not_contain=['WITH CHECK', 'WITH NOCHECK'],
+      expect_unhandled=0)
+check("WITH NOCHECK ADD CONSTRAINT strips the toggle to a plain validating ADD (valid PG)",
+      "ALTER TABLE ${flyway:defaultSchema}.T WITH NOCHECK ADD CONSTRAINT CK_y CHECK (c IS NULL OR c IN ('a'));",
+      must_contain=['ADD CONSTRAINT "CK_y" CHECK'],
+      must_not_contain=['WITH NOCHECK', 'WITH CHECK'],
+      expect_unhandled=0)
+check_accounting("WITH NOCHECK ADD reconciles with no leak",
+                 "ALTER TABLE ${flyway:defaultSchema}.T WITH NOCHECK ADD CONSTRAINT CK_y CHECK (c IN ('a'));")
+
+# Multi-constraint `ALTER TABLE ... ADD` — T-SQL lets a single `ADD` govern a comma-separated
+# constraint list; PG requires `ADD` before EACH action. sqlglot parses the list into ONE
+# AddConstraint holding N constraints and emits one `ADD` + comma list (`ADD CONSTRAINT a ...,
+# CONSTRAINT b ...`), which PG rejects with `syntax error at or near "CONSTRAINT"` — a SILENT
+# invalid-emission (unhandled=0). Split into one ADD per constraint. (Real: v5.49 Compaction two
+# CHECKs on AIAgentType; v5.24 KnowledgeHub CHECK + FK on Tag — both only exposed by whole-file
+# validation. sqlglot already repeats ADD for multiple ADD COLUMN; only constraints leak.)
+check("multi-CHECK ADD repeats ADD before each constraint (valid PG)",
+      "ALTER TABLE ${flyway:defaultSchema}.AIAgentType "
+      "ADD CONSTRAINT CK_A CHECK (TriggerPercent >= 1 AND TriggerPercent <= 100), "
+      "CONSTRAINT CK_B CHECK (TargetPercent >= 1 AND TargetPercent <= 100);",
+      must_contain=['ADD CONSTRAINT "CK_A" CHECK', 'ADD CONSTRAINT "CK_B" CHECK'],
+      must_not_contain=[', CONSTRAINT "CK_B"'],
+      expect_unhandled=0)
+check("multi-constraint ADD mixing CHECK + FK repeats ADD (valid PG)",
+      "ALTER TABLE ${flyway:defaultSchema}.Tag "
+      "ADD CONSTRAINT CK_Tag_Status CHECK (Status IN ('Active','Merged')), "
+      "CONSTRAINT FK_Tag_MergedIntoTag FOREIGN KEY (MergedIntoTagID) "
+      "REFERENCES ${flyway:defaultSchema}.Tag(ID);",
+      must_contain=['ADD CONSTRAINT "CK_Tag_Status" CHECK',
+                    'ADD CONSTRAINT "FK_Tag_MergedIntoTag" FOREIGN KEY'],
+      must_not_contain=[', CONSTRAINT "FK_Tag_MergedIntoTag"'],
+      expect_unhandled=0)
+check("single-constraint ADD is unaffected (still one ADD, valid PG)",
+      "ALTER TABLE ${flyway:defaultSchema}.T ADD CONSTRAINT CK_only CHECK (x >= 1);",
+      must_contain=['ADD CONSTRAINT "CK_only" CHECK'],
+      expect_unhandled=0)
+check_accounting("multi-constraint ADD reconciles with no leak",
+                 "ALTER TABLE ${flyway:defaultSchema}.AIAgentType "
+                 "ADD CONSTRAINT CK_A CHECK (a >= 1), CONSTRAINT CK_B CHECK (b >= 1);")
+
+# Nested-comment sequences inside emitted block comments. sqlglot relocates `--` line comments
+# into inline `/* ... */` block comments on AST nodes. PG block comments NEST, so a comment body
+# containing `/*` (e.g. `image/*`) or `*/` opens/closes a nested comment → `unterminated /*
+# comment`. sqlglot 30.x sanitizes this at emit (`image/ *`); the committed pin (27.18) emits it
+# VERBATIM → invalid PG (version-skew!). Sanitize comment text so BOTH versions emit valid PG.
+# (Real: v5.38 Backfill_Attachment_Artifacts, `image/*` in a wildcard-matching comment — pin-only,
+# only surfaced by whole-file validation.) Raw (whitespace-sensitive) assertions: check() strips
+# whitespace and would collapse `image/ *` back to `image/*`.
+check_raw("nested /* in emitted block comment is broken to /space* (valid PG on pinned sqlglot)",
+          "SELECT 1 AS x -- Wildcard (e.g. image/* matches image/jpeg)\n;",
+          must_contain=["image/ *"],
+          must_not_contain=["image/*"],
+          expect_unhandled=0)
+check_raw("nested */ in emitted block comment is broken to *space/ (valid PG on pinned sqlglot)",
+          "SELECT 1 AS x -- ends with a close seq */ here\n;",
+          must_not_contain=["*/ here"],
+          expect_unhandled=0)
+
+
+# --- Version-skew guard (issue #3252 review): every `exp.<Name>` the dialect references
+# must exist in the RUNNING sqlglot. A bare attribute access on a node type the installed
+# version lacks (e.g. exp.IfBlock, added in sqlglot 29.0.0, absent from the committed pin
+# sqlglot~=27.18.0) raises AttributeError at runtime and crashes every conversion. Run this
+# suite against `pip install -r requirements.txt` (CI does) and any such drift fails here
+# by name instead of exploding mid-conversion.
+def check_exp_attribute_references():
+    global _failures
+    import re as _re
+    import sqlglot.expressions as _exp
+    src = (Path(__file__).parent / "mj_postgres.py").read_text()
+    # Strip `#` comments first: prose like "reaches here as exp.If/exp.IfBlock" must not be
+    # treated as a runtime reference (exp.IfBlock is deliberately accessed ONLY via getattr
+    # for version tolerance). Line-based strip is sufficient — real attribute accesses in
+    # this module never share a line with a preceding '#'.
+    code_only = "\n".join(line.split("#", 1)[0] for line in src.splitlines())
+    referenced = sorted(set(_re.findall(r"\bexp\.([A-Z]\w*)", code_only)))
+    missing = [name for name in referenced if not hasattr(_exp, name)]
+    if missing:
+        _failures += 1
+        print(f"FAIL exp.* attribute references exist in the running sqlglot")
+        print(f"     missing from sqlglot {__import__('sqlglot').__version__}: {missing}")
+    else:
+        print(f"ok   exp.* attribute references exist in the running sqlglot ({len(referenced)} names checked)")
+
+
+check_exp_attribute_references()
 
 
 if _failures:
