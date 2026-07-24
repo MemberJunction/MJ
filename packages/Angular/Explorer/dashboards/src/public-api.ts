@@ -171,6 +171,12 @@ export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from 
 // Realtime Recordings — review & replay recorded realtime sessions (audio + transcript)
 export { RealtimeRecordingsDashboardComponent, LoadRealtimeRecordingsDashboard } from './RealtimeRecordings/realtime-recordings-dashboard.component';
 
+// Sharing Center — full-page host for a user's direct shares.
+export { SharingCenterDashboardComponent } from './SharingCenter/sharing-center-dashboard.component';
+export { SharingCenterResourceComponent, LoadSharingCenterResource } from './SharingCenter/sharing-center-resource.component';
+import { LoadSharingCenterResource } from './SharingCenter/sharing-center-resource.component';
+LoadSharingCenterResource();
+
 // Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
 export {
     PermissionsUserAccessResourceComponent,

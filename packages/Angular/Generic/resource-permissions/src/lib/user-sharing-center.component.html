@@ -1,4 +1,5 @@
 <div class="user-sharing-center">
+    @if (ShowTabBar) {
     <div class="tabs">
         <button
             class="tab"
@@ -21,6 +22,7 @@
             </button>
         }
     </div>
+    }
 
     @if (ErrorMessage) {
         <div class="error">

@@ -71,6 +71,13 @@ describe('UserSharingCenterComponent (DOM, data-bound)', () => {
     expect(query(withoutClose, '.close')).toBeNull();
   });
 
+  it('hides its tab strip when a full-page host provides navigation chrome', () => {
+    const f = render({ ShowTabBar: false }, (c) => {
+      c.SharedWithMe = [group()];
+    });
+    expect(query(f, '.tabs')).toBeNull();
+  });
+
   it('renders a domain group with its name and row count', () => {
     const f = render({}, (c) => {
       c.SharedWithMe = [group({ Rows: [permission(), permission({ SourceRecordID: 'perm2' })] })];

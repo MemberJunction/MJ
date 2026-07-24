@@ -4,8 +4,10 @@ import {
     Component,
     EventEmitter,
     Input,
+    OnChanges,
     OnInit,
     Output,
+    SimpleChanges,
     inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -92,7 +94,7 @@ export const DefaultSharingEntityResolver = (domainName: string): string | null 
     templateUrl: './user-sharing-center.component.html',
     styleUrls: ['./user-sharing-center.component.css'],
 })
-export class UserSharingCenterComponent extends BaseAngularComponent implements OnInit {
+export class UserSharingCenterComponent extends BaseAngularComponent implements OnInit, OnChanges {
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly dialogService = inject(MJDialogService);
 
@@ -106,6 +108,13 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
      * embedding container provides its own close affordance.
      */
     @Input() ShowCloseButton = true;
+
+    /**
+     * Controls the component-owned tab strip. Full-page hosts provide their own
+     * navigation chrome and set this to false while retaining the same list and
+     * revoke behavior.
+     */
+    @Input() ShowTabBar = true;
 
     /** Title text displayed in the confirm-revoke dialog. */
     @Input() RevokeConfirmTitle = 'Revoke access';
@@ -146,6 +155,13 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
 
     async ngOnInit(): Promise<void> {
         await this.loadTab(this.ActiveTab);
+    }
+
+    ngOnChanges(changes: SimpleChanges): void {
+        const activeTabChange = changes['ActiveTab'];
+        if (activeTabChange && !activeTabChange.firstChange) {
+            void this.loadTab(this.ActiveTab);
+        }
     }
 
     // ─── Public methods (callable from parent via @ViewChild) ──────────────────

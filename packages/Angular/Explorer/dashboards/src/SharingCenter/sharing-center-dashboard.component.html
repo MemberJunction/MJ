@@ -1,0 +1,27 @@
+<mj-page-layout>
+    <mj-page-header
+        Title="Sharing Center"
+        Icon="fa-solid fa-share-nodes"
+        Subtitle="See what's shared with you, manage what you've shared, and review everything you can access.">
+        <div actions>
+            <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="OnRefresh()"></mj-refresh-button>
+        </div>
+
+        <div toolbar>
+            <mj-tab-nav [Tabs]="Tabs" [ActiveKey]="ActiveTab" (TabChange)="OnTabChange($event)"></mj-tab-nav>
+        </div>
+    </mj-page-header>
+
+    <mj-page-body>
+        <div class="sharing-center-dashboard__body">
+            <mj-user-sharing-center
+                [Provider]="Provider"
+                [ActiveTab]="ActiveTab"
+                [ShowTabBar]="false"
+                [ShowCloseButton]="false"
+                (ActiveTabChange)="OnTabChange($event)"
+                (ResourceClicked)="OnResourceClicked($event)">
+            </mj-user-sharing-center>
+        </div>
+    </mj-page-body>
+</mj-page-layout>

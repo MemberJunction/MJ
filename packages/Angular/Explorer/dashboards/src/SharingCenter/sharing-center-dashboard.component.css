@@ -1,0 +1,19 @@
+:host {
+    display: block;
+    height: 100%;
+}
+
+.sharing-center-dashboard__body {
+    height: 100%;
+    min-height: 0;
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-lg);
+    overflow: hidden;
+    background: var(--mj-bg-surface);
+    box-shadow: var(--mj-shadow-sm);
+}
+
+.sharing-center-dashboard__body mj-user-sharing-center {
+    display: block;
+    height: 100%;
+}

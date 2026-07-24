@@ -39,7 +39,7 @@ import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 import { VersionsModule } from '@memberjunction/ng-versions';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { NgTreesModule } from '@memberjunction/ng-trees';
-import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
+import { ResourcePermissionsModule, UserSharingCenterComponent } from '@memberjunction/ng-resource-permissions';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 
 // Core components — eagerly loaded, most-visited pages
@@ -94,6 +94,8 @@ import { AngularSplitModule } from 'angular-split';
 import { PermissionsUserAccessResourceComponent } from './Permissions/user-access-resource.component';
 import { PermissionsResourceAccessResourceComponent } from './Permissions/resource-access-resource.component';
 import { PermissionsAuditLogResourceComponent } from './Permissions/audit-log-resource.component';
+import { SharingCenterDashboardComponent } from './SharingCenter/sharing-center-dashboard.component';
+import { SharingCenterResourceComponent } from './SharingCenter/sharing-center-resource.component';
 // Version History
 import { VersionHistoryLabelsResourceComponent } from './VersionHistory/components/labels-resource.component';
 import { VersionHistoryDiffResourceComponent } from './VersionHistory/components/diff-resource.component';
@@ -148,6 +150,9 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     PermissionsUserAccessResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsAuditLogResourceComponent,
+    // Sharing Center
+    SharingCenterDashboardComponent,
+    SharingCenterResourceComponent,
     // Version History
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
@@ -197,6 +202,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ExportServiceModule,
     NgTreesModule,
     ResourcePermissionsModule,
+    UserSharingCenterComponent,
     SharedPipesModule,
     AngularSplitModule,
     MJStorageMediaPlayerComponent
@@ -238,6 +244,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     PermissionsUserAccessResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsAuditLogResourceComponent,
+    SharingCenterDashboardComponent,
+    SharingCenterResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryRestoreResourceComponent,
