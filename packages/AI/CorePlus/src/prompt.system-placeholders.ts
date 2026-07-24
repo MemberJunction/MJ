@@ -264,14 +264,6 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         }
     },
     {
-        name: '_AGENT_RUN_ID',
-        description: 'The parent agent run ID if this prompt is part of an agent execution',
-        category: 'Execution Context',
-        getValue: async (params: AIPromptParams) => {
-            return params.agentRunId || '';
-        }
-    },
-    {
         name: '_HAS_CONVERSATION_CONTEXT',
         description: 'Whether conversation messages are provided',
         category: 'Execution Context',

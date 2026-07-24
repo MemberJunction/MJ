@@ -182,7 +182,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (408 classes)
+// @memberjunction/core-entities (409 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -340,6 +340,7 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
@@ -1360,6 +1361,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
@@ -2043,7 +2045,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 880;
+export const CLASS_REGISTRATIONS_COUNT = 881;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
