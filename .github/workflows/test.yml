@@ -148,6 +148,30 @@ jobs:
             npm test -- --concurrency=4
           fi
 
+      # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
+      # sqlglot-ts vitest suite auto-skips when Python/sqlglot is absent, so CI never
+      # executed mj_postgres.py — which let the code reference exp.IfBlock (added in
+      # sqlglot 29.0.0) while requirements.txt pinned ~=27.18.0: an AttributeError on
+      # every statement reaching the plain-SQL path, in exactly the environments the pin
+      # exists to make reproducible. Install `-r requirements.txt` verbatim and run the
+      # dialect suite (which includes an exp.*-attribute existence guard), so the pin and
+      # the code can never drift apart silently again. PR runs skip it when SQLGlotTS is
+      # untouched; backstop runs (push/schedule/dispatch) always execute it.
+      - name: Python dialect tests (pinned sqlglot)
+        run: |
+          RUN_DIALECT=1
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "${{ github.base_ref }}" 2>/dev/null || true
+            if ! git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -q '^packages/SQLGlotTS/'; then
+              RUN_DIALECT=0
+              echo "No SQLGlotTS changes — skipping the Python dialect suite."
+            fi
+          fi
+          if [ "$RUN_DIALECT" = "1" ]; then
+            python3 -m pip install --quiet -r packages/SQLGlotTS/requirements.txt
+            python3 packages/SQLGlotTS/src/python/test_mj_postgres.py
+          fi
+
       # Native-ESM import guard (#3142, follow-up to #3137): import every BUILT
       # "type": "module" package's entry point with Node's native ESM resolver and fail
       # on the extensionless-relative-specifier signature in the package's own dist/ —
