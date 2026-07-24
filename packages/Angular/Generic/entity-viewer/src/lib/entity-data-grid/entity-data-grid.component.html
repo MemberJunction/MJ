@@ -92,9 +92,10 @@
         @if (ShowExportButton) {
           <button
             class="toolbar-button"
-            title="Export to Excel"
+            title="Export"
+            [disabled]="IsPreparingExport"
             (click)="onExportClick()">
-            <i class="fa-solid fa-file-excel"></i>
+            <i class="fa-solid" [class.fa-file-excel]="!IsPreparingExport" [class.fa-spinner]="IsPreparingExport" [class.fa-spin]="IsPreparingExport"></i>
             <span class="button-text">Export</span>
           </button>
         }
@@ -134,10 +135,10 @@
         @if (ShowAddToListButton) {
           <button
             class="toolbar-button"
-            title="Add selected records to a list"
-            [disabled]="!HasSelection"
+            [title]="HasSelection ? 'Add selected records to a list' : 'Add all matching records to a list'"
+            [disabled]="(!HasSelection && !ExportDataProvider) || IsPreparingAddToList"
             (click)="onAddToListClick()">
-            <i class="fa-solid fa-list-check"></i>
+            <i class="fa-solid" [class.fa-list-check]="!IsPreparingAddToList" [class.fa-spinner]="IsPreparingAddToList" [class.fa-spin]="IsPreparingAddToList"></i>
             <span class="button-text">Add to List</span>
           </button>
         }
@@ -243,7 +244,7 @@
                 @if (showExportInOverflow) {
                   <button class="overflow-item" (click)="onExportClick(); closeOverflowMenu()">
                     <i class="fa-solid fa-file-excel"></i>
-                    <span>Export to Excel</span>
+                    <span>Export</span>
                   </button>
                 }
                 <!-- Entity Actions -->

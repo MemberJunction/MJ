@@ -310,6 +310,18 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     /** Page size for server-side paging */
     @Input() PageSize: number = 100;
 
+    /**
+     * Optional provider that returns the FULL result set for export. When the grid is server-side
+     * paged, `Data` only holds the current page (default 100 rows), so exporting `Data` would silently
+     * cap the export at the page size (bug B3/C1). A host that owns the query (with its parameters) can
+     * supply this callback to fetch every matching row on demand; the grid awaits it when the user
+     * exports without an explicit row selection. When not provided, export falls back to the loaded page.
+     */
+    @Input() ExportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
+
+    /** True while an export is fetching the full result set via ExportDataProvider. */
+    public IsPreparingExport: boolean = false;
+
     /** Fired when the user navigates to a different page */
     @Output() PageChange = new EventEmitter<PageChangeEvent>();
 
@@ -1016,10 +1028,17 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     /**
      * Opens the export dialog with current grid data
      */
-    public OpenExportDialog(): void {
+    public async OpenExportDialog(): Promise<void> {
         if (!this._data.length) return;
 
-        const data = this.getExportData();
+        this.IsPreparingExport = true;
+        this.cdr.detectChanges();
+        let data: ExportData;
+        try {
+            data = await this.resolveExportData();
+        } finally {
+            this.IsPreparingExport = false;
+        }
         const columns = this.getExportColumns();
         const fileName = this._queryInfo?.Name || 'query-export';
 
@@ -1050,7 +1069,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      * Export grid data directly without showing dialog
      */
     public async Export(options?: Partial<ExportOptions>, download: boolean = true): Promise<ExportResult> {
-        const data = this.getExportData();
+        const data = await this.resolveExportData();
         const columns = this.getExportColumns();
         const fileName = options?.fileName || this._queryInfo?.Name || 'query-export';
 
@@ -1072,12 +1091,26 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Get the current grid data formatted for export
+     * Resolves the rows to export. An explicit row selection always wins. Otherwise, if a host
+     * supplied an ExportDataProvider, the full result set is fetched (so export isn't silently
+     * capped at the current page — bug B3/C1); if it isn't supplied or the fetch yields nothing,
+     * export falls back to the loaded page (`_data`).
      */
-    private getExportData(): ExportData {
-        // Use selected rows if any, otherwise all data
-        const rows = this.SelectedRows.length > 0 ? this.SelectedRows : this._data;
-        return rows as ExportData;
+    private async resolveExportData(): Promise<ExportData> {
+        if (this.SelectedRows.length > 0) {
+            return this.SelectedRows as ExportData;
+        }
+        if (this.ExportDataProvider) {
+            try {
+                const allRows = await this.ExportDataProvider();
+                if (allRows && allRows.length > 0) {
+                    return allRows as ExportData;
+                }
+            } catch {
+                // Fall through to the loaded page on any fetch failure.
+            }
+        }
+        return this._data as ExportData;
     }
 
     /**

@@ -265,6 +265,20 @@ export abstract class BaseLLM extends BaseModel {
                         console.error("Stream aborted while processing chunks:", streamError);
                     }
 
+                    // Flush any content the thinking-tag stripper was holding back waiting for more
+                    // chunks. A trailing fragment that looks like the START of a thinking tag (e.g. a
+                    // response literally ending in "<") is held back mid-stream so it can't leak as a
+                    // partial "<think>"; if the stream then ends, that fragment is real content and
+                    // must be emitted rather than silently dropped (bug A5 tail). Only visible content
+                    // is flushed — an unterminated thinking block stays held back.
+                    const thinkingRemainder = this.flushThinkingStreamRemainder();
+                    if (thinkingRemainder) {
+                        accumulatedContent += thinkingRemainder;
+                        if (params.streamingCallbacks?.OnContent) {
+                            params.streamingCallbacks.OnContent(thinkingRemainder, false);
+                        }
+                    }
+
                     // Stream complete, call OnContent one last time with isComplete=true
                     if (params.streamingCallbacks?.OnContent) {
                         params.streamingCallbacks.OnContent('', true);
@@ -453,6 +467,26 @@ export abstract class BaseLLM extends BaseModel {
     }
 
     /**
+     * Returns (and clears) any user-visible content the thinking-tag stripper is still holding back at
+     * the end of a stream. Mid-stream, {@link processStreamChunkWithThinking} holds back a trailing
+     * fragment that could be the start of a `<think>`/`</think>` tag so a split tag never leaks as
+     * partial text; once the stream ends, such a fragment is real content and must be emitted (bug A5).
+     *
+     * Only flushes when NOT inside a thinking block: an unterminated `<think>` block's buffered text is
+     * reasoning, not answer, and is left held back (never surfaced as visible content). Returns `''`
+     * when thinking extraction isn't active (no state) or there's nothing to flush.
+     */
+    protected flushThinkingStreamRemainder(): string {
+        const state = this.thinkingStreamState;
+        if (!state || state.inThinkingBlock) {
+            return '';
+        }
+        const remainder = state.pendingContent;
+        state.pendingContent = '';
+        return remainder;
+    }
+
+    /**
      * Process streaming chunk with thinking extraction
      * This method handles case-insensitive extraction across chunk boundaries
      */
@@ -509,17 +543,73 @@ export abstract class BaseLLM extends BaseModel {
                 // Process any remaining content recursively
                 return this.processStreamChunkWithThinking('');
             } else {
-                // Still accumulating thinking content
-                this.thinkingStreamState.accumulatedThinking += this.thinkingStreamState.pendingContent;
-                this.thinkingStreamState.pendingContent = '';
+                // Still accumulating thinking content. The close tag can be split across chunk
+                // boundaries (e.g. pending ends with "</thi"); if we consumed that fragment into
+                // the thinking text we would never recognize the completed "</think>" and would
+                // swallow the rest of the response as thinking forever. Hold back any suffix that
+                // could be the start of the close tag.
+                const closeHoldBack = this.partialTagSuffixLength(this.thinkingStreamState.pendingContent, tags.close);
+                const closeCut = this.thinkingStreamState.pendingContent.length - closeHoldBack;
+                this.thinkingStreamState.accumulatedThinking += this.thinkingStreamState.pendingContent.substring(0, closeCut);
+                this.thinkingStreamState.pendingContent = this.thinkingStreamState.pendingContent.substring(closeCut);
                 return '';
             }
         }
-        
-        // Not in thinking block and no thinking tags found
-        contentToEmit = this.thinkingStreamState.pendingContent;
-        this.thinkingStreamState.pendingContent = '';
+
+        // Not in a thinking block and no complete open tag found. A partial open tag can be split
+        // across streaming chunk boundaries (e.g. pending ends with "<thi"); emitting that fragment
+        // leaks a literal "<thi" into user-visible text and it becomes "<think>" once the next chunk
+        // arrives (bug A5). Hold back any suffix that could be the start of the open tag, and avoid
+        // cutting in the middle of a UTF-16 surrogate pair.
+        const openHoldBack = this.partialTagSuffixLength(this.thinkingStreamState.pendingContent, tags.open);
+        let emitEnd = this.avoidSurrogateSplit(
+            this.thinkingStreamState.pendingContent,
+            this.thinkingStreamState.pendingContent.length - openHoldBack
+        );
+        contentToEmit = this.thinkingStreamState.pendingContent.substring(0, emitEnd);
+        this.thinkingStreamState.pendingContent = this.thinkingStreamState.pendingContent.substring(emitEnd);
         return contentToEmit;
+    }
+
+    /**
+     * Returns the length of the longest suffix of `text` that is a non-empty prefix of `tag`
+     * (case-insensitive). Used to detect a tag that may be split across streaming chunk
+     * boundaries so the caller can hold that partial fragment back instead of emitting it.
+     * Returns 0 when no suffix of `text` is a prefix of `tag`.
+     */
+    private partialTagSuffixLength(text: string, tag: string): number {
+        if (!text || !tag) {
+            return 0;
+        }
+        const t = text.toLowerCase();
+        const g = tag.toLowerCase();
+        // A held-back fragment is at most tag.length - 1 chars (a full tag is handled elsewhere).
+        const max = Math.min(t.length, g.length - 1);
+        for (let len = max; len > 0; len--) {
+            if (t.endsWith(g.substring(0, len))) {
+                return len;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Defensive guard for the tag hold-back: if the emit/hold boundary would fall *between* the two
+     * halves of a UTF-16 surrogate pair (which renders as U+FFFD), move the cut back by one so the
+     * full pair stays together in the held-back remainder. In the common case the held-back fragment
+     * is an ASCII tag prefix (e.g. "<thi"), so `cut` lands on an ASCII boundary and this is a no-op;
+     * it only bites when a hold-back boundary happens to land mid-pair. Note it does NOT hold back a
+     * lone trailing high surrogate when nothing else is being held back (holdBack === 0) — a pair
+     * split exactly at a streaming chunk boundary is left to render and is corrected by the next chunk.
+     */
+    private avoidSurrogateSplit(text: string, cut: number): number {
+        if (cut > 0 && cut < text.length) {
+            const code = text.charCodeAt(cut - 1);
+            if (code >= 0xD800 && code <= 0xDBFF) {
+                return cut - 1;
+            }
+        }
+        return cut;
     }
 
     /**
