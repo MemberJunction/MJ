@@ -27,7 +27,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (406 classes)
+// @memberjunction/core-entities (408 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -169,6 +169,7 @@ import {
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
+    MJContentItemChunkEntity,
     MJContentItemDuplicateEntity,
     MJContentItemEntity,
     MJContentItemTagEntity,
@@ -274,6 +275,7 @@ import {
     MJListDetailEntity,
     MJListDetailEntityExtended,
     MJListEntity,
+    MJListEntityExtended,
     MJListInvitationEntity,
     MJListShareEntity,
     MJMCPServerConnectionEntity,
@@ -738,6 +740,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
+    MJContentItemChunkEntity,
     MJContentItemDuplicateEntity,
     MJContentItemEntity,
     MJContentItemTagEntity,
@@ -843,6 +846,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJListDetailEntity,
     MJListDetailEntityExtended,
     MJListEntity,
+    MJListEntityExtended,
     MJListInvitationEntity,
     MJListShareEntity,
     MJMCPServerConnectionEntity,
@@ -1101,7 +1105,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 505;
+export const CLASS_REGISTRATIONS_COUNT = 507;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
