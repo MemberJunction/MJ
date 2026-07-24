@@ -65,8 +65,17 @@ GO
 
 -------------------------------------------------------------------------------
 -- Extended properties (descriptions consumed by CodeGen)
--- (FK columns ParentID / ContentItemID omitted — CodeGen derives FK descriptions.)
+-- (ContentItemChunk.ContentItemID omitted — CodeGen derives that FK's description.)
 -------------------------------------------------------------------------------
+
+-- ContentItem.ParentID (self-referencing FK — explicit description; CodeGen only derives the relationship)
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'ContentItem',
+    @level2type = N'COLUMN', @level2name = N'ParentID';
+GO
 
 -- ContentItem.VectorRecordID
 EXEC sp_addextendedproperty
@@ -233,25 +242,14 @@ GO
  * ==== BELOW THIS LINE: MEMBERJUNCTION CODEGEN OUTPUT — DO NOT HAND-EDIT ====
  * ============================================================================
  *
- * Everything below was produced by the MemberJunction CodeGen tool (`mj codegen`)
- * from the hand-written DDL above. It contains, for MJ: Content Items and the new
- * MJ: Content Item Chunks entity:
- *   - Entity + EntityField metadata inserts + value-list (EntityFieldValue) rows for
- *     the new status fields (derived from the CHECK constraints above)
- *   - Application-entity registration and entity permission grants
- *   - Foreign-key indexes and the __mj_CreatedAt/__mj_UpdatedAt special fields
- *   - Regenerated base views (vwContentItems, vwContentItemChunks) + view permissions
- *   - spCreate / spUpdate / spDelete stored procedures + their permissions
- *   - Field property / category / icon metadata
+ * Produced by `mj codegen` from the hand-written DDL above — for MJ: Content Items
+ * and MJ: Content Item Chunks: Entity/EntityField metadata (incl. the ParentID
+ * description), value-list rows, FK indexes, __mj_CreatedAt/UpdatedAt fields,
+ * regenerated views, spCreate/spUpdate/spDelete, permissions, field/category/icon metadata.
  *
- * DO NOT edit any of this by hand. If the hand-written DDL above changes, re-run
- * `mj codegen` and replace this entire generated section with the new output.
- *
- * NOTE: The raw CodeGen run also emitted unrelated `GeneratedCode` validator
- * regenerations for MJ: AI Agents / MJ: AI Agent Types. Those are an artifact of
- * this environment's fresh-install state and belong to the v5.49 Agent
- * Conversation Compaction feature, NOT to this migration, so they were
- * intentionally excluded here.
+ * DO NOT edit by hand. If the hand-written DDL changes, re-run `mj codegen` and
+ * replace this section. Unrelated AI-Agent GeneratedCode validator regenerations
+ * from this environment's fresh-install state were intentionally excluded.
  * ============================================================================ */
 
 /* SQL generated to create new entity MJ: Content Item Chunks */
@@ -280,7 +278,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '45fed76c-b908-40eb-b719-b1d4f8fde59d',
+         '2324cd0b-d589-41a9-9f6f-eb5a4e7ceb21',
          'MJ: Content Item Chunks',
          'Content Item Chunks',
          'Represents an individual chunk of a Content Item''s text that was embedded as a distinct vector. When a Content Item is too large to embed as a single vector it is split into ordered chunks; each chunk becomes one row here, linking the stored vector back to the specific portion of the parent Content Item it represents.',
@@ -306,22 +304,22 @@ GO
 /* SQL generated to add new entity MJ: Content Item Chunks to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '45fed76c-b908-40eb-b719-b1d4f8fde59d', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '2324cd0b-d589-41a9-9f6f-eb5a4e7ceb21', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Content Item Chunks for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('45fed76c-b908-40eb-b719-b1d4f8fde59d', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('2324cd0b-d589-41a9-9f6f-eb5a4e7ceb21', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Content Item Chunks for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('45fed76c-b908-40eb-b719-b1d4f8fde59d', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('2324cd0b-d589-41a9-9f6f-eb5a4e7ceb21', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Content Item Chunks for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('45fed76c-b908-40eb-b719-b1d4f8fde59d', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('2324cd0b-d589-41a9-9f6f-eb5a4e7ceb21', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ContentItemChunk */
 ALTER TABLE [${flyway:defaultSchema}].[ContentItemChunk] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -357,7 +355,7 @@ GO
 
 /* SQL text to insert 16 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd0e72118-ac9f-477e-b701-c02f8a2ee0f6' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6f3ba29d-3a9c-419b-b720-0e12a487e15b' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'VectorRecordID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -390,826 +388,7 @@ GO
          )
          VALUES
          (
-            'd0e72118-ac9f-477e-b701-c02f8a2ee0f6',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0c432c34-fe79-4809-828e-77bd6fd89487' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'ContentItemID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '0c432c34-fe79-4809-828e-77bd6fd89487',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100002,
-            'ContentItemID',
-            'Content Item ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'B693AD50-0E66-EF11-A752-C0A5E8ACCB22',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f778a75c-198a-47c6-83ac-2795bcabce94' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'Sequence')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f778a75c-198a-47c6-83ac-2795bcabce94',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100003,
-            'Sequence',
-            'Sequence',
-            'Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0bc52a38-1933-41a7-ba58-652517797509' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'Text')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '0bc52a38-1933-41a7-ba58-652517797509',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100004,
-            'Text',
-            'Text',
-            'The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk''s vector.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '38e3c522-689f-4ee6-b3d1-16094dfbce11' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'VectorRecordID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '38e3c522-689f-4ee6-b3d1-16094dfbce11',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100005,
-            'VectorRecordID',
-            'Vector Record ID',
-            'The identifier of this chunk''s vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the chunk''s embedding under. Provides traceability from the chunk back to its stored vector.',
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '68b92187-b7c3-41ea-ad73-2d4de92c1f24' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'EmbeddingStatus')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '68b92187-b7c3-41ea-ad73-2d4de92c1f24',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100006,
-            'EmbeddingStatus',
-            'Embedding Status',
-            'Embedding lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Pending',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b1883b20-be2b-4968-8543-6c52a07d9494' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'TaggingStatus')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b1883b20-be2b-4968-8543-6c52a07d9494',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100007,
-            'TaggingStatus',
-            'Tagging Status',
-            'Tagging lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Pending',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bf66a747-87a6-46bb-8c51-c2cddc8b0c81' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'DeleteStatus')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'bf66a747-87a6-46bb-8c51-c2cddc8b0c81',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100008,
-            'DeleteStatus',
-            'Delete Status',
-            'Deletion lifecycle state of this chunk''s vector: NULL when not slated for deletion, Pending when vector removal is queued, or Deleted once the vector has been removed from the vector database.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '567a08b3-8448-4dde-936f-94f23aeb8611' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'LastEmbeddedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '567a08b3-8448-4dde-936f-94f23aeb8611',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100009,
-            'LastEmbeddedAt',
-            'Last Embedded At',
-            'Timestamp of the last successful embedding of this chunk.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6a4a4c4f-b21d-4fb1-af18-310acddd19b0' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'LastTaggedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '6a4a4c4f-b21d-4fb1-af18-310acddd19b0',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100010,
-            'LastTaggedAt',
-            'Last Tagged At',
-            'Timestamp of the last successful tagging of this chunk.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8003fd1f-8f13-4f41-a304-cfa21e7ffa37' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'LastDeletedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8003fd1f-8f13-4f41-a304-cfa21e7ffa37',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100011,
-            'LastDeletedAt',
-            'Last Deleted At',
-            'Timestamp of the last successful deletion of this chunk''s vector from the vector database.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c11e609b-8599-4071-a981-622ac6772cf2' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'c11e609b-8599-4071-a981-622ac6772cf2',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100012,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '650733c9-ddc3-4e03-8713-62dd71d311df' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '650733c9-ddc3-4e03-8713-62dd71d311df',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100013,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2a3c2f4f-ddea-45fd-991d-cf58656ac9c2' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'VectorRecordID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2a3c2f4f-ddea-45fd-991d-cf58656ac9c2',
+            '6f3ba29d-3a9c-419b-b720-0e12a487e15b',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             100046,
             'VectorRecordID',
@@ -1239,7 +418,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cb2a79c6-7fa7-4bf8-b9c5-98b2a71904a2' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'ParentID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b2686a87-4b1e-4eb2-bf22-5122a3346e72' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'ParentID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1272,12 +451,12 @@ GO
          )
          VALUES
          (
-            'cb2a79c6-7fa7-4bf8-b9c5-98b2a71904a2',
+            'b2686a87-4b1e-4eb2-bf22-5122a3346e72',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             100047,
             'ParentID',
             'Parent ID',
-            NULL,
+            'Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.',
             'uniqueidentifier',
             16,
             0,
@@ -1302,7 +481,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1e791bd8-2eb2-40d5-ac44-c26a1530b498' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'DisplayLink')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ab3781c6-4540-4d28-be5c-f329136c262e' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'DisplayLink')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1335,7 +514,7 @@ GO
          )
          VALUES
          (
-            '1e791bd8-2eb2-40d5-ac44-c26a1530b498',
+            'ab3781c6-4540-4d28-be5c-f329136c262e',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             100048,
             'DisplayLink',
@@ -1365,129 +544,948 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID c912e027-7c95-494d-8b6a-4e1de24e648d */
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c07b5b08-0084-4f59-b638-243f526546e4' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c07b5b08-0084-4f59-b638-243f526546e4',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '073f4c8a-f2ab-4f27-9fe3-743882972f31' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'ContentItemID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '073f4c8a-f2ab-4f27-9fe3-743882972f31',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100002,
+            'ContentItemID',
+            'Content Item ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'B693AD50-0E66-EF11-A752-C0A5E8ACCB22',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7618b84a-5040-4c23-9007-71f193e13b8a' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Sequence')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7618b84a-5040-4c23-9007-71f193e13b8a',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100003,
+            'Sequence',
+            'Sequence',
+            'Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '80dc7d33-19f5-4781-bc71-e1e1b882c514' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Text')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '80dc7d33-19f5-4781-bc71-e1e1b882c514',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100004,
+            'Text',
+            'Text',
+            'The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk''s vector.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f761d312-981b-47e1-94dc-42ff4550cc13' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'VectorRecordID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f761d312-981b-47e1-94dc-42ff4550cc13',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100005,
+            'VectorRecordID',
+            'Vector Record ID',
+            'The identifier of this chunk''s vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the chunk''s embedding under. Provides traceability from the chunk back to its stored vector.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '06db407c-561a-4740-8a28-e93dc745435b' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'EmbeddingStatus')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '06db407c-561a-4740-8a28-e93dc745435b',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100006,
+            'EmbeddingStatus',
+            'Embedding Status',
+            'Embedding lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Pending',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a805fbdb-79c6-4b2b-b39d-693cce47a9e7' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'TaggingStatus')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a805fbdb-79c6-4b2b-b39d-693cce47a9e7',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100007,
+            'TaggingStatus',
+            'Tagging Status',
+            'Tagging lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Pending',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'edefd181-ac1e-4533-a7f7-cad268e1ec07' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'DeleteStatus')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'edefd181-ac1e-4533-a7f7-cad268e1ec07',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100008,
+            'DeleteStatus',
+            'Delete Status',
+            'Deletion lifecycle state of this chunk''s vector: NULL when not slated for deletion, Pending when vector removal is queued, or Deleted once the vector has been removed from the vector database.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9f645e2c-17ff-4569-b28c-bf8caeaa0b68' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'LastEmbeddedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9f645e2c-17ff-4569-b28c-bf8caeaa0b68',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100009,
+            'LastEmbeddedAt',
+            'Last Embedded At',
+            'Timestamp of the last successful embedding of this chunk.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2c847a8b-a352-43f7-bcdf-ca951ad2f9a6' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'LastTaggedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '2c847a8b-a352-43f7-bcdf-ca951ad2f9a6',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100010,
+            'LastTaggedAt',
+            'Last Tagged At',
+            'Timestamp of the last successful tagging of this chunk.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7eb2ae41-ce4e-45e5-b481-b929099ac6e6' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'LastDeletedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7eb2ae41-ce4e-45e5-b481-b929099ac6e6',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100011,
+            'LastDeletedAt',
+            'Last Deleted At',
+            'Timestamp of the last successful deletion of this chunk''s vector from the vector database.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2d402f99-b9a1-4abb-9d19-a4b204d09bac' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '2d402f99-b9a1-4abb-9d19-a4b204d09bac',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100012,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9e337b81-5b94-46ac-b696-0efa27c9f85b' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9e337b81-5b94-46ac-b696-0efa27c9f85b',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100013,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert entity field value with ID babcc4d3-c9f4-4783-8161-6e3ae774d81e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('c912e027-7c95-494d-8b6a-4e1de24e648d', '68B92187-B7C3-41EA-AD73-2D4DE92C1F24', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('babcc4d3-c9f4-4783-8161-6e3ae774d81e', '06DB407C-561A-4740-8A28-E93DC745435B', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 26eed387-a8f4-4db1-85d7-71f784558319 */
+/* SQL text to insert entity field value with ID ca3f6ef8-8049-4f6c-8cce-678ed4689c64 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('26eed387-a8f4-4db1-85d7-71f784558319', '68B92187-B7C3-41EA-AD73-2D4DE92C1F24', 2, 'Complete', 'Complete', GETUTCDATE(), GETUTCDATE());
+                                       ('ca3f6ef8-8049-4f6c-8cce-678ed4689c64', '06DB407C-561A-4740-8A28-E93DC745435B', 2, 'Complete', 'Complete', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 3343a2cb-7013-4088-bb0d-5e280b869108 */
+/* SQL text to insert entity field value with ID 464d0bb3-a1fe-480d-91fc-807873375472 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('3343a2cb-7013-4088-bb0d-5e280b869108', '68B92187-B7C3-41EA-AD73-2D4DE92C1F24', 3, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
+                                       ('464d0bb3-a1fe-480d-91fc-807873375472', '06DB407C-561A-4740-8A28-E93DC745435B', 3, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 89fb66f1-4d3f-4372-b78f-abdcfa78e66e */
+/* SQL text to insert entity field value with ID 270c2b63-34f2-4017-b044-82701e0bc763 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('89fb66f1-4d3f-4372-b78f-abdcfa78e66e', '68B92187-B7C3-41EA-AD73-2D4DE92C1F24', 4, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+                                       ('270c2b63-34f2-4017-b044-82701e0bc763', '06DB407C-561A-4740-8A28-E93DC745435B', 4, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID ba465cfc-9340-4369-a08f-b0df0b2f881b */
+/* SQL text to insert entity field value with ID 172f3a14-3837-4b1d-8c10-329fb35c03d4 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ba465cfc-9340-4369-a08f-b0df0b2f881b', '68B92187-B7C3-41EA-AD73-2D4DE92C1F24', 5, 'Processed', 'Processed', GETUTCDATE(), GETUTCDATE());
+                                       ('172f3a14-3837-4b1d-8c10-329fb35c03d4', '06DB407C-561A-4740-8A28-E93DC745435B', 5, 'Processed', 'Processed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 63232205-5540-427a-9074-37c72f16d0e3 */
+/* SQL text to insert entity field value with ID e2e5bdef-2c52-4ca1-a5d8-bd844f9b3e31 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('63232205-5540-427a-9074-37c72f16d0e3', '68B92187-B7C3-41EA-AD73-2D4DE92C1F24', 6, 'Processing', 'Processing', GETUTCDATE(), GETUTCDATE());
+                                       ('e2e5bdef-2c52-4ca1-a5d8-bd844f9b3e31', '06DB407C-561A-4740-8A28-E93DC745435B', 6, 'Processing', 'Processing', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID a7f3b074-1289-4639-9a72-7fc7fdc0884d */
+/* SQL text to insert entity field value with ID 22a533c5-6622-4e19-8862-2f4133d8766d */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a7f3b074-1289-4639-9a72-7fc7fdc0884d', '68B92187-B7C3-41EA-AD73-2D4DE92C1F24', 7, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
+                                       ('22a533c5-6622-4e19-8862-2f4133d8766d', '06DB407C-561A-4740-8A28-E93DC745435B', 7, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 68B92187-B7C3-41EA-AD73-2D4DE92C1F24 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='68B92187-B7C3-41EA-AD73-2D4DE92C1F24';
+/* SQL text to update ValueListType for entity field ID 06DB407C-561A-4740-8A28-E93DC745435B */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='06DB407C-561A-4740-8A28-E93DC745435B';
 
-/* SQL text to insert entity field value with ID e2fa43e9-03a3-4c40-9e89-23dcc9056cce */
+/* SQL text to insert entity field value with ID 96c20dff-bf1b-4c68-a695-086d6290f3b3 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e2fa43e9-03a3-4c40-9e89-23dcc9056cce', 'B1883B20-BE2B-4968-8543-6C52A07D9494', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('96c20dff-bf1b-4c68-a695-086d6290f3b3', 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID eabbd8b6-a58b-4025-9f86-304b892ae6ab */
+/* SQL text to insert entity field value with ID 52bfa9f6-d702-4a72-a1aa-482973b60138 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('eabbd8b6-a58b-4025-9f86-304b892ae6ab', 'B1883B20-BE2B-4968-8543-6C52A07D9494', 2, 'Complete', 'Complete', GETUTCDATE(), GETUTCDATE());
+                                       ('52bfa9f6-d702-4a72-a1aa-482973b60138', 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7', 2, 'Complete', 'Complete', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 2094ca8a-ae23-40d0-bbbd-3f8fbfb69d50 */
+/* SQL text to insert entity field value with ID a5cfd374-b72b-49b5-92c3-d86444611069 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2094ca8a-ae23-40d0-bbbd-3f8fbfb69d50', 'B1883B20-BE2B-4968-8543-6C52A07D9494', 3, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
+                                       ('a5cfd374-b72b-49b5-92c3-d86444611069', 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7', 3, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 3e82501f-e900-4d84-ae29-d6330bc96a30 */
+/* SQL text to insert entity field value with ID bb644496-d2ce-4c7f-9ef5-b81d6d5983ba */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('3e82501f-e900-4d84-ae29-d6330bc96a30', 'B1883B20-BE2B-4968-8543-6C52A07D9494', 4, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+                                       ('bb644496-d2ce-4c7f-9ef5-b81d6d5983ba', 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7', 4, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 784e002e-48ae-470c-aeca-771db4b3ef8e */
+/* SQL text to insert entity field value with ID 7d4cef3a-58ad-4b2c-b17c-0f55b2bf4c74 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('784e002e-48ae-470c-aeca-771db4b3ef8e', 'B1883B20-BE2B-4968-8543-6C52A07D9494', 5, 'Processed', 'Processed', GETUTCDATE(), GETUTCDATE());
+                                       ('7d4cef3a-58ad-4b2c-b17c-0f55b2bf4c74', 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7', 5, 'Processed', 'Processed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 0acb9c27-8155-429a-8aa8-f0f6d586cb8e */
+/* SQL text to insert entity field value with ID ad5c3c88-d252-48d2-afd8-4c17855fa09f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('0acb9c27-8155-429a-8aa8-f0f6d586cb8e', 'B1883B20-BE2B-4968-8543-6C52A07D9494', 6, 'Processing', 'Processing', GETUTCDATE(), GETUTCDATE());
+                                       ('ad5c3c88-d252-48d2-afd8-4c17855fa09f', 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7', 6, 'Processing', 'Processing', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 7a23cf15-279f-4d19-b03e-192d40e17d88 */
+/* SQL text to insert entity field value with ID b5fc85ba-dd9e-4a1d-aaa3-836d00184225 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7a23cf15-279f-4d19-b03e-192d40e17d88', 'B1883B20-BE2B-4968-8543-6C52A07D9494', 7, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
+                                       ('b5fc85ba-dd9e-4a1d-aaa3-836d00184225', 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7', 7, 'Skipped', 'Skipped', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID B1883B20-BE2B-4968-8543-6C52A07D9494 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='B1883B20-BE2B-4968-8543-6C52A07D9494';
+/* SQL text to update ValueListType for entity field ID A805FBDB-79C6-4B2B-B39D-693CCE47A9E7 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='A805FBDB-79C6-4B2B-B39D-693CCE47A9E7';
 
-/* SQL text to insert entity field value with ID c178ded8-727a-41b6-b8e7-d762a563e77f */
+/* SQL text to insert entity field value with ID f935bdd7-2502-4b8f-907b-25c0fc650eb5 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('c178ded8-727a-41b6-b8e7-d762a563e77f', 'BF66A747-87A6-46BB-8C51-C2CDDC8B0C81', 1, 'Deleted', 'Deleted', GETUTCDATE(), GETUTCDATE());
+                                       ('f935bdd7-2502-4b8f-907b-25c0fc650eb5', 'EDEFD181-AC1E-4533-A7F7-CAD268E1EC07', 1, 'Deleted', 'Deleted', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID b3b7afe7-9459-41b9-9d86-09643586438b */
+/* SQL text to insert entity field value with ID c77da30e-0fe6-4fa7-9d60-2a88fd99a1f4 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('b3b7afe7-9459-41b9-9d86-09643586438b', 'BF66A747-87A6-46BB-8C51-C2CDDC8B0C81', 2, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+                                       ('c77da30e-0fe6-4fa7-9d60-2a88fd99a1f4', 'EDEFD181-AC1E-4533-A7F7-CAD268E1EC07', 2, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID BF66A747-87A6-46BB-8C51-C2CDDC8B0C81 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='BF66A747-87A6-46BB-8C51-C2CDDC8B0C81';
+/* SQL text to update ValueListType for entity field ID EDEFD181-AC1E-4533-A7F7-CAD268E1EC07 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='EDEFD181-AC1E-4533-A7F7-CAD268E1EC07';
 
 
 /* Create Entity Relationship: MJ: Content Items -> MJ: Content Items (One To Many via ParentID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '247f7d2e-ef99-4f67-b0ac-9ec9805ff0a2'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '884dd38f-2e93-4ce6-a00e-689d53d22571'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('247f7d2e-ef99-4f67-b0ac-9ec9805ff0a2', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'ParentID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('884dd38f-2e93-4ce6-a00e-689d53d22571', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'ParentID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Content Items -> MJ: Content Item Chunks (One To Many via ContentItemID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0b4b0b3d-2abd-4870-baf1-2921f3acd050'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'e334473d-ece5-44ff-bfb6-aceb0b989a28'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('0b4b0b3d-2abd-4870-baf1-2921f3acd050', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', '45FED76C-B908-40EB-B719-B1D4F8FDE59D', 'ContentItemID', 'One To Many', 1, 1, 7, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('e334473d-ece5-44ff-bfb6-aceb0b989a28', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', 'ContentItemID', 'One To Many', 1, 1, 7, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for ContentItemChunk */
@@ -1508,8 +1506,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ContentItemChunk_ContentItemID ON [${flyway:defaultSchema}].[ContentItemChunk] ([ContentItemID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 0C432C34-FE79-4809-828E-77BD6FD89487 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='0C432C34-FE79-4809-828E-77BD6FD89487', @RelatedEntityNameFieldMap='ContentItem';
+/* SQL text to update entity field related entity name field map for entity field ID 073F4C8A-F2AB-4F27-9FE3-743882972F31 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='073F4C8A-F2AB-4F27-9FE3-743882972F31', @RelatedEntityNameFieldMap='ContentItem';
 
 /* Base View SQL for MJ: Content Item Chunks */
 -----------------------------------------------------------------
@@ -1884,8 +1882,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ContentItem_ParentID ON [${flyway:defaultSchema}].[ContentItem] ([ParentID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID CB2A79C6-7FA7-4BF8-B9C5-98B2A71904A2 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='CB2A79C6-7FA7-4BF8-B9C5-98B2A71904A2', @RelatedEntityNameFieldMap='Parent';
+/* SQL text to update entity field related entity name field map for entity field ID B2686A87-4B1E-4EB2-BF22-5122A3346E72 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='B2686A87-4B1E-4EB2-BF22-5122A3346E72', @RelatedEntityNameFieldMap='Parent';
 
 /* Root ID Function SQL for MJ: Content Items.ParentID */
 -----------------------------------------------------------------
@@ -2352,7 +2350,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItem] TO [cdp_Develop
 
 /* SQL text to insert 3 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f4cd5a29-f987-4fe7-9844-439081e4a9a1' OR (EntityID = '45FED76C-B908-40EB-B719-B1D4F8FDE59D' AND Name = 'ContentItem')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '871eaa3f-3548-434e-ad31-48f5adfb41b6' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'Parent')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2385,70 +2383,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItem] TO [cdp_Develop
          )
          VALUES
          (
-            'f4cd5a29-f987-4fe7-9844-439081e4a9a1',
-            '45FED76C-B908-40EB-B719-B1D4F8FDE59D', -- Entity: MJ: Content Item Chunks
-            100027,
-            'ContentItem',
-            'Content Item',
-            NULL,
-            'nvarchar',
-            500,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '112bb4b0-7d70-4452-8035-e4c7915dab4e' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'Parent')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '112bb4b0-7d70-4452-8035-e4c7915dab4e',
+            '871eaa3f-3548-434e-ad31-48f5adfb41b6',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             100055,
             'Parent',
@@ -2478,7 +2413,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItem] TO [cdp_Develop
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f5025161-dcfe-47c3-8b8c-f3246748180b' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'RootParentID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e64484d1-d784-462a-b173-6cf33741f4a3' OR (EntityID = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'RootParentID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2511,7 +2446,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItem] TO [cdp_Develop
          )
          VALUES
          (
-            'f5025161-dcfe-47c3-8b8c-f3246748180b',
+            'e64484d1-d784-462a-b173-6cf33741f4a3',
             'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Items
             100056,
             'RootParentID',
@@ -2541,17 +2476,80 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItem] TO [cdp_Develop
          )
       END;
 
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9527fb1b-0c05-4c0e-a709-c8922fac9c8e' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'ContentItem')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9527fb1b-0c05-4c0e-a709-c8922fac9c8e',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100027,
+            'ContentItem',
+            'Content Item',
+            NULL,
+            'nvarchar',
+            500,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '0BD076E0-A5D2-4AF8-B9A7-646D342DBEF4'
-               AND AutoUpdateUserSearchPredicate = 1;
+               SET DefaultInView = 1
+               WHERE ID = 'FDB8433E-F36B-1410-867F-007B559E242F'
+               AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '064AA602-A3D4-4192-88C4-6F96EFDF0F18'
-               AND AutoUpdateUserSearchPredicate = 1;
+               SET DefaultInView = 1
+               WHERE ID = 'EFA43D7E-C671-48A6-8733-8B75CA8B3CC1'
+               AND AutoUpdateDefaultInView = 1;
 
             UPDATE [${flyway:defaultSchema}].[Entity]
             SET AllowUserSearchAPI = 1
@@ -2562,42 +2560,52 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItem] TO [cdp_Develop
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'F778A75C-198A-47C6-83AC-2795BCABCE94'
+               WHERE ID = '7618B84A-5040-4C23-9007-71F193E13B8A'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '68B92187-B7C3-41EA-AD73-2D4DE92C1F24'
+               WHERE ID = '06DB407C-561A-4740-8A28-E93DC745435B'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'B1883B20-BE2B-4968-8543-6C52A07D9494'
+               WHERE ID = 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '567A08B3-8448-4DDE-936F-94F23AEB8611'
+               WHERE ID = '9F645E2C-17FF-4569-B28C-BF8CAEAA0B68'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'F4CD5A29-F987-4FE7-9844-439081E4A9A1'
+               WHERE ID = '9527FB1B-0C05-4C0E-A709-C8922FAC9C8E'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '0BC52A38-1933-41A7-BA58-652517797509'
+               WHERE ID = '80DC7D33-19F5-4781-BC71-E1E1B882C514'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'F4CD5A29-F987-4FE7-9844-439081E4A9A1'
+               WHERE ID = 'F761D312-981B-47E1-94DC-42FF4550CC13'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '9527FB1B-0C05-4C0E-A709-C8922FAC9C8E'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'F4CD5A29-F987-4FE7-9844-439081E4A9A1'
+               WHERE ID = '9527FB1B-0C05-4C0E-A709-C8922FAC9C8E'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'Exact'
+               WHERE ID = 'F761D312-981B-47E1-94DC-42FF4550CC13'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set categories for 14 fields */
@@ -2610,7 +2618,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'D0E72118-AC9F-477E-B701-C02F8A2EE0F6' AND AutoUpdateCategory = 1;
+   ID = 'C07B5B08-0084-4F59-B638-243F526546E4' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.ContentItemID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2621,7 +2629,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0C432C34-FE79-4809-828E-77BD6FD89487' AND AutoUpdateCategory = 1;
+   ID = '073F4C8A-F2AB-4F27-9FE3-743882972F31' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.ContentItem 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2632,7 +2640,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'F4CD5A29-F987-4FE7-9844-439081E4A9A1' AND AutoUpdateCategory = 1;
+   ID = '9527FB1B-0C05-4C0E-A709-C8922FAC9C8E' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.Sequence 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2642,28 +2650,28 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'F778A75C-198A-47C6-83AC-2795BCABCE94' AND AutoUpdateCategory = 1;
+   ID = '7618B84A-5040-4C23-9007-71F193E13B8A' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.Text 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Chunk Content',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Chunk Text',
+   DisplayName = 'Text Content',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '0BC52A38-1933-41A7-BA58-652517797509' AND AutoUpdateCategory = 1;
+   ID = '80DC7D33-19F5-4781-BC71-E1E1B882C514' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.VectorRecordID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Vector Information',
+   Category = 'Vector Integration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '38E3C522-689F-4EE6-B3D1-16094DFBCE11' AND AutoUpdateCategory = 1;
+   ID = 'F761D312-981B-47E1-94DC-42FF4550CC13' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.EmbeddingStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2673,7 +2681,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '68B92187-B7C3-41EA-AD73-2D4DE92C1F24' AND AutoUpdateCategory = 1;
+   ID = '06DB407C-561A-4740-8A28-E93DC745435B' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.TaggingStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2683,7 +2691,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'B1883B20-BE2B-4968-8543-6C52A07D9494' AND AutoUpdateCategory = 1;
+   ID = 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.DeleteStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2693,7 +2701,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'BF66A747-87A6-46BB-8C51-C2CDDC8B0C81' AND AutoUpdateCategory = 1;
+   ID = 'EDEFD181-AC1E-4533-A7F7-CAD268E1EC07' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.LastEmbeddedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2703,7 +2711,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '567A08B3-8448-4DDE-936F-94F23AEB8611' AND AutoUpdateCategory = 1;
+   ID = '9F645E2C-17FF-4569-B28C-BF8CAEAA0B68' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.LastTaggedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2713,7 +2721,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '6A4A4C4F-B21D-4FB1-AF18-310ACDDD19B0' AND AutoUpdateCategory = 1;
+   ID = '2C847A8B-A352-43F7-BCDF-CA951AD2F9A6' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.LastDeletedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2723,7 +2731,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '8003FD1F-8F13-4F41-A304-CFA21E7FFA37' AND AutoUpdateCategory = 1;
+   ID = '7EB2AE41-CE4E-45E5-B481-B929099AC6E6' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2733,7 +2741,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'C11E609B-8599-4071-A981-622AC6772CF2' AND AutoUpdateCategory = 1;
+   ID = '2D402F99-B9A1-4ABB-9D19-A4B204D09BAC' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2743,29 +2751,29 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '650733C9-DDC3-4E03-8713-62DD71D311DF' AND AutoUpdateCategory = 1;
+   ID = '9E337B81-5B94-46AC-B696-0EFA27C9F85B' AND AutoUpdateCategory = 1;
 
 /* Set entity icon to fa fa-layer-group */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-layer-group', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '45FED76C-B908-40EB-B719-B1D4F8FDE59D';
+               WHERE [ID] = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21';
 
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('466230d5-f023-4bef-b455-54aff3495995', '45FED76C-B908-40EB-B719-B1D4F8FDE59D', 'FieldCategoryInfo', '{"Chunk Details":{"icon":"fa fa-info-circle","description":"Core identification and ordering information for the content chunk"},"Chunk Content":{"icon":"fa fa-align-left","description":"The raw text content extracted from the parent item"},"Vector Information":{"icon":"fa fa-database","description":"Technical details regarding the vector database record"},"Lifecycle Status":{"icon":"fa fa-tasks","description":"Current processing state for embedding, tagging, and deletion"},"Lifecycle Timestamps":{"icon":"fa fa-clock","description":"Timestamps for lifecycle events"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('26b64197-277b-402f-ba15-5112bf85d8a6', '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', 'FieldCategoryInfo', '{"Chunk Details":{"icon":"fa fa-info-circle","description":"Core information identifying the chunk and its parent content item"},"Chunk Content":{"icon":"fa fa-align-left","description":"The actual text content embedded within the chunk"},"Vector Integration":{"icon":"fa fa-database","description":"Technical identifiers for vector database synchronization"},"Lifecycle Status":{"icon":"fa fa-tasks","description":"Current processing states for embedding, tagging, and deletion"},"Lifecycle Timestamps":{"icon":"fa fa-clock","description":"Audit timestamps for lifecycle operations"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
 
 /* Insert FieldCategoryIcons setting (legacy) */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('d3e9685f-1b45-4c52-97c5-75be67aa004f', '45FED76C-B908-40EB-B719-B1D4F8FDE59D', 'FieldCategoryIcons', '{"Chunk Details":"fa fa-info-circle","Chunk Content":"fa fa-align-left","Vector Information":"fa fa-database","Lifecycle Status":"fa fa-tasks","Lifecycle Timestamps":"fa fa-clock","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('4a83c07f-7fc3-4ccf-acd8-30b6ab76e63e', '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', 'FieldCategoryIcons', '{"Chunk Details":"fa fa-info-circle","Chunk Content":"fa fa-align-left","Vector Integration":"fa fa-database","Lifecycle Status":"fa fa-tasks","Lifecycle Timestamps":"fa fa-clock","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
 
 /* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '45FED76C-B908-40EB-B719-B1D4F8FDE59D';
+         WHERE [EntityID] = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21';
 
 /* Set categories for 29 fields */
 
@@ -2950,7 +2958,7 @@ SET
    ExtendedType = 'URL',
    CodeType = NULL
 WHERE 
-   ID = '1E791BD8-2EB2-40D5-AC44-C26A1530B498' AND AutoUpdateCategory = 1;
+   ID = 'AB3781C6-4540-4D28-BE5C-F329136C262E' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Items.EmbeddingStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3006,7 +3014,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '2A3C2F4F-DDEA-45FD-991D-CF58656AC9C2' AND AutoUpdateCategory = 1;
+   ID = '6F3BA29D-3A9C-419B-B720-0E12A487E15B' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Items.EmbeddingModel 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3021,44 +3029,45 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: Content Items.ParentID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Relationships',
+   Category = 'Hierarchy',
    GeneratedFormSection = 'Category',
    DisplayName = 'Parent Content',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'CB2A79C6-7FA7-4BF8-B9C5-98B2A71904A2' AND AutoUpdateCategory = 1;
+   ID = 'B2686A87-4B1E-4EB2-BF22-5122A3346E72' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Items.Parent 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Relationships',
+   Category = 'Hierarchy',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Parent Name',
+   DisplayName = 'Parent Content Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '112BB4B0-7D70-4452-8035-E4C7915DAB4E' AND AutoUpdateCategory = 1;
+   ID = '871EAA3F-3548-434E-AD31-48F5ADFB41B6' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Items.RootParentID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Relationships',
+   Category = 'Hierarchy',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Root Parent',
+   DisplayName = 'Root Parent Content',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'F5025161-DCFE-47C3-8B8C-F3246748180B' AND AutoUpdateCategory = 1;
+   ID = 'E64484D1-D784-462A-B173-6CF33741F4A3' AND AutoUpdateCategory = 1;
 
 /* Update FieldCategoryInfo setting for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntitySetting]
-               SET [Value] = '{"Relationships":{"icon":"fa fa-project-diagram","description":"Hierarchical relationships between content items"}}', [__mj_UpdatedAt] = GETUTCDATE()
+               SET [Value] = '{"Hierarchy":{"icon":"fa fa-sitemap","description":"Organizational structure and parent-child relationships for content items"}}', [__mj_UpdatedAt] = GETUTCDATE()
                WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND [Name] = 'FieldCategoryInfo';
 
 /* Update FieldCategoryIcons setting (legacy) */
 
                UPDATE [${flyway:defaultSchema}].[EntitySetting]
-               SET [Value] = '{"Relationships":"fa fa-project-diagram"}', [__mj_UpdatedAt] = GETUTCDATE()
+               SET [Value] = '{"Hierarchy":"fa fa-sitemap"}', [__mj_UpdatedAt] = GETUTCDATE()
                WHERE [EntityID] = 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22' AND [Name] = 'FieldCategoryIcons';
+
