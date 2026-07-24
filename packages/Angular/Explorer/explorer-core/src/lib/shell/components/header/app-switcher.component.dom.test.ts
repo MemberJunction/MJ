@@ -83,6 +83,22 @@ describe('AppSwitcherComponent (DOM)', () => {
     expect(query(render({ loadingAppId: 'a2' }), '.loading-spinner')).not.toBeNull();
   });
 
+  it('labels the trigger with the current app name', () => {
+    const fixture = render({ activeApp: APPS[1] });
+    expect(query(fixture, '.app-switcher-button .app-label')?.textContent?.trim()).toBe('Marketing');
+    expect(attr(fixture, '.app-switcher-button', 'aria-label')).toBe('Switch application — current: Marketing');
+  });
+
+  it('falls back to "Apps" when no app is active', () => {
+    expect(query(render(), '.app-switcher-button .app-label')?.textContent?.trim()).toBe('Apps');
+  });
+
+  it('falls back to "Apps" when viewing a system tab', () => {
+    const fixture = render({ activeApp: APPS[1], isViewingSystemTab: true });
+    expect(query(fixture, '.app-switcher-button .app-label')?.textContent?.trim()).toBe('Apps');
+    expect(attr(fixture, '.app-switcher-button', 'aria-label')).toBe('Switch application');
+  });
+
   it('hides the launcher by default and reflects aria-expanded=false', () => {
     const fixture = render();
     expect(query(fixture, '.launcher-panel')).toBeNull();

@@ -28,9 +28,26 @@
   outline: 2px solid var(--mj-border-focus);
   outline-offset: 2px;
 }
+/* Current-app name in the trigger. Capped at 160px: no current catalog name
+   truncates at this width — the ellipsis only guards future/client apps. */
+.app-switcher-button .app-label {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .app-switcher-button .dropdown-arrow {
   font-size: 10px;
-  color: var(--mj-text-disabled);
+  color: var(--mj-text-muted);
+  transition: color var(--mj-transition-fast);
+}
+/* text-disabled sat nearly on top of --mj-bg-surface-hover in dark mode —
+   the chevron vanished on hover. Muted at rest, secondary on hover. */
+.app-switcher-button:hover .dropdown-arrow {
+  color: var(--mj-text-secondary);
 }
 .app-switcher-button .loading-spinner {
   color: var(--mj-text-muted);
@@ -337,6 +354,9 @@
   }
   .launcher-kbd-hints {
     display: none; /* No hardware-keyboard hints on touch */
+  }
+  .app-switcher-button .app-label {
+    display: none; /* Icon-only trigger — the 390px header has no room for a name */
   }
 }
 

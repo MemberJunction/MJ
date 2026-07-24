@@ -1,7 +1,7 @@
 <div class="app-switcher-container" [class.loading]="isLoading">
   <div class="app-switcher-button"
     #trigger
-    mjClickable="Switch application"
+    [mjClickable]="TriggerAriaLabel"
     testId="app-switcher-trigger"
     [attr.aria-haspopup]="'dialog'"
     [attr.aria-expanded]="showDropdown"
@@ -14,6 +14,8 @@
       <i class="app-icon" [class]="activeApp?.Icon || 'fa-solid fa-cube'"
         [style.color]="activeApp?.GetColor()" aria-hidden="true"></i>
     }
+    <!-- Current app name; hidden at the mobile breakpoint (icon-only trigger) -->
+    <span class="app-label">{{ TriggerLabel }}</span>
     <i class="dropdown-arrow fa-solid fa-chevron-down" aria-hidden="true"></i>
   </div>
 

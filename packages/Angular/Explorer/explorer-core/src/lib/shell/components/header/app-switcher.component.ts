@@ -72,6 +72,21 @@ export class AppSwitcherComponent {
   }
 
   /**
+   * Visible trigger label: the current app's name, or "Apps" when there's no
+   * app context (system tabs, nothing active yet).
+   */
+  get TriggerLabel(): string {
+    return this.activeApp && !this.isViewingSystemTab ? this.activeApp.Name : 'Apps';
+  }
+
+  /** Accessible name for the trigger — names the control AND the current app */
+  get TriggerAriaLabel(): string {
+    return this.activeApp && !this.isViewingSystemTab
+      ? `Switch application — current: ${this.activeApp.Name}`
+      : 'Switch application';
+  }
+
+  /**
    * Get applications that should appear in the app switcher
    * (NavigationStyle = 'App Switcher' or 'Both')
    */
