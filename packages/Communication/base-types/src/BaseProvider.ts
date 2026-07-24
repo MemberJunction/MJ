@@ -819,6 +819,26 @@ export type SubscriptionCapabilities = {
      * (Graph performs a synchronous handshake requiring the endpoint to echo a token).
      */
     RequiresEndpointValidation: boolean;
+    /**
+     * True when the provider can programmatically create/delete the inbound registration
+     * with the remote service ({@link BaseCommunicationProvider.CreateSubscription} /
+     * {@link BaseCommunicationProvider.DeleteSubscription} are implemented). When false, the
+     * provider only PARSES inbound notifications ({@link BaseCommunicationProvider.ParseNotification})
+     * and the registration is managed out-of-band (DNS/console).
+     *
+     * Note {@link BaseCommunicationProvider.RenewSubscription} is independent: a provider may
+     * support management but have no renewal concept (its registrations don't expire -
+     * {@link SubscriptionCapabilities.MaxLifetimeMinutes} `undefined`), e.g. Twilio/SendGrid.
+     * Only providers with a finite `MaxLifetimeMinutes` implement `RenewSubscription`.
+     */
+    SupportsSubscriptionManagement: boolean;
+    /**
+     * True when {@link BaseCommunicationProvider.ParseNotification} returns the full message
+     * inline in {@link NormalizedNotification.Message} (SendGrid Inbound Parse, Twilio SMS),
+     * so consumers need not re-fetch. False for HINT-mode providers (Graph, Gmail) where the
+     * notification only carries {@link NormalizedNotification.MessageIDs} to pull with.
+     */
+    DeliversPayloadInline: boolean;
 };
 
 /**
@@ -856,11 +876,34 @@ export type WebhookNotificationInput = {
 };
 
 /**
- * A single normalized notification parsed from an inbound webhook payload. A notification
- * is a HINT that something changed - never the data path. Consumers re-fetch content
- * through the authenticated pull methods ({@link BaseCommunicationProvider.GetMessages} /
- * {@link BaseCommunicationProvider.GetSingleMessage}), which makes forged notifications
- * harmless (worst case: one extra empty sweep).
+ * A single normalized notification parsed from an inbound webhook payload.
+ *
+ * ## Two delivery modes: HINT vs. INLINE PAYLOAD
+ *
+ * A notification is a HINT by default: it signals that something changed and the consumer
+ * re-fetches content through the authenticated pull methods
+ * ({@link BaseCommunicationProvider.GetMessages} / {@link BaseCommunicationProvider.GetSingleMessage}),
+ * addressed by {@link NormalizedNotification.MessageIDs}. This is the safest mode - a forged
+ * notification is harmless (worst case: one extra empty sweep) because the real content only
+ * ever comes from an authenticated pull.
+ *
+ * Some transports, however, deliver the FULL message inline in the webhook body itself
+ * (SendGrid Inbound Parse posts the entire parsed email; Twilio posts the SMS body). For
+ * those, re-fetching is wasteful or impossible (SendGrid has no inbound-retrieval API at
+ * all). Such providers populate {@link NormalizedNotification.Message} with the parsed
+ * content, and the consumer uses it directly instead of pulling. A provider signals which
+ * mode it uses via {@link SubscriptionCapabilities.DeliversPayloadInline}.
+ *
+ * This inline-OR-pointer shape mirrors the established MJ duality (`FileOutputRef`'s
+ * `fileData?` vs `fileId?`, `ArtifactVersion.ContentMode` 'Text' vs 'File', `MediaOutput`'s
+ * `data?` vs `url?`): exactly one of the two carries the content for a given provider.
+ *
+ * SECURITY NOTE for inline mode: because the payload IS the data path, a provider that sets
+ * {@link NormalizedNotification.Message} MUST also authenticate the notification
+ * ({@link ParseNotificationResult.SignatureValid}) - or the consumer must - since a forged
+ * inline notification is no longer harmless. Providers whose inbound transport is unsigned
+ * (SendGrid Inbound Parse) rely on the consumer's URL secret / network controls; this is
+ * documented per-provider.
  */
 export type NormalizedNotification = {
     /**
@@ -889,9 +932,20 @@ export type NormalizedNotification = {
     /**
      * Provider message IDs when the notification carries them (Graph `resourceData.id`,
      * Twilio `MessageSid`). An empty array means "something changed; do a targeted
-     * {@link BaseCommunicationProvider.GetMessages}".
+     * {@link BaseCommunicationProvider.GetMessages}". This is the HINT/pointer path; for
+     * inline-payload providers it may still be populated (e.g. Twilio's `MessageSid`) so a
+     * consumer CAN re-fetch, but {@link NormalizedNotification.Message} is present and
+     * authoritative.
      */
     MessageIDs: string[];
+    /**
+     * The fully parsed inbound message, present ONLY when the provider's transport delivers
+     * the content inline (see {@link SubscriptionCapabilities.DeliversPayloadInline}).
+     * When set, the consumer uses this directly and does NOT need to re-fetch via
+     * {@link BaseCommunicationProvider.GetMessages}. `undefined` for HINT-mode providers
+     * (Graph, Gmail), where the content must be pulled using {@link NormalizedNotification.MessageIDs}.
+     */
+    Message?: GetMessageMessage;
     /**
      * For `Kind: 'lifecycle'`: which lifecycle event occurred.
      */
@@ -1239,12 +1293,38 @@ export abstract class BaseCommunicationProvider {
     // create/renew/delete subscriptions with the remote service and parse inbound
     // notifications, but never persist subscription state. See the type docs above.
     //
-    // CAPABILITY INVARIANT: getSubscriptionCapabilities() !== undefined  IFF  all four
-    // subscription operations appear in getSupportedOperations(). The two mechanisms are
-    // intentionally redundant (ops for uniform capability queries, capabilities for
-    // renewal metadata) but MUST always agree - implementing one without the other is
-    // a bug.
+    // TWO PUSH SHAPES (a provider is one or the other, never neither-when-SupportsPush):
+    //   • Subscription-managed (Graph, Gmail): the provider programmatically creates the
+    //     registration (CreateSubscription), the service delivers HINT notifications, the
+    //     consumer re-fetches via GetMessages. May expire (RenewSubscription).
+    //   • Inbound-parse (SendGrid, Twilio): the notification carries the payload inline;
+    //     ParseNotification populates NormalizedNotification.Message. Management may exist
+    //     (Twilio SmsUrl, SendGrid Parse Settings) but there is no expiry/renewal.
+    //
+    // CAPABILITY GATE: SupportsPush === (getSubscriptionCapabilities() !== undefined). The
+    // default SupportsPush getter derives from capabilities, so a provider "opts in" simply
+    // by returning capabilities - no separate flag to keep in sync (avoids the drift a hand-
+    // maintained boolean invites). Any push provider MUST implement ParseNotification and
+    // list it in getSupportedOperations(). Whether it ALSO implements Create/Renew/Delete is
+    // expressed by SubscriptionCapabilities.SupportsSubscriptionManagement + MaxLifetimeMinutes,
+    // and those ops must appear in getSupportedOperations() when implemented.
     // ========================================================================
+
+    /**
+     * Convenience gate: `true` when this provider supports inbound push in ANY form
+     * (subscription-managed or inbound-parse), `false` otherwise. Lets callers cleanly
+     * short-circuit — `if (provider.SupportsPush) { ... }` — instead of probing individual
+     * operations.
+     *
+     * Derived from {@link getSubscriptionCapabilities} so it stays in lockstep with actual
+     * capability: providers that support push return capabilities and thereby report
+     * `SupportsPush === true` for free; providers that don't return `undefined` and report
+     * `false`. Subclasses normally do NOT override this — override
+     * {@link getSubscriptionCapabilities} instead.
+     */
+    public get SupportsPush(): boolean {
+        return this.getSubscriptionCapabilities() !== undefined;
+    }
 
     /**
      * Creates a push-notification subscription with the remote messaging service.

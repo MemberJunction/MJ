@@ -1103,7 +1103,12 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         return {
             MaxLifetimeMinutes: MSGRAPH_MAX_SUBSCRIPTION_MINUTES,
             SupportedChangeTypes: ['created', 'updated', 'deleted'],
-            RequiresEndpointValidation: true
+            RequiresEndpointValidation: true,
+            // Graph is subscription-managed (CreateSubscription/RenewSubscription/DeleteSubscription)
+            // and HINT-mode: notifications carry resourceData IDs, the consumer re-fetches via
+            // GetMessages/GetSingleMessage — the payload is never delivered inline.
+            SupportsSubscriptionManagement: true,
+            DeliversPayloadInline: false
         };
     }
 

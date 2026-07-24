@@ -192,6 +192,8 @@ describe('MSGraphProvider', () => {
         MaxLifetimeMinutes: 4230,
         SupportedChangeTypes: ['created', 'updated', 'deleted'],
         RequiresEndpointValidation: true,
+        SupportsSubscriptionManagement: true,
+        DeliversPayloadInline: false,
       });
     });
   });

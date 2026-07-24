@@ -45,6 +45,69 @@ class TestProvider extends BaseCommunicationProvider {
     }
 }
 
+// A subscription-managed, HINT-mode push provider (Graph/Gmail shape): full CRUD, the
+// notification only carries MessageIDs to re-fetch with — never an inline Message.
+class SubscriptionManagedPushProvider extends TestProvider {
+    public override getSupportedOperations() {
+        return [
+            ...super.getSupportedOperations(),
+            'CreateSubscription' as const,
+            'RenewSubscription' as const,
+            'DeleteSubscription' as const,
+            'ParseNotification' as const,
+        ];
+    }
+    public override getSubscriptionCapabilities() {
+        return {
+            MaxLifetimeMinutes: 4230,
+            SupportedChangeTypes: ['created' as const],
+            RequiresEndpointValidation: true,
+            SupportsSubscriptionManagement: true,
+            DeliversPayloadInline: false,
+        };
+    }
+    public override async ParseNotification() {
+        return {
+            Success: true,
+            Notifications: [{ Kind: 'message' as const, MessageIDs: ['ext-1'] }],
+            SuggestedResponseStatus: 202,
+        };
+    }
+}
+
+// A parse-only, INLINE-mode push provider (SendGrid shape): no renewal, the notification
+// carries the full message inline in NormalizedNotification.Message (no re-fetch path).
+class InlineParsePushProvider extends TestProvider {
+    public override getSupportedOperations() {
+        return [
+            ...super.getSupportedOperations(),
+            'CreateSubscription' as const,
+            'DeleteSubscription' as const,
+            'ParseNotification' as const,
+        ];
+    }
+    public override getSubscriptionCapabilities() {
+        return {
+            MaxLifetimeMinutes: undefined,
+            SupportedChangeTypes: ['created' as const],
+            RequiresEndpointValidation: false,
+            SupportsSubscriptionManagement: true,
+            DeliversPayloadInline: true,
+        };
+    }
+    public override async ParseNotification() {
+        return {
+            Success: true,
+            Notifications: [{
+                Kind: 'message' as const,
+                MessageIDs: [],
+                Message: { From: 'a@x.com', To: 'b@y.com', Body: 'hello', Subject: 'hi' },
+            }],
+            SuggestedResponseStatus: 200,
+        };
+    }
+}
+
 describe('Message', () => {
     it('should create a new Message with default properties', () => {
         const msg = new Message();
@@ -267,13 +330,78 @@ describe('BaseCommunicationProvider', () => {
             expect(provider.supportsOperation('ParseNotification')).toBe(false);
         });
 
-        it('capability invariant holds: undefined capabilities IFF ops absent', () => {
-            const caps = provider.getSubscriptionCapabilities();
+        it('SupportsPush is false by default (no capabilities)', () => {
+            expect(provider.SupportsPush).toBe(false);
+        });
+
+        it('capability gate holds for the default provider: no capabilities, no push, no ops', () => {
+            expect(provider.getSubscriptionCapabilities()).toBeUndefined();
+            expect(provider.SupportsPush).toBe(false);
             const ops = provider.getSupportedOperations();
-            const hasAnySubOp = ['CreateSubscription', 'RenewSubscription', 'DeleteSubscription', 'ParseNotification']
-                .some((op) => ops.includes(op as never));
-            // Default provider: no capabilities AND no ops - the two agree.
-            expect(caps === undefined).toBe(!hasAnySubOp);
+            expect(ops.includes('ParseNotification' as never)).toBe(false);
+        });
+    });
+
+    describe('push capability gate (SupportsPush + generalized invariant)', () => {
+        it('SupportsPush derives from getSubscriptionCapabilities (subscription-managed provider)', () => {
+            const p = new SubscriptionManagedPushProvider();
+            expect(p.getSubscriptionCapabilities()).toBeDefined();
+            expect(p.SupportsPush).toBe(true);
+        });
+
+        it('SupportsPush derives from getSubscriptionCapabilities (inline-parse provider)', () => {
+            const p = new InlineParsePushProvider();
+            expect(p.getSubscriptionCapabilities()).toBeDefined();
+            expect(p.SupportsPush).toBe(true);
+        });
+
+        it('GENERALIZED INVARIANT: SupportsPush IFF capabilities defined, for every shape', () => {
+            for (const p of [new TestProvider(), new SubscriptionManagedPushProvider(), new InlineParsePushProvider()]) {
+                expect(p.SupportsPush).toBe(p.getSubscriptionCapabilities() !== undefined);
+            }
+        });
+
+        it('a push provider MUST support ParseNotification (the common denominator)', () => {
+            for (const p of [new SubscriptionManagedPushProvider(), new InlineParsePushProvider()]) {
+                expect(p.SupportsPush).toBe(true);
+                expect(p.supportsOperation('ParseNotification')).toBe(true);
+            }
+        });
+
+        it('SupportsSubscriptionManagement agrees with Create/Delete ops being present', () => {
+            for (const p of [new SubscriptionManagedPushProvider(), new InlineParsePushProvider()]) {
+                const caps = p.getSubscriptionCapabilities()!;
+                const hasCreate = p.supportsOperation('CreateSubscription');
+                const hasDelete = p.supportsOperation('DeleteSubscription');
+                expect(caps.SupportsSubscriptionManagement).toBe(hasCreate && hasDelete);
+            }
+        });
+
+        it('RenewSubscription op present IFF the service has a finite MaxLifetimeMinutes', () => {
+            const managed = new SubscriptionManagedPushProvider();
+            expect(managed.getSubscriptionCapabilities()!.MaxLifetimeMinutes).toBeTypeOf('number');
+            expect(managed.supportsOperation('RenewSubscription')).toBe(true);
+
+            const inline = new InlineParsePushProvider();
+            expect(inline.getSubscriptionCapabilities()!.MaxLifetimeMinutes).toBeUndefined();
+            expect(inline.supportsOperation('RenewSubscription')).toBe(false);
+        });
+
+        it('HINT-mode notifications carry MessageIDs and no inline Message', async () => {
+            const p = new SubscriptionManagedPushProvider();
+            expect(p.getSubscriptionCapabilities()!.DeliversPayloadInline).toBe(false);
+            const result = await p.ParseNotification({ Headers: {}, QueryParams: {}, RawBody: '{}' });
+            expect(result.Notifications[0].MessageIDs.length).toBeGreaterThan(0);
+            expect(result.Notifications[0].Message).toBeUndefined();
+        });
+
+        it('INLINE-mode notifications carry the Message payload directly (no re-fetch)', async () => {
+            const p = new InlineParsePushProvider();
+            expect(p.getSubscriptionCapabilities()!.DeliversPayloadInline).toBe(true);
+            const result = await p.ParseNotification({ Headers: {}, QueryParams: {}, RawBody: '' });
+            expect(result.Notifications[0].Message).toBeDefined();
+            expect(result.Notifications[0].Message?.Body).toBe('hello');
+            expect(result.Notifications[0].MessageIDs).toEqual([]);
         });
     });
 });
