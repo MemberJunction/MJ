@@ -197,6 +197,82 @@ describe('check-claude-md', () => {
         });
     });
 
+    describe('anchors — a link into a section that no longer exists', () => {
+        it('fails when a #fragment is not a heading in the target file', () => {
+            put('CLAUDE.md', [
+                '# Guide',
+                '',
+                '- packages/Thing/CLAUDE.md',
+                '- [gone](guides/README.md#no-such-heading)',
+                '',
+            ].join('\n'));
+            const { code, err } = run();
+            expect(code).toBe(1);
+            expect(err).toContain('not a heading');
+        });
+
+        it('passes when the #fragment matches a heading, slugified GitHub-style', () => {
+            put('guides/README.md', '# Guides\n\n## Start Here!\n\n- [Alpha](ALPHA_GUIDE.md)\n');
+            put('CLAUDE.md', [
+                '# Guide',
+                '',
+                '- packages/Thing/CLAUDE.md',
+                '- [there](guides/README.md#start-here)',
+                '',
+            ].join('\n'));
+            expect(run().code).toBe(0);
+        });
+
+        it('ignores line-range anchors, which point into source not headings', () => {
+            put('CLAUDE.md', [
+                '# Guide',
+                '',
+                '- packages/Thing/CLAUDE.md',
+                '- [g](guides/README.md)',
+                '- [src](packages/Thing/index.ts#L1-L5)',
+                '',
+            ].join('\n'));
+            expect(run().code).toBe(0);
+        });
+    });
+
+    describe('grandfathering — a ratchet, not an amnesty', () => {
+        const withEntries = (entries) => put('.claude/claude-md-manifest.json', JSON.stringify({
+            budget: { maxLines: 100, maxBytes: 10000 },
+            knownBrokenReferences: { entries },
+            sections: [{ title: 'Kept', destinations: ['root'] }],
+        }));
+
+        it('downgrades a listed pre-existing broken reference', () => {
+            put('CLAUDE.md', '# Guide\n\n- packages/Thing/CLAUDE.md\n- [old](guides/LEGACY.md)\n');
+            withEntries(['CLAUDE.md -> guides/LEGACY.md']);
+            const { code, out } = run();
+            expect(code).toBe(0);
+            expect(out).toContain('grandfathered');
+        });
+
+        it('still fails an UNLISTED broken reference in the same file', () => {
+            put('CLAUDE.md', [
+                '# Guide',
+                '',
+                '- packages/Thing/CLAUDE.md',
+                '- [old](guides/LEGACY.md)',
+                '- [new](guides/BRAND_NEW_BREAK.md)',
+                '',
+            ].join('\n'));
+            withEntries(['CLAUDE.md -> guides/LEGACY.md']);
+            const { code, err } = run();
+            expect(code).toBe(1);
+            expect(err).toContain('BRAND_NEW_BREAK.md');
+            expect(err).not.toContain('LEGACY.md');
+        });
+
+        it('treats a stale entry (no longer broken) as harmless', () => {
+            withEntries(['CLAUDE.md -> guides/SOMETHING_ALREADY_FIXED.md']);
+            expect(run().code).toBe(0);
+        });
+    });
+
     describe('routing — nested files must be discoverable', () => {
         it('fails when a nested CLAUDE.md is absent from the routing table', () => {
             put('packages/Hidden/CLAUDE.md', '# Hidden\n');

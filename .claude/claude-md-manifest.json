@@ -26,6 +26,29 @@
     "maxBytes": 18000,
     "note": "Anthropic guidance is ~200 lines per CLAUDE.md. Ceiling set slightly above the achieved result (190 lines) to allow small additions without churn. Raising it requires justifying why the content is unrecoverable-if-violated or true-on-every-task."
   },
+  "knownBrokenReferences": {
+    "$comment": [
+      "Broken links and dead heading-anchors that predate the CLAUDE.md refactor and sit outside",
+      "its blast radius (rot in guides/, mostly pointing at plans/ files deleted some time ago).",
+      "",
+      "This is a ratchet, not an amnesty. Each entry is recorded so the debt is visible rather than",
+      "hidden, and ANY new broken reference fails the gate. Delete entries as they are fixed --",
+      "the checker does not require an entry to still be broken, so a stale entry is harmless.",
+      "",
+      "Do not add to this list to silence a reference YOU broke. Fix it."
+    ],
+    "entries": [
+      "guides/FRAMEWORK_COMPARISON.md -> BUILDING_APPS_ON_MJ.md#4-write-once-run-on-every-tier--the-isomorphic-core-in-practice",
+      "guides/PREDICTIVE_STUDIO_GUIDE.md -> ../plans/predictive-studio-business-ux/option-b-refined.html",
+      "guides/REALTIME_BRIDGES_GUIDE.md -> ../packages/AI/BridgeBase/README.md",
+      "guides/REALTIME_BRIDGES_GUIDE.md -> ../packages/AI/Bridge/README.md",
+      "guides/REALTIME_BRIDGES_GUIDE.md -> ../plans/realtime/realtime-core-host-convergence.md",
+      "guides/REALTIME_BRIDGES_GUIDE.md -> REALTIME_CO_AGENTS_GUIDE.md#-single-source-of-truth-one-prep-the-precedence-cascade-the-corehost-boundary",
+      "guides/REALTIME_CO_AGENTS_GUIDE.md -> ../plans/realtime/realtime-core-host-convergence.md",
+      "guides/REALTIME_CO_AGENTS_GUIDE.md -> REALTIME_BRIDGES_GUIDE.md#9-multi-party-livekit--multiple-agents",
+      "guides/REMOTE_BROWSER_GUIDE.md -> ../plans/realtime/computer-use-remote-browser-blend.md"
+    ]
+  },
   "sections": [
     { "title": "GENERAL RULE", "destinations": ["root"] },
     { "title": "Claude Code Fast Mode", "destinations": ["deleted"], "reason": "Described Opus 4.6 and a settings.json workaround for the VSCode extension. Superseded by the current /fast command and model lineup; keeping it would give stale instructions about which model is in use." },

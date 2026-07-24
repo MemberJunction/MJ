@@ -117,14 +117,50 @@ if (exists('CLAUDE.md') && manifest?.budget) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. REFERENCES — every link and backticked path resolves
 // ─────────────────────────────────────────────────────────────────────────────
+// Every file whose job is to instruct: memory files, rules, skills, and the guides the
+// routing table points at. Guides are included because relocating content out of root
+// orphans the cross-references INTO it, and those live mostly in guides/.
 const instructionFiles = [
   ...findClaudeMds(),
   ...globSync('.claude/rules/*.md', { cwd: ROOT }),
   ...globSync('.claude/skills/*/SKILL.md', { cwd: ROOT }),
-  'guides/README.md',
+  ...globSync('guides/*.md', { cwd: ROOT }),
 ].filter(exists);
 
+/** GitHub-style heading slug, so `## Foo Bar!` -> `foo-bar`. */
+const slug = (heading) =>
+  heading
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')   // drop punctuation and emoji
+    .trim()
+    .replace(/\s+/g, '-');
+
+/** Every anchor a markdown file exposes (from its headings). */
+const anchorCache = new Map();
+function anchorsOf(absPath) {
+  if (anchorCache.has(absPath)) return anchorCache.get(absPath);
+  let set = new Set();
+  try {
+    const txt = readFileSync(absPath, 'utf8').replace(/```[\s\S]*?```/g, '');
+    for (const m of txt.matchAll(/^#{1,6}\s+(.+?)\s*$/gm)) set.add(slug(m[1]));
+  } catch { /* unreadable — the existence check already reported it */ }
+  anchorCache.set(absPath, set);
+  return set;
+}
+
+// Pre-existing rot, recorded in the manifest so it is visible rather than hidden. A ratchet:
+// listed references are reported as notes; anything new is a hard failure.
+const grandfathered = new Set(manifest?.knownBrokenReferences?.entries ?? []);
+let grandfatheredHit = 0;
+const reportRef = (f, target, msg) => {
+  const key = `${f} -> ${target}`;
+  if (grandfathered.has(key)) { grandfatheredHit++; return; }
+  fail('references', msg);
+};
+
 let refsChecked = 0;
+let anchorsChecked = 0;
 for (const f of instructionFiles) {
   const txt = read(f);
   const base = dirname(join(ROOT, f));
@@ -134,15 +170,34 @@ for (const f of instructionFiles) {
 
   // Markdown links to local files
   for (const m of body.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
-    let target = m[1].split('#')[0];
+    const [target, fragment] = m[1].split('#');
     if (!target || /^(https?|mailto):/.test(target)) continue;
     refsChecked++;
-    if (!existsSync(resolve(base, target))) {
-      fail('references', `${f}: broken link -> ${target}`);
+    const abs = resolve(base, target);
+    if (!existsSync(abs)) {
+      reportRef(f, m[1], `${f}: broken link -> ${target}`);
+      continue;
+    }
+    // A link into a section that no longer exists resolves fine at the file level but
+    // sends the reader nowhere — this is how a refactor silently orphans cross-references.
+    // Line-range anchors (#L272-L324) point into source files, not headings; skip those.
+    if (fragment && target.endsWith('.md') && !/^L\d+/.test(fragment)) {
+      anchorsChecked++;
+      const have = anchorsOf(abs);
+      if (have.size > 0 && !have.has(slug(fragment))) {
+        reportRef(f, m[1], `${f}: link -> ${target}#${fragment} resolves, but "${fragment}" is not a heading in that file`);
+      }
     }
   }
+
+  // Prose references to root are not machine-checkable, but after this refactor root is
+  // small and most such references now point at relocated content. Surface them for review.
+  if (f !== 'CLAUDE.md' && /root (\[`?)?CLAUDE\.md|root project guide/i.test(body)) {
+    notes.push(`${f}: refers to root CLAUDE.md in prose — confirm the content it means still lives there.`);
+  }
 }
-log(`  references:   ${refsChecked} links checked across ${instructionFiles.length} instruction files`);
+log(`  references:   ${refsChecked} links + ${anchorsChecked} anchors checked across ${instructionFiles.length} instruction files` +
+    (grandfatheredHit ? ` (${grandfatheredHit} pre-existing, grandfathered)` : ''));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. ROUTING — every CLAUDE.md is discoverable from root

@@ -236,14 +236,37 @@ If you're building an Angular component that gets **dynamically loaded into anot
 
 ## Angular Component & Module Strategy
 
-See the root [CLAUDE.md](../../CLAUDE.md) rule #4 for the full policy. Summary:
+MemberJunction supports both standalone and NgModule-declared components. Choose the right
+approach for each situation — this file is the full policy.
 
-- **Standalone components are allowed and preferred for new leaf components** (dialogs, panels, widgets, lazy-loaded routes)
-- **NgModules are still used for feature modules** grouping many related components
-- **Follow the existing pattern** in whichever package you're working in
-- **Use `standalone: false` explicitly** for NgModule-declared components (Angular 21 defaults to standalone)
-- **Use `@if`/`@for`/`@switch`** block syntax for all new templates (not `*ngIf`/`*ngFor`)
-- **Use `inject()` function** for DI in new components (not constructor injection)
+### When to Use Standalone Components (Preferred for New Components)
+- **New leaf components** (dialogs, panels, small widgets) that don't need to share a module
+- **Lazy-loaded route components** — standalone enables direct `loadComponent()` without wrapper modules
+- **Simple, self-contained components** with clear dependency lists
+- Benefits: better tree-shaking with ESBuild, less boilerplate, explicit dependency graph
+
+### When to Use NgModules
+- **Feature modules** grouping many related components (e.g. dashboards, explorer modules)
+- **Shared modules** providing common functionality to multiple consumers
+- **Existing module-declared components** — don't migrate just for the sake of it
+- When a group of components share the same set of imports
+
+### Rules for Both Approaches
+- **Standalone components**: declare all dependencies in the component's `imports` array
+- **NgModule components**: must use `standalone: false` explicitly (Angular 21 defaults to standalone)
+- **Never mix within a single component** — a component is either standalone or module-declared
+- When adding to an existing package, **follow the pattern already used in that package**
+
+### Modern Template Syntax (Required for New Code)
+- **Use `@if`/`@for`/`@switch`** block syntax instead of `*ngIf`/`*ngFor`/`*ngSwitch`
+  - `@for` has 90% better runtime performance than `*ngFor`
+  - `*ngIf`/`*ngFor` are heading toward deprecation
+  - Works identically with both standalone and NgModule components
+  - After migrating templates, the `CommonModule` import can be removed if no other directives are used
+- **Use `inject()` function** instead of constructor injection for new components
+  - Angular officially recommends `inject()` over constructor DI
+  - Better inheritance (no `super()` chains), better types, works with standard decorators
+  - Existing constructor injection doesn't need to be migrated unless refactoring
 
 ## 🚨 Dialog Button Placement (MJ Convention) 🚨
 

@@ -38,4 +38,33 @@ conventions had no home at all; `migrations/CLAUDE.md` was missing the foreign-k
 `packages/Actions/CLAUDE.md` pointed at `ActionEntity.server.ts`, renamed some time ago to
 `MJActionEntityServer.server.ts` and with a wrong relative path besides.
 
+Smoke testing the result against the skill-creator validator and a rule-by-rule preservation
+sweep turned up four defects, all fixed:
+
+- **`packages/Angular/CLAUDE.md` delegated to "root CLAUDE.md rule #4"**, which this change had
+  removed — and root's rule 4 is now *"start work on a feature branch"*, so the pointer resolved
+  to a real but unrelated rule. The full standalone-vs-NgModule policy is restored inline.
+- **Eleven cross-references into root were orphaned** by the move (in `MJServer` and
+  `AuthProviders` READMEs, `docker/regression/ARCHITECTURE.md`, and three guides), including a
+  dead heading anchor. All repointed at the new homes.
+- **A contradiction was introduced**: root summarized function decomposition as "a smell to
+  investigate, not merely because a function got long" while `typescript-style.md` carries the
+  project's verbatim "MAXIMUM ~30-40 lines … refactor immediately". Contradictory instructions
+  get resolved arbitrarily, so the paraphrase is gone — the rule owns it, and root links rather
+  than restates.
+- **`metadata/components/claude.md` was lowercase**, so those 359 lines never loaded as a memory
+  file on any case-sensitive filesystem (Linux, CI, containers) — macOS hid it. Renamed to
+  `CLAUDE.md` and added to the routing table.
+
+The checker gained anchor validation (a `#fragment` must match a real heading — this is how a
+refactor silently orphans cross-references) and its corpus widened from 24 to 65 files to include
+guides, where most references into root live. That surfaced 9 pre-existing broken references
+unrelated to this work; they are recorded in the manifest as a ratchet rather than an amnesty, so
+they stay visible while any new break fails the gate.
+
+Honest accounting on the saving: 92% applies to sessions touching no TypeScript. Because
+`data-access.md` and `typescript-style.md` are scoped to `**/*.ts`, a typical session pays
+~16,200 tokens against the old 38,365 — a **58%** reduction, with 51% as the worst case where
+every rule fires. Narrowing those two globs is the obvious next lever.
+
 No published package's code or behavior changes, so this carries no version bump.

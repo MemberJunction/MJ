@@ -129,6 +129,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 |---|---|
 | [`migrations/CLAUDE.md`](migrations/CLAUDE.md) | Migration authoring — naming, hardcoded UUIDs, system columns CodeGen owns, CHECK constraints, CodeGen handoff |
 | [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, `uuidgen` primary keys, no per-PR sync migrations, seeding lookup tables, application metadata |
+| [`metadata/components/CLAUDE.md`](metadata/components/CLAUDE.md) | Interactive component authoring — component architecture rules, the `ProductRevenueMatrix` reference implementation |
 | [`docker/CLAUDE.md`](docker/CLAUDE.md) | Docker workbench + MJAPI container configurations |
 | [`stats/CLAUDE.md`](stats/CLAUDE.md) | Repo LOC stats — generated files, do not hand-edit |
 | [`packages/Actions/CLAUDE.md`](packages/Actions/CLAUDE.md) | Actions are boundaries, not internal APIs — when to create one, parameter validation, error handling |
@@ -170,7 +171,10 @@ npm run check:claude-md   # instruction-file budget, link validity, and routing-
 
 **Parallelize aggressively.** Whenever you need to spin up tasks that don't require user interaction and aren't interdependent, run them **in parallel**. Never process independent tasks sequentially.
 
-**Decompose functions.** ~30–40 lines is a smell to investigate. Split when a chunk is a genuine, separately-nameable abstraction — not merely because a function got long.
+<!-- Function decomposition rules deliberately live ONLY in .claude/rules/typescript-style.md.
+     They were summarized here at one point, and the paraphrase drifted from the rule it was
+     summarizing — a restated rule is a second source of truth that silently diverges. If a rule
+     has a home, link to it; don't re-say it. -->
 
 ---
 
