@@ -46,7 +46,7 @@ async function resolveShipped(name: string, user: UserInfo): Promise<MJAIAgentEn
 
 /** Run a shipped agent over the wire, land its run id (recorded for teardown), deep-verify it. */
 async function runAndVerify(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, message: string, opts?: { conversationDetailId?: string }): Promise<string> {
-    const result = await runAgentOverWire(makeAIClient(ctx.Provider), agent, userTurn(message), opts);
+    const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), agent, userTurn(message), opts);
     await sleep(AGENT_LIVE_SETTLE_MS);
     const fallback = opts?.conversationDetailId
         ? `AgentID='${agent.ID}' AND ConversationDetailID='${opts.conversationDetailId}'`
