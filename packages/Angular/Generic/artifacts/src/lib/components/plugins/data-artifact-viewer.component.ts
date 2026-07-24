@@ -480,9 +480,9 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       return this.CurrentVersionNumber;
     }
 
-    const versions = ArtifactMetadataEngine.Instance.GetVersionsForArtifact(this.artifactVersion.ArtifactID);
+    const versions = ArtifactMetadataEngine.Instance.GetCachedVersionsForArtifact(this.artifactVersion.ArtifactID);
     if (versions.length > 0) {
-      // GetVersionsForArtifact returns DESC sorted
+      // GetCachedVersionsForArtifact returns DESC sorted
       return versions[0].VersionNumber || 1;
     }
 
@@ -505,8 +505,8 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     if (!this.artifactVersion?.ArtifactID) return effective;
 
-    // GetVersionsForArtifact returns DESC sorted — scan all versions
-    const versions = ArtifactMetadataEngine.Instance.GetVersionsForArtifact(this.artifactVersion.ArtifactID);
+    // GetCachedVersionsForArtifact returns DESC sorted — scan all versions
+    const versions = ArtifactMetadataEngine.Instance.GetCachedVersionsForArtifact(this.artifactVersion.ArtifactID);
     for (const v of versions) {
       try {
         if (!v.Content) continue;

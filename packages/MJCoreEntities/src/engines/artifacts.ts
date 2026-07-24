@@ -26,9 +26,23 @@ import {
  * cost independent of how much artifact content a deployment has accumulated.
  *
  * The on-demand results are memoized in per-ID maps so the synchronous
- * accessors ({@link FindArtifactByID}, {@link FindArtifactVersionByID},
- * {@link GetVersionsForArtifact}) serve anything already fetched this session.
- * A cache miss is not an error — callers fall back to a direct entity load.
+ * accessors ({@link FindCachedArtifactByID}, {@link FindCachedArtifactVersionByID},
+ * {@link GetCachedVersionsForArtifact}) serve anything already fetched this
+ * session. A cache miss is not an error — callers fall back to a direct entity
+ * load.
+ *
+ * ## Naming: `Cached*` accessors are session-scoped, NOT the full corpus
+ *
+ * The synchronous artifact/version accessors are deliberately prefixed
+ * `Cached` (`CachedArtifacts`, `CachedArtifactVersions`, `FindCachedArtifactByID`,
+ * `FindCachedArtifactVersionByID`, `GetCachedVersionsForArtifact`) to make it
+ * unmistakable that they return only what has been fetched on demand this
+ * session — never the entire system's artifacts. They replace the former
+ * unprefixed accessors (`Artifacts`, `ArtifactVersions`, `FindArtifactByID`,
+ * `FindArtifactVersionByID`, `GetVersionsForArtifact`) whose names implied a
+ * full boot-time load that no longer happens. The rename is intentional: it
+ * turns any consumer that assumed full-corpus semantics into a hard compile
+ * error rather than a silent empty-result regression.
  */
 export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
     /**
@@ -67,7 +81,7 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
      * Artifacts fetched on demand this session (via {@link LoadVersionsForArtifact}).
      * NOT the full system corpus — artifacts are no longer bulk-loaded at boot.
      */
-    public get Artifacts(): MJArtifactEntity[] {
+    public get CachedArtifacts(): MJArtifactEntity[] {
         return Array.from(this._artifactCache.values());
     }
 
@@ -76,7 +90,7 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
      * {@link LoadVersionsForArtifact} / {@link GetVersionContent}). NOT the full
      * system corpus — versions are no longer bulk-loaded at boot.
      */
-    public get ArtifactVersions(): MJArtifactVersionEntity[] {
+    public get CachedArtifactVersions(): MJArtifactVersionEntity[] {
         return Array.from(this._versionCache.values());
     }
 
@@ -95,7 +109,7 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
      * Returns undefined on a cache miss — call {@link LoadVersionsForArtifact}
      * first, or fall back to a direct entity load.
      */
-    public FindArtifactByID(id: string): MJArtifactEntity | undefined {
+    public FindCachedArtifactByID(id: string): MJArtifactEntity | undefined {
         if (!id) return undefined;
         return this._artifactCache.get(id.trim().toLowerCase());
     }
@@ -105,7 +119,7 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
      * session. Returns undefined on a cache miss — call {@link GetVersionContent}
      * or {@link LoadVersionsForArtifact} first, or fall back to a direct load.
      */
-    public FindArtifactVersionByID(id: string): MJArtifactVersionEntity | undefined {
+    public FindCachedArtifactVersionByID(id: string): MJArtifactVersionEntity | undefined {
         if (!id) return undefined;
         return this._versionCache.get(id.trim().toLowerCase());
     }
@@ -116,7 +130,7 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
      * {@link LoadVersionsForArtifact} has not been called for this artifact —
      * this is a synchronous cache read, not a loader.
      */
-    public GetVersionsForArtifact(artifactId: string): MJArtifactVersionEntity[] {
+    public GetCachedVersionsForArtifact(artifactId: string): MJArtifactVersionEntity[] {
         if (!artifactId) return [];
         const cached = this._versionsByArtifact.get(artifactId.trim().toLowerCase());
         return cached ? [...cached] : [];
@@ -143,7 +157,7 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
         if (!artifactId) return [];
         const key = artifactId.trim().toLowerCase();
         if (!forceRefresh && this._versionsByArtifact.has(key)) {
-            return this.GetVersionsForArtifact(artifactId);
+            return this.GetCachedVersionsForArtifact(artifactId);
         }
 
         const rvProvider = (provider as unknown as IRunViewProvider) ?? this.RunViewProviderToUse;
@@ -157,7 +171,7 @@ export class ArtifactMetadataEngine extends BaseEngine<ArtifactMetadataEngine> {
 
         if (!result.Success) {
             LogStatus(`WARN ArtifactMetadataEngine.LoadVersionsForArtifact: failed to load versions for artifact ${artifactId}: ${result.ErrorMessage}`);
-            return this.GetVersionsForArtifact(artifactId);
+            return this.GetCachedVersionsForArtifact(artifactId);
         }
 
         const versions = result.Results || [];

@@ -73,7 +73,7 @@ export class LazyArtifactInfo {
     // Try the engine first — it stays in sync via BaseEntity events
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const fromEngine = engine.FindArtifactByID(this.artifactId);
+      const fromEngine = engine.FindCachedArtifactByID(this.artifactId);
       if (fromEngine) {
         return fromEngine;
       }
@@ -91,7 +91,7 @@ export class LazyArtifactInfo {
     // Try the engine first — it stays in sync via BaseEntity events
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const fromEngine = engine.FindArtifactVersionByID(this.artifactVersionId);
+      const fromEngine = engine.FindCachedArtifactVersionByID(this.artifactVersionId);
       if (fromEngine) {
         return fromEngine;
       }
@@ -108,8 +108,8 @@ export class LazyArtifactInfo {
   get isLoaded(): boolean {
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const hasArtifact = !!engine.FindArtifactByID(this.artifactId);
-      const hasVersion = !!engine.FindArtifactVersionByID(this.artifactVersionId);
+      const hasArtifact = !!engine.FindCachedArtifactByID(this.artifactId);
+      const hasVersion = !!engine.FindCachedArtifactVersionByID(this.artifactVersionId);
       if (hasArtifact && hasVersion) {
         return true;
       }
