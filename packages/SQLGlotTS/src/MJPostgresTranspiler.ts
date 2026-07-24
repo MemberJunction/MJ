@@ -24,6 +24,12 @@ export interface MJPostgresTranspileResult {
   sql: string[];
   /** Statements the dialect refused to emit — never silently dropped. */
   unhandled: MJUnhandledStatement[];
+  /**
+   * Statements the dialect INTENTIONALLY discarded (batch-control noise, an actionless ALTER,
+   * a swallowed routine `END`, …) — accounted, not vanished. Lets a consumer distinguish an
+   * all-dropped empty output from true content loss (issue #3252 1d/reconciliation).
+   */
+  dropped?: MJUnhandledStatement[];
 }
 
 export interface MJPostgresTranspilerOptions {
