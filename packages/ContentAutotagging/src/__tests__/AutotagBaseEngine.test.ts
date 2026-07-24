@@ -777,14 +777,17 @@ describe('AutotagBaseEngine', () => {
       const mockCreateRecords = vi.fn().mockResolvedValue({
         success: true, message: 'OK',
       });
+      const mockDeleteRecords = vi.fn().mockResolvedValue({
+        success: true, message: 'OK',
+      });
       vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation((_base, driverClass) => {
         if (typeof driverClass === 'string' && driverClass.includes('Embed')) {
           return { EmbedTexts: mockEmbedTexts } as never;
         }
-        return { CreateRecords: mockCreateRecords } as never;
+        return { CreateRecords: mockCreateRecords, DeleteRecords: mockDeleteRecords } as never;
       });
 
-      return { mockEmbedTexts, mockCreateRecords };
+      return { mockEmbedTexts, mockCreateRecords, mockDeleteRecords };
     }
 
     it('should return zero vectorized and correct skipped count for empty items array', async () => {
@@ -1094,30 +1097,44 @@ describe('AutotagBaseEngine', () => {
           expect(row.LastEmbeddedAt).toBeInstanceOf(Date);
           expect(row.Save).toHaveBeenCalledTimes(1);
         });
-        // Chunk 0 uses the base vector id; later chunks get the _chunkN suffix.
-        expect(created[0].VectorRecordID).toBe('abc123hash');
-        expect(created[1].VectorRecordID).toBe('abc123hash_chunk1');
+        // Each chunk carries a unique, persistent vector id (minted per chunk) — distinct per
+        // chunk, so a re-chunk's new rows never reuse a superseded chunk's vector id.
+        created.forEach(row => {
+          expect(typeof row.VectorRecordID).toBe('string');
+          expect((row.VectorRecordID as string).length).toBeGreaterThan(0);
+        });
+        expect(created[0].VectorRecordID).not.toBe(created[1].VectorRecordID);
         // Persisted atomically: one transaction, committed, never rolled back.
         expect(provider.BeginTransaction).toHaveBeenCalledTimes(1);
         expect(provider.CommitTransaction).toHaveBeenCalledTimes(1);
         expect(provider.RollbackTransaction).not.toHaveBeenCalled();
       });
 
-      it('reads existing rows via the request-scoped provider and deletes them before insert (idempotent)', async () => {
+      it('SOFT-deletes existing live chunks (marks DeleteStatus=Pending) and appends new ones — no hard delete', async () => {
         await setupVectorMocks();
         embedOnePerText();
 
-        // Existing chunk rows returned by the provider's RunView (NOT a global `new RunView()`).
-        const deleteSpies = [vi.fn().mockResolvedValue(true), vi.fn().mockResolvedValue(true)];
-        const existingRows = deleteSpies.map((del, i) => ({ ID: `old-chunk-${i}`, Delete: del }));
+        // Existing LIVE chunk rows returned by the provider's RunView (request-scoped, not global).
+        const existingRows = [0, 1].map(i => ({
+          ID: `old-chunk-${i}`,
+          DeleteStatus: null as string | null,
+          Save: vi.fn().mockResolvedValue(true),
+          Delete: vi.fn().mockResolvedValue(true),   // present so we can prove it is NOT called
+          LatestResult: { CompleteMessage: '' },
+        }));
         const { provider } = installProvider(existingRows);
         const item = createVectorItem('item-rerun', LONG_TEXT);
 
         await engine.VectorizeContentItems([item] as never[], mockUser);
 
-        // Loaded via the request-scoped provider, deleted before the new rows are written, committed once.
         expect(provider.RunView).toHaveBeenCalled();
-        deleteSpies.forEach(del => expect(del).toHaveBeenCalledTimes(1));
+        // Superseded rows are soft-deleted (marked Pending + saved), NOT hard-deleted — the row is
+        // kept so a later PurgeDeletedChunks can remove its vector from the 3rd-party store.
+        existingRows.forEach(row => {
+          expect(row.DeleteStatus).toBe('Pending');
+          expect(row.Save).toHaveBeenCalledTimes(1);
+          expect(row.Delete).not.toHaveBeenCalled();
+        });
         expect(provider.CommitTransaction).toHaveBeenCalledTimes(1);
         expect(provider.RollbackTransaction).not.toHaveBeenCalled();
       });
@@ -1147,6 +1164,47 @@ describe('AutotagBaseEngine', () => {
         await expect(engine.VectorizeContentItems([item] as never[], mockUser)).resolves.not.toThrow();
         expect(provider.RollbackTransaction).toHaveBeenCalledTimes(1);
         expect(provider.CommitTransaction).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('PurgeDeletedChunks', () => {
+    const mockUser = { ID: 'user-1' } as never;
+
+    it('returns zero when no chunks are pending deletion', async () => {
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() { return { RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }) }; },
+        configurable: true,
+      });
+      const result = await engine.PurgeDeletedChunks(mockUser);
+      expect(result).toEqual({ purged: 0, failed: 0, skipped: 0 });
+    });
+
+    it('marks Pending chunks that have no VectorRecordID as Deleted without any remote delete', async () => {
+      // No VectorRecordID → nothing to remove from a 3rd-party store → mark Deleted directly.
+      const chunks = [0, 1].map(i => ({
+        ID: `chunk-${i}`,
+        ContentItemID: 'item-x',
+        VectorRecordID: null as string | null,
+        DeleteStatus: 'Pending' as string,
+        LastDeletedAt: null as Date | null,
+        Save: vi.fn().mockResolvedValue(true),
+        LatestResult: { CompleteMessage: '' },
+      }));
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() { return { RunView: vi.fn().mockResolvedValue({ Success: true, Results: chunks }) }; },
+        configurable: true,
+      });
+
+      const result = await engine.PurgeDeletedChunks(mockUser);
+
+      expect(result.skipped).toBe(2);
+      expect(result.purged).toBe(0);
+      expect(result.failed).toBe(0);
+      chunks.forEach(c => {
+        expect(c.DeleteStatus).toBe('Deleted');
+        expect(c.LastDeletedAt).toBeInstanceOf(Date);
+        expect(c.Save).toHaveBeenCalledTimes(1);
       });
     });
   });
@@ -1235,6 +1293,49 @@ describe('AutotagBaseEngine', () => {
 
       // Verify GetEntityObject was called (for status update)
       expect(mdInstance.GetEntityObject).toHaveBeenCalled();
+    });
+
+    // Helper: install a provider whose GetEntityObject returns a captured mock item, then invoke
+    // the private updateContentItemTaggingStatus so we can assert what it wrote.
+    async function runTaggingStatus(item: Record<string, unknown>, status: string) {
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() { return { GetEntityObject: vi.fn().mockResolvedValue(item) }; },
+        configurable: true,
+      });
+      await (engine as unknown as {
+        updateContentItemTaggingStatus: (id: string, s: string, u: unknown) => Promise<void>;
+      }).updateContentItemTaggingStatus('item-1', status, mockUser);
+    }
+
+    it("resets EmbeddingStatus to 'Pending' when tagging transitions to Processing (re-embed changed content)", async () => {
+      const item: Record<string, unknown> = {
+        Load: vi.fn().mockResolvedValue(true),
+        Save: vi.fn().mockResolvedValue(true),
+        TaggingStatus: 'Complete',
+        EmbeddingStatus: 'Complete',
+        LastTaggedAt: null,
+      };
+      await runTaggingStatus(item, 'Processing');
+
+      expect(item.TaggingStatus).toBe('Processing');
+      // The item is being (re)tagged because its content changed → its prior embedding is stale.
+      expect(item.EmbeddingStatus).toBe('Pending');
+      expect(item.Save).toHaveBeenCalled();
+    });
+
+    it("does NOT touch EmbeddingStatus on the Complete transition", async () => {
+      const item: Record<string, unknown> = {
+        Load: vi.fn().mockResolvedValue(true),
+        Save: vi.fn().mockResolvedValue(true),
+        TaggingStatus: 'Processing',
+        EmbeddingStatus: 'Complete',
+        LastTaggedAt: null,
+      };
+      await runTaggingStatus(item, 'Complete');
+
+      expect(item.TaggingStatus).toBe('Complete');
+      expect(item.EmbeddingStatus).toBe('Complete'); // untouched — only the Processing transition resets it
+      expect(item.LastTaggedAt).toBeInstanceOf(Date);
     });
 
     it('should not crash when LLM fails (status transitions are best-effort)', async () => {

@@ -36,7 +36,12 @@ ALTER TABLE ${flyway:defaultSchema}.ContentItem
 GO
 
 -------------------------------------------------------------------------------
--- ContentItemChunk — full table (all columns, PK/FK/UNIQUE/CHECK up front)
+-- ContentItemChunk — full table (all columns, PK/FK/CHECK up front)
+--
+-- NOTE: (ContentItemID, Sequence) is deliberately NOT unique. Chunks are
+-- soft-deleted (DeleteStatus set, row kept) rather than hard-deleted when a
+-- Content Item is re-chunked, so a superseded chunk and its replacement can
+-- legitimately share the same Sequence until the old one's vector is purged.
 -------------------------------------------------------------------------------
 CREATE TABLE ${flyway:defaultSchema}.ContentItemChunk (
     ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
@@ -52,7 +57,6 @@ CREATE TABLE ${flyway:defaultSchema}.ContentItemChunk (
     LastDeletedAt DATETIMEOFFSET NULL,
     CONSTRAINT PK_ContentItemChunk PRIMARY KEY (ID),
     CONSTRAINT FK_ContentItemChunk_ContentItemID FOREIGN KEY (ContentItemID) REFERENCES ${flyway:defaultSchema}.ContentItem(ID),
-    CONSTRAINT UQ_ContentItemChunk_ContentItemID_Sequence UNIQUE (ContentItemID, Sequence),
     CONSTRAINT CK_ContentItemChunk_EmbeddingStatus CHECK (EmbeddingStatus IN ('Active','Complete','Failed','Pending','Processed','Processing','Skipped')),
     CONSTRAINT CK_ContentItemChunk_TaggingStatus CHECK (TaggingStatus IN ('Active','Complete','Failed','Pending','Processed','Processing','Skipped')),
     CONSTRAINT CK_ContentItemChunk_DeleteStatus CHECK (DeleteStatus IN ('Deleted','Pending'))

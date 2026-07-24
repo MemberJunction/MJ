@@ -22,6 +22,15 @@ import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
  */
 @RegisterClass(BaseAction, "__AutotagAndVectorizeContent")
 export class AutotagAndVectorizeContentAction extends BaseAction {
+    /**
+     * Default cap on how many pending content items a single vectorization run processes.
+     * Prevents a large backlog (e.g. tens of thousands of Pending items) from loading all at
+     * once. Vectorization drains the backlog MaxItems at a time — each run flips items
+     * Pending→Complete, so a subsequent (e.g. scheduled) run picks up the next batch.
+     * Override per-invocation with the 'MaxItems' action param.
+     */
+    private static readonly DEFAULT_MAX_ITEMS = 1000;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const autotagParam: ActionParam | undefined = params.Params.find(p => p.Name === 'Autotag');
         const vectorizeParam: ActionParam | undefined = params.Params.find(p => p.Name === 'Vectorize');
@@ -49,6 +58,14 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         // Optional: ContentProcessRunID to link detail records for per-source tracking
         const processRunParam = params.Params.find(p => p.Name === 'ContentProcessRunID');
         const contentProcessRunID = processRunParam?.Value ? String(processRunParam.Value) : undefined;
+
+        // Optional: cap how many pending content items a single vectorization run grabs
+        // (default DEFAULT_MAX_ITEMS). A positive integer; anything else falls back to the default.
+        const maxItemsParam = params.Params.find(p => p.Name === 'MaxItems');
+        const parsedMaxItems = maxItemsParam?.Value != null ? Number(maxItemsParam.Value) : NaN;
+        const maxItems = Number.isFinite(parsedMaxItems) && parsedMaxItems > 0
+            ? Math.floor(parsedMaxItems)
+            : AutotagAndVectorizeContentAction.DEFAULT_MAX_ITEMS;
 
         try {
             // Initialize the autotagging engine (loads cached metadata)
@@ -83,27 +100,24 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
                 AutotagBaseEngine.Instance.CleanupTaxonomyBridge();
             }
 
-            // Phase 2: Vectorization. Content item vectorization runs when new tags
-            // were created. Entity vector sync only runs when forceReprocess is set,
-            // since entity records don't change during tagging — their vectors were
-            // already synced when first ingested via the Vectors dashboard.
+            // Phase 2: Vectorization. Runs whenever Vectorize=1 — decoupled from whether
+            // autotagging produced new items this run, so a standalone Autotag=0 + Vectorize=1
+            // invocation still embeds pending content. RunDirectVectorization selects only items
+            // that still need embedding (EmbeddingStatus='Pending') unless forceReprocess re-embeds
+            // everything. Entity vector sync only runs when forceReprocess is set, since entity
+            // records don't change during tagging — their vectors were already synced when first
+            // ingested via the Vectors dashboard.
             if (vectorizeParam.Value === 1) {
                 const tasks: Promise<void>[] = [];
 
-                if (hasNewItems) {
-                    tasks.push(this.RunDirectVectorization(params, contentProcessRunID));
-                }
+                tasks.push(this.RunDirectVectorization(params, contentProcessRunID, contentSourceIDs, forceReprocess, maxItems));
 
                 if (forceReprocess) {
                     tasks.push(this.SyncEntitySourceVectors(params, contentSourceIDs));
                 }
 
-                if (tasks.length > 0) {
-                    LogStatus(`[AutotagAction] Phase 2: Running ${tasks.length} vectorization task(s)...`);
-                    await Promise.all(tasks);
-                } else {
-                    LogStatus(`[AutotagAction] Phase 2: Skipping vectorization — no new content items and not force-reprocessing`);
-                }
+                LogStatus(`[AutotagAction] Phase 2: Running ${tasks.length} vectorization task(s)...`);
+                await Promise.all(tasks);
             }
             LogStatus(`[AutotagAction] All tasks completed`);
 
@@ -193,7 +207,10 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
      */
     private async RunDirectVectorization(
         params: RunActionParams,
-        contentProcessRunID?: string
+        contentProcessRunID?: string,
+        contentSourceIDs?: string[],
+        forceReprocess?: boolean,
+        maxItems?: number
     ): Promise<void> {
         // Resolve the per-request provider once and thread it down the call stack so
         // every BaseEntity / RunView operation in this action runs against the caller's
@@ -203,12 +220,30 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         // implement RunView.
         const provider = (params.Provider ?? Metadata.Provider) as unknown as IMetadataProvider;
 
-        // Load all content items, then exclude Entity-sourced items.
-        // Entity sources get their vectors via EntityVectorSyncer (Phase 2b),
-        // not through content item vectorization.
+        // Select only items that still need embedding, then exclude Entity-sourced items.
+        // EmbeddingStatus='Pending' is the "not yet vectorized" signal — new items default to
+        // Pending, successfully embedded items are 'Complete'. Failed items are intentionally
+        // NOT retried here (they failed for a reason); use ForceReprocess to re-embed everything.
+        // Optionally scope to specific content sources. Entity sources get their vectors via
+        // EntityVectorSyncer (Phase 2b), not through content item vectorization.
+        const filters: string[] = [];
+        if (!forceReprocess) {
+            filters.push(`EmbeddingStatus = 'Pending'`);
+        }
+        if (contentSourceIDs && contentSourceIDs.length > 0) {
+            const idList = contentSourceIDs.map(id => `'${id.replace(/'/g, "''")}'`).join(', ');
+            filters.push(`ContentSourceID IN (${idList})`);
+        }
+        const extraFilter = filters.join(' AND ');
+
+        // Cap the intake per run and order deterministically (oldest-pending first) so the
+        // backlog drains predictably instead of arbitrarily starving older items.
         const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',
+            ExtraFilter: extraFilter,
+            OrderBy: '__mj_CreatedAt ASC',
+            MaxRows: maxItems,
             ResultType: 'entity_object'
         }, params.ContextUser);
 
