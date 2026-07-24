@@ -465,7 +465,17 @@ Each of these cost real time. Heed them.
 - For pg_dump, exclude `__mj.flyway_schema_history`, strip `\restrict` and `\unrestrict`, and make `CREATE SCHEMA` idempotent. The data section goes between pre-data and post-data.
 - For the browser test, use the Owner user, build the servers once and early and in parallel, and never restart to fix permissions. Kill a delegated agent that loops on a permission workaround.
 - Run the L3 and L4 scripts from the host, because they use `docker exec`. L1 needs no database. L2 needs the SQL Server compare database, so build it in parallel.
-- The real gate is a clean `mj migrate` on a fresh database. A "0 gaps" result from convert is structural only.
+- The real gate is a clean `mj migrate` on a fresh database. A "0 gaps" result from convert is structural only. **But that gate is blind to an EMPTIED migration — empty SQL applies cleanly.** The converter can write a header-only stub (or bare `;` statements) while printing `unhandled stmts: 0` and exiting 0. This shipped in v5.45 (`Metadata_Sync.pg.sql` = 126 bytes against 12,041 lines) and recurred 3× in v5.49. Run the content check before copy-back — it is also a CI gate in `pg-migrations.yml`:
+  ```bash
+  node scripts/check-pg-migration-content.mjs        # exits 1 on a silently-emptied counterpart
+  ```
+  A counterpart that is *correctly* empty (PG maintains the routine in `metadataSupportObjects.ts`, or never had the defect) must declare itself so it is distinguishable from the bug: `-- PG-EMPTY-BY-DESIGN: <reason>`.
+- **Before hand-authoring a `.needs-hand`, check git history.** Feature PRs sometimes author a counterpart that is later deleted under the "build engineer creates PG migrations" policy — that work is reviewed and recoverable. In v5.49 this recovered a 7,002-line file including a hand-written `BEFORE INSERT FOR EACH ROW` trigger using `pg_advisory_xact_lock`, ~30 minutes before it would have been rewritten from scratch.
+  ```bash
+  git log --all --oneline --diff-filter=A -- '*<MigrationName>.pg.sql'
+  git show <deleting-commit>^:migrations-pg/v5/<file>.pg.sql > /tmp/recovered.pg.sql
+  git log --oneline <deleting-commit>..HEAD -- migrations/v5/<MigrationName>.sql   # blank = SS unchanged, safe to reuse
+  ```
 - Committed `.pg.sql` and `.pg-only.sql` files are immutable. Only ever produce PG counterparts for new SQL Server migrations. Never reconvert or hand-patch a committed one.
 - For `mj codegen`, always use `scripts/pg-codegen-await.mjs`. The bare CLI can fire-and-forget and exit 0 as a silent no-op.
 - The converter's own "EntityField Sequence deduplication" pass edits committed `.pg.sql` files — check `git status migrations-pg/` after every convert. They never ship (Phase-5 copy-back is selective); restoring them in-container needs a `git diff` confirmation + explicit approval first (`git checkout --`/`git restore` are Rule-#3 destructive commands, never run blind). The gate proves whether the dedup mattered (so far: it did not).

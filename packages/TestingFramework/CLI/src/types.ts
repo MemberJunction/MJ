@@ -42,6 +42,8 @@ export interface CommonFlags {
      * own oracle types without modifying TestingFramework.
      */
     oraclesModule?: string;
+    /** Ad-hoc integration-check module to preload (config `testing.checkModules` is the durable form). */
+    checksModule?: string;
 }
 
 /**

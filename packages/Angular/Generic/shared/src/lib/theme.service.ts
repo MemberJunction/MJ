@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { derive, DerivedTheme, emitLogoOverlayCss, emitOverlayCss, ThemeLogos, ThemeSeeds } from '@memberjunction/theme-engine';
 
 /**
  * Defines a theme available in the application.
@@ -16,6 +17,12 @@ export interface ThemeDefinition {
     BaseTheme: 'light' | 'dark';
     /** URL to the CSS file with token overrides (omit for built-in themes) */
     CssUrl?: string;
+    /**
+     * Derived --mj-* token overrides. Populated for brand themes emitted
+     * from seeds; an alternative/companion to CssUrl for token-based application and
+     * for feeding the Theme Builder preview without a round-trip through CSS.
+     */
+    Tokens?: Record<string, string>;
     /** Whether this is a built-in theme (light/dark) */
     IsBuiltIn: boolean;
     /** Optional description shown in theme picker */
@@ -43,6 +50,21 @@ const THEME_SETTING_KEY = 'Explorer.Theme';
  * cleared on logout via Reset().
  */
 const PRELOAD_BASE_THEME_KEY = 'mj-theme';
+
+/**
+ * localStorage key holding the active org **brand overlay** id, mirrored so the
+ * inline pre-paint script can restore `data-theme-overlay` on first paint (the org
+ * brand persists across the user's light/dark choice AND across logout). The overlay
+ * CSS itself is a session-scoped Blob re-emitted at login bootstrap, so this key only
+ * restores the attribute — brand colors repaint once bootstrap re-injects the CSS.
+ */
+const PRELOAD_OVERLAY_KEY = 'mj-theme-overlay';
+
+/** User-settings key: JSON array of the user's starred (favorited) brand theme ids. */
+const STARRED_THEMES_KEY = 'Explorer.StarredThemes';
+
+/** User-settings key: the brand theme id the user last applied (restored over org default). */
+const SELECTED_BRAND_KEY = 'Explorer.SelectedBrandTheme';
 
 /**
  * Built-in light theme definition
@@ -87,18 +109,38 @@ const DARK_THEME: ThemeDefinition = {
 export class ThemeService {
     private _preference$ = new BehaviorSubject<string>('system');
     private _appliedTheme$ = new BehaviorSubject<string>('light');
+    /**
+     * The active org brand overlay id, applied independently of the user's light/dark
+     * choice and preserved across Reset()/logout.
+     */
+    private _brandOverlayId: string | null = null;
+    /** The user's starred (favorited) brand theme ids, reactive for menus/badges. */
+    private _starred$ = new BehaviorSubject<string[]>([]);
+    /** Emits when the set of saved themes changes (create/rename/delete/duplicate/default)
+     *  so open dashboards (Theme Studio, Manage Themes) refresh without a page reload. */
+    private _themesChanged$ = new Subject<void>();
     private _initialized = false;
     private systemMediaQuery: MediaQueryList | null = null;
     private boundSystemThemeHandler: (() => void) | null = null;
 
-    /** Registry of available themes, seeded with built-in light and dark */
+    /** Registry of USER-SELECTABLE themes (shown in the theme picker), seeded with light + dark. */
     private themeRegistry = new Map<string, ThemeDefinition>([
         ['light', LIGHT_THEME],
         ['dark', DARK_THEME]
     ]);
 
+    /**
+     * Registry of ORG BRAND overlays (from RegisterBrandTheme). Kept separate from
+     * themeRegistry so brand overlays do NOT appear in the user's light/dark theme
+     * picker — the org brand is applied independently of the user's mode (decision #1).
+     */
+    private brandRegistry = new Map<string, ThemeDefinition>();
+
     /** Cache of loaded <link> elements by theme ID to avoid re-downloading */
     private loadedCssLinks = new Map<string, HTMLLinkElement>();
+
+    /** Session-scoped Blob object URLs for brand overlays, keyed by theme ID (for revocation on re-register). */
+    private brandBlobUrls = new Map<string, string>();
 
     /**
      * Observable for user's theme preference (theme ID or 'system')
@@ -171,6 +213,142 @@ export class ThemeService {
         }
     }
 
+    /**
+     * Register a brand theme from its seeds.
+     *
+     * Derives the full --mj-* token contract with @memberjunction/theme-engine, emits
+     * the `[data-theme-overlay="<id>"]` CSS, and publishes it as a session-scoped Blob
+     * URL that plugs into the existing CssUrl overlay path — so brand themes apply
+     * through the same machinery as file-based custom themes. Returns the derived
+     * theme so callers can surface the a11y contrast report / previews.
+     *
+     * The emitted overlay overrides only the primitive ramps (plus viz/shadow/font/
+     * radius); every semantic token and the `[data-theme="dark"]` block reference those
+     * primitives, so both light and dark re-point automatically off one block.
+     *
+     * @param params.seeds ThemeSeeds object or the entity's Seeds JSON string.
+     */
+    public RegisterBrandTheme(params: {
+        id: string;
+        name: string;
+        seeds: ThemeSeeds | string;
+        description?: string;
+        baseTheme?: 'light' | 'dark';
+        /** Optional logo variant URLs + geometry, emitted as --mj-logo-*. */
+        logos?: ThemeLogos;
+        /** Advanced: per-token overrides (JSON map or object) merged over the derived vars. */
+        overrides?: Record<string, string> | string | null;
+        /** Advanced: raw CSS appended to the overlay, auto-scoped to this theme. */
+        customCss?: string | null;
+    }): DerivedTheme {
+        const seeds = typeof params.seeds === 'string' ? (JSON.parse(params.seeds) as ThemeSeeds) : params.seeds;
+        const derived = derive(seeds);
+        const overrides = this.parseOverrides(params.overrides);
+        // One Blob carries the whole brand: color/shape/font overlay (+ advanced layer) + logo tokens.
+        const css = emitOverlayCss(params.id, derived, { overrides, customCss: params.customCss })
+            + (params.logos ? emitLogoOverlayCss(params.id, params.logos) : '');
+
+        // Replace any prior Blob URL + cached <link> for this id so a re-registration
+        // (e.g. live preview) loads the new CSS instead of re-enabling stale bytes.
+        const priorUrl = this.brandBlobUrls.get(params.id);
+        if (priorUrl) {
+            URL.revokeObjectURL(priorUrl);
+        }
+        const cachedLink = this.loadedCssLinks.get(params.id);
+        if (cachedLink) {
+            cachedLink.remove();
+            this.loadedCssLinks.delete(params.id);
+        }
+
+        const url = URL.createObjectURL(new Blob([css], { type: 'text/css' }));
+        this.brandBlobUrls.set(params.id, url);
+
+        // Register into the brand registry only — NOT themeRegistry — so the org brand
+        // does not surface as a user-selectable option in the theme picker.
+        this.brandRegistry.set(params.id, {
+            Id: params.id,
+            Name: params.name,
+            BaseTheme: params.baseTheme ?? 'light',
+            CssUrl: url,
+            Tokens: derived.overlayVars,
+            IsBuiltIn: false,
+            Description: params.description,
+            PreviewColors: [
+                derived.tokens.light['--mj-brand-primary'],
+                derived.tokens.light['--mj-brand-accent'],
+                derived.tokens.light['--mj-brand-tertiary'],
+            ],
+        });
+
+        return derived;
+    }
+
+    /** Normalize the advanced overrides input (JSON string, object, or null) to a token map. */
+    private parseOverrides(input?: Record<string, string> | string | null): Record<string, string> | undefined {
+        if (!input) return undefined;
+        if (typeof input === 'string') {
+            try {
+                const parsed = JSON.parse(input);
+                return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : undefined;
+            } catch {
+                return undefined;
+            }
+        }
+        return input;
+    }
+
+    /**
+     * The active org brand overlay id, or null if none is applied.
+     */
+    public get BrandOverlayId(): string | null {
+        return this._brandOverlayId;
+    }
+
+    /**
+     * Apply an org brand overlay **independently of the user's light/dark mode.
+     * The overlay layers under whatever base theme is
+     * active and is re-asserted whenever the user toggles light/dark. Persists the id
+     * to localStorage so the pre-paint script restores the attribute on next load.
+     *
+     * @param id id of a brand theme registered via {@link RegisterBrandTheme}.
+     * @param options.persist pass `false` for session-only overlays backed by Blob URLs
+     * (e.g. Theme Studio's draft workspace preview) — a Blob URL doesn't survive a
+     * reload, so persisting its id would leave the pre-paint script pointing at a
+     * dangling overlay and clobber the user's real persisted selection. Defaults true.
+     */
+    public async ApplyBrandOverlay(id: string, options?: { persist?: boolean }): Promise<void> {
+        const def = this.brandRegistry.get(id);
+        if (!def || !def.CssUrl) {
+            console.warn(`ApplyBrandOverlay: no registered brand theme "${id}" with CSS.`);
+            return;
+        }
+        this._brandOverlayId = id;
+        await this.loadThemeCss(def);
+        document.documentElement.setAttribute('data-theme-overlay', id);
+        if (options?.persist === false) {
+            return;
+        }
+        try {
+            window.localStorage.setItem(PRELOAD_OVERLAY_KEY, id);
+        } catch (e) {
+            // non-fatal: a brief brand flash on next reload at worst
+        }
+    }
+
+    /**
+     * Remove the active org brand overlay (revert to the base MJ tokens).
+     */
+    public ClearBrandOverlay(): void {
+        this._brandOverlayId = null;
+        document.documentElement.removeAttribute('data-theme-overlay');
+        this.disableAllCustomCss();
+        try {
+            window.localStorage.removeItem(PRELOAD_OVERLAY_KEY);
+        } catch (e) {
+            // non-fatal
+        }
+    }
+
     // ========================================
     // LIFECYCLE
     // ========================================
@@ -185,6 +363,8 @@ export class ThemeService {
         }
 
         this.setupSystemThemeListener();
+
+        this._starred$.next(this.loadStarredIds());
 
         const savedPreference = await this.loadSetting();
         this._preference$.next(savedPreference);
@@ -226,9 +406,11 @@ export class ThemeService {
         this._appliedTheme$.next('light');
         this._initialized = false;
 
-        // Remove theme attributes
+        // Remove the base-theme attribute only. We deliberately KEEP the org brand
+        // overlay (data-theme-overlay + its CSS + _brandOverlayId) so the brand
+        // survives logout and stays on the login screen.
+        // The overlay is re-emitted at the next login bootstrap.
         document.documentElement.removeAttribute('data-theme');
-        document.documentElement.removeAttribute('data-theme-overlay');
 
         // NOTE: we deliberately do NOT clear PRELOAD_BASE_THEME_KEY here.
         // The unified theme key ('mj-theme') is the single source of truth
@@ -238,8 +420,9 @@ export class ThemeService {
         // window. The auth provider's clearClientCaches() preserves it for
         // exactly this reason (see preservedLocalStorageKeys).
 
-        // Disable all custom CSS links
-        this.disableAllCustomCss();
+        // Disable custom CSS links EXCEPT the active org brand overlay, which must
+        // survive logout so the brand persists on the login screen.
+        this.disableAllCustomCss(this._brandOverlayId);
     }
 
     // ========================================
@@ -265,11 +448,24 @@ export class ThemeService {
         this.applyBaseThemeAttribute(themeDef.BaseTheme);
 
         if (themeDef.IsBuiltIn) {
-            // Built-in theme: remove overlay, disable custom CSS
-            document.documentElement.removeAttribute('data-theme-overlay');
-            this.disableAllCustomCss();
+            // Built-in (light/dark): the user's mode changes, but the org brand overlay
+            // stays layered under it. Re-assert the brand overlay if one is active;
+            // otherwise clear any overlay.
+            if (this._brandOverlayId) {
+                const brandDef = this.brandRegistry.get(this._brandOverlayId);
+                if (brandDef?.CssUrl) {
+                    await this.loadThemeCss(brandDef);
+                    document.documentElement.setAttribute('data-theme-overlay', this._brandOverlayId);
+                } else {
+                    document.documentElement.removeAttribute('data-theme-overlay');
+                    this.disableAllCustomCss();
+                }
+            } else {
+                document.documentElement.removeAttribute('data-theme-overlay');
+                this.disableAllCustomCss();
+            }
         } else if (themeDef.CssUrl) {
-            // Custom theme: load/enable CSS and set overlay attribute
+            // Explicit custom theme selected — its overlay overrides any brand overlay.
             await this.loadThemeCss(themeDef);
             document.documentElement.setAttribute('data-theme-overlay', themeDef.Id);
         }
@@ -355,11 +551,15 @@ export class ThemeService {
     }
 
     /**
-     * Disable (not remove) all custom theme CSS <link> elements.
+     * Disable (not remove) custom theme CSS <link> elements.
      * Disabling rather than removing avoids re-downloading when switching back.
+     * @param keepId optional theme id to leave enabled (e.g. the active brand overlay).
      */
-    private disableAllCustomCss(): void {
-        for (const link of this.loadedCssLinks.values()) {
+    private disableAllCustomCss(keepId?: string | null): void {
+        for (const [id, link] of this.loadedCssLinks.entries()) {
+            if (keepId && id === keepId) {
+                continue;
+            }
             link.disabled = true;
         }
     }
@@ -417,6 +617,85 @@ export class ThemeService {
         if (this._preference$.value === 'system') {
             const newThemeId = this.getSystemTheme();
             await this.applyTheme(newThemeId);
+        }
+    }
+
+    // ========================================
+    // STARRED (FAVORITE) BRAND THEMES
+    // ========================================
+
+    /** Reactive list of the user's starred brand theme ids. */
+    public get Starred$(): Observable<string[]> {
+        return this._starred$.asObservable();
+    }
+
+    /** Emits after any saved-theme mutation so open dashboards can refresh their lists. */
+    public get ThemesChanged$(): Observable<void> {
+        return this._themesChanged$.asObservable();
+    }
+
+    /** Broadcast that the set of saved themes changed (create/rename/delete/duplicate/default). */
+    public NotifyThemesChanged(): void {
+        this._themesChanged$.next();
+    }
+
+    /** The user's starred brand theme ids (synchronous). */
+    public GetStarredThemeIds(): string[] {
+        return this._starred$.value;
+    }
+
+    /** Whether a theme id is starred by the user. */
+    public IsStarred(id: string): boolean {
+        return this._starred$.value.includes(id);
+    }
+
+    /**
+     * Toggle a theme's starred state and persist to User Settings.
+     * @returns the new starred state (true = now starred).
+     */
+    public async ToggleStar(id: string): Promise<boolean> {
+        const set = new Set(this._starred$.value);
+        const nowStarred = !set.has(id);
+        if (nowStarred) {
+            set.add(id);
+        } else {
+            set.delete(id);
+        }
+        const ids = Array.from(set);
+        this._starred$.next(ids);
+        try {
+            await UserInfoEngine.Instance.SetSetting(STARRED_THEMES_KEY, JSON.stringify(ids));
+        } catch (error) {
+            console.warn('Failed to save starred themes:', error);
+        }
+        return nowStarred;
+    }
+
+    private loadStarredIds(): string[] {
+        try {
+            const raw = UserInfoEngine.Instance.GetSetting(STARRED_THEMES_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
+        } catch {
+            return [];
+        }
+    }
+
+    /** The brand theme the user last applied (or null to follow the org default). */
+    public GetSelectedBrandThemeId(): string | null {
+        try {
+            return UserInfoEngine.Instance.GetSetting(SELECTED_BRAND_KEY) || null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** Persist (or clear, with null) the user's chosen brand theme so login restores it. */
+    public async SetSelectedBrandTheme(id: string | null): Promise<void> {
+        try {
+            await UserInfoEngine.Instance.SetSetting(SELECTED_BRAND_KEY, id ?? '');
+        } catch (error) {
+            console.warn('Failed to save selected brand theme:', error);
         }
     }
 

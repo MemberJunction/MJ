@@ -21,6 +21,10 @@ on:
       - '.github/scripts/check-esm-imports.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # The PG migration content detector's unit suite lives in __tests__ above but the
+      # script itself lives in scripts/ — without this entry a detector-only PR never
+      # runs its tests.
+      - 'scripts/check-pg-migration-content.mjs'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
@@ -123,14 +127,49 @@ jobs:
 
       - name: Build + run unit tests
         run: |
+          # Angular DOM suites each spin heavy AOT-compile + jsdom workers (capped
+          # to 2/package by vitest.dom.shared.ts). The FULL-suite backstop can fire
+          # all ~8 DOM packages at once, so it caps turbo `--concurrency` to keep
+          # peak workers (concurrency × 2) well under the 16 GB runner's limit
+          # (otherwise: OOM / exit 137). The AFFECTED path gets the SAME cap: a PR
+          # touching a root package (@memberjunction/global, core, ...) makes
+          # `...[base]` select essentially the whole repo — a de-facto full suite
+          # that OOM'd exactly as predicted when left uncapped (PR #3231, exit 137
+          # on CoreActions + react-test-harness, twice). The cap costs the common
+          # small-PR case nothing: with fewer than 4 test tasks in scope it never
+          # engages.
           if [ -n "$TURBO_FILTER" ]; then
             echo "::group::Affected build"
             npx turbo run build --log-order=stream "$TURBO_FILTER"
             echo "::endgroup::"
-            npx turbo run test "$TURBO_FILTER"
+            npx turbo run test --concurrency=4 "$TURBO_FILTER"
           else
             npm run build
-            npm test
+            npm test -- --concurrency=4
+          fi
+
+      # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
+      # sqlglot-ts vitest suite auto-skips when Python/sqlglot is absent, so CI never
+      # executed mj_postgres.py — which let the code reference exp.IfBlock (added in
+      # sqlglot 29.0.0) while requirements.txt pinned ~=27.18.0: an AttributeError on
+      # every statement reaching the plain-SQL path, in exactly the environments the pin
+      # exists to make reproducible. Install `-r requirements.txt` verbatim and run the
+      # dialect suite (which includes an exp.*-attribute existence guard), so the pin and
+      # the code can never drift apart silently again. PR runs skip it when SQLGlotTS is
+      # untouched; backstop runs (push/schedule/dispatch) always execute it.
+      - name: Python dialect tests (pinned sqlglot)
+        run: |
+          RUN_DIALECT=1
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "${{ github.base_ref }}" 2>/dev/null || true
+            if ! git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -q '^packages/SQLGlotTS/'; then
+              RUN_DIALECT=0
+              echo "No SQLGlotTS changes — skipping the Python dialect suite."
+            fi
+          fi
+          if [ "$RUN_DIALECT" = "1" ]; then
+            python3 -m pip install --quiet -r packages/SQLGlotTS/requirements.txt
+            python3 packages/SQLGlotTS/src/python/test_mj_postgres.py
           fi
 
       # Native-ESM import guard (#3142, follow-up to #3137): import every BUILT

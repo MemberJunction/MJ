@@ -5,14 +5,15 @@ import { Metadata, UserInfo } from '@memberjunction/core';
  * Represents artifact information with lazy-loading capabilities.
  * Stores minimal display data initially (from query) and loads full entities on-demand.
  *
- * For full entity access, delegates to {@link ArtifactMetadataEngine} which is kept
- * in sync automatically via BaseEngine's MJGlobal event listener. When any
- * BaseEntity save/delete fires in the same process, the engine's in-memory
- * arrays are updated immediately — so callers always get the freshest data
- * without tight coupling between the conversation layer and artifact editors.
+ * For full entity access, this first checks {@link ArtifactMetadataEngine}'s
+ * on-demand caches (populated when an artifact's versions were loaded earlier
+ * this session) and otherwise loads the single artifact/version directly from
+ * the database. Artifacts and versions are no longer bulk-loaded at boot — a
+ * version's `Content` can be arbitrarily large — so a direct load is the normal
+ * path here, not just a fallback.
  *
- * A one-time direct load fallback is used when the engine hasn't loaded yet
- * or the entity is brand-new and hasn't propagated to the engine's cache.
+ * The direct load is coalesced via a shared promise so concurrent callers issue
+ * a single query.
  */
 export class LazyArtifactInfo {
   // Display data (always available from initial query - no lazy loading needed)
@@ -72,7 +73,7 @@ export class LazyArtifactInfo {
     // Try the engine first — it stays in sync via BaseEntity events
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const fromEngine = engine.FindArtifactByID(this.artifactId);
+      const fromEngine = engine.FindCachedArtifactByID(this.artifactId);
       if (fromEngine) {
         return fromEngine;
       }
@@ -90,7 +91,7 @@ export class LazyArtifactInfo {
     // Try the engine first — it stays in sync via BaseEntity events
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const fromEngine = engine.FindArtifactVersionByID(this.artifactVersionId);
+      const fromEngine = engine.FindCachedArtifactVersionByID(this.artifactVersionId);
       if (fromEngine) {
         return fromEngine;
       }
@@ -107,8 +108,8 @@ export class LazyArtifactInfo {
   get isLoaded(): boolean {
     const engine = ArtifactMetadataEngine.Instance;
     if (engine.Loaded) {
-      const hasArtifact = !!engine.FindArtifactByID(this.artifactId);
-      const hasVersion = !!engine.FindArtifactVersionByID(this.artifactVersionId);
+      const hasArtifact = !!engine.FindCachedArtifactByID(this.artifactId);
+      const hasVersion = !!engine.FindCachedArtifactVersionByID(this.artifactVersionId);
       if (hasArtifact && hasVersion) {
         return true;
       }

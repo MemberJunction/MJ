@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT21 - Open-App Metadata Teardown",
+    "Description": "Live proof of the Open-App metadata teardown seam (OpenApp engine × SQLDialect × data-provider), deterministic (no model calls). Seeds a *used* app (SchemaInfo + Entity + EntityField + a blocking NOT-NULL-FK RecordChange + a link-less nav Application) and drives the real RemoveAppEntityMetadata (the mj app remove code path). OAT1: the FK-graph cascade clears ALL of the app's metadata including the blocking RecordChange the old hardcoded-list path under-deleted. OAT2: the link-less Application is removed and can be re-created with the SAME fixed GUID without a PK_Application collision. The bundle seeds + removes all its own throwaway __mj rows.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The FK-graph teardown clears entity/field/schema-info + the blocking RecordChange; the link-less Application is removed and re-creatable at the same GUID."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "open-app-teardown"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "91D38612-A231-404B-BAF5-72E5635CB89E"
+  }
+}

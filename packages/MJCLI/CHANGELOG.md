@@ -1,5 +1,53 @@
 # Change Log - @memberjunction/cli
 
+## 5.49.0
+
+### Patch Changes
+
+- 70c658c: Add configurable startup mode ('full' | 'task') for fast CLI/script boot. StartupManager.Startup() accepts startup options; 'task' mode skips all @RegisterForStartup engine pre-warm (engines lazy-load on first touch) while 'full' preserves existing behavior. Mode resolves via a shared four-level precedence chain (MJ_STARTUP_MODE env var > programmatic option > mj.config.cjs startup.mode > entry-point default). MJAPI defaults to 'full'; MJCLI, mj-sync, and CodeGen default to 'task'. Measured 14x CPU reduction on mj sync validate.
+- Updated dependencies [486b276]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [a7733a9]
+- Updated dependencies [3b23275]
+- Updated dependencies [505c8b5]
+- Updated dependencies [ebe5b88]
+- Updated dependencies [6c910ef]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [38c69a6]
+- Updated dependencies [7d6e8fb]
+- Updated dependencies [b64efd1]
+- Updated dependencies [d23aa89]
+- Updated dependencies [85575cf]
+- Updated dependencies [04cdd67]
+- Updated dependencies [38c220c]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [fc1c693]
+- Updated dependencies [70c658c]
+  - @memberjunction/codegen-lib@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/server-bootstrap-lite@5.49.0
+  - @memberjunction/sql-converter@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/testing-cli@5.49.0
+  - @memberjunction/metadata-sync@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/ai-cli@5.49.0
+  - @memberjunction/db-auto-doc@5.49.0
+  - @memberjunction/open-app-engine@5.49.0
+  - @memberjunction/query-gen@5.49.0
+  - @memberjunction/cli-core@5.49.0
+  - @memberjunction/config@5.49.0
+  - @memberjunction/installer@5.49.0
+  - @memberjunction/sqlglot-ts@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes

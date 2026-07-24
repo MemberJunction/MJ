@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, CodeNameFromString } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, CodeNameFromString, ResolveStartupMode } from '@memberjunction/core';
 import {
     CodeGenDatabaseProvider,
     CRUDType,
@@ -10,7 +10,7 @@ import {
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { RegisterClass } from '@memberjunction/global';
 import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
-import { dbDatabase, mj_core_schema } from '../../../Config/config';
+import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
 import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import {
@@ -63,7 +63,10 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         startSpinner('Initializing database connection...');
         const pool = await MSSQLConnection();
         const config = new SQLServerProviderConfigData(pool, mj_core_schema());
-        const provider: SQLServerDataProvider = await setupSQLServerClient(config);
+        // CodeGen is a short-lived process ⇒ 'task' entry-point default: skip engine
+        // pre-warm; MJ_STARTUP_MODE or mj.config.cjs startup.mode can override
+        const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'task' });
+        const provider: SQLServerDataProvider = await setupSQLServerClient(config, { mode: startupMode.mode });
         const conn = new SQLServerCodeGenConnection(pool);
 
         // `getSqlConfig()` returns the config that was built lazily by
@@ -493,24 +496,27 @@ GO`;
      * to 128 characters (SQL Server's identifier length limit). Wraps each statement in an
      * `IF NOT EXISTS` check against `sys.indexes` to avoid duplicate index creation.
      */
-    generateForeignKeyIndexes(entity: EntityInfo): string[] {
-        const indexes: string[] = [];
-        for (const f of entity.Fields) {
-            if (f.RelatedEntity && f.RelatedEntity.length > 0) {
-                let indexName = `IDX_AUTO_MJ_FKEY_${entity.BaseTableCodeName}_${f.CodeName}`;
-                if (indexName.length > 128) indexName = indexName.substring(0, 128);
+    protected tableToken(entity: EntityInfo): string {
+        return entity.BaseTableCodeName;
+    }
 
-                indexes.push(`-- Index for foreign key ${f.Name} in table ${entity.BaseTable}
+    protected columnToken(f: EntityFieldInfo): string {
+        return f.CodeName;
+    }
+
+    protected formatIndexStatement(entity: EntityInfo, f: EntityFieldInfo, indexName: string): string {
+        // NOTE: the trailing space after the index name below is intentional — it reproduces
+        // the historical output byte-for-byte. `writeFileIfChanged` compares generated file
+        // content, so altering even insignificant whitespace would rewrite every entity's
+        // .index.generated.sql on the next run for no functional gain.
+        return `-- Index for foreign key ${f.Name} in table ${entity.BaseTable}
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
     WHERE name = '${indexName}' 
     AND object_id = OBJECT_ID('[${entity.SchemaName}].[${entity.BaseTable}]')
 )
-CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`);
-            }
-        }
-        return indexes;
+CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`;
     }
 
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────

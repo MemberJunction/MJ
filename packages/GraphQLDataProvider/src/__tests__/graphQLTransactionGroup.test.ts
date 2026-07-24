@@ -150,6 +150,50 @@ describe('GraphQLTransactionGroup', () => {
     expect(vars.group.Items[0].OperationType).toBe('Create');
   });
 
+  it('should mark every item failed when the server reports Success=false (rollback)', async () => {
+    // On a server-side rollback, PrepareReturnValue still serializes each entity's in-memory
+    // state into ResultsJSON — non-null payloads. Per-item success must therefore be gated on
+    // the transaction-level Success flag, not on payload presence.
+    const mockResults = {
+      ExecuteTransactionGroup: {
+        Success: false,
+        ErrorMessages: ['{"Success":false}', '{"Success":false}'],
+        ResultsJSON: [
+          JSON.stringify({ ID: '123', Name: 'Would-be Created (rolled back)' }),
+          JSON.stringify({ ID: '456', Name: 'Would-be Updated (rolled back)' }),
+        ],
+      },
+    };
+
+    mockProvider.ExecuteGQL.mockResolvedValue(mockResults);
+
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    group.PendingTransactions = [
+      {
+        BaseEntity: {
+          EntityInfo: { Name: 'MJTestEntity' },
+          GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+        },
+        OperationType: 'Create',
+      },
+      {
+        BaseEntity: {
+          EntityInfo: { Name: 'MJTestEntity' },
+          GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+        },
+        OperationType: 'Update',
+      },
+    ];
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    const results = (await handleSubmit()) as Array<{ Success: boolean }>;
+
+    expect(results).toHaveLength(2);
+    for (const r of results) {
+      expect(r.Success).toBe(false);
+    }
+  });
+
   it('should handle empty pending transactions', async () => {
     const mockResults = {
       ExecuteTransactionGroup: {

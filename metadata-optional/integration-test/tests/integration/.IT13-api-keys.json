@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT13 - API Keys Engine Authorize",
+    "Description": "Exercises the API Keys engine end-to-end against real seeded metadata (deterministic, in-process — no model calls). AK1: Config() loads the real seeded API Scopes (full_access, entity:read, entity:delete, agent:execute). AK2: Config() loads the real seeded API Applications (MJAPI). AK3: a real key with an explicit ALLOW rule (entity:read) and an explicit DENY rule (entity:delete) authorizes/denies correctly through Authorize() — then is cleaned up (key + scope rules + usage logs). AK3 creates and tears down its own fixtures inside the check.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Seeded scopes + applications load via Config(); a real key's explicit allow/deny rules are honored by Authorize()."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "api-keys"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "202220AD-E05C-41D9-BBCD-267D11B5DE66"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T19:15:10.352Z",
+    "checksum": "b131996a13244ec03f4ff26d47047a6c4aa10b14d4e1131cad2a363809efaaed"
+  }
+}

@@ -40,7 +40,7 @@ import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-message-input',
   templateUrl: './message-input.component.html',
-  styleUrl: './message-input.component.scss'
+  styleUrl: './message-input.component.css'
 })
 export class MessageInputComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit  {
   // Default artifact type ID for JSON (when agent doesn't specify DefaultArtifactTypeID)
@@ -54,6 +54,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() parentMessageId?: string; // Optional: for replying in threads
   @Input() enableAttachments: boolean = true; // Whether to show attachment button (based on agent modality support)
   @Input() enableMentions: boolean = true; // Whether to enable @-mention autocomplete (agents/users). Hosts addressing a single fixed agent (e.g. Form Builder cockpit) typically set false.
+  @Input() enablePlanMode: boolean = true; // Whether the composer shows the Plan Mode toggle. Hosts that don't expose plan-mode workflows set false.
+  @Input() enableRealtime: boolean = true; // Whether the composer shows the realtime voice-call launcher/options. Hosts without a voice experience set false.
   @Input() maxAttachments: number = 10; // Maximum number of attachments per message
   @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // Maximum size per attachment (20MB default)
   @Input() acceptedFileTypes: string = 'image/*'; // Accepted MIME types pattern

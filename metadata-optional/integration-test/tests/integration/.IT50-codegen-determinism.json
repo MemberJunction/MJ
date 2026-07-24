@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT50 - CodeGen Artifact Consistency",
+    "Description": "CodeGen determinism seams over existing generated artifacts: RegisterClass/entity-name consistency, zod schema presence, generated markers. Read-only. Client transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "CodeGen determinism seams over existing generated artifacts: RegisterClass/entity-name consistency, zod schema presence, generated markers. Read-only. Client transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "codegen-determinism"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "A7D313AA-D02B-408C-BE4D-ACB2616199A8"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:49:20.720Z",
+    "checksum": "06abd5b7b7501b5a0410d3793d5b9b6eb079ac7b47530ca229b619e8beed85b9"
+  }
+}

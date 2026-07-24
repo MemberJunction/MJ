@@ -1,7 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
 
 body {
-    font-family: "Montserrat", sans-serif;
+    /* Chrome font follows the active theme token. NOTE: this is an
+       intentional default-font change — --mj-font-family's stock value in
+       _tokens.scss is the MJ default type stack (Inter), which the theme engine's
+       MJ_DEFAULT_SEEDS reproduce, so the body renders Inter even with no brand
+       theme applied. Brand themes override --mj-font-family; Montserrat survives
+       only as a last-resort fallback if the token stylesheet fails to load. */
+    font-family: var(--mj-font-family, "Montserrat", sans-serif);
 }
 
 h1 {
