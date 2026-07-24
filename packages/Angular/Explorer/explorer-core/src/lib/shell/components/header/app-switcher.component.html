@@ -11,8 +11,7 @@
     }
     @if (!isLoading) {
       <i class="app-icon" [class]="activeApp?.Icon || 'fa-solid fa-cube'"
-        [style.color]="activeApp?.GetColor()"
-      [style.--active-color]="activeApp?.GetColor()"></i>
+        [style.color]="activeApp?.GetColor()"></i>
     }
     <i class="dropdown-arrow fa-solid fa-chevron-down"></i>
   </div>

@@ -16,6 +16,7 @@
           <button
             class="nav-bar-app-btn"
             [class.active]="IsActiveApp(app)"
+            [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
             [title]="app.Name"
             [style.--app-color]="app.GetColor()"
             (click)="onNavBarAppClick(app, $event)"
@@ -150,6 +151,7 @@
             <button
               class="nav-bar-app-btn"
               [class.active]="IsActiveApp(app)"
+              [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
               [title]="app.Name"
               [style.--app-color]="app.GetColor()"
               (click)="onNavBarAppClick(app, $event)"

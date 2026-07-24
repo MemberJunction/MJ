@@ -1,38 +1,31 @@
 .app-switcher-container {
   position: relative;
-  margin-left: -2px; /* Fine-tune alignment when no nav-bar icons to the left */
+  margin-left: calc(-1 * var(--mj-space-0-5)); /* Fine-tune alignment when no nav-bar icons to the left */
 }
 
 .app-switcher-button {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  gap: var(--mj-space-1-5);
+  padding: var(--mj-space-2) var(--mj-space-2-5);
+  border-radius: var(--mj-radius-md);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--mj-transition-fast);
   user-select: none;
   position: relative;
 }
 .app-switcher-button .app-icon {
-  font-size: 20px;
+  font-size: var(--mj-text-xl);
   width: 24px;
   text-align: center;
   position: relative;
 }
-/* Color underline under the icon only, not the caret */
-.app-switcher-button .app-icon::after {
-  content: "";
-  position: absolute;
-  bottom: -6px;
-  left: 2px;
-  right: 2px;
-  height: 3px;
-  border-radius: 2px;
-  background-color: var(--active-color, var(--mj-text-muted));
-}
 .app-switcher-button:hover {
   background: var(--mj-bg-surface-hover);
+}
+.app-switcher-button:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
 }
 .app-switcher-button .dropdown-arrow {
   font-size: 10px;
@@ -45,7 +38,7 @@
   left: 0;
   background: var(--mj-bg-surface-elevated);
   border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
+  border-radius: var(--mj-radius-md);
   box-shadow: var(--mj-shadow-lg);
   min-width: 220px;
   width: max-content;
@@ -63,57 +56,38 @@
 .app-switcher-dropdown .app-switcher-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-4);
   cursor: pointer;
-  transition: all 0.15s;
-  font-weight: 500;
+  transition: all var(--mj-transition-fast);
+  font-weight: var(--mj-font-medium);
   color: var(--mj-text-secondary);
   position: relative;
   white-space: nowrap;
 }
-.app-switcher-dropdown .app-switcher-item::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 2px;
-  background-color: var(--item-color, var(--mj-text-muted));
-  opacity: 0.8;
-  transition: all 0.15s;
-}
+/* Icon glyphs carry the app's identity color; state (hover/active) is neutral
+   or brand-primary — never the app color. */
 .app-switcher-dropdown .app-switcher-item i {
-  font-size: 18px;
+  font-size: var(--mj-text-lg);
   color: var(--item-color, var(--mj-text-muted));
   width: 20px;
   text-align: center;
-  opacity: 1;
-  transition: all 0.15s;
 }
 .app-switcher-dropdown .app-switcher-item:hover {
   background: var(--mj-bg-surface-hover);
 }
-.app-switcher-dropdown .app-switcher-item:hover::before {
-  opacity: 1;
+.app-switcher-dropdown .app-switcher-item:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: -2px;
 }
 .app-switcher-dropdown .app-switcher-item.active {
-  background: color-mix(in srgb, var(--item-color, var(--mj-brand-primary)) 10%, var(--mj-bg-surface-elevated));
-  color: var(--item-color, var(--mj-brand-primary));
-  font-weight: 600;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
+  color: var(--mj-brand-primary);
+  font-weight: var(--mj-font-semibold);
 }
-.app-switcher-dropdown .app-switcher-item.active::before {
-  width: 4px;
-  left: 3px;
-  opacity: 1;
-}
-/* Configure option - no color line, neutral gray styling */
+/* Configure option - neutral gray styling */
 .app-switcher-dropdown .app-switcher-item.configure-item {
   color: var(--mj-text-secondary);
-}
-.app-switcher-dropdown .app-switcher-item.configure-item::before {
-  display: none;
 }
 .app-switcher-dropdown .app-switcher-item.configure-item i {
   color: var(--mj-text-muted);
@@ -127,16 +101,12 @@
 .app-switcher-dropdown .app-switcher-divider {
   height: 1px;
   background: var(--mj-border-default);
-  margin: 4px 12px;
+  margin: var(--mj-space-1) var(--mj-space-3);
 }
 
 /* Loading state for app switcher button */
 .app-switcher-button .loading-spinner {
   color: var(--mj-text-muted);
-}
-.app-switcher-button .loading-spinner::after {
-  /* Hide the underline when showing spinner */
-  display: none;
 }
 
 /* Loading state for dropdown items */
@@ -165,14 +135,14 @@
   }
 
   .app-switcher-dropdown .app-switcher-item {
-    padding: 14px 20px;
-    gap: 14px;
+    padding: var(--mj-space-3-5) var(--mj-space-5);
+    gap: var(--mj-space-3-5);
     min-height: 48px;
     font-size: 0.9375rem;
   }
 
   .app-switcher-dropdown .app-switcher-item i {
-    font-size: 20px;
+    font-size: var(--mj-text-xl);
     width: 24px;
   }
 
