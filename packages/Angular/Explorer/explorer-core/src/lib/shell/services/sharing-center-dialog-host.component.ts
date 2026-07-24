@@ -89,8 +89,13 @@ export class SharingCenterDialogHostComponent {
         const apps: BaseApplication[] = await firstValueFrom(this.appManager.Applications).catch(() => []);
         for (const app of apps) {
             const navItems = await app.GetNavItems();
-            if (navItems.some((item) => item.Label === 'Collections')) {
-                await this.navigationService.SwitchToApp(app.ID, 'Collections', { collectionId });
+            // Match on DriverClass (stable identity — survives label renames/localization)
+            // and only consider Active items (Status defaults to Active when unset).
+            const collectionsNav = navItems.find(
+                (item) => item.DriverClass === 'ChatCollectionsResource' && (item.Status ?? 'Active') === 'Active'
+            );
+            if (collectionsNav) {
+                await this.navigationService.SwitchToApp(app.ID, collectionsNav.Label, { collectionId });
                 return true;
             }
         }

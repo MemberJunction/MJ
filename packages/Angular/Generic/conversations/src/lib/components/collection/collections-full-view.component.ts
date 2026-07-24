@@ -2066,6 +2066,9 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
    * the raw email — prefer "FirstName LastName" when the user record has them.
    */
   private async loadOwnerNames(): Promise<void> {
+    // Clear up front so a failed reload falls back to denormalized names
+    // instead of serving a previous run's stale entries
+    this.ownerNameMap.clear();
     const ownerIds = [...new Set(
       this.collections
         .filter(c => c.OwnerID)
@@ -2086,7 +2089,6 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
       );
 
       if (result.Success) {
-        this.ownerNameMap.clear();
         for (const user of result.Results || []) {
           const friendly = [user.FirstName, user.LastName].filter(Boolean).join(' ').trim();
           this.ownerNameMap.set(NormalizeUUID(user.ID), friendly || user.Name);
@@ -2515,8 +2517,15 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     collection: MJCollectionEntity | null,
     requiredPermission: 'edit' | 'delete' | 'share'
   ): Promise<boolean> {
-    // Owner has all permissions (including backwards compatibility for null OwnerID)
-    if (!collection?.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
+    // Owner has all permissions. Null OwnerID (legacy collection) still counts as
+    // owned for edit/delete backwards compatibility, but NOT for share — the
+    // server-side create gate requires a real owner or an explicit Share grant.
+    if (!collection) {
+      return true;
+    }
+    if (collection.OwnerID
+      ? UUIDsEqual(collection.OwnerID, this.currentUser.ID)
+      : requiredPermission !== 'share') {
       return true;
     }
 
@@ -2565,8 +2574,11 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   }
 
   canShare(collection: MJCollectionEntity): boolean {
-    // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
+    // Unlike edit/delete, sharing does NOT get the null-OwnerID backwards-compat
+    // treatment: the server-side create gate requires a real owner or an explicit
+    // Share grant, so offering Share on a legacy null-owner collection would
+    // always be rejected server-side (permit-then-deny UX).
+    if (collection.OwnerID && UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
