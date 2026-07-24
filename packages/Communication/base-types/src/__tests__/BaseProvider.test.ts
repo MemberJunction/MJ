@@ -24,6 +24,8 @@ import {
     BaseCommunicationProvider,
     MJCommunicationProviderEntityExtended,
     ProcessedMessage,
+    WebhookNotificationInput,
+    ParseNotificationResult,
 } from '../BaseProvider';
 
 // Concrete test implementation of the abstract class
@@ -66,10 +68,10 @@ class SubscriptionManagedPushProvider extends TestProvider {
             DeliversPayloadInline: false,
         };
     }
-    public override async ParseNotification() {
+    public override async ParseNotification(_input: WebhookNotificationInput): Promise<ParseNotificationResult> {
         return {
             Success: true,
-            Notifications: [{ Kind: 'message' as const, MessageIDs: ['ext-1'] }],
+            Notifications: [{ Kind: 'message', MessageIDs: ['ext-1'] }],
             SuggestedResponseStatus: 202,
         };
     }
@@ -95,11 +97,11 @@ class InlineParsePushProvider extends TestProvider {
             DeliversPayloadInline: true,
         };
     }
-    public override async ParseNotification() {
+    public override async ParseNotification(_input: WebhookNotificationInput): Promise<ParseNotificationResult> {
         return {
             Success: true,
             Notifications: [{
-                Kind: 'message' as const,
+                Kind: 'message',
                 MessageIDs: [],
                 Message: { From: 'a@x.com', To: 'b@y.com', Body: 'hello', Subject: 'hi' },
             }],
