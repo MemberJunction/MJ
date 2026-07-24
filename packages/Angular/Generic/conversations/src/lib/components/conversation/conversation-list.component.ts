@@ -32,14 +32,20 @@ interface FolderNode {
   selector: 'mj-conversation-list',
   template: `
     <div class="conversation-list">
+      <!-- Header strip gated as a whole so an empty bordered band never renders:
+           the ⋯ menu also hides during selection mode, so it only counts toward
+           the strip when actually visible. -->
+      @if (showSearch || (showHeaderMenu && !isSelectionMode)) {
       <div class="list-header">
         <div class="header-top">
-          <input
-            type="text"
-            class="search-input"
-            placeholder="Search conversations..."
-            [(ngModel)]="searchQuery">
-          @if (!isSelectionMode) {
+          @if (showSearch) {
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search conversations..."
+              [(ngModel)]="searchQuery">
+          }
+          @if (showHeaderMenu && !isSelectionMode) {
             <div class="header-menu-container">
               <button class="btn-menu" (click)="toggleHeaderMenu($event)" title="Options">
                 <i class="fas fa-ellipsis-v"></i>
@@ -70,22 +76,27 @@ interface FolderNode {
           }
         </div>
       </div>
-      <button class="btn-new-conversation" (click)="createNewConversation()" title="New Conversation">
-        <i class="fas fa-plus"></i>
-        <span>New Conversation</span>
-      </button>
+      }
+      @if (showNewConversationButton) {
+        <button class="btn-new-conversation" (click)="createNewConversation()" title="New Conversation">
+          <i class="fas fa-plus"></i>
+          <span>New Conversation</span>
+        </button>
+      }
       <div class="list-content">
         <!-- Pinned Section (only show if there are pinned conversations) -->
         @if (pinnedConversations.length > 0) {
           <div class="sidebar-section pinned-section">
-            <div class="section-header" [class.expanded]="pinnedExpanded" (click)="togglePinned()">
-              <div class="section-title">
-                <i class="fas fa-chevron-right"></i>
-                <i class="fas fa-thumbtack section-icon"></i>
-                <span>Pinned</span>
+            @if (showSectionHeaders) {
+              <div class="section-header" [class.expanded]="pinnedExpanded" (click)="togglePinned()">
+                <div class="section-title">
+                  <i class="fas fa-chevron-right"></i>
+                  <i class="fas fa-thumbtack section-icon"></i>
+                  <span>Pinned</span>
+                </div>
               </div>
-            </div>
-            <div class="chat-list" [class.expanded]="pinnedExpanded">
+            }
+            <div class="chat-list" [class.expanded]="!showSectionHeaders || pinnedExpanded">
               @for (conversation of pinnedConversations; track conversation.ID) {
                 <ng-container [ngTemplateOutlet]="conversationItem" [ngTemplateOutletContext]="{ $implicit: conversation }"></ng-container>
               }
@@ -93,24 +104,32 @@ interface FolderNode {
           </div>
         }
 
-        @if (groupBy === 'project') {
+        <!-- showSectionHeaders=false forces the FLAT branch even in project
+             grouping: the folder tree's root drop-zone and New Folder action
+             live in the section header, so rendering the tree without headers
+             would let a user drag a folder INTO another folder with no way to
+             ever drag it back out (a one-way door). Flat + headerless is the
+             coherent chrome-less rendering. -->
+        @if (showSectionHeaders && groupBy === 'project') {
           <!-- Folders Section -->
           <div class="sidebar-section folders-section">
-            <div class="section-header" [class.expanded]="foldersExpanded"
-                 [class.drag-over]="dragOverTargetId === 'folders-root'"
-                 (click)="toggleFolders()"
-                 (dragover)="onFoldersRootDragOver($event)"
-                 (dragleave)="onDragLeave('folders-root')"
-                 (drop)="onFoldersRootDrop($event)">
-              <div class="section-title">
-                <i class="fas fa-chevron-right"></i>
-                <span>Folders</span>
+            @if (showSectionHeaders) {
+              <div class="section-header" [class.expanded]="foldersExpanded"
+                   [class.drag-over]="dragOverTargetId === 'folders-root'"
+                   (click)="toggleFolders()"
+                   (dragover)="onFoldersRootDragOver($event)"
+                   (dragleave)="onDragLeave('folders-root')"
+                   (drop)="onFoldersRootDrop($event)">
+                <div class="section-title">
+                  <i class="fas fa-chevron-right"></i>
+                  <span>Folders</span>
+                </div>
+                <button class="section-action-btn" (click)="createFolder(null, $event)" title="New Folder">
+                  <i class="fas fa-folder-plus"></i>
+                </button>
               </div>
-              <button class="section-action-btn" (click)="createFolder(null, $event)" title="New Folder">
-                <i class="fas fa-folder-plus"></i>
-              </button>
-            </div>
-            <div class="chat-list" [class.expanded]="foldersExpanded">
+            }
+            <div class="chat-list" [class.expanded]="!showSectionHeaders || foldersExpanded">
               @for (node of folderTree; track node.project.ID) {
                 @if (!isSearching || node.hasContent) {
                   <ng-container [ngTemplateOutlet]="folderNode" [ngTemplateOutletContext]="{ $implicit: node }"></ng-container>
@@ -128,13 +147,15 @@ interface FolderNode {
                (dragover)="onUngroupedDragOver($event)"
                (dragleave)="onDragLeave('ungrouped')"
                (drop)="onUngroupedDrop($event)">
-            <div class="section-header" [class.expanded]="ungroupedExpanded" (click)="toggleUngrouped()">
-              <div class="section-title">
-                <i class="fas fa-chevron-right"></i>
-                <span>{{ folderTree.length > 0 ? 'Ungrouped' : 'Messages' }}</span>
+            @if (showSectionHeaders) {
+              <div class="section-header" [class.expanded]="ungroupedExpanded" (click)="toggleUngrouped()">
+                <div class="section-title">
+                  <i class="fas fa-chevron-right"></i>
+                  <span>{{ folderTree.length > 0 ? 'Ungrouped' : 'Messages' }}</span>
+                </div>
               </div>
-            </div>
-            <div class="chat-list" [class.expanded]="ungroupedExpanded">
+            }
+            <div class="chat-list" [class.expanded]="!showSectionHeaders || ungroupedExpanded">
               @for (conversation of ungroupedConversations; track conversation.ID) {
                 <ng-container [ngTemplateOutlet]="conversationItem" [ngTemplateOutletContext]="{ $implicit: conversation }"></ng-container>
               }
@@ -143,13 +164,15 @@ interface FolderNode {
         } @else {
           <!-- Flat Messages Section -->
           <div class="sidebar-section">
-            <div class="section-header" [class.expanded]="directMessagesExpanded" (click)="toggleDirectMessages()">
-              <div class="section-title">
-                <i class="fas fa-chevron-right"></i>
-                <span>Messages</span>
+            @if (showSectionHeaders) {
+              <div class="section-header" [class.expanded]="directMessagesExpanded" (click)="toggleDirectMessages()">
+                <div class="section-title">
+                  <i class="fas fa-chevron-right"></i>
+                  <span>Messages</span>
+                </div>
               </div>
-            </div>
-            <div class="chat-list" [class.expanded]="directMessagesExpanded">
+            }
+            <div class="chat-list" [class.expanded]="!showSectionHeaders || directMessagesExpanded">
               @for (conversation of unpinnedConversations; track conversation.ID) {
                 <ng-container [ngTemplateOutlet]="conversationItem" [ngTemplateOutletContext]="{ $implicit: conversation }"></ng-container>
               }
@@ -329,21 +352,38 @@ interface FolderNode {
     </ng-template>
   `,
   styles: [`
-    :host { display: block; height: 100%; }
-    .conversation-list { display: flex; flex-direction: column; height: 100%; background: var(--mj-brand-secondary); }
-    .list-header { padding: 8px; border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent); }
+    :host {
+      display: block;
+      height: 100%;
+      /* White-label theming tokens for the list panel. The public
+         --mj-conversations-list-* custom properties are host-overridable (set
+         them at :root or on any ancestor); the private --conv-list-* names
+         resolve the fallback ONCE here so the 70+ usages below stay simple.
+         (A self-referential var() fallback would be a custom-property cycle,
+         so the two-name indirection is required, not stylistic.) Defaults
+         preserve the stock look exactly: a brand-secondary panel with
+         on-secondary ink. Hover/border/divider states derive from the ink via
+         color-mix, so they follow automatically when the ink is remapped. */
+      --conv-list-bg: var(--mj-conversations-list-bg, var(--mj-brand-secondary));
+      --conv-list-ink: var(--mj-conversations-list-ink, var(--mj-brand-on-secondary));
+      --conv-list-active-bg: var(--mj-conversations-list-active-bg, var(--mj-brand-primary));
+      --conv-list-active-ink: var(--mj-conversations-list-active-ink, var(--mj-brand-on-secondary));
+      --conv-list-active-hover-bg: var(--mj-conversations-list-active-hover-bg, var(--mj-brand-primary-hover));
+    }
+    .conversation-list { display: flex; flex-direction: column; height: 100%; background: var(--conv-list-bg); }
+    .list-header { padding: 8px; border-bottom: 1px solid color-mix(in srgb, var(--conv-list-ink) 10%, transparent); }
     .search-input {
       width: 100%;
       padding: 8px 12px;
-      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
-      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 20%, transparent);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
       border-radius: 6px;
-      color: var(--mj-brand-on-secondary);
+      color: var(--conv-list-ink);
       font-size: 13px;
       transition: all 0.2s;
     }
-    .search-input::placeholder { color: color-mix(in srgb, var(--mj-brand-on-secondary) 50%, transparent); }
-    .search-input:focus { outline: none; background: color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent); border-color: var(--mj-brand-primary); }
+    .search-input::placeholder { color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent); }
+    .search-input:focus { outline: none; background: color-mix(in srgb, var(--conv-list-ink) 15%, transparent); border-color: var(--mj-brand-primary); }
     .btn-new-conversation {
       width: calc(100% - 16px);
       margin: 8px;
@@ -379,13 +419,13 @@ interface FolderNode {
       align-items: center;
       justify-content: space-between;
       cursor: pointer;
-      color: var(--mj-brand-on-secondary);
+      color: var(--conv-list-ink);
       font-size: 13px;
       font-weight: 500;
       transition: background 0.2s;
       user-select: none;
     }
-    .section-header:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 8%, transparent); }
+    .section-header:hover { background: color-mix(in srgb, var(--conv-list-ink) 8%, transparent); }
     .section-title {
       display: flex;
       align-items: center;
@@ -412,23 +452,23 @@ interface FolderNode {
       align-items: center;
       transition: all 0.2s;
       position: relative;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
       font-size: 14px;
       min-height: 45px;
     }
-    .conversation-item:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 8%, transparent); color: var(--mj-brand-on-secondary); }
+    .conversation-item:hover { background: color-mix(in srgb, var(--conv-list-ink) 8%, transparent); color: var(--conv-list-ink); }
     .conversation-item:hover .conversation-actions { opacity: 1; }
-    .conversation-item.active { background: var(--mj-brand-primary); color: var(--mj-brand-on-secondary); }
+    .conversation-item.active { background: var(--conv-list-active-bg); color: var(--conv-list-active-ink); }
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }
     .conversation-icon { font-size: 12px; width: 16px; text-align: center; }
     .conversation-icon.has-tasks { color: var(--mj-status-warning); }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
     .conversation-info { flex: 1; min-width: 0; }
     .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
-    .shared-indicator { font-size: 10px; color: color-mix(in srgb, var(--mj-brand-on-secondary) 55%, transparent); flex-shrink: 0; }
-    .conversation-item.active .shared-indicator { color: color-mix(in srgb, var(--mj-brand-on-secondary) 85%, transparent); }
-    .conversation-preview { font-size: 12px; color: color-mix(in srgb, var(--mj-brand-on-secondary) 50%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .conversation-item.active .conversation-preview { color: color-mix(in srgb, var(--mj-brand-on-secondary) 80%, transparent); }
+    .shared-indicator { font-size: 10px; color: color-mix(in srgb, var(--conv-list-ink) 55%, transparent); flex-shrink: 0; }
+    .conversation-item.active .shared-indicator { color: color-mix(in srgb, var(--conv-list-active-ink) 85%, transparent); }
+    .conversation-preview { font-size: 12px; color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conversation-item.active .conversation-preview { color: color-mix(in srgb, var(--conv-list-active-ink) 80%, transparent); }
     .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
     /* Project Badge */
@@ -439,20 +479,20 @@ interface FolderNode {
       font-size: 10px;
       font-weight: 600;
       margin-left: auto;
-      background-color: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 60%, transparent);
+      background-color: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
       white-space: nowrap;
       max-width: 80px;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .conversation-item:hover .project-badge {
-      background-color: color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent);
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 80%, transparent);
+      background-color: color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 80%, transparent);
     }
     .conversation-item.active .project-badge {
-      background-color: color-mix(in srgb, var(--mj-brand-on-secondary) 20%, transparent);
-      color: var(--mj-brand-on-secondary);
+      background-color: color-mix(in srgb, var(--conv-list-active-ink) 20%, transparent);
+      color: var(--conv-list-active-ink);
     }
 
     .conversation-actions {
@@ -501,19 +541,19 @@ interface FolderNode {
       align-items: center;
       justify-content: center;
       border-radius: 6px;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent);
-      background: var(--mj-brand-secondary) !important;
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
+      background: var(--conv-list-bg) !important;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
     }
     .menu-btn:hover {
-      background: color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent) !important;
-      color: var(--mj-brand-on-secondary);
+      background: color-mix(in srgb, var(--conv-list-ink) 15%, transparent) !important;
+      color: var(--conv-list-ink);
     }
     .conversation-item.active .menu-btn {
-      background: var(--mj-brand-primary-hover) !important;
-      color: var(--mj-brand-on-secondary);
+      background: var(--conv-list-active-hover-bg) !important;
+      color: var(--conv-list-active-ink);
     }
     .menu-btn i { font-size: 14px; }
 
@@ -523,8 +563,8 @@ interface FolderNode {
       right: 0;
       margin-top: 4px;
       min-width: 160px;
-      background: var(--mj-brand-secondary);
-      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent);
+      background: var(--conv-list-bg);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
       border-radius: 8px;
       box-shadow: var(--mj-shadow-lg);
       z-index: 1001;
@@ -540,7 +580,7 @@ interface FolderNode {
       padding: 10px 14px;
       background: transparent;
       border: none;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 85%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 85%, transparent);
       font-size: 14px;
       text-align: left;
       cursor: pointer;
@@ -548,18 +588,18 @@ interface FolderNode {
     }
 
     .menu-item:hover {
-      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
-      color: var(--mj-brand-on-secondary);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: var(--conv-list-ink);
     }
 
     .menu-item i {
       width: 16px;
       font-size: 13px;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 60%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
     }
 
     .menu-item:hover i {
-      color: var(--mj-brand-on-secondary);
+      color: var(--conv-list-ink);
     }
 
     .menu-item.danger {
@@ -581,7 +621,7 @@ interface FolderNode {
 
     .menu-divider {
       height: 1px;
-      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
       margin: 4px 0;
     }
 
@@ -590,24 +630,35 @@ interface FolderNode {
       animation: renameHighlight 1500ms cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    /* Brand-token ramp (was hardcoded tailwind blue/purple/emerald rgba values,
+       which ignored theming): primary/accent open the flash, success/primary
+       carry the fade, at the original alpha ramp (40/35/30/20; glows 50-20). */
     @keyframes renameHighlight {
       0% {
-        background: linear-gradient(90deg, rgba(59, 130, 246, 0.4), rgba(147, 51, 234, 0.4));
+        background: linear-gradient(90deg,
+          color-mix(in srgb, var(--mj-brand-primary) 40%, transparent),
+          color-mix(in srgb, var(--mj-brand-accent) 40%, transparent));
         transform: scale(1.03);
-        box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        box-shadow: 0 0 20px color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
       }
       25% {
-        background: linear-gradient(90deg, rgba(59, 130, 246, 0.35), rgba(147, 51, 234, 0.35));
-        box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        background: linear-gradient(90deg,
+          color-mix(in srgb, var(--mj-brand-primary) 35%, transparent),
+          color-mix(in srgb, var(--mj-brand-accent) 35%, transparent));
+        box-shadow: 0 0 15px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
       }
       50% {
-        background: linear-gradient(90deg, rgba(16, 185, 129, 0.3), rgba(59, 130, 246, 0.3));
+        background: linear-gradient(90deg,
+          color-mix(in srgb, var(--mj-status-success) 30%, transparent),
+          color-mix(in srgb, var(--mj-brand-primary) 30%, transparent));
         transform: scale(1.02);
-        box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+        box-shadow: 0 0 10px color-mix(in srgb, var(--mj-status-success) 30%, transparent);
       }
       75% {
-        background: linear-gradient(90deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2));
-        box-shadow: 0 0 5px rgba(16, 185, 129, 0.2);
+        background: linear-gradient(90deg,
+          color-mix(in srgb, var(--mj-status-success) 20%, transparent),
+          color-mix(in srgb, var(--mj-brand-primary) 20%, transparent));
+        box-shadow: 0 0 5px color-mix(in srgb, var(--mj-status-success) 20%, transparent);
       }
       100% {
         background: transparent;
@@ -636,17 +687,17 @@ interface FolderNode {
       align-items: center;
       justify-content: center;
       background: transparent;
-      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 20%, transparent);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
       border-radius: 6px;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .btn-menu:hover {
-      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
-      color: var(--mj-brand-on-secondary);
-      border-color: color-mix(in srgb, var(--mj-brand-on-secondary) 30%, transparent);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: var(--conv-list-ink);
+      border-color: color-mix(in srgb, var(--conv-list-ink) 30%, transparent);
     }
 
     .header-dropdown-menu {
@@ -654,8 +705,8 @@ interface FolderNode {
       top: calc(100% + 4px);
       right: 0;
       min-width: 200px;
-      background: var(--mj-brand-secondary);
-      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent);
+      background: var(--conv-list-bg);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
       border-radius: 8px;
       box-shadow: var(--mj-shadow-lg);
       z-index: 1001;
@@ -671,7 +722,7 @@ interface FolderNode {
       padding: 10px 14px;
       background: transparent;
       border: none;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 85%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 85%, transparent);
       font-size: 13px;
       text-align: left;
       cursor: pointer;
@@ -679,33 +730,33 @@ interface FolderNode {
     }
 
     .header-dropdown-menu .dropdown-item:hover {
-      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
-      color: var(--mj-brand-on-secondary);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: var(--conv-list-ink);
     }
 
     .header-dropdown-menu .dropdown-item i {
       width: 16px;
       font-size: 13px;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 60%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
     }
 
     .header-dropdown-menu .dropdown-item:hover i {
-      color: var(--mj-brand-on-secondary);
+      color: var(--conv-list-ink);
     }
 
     .header-dropdown-menu .dropdown-item .shortcut {
       margin-left: auto;
       font-size: 11px;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 40%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 40%, transparent);
       font-family: system-ui, -apple-system, sans-serif;
     }
 
     .btn-select {
       padding: 8px 12px;
       background: transparent;
-      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 20%, transparent);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
       border-radius: 6px;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
       font-size: 13px;
       font-weight: 500;
       display: flex;
@@ -718,9 +769,9 @@ interface FolderNode {
     }
 
     .btn-select:hover {
-      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
-      color: var(--mj-brand-on-secondary);
-      border-color: color-mix(in srgb, var(--mj-brand-on-secondary) 30%, transparent);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: var(--conv-list-ink);
+      border-color: color-mix(in srgb, var(--conv-list-ink) 30%, transparent);
     }
 
     .conversation-checkbox {
@@ -744,8 +795,8 @@ interface FolderNode {
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
-      background: var(--mj-brand-secondary);
-      border-top: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent);
+      background: var(--conv-list-bg);
+      border-top: 1px solid color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
       gap: 12px;
       flex-wrap: wrap;
       flex-shrink: 0;
@@ -755,7 +806,7 @@ interface FolderNode {
       display: flex;
       align-items: center;
       gap: 12px;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 90%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 90%, transparent);
       font-size: 14px;
       font-weight: 500;
       flex: 1 1 auto;
@@ -763,7 +814,7 @@ interface FolderNode {
     }
 
     .selection-count {
-      color: var(--mj-brand-on-secondary);
+      color: var(--conv-list-ink);
     }
 
     .link-btn {
@@ -778,7 +829,7 @@ interface FolderNode {
     }
 
     .link-btn:hover {
-      color: var(--mj-brand-on-secondary);
+      color: var(--conv-list-ink);
     }
 
     .selection-actions {
@@ -790,9 +841,9 @@ interface FolderNode {
     .btn-cancel {
       padding: 8px 16px;
       background: transparent;
-      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 20%, transparent);
+      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
       border-radius: 6px;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
       cursor: pointer;
       font-size: 13px;
       font-weight: 500;
@@ -800,8 +851,8 @@ interface FolderNode {
     }
 
     .btn-cancel:hover {
-      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
-      color: var(--mj-brand-on-secondary);
+      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
+      color: var(--conv-list-ink);
     }
 
     .btn-delete-bulk {
@@ -812,6 +863,9 @@ interface FolderNode {
       background: var(--mj-status-error);
       border: none;
       border-radius: 6px;
+      /* Deliberately NOT --conv-list-ink: this ink sits on the error-red button,
+         not the panel, so it must not follow a panel remap. (brand-on-secondary
+         stays light in both modes; text-inverse flips dark in dark mode.) */
       color: var(--mj-brand-on-secondary);
       cursor: pointer;
       font-size: 13px;
@@ -842,13 +896,13 @@ interface FolderNode {
       background: transparent;
       border: none;
       border-radius: 4px;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 60%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
       cursor: pointer;
       transition: all 0.2s;
     }
     .section-action-btn:hover {
-      background: color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent);
-      color: var(--mj-brand-on-secondary);
+      background: color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
+      color: var(--conv-list-ink);
     }
     .section-action-btn i { font-size: 12px; }
 
@@ -858,13 +912,13 @@ interface FolderNode {
       gap: 6px;
       padding: 5px 8px 5px 12px;
       cursor: pointer;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 80%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 80%, transparent);
       font-size: 13px;
       transition: background 0.15s;
       user-select: none;
       position: relative;
     }
-    .folder-row:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 8%, transparent); }
+    .folder-row:hover { background: color-mix(in srgb, var(--conv-list-ink) 8%, transparent); }
     .folder-row.drag-over {
       background: color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
       box-shadow: inset 0 0 0 1px var(--mj-brand-primary);
@@ -880,7 +934,7 @@ interface FolderNode {
       width: 10px;
       flex-shrink: 0;
       transition: transform 0.2s;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 55%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 55%, transparent);
     }
     .folder-chevron.expanded { transform: rotate(90deg); }
     .folder-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
@@ -895,7 +949,7 @@ interface FolderNode {
     .folder-count {
       font-size: 11px;
       font-weight: 600;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 50%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent);
       flex-shrink: 0;
       margin-left: auto;
       padding-left: 6px;
@@ -924,13 +978,13 @@ interface FolderNode {
       background: transparent;
       border: none;
       border-radius: 4px;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 60%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
       cursor: pointer;
       transition: all 0.15s;
     }
     .folder-action-btn:hover {
-      background: color-mix(in srgb, var(--mj-brand-on-secondary) 18%, transparent);
-      color: var(--mj-brand-on-secondary);
+      background: color-mix(in srgb, var(--conv-list-ink) 18%, transparent);
+      color: var(--conv-list-ink);
     }
     .folder-action-btn.danger:hover {
       background: color-mix(in srgb, var(--mj-status-error) 18%, transparent);
@@ -942,7 +996,7 @@ interface FolderNode {
       padding: 6px 16px;
       font-size: 11px;
       font-style: italic;
-      color: color-mix(in srgb, var(--mj-brand-on-secondary) 45%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 45%, transparent);
     }
     .ungrouped-section.drag-over {
       background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
@@ -968,6 +1022,31 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @Input() renamedConversationId: string | null = null;
   @Input() isSidebarPinned: boolean = true; // Whether sidebar is pinned (stays open after selection)
   @Input() isMobileView: boolean = false; // Whether we're on mobile (no pin options)
+
+  // ── White-label chrome toggles (all default true = stock rendering) ──
+  /** Show the search box in the list header. Flipping to false clears any active
+   *  search so a hidden filter can't keep silently narrowing the list. */
+  @Input()
+  set showSearch(value: boolean) {
+    if (!value && this._searchQuery) {
+      this.searchQuery = ''; // setter rebuilds the groupings
+    }
+    this._showSearch = value;
+  }
+  get showSearch(): boolean {
+    return this._showSearch;
+  }
+  private _showSearch = true;
+  /** Show the "New Conversation" button. */
+  @Input() showNewConversationButton: boolean = true;
+  /** Show the ⋯ header options menu (refresh / select / group-by / hide sidebar). */
+  @Input() showHeaderMenu: boolean = true;
+  /** Show the collapsible Pinned / Folders / Messages section headers. When false,
+   *  the list renders FLAT and fully expanded: folder grouping is bypassed (the
+   *  folder tree's root drop-zone and New Folder action live in the section
+   *  header, so a headerless tree would allow one-way folder nesting) — the
+   *  chrome-less rendering for embedded hosts. */
+  @Input() showSectionHeaders: boolean = true;
 
   @Output() conversationSelected = new EventEmitter<string>();
   @Output() conversationDeleted = new EventEmitter<string>(); // Emits the deleted conversation ID

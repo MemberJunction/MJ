@@ -148,6 +148,43 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 </mj-conversation-chat-area>
 ```
 
+### Conversation List
+
+#### Feature toggles
+
+The same white-label pattern extends to `mj-conversation-list` (and passes through `mj-conversation-sidebar`). All default to `true`; set `false` to remove the chrome entirely:
+
+| Input | Gates |
+|---|---|
+| `showSearch` | The search box in the list header |
+| `showNewConversationButton` | The "New Conversation" button (hosts wiring their own new-chat affordance listen to `newConversationRequested` elsewhere) |
+| `showHeaderMenu` | The ⋯ options menu (refresh / select conversations / group-by / hide sidebar). The header strip is removed entirely whenever nothing would occupy it |
+| `showSectionHeaders` | The collapsible Pinned / Folders / Messages section headers. When `false`, the list renders FLAT and fully expanded — folder grouping is bypassed (the folder tree's root drop-zone and New Folder action live in the section header, so a headerless tree would allow one-way folder nesting) — the chrome-less rendering for embedded hosts |
+
+`mj-conversation-sidebar` also now **re-emits** the list's `(conversationDeleted)` (payload = the deleted conversation's ID) and `(refreshRequested)` outputs — previously these died at the sidebar boundary, forcing hosts to watch `ConversationEngine.Conversations$` to notice their active conversation vanish.
+
+#### Theming tokens
+
+The list panel renders on brand tokens by default (a `--mj-brand-secondary` panel with `--mj-brand-on-secondary` ink — the stock navy sidebar). White-label hosts can remap it onto surface tokens so the list matches the chat area, via four component-scoped custom properties (settable at `:root` or on any ancestor):
+
+| Token | Default | Governs |
+|---|---|---|
+| `--mj-conversations-list-bg` | `var(--mj-brand-secondary)` | Panel background (and its dropdown/context menus) |
+| `--mj-conversations-list-ink` | `var(--mj-brand-on-secondary)` | Text — hover, border, divider, and placeholder tints all derive from this via `color-mix`, so they follow automatically |
+| `--mj-conversations-list-active-bg` | `var(--mj-brand-primary)` | The active conversation row's background |
+| `--mj-conversations-list-active-ink` | `var(--mj-brand-on-secondary)` | ALL text on the active row (title, preview, badges, icons) — remap alongside `active-bg` to keep the row legible |
+| `--mj-conversations-list-active-hover-bg` | `var(--mj-brand-primary-hover)` | Hovered controls (the ⋯ button) on the active row |
+
+```css
+/* e.g. match the list to the chat area's light surface */
+:root {
+  --mj-conversations-list-bg: var(--mj-bg-surface-card);
+  --mj-conversations-list-ink: var(--mj-text-primary);
+}
+```
+
+Action-colored elements (the New Conversation button, focus rings, drag-over highlights) stay on the global `--mj-brand-primary` deliberately — they're "action color", not "panel color" — and the bulk-delete button's ink stays on `--mj-brand-on-secondary` (it sits on the error-red button, not the panel). The routines section at the bottom of the sidebar already renders on surface tokens; remapping the list onto surface tokens makes the two consistent. Note the rename-flash animation and these defaults resolve through MJ's semantic tokens — a host that doesn't load MJ's token stylesheet should define the four list tokens (and the brand/status tokens) explicitly.
+
 ### Chat Overlay
 
 A floating chat panel (bottom-right corner) that wraps the chat area for persistent agent access across the application. Collapses to a bubble icon, expands to a full chat panel.
