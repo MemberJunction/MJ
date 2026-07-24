@@ -3,6 +3,8 @@
  *
  * Provides consistent styling for native form elements replacing Kendo inputs.
  * - .mj-input — text inputs (replaces kendo-textbox / kendoTextBox)
+ * - .mj-input--sm — compact 32px variant, height-matched to `mjButton size="sm"`
+ *   for toolbars where inputs and buttons sit side by side
  * - .mj-textarea — textareas (replaces kendoTextArea)
  * - .mj-checkbox — styled checkbox (replaces kendoCheckBox)
  */
@@ -41,6 +43,14 @@
     cursor: not-allowed;
     background: var(--mj-bg-surface-sunken);
   }
+}
+
+/* Compact toolbar variant — height-matched to mjButton size="sm" (32px) so
+   inputs, buttons, and segmented controls align in toolbars. */
+.mj-input--sm {
+  min-height: 32px;
+  padding: 5px 10px;
+  font-size: var(--mj-text-xs);
 }
 
 .mj-textarea {

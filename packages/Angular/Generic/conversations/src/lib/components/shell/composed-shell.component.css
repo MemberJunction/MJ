@@ -1,4 +1,9 @@
-/* mj-composed-shell — the frame grid. Tokens only. */
+/* mj-composed-shell — the frame grid.
+   TOKEN POLICY (shell-wide, ratified 2026-07-23): colors, font sizes, weights,
+   radii, shadows, and structural spacing all use --mj-* tokens. The one
+   sanctioned exception: 11px micro-label type (uppercase section labels,
+   helper captions) sits BELOW the token scale (--mj-text-xs = 12px) by design —
+   always written as a commented 11px, unified shell-wide. */
 
 :host {
   display: block;
@@ -26,7 +31,23 @@
   background: var(--mj-bg-page);
 }
 
+/* Child-surface sizing lives HERE (parent-scoped rules on the host elements) —
+   :host sizing rules on the children proved unreliable in this package (two
+   observed cases of partial :host application); the parent's content-scoped
+   rules always match. */
 .shell-main > mj-conversation-chat-area {
+  flex: 1;
+  min-height: 0;
+}
+.shell-main > mj-shell-front-door {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.shell-main > mj-shell-chats-surface {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
 }
@@ -37,57 +58,57 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--mj-space-2-5);
   text-align: center;
-  padding: 40px;
+  padding: var(--mj-space-10);
   color: var(--mj-text-muted);
 }
 .shell-placeholder i {
-  font-size: 26px;
+  font-size: var(--mj-text-2xl);
   color: var(--mj-text-disabled);
 }
 .shell-placeholder h2 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: var(--mj-text-base);
+  font-weight: var(--mj-font-bold);
   color: var(--mj-text-secondary);
 }
 .shell-placeholder p {
   margin: 0;
   max-width: 420px;
-  font-size: 12.5px;
+  font-size: var(--mj-text-xs);
   line-height: 1.55;
 }
 
 .set-body {
-  padding: 4px 18px 24px;
+  padding: var(--mj-space-1) var(--mj-space-4) var(--mj-space-6);
 }
 
 .set-sub {
-  font-size: 12px;
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-muted);
-  margin: 2px 0 0;
+  margin: var(--mj-space-0-5) 0 0;
 }
 
 .set-lbl {
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: 11px; /* micro-label — below token scale, see header */
+  font-weight: var(--mj-font-bold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--mj-text-muted);
-  margin: 20px 2px 6px;
+  margin: var(--mj-space-5) var(--mj-space-0-5) var(--mj-space-1-5);
 }
 
 .set-group {
   border: 1px solid var(--mj-border-default);
-  border-radius: 12px;
+  border-radius: var(--mj-radius-lg);
 }
 
 .set-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 11px 13px;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-2-5) var(--mj-space-3);
   border-bottom: 1px solid var(--mj-border-subtle);
 }
 .set-row:last-child {
@@ -99,20 +120,20 @@
 }
 .set-row .t .n {
   display: block;
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
 }
 .set-row .t .d {
   display: block;
-  font-size: 11px;
+  font-size: 11px; /* micro-label — below token scale, see header */
   color: var(--mj-text-muted);
   margin-top: 1px;
 }
 
 .ro-value {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-secondary);
 }
 

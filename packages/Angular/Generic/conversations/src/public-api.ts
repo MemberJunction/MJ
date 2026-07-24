@@ -90,6 +90,7 @@ export * from './lib/components/overlay/chat-overlay.component';
 // Composed shell (SLICE-S1+)
 export * from './lib/components/shell/shell-types';
 export * from './lib/components/shell/composed-shell.component';
+export * from './lib/components/shell/shell-front-door.component';
 export * from './lib/components/shell/shell-sidebar.component';
 export * from './lib/components/shell/shell-chats-surface.component';
 export * from './lib/utils/shell-preferences';

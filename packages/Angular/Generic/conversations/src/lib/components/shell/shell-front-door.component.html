@@ -1,0 +1,122 @@
+<div class="qh-page fd">
+  <h3 class="fd-title">{{ Greeting }}</h3>
+  <p class="fd-sub">Ask anything, or describe a deliverable — &#64; agents · # records · / skills</p>
+
+  <div class="fd-composer">
+    <mj-message-input
+      [currentUser]="CurrentUser"
+      [emptyStateMode]="true"
+      [enableMentions]="true"
+      [enableAttachments]="true"
+      placeholder="Ask anything, or describe a deliverable…"
+      (emptyStateSubmit)="OnComposerSubmit($event)">
+    </mj-message-input>
+  </div>
+
+  @if (IsFirstRun) {
+    <div class="qh-sect">
+      <div class="qh-label"><span class="l">Or start from one of these</span></div>
+      @for (s of Starters; track s.Text) {
+        <div class="fr-sug" role="button" tabindex="0" (click)="OnStarterClicked(s.Text)" (keydown.enter)="OnStarterClicked(s.Text)">
+          <div class="tt">
+            <div class="t">{{ s.Text }}</div>
+            <div class="s">{{ s.Sub }}</div>
+          </div>
+          <i class="fa-solid fa-arrow-right"></i>
+        </div>
+      }
+    </div>
+    <p class="qh-foot center">
+      <i class="fa-solid fa-seedling"></i>As work accumulates, group conversations into projects —
+      shared memory, deliverables, and people in one place. Nothing to set up now.
+    </p>
+  } @else {
+    @if (LoadError) {
+      <div class="fd-err">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        Couldn't load your workspace activity — the server didn't answer.
+        <span class="retry" role="button" tabindex="0" (click)="LoadDynamic()">Retry</span>
+      </div>
+    } @else if (DynamicLoading) {
+      <div class="qh-sect">
+        <div class="fd-skel" style="width: 62%"></div>
+        <div class="fd-skel" style="width: 84%"></div>
+        <div class="fd-skel" style="width: 70%"></div>
+      </div>
+    } @else {
+      @if (NeedsYou.length) {
+        <div class="qh-sect">
+          <div class="qh-label">
+            <span class="l">Needs you</span>
+            @if (NeedsYou.length > NeedsAtRest) {
+              <span class="a" role="button" tabindex="0" (click)="ToggleAllNeeds()" (keydown.enter)="ToggleAllNeeds()">
+                {{ ShowAllNeeds ? 'Show less' : 'All (' + NeedsYou.length + ') →' }}
+              </span>
+            }
+          </div>
+          @for (item of VisibleNeedsYou; track $index) {
+            <div class="fd-need">
+              <i class="lead fa-solid" [ngClass]="[item.Icon, item.IconClass]"></i>
+              <span class="t">{{ item.Lead }}<b>{{ item.Strong }}</b></span>
+              <button
+                mjButton
+                [variant]="item.Kind === 'request' ? 'primary' : 'secondary'"
+                size="sm"
+                (click)="OpenConversationById(item.ConversationId, 'chats')">
+                {{ item.ActionLabel }}
+              </button>
+            </div>
+          }
+        </div>
+      }
+    }
+
+    @if (ContinueCards.length) {
+      <div class="qh-sect">
+        <div class="qh-label">
+          <span class="l">Continue</span>
+          <span class="a" role="button" tabindex="0" (click)="ViewRequested.emit('chats')">All chats →</span>
+        </div>
+        <div class="fd-cards">
+          @for (c of ContinueCards; track c.ID) {
+            <div class="fd-card" role="button" tabindex="0" (click)="OnCardClicked(c)" (keydown.enter)="OnCardClicked(c)">
+              <div class="top">
+                @if (ShowProjects) {
+                  @if (ProjectColor(c); as color) {
+                    <span class="pdot" [style.background]="color"></span>{{ ProjectName(c) }} ·
+                  } @else {
+                    <span class="pdot hollow"></span>Ungrouped ·
+                  }
+                }
+                {{ TimeLabel(c) }}
+                @if (HasActivity(c)) {
+                  <span class="udot" title="New activity"></span>
+                }
+              </div>
+              <div class="n">{{ c.Name || 'Untitled conversation' }}</div>
+              @if (c.Description) {
+                <div class="d">{{ c.Description }}</div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    @if (!DynamicLoading && !LoadError && Ran.length) {
+      <div class="qh-sect">
+        <div class="qh-label">
+          <span class="l">Ran overnight</span>
+          <span class="a" role="button" tabindex="0" (click)="ViewRequested.emit('routines')">Routines →</span>
+        </div>
+        @for (item of Ran; track $index) {
+          <div class="fd-need">
+            <i class="lead ok fa-solid fa-clock-rotate-left"></i>
+            <span class="t"><b>{{ item.RoutineName }}</b> ran {{ item.When }} <span class="w">· {{ item.Note }}</span></span>
+            <span class="fd-open" role="button" tabindex="0" (click)="OpenConversationById(item.ConversationId, 'routines')">Open result</span>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

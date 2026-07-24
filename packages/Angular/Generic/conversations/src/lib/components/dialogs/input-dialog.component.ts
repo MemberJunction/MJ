@@ -48,7 +48,9 @@ import { Component, Input } from '@angular/core';
     `,
   styles: [`
     .input-dialog-content {
-      padding: 8px 0;
+      /* Service-opened dialogs ship a zero-padding body (component content owns
+         its inset) — match the dialog system's standard 20px content padding. */
+      padding: 16px 20px 20px;
     }
     .dialog-message {
       margin: 0 0 16px 0;
@@ -59,6 +61,9 @@ import { Component, Input } from '@angular/core';
       display: flex;
       flex-direction: column;
       gap: 8px;
+    }
+    .input-field + .input-field {
+      margin-top: 16px;
     }
     .input-label {
       font-weight: 500;

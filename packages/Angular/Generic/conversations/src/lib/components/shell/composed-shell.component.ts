@@ -32,7 +32,8 @@ import {
   inject,
 } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { MJConversationEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, MJConversationEntity } from '@memberjunction/core-entities';
+import { PendingAttachment } from '@memberjunction/ng-composer';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
@@ -76,6 +77,17 @@ export class ComposedShellComponent extends BaseAngularComponent {
   public SelectedConversationId: string | null = null;
   public SelectedConversation: MJConversationEntity | null = null;
   public IsNewConversation = false;
+  /** Front Door composer handoff (auto-sent by chat-area on mount, then consumed). */
+  public PendingMessageText: string | null = null;
+  public PendingAttachments: PendingAttachment[] = [];
+  /** Pins the pending message to ONE conversation (chat-area's anti-bleed contract). */
+  public PendingMessageConversationId: string | null = null;
+
+  private get engine(): ConversationEngine {
+    return this.Provider
+      ? (ConversationEngine.GetProviderInstance(this.Provider, ConversationEngine) as ConversationEngine)
+      : ConversationEngine.Instance;
+  }
   public SettingsOpen = false;
   public Appearance: ShellAppearance = 'system';
   public RefreshState: 'idle' | 'refreshing' | 'done' = 'idle';
@@ -87,11 +99,6 @@ export class ComposedShellComponent extends BaseAngularComponent {
   public readonly AppearanceOptions = ['System', 'Light', 'Dark'];
 
   public readonly Placeholders: Partial<Record<ShellView, ShellPlaceholder>> = {
-    frontdoor: {
-      Icon: 'fa-door-open',
-      Title: 'Front Door',
-      Detail: 'Your landing surface — needs-you, continue, and ran-overnight arrive with slice S3. Pick a conversation from the sidebar, or start a new one.',
-    },
     projects: {
       Icon: 'fa-folder',
       Title: 'Projects',
@@ -153,7 +160,23 @@ export class ComposedShellComponent extends BaseAngularComponent {
     this.cdr.markForCheck();
   }
 
+  /**
+   * "New conversation" lands on the FRONT DOOR (Matt, S3 review) — per the shell
+   * routing rule, quick chats start from the Front Door's composer; a separate
+   * blank new-chat surface would duplicate it. The chat-area empty-state path
+   * below (NewConversationFallback) remains for the composer-submit error case.
+   */
   public OnNewConversation(): void {
+    this.SelectedConversationId = null;
+    this.SelectedConversation = null;
+    this.IsNewConversation = false;
+    this.CurrentView = 'frontdoor';
+    this.ViewChanged.emit('frontdoor');
+    this.ConversationOpened.emit(null);
+    this.cdr.markForCheck();
+  }
+
+  private NewConversationFallback(): void {
     this.SelectedConversationId = null;
     this.SelectedConversation = null;
     this.IsNewConversation = true;
@@ -163,10 +186,62 @@ export class ComposedShellComponent extends BaseAngularComponent {
     this.cdr.markForCheck();
   }
 
-  public OnConversationCreated(event: { conversation: MJConversationEntity }): void {
+  /**
+   * Front Door composer → the frame CREATES the conversation (mirroring the
+   * chat empty-state's creation flow), then delivers the message through the
+   * chat-area pendingMessage contract, pinned to the new conversation so the
+   * auto-send can't bleed elsewhere.
+   */
+  public async OnComposerSubmitted(event: { text: string; attachments: PendingAttachment[] }): Promise<void> {
+    try {
+      const conversation = await this.engine.CreateConversation(
+        'New Conversation', // auto-named after the first message
+        this.environmentId,
+        this.currentUser
+      );
+      if (!conversation) throw new Error('CreateConversation returned null');
+      this.SelectedConversationId = conversation.ID;
+      this.SelectedConversation = conversation;
+      this.IsNewConversation = false;
+      this.PendingMessageText = event.text;
+      this.PendingAttachments = event.attachments;
+      this.PendingMessageConversationId = conversation.ID;
+      this.CurrentView = 'chat';
+      this.ViewChanged.emit('chat');
+      this.ConversationOpened.emit(conversation.ID);
+    } catch (error) {
+      console.error('[ComposedShell] Front Door send failed to create conversation:', error);
+      // Fall back to the plain chat empty state; the user retypes rather than
+      // the message silently vanishing into a broken state.
+      this.NewConversationFallback();
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OnPendingMessageConsumed(): void {
+    this.PendingMessageText = null;
+    this.PendingAttachments = [];
+    this.PendingMessageConversationId = null;
+  }
+
+  /**
+   * Chat-area empty-state created a conversation. Per its contract, the pending
+   * first message ROUND-TRIPS through the host: we set it back as an input,
+   * pinned to the new conversation, and chat-area auto-sends it there.
+   */
+  public OnConversationCreated(event: {
+    conversation: MJConversationEntity;
+    pendingMessage?: string;
+    pendingAttachments?: PendingAttachment[];
+  }): void {
     this.SelectedConversationId = event.conversation.ID;
     this.SelectedConversation = event.conversation;
     this.IsNewConversation = false;
+    if (event.pendingMessage) {
+      this.PendingMessageText = event.pendingMessage;
+      this.PendingAttachments = event.pendingAttachments ?? [];
+      this.PendingMessageConversationId = event.conversation.ID;
+    }
     this.ConversationOpened.emit(event.conversation.ID);
     this.cdr.markForCheck();
   }

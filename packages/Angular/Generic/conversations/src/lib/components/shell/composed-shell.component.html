@@ -14,7 +14,17 @@
   </mj-shell-sidebar>
 
   <main class="shell-main">
-    @if (CurrentView === 'chats') {
+    @if (CurrentView === 'frontdoor') {
+      <mj-shell-front-door
+        [Provider]="Provider"
+        [EnvironmentId]="environmentId"
+        [CurrentUser]="currentUser"
+        [ShowProjects]="ShowProjects"
+        (ConversationSelected)="OnConversationSelected($event)"
+        (ViewRequested)="OnViewSelected($event)"
+        (ComposerSubmitted)="OnComposerSubmitted($event)">
+      </mj-shell-front-door>
+    } @else if (CurrentView === 'chats') {
       <mj-shell-chats-surface
         [Provider]="Provider"
         [EnvironmentId]="environmentId"
@@ -30,6 +40,10 @@
         [conversationId]="SelectedConversationId"
         [conversation]="SelectedConversation"
         [isNewConversation]="IsNewConversation"
+        [pendingMessage]="PendingMessageText"
+        [pendingAttachments]="PendingAttachments"
+        [pendingMessageConversationId]="PendingMessageConversationId"
+        (pendingMessageConsumed)="OnPendingMessageConsumed()"
         (conversationCreated)="OnConversationCreated($event)">
       </mj-conversation-chat-area>
     } @else if (ActivePlaceholder; as ph) {

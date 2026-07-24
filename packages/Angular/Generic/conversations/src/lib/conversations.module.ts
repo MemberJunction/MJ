@@ -80,6 +80,7 @@ import { ChatAgentsOverlayComponent } from './components/overlay/chat-overlay.co
 // Composed shell (SLICE-S1) — frame is module-declared (mounts chat-area/toast +
 // the shared mj-slide-panel for Settings); sidebar is a standalone leaf component.
 import { ComposedShellComponent } from './components/shell/composed-shell.component';
+import { ShellFrontDoorComponent } from './components/shell/shell-front-door.component';
 import { ShellSidebarComponent } from './components/shell/shell-sidebar.component';
 import { ShellChatsSurfaceComponent } from './components/shell/shell-chats-surface.component';
 import { RealtimeAgentPickerComponent } from './components/realtime/realtime-agent-picker.component';
@@ -173,7 +174,8 @@ const COMPONENTS = [
   ImageViewerComponent,
   PinnedMessagesPanelComponent,
   ChatAgentsOverlayComponent,
-  ComposedShellComponent
+  ComposedShellComponent,
+  ShellFrontDoorComponent
 ];
 
 @NgModule({
