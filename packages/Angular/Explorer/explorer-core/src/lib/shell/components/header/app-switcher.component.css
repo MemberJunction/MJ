@@ -228,12 +228,6 @@
 .app-card.active .app-card-name {
   color: var(--mj-brand-primary);
 }
-.app-card-lastused {
-  flex-shrink: 0;
-  font-size: 10.5px;
-  font-weight: var(--mj-font-semibold);
-  color: var(--mj-text-muted);
-}
 .app-card-desc {
   margin-top: var(--mj-space-0-5);
   font-size: var(--mj-text-xs);

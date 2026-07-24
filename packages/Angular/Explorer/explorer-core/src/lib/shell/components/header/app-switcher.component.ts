@@ -135,23 +135,6 @@ export class AppSwitcherComponent {
       a.Name.toLowerCase().includes(q) || (a.Description || '').toLowerCase().includes(q));
   }
 
-  /** Human "last used" stamp for a recent app's card */
-  RelativeLastUsed(app: BaseApplication): string {
-    const entry = this.recentEntries.find(e => UUIDsEqual(e.id, app.ID));
-    if (!entry) {
-      return '';
-    }
-    const mins = Math.floor((Date.now() - entry.ts) / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days === 1) return 'yesterday';
-    if (days < 30) return `${days}d ago`;
-    return '';
-  }
-
   /** Stable DOM id for a card (arrow-key focus target) */
   OptionId(index: number): string {
     return `mj-launcher-opt-${index}`;
