@@ -43,6 +43,7 @@
       <mj-app-nav
         class="desktop-nav"
         [app]="activeApp"
+        [overflowEnabled]="true"
         (navItemClick)="onNavItemClick($event)"
         (navItemDismiss)="onNavItemDismiss($event)">
       </mj-app-nav>
@@ -280,6 +281,7 @@
         <div class="mobile-nav-section-title">{{ activeApp.Name }}</div>
         <mj-app-nav
           [app]="activeApp"
+          [overflowEnabled]="false"
           (navItemClick)="onNavItemClick($event)"
           (navItemDismiss)="onNavItemDismiss($event)">
         </mj-app-nav>

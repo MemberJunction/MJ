@@ -143,6 +143,22 @@ mj-tab-container ::ng-deep .lm_stack {
   flex: 1;
 }
 
+/* Priority+ overflow support: on desktop the app nav owns the header's free
+   middle space (so it knows exactly how much room its items have) and the
+   spacer stands down. On mobile the nav is display:none'd, so the spacer's
+   flex: 1 keeps the action cluster right-aligned. When the nav isn't rendered
+   at all (app-locked sessions, Shell.AppNav.Enabled off), the sibling selector
+   doesn't match and the spacer behaves as before. */
+@media (min-width: 769px) {
+  mj-app-nav.desktop-nav {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  mj-app-nav.desktop-nav + .spacer {
+    flex: 0 0 0px;
+  }
+}
+
 .header-actions {
   display: flex;
   align-items: center;

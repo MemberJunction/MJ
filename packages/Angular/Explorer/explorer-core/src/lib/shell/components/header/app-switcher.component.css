@@ -118,8 +118,11 @@
   color: var(--item-color, var(--mj-text-muted));
 }
 
-/* Mobile: full-width dropdown with scroll */
-@media (max-width: 600px) {
+/* Mobile: full-width dropdown with scroll.
+   Breakpoint matches the shell's 768px mobile breakpoint — they used to
+   disagree (600 vs 768), leaving a dead zone where the drawer was active
+   but the switcher still anchored desktop-style. */
+@media (max-width: 768px) {
   .app-switcher-dropdown {
     position: fixed;
     top: calc(60px + var(--mj-connectivity-banner-height, 0px));

@@ -1,5 +1,13 @@
-<nav class="nav-list" [style.--app-color]="appColor">
-  @for (item of navItems; track trackByNavItem($index, item)) {
+<nav class="nav-list" #navList [class.measuring]="Measuring" [style.--app-color]="appColor">
+  @if (Loading && navItems.length === 0) {
+    <!-- Skeleton pills while GetNavItems() resolves — prevents header pop-in -->
+    <div class="nav-skeleton" aria-hidden="true">
+      <span class="nav-skeleton-pill" style="width: 88px"></span>
+      <span class="nav-skeleton-pill" style="width: 72px"></span>
+      <span class="nav-skeleton-pill" style="width: 96px"></span>
+    </div>
+  }
+  @for (item of InlineItems; track trackByNavItem($index, item)) {
     <div
       class="nav-item"
       [mjClickable]="item.Label"
@@ -21,6 +29,51 @@
         <button class="dismiss-btn" title="Remove" (click)="onDismiss(item, $event)">
           <i class="fa-solid fa-xmark"></i>
         </button>
+      }
+    </div>
+  }
+  @if (OverflowItems.length > 0) {
+    <div class="nav-more-container">
+      <div
+        #moreBtn
+        class="nav-item nav-more-btn"
+        mjClickable="More navigation items"
+        testId="nav-more-btn"
+        [attr.aria-haspopup]="true"
+        [attr.aria-expanded]="MoreOpen"
+        [class.active]="OverflowHasActive"
+        (click)="ToggleMore($event)">
+        <i class="fa-solid fa-ellipsis"></i>
+        <span>More</span>
+        <span class="more-count">{{ OverflowItems.length }}</span>
+      </div>
+      @if (MoreOpen) {
+        <div class="nav-more-dropdown">
+          @for (item of OverflowItems; track trackByNavItem($index, item)) {
+            <div
+              class="nav-more-item"
+              [mjClickable]="item.Label"
+              role="link"
+              [testId]="'nav-more-item-' + item.Label"
+              [attr.aria-current]="isActive(item) ? 'page' : null"
+              [class.active]="isActive(item)"
+              [class.dynamic]="isDynamic(item)"
+              (click)="onNavClick(item, $event)">
+              @if (item.Icon) {
+                <i [class]="item.Icon"></i>
+              }
+              <span class="more-item-label">{{ item.Label }}</span>
+              @if (item.Badge) {
+                <span class="badge">{{ item.Badge }}</span>
+              }
+              @if (isDynamic(item)) {
+                <button class="dismiss-btn" title="Remove" (click)="onDismiss(item, $event)">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              }
+            </div>
+          }
+        </div>
       }
     </div>
   }
