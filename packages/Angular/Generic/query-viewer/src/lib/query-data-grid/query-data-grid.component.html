@@ -40,11 +40,11 @@
         <!-- Export button -->
         @if (ShowExport) {
           <button
-            [disabled]="RowCount === 0"
+            [disabled]="RowCount === 0 || IsPreparingExport"
             title="Export data"
             class="toolbar-btn"
             (click)="OpenExportDialog()">
-            <i class="fa-solid fa-file-export"></i>
+            <i class="fa-solid" [class.fa-file-export]="!IsPreparingExport" [class.fa-spinner]="IsPreparingExport" [class.fa-spin]="IsPreparingExport"></i>
             <span class="button-text">Export</span>
           </button>
         }

@@ -7,6 +7,19 @@ on:
     types:
       - completed
 
+  # Docs content changes that land on main outside a release cycle
+  push:
+    branches: [main]
+    paths:
+      - 'docs-site/**'
+      - 'guides/**'
+      - 'README.md'
+      - 'DEPLOYMENT.md'
+      - 'UPGRADE-v5.0.md'
+      - 'CONTRIBUTING.md'
+      - 'metadata/README.md'
+      - '.claude/skills/**'
+
   workflow_dispatch:
 
 permissions:
@@ -20,8 +33,8 @@ concurrency:
 
 jobs:
   docs:
-    name: Generate and deploy package documentation
-    timeout-minutes: 30
+    name: Generate and deploy documentation site
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     steps:
       - name: Error out if the trigger did not succeed
@@ -41,7 +54,9 @@ jobs:
         with:
           node-version: 24
           cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
+          cache-dependency-path: |
+            package-lock.json
+            docs-site/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -49,8 +64,29 @@ jobs:
       - name: Build packages
         run: npm run build
 
-      - name: Generate documentation
+      - name: Generate API reference (TypeDoc)
         run: npx typedoc
+
+      - name: Install docs site dependencies
+        run: npm ci
+        working-directory: docs-site
+
+      - name: Run docs site unit tests
+        run: npm test
+        working-directory: docs-site
+
+      - name: Build docs site (ingest + Astro)
+        run: npm run build
+        working-directory: docs-site
+        env:
+          DOCS_BASE: /MJ
+          DOCS_SITE: https://memberjunction.github.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach API reference under /api
+        run: |
+          mkdir -p docs-site/dist/api
+          cp -R docs/. docs-site/dist/api/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -58,7 +94,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'docs'
+          path: 'docs-site/dist'
 
       - name: Deploy to GitHub Pages
         id: deployment
