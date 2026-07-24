@@ -132,7 +132,7 @@
 ## C. Host wiring & perimeter (the invisible class — all CONTRACT, cutover checklist)
 | Contract | Verified at |
 |---|---|
-| Host feature-gate contract (~20 chat-area inputs) re-expressed; embedder matrix (Form Builder / Component Studio / Predictive Studio / LiveKit exports) keeps working | Cutover + per-embedder smoke test |
+| Host feature-gate contract (~20 chat-area inputs) re-expressed; embedder matrix (Form Builder / Component Studio / Predictive Studio / LiveKit exports — VERIFIED in-repo; **Betty = REPORTED consumer only, per Collin's toggle/chrome PRs — actual component list + gate config UNVERIFIED, external repo; verify with Collin before S5 smoke tests**) keeps working | Cutover + per-embedder smoke test |
 | String couplings: app 'Chat', nav names, resource `@RegisterClass` keys (+ manifest regen on any rename) | Cutover checklist — rename map authored FIRST |
 | Overlay↔route boundary (`isChatRoute`), toast-suppression predicate, `<mj-toast>` hosting, TopBoundaryPx/EmptyStateGreeting/AppContext feeds | Cutover |
 | Omnibar `?agent`+nonce consume path (once-only, stale-echo re-clear) + pill pre-address seam | Slice that owns the wrapper |
