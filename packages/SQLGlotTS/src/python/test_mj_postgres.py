@@ -1068,6 +1068,27 @@ check("RAISERROR + trailing PRINT (no real sibling) still fast-paths to a single
       "BEGIN RAISERROR('conflict detected', 16, 1) PRINT 'note' END;",
       must_contain=["DO $$", "RAISE EXCEPTION 'conflict detected'"],
       expect_unhandled=0)
+# Strict "never silently drop" contract (issue #3252 code review 2): a guard body with TWO
+# (semicolon-separated) RAISERRORs cannot collapse into a SINGLE RAISE EXCEPTION without dropping
+# the second unaccounted — the `;`-split makes each RAISERROR its own lone-raiserror piece, so the
+# old fast path emitted only the first and the second vanished into no bucket. A 2nd RAISERROR is a
+# sibling: report the whole guard unhandled instead. (Real migration guards never pair two, but the
+# fast path must still not silently lose one.)
+check("double-RAISERROR guard is reported unhandled, not collapsed to a single RAISE (2nd not dropped)",
+      "IF EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Foo) "
+      "BEGIN RAISERROR('a fail', 16, 1); RAISERROR('b fail', 16, 1) END;",
+      must_not_contain=["DO $$", "RAISE EXCEPTION"],
+      expect_unhandled=1)
+check_accounting("double-RAISERROR guard reconciles as one unhandled guard, no leak",
+                 "IF EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Foo) "
+                 "BEGIN RAISERROR('a fail', 16, 1); RAISERROR('b fail', 16, 1) END;")
+# Semicolon-LESS double RAISERROR is caught by the same contract (already, via _has_real_stmt_starter
+# seeing the 2nd RAISERROR after the first call) — pin it so it can't regress.
+check("double-RAISERROR guard (semicolon-LESS) is also reported unhandled, not collapsed",
+      "IF EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Foo) "
+      "BEGIN RAISERROR('a fail', 16, 1) RAISERROR('b fail', 16, 1) END;",
+      must_not_contain=["DO $$", "RAISE EXCEPTION"],
+      expect_unhandled=1)
 
 
 # --- Version-skew guard (issue #3252 review): every `exp.<Name>` the dialect references

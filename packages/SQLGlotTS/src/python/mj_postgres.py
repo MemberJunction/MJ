@@ -1782,16 +1782,25 @@ def _is_raiserror_only(stmt: str) -> bool:
 
 
 def _raiserror_has_siblings(body: str) -> bool:
-    """True if `body` contains a meaningful statement OTHER than RAISERROR (a benign trailing
-    PRINT / RETURN / comment / blank doesn't count). The RAISERROR→RAISE-EXCEPTION guard fast path
-    is only safe when RAISERROR stands alone; a paired real statement would be silently dropped
-    (issue #3252). Because T-SQL's `;` is optional, a real statement can ride glued after a PRINT
-    with no separator — so a piece that merely STARTS with PRINT is NOT automatically benign:
+    """True if `body` contains a meaningful statement OTHER than a single RAISERROR (a benign
+    trailing PRINT / RETURN / comment / blank doesn't count). The RAISERROR→RAISE-EXCEPTION guard
+    fast path collapses the guard to ONE `RAISE EXCEPTION`, so it is only safe when exactly ONE
+    RAISERROR stands alone; a paired real statement — OR a SECOND RAISERROR — would be silently
+    dropped (issue #3252). Because T-SQL's `;` is optional, a real statement can ride glued after a
+    PRINT with no separator, so a piece that merely STARTS with PRINT is NOT automatically benign:
     consume the PRINT/RETURN and check the remainder for a real starter. _is_raiserror_only handles
-    the semicolon-less RAISERROR shape that a bare `;`-split misses."""
+    the semicolon-less RAISERROR shape a bare `;`-split misses; the count guards the semicolon-
+    SEPARATED double-RAISERROR (`RAISERROR('a'); RAISERROR('b')`), whose second call splits into its
+    own lone-raiserror piece and must not fold away unaccounted (issue #3252 code review 2)."""
+    raiserrors = 0
     for s in _split_top_level_statements(body):
         stmt = _strip_leading_sql_comments(s).strip(" \t\r\n;")
-        if not stmt or _is_raiserror_only(stmt):
+        if not stmt:
+            continue
+        if _is_raiserror_only(stmt):
+            raiserrors += 1
+            if raiserrors > 1:
+                return True  # a 2nd RAISERROR can't fold into the single RAISE EXCEPTION — a sibling
             continue
         head = _re.match(r"(?:PRINT|RETURN)\b", stmt, _re.IGNORECASE)
         if head and not _has_real_stmt_starter(stmt[head.end():]):
