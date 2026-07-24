@@ -127,14 +127,21 @@ const instructionFiles = [
   ...globSync('guides/*.md', { cwd: ROOT }),
 ].filter(exists);
 
-/** GitHub-style heading slug, so `## Foo Bar!` -> `foo-bar`. */
+/**
+ * GitHub-style heading slug, so `## Foo Bar!` -> `foo-bar`.
+ *
+ * Deliberately does NOT trim after stripping punctuation. GitHub keeps the hyphen left behind
+ * by a removed leading/trailing emoji, so `## 🚨 Button Styling 🚨` slugs to
+ * `-button-styling-` with both edge hyphens. Trimming here produced false "dead anchor"
+ * reports against the 34 emoji-prefixed headings in this repo's CLAUDE.md files.
+ * Each whitespace char maps to one hyphen for the same reason — `\s+` would collapse the
+ * double space an interior emoji leaves behind.
+ */
 const slug = (heading) =>
   heading
-    .trim()
     .toLowerCase()
-    .replace(/[^\w\s-]/g, '')   // drop punctuation and emoji
-    .trim()
-    .replace(/\s+/g, '-');
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s/g, '-');
 
 /** Every anchor a markdown file exposes (from its headings). */
 const anchorCache = new Map();
@@ -196,8 +203,7 @@ for (const f of instructionFiles) {
     notes.push(`${f}: refers to root CLAUDE.md in prose — confirm the content it means still lives there.`);
   }
 }
-log(`  references:   ${refsChecked} links + ${anchorsChecked} anchors checked across ${instructionFiles.length} instruction files` +
-    (grandfatheredHit ? ` (${grandfatheredHit} pre-existing, grandfathered)` : ''));
+log(`  references:   ${refsChecked} links + ${anchorsChecked} anchors checked across ${instructionFiles.length} instruction files`);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. ROUTING — every CLAUDE.md is discoverable from root
@@ -261,6 +267,62 @@ if (exists('guides/README.md')) {
   }
   log(`  guides:       ${guides.length} guides, all indexed`);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. INBOUND INSTRUCTION REFERENCES — anywhere in the repo, not just instruction files
+//
+// Checks 3 validates links going OUT of instruction files. The dangerous direction is the
+// other one: relocating a section out of root orphans every reference INTO it, and those
+// live all over the repo (plans/, package docs) — outside any instruction-file corpus.
+//
+// This scans every markdown file but only validates links whose target IS an instruction
+// file (a CLAUDE.md, or anything under .claude/rules/). Scoping by target rather than by
+// source is what keeps it usable: widening the corpus to plans/** wholesale would pull in
+// 111 pre-existing broken links that have nothing to do with instruction files, and
+// grandfathering that many entries would bury the signal it exists to produce.
+// ─────────────────────────────────────────────────────────────────────────────
+const isInstructionFile = (absPath) => {
+  const p = relative(ROOT, absPath).split('/');
+  return p[p.length - 1] === 'CLAUDE.md' || (p[0] === '.claude' && p[1] === 'rules');
+};
+
+let inboundChecked = 0;
+const allMarkdown = globSync('**/*.md', {
+  cwd: ROOT,
+  exclude: (p) => p.includes('node_modules') || p.includes('.claude/worktrees'),
+}).filter((p) => !p.includes('node_modules') && !p.split('/').includes('dist'));
+
+for (const f of allMarkdown) {
+  let txt;
+  try { txt = read(f); } catch { continue }
+  const base = dirname(join(ROOT, f));
+  const body = txt.replace(/```[\s\S]*?```/g, '');
+
+  for (const m of body.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
+    const [target, fragment] = m[1].split('#');
+    if (!target || /^(https?|mailto):/.test(target)) continue;
+    const abs = resolve(base, target);
+    if (!isInstructionFile(abs)) continue;   // only guard references INTO instruction files
+
+    inboundChecked++;
+    const key = `${f} -> ${m[1]}`;
+    if (grandfathered.has(key)) { grandfatheredHit++; continue }
+
+    if (!existsSync(abs)) {
+      fail('inbound-refs', `${f}: points at instruction file ${target}, which does not exist`);
+      continue;
+    }
+    if (fragment && !/^L\d+/.test(fragment)) {
+      const have = anchorsOf(abs);
+      if (have.size > 0 && !have.has(slug(fragment))) {
+        fail('inbound-refs', `${f}: ${target}#${fragment} — "${fragment}" is not a heading there (was the section relocated?)`);
+      }
+    }
+  }
+}
+log(`  inbound-refs: ${inboundChecked} references into instruction files, from ${allMarkdown.length} markdown files repo-wide`);
+// Printed after every check so the total is accurate — it accumulates across checks 3 and 7.
+if (grandfatheredHit) log(`  grandfathered: ${grandfatheredHit} pre-existing reference(s) reported as notes, not failures`);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Report

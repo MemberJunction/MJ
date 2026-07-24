@@ -236,6 +236,68 @@ describe('check-claude-md', () => {
         });
     });
 
+    describe('slug — must match GitHub, including hyphens left by stripped emoji', () => {
+        it('accepts an anchor whose heading is emoji-wrapped', () => {
+            // GitHub slugs "## 🚨 Button Styling 🚨" to "-button-styling-", keeping both edge
+            // hyphens where the emoji were. Trimming them produced false dead-anchor reports.
+            put('guides/README.md', '# Guides\n\n## \u{1F6A8} Button Styling \u{1F6A8}\n\n- [Alpha](ALPHA_GUIDE.md)\n');
+            put('CLAUDE.md', [
+                '# Guide', '',
+                '- packages/Thing/CLAUDE.md',
+                '- [styling](guides/README.md#-button-styling-)',
+                '',
+            ].join('\n'));
+            expect(run().code).toBe(0);
+        });
+
+        it('maps each space to its own hyphen rather than collapsing runs', () => {
+            // An interior emoji leaves a double space; GitHub yields two hyphens.
+            put('guides/README.md', '# Guides\n\n## A \u{1F6A8} B\n\n- [Alpha](ALPHA_GUIDE.md)\n');
+            put('CLAUDE.md', [
+                '# Guide', '',
+                '- packages/Thing/CLAUDE.md',
+                '- [ab](guides/README.md#a--b)',
+                '',
+            ].join('\n'));
+            expect(run().code).toBe(0);
+        });
+    });
+
+    describe('inbound refs — references INTO instruction files, from anywhere in the repo', () => {
+        it('fails a dead anchor in a file outside the instruction corpus', () => {
+            // plans/ is not in the instruction corpus, so only the inbound check can see this.
+            put('plans/some-plan.md', '# Plan\n\nSee [rules](../.claude/rules/scoped.md#gone-section).\n');
+            const { code, err } = run();
+            expect(code).toBe(1);
+            expect(err).toContain('inbound-refs');
+            expect(err).toContain('some-plan.md');
+        });
+
+        it('fails a reference to an instruction file that does not exist', () => {
+            put('plans/some-plan.md', '# Plan\n\nSee [rules](../packages/Ghost/CLAUDE.md).\n');
+            const { code, err } = run();
+            expect(code).toBe(1);
+            expect(err).toContain('does not exist');
+        });
+
+        it('ignores non-instruction targets in the same file', () => {
+            // A broken link to an ordinary doc is out of scope — that is what keeps this check
+            // usable in a repo with pre-existing link rot unrelated to instruction files.
+            put('plans/some-plan.md', '# Plan\n\nSee [other](./not-a-thing.md) and [rules](../.claude/rules/scoped.md).\n');
+            expect(run().code).toBe(0);
+        });
+
+        it('honours the grandfather list for inbound refs too', () => {
+            put('plans/some-plan.md', '# Plan\n\nSee [rules](../.claude/rules/scoped.md#gone-section).\n');
+            put('.claude/claude-md-manifest.json', JSON.stringify({
+                budget: { maxLines: 100, maxBytes: 10000 },
+                knownBrokenReferences: { entries: ['plans/some-plan.md -> ../.claude/rules/scoped.md#gone-section'] },
+                sections: [{ title: 'Kept', destinations: ['root'] }],
+            }));
+            expect(run().code).toBe(0);
+        });
+    });
+
     describe('grandfathering — a ratchet, not an amnesty', () => {
         const withEntries = (entries) => put('.claude/claude-md-manifest.json', JSON.stringify({
             budget: { maxLines: 100, maxBytes: 10000 },

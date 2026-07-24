@@ -38,16 +38,19 @@
       "Do not add to this list to silence a reference YOU broke. Fix it."
     ],
     "entries": [
-      "guides/FRAMEWORK_COMPARISON.md -> BUILDING_APPS_ON_MJ.md#4-write-once-run-on-every-tier--the-isomorphic-core-in-practice",
       "guides/PREDICTIVE_STUDIO_GUIDE.md -> ../plans/predictive-studio-business-ux/option-b-refined.html",
       "guides/REALTIME_BRIDGES_GUIDE.md -> ../packages/AI/BridgeBase/README.md",
       "guides/REALTIME_BRIDGES_GUIDE.md -> ../packages/AI/Bridge/README.md",
       "guides/REALTIME_BRIDGES_GUIDE.md -> ../plans/realtime/realtime-core-host-convergence.md",
-      "guides/REALTIME_BRIDGES_GUIDE.md -> REALTIME_CO_AGENTS_GUIDE.md#-single-source-of-truth-one-prep-the-precedence-cascade-the-corehost-boundary",
       "guides/REALTIME_CO_AGENTS_GUIDE.md -> ../plans/realtime/realtime-core-host-convergence.md",
-      "guides/REALTIME_CO_AGENTS_GUIDE.md -> REALTIME_BRIDGES_GUIDE.md#9-multi-party-livekit--multiple-agents",
-      "guides/REMOTE_BROWSER_GUIDE.md -> ../plans/realtime/computer-use-remote-browser-blend.md"
-    ]
+      "guides/REMOTE_BROWSER_GUIDE.md -> ../plans/realtime/computer-use-remote-browser-blend.md",
+      "plans/MEMORY_LEAK_AUDIT.md -> ../../../CLAUDE.md#memory-leaks"
+    ],
+    "$notes": {
+      "plans/MEMORY_LEAK_AUDIT.md -> ../../../CLAUDE.md#memory-leaks": "Kept rather than repointed because there is no correct target. The path escapes the repo root AND '#memory-leaks' was never a heading in root at any revision -- no instruction file documents listener-leak antipatterns. Repointing it would produce a link that resolves but does not contain what the sentence claims, which is worse than a visibly broken one. Fixing this means either writing that guidance or dropping the claim, and both are edits to an unrelated audit document.",
+      "removed-by-slug-fix": "Three anchor entries were dropped from this list because they were never really broken -- the checker's slugifier trimmed the leading/trailing hyphen that GitHub keeps when it strips an emoji from a heading, so it falsely reported dead anchors against this repo's 34 emoji-prefixed headings. The slugifier now matches GitHub and those three validate.",
+      "depth-errors-fixed": "Ten pre-existing links in plans/ pointed at instruction files with the wrong number of '../' segments. They were fixed rather than grandfathered: each had one unambiguous intended target that exists, so the fix is a one-token change, and starting the inbound-refs category with ten grandfathered entries would bury exactly the signal that check exists to produce."
+    }
   },
   "sections": [
     { "title": "GENERAL RULE", "destinations": ["root"] },

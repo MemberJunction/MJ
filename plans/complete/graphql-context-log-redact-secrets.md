@@ -424,7 +424,7 @@ input types in `packages/MJServer/src/generated/generated.ts`.
 ### Per-request provider note
 
 `context.providers[0].provider.EntityByName(...)` honors the spirit of
-[CLAUDE.md](../CLAUDE.md)'s multi-provider rule — it uses a per-request
+[CLAUDE.md](../../CLAUDE.md)'s multi-provider rule — it uses a per-request
 provider instead of `Metadata.Provider`. **However, this is not full
 multi-provider correctness**: in a future deployment with multiple distinct
 providers per request (e.g. a federated server routing resolvers to different
