@@ -244,10 +244,98 @@ describe('Parse guard (#2975 safety net) — never silently writes a broken conf
         expect(mockedWriteFileSync).not.toHaveBeenCalled(); // file untouched on a bad edit
     });
 
-    it('writes exactly once when the resulting config is valid', () => {
+    it('writes exactly once per resolvable config when the result is valid', () => {
+        // `setupConfigFile` makes existsSync return true for every probe, so BOTH the server
+        // workspace config and the root config resolve — one write each, no retry loop.
         setupConfigFile(issueTemplateConfig());
         const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest());
         expect(result.Success).toBe(true);
+        expect(mockedWriteFileSync).toHaveBeenCalledTimes(2);
+    });
+});
+
+/**
+ * #3271: `dynamicPackages` must reach EVERY config a consumer may load, not just the nearest one.
+ * MJAPI started from its own workspace reads the server-workspace config; the client bootstrap
+ * manifest step and container/App-Service deploys read the repo root. Writing only one of them
+ * fails silently — `0 client packages wired`, or an API whose schema lacks all the app's types
+ * while `__mj.OpenApp` still reports the app Active.
+ */
+describe('Multi-config targeting (#3271)', () => {
+    const SERVER_CONFIG = resolve(REPO_ROOT, 'packages/MJAPI', 'mj.config.cjs');
+    const ROOT_CONFIG = resolve(REPO_ROOT, 'mj.config.cjs');
+
+    it('writes the entry to both the server workspace config and the repo root', () => {
+        setupConfigFile(issueTemplateConfig());
+
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest(), 'packages/MJAPI');
+
+        expect(result.Success).toBe(true);
+        const targets = mockedWriteFileSync.mock.calls.map((c) => c[0] as string);
+        expect(targets).toContain(SERVER_CONFIG);
+        expect(targets).toContain(ROOT_CONFIG);
+        for (const call of mockedWriteFileSync.mock.calls) {
+            const written = call[1] as string;
+            expect(written).toContain('@mj-biz-apps/common-server');
+            assertValidConfig(written);
+        }
+    });
+
+    it('does not write the same file twice when the server path IS the repo root', () => {
+        setupConfigFile(issueTemplateConfig());
+
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest(), '.');
+
+        expect(result.Success).toBe(true);
         expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
+    });
+
+    it('succeeds with a warning when one config cannot be edited (#3270 re-export shape)', () => {
+        // The distribution ships apps/MJAPI/mj.config.cjs as a bare re-export, which has no
+        // object literal to insert into. That file needs no edit — it re-exports the root
+        // config, which IS written — so the install must not fail on it.
+        mockedExistsSync.mockReturnValue(true);
+        mockedReadFileSync.mockImplementation((p: unknown) =>
+            String(p) === SERVER_CONFIG
+                ? "module.exports = require('../../mj.config.cjs');\n"
+                : issueTemplateConfig()
+        );
+
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest(), 'packages/MJAPI');
+
+        expect(result.Success).toBe(true);
+        expect(result.Warnings?.join(' ')).toMatch(/Could not find a config object/);
+        const targets = mockedWriteFileSync.mock.calls.map((c) => c[0] as string);
+        expect(targets).toEqual([ROOT_CONFIG]); // only the editable one was written
+    });
+
+    it('fails only when NO config could be updated', () => {
+        mockedExistsSync.mockReturnValue(true);
+        mockedReadFileSync.mockReturnValue("module.exports = require('./somewhere-else.cjs');\n");
+
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest(), 'packages/MJAPI');
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/Failed to update config/);
+        expect(mockedWriteFileSync).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the apps/ layout when packages/MJAPI is absent (#3270)', () => {
+        // Unconfigured host: only the apps/ layout exists on disk.
+        const APPS_CONFIG = resolve(REPO_ROOT, 'apps/MJAPI', 'mj.config.cjs');
+        mockedExistsSync.mockImplementation((p: unknown) => {
+            const path = String(p);
+            if (path === resolve(REPO_ROOT, 'packages/MJAPI', 'package.json')) return false;
+            if (path === resolve(REPO_ROOT, 'apps/MJAPI', 'package.json')) return true;
+            return path === APPS_CONFIG || path === ROOT_CONFIG;
+        });
+        mockedReadFileSync.mockReturnValue(issueTemplateConfig());
+
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest());
+
+        expect(result.Success).toBe(true);
+        const targets = mockedWriteFileSync.mock.calls.map((c) => c[0] as string);
+        expect(targets).toContain(APPS_CONFIG);
+        expect(targets).toContain(ROOT_CONFIG);
     });
 });
