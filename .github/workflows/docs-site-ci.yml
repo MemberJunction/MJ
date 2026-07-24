@@ -52,6 +52,7 @@ jobs:
         run: npm run build
         working-directory: docs-site
         env:
-          DOCS_BASE: /MJ
-          DOCS_SITE: https://memberjunction.github.io
+          # Mirror the deploy config (docs.yml) so CI builds what prod ships.
+          DOCS_BASE: /
+          DOCS_SITE: https://docs.memberjunction.org
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
