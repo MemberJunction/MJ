@@ -76,15 +76,15 @@
       </div>
 
       <div class="launcher-foot">
-        <button class="launcher-configure" type="button" testId="app-switcher-configure" (click)="openConfigDialog()">
-          <i class="fa-solid fa-gear" aria-hidden="true"></i>
-          <span>Configure…</span>
-        </button>
         <span class="launcher-kbd-hints" aria-hidden="true">
           <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
           <span><kbd>↵</kbd> open</span>
           <span><kbd>esc</kbd> close</span>
         </span>
+        <button class="launcher-configure" type="button" testId="app-switcher-configure" (click)="openConfigDialog()">
+          <i class="fa-solid fa-gear" aria-hidden="true"></i>
+          <span>Configure…</span>
+        </button>
       </div>
 
       <span class="sr-only" role="status">{{ VisibleApps.length }} applications available</span>

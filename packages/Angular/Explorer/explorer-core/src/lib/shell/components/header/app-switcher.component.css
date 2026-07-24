@@ -54,12 +54,11 @@
 }
 
 /* ---- Launcher overlay ---- */
+/* Whole-screen scrim (matches the omnibar): the header dims behind the
+   launcher for full modal focus. */
 .launcher-scrim {
   position: fixed;
-  top: calc(60px + var(--mj-connectivity-banner-height, 0px));
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: var(--mj-bg-overlay);
   z-index: 9999;
   animation: launcher-fade-in var(--mj-transition-fast);
@@ -80,15 +79,20 @@
   flex-direction: column;
   overflow: hidden;
   z-index: 10000;
-  animation: launcher-fade-in var(--mj-transition-fast);
+  animation: launcher-pop .13s ease-out;
 }
 
-/* Fade only — deliberately no transform in the animation. Animating the
-   panel's transform fights the layout transform (translateX(-50%) on desktop,
-   none on the mobile sheet) and reads as the panel jumping in from the side. */
 @keyframes launcher-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+/* Desktop pop matches the omnibar's ob-pop exactly. The from-state keeps the
+   layout translateX(-50%); on the mobile sheet (base transform: none) this
+   animation is disabled rather than redefined — redefining keyframes inside
+   the media query is what caused the jump-in bug. */
+@keyframes launcher-pop {
+  from { opacity: 0; transform: translateX(-50%) scale(.985) translateY(-4px); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
 }
 
 /* ---- Head: filter + close ---- */
@@ -163,10 +167,11 @@
   flex: 1 1 auto;
   min-height: 0;
 }
+/* Typography matches the omnibar's .ob-group-label */
 .launcher-sect {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: var(--mj-font-bold);
-  letter-spacing: 0.09em;
+  letter-spacing: .6px;
   text-transform: uppercase;
   color: var(--mj-text-muted);
   padding: var(--mj-space-3) var(--mj-space-1-5) var(--mj-space-1-5);
@@ -257,17 +262,22 @@
 }
 
 /* ---- Footer ---- */
+/* Footer tone matches the omnibar's .ob-foot */
 .launcher-foot {
-  border-top: 1px solid var(--mj-border-default);
+  border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-card);
   padding: var(--mj-space-2-5) var(--mj-space-4);
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
+/* Footer options button — shared spec with the omnibar's Settings button:
+   quiet labeled gear, right-aligned. */
 .launcher-configure {
   display: flex;
   align-items: center;
   gap: var(--mj-space-2);
+  margin-left: auto;
   border: none;
   background: transparent;
   color: var(--mj-text-secondary);
@@ -288,20 +298,23 @@
   outline-offset: 2px;
 }
 .launcher-kbd-hints {
-  margin-left: auto;
   display: flex;
-  gap: var(--mj-space-2-5);
-  font-size: 11px;
+  gap: var(--mj-space-4);
+  font-size: 11.5px;
   color: var(--mj-text-muted);
 }
+/* kbd chips: the canonical ob-kbd chrome (10.5px / 5px radius / bottom-heavy
+   border) — same spec the omnibar and the header search button use. */
 .launcher-kbd-hints kbd {
   font-family: inherit;
-  font-size: 10px;
+  font-size: 10.5px;
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-muted);
+  background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-strong);
   border-bottom-width: 2px;
-  border-radius: var(--mj-radius-sm);
-  padding: 0 var(--mj-space-1);
-  background: var(--mj-bg-surface-sunken);
+  border-radius: 5px;
+  padding: 1.5px var(--mj-space-1-5);
 }
 
 /* ---- Screen-reader-only live region ---- */
@@ -327,19 +340,20 @@
 /* Mobile: full sheet below the header, single-column cards, 48px+ targets.
    Breakpoint matches the shell's 768px mobile breakpoint. */
 @media (max-width: 768px) {
+  /* Full-screen sheet, matching the omnibar's mobile treatment. The pop
+     animation is disabled (its from-state translateX no longer applies). */
   .launcher-panel {
-    top: calc(60px + var(--mj-connectivity-banner-height, 0px));
+    top: 0;
     left: 0;
     right: 0;
+    bottom: 0;
     transform: none;
     width: 100%;
     max-height: none;
-    height: calc(100vh - 60px - var(--mj-connectivity-banner-height, 0px));
-    height: calc(100dvh - 60px - var(--mj-connectivity-banner-height, 0px));
+    height: 100dvh;
     border-radius: 0;
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
+    border: none;
+    animation: none;
   }
   .launcher-grid {
     grid-template-columns: 1fr;
