@@ -136,6 +136,17 @@ export interface LocalCacheManagerConfig {
      */
     maxPercentOfCachePerEntity: number;
     /**
+     * Maximum size of any single cache entry, expressed as a percentage of
+     * maxSizeBytes. An entry estimated larger than this cap is not cached at
+     * all — the write is skipped (logged, data still returned to the caller
+     * uncached). Without this cap, storing an oversized entry is strictly worse
+     * than not caching it: evictIfNeeded frees max(incoming, 10% of budget), so
+     * an entry larger than the whole budget evicts EVERY other entry and still
+     * cannot be retained within budget — a full cache wipe on every store.
+     * Applies to RunView and RunQuery entries. Default: 25. Set to 0 to disable.
+     */
+    maxEntryPercentOfCache: number;
+    /**
      * Interval in milliseconds for the periodic eviction sweep.
      * Catches entries that should have been evicted (TTL expired) but weren't
      * because no new stores triggered eviction. 0 = disabled.
@@ -159,6 +170,7 @@ const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     defaultTTLMs: 0, // No TTL — event-based invalidation is the primary mechanism
     evictionPolicy: 'lru',
     maxPercentOfCachePerEntity: 50,
+    maxEntryPercentOfCache: 25,
     evictionSweepIntervalMs: 300000, // 5 minutes
     verboseLogging: false,
 };
@@ -1689,6 +1701,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // value is the native object — no full JSON.stringify on the hot path.
         const sizeBytes = this.estimateResultsSize(data.results as unknown[]);
 
+        // Oversized-entry gate: an entry above maxEntryPercentOfCache of the budget is
+        // never cached. Attempting to store it would trigger a full-cache eviction to
+        // make room for an entry the very next store would evict again — strictly worse
+        // than serving this one query uncached. Always logged (not verbose-gated): an
+        // oversized result is a perf smell the operator should be able to see.
+        if (this.exceedsMaxEntrySize(sizeBytes)) {
+            LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for "${params.EntityName || fingerprint.substring(0, 60)}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)` });
+            return;
+        }
+
         // Per-entity memory limit: evict oldest entries for this entity if over budget
         const entityName = params.EntityName || 'Unknown';
         await this.enforcePerEntityMemoryLimit(entityName, sizeBytes);
@@ -2328,6 +2350,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Estimate size by sampling rows (eviction accounting only).
         const sizeBytes = this.estimateResultsSize(results);
 
+        // Oversized-entry gate — same rationale as SetRunViewResult: never wipe the
+        // cache to make room for an entry that can't be retained within budget.
+        if (this.exceedsMaxEntrySize(sizeBytes)) {
+            LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for query "${queryName}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)` });
+            return;
+        }
+
         // Check if we need to evict entries
         await this.evictIfNeeded(sizeBytes);
 
@@ -2775,6 +2804,20 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
         const avgLen = total / sampleCount;
         return Math.ceil(avgLen * rowCount) * 2;
+    }
+
+    /**
+     * Returns true when a single entry of the given estimated size exceeds the
+     * per-entry cap (maxEntryPercentOfCache of maxSizeBytes) and must not be
+     * cached. See the config property's doc comment for the full rationale —
+     * in short, an entry that large can only be stored by evicting most (or
+     * all) of the cache, and it would be evicted again on the next store, so
+     * caching it is strictly worse than skipping it.
+     */
+    private exceedsMaxEntrySize(sizeBytes: number): boolean {
+        const pct = this._config.maxEntryPercentOfCache;
+        if (pct <= 0) return false;
+        return sizeBytes > Math.floor(this._config.maxSizeBytes * pct / 100);
     }
 
     /**
