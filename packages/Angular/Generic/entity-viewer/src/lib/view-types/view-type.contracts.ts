@@ -74,6 +74,16 @@ export interface IViewTypeDescriptor {
   readonly UsesCanonicalGridState?: boolean;
 
   /**
+   * When `true`, this view type ships its OWN in-view export affordance (e.g. the Grid renderer's
+   * in-toolbar "Export" button + {@link IViewRenderer.exportRecords}). Hosts use this to decide
+   * whether to render a FALLBACK export button for view types that DON'T (Cards / Map / Timeline),
+   * so every view type can export without a duplicate button on the ones that already have one.
+   * Defaults to `false`. This is read off the (synchronously-resolved) descriptor rather than the
+   * mounted renderer instance, so it's correct the instant the active view type changes.
+   */
+  readonly ProvidesOwnExport?: boolean;
+
+  /**
    * Predicate that decides whether this view type is available for a given entity.
    * For example, Timeline requires a date field; Map requires geocoding support.
    * Grid and Cards are always available.
@@ -287,6 +297,13 @@ export abstract class BaseViewTypeDescriptor implements IViewTypeDescriptor {
    * canonical grid columns (see {@link IViewTypeDescriptor.UsesCanonicalGridState}).
    */
   readonly UsesCanonicalGridState: boolean = false;
+
+  /**
+   * Default: this view type has no built-in export UI, so a host should provide a fallback Export
+   * affordance. Override to `true` in a view type that ships its own export (see
+   * {@link IViewTypeDescriptor.ProvidesOwnExport}).
+   */
+  readonly ProvidesOwnExport: boolean = false;
 
   /**
    * Default availability: available for every entity. Override in subclasses that have
