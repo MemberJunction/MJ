@@ -679,7 +679,7 @@ mj-tab-container ::ng-deep .lm_stack {
   left: 0;
   right: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--mj-text-primary) 40%, transparent);
+  background: var(--mj-bg-overlay);
   z-index: 9998;
 }
 
@@ -908,7 +908,7 @@ mj-tab-container ::ng-deep .lm_stack {
   left: 0;
   right: 0;
   bottom: 0;
-  background: color-mix(in srgb, var(--mj-text-primary) 30%, transparent);
+  background: var(--mj-bg-overlay);
   z-index: 9999;
   animation: fadeIn 0.15s ease;
 }

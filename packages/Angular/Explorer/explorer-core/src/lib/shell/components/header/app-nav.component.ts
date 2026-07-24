@@ -58,11 +58,12 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Cached natural pixel width of each nav item, parallel to navItems order */
   private itemWidths: number[] = [];
   /** Measured width of the More button (fallback used until first render) */
-  private moreBtnWidth = 100;
-  /** True during the one-frame all-items render used to measure natural widths.
-   *  The CSS clips the row while this is set so the temporary full row can't
-   *  paint over the header's action cluster. */
-  public Measuring = false;
+  private moreBtnWidth = 120;
+  /** Left offset (px, relative to host) where the More dropdown anchors */
+  public MoreDropdownLeft = 0;
+  /** True when even one item + More can't fit — the lone visible pill
+   *  shrinks with an ellipsis instead of clipping the More button. */
+  public Tight = false;
   /** Flex gap between nav items — must match --mj-space-1 in the CSS */
   private static readonly ITEM_GAP = 4;
   /** How many leading nav items are currently visible inline */
@@ -198,10 +199,12 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
     this.updateActiveStates(config);
 
     // New item set: show everything for one frame so natural widths can be
-    // measured, then collapse to fit.
+    // measured (the row clips, so the temporary full row is invisible),
+    // then collapse to fit. Tight mode MUST be off during measurement — its
+    // flex-shrink would record squeezed widths and poison the fit arithmetic.
     this.VisibleCount = Number.MAX_SAFE_INTEGER;
     this.MoreOpen = false;
-    this.Measuring = this._overflowEnabled;
+    this.Tight = false;
     this.cdr.markForCheck();
 
     // In Angular 21 zoneless mode, markForCheck() alone is unreliable when the trigger
@@ -220,13 +223,6 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
       requestAnimationFrame(() => {
         this.measureItemWidths();
         this.recomputeFit();
-        this.Measuring = false;
-        this.cdr.markForCheck();
-        try {
-          this.cdr.detectChanges();
-        } catch {
-          // Re-entrant CD — harmless.
-        }
       });
     }
   }
@@ -254,12 +250,32 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
    * on every resize.
    */
   private recomputeFit(): void {
-    if (!this._overflowEnabled || this.itemWidths.length === 0) {
+    if (!this._overflowEnabled || this._cachedNavItems.length === 0) {
       return;
     }
     const hostWidth = this.host.nativeElement.clientWidth;
     if (hostWidth === 0) {
       return; // Hidden (mobile breakpoint) — leave state alone
+    }
+    // Self-heal: if the width cache is stale or missing (the measurement
+    // frame can race the first render after a reload/app switch), expand to
+    // the full item set, re-measure, and retry next frame until it converges.
+    if (this.itemWidths.length !== this._cachedNavItems.length) {
+      if (this.VisibleCount < this._cachedNavItems.length || this.Tight) {
+        this.VisibleCount = Number.MAX_SAFE_INTEGER;
+        this.Tight = false; // Never measure with tight-mode shrink applied
+        this.cdr.markForCheck();
+        try {
+          this.cdr.detectChanges();
+        } catch {
+          // Re-entrant CD — harmless.
+        }
+      }
+      this.measureItemWidths();
+      if (this.itemWidths.length !== this._cachedNavItems.length) {
+        requestAnimationFrame(() => this.recomputeFit());
+        return;
+      }
     }
     if (this.moreBtnRef?.nativeElement) {
       this.moreBtnWidth = this.moreBtnRef.nativeElement.offsetWidth || this.moreBtnWidth;
@@ -270,6 +286,7 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
     const totalAll = this.itemWidths.reduce((a, b) => a + b, 0) + gap * (n - 1);
 
     let newCount: number;
+    let tight = false;
     if (totalAll <= hostWidth) {
       newCount = Number.MAX_SAFE_INTEGER; // Everything fits
     } else {
@@ -285,10 +302,12 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
         fit++;
       }
       newCount = Math.max(1, fit); // Never collapse below one visible item
+      tight = fit === 0; // Even one item + More overflows — shrink the lone pill
     }
 
-    if (newCount !== this.VisibleCount) {
+    if (newCount !== this.VisibleCount || tight !== this.Tight) {
       this.VisibleCount = newCount;
+      this.Tight = tight;
       if (this.OverflowItems.length === 0) {
         this.MoreOpen = false;
       }
@@ -321,6 +340,24 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
   ToggleMore(event: MouseEvent): void {
     event.stopPropagation();
     this.MoreOpen = !this.MoreOpen;
+    if (this.MoreOpen) {
+      // Anchor the dropdown under the More button; once the dropdown has
+      // rendered, clamp it so its right edge stays inside the host.
+      this.MoreDropdownLeft = this.moreBtnRef?.nativeElement?.offsetLeft ?? 0;
+      requestAnimationFrame(() => {
+        const dropdown = this.host.nativeElement.querySelector<HTMLElement>('.nav-more-dropdown');
+        if (dropdown) {
+          const maxLeft = this.host.nativeElement.clientWidth - dropdown.offsetWidth;
+          this.MoreDropdownLeft = Math.max(0, Math.min(this.MoreDropdownLeft, maxLeft));
+          this.cdr.markForCheck();
+          try {
+            this.cdr.detectChanges();
+          } catch {
+            // Re-entrant CD — harmless.
+          }
+        }
+      });
+    }
     this.cdr.markForCheck();
   }
 

@@ -1,20 +1,30 @@
 :host {
   display: block;
   min-width: 0;
+  position: relative;
 }
+/* Always clipped: if the fit arithmetic is ever a few px off (badge widths,
+   font fallbacks), the row clips inside its own box instead of painting over
+   the header's action cluster. The More dropdown renders outside this row. */
 .nav-list {
   display: flex;
   flex-wrap: nowrap;
   gap: var(--mj-space-1);
-  position: relative;
-}
-/* Clip only during the one-frame full-row width measurement (see component);
-   stays visible otherwise so the More dropdown can escape the row. */
-.nav-list.measuring {
   overflow: hidden;
 }
 .nav-list .nav-item {
   flex-shrink: 0;
+}
+/* Tight mode: even one item + More can't fit, so the lone visible pill
+   yields with an ellipsis and the More button stays whole. */
+.nav-list.tight .nav-item:not(.nav-more-btn) {
+  flex-shrink: 1;
+  min-width: 0;
+}
+.nav-list.tight .nav-item:not(.nav-more-btn) > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .nav-list .nav-item {
   display: flex;
@@ -106,10 +116,6 @@
 }
 
 /* ---- Priority+ overflow: the More button + dropdown ---- */
-.nav-more-container {
-  position: relative;
-  flex-shrink: 0;
-}
 .nav-more-btn .more-count {
   background: var(--mj-bg-surface-active);
   color: var(--mj-text-secondary);
@@ -127,8 +133,8 @@
 }
 .nav-more-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  top: calc(100% + var(--mj-space-2));
+  left: 0; /* Overridden by the measured [style.left.px] anchor */
   background: var(--mj-bg-surface-elevated);
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-md);

@@ -1,53 +1,131 @@
 <div class="app-switcher-container" [class.loading]="isLoading">
   <div class="app-switcher-button"
+    #trigger
     mjClickable="Switch application"
     testId="app-switcher-trigger"
-    [attr.aria-haspopup]="true"
+    [attr.aria-haspopup]="'dialog'"
     [attr.aria-expanded]="showDropdown"
-    (click)="toggleDropdown()">
+    (click)="ToggleLauncher()">
     <!-- Show spinner when loading, otherwise show app icon -->
     @if (isLoading) {
-      <i class="app-icon loading-spinner fa-solid fa-spinner fa-spin"></i>
+      <i class="app-icon loading-spinner fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
     }
     @if (!isLoading) {
       <i class="app-icon" [class]="activeApp?.Icon || 'fa-solid fa-cube'"
-        [style.color]="activeApp?.GetColor()"></i>
+        [style.color]="activeApp?.GetColor()" aria-hidden="true"></i>
     }
-    <i class="dropdown-arrow fa-solid fa-chevron-down"></i>
+    <i class="dropdown-arrow fa-solid fa-chevron-down" aria-hidden="true"></i>
   </div>
 
   @if (showDropdown) {
-    <div class="app-switcher-dropdown">
-      <div class="app-switcher-list">
-        @for (app of apps; track app) {
-          <div
-            class="app-switcher-item"
-            [mjClickable]="app.Name"
-            [testId]="'app-switcher-item-' + app.Name"
-            [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
-            [class.active]="IsActiveApp(app)"
-            [class.loading]="IsLoadingApp(app)"
-            [style.--item-color]="app.GetColor()"
-            (click)="selectApp(app)">
-            @if (IsLoadingApp(app)) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
+    <div class="launcher-scrim" (click)="CloseLauncher()" aria-hidden="true"></div>
+    <div class="launcher-panel"
+      #panel
+      role="dialog"
+      aria-modal="true"
+      aria-label="Application launcher"
+      (keydown)="onPanelKeydown($event)">
+
+      <div class="launcher-head">
+        <div class="launcher-filter">
+          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+          <input
+            #filterInput
+            type="text"
+            placeholder="Find an app…"
+            aria-label="Find an app"
+            [value]="FilterText"
+            (input)="onFilterInput($event)"
+            (keydown)="onFilterKeydown($event)"
+            autocomplete="off"
+            spellcheck="false" />
+        </div>
+        <button class="launcher-close" type="button" aria-label="Close application launcher" (click)="CloseLauncher()">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="launcher-scroll">
+        @if (IsFiltering) {
+          <div class="launcher-grid">
+            @for (app of VisibleApps; track app.ID; let i = $index) {
+              <ng-container *ngTemplateOutlet="appCard; context: { $implicit: app, idx: i, recent: false }"></ng-container>
             }
-            @if (!IsLoadingApp(app)) {
-              <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
+          </div>
+          @if (VisibleApps.length === 0) {
+            <div class="launcher-empty">No apps match "{{ FilterText }}"</div>
+          }
+        } @else {
+          @if (RecentApps.length > 0) {
+            <div class="launcher-sect">Recent</div>
+            <div class="launcher-grid" role="group" aria-label="Recent applications">
+              @for (app of RecentApps; track app.ID; let i = $index) {
+                <ng-container *ngTemplateOutlet="appCard; context: { $implicit: app, idx: i, recent: true }"></ng-container>
+              }
+            </div>
+          }
+          <div class="launcher-sect">All apps</div>
+          <div class="launcher-grid" role="group" aria-label="All applications">
+            @for (app of OtherApps; track app.ID; let i = $index) {
+              <ng-container *ngTemplateOutlet="appCard; context: { $implicit: app, idx: i + RecentApps.length, recent: false }"></ng-container>
             }
-            <span>{{ app.Name }}</span>
           </div>
         }
       </div>
-      <!-- Divider + Configure pinned at bottom -->
-      <div class="app-switcher-divider"></div>
-      <div class="app-switcher-item configure-item" mjClickable="Configure applications" testId="app-switcher-configure" (click)="openConfigDialog()">
-        <i class="fa-solid fa-gear"></i>
-        <span>Configure...</span>
+
+      <div class="launcher-foot">
+        <button class="launcher-configure" type="button" testId="app-switcher-configure" (click)="openConfigDialog()">
+          <i class="fa-solid fa-gear" aria-hidden="true"></i>
+          <span>Configure…</span>
+        </button>
+        <span class="launcher-kbd-hints" aria-hidden="true">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> open</span>
+          <span><kbd>esc</kbd> close</span>
+        </span>
       </div>
+
+      <span class="sr-only" role="status">{{ VisibleApps.length }} applications available</span>
     </div>
   }
 </div>
+
+<!-- Shared app-card template: each card is a real focusable control (mjClickable
+     adds role, tabindex 0, aria-label, and Enter/Space activation), so Tab walks
+     the cards and arrow keys are the fast path. -->
+<ng-template #appCard let-app let-idx="idx" let-recent="recent">
+  <div class="app-card"
+    [id]="OptionId(idx)"
+    [mjClickable]="app.Name"
+    role="link"
+    [testId]="'app-switcher-item-' + app.Name"
+    [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
+    [attr.aria-describedby]="app.Description ? OptionId(idx) + '-desc' : null"
+    [class.active]="IsActiveApp(app)"
+    [class.loading]="IsLoadingApp(app)"
+    [style.--app-color]="app.GetColor()"
+    (click)="selectApp(app)"
+    (keydown)="onCardKeydown(idx, $event)">
+    <div class="app-card-glyph">
+      @if (IsLoadingApp(app)) {
+        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+      } @else {
+        <i [class]="app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
+      }
+    </div>
+    <div class="app-card-text">
+      <div class="app-card-name">
+        <span class="app-card-name-label">{{ app.Name }}</span>
+        @if (recent && RelativeLastUsed(app)) {
+          <span class="app-card-lastused">{{ RelativeLastUsed(app) }}</span>
+        }
+      </div>
+      @if (app.Description) {
+        <div class="app-card-desc" [id]="OptionId(idx) + '-desc'">{{ app.Description }}</div>
+      }
+    </div>
+  </div>
+</ng-template>
 
 <!-- App Configuration Dialog -->
 <mj-user-app-config
