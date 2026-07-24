@@ -9,6 +9,7 @@ import {
   deduplicateEntityFieldSequences,
   convertMigration,
   IncrementalBaker,
+  BakeApplyError,
 } from '@memberjunction/sql-converter';
 import type {
   BatchConverterConfig,
@@ -53,13 +54,38 @@ type ConvertedShape = Pick<MigrationConversionResult, 'status' | 'pgSQL' | 'unha
  *   blocked from baking at the baseline. Keying off `status`/`unhandled` would wrongly halt it.
  */
 export function decideConvertWrite(
-  result: { status: string; unhandled: MigrationConversionResult['unhandled']; mode?: string },
+  // Strongly typed via ConvertedShape — `status` is MigrationConversionResult['status'] and `mode`
+  // is BakedMigrationResult['mode'], NOT `string`. Widening either to `string` would let an invalid
+  // state compile and bypass the write/halt policy below (issue #3252 code review — Standards 2).
+  result: Pick<ConvertedShape, 'status' | 'unhandled' | 'mode'>,
   bakeCodegen: boolean,
 ): { isGap: boolean; writeAsNeedsHand: boolean; haltBake: boolean } {
   const isNoBakeGate = result.mode === 'gap-no-bake';
   const writeAsNeedsHand = result.status === 'needs-hand-authoring' || isNoBakeGate;
   const isGap = writeAsNeedsHand || result.unhandled.length > 0;
   return { isGap, writeAsNeedsHand, haltBake: bakeCodegen && isNoBakeGate };
+}
+
+/**
+ * Build the `.needs-hand` file body for a conversion FAILURE (issue #3252 review P2 / Phase 4e).
+ * Pure — no I/O — so the "never emit a bare stub over a useful artifact" policy is unit-testable.
+ *
+ * A bake working-DB apply/capture failure carries the already-transpiled body (via BakeApplyError):
+ * the transpiled DDL is the expensive artifact, so it is PRESERVED under a failure banner for a
+ * human to finish. Any other failure (missing transpiler, pre-transpile infra) has no body — a
+ * blank/whitespace `preservedBody` falls back to the plain hand-author stub with no misleading
+ * "preserved DDL below" banner over nothing.
+ */
+export function buildConversionFailureArtifact(sourceFile: string, message: string, preservedBody: string): string {
+  const preserved = preservedBody.trim();
+  if (!preserved) {
+    return `-- CONVERSION FAILED for ${sourceFile}\n-- ${message}\n-- Hand-author the PostgreSQL form, then rename to .pg.sql.\n`;
+  }
+  return (
+    `-- CONVERSION FAILED (working-DB apply/capture) for ${sourceFile}\n-- ${message}\n` +
+    `-- The transpiled DDL below is PRESERVED for hand-finishing; complete it, then rename to .pg.sql.\n\n` +
+    `${preserved}\n`
+  );
 }
 
 /**
@@ -341,17 +367,19 @@ export default class MigrateConvert extends Command {
       } catch (err) {
         // NEVER `this.error` with zero artifacts (issue #3252 Phase 4e). Whatever threw
         // (missing transpiler, a working-DB apply/capture failure in bake mode, infra), write
-        // a .needs-hand stub carrying the error + record the gap, THEN halt after the loop.
+        // a .needs-hand file carrying the error + record the gap, THEN halt after the loop.
         const msg = err instanceof Error ? err.message : String(err);
         const failName = `${m.OutputFile}.needs-hand`;
         const failPath = path.join(outputDir, failName);
+        // A bake working-DB apply/capture failure carries the already-transpiled body (issue #3252
+        // review P2): preserve it under a failure banner so a human can finish it, instead of
+        // discarding the useful artifact for a bare stub. Other failures have no body → plain stub.
+        const preserved = err instanceof BakeApplyError ? err.transpiledBody : '';
+        const failBody = buildConversionFailureArtifact(m.SourceFile, msg, preserved);
         // Same "never clobber on re-run" guard as the normal write path — a human may have
-        // started hand-authoring the stub from a prior failed run; don't overwrite their work.
+        // started hand-authoring the file from a prior failed run; don't overwrite their work.
         if (!flags['dry-run'] && !fs.existsSync(failPath)) {
-          fs.writeFileSync(
-            failPath,
-            `-- CONVERSION FAILED for ${m.SourceFile}\n-- ${msg}\n-- Hand-author the PostgreSQL form, then rename to .pg.sql.\n`,
-          );
+          fs.writeFileSync(failPath, failBody);
         }
         gapReport.push({
           sourceFile: m.SourceFile,

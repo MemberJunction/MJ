@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { IncrementalBaker, stripVolatileHeaders } from '../IncrementalBaker.js';
+import { IncrementalBaker, stripVolatileHeaders, BakeApplyError } from '../IncrementalBaker.js';
 import type { BakerWorkingDB, CapturedEntitySQL } from '../IncrementalBaker.js';
 import type { TSQLToPGTranspiler } from '../MigrationConverter.js';
 
@@ -295,6 +295,33 @@ describe('IncrementalBaker', () => {
       expect(r.pgSQL).toBe(committed);
       // never captured — we kept the committed file wholesale
       expect(db.calls.some((c) => c.startsWith('capture:'))).toBe(false);
+    });
+  });
+
+  describe('working-DB failure preserves the transpiled body (issue #3252 review P2)', () => {
+    /** A working DB whose apply() throws — models a mid-sequence CASCADE / metadata corruption. */
+    class ThrowOnApplyDB extends FakeDB {
+      override async apply(): Promise<void> {
+        throw new Error('cannot drop dependent view vwApplicationSettings — apply failed');
+      }
+    }
+
+    it('throws a typed BakeApplyError carrying the already-transpiled body, not a bare error', async () => {
+      // The transpiled DDL is computed BEFORE the working-DB apply can fail. A failure there must
+      // NOT throw the useful artifact away — the baker rethrows it as a BakeApplyError so the CLI
+      // can still write the transpiled body into `.needs-hand` for hand-finishing.
+      const baker = new IncrementalBaker({ transpiler: echoTranspiler, db: new ThrowOnApplyDB(capturedFor) });
+      const sql = ssMigration(
+        'ALTER TABLE [${flyway:defaultSchema}].[AIAgentRun] ADD LastHeartbeatAt DATETIMEOFFSET NULL;',
+        ['MJ: AI Agent Runs'],
+      );
+
+      const err = await baker.bakeMigration(sql, 'V9__Heartbeat.sql').then(() => null, (e) => e);
+
+      expect(err).toBeInstanceOf(BakeApplyError);
+      expect(err.fileName).toBe('V9__Heartbeat.sql');
+      expect(err.transpiledBody).toContain('LastHeartbeatAt'); // the transpiled DDL is preserved
+      expect(err.message).toContain('vwApplicationSettings'); // the underlying failure is retained
     });
   });
 });
