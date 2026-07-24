@@ -305,28 +305,60 @@ export async function convertMigration(
   options: ConvertMigrationOptions = {},
 ): Promise<MigrationConversionResult> {
   const kept = extractKeptTSQL(sql, fileName);
-  const sourceStatements = splitByStatement(sql).filter((s) => s.kind !== 'noise').length;
+  const stmts = splitByStatement(sql);
+  const sourceStatements = stmts.filter((s) => s.kind !== 'noise').length;
 
   if (!kept.tsql.trim()) {
-    // Marker path: the classifier found nothing translatable. Trust it — the emptiness is
-    // explained by CodeGen-block / metadata-sync / baseline routing, which the (Phase-2-fixed)
-    // classifier owns. Reconciliation reports the counts but does not second-guess the routing.
+    // Marker path: the classifier found nothing translatable. The emptiness is USUALLY explained
+    // by CodeGen-block / metadata-sync / baseline routing (which the classifier owns) — but the
+    // marker must not be accepted BLINDLY, or a hand-authored statement dropped to a "clean"
+    // marker is exactly the RC1 silent-drop class (issue #3252). Reconcile before trusting it:
+    // a `schema-ddl` batch, or a `hand-procedural` routine beyond those already reported, that
+    // vanished into an empty marker is content NEITHER `mj codegen` NOR `mj sync push` reproduces.
+    // Objects named to a CodeGen convention (vw*/spCreate*/fn*…) are deliberately EXCLUDED — they
+    // classify as `codegen-object` and ARE regenerated; a hand-authored object that collides with
+    // those names is governed by MigrationStatementSplitter's HAND_WRITTEN_OBJECT_ALLOWLIST, not
+    // this net (surfacing every convention-named drop would false-flag every baseline snapshot).
+    const unreportedHand = Math.max(
+      0,
+      stmts.filter((s) => s.kind === 'hand-procedural').length - kept.handProcedural.length,
+    );
+    const droppedSchemaDdl = stmts.filter((s) => s.kind === 'schema-ddl').length;
+    const suspiciousEmptyOutput = unreportedHand + droppedSchemaDdl > 0;
+
+    const unhandled: UnhandledStatement[] = [];
+    const notes = [...kept.notes];
+    if (suspiciousEmptyOutput) {
+      unhandled.push({
+        kind: 'RECONCILIATION-EMPTY-OUTPUT',
+        snippet:
+          `${unreportedHand + droppedSchemaDdl} hand-authored statement(s) were routed to an empty marker ` +
+          'with no PG output and no reported gap — CodeGen/sync push will not reproduce them; hand-author the PG form.',
+      });
+      notes.push(
+        'Reconciliation: hand-authored DDL was dropped to an empty marker with no output or gap — surfaced as a conversion gap.',
+      );
+    }
+
     return {
       fileName: kept.fileName,
-      status: kept.status,
-      pgSQL: regenOnlyMarker(kept),
+      // A silent-drop marker must NOT masquerade as a clean reseed/regen file: promote it to
+      // needs-hand-authoring so the CLI writes `.needs-hand` (never a discoverable `.pg.sql` that
+      // Skyway could apply) and the bake batch halts on it.
+      status: suspiciousEmptyOutput ? 'needs-hand-authoring' : kept.status,
+      pgSQL: suspiciousEmptyOutput ? emptyDropGapMarker(kept, stmts) : regenOnlyMarker(kept),
       split: kept.split,
       droppedCodeGenLines: kept.droppedCodeGenLines,
-      unhandled: [],
+      unhandled,
       handProcedural: kept.handProcedural,
       droppedObjects: kept.droppedObjects,
-      notes: kept.notes,
+      notes,
       reconciliation: {
         sourceStatements,
         emittedStatements: 0,
-        gaps: kept.handProcedural.length,
+        gaps: kept.handProcedural.length + unhandled.length,
         accountingLeak: false,
-        suspiciousEmptyOutput: false,
+        suspiciousEmptyOutput,
       },
     };
   }
@@ -585,4 +617,20 @@ function regenOnlyMarker(kept: KeptTSQL): string {
   }
   lines.push('');
   return lines.join('\n');
+}
+
+/**
+ * Gap-marker body for a file whose ONLY content is hand-authored DDL the classifier dropped to an
+ * empty marker without transpiling or reporting it (the reconciliation net in `convertMigration`).
+ * Names each dropped statement so a human can author the PG form — never a misleading "no DDL to
+ * translate" marker over content that silently vanished.
+ */
+function emptyDropGapMarker(kept: KeptTSQL, stmts: StatementBatch[]): string {
+  const dropped = stmts.filter((s) => s.kind === 'schema-ddl' || s.kind === 'hand-procedural');
+  return [
+    `-- ${kept.fileName} — CONVERSION GAP: hand-authored DDL dropped with no PG translation.`,
+    '-- `mj codegen` / `mj sync push` do NOT reproduce the following; author the PG form by hand:',
+    ...dropped.map((s) => `--   • ${s.evidence}`),
+    '',
+  ].join('\n');
 }

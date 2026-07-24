@@ -47,4 +47,16 @@ describe('decideConvertWrite (issue #3252 Phase 4)', () => {
     expect(d.isGap).toBe(false);
     expect(d.haltBake).toBe(false);
   });
+
+  it('bake: a baseline exempted to `baked` despite needs-hand status must NOT halt the batch', () => {
+    // IncrementalBaker deliberately returns { status: 'needs-hand-authoring', mode: 'baked' } for a
+    // baseline whose PRE-SEEDED metadata made the CodeGen capture complete even though the file
+    // carries hand-authored utility gaps (IncrementalBaker.ts baseline path). The working DB WAS
+    // advanced past this migration, so subsequent migrations can still bake — the batch must NOT
+    // halt here. It is still written `.needs-hand` and reported as a gap for a human to finish.
+    const d = decideConvertWrite(res({ status: 'needs-hand-authoring', mode: 'baked' }), true);
+    expect(d.writeAsNeedsHand).toBe(true); // the hand-authored gaps still need a human
+    expect(d.isGap).toBe(true); // still surfaced in the gap report
+    expect(d.haltBake).toBe(false); // but the bake batch continues — mode 'baked' == DB advanced
+  });
 });

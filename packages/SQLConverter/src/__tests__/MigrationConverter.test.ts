@@ -68,6 +68,17 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(false);
   });
 
+  it('flags a hand-authored object silently dropped to a clean marker (issue #3252 Phase 4)', async () => {
+    // A hand-authored VIEW whose name does NOT match a CodeGen convention (so `mj codegen` will
+    // NOT regenerate it) can be routed to an empty marker by the classifier. Returning a clean
+    // reseed/regen marker there is exactly the RC1 silent-drop class — the marker path must
+    // reconcile source statements against what was kept/reported before trusting the emptiness.
+    const sql = 'CREATE VIEW [__mj].[CustomerSummary] AS SELECT [ID], [Total] FROM [__mj].[Orders];';
+    const r = await convertMigration(sql, 'V_CustomerSummary.sql', { transpiler: passthrough });
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
+    expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+  });
+
   it('reflects a dialect ACCOUNTING-LEAK in reconciliation', async () => {
     const leaky: TSQLToPGTranspiler = {
       transpile: async (t) => ({ sql: [t], unhandled: [{ kind: 'ACCOUNTING-LEAK', snippet: 'parsed=3 but …' }] }),

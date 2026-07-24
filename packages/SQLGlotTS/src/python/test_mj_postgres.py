@@ -859,6 +859,21 @@ check("WITH NOCHECK ADD CONSTRAINT strips the toggle to a plain validating ADD (
 check_accounting("WITH NOCHECK ADD reconciles with no leak",
                  "ALTER TABLE ${flyway:defaultSchema}.T WITH NOCHECK ADD CONSTRAINT CK_y CHECK (c IN ('a'));")
 
+# The pre-parse `WITH [NO]CHECK ADD` strip must be ATOM-AWARE: the phrase occurring INSIDE a string
+# literal or a comment is data/prose, NOT the enforcement toggle — stripping it there silently
+# rewrites emitted content (issue #3252: never silently alter output). Only a real ALTER statement's
+# toggle is at a code position and gets rewritten.
+check("WITH CHECK ADD inside a string DEFAULT literal is preserved verbatim (not stripped)",
+      "CREATE TABLE ${flyway:defaultSchema}.T (Note NVARCHAR(200) NOT NULL "
+      "DEFAULT N'run ALTER TABLE x WITH CHECK ADD CONSTRAINT c');",
+      must_contain=["WITH CHECK ADD CONSTRAINT c"],
+      expect_unhandled=0)
+check("WITH CHECK ADD inside a comment is preserved (comment prose is not the toggle)",
+      "-- remember to run WITH CHECK ADD on the FK later\n"
+      "CREATE TABLE ${flyway:defaultSchema}.T2 (Id INT NOT NULL);",
+      must_contain=["WITH CHECK ADD on the FK"],
+      expect_unhandled=0)
+
 # Multi-constraint `ALTER TABLE ... ADD` — T-SQL lets a single `ADD` govern a comma-separated
 # constraint list; PG requires `ADD` before EACH action. sqlglot parses the list into ONE
 # AddConstraint holding N constraints and emits one `ADD` + comma list (`ADD CONSTRAINT a ...,

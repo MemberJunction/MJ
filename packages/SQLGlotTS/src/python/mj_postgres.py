@@ -1462,7 +1462,15 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
     protected = sql.replace(FLYWAY_MACRO, FLYWAY_SENTINEL)
     # Strip the SQL Server `WITH [NO]CHECK` enforcement toggle before `ADD CONSTRAINT` — it has
     # no PG equivalent and otherwise leaks as invalid `… WITH CHECK ADD …` (see _WITH_CHECK_ADD).
-    protected = _WITH_CHECK_ADD.sub("", protected)
+    # ATOM-AWARE: rewrite the toggle ONLY at a real code position. The identical phrase occurring
+    # inside a string literal (e.g. a seeded `N'… WITH CHECK ADD …'`) or a comment is data/prose,
+    # not the toggle — stripping it there silently corrupts emitted content (issue #3252: never
+    # silently alter output). Matches whose head sits in a masked atom are left verbatim.
+    _wca_spans = _atom_masked_spans(protected)
+    protected = _WITH_CHECK_ADD.sub(
+        lambda m: m.group(0) if _pos_in_spans(m.start(), _wca_spans) else "",
+        protected,
+    )
     # Set after reporting a CREATE PROCEDURE/FUNCTION/TRIGGER: the routine's closing
     # `END` often parses as its own dangling statement — it belongs to the routine we
     # just reported, not to a new gap.

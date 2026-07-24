@@ -44,8 +44,13 @@ type ConvertedShape = Pick<MigrationConversionResult, 'status' | 'pgSQL' | 'unha
  *   existing behavior (a discoverable `.pg.sql` with embedded gap comments).
  * - `isGap`: needs-hand, any unhandled statement, or a bake `gap-no-bake` — anything that must
  *   fail the run unless `--allow-gaps` (which is disallowed in bake mode, 4f).
- * - `haltBake`: in bake mode a gap means the working DB was NOT advanced past this migration, so
- *   later bakes would run against a stale schema — halt the batch here.
+ * - `haltBake`: gated on the baker's `mode`, NOT on `isGap`. Only `mode === 'gap-no-bake'` means the
+ *   working DB was NOT advanced past this migration (a gappy FORWARD migration the baker refused to
+ *   apply); halting there stops later bakes from running against a stale schema. A baseline the baker
+ *   exempts to `mode: 'baked'` despite a `needs-hand-authoring` status (its pre-seeded metadata made
+ *   the capture complete — IncrementalBaker baseline path) DID advance the DB, so it must be written
+ *   `.needs-hand` and reported as a gap yet must NOT halt — otherwise every subsequent migration is
+ *   blocked from baking at the baseline. Keying off `status`/`unhandled` would wrongly halt it.
  */
 export function decideConvertWrite(
   result: { status: string; unhandled: MigrationConversionResult['unhandled']; mode?: string },
@@ -54,7 +59,7 @@ export function decideConvertWrite(
   const isNoBakeGate = result.mode === 'gap-no-bake';
   const writeAsNeedsHand = result.status === 'needs-hand-authoring' || isNoBakeGate;
   const isGap = writeAsNeedsHand || result.unhandled.length > 0;
-  return { isGap, writeAsNeedsHand, haltBake: bakeCodegen && isGap };
+  return { isGap, writeAsNeedsHand, haltBake: bakeCodegen && isNoBakeGate };
 }
 
 /**
