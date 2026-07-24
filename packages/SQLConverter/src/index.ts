@@ -14,7 +14,7 @@ export type {
   FileRouting,
 } from './MigrationSplitter.js';
 export { convertMigration, extractKeptTSQL } from './MigrationConverter.js';
-export { IncrementalBaker, stripVolatileHeaders } from './IncrementalBaker.js';
+export { IncrementalBaker, stripVolatileHeaders, BakeApplyError } from './IncrementalBaker.js';
 export type {
   BakerWorkingDB,
   CapturedEntitySQL,

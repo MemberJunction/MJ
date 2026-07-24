@@ -2,7 +2,7 @@ import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef,
 import { RegisterClass , UUIDsEqual, MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJListCategoryEntity } from '@memberjunction/core-entities';
-import { MJListEntity, MJListDetailEntity, MJUserFavoriteEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJListEntity, MJListEntityExtended, MJListDetailEntity, MJUserFavoriteEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseEntity, BaseEntityEvent, Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -410,14 +410,14 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
             <i class="fa-solid fa-copy"></i>
             Duplicate
           </button>
-          @if (contextItemCapabilities.CanDelete) {
+          @if (CanDeleteContextItem) {
             <div class="menu-divider"></div>
             <button class="menu-item danger" (click)="confirmDeleteList()">
               <i class="fa-solid fa-trash"></i>
               Delete
             </button>
           }
-          @if (!contextItemCapabilities.CanEdit && !contextItemCapabilities.CanShare && !contextItemCapabilities.CanDelete) {
+          @if (!contextItemCapabilities.CanEdit && !contextItemCapabilities.CanShare && !CanDeleteContextItem) {
             <div class="menu-viewer-hint">
               <i class="fa-solid fa-eye"></i>
               Viewer access — read only
@@ -1834,6 +1834,20 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   public contextItemCapabilities: ListCapabilities = CapabilitiesForLevel('Owner');
   private capabilityCache = new Map<string, SharePermissionLevel | null>();
 
+  /**
+   * Whether the current user may DELETE the context-menu's list. This uses the single shared
+   * ownership rule ({@link MJListEntityExtended.UserCanDelete}) — the same rule the server enforces
+   * in MJListEntityServer.Delete() — rather than the share-level capability, so the button is shown
+   * only when the delete would actually succeed: the List's owner, or a Developer/Integration user.
+   */
+  public get CanDeleteContextItem(): boolean {
+    const list = this.selectedContextItem?.list;
+    if (!list) {
+      return false;
+    }
+    return MJListEntityExtended.UserCanDelete(list.UserID, this.ProviderToUse.CurrentUser);
+  }
+
   // Tracks whether the in-memory categories list is known-stale
   // relative to the DB. Flipped to true by the BaseEntity event
   // subscription whenever any `MJ: List Categories` row is saved or
@@ -2976,6 +2990,17 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
     const listToDelete = this.listToDelete;
     const listName = listToDelete.Name;
+
+    // Defense-in-depth: re-check the ownership rule before deleting so a stale/forced menu can't
+    // bypass the gate. The server (MJListEntityServer.Delete) is the true enforcement point, but
+    // failing fast here gives a clean message instead of a rejected server round-trip.
+    if (!MJListEntityExtended.UserCanDelete(listToDelete.UserID, this.ProviderToUse.CurrentUser)) {
+      this.notificationService.CreateSimpleNotification(
+        `You don't have permission to delete "${listName}".`,
+        'error', 6000,
+      );
+      return;
+    }
 
     this.isDeleting = true;
     this.cdr.detectChanges();

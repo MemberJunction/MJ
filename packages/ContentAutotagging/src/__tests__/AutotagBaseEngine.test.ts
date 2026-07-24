@@ -777,14 +777,17 @@ describe('AutotagBaseEngine', () => {
       const mockCreateRecords = vi.fn().mockResolvedValue({
         success: true, message: 'OK',
       });
+      const mockDeleteRecords = vi.fn().mockResolvedValue({
+        success: true, message: 'OK',
+      });
       vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation((_base, driverClass) => {
         if (typeof driverClass === 'string' && driverClass.includes('Embed')) {
           return { EmbedTexts: mockEmbedTexts } as never;
         }
-        return { CreateRecords: mockCreateRecords } as never;
+        return { CreateRecords: mockCreateRecords, DeleteRecords: mockDeleteRecords } as never;
       });
 
-      return { mockEmbedTexts, mockCreateRecords };
+      return { mockEmbedTexts, mockCreateRecords, mockDeleteRecords };
     }
 
     it('should return zero vectorized and correct skipped count for empty items array', async () => {
@@ -975,6 +978,235 @@ describe('AutotagBaseEngine', () => {
         expect(errorMessages.some(m => m.includes('item-save-throw') && m.includes('connection reset by peer'))).toBe(true);
       });
     });
+
+    describe('vector reference persistence — ContentItem.VectorRecordID + ContentItemChunk', () => {
+      // Item factory with a Save spy plus the fields the persistence path reads/writes.
+      function createVectorItem(id: string, text: string): Record<string, unknown> {
+        return {
+          ID: id,
+          Text: text,
+          Name: `Item ${id}`,
+          Description: `Description for ${id}`,
+          URL: `https://example.com/${id}`,
+          ContentSourceID: 'source-1',
+          ContentSourceTypeID: 'type-1',
+          ContentFileTypeID: 'file-type-1',
+          ContentTypeID: 'content-type-1',
+          EmbeddingStatus: 'Pending' as 'Pending' | 'Processing' | 'Complete' | 'Failed',
+          LastEmbeddedAt: null as Date | null,
+          EmbeddingModelID: null as string | null,
+          VectorRecordID: null as string | null,
+          Save: vi.fn().mockResolvedValue(true),
+        };
+      }
+
+      // Comfortably exceeds MAX_EMBEDDING_TOKENS * 4 (~30,000 chars) so buildEmbeddingChunks
+      // routes through the (mocked) TextChunker and yields more than one chunk.
+      const LONG_TEXT = 'This is a sentence about content. '.repeat(1200);
+
+      // Return one vector per embedded text so the vector count always matches the chunk
+      // count, regardless of exactly how many chunks the splitter produces.
+      function embedOnePerText() {
+        mockRunEmbeddingFn.mockImplementationOnce(async (params: { Texts: string[] }) => ({
+          Success: true,
+          Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]),
+          PromptRunID: 'mock-multi-run',
+          TokensUsed: 100,
+          Cost: 0.001,
+          ErrorMessage: null,
+          ExecutionTimeMs: 10,
+        }));
+      }
+
+      // Install a stub request-scoped provider (`this.ProviderToUse`) exposing everything the
+      // persistence path now uses: GetEntityObject (records each ContentItemChunk row for
+      // inspection), RunView (returns the item's existing chunk rows — NOT a global `new RunView()`),
+      // and the server-side transaction methods. `opts.failInsertAt` forces the Nth inserted chunk's
+      // Save to return false, to exercise the rollback path. Returns handles for assertions.
+      function installProvider(
+        existingRows: Array<Record<string, unknown>> = [],
+        opts: { failInsertAt?: number } = {}
+      ) {
+        const created: Array<Record<string, unknown>> = [];
+        let insertIndex = 0;
+        const provider = {
+          GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+            const row: Record<string, unknown> = {
+              NewRecord: vi.fn(),
+              ContentItemID: '',
+              Sequence: 0,
+              Text: '',
+              VectorRecordID: '',
+              EmbeddingStatus: 'Pending' as string,
+              LastEmbeddedAt: null as Date | null,
+              LatestResult: { CompleteMessage: 'simulated chunk save failure' },
+            };
+            if (entityName === 'MJ: Content Item Chunks') {
+              const idx = insertIndex++;
+              row.Save = vi.fn().mockResolvedValue(opts.failInsertAt !== idx);
+              created.push(row);
+            } else {
+              row.Save = vi.fn().mockResolvedValue(true);
+            }
+            return row;
+          }),
+          RunView: vi.fn().mockResolvedValue({ Success: true, Results: existingRows }),
+          BeginTransaction: vi.fn().mockResolvedValue(undefined),
+          CommitTransaction: vi.fn().mockResolvedValue(undefined),
+          RollbackTransaction: vi.fn().mockResolvedValue(undefined),
+        };
+        Object.defineProperty(engine, 'ProviderToUse', {
+          get() { return provider; },
+          configurable: true,
+        });
+        return { created, provider };
+      }
+
+      it('stores the vector record id on ContentItem.VectorRecordID for a single-chunk item', async () => {
+        await setupVectorMocks();
+        const { created, provider } = installProvider();
+        const item = createVectorItem('item-single', 'Short single-chunk content');
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // crypto is mocked, so contentItemVectorId returns the fixed digest.
+        expect(item.VectorRecordID).toBe('abc123hash');
+        expect(item.EmbeddingStatus).toBe('Complete');
+        // A single-chunk item must NOT create ContentItemChunk rows or open a transaction.
+        expect(created).toHaveLength(0);
+        expect(provider.BeginTransaction).not.toHaveBeenCalled();
+      });
+
+      it('writes ordered ContentItemChunk rows in one committed transaction (multi-chunk item)', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+        const { created, provider } = installProvider();
+        const item = createVectorItem('item-multi', LONG_TEXT);
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Multi-chunk: provenance lives in ContentItemChunk, not on the item.
+        expect(item.VectorRecordID).toBeNull();
+        expect(item.EmbeddingStatus).toBe('Complete');
+        expect(created.length).toBeGreaterThan(1);
+        // Rows are ordered by sequence, carry the parent id, are stamped as embedded, and saved.
+        created.forEach((row, i) => {
+          expect(row.ContentItemID).toBe('item-multi');
+          expect(row.Sequence).toBe(i);
+          expect(row.EmbeddingStatus).toBe('Complete');
+          expect(row.LastEmbeddedAt).toBeInstanceOf(Date);
+          expect(row.Save).toHaveBeenCalledTimes(1);
+        });
+        // Each chunk carries a unique, persistent vector id (minted per chunk) — distinct per
+        // chunk, so a re-chunk's new rows never reuse a superseded chunk's vector id.
+        created.forEach(row => {
+          expect(typeof row.VectorRecordID).toBe('string');
+          expect((row.VectorRecordID as string).length).toBeGreaterThan(0);
+        });
+        expect(created[0].VectorRecordID).not.toBe(created[1].VectorRecordID);
+        // Persisted atomically: one transaction, committed, never rolled back.
+        expect(provider.BeginTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.CommitTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.RollbackTransaction).not.toHaveBeenCalled();
+      });
+
+      it('SOFT-deletes existing live chunks (marks DeleteStatus=Pending) and appends new ones — no hard delete', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+
+        // Existing LIVE chunk rows returned by the provider's RunView (request-scoped, not global).
+        const existingRows = [0, 1].map(i => ({
+          ID: `old-chunk-${i}`,
+          DeleteStatus: null as string | null,
+          Save: vi.fn().mockResolvedValue(true),
+          Delete: vi.fn().mockResolvedValue(true),   // present so we can prove it is NOT called
+          LatestResult: { CompleteMessage: '' },
+        }));
+        const { provider } = installProvider(existingRows);
+        const item = createVectorItem('item-rerun', LONG_TEXT);
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        expect(provider.RunView).toHaveBeenCalled();
+        // Superseded rows are soft-deleted (marked Pending + saved), NOT hard-deleted — the row is
+        // kept so a later PurgeDeletedChunks can remove its vector from the 3rd-party store.
+        existingRows.forEach(row => {
+          expect(row.DeleteStatus).toBe('Pending');
+          expect(row.Save).toHaveBeenCalledTimes(1);
+          expect(row.Delete).not.toHaveBeenCalled();
+        });
+        expect(provider.CommitTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.RollbackTransaction).not.toHaveBeenCalled();
+      });
+
+      it('rolls back the transaction and keeps the batch alive when a chunk insert fails', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+        const { provider } = installProvider([], { failInsertAt: 1 });
+        const item = createVectorItem('item-rollback', LONG_TEXT);
+
+        // Per-item persistence failure is best-effort: the run itself does not throw.
+        await expect(engine.VectorizeContentItems([item] as never[], mockUser)).resolves.not.toThrow();
+
+        // The failed replacement rolled back and was NOT committed.
+        expect(provider.RollbackTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.CommitTransaction).not.toHaveBeenCalled();
+      });
+
+      it('stays contained (no unhandled throw) even when the rollback itself fails', async () => {
+        await setupVectorMocks();
+        embedOnePerText();
+        const { provider } = installProvider([], { failInsertAt: 0 });
+        // Simulate a rollback that also fails (e.g. connection dropped). Must not mask the run or leak.
+        provider.RollbackTransaction = vi.fn().mockRejectedValue(new Error('connection reset during rollback'));
+        const item = createVectorItem('item-rollback-throws', LONG_TEXT);
+
+        await expect(engine.VectorizeContentItems([item] as never[], mockUser)).resolves.not.toThrow();
+        expect(provider.RollbackTransaction).toHaveBeenCalledTimes(1);
+        expect(provider.CommitTransaction).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('PurgeDeletedChunks', () => {
+    const mockUser = { ID: 'user-1' } as never;
+
+    it('returns zero when no chunks are pending deletion', async () => {
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() { return { RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] }) }; },
+        configurable: true,
+      });
+      const result = await engine.PurgeDeletedChunks(mockUser);
+      expect(result).toEqual({ purged: 0, failed: 0, skipped: 0 });
+    });
+
+    it('marks Pending chunks that have no VectorRecordID as Deleted without any remote delete', async () => {
+      // No VectorRecordID → nothing to remove from a 3rd-party store → mark Deleted directly.
+      const chunks = [0, 1].map(i => ({
+        ID: `chunk-${i}`,
+        ContentItemID: 'item-x',
+        VectorRecordID: null as string | null,
+        DeleteStatus: 'Pending' as string,
+        LastDeletedAt: null as Date | null,
+        Save: vi.fn().mockResolvedValue(true),
+        LatestResult: { CompleteMessage: '' },
+      }));
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() { return { RunView: vi.fn().mockResolvedValue({ Success: true, Results: chunks }) }; },
+        configurable: true,
+      });
+
+      const result = await engine.PurgeDeletedChunks(mockUser);
+
+      expect(result.skipped).toBe(2);
+      expect(result.purged).toBe(0);
+      expect(result.failed).toBe(0);
+      chunks.forEach(c => {
+        expect(c.DeleteStatus).toBe('Deleted');
+        expect(c.LastDeletedAt).toBeInstanceOf(Date);
+        expect(c.Save).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 
   describe('Circuit breaker', () => {
@@ -1061,6 +1293,49 @@ describe('AutotagBaseEngine', () => {
 
       // Verify GetEntityObject was called (for status update)
       expect(mdInstance.GetEntityObject).toHaveBeenCalled();
+    });
+
+    // Helper: install a provider whose GetEntityObject returns a captured mock item, then invoke
+    // the private updateContentItemTaggingStatus so we can assert what it wrote.
+    async function runTaggingStatus(item: Record<string, unknown>, status: string) {
+      Object.defineProperty(engine, 'ProviderToUse', {
+        get() { return { GetEntityObject: vi.fn().mockResolvedValue(item) }; },
+        configurable: true,
+      });
+      await (engine as unknown as {
+        updateContentItemTaggingStatus: (id: string, s: string, u: unknown) => Promise<void>;
+      }).updateContentItemTaggingStatus('item-1', status, mockUser);
+    }
+
+    it("resets EmbeddingStatus to 'Pending' when tagging transitions to Processing (re-embed changed content)", async () => {
+      const item: Record<string, unknown> = {
+        Load: vi.fn().mockResolvedValue(true),
+        Save: vi.fn().mockResolvedValue(true),
+        TaggingStatus: 'Complete',
+        EmbeddingStatus: 'Complete',
+        LastTaggedAt: null,
+      };
+      await runTaggingStatus(item, 'Processing');
+
+      expect(item.TaggingStatus).toBe('Processing');
+      // The item is being (re)tagged because its content changed → its prior embedding is stale.
+      expect(item.EmbeddingStatus).toBe('Pending');
+      expect(item.Save).toHaveBeenCalled();
+    });
+
+    it("does NOT touch EmbeddingStatus on the Complete transition", async () => {
+      const item: Record<string, unknown> = {
+        Load: vi.fn().mockResolvedValue(true),
+        Save: vi.fn().mockResolvedValue(true),
+        TaggingStatus: 'Processing',
+        EmbeddingStatus: 'Complete',
+        LastTaggedAt: null,
+      };
+      await runTaggingStatus(item, 'Complete');
+
+      expect(item.TaggingStatus).toBe('Complete');
+      expect(item.EmbeddingStatus).toBe('Complete'); // untouched — only the Processing transition resets it
+      expect(item.LastTaggedAt).toBeInstanceOf(Date);
     });
 
     it('should not crash when LLM fails (status transitions are best-effort)', async () => {

@@ -279,10 +279,14 @@ describe('LocalCacheManager Cache Control', () => {
         }
 
         it('should evict LRU entries when entity exceeds memory percentage', async () => {
-            // 100KB total budget, 50% per entity = 50KB per entity
+            // 100KB total budget, 50% per entity = 50KB per entity.
+            // Disable the per-ENTRY size cap: this test exercises per-ENTITY LRU
+            // eviction with individual entries sized up to 30% of budget, which
+            // the default 25% single-entry cap would otherwise reject first.
             await cacheManager.Initialize(mockStorage, {
                 maxSizeBytes: 100 * 1024,
                 maxPercentOfCachePerEntity: 50,
+                maxEntryPercentOfCache: 0,
             });
 
             // Insert ~20KB entry
@@ -325,10 +329,14 @@ describe('LocalCacheManager Cache Control', () => {
         it('should evict least-recently-accessed entries first (LRU)', async () => {
             vi.useFakeTimers();
 
-            // 60KB total, 50% per entity = 30KB per entity
+            // 60KB total, 50% per entity = 30KB per entity.
+            // Disable the per-ENTRY size cap: this test exercises per-ENTITY LRU
+            // eviction with individual entries sized up to ~25% of budget, which
+            // the default single-entry cap would otherwise reject first.
             await cacheManager.Initialize(mockStorage, {
                 maxSizeBytes: 60 * 1024,
                 maxPercentOfCachePerEntity: 50,
+                maxEntryPercentOfCache: 0,
             });
 
             // Insert ~10KB at t=0

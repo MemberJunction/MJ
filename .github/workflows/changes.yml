@@ -34,15 +34,24 @@ jobs:
         # next time someone happens to add a migration.
         run: .github/scripts/check-migration-id-determinism.sh --self-test
 
-      - name: Fetch PR base commit
-        # The default checkout is a depth-1 shallow clone of the merge commit, so
-        # the base commit's objects aren't present and `git diff <base>` fails
-        # with "bad object" — which previously made every validation step silently
-        # skip. Fetch just that one commit at depth 1: its trees are nearly
-        # identical to the already-checked-out merge commit, so the incremental
-        # transfer is ~the PR diff size, not the full repo history that
-        # `fetch-depth: 0` would pull.
-        run: git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.sha }}
+      - name: Resolve current base branch tip
+        id: base
+        # Two subtleties:
+        # 1. The default checkout is a depth-1 shallow clone of the merge commit,
+        #    so the base branch's objects aren't present and `git diff <base>`
+        #    fails with "bad object". Fetch the base at depth 1 — `git diff A B`
+        #    compares trees, no history walk needed, so the incremental transfer
+        #    is ~the PR diff size.
+        # 2. We deliberately do NOT use `github.event.pull_request.base.sha`: it
+        #    is a snapshot from when the PR was opened and never advances with
+        #    the base branch. A long-lived PR that merges the base branch in
+        #    (this repo's standard flow — no rebases) would be diffed against a
+        #    months-old base and blamed for every migration merged since.
+        #    `github.sha` is the test merge of the PR head into the CURRENT base
+        #    tip, so diffing from that tip yields exactly what this PR adds.
+        run: |
+          git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.ref }}
+          echo "sha=$(git rev-parse FETCH_HEAD)" >> $GITHUB_OUTPUT
 
       - name: Check for migration file changes
         id: check_migrations
@@ -50,7 +59,7 @@ jobs:
           # Resolve the diff first so a real git failure (e.g. an unfetched base
           # commit) hard-fails the job under `set -e` instead of being swallowed
           # by `|| true` and reported as "no migrations".
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+          CHANGED_FILES=$(git diff --name-only ${{ steps.base.outputs.sha }} ${{ github.sha }})
           MIGRATION_FILES=$(echo "$CHANGED_FILES" | grep -E '^migrations/.*\.sql$' || true)
           if [ -n "$MIGRATION_FILES" ]; then
             echo "has_migrations=true" >> $GITHUB_OUTPUT
@@ -86,7 +95,7 @@ jobs:
           NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 ))"
           EXPECTED_STRING="__v$NEXT_MINOR_VERSION"
 
-          git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
+          git diff --name-only --diff-filter=A ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
             if [[ ! "$file" =~ $EXPECTED_STRING ]]; then
               echo "::error file=$file::Migration filename doesn't match the next minor version (v$NEXT_MINOR_VERSION)"
               exit 1
@@ -101,7 +110,7 @@ jobs:
         if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
           # Get new migration files being added in this PR
-          NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
+          NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
 
           if [ -z "$NEW_MIGRATIONS" ]; then
             echo "No new migration files to check"
@@ -113,7 +122,7 @@ jobs:
           MAX_EXISTING_TIMESTAMP=0
 
           # Get all existing migration files from the base branch
-          for file in $(git ls-tree -r --name-only ${{ github.event.pull_request.base.sha }} -- migrations/ | grep -E '\.sql$'); do
+          for file in $(git ls-tree -r --name-only ${{ steps.base.outputs.sha }} -- migrations/ | grep -E '\.sql$'); do
             filename=$(basename "$file")
             # Extract timestamp from filename (VYYYYMMDDHHMM format)
             if [[ "$filename" =~ ^V([0-9]{12})__ ]]; then
@@ -164,7 +173,7 @@ jobs:
       - name: Check migration content
         if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
-          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
+          git diff --name-only ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
             # Strip single-quoted SQL string literals before the hard-coded-schema check so that
             # seeded data (e.g. prompt/template content that legitimately shows __mj.* SQL examples)
             # doesn't trip the guard. T-SQL escapes a quote by doubling it (''); slurp mode handles
@@ -210,7 +219,7 @@ jobs:
           COMMENT_BODY_FILE: ${{ runner.temp }}/id-determinism-comment.md
         run: |
           .github/scripts/check-migration-id-determinism.sh \
-            '${{ github.event.pull_request.base.sha }}' \
+            '${{ steps.base.outputs.sha }}' \
             '${{ github.sha }}'
 
       - name: Comment on non-deterministic migration IDs
@@ -239,7 +248,7 @@ jobs:
       - name: Check for minor version change
         if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
-          MIGRATION_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
+          MIGRATION_FILES=$(git diff --name-only ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
           if [ -n "$MIGRATION_FILES" ]; then
             MINOR_CHANGE=$(grep 'minor' .changeset/*.md || true)
             if [ -z "$MINOR_CHANGE" ]; then
