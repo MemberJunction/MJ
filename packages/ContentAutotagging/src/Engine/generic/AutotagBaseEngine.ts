@@ -1,5 +1,5 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core'
-import { MJGlobal, UUIDsEqual, NormalizeUUID, RegisterClass } from '@memberjunction/global'
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core'
+import { MJGlobal, UUIDsEqual, NormalizeUUID, RegisterClass, uuidv4 } from '@memberjunction/global'
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
     MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
@@ -7,7 +7,7 @@ import {
     MJContentItemAttributeEntity, MJContentSourceTypeParamEntity,
     MJContentProcessRunEntity_IContentProcessRunConfiguration,
     MJContentItemDuplicateEntity, MJTaggedItemEntity,
-    MJEntityRecordDocumentEntity
+    MJEntityRecordDocumentEntity, MJContentItemChunkEntity
 } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
 import { RateLimiter } from './RateLimiter'
@@ -45,6 +45,16 @@ interface ResolvedVectorInfrastructure {
     embeddingModelID: string;
 }
 
+/** Running tally for a PurgeDeletedChunks pass. */
+interface ChunkPurgeStats {
+    /** Chunks whose vector was removed from the store and row flipped to 'Deleted'. */
+    purged: number;
+    /** Chunks that could not be purged this run (left 'Pending', retried next run). */
+    failed: number;
+    /** Chunks with no VectorRecordID — nothing to remove remotely, marked 'Deleted' directly. */
+    skipped: number;
+}
+
 /**
  * Result of a vectorization operation, including counts and AIPromptRun IDs
  * for linking to ContentProcessRunDetail records.
@@ -60,6 +70,10 @@ export interface VectorizeResult {
 
 /** Default batch size for vectorization processing */
 const DEFAULT_VECTORIZE_BATCH_SIZE = 20;
+/** Default cap on how many soft-deleted chunks a single PurgeDeletedChunks run processes. */
+const DEFAULT_PURGE_BATCH_SIZE = 1000;
+/** Vector-DB delete sub-batch size — bounds how many records hit a 3rd-party store per call. */
+const PURGE_VECTORDB_SUBBATCH = 50;
 
 /**
  * Core engine for content autotagging. Extends BaseEngine to cache content metadata
@@ -396,6 +410,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             item.TaggingStatus = status;
             if (status === 'Complete') {
                 item.LastTaggedAt = new Date();
+            }
+            // When tagging STARTS, the item is being (re)processed because its content is new or
+            // changed (the provider's checksum comparison already filtered out unchanged items).
+            // Reset its embedding state to 'Pending' so the vectorization phase re-embeds it — the
+            // tagging and embedding "needs work" signals are otherwise independent, and a changed
+            // item that was previously 'Complete' would never get re-embedded.
+            if (status === 'Processing') {
+                item.EmbeddingStatus = 'Pending';
             }
             await item.Save();
         } catch {
@@ -1554,6 +1576,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const batchSuccess = await this.upsertVectorRecords(records, infra);
             if (batchSuccess) {
                 vectorized += batch.length;
+                // Persist the vector-DB record identifiers back into MJ before the status save,
+                // so single-chunk items carry their VectorRecordID in the same 'Complete' write.
+                await this.persistVectorReferences(batch, allChunks, records, contextUser);
                 await this.updateEmbeddingStatusBatch(batch, 'Complete', contextUser, infra.embeddingModelID);
             } else {
                 await this.updateEmbeddingStatusBatch(batch, 'Failed', contextUser);
@@ -1588,12 +1613,16 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      */
     private buildChunksForBatch(
         batch: MJContentItemEntity[]
-    ): { item: MJContentItemEntity; chunkIndex: number; text: string }[] {
-        const allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string }[] = [];
+    ): { item: MJContentItemEntity; chunkIndex: number; text: string; chunkId: string }[] {
+        const allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string; chunkId: string }[] = [];
         for (const item of batch) {
             const chunks = this.buildEmbeddingChunks(item);
             for (let ci = 0; ci < chunks.length; ci++) {
-                allChunks.push({ item, chunkIndex: ci, text: chunks[ci] });
+                // Mint a stable per-chunk id up front. For multi-chunk items this becomes BOTH the
+                // ContentItemChunk row's RecordID and its vector-DB record id (recordId strategy),
+                // so a re-chunk produces NEW rows with NEW ids — old (soft-deleted) and new chunks
+                // never collide on a vector id, which is what makes the purge safe.
+                allChunks.push({ item, chunkIndex: ci, text: chunks[ci], chunkId: uuidv4() });
             }
         }
         return allChunks;
@@ -1603,17 +1632,351 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Build VectorRecord objects from embedding chunks and their corresponding vectors.
      */
     private buildVectorRecords(
-        allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string }[],
+        allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string; chunkId: string }[],
         vectors: number[][],
         tagMap: Map<string, string[]>
     ): VectorRecord[] {
+        // Count chunks per item: single-chunk items keep an item-level (deterministic) vector id;
+        // multi-chunk items use each chunk's unique RecordID (chunkId) as its vector id, so
+        // re-chunked (soft-deleted) old chunks and their replacements never share a vector id.
+        const countByItem = new Map<string, number>();
+        for (const c of allChunks) {
+            countByItem.set(c.item.ID, (countByItem.get(c.item.ID) ?? 0) + 1);
+        }
         return allChunks.map((chunk, idx) => ({
-            id: chunk.chunkIndex === 0
-                ? this.contentItemVectorId(chunk.item.ID)
-                : this.contentItemVectorId(chunk.item.ID) + `_chunk${chunk.chunkIndex}`,
+            id: (countByItem.get(chunk.item.ID) ?? 1) > 1
+                ? chunk.chunkId
+                : this.contentItemVectorId(chunk.item.ID),
             values: vectors[idx],
             metadata: this.buildVectorMetadata(chunk.item, tagMap.get(chunk.item.ID))
         }));
+    }
+
+    /**
+     * Persist the vector-database record identifiers produced during this batch back into MJ.
+     *
+     * - Single-chunk items: the item embeds as one vector, so its record id is stored directly
+     *   on ContentItem.VectorRecordID (set in-memory here; persisted by the subsequent
+     *   'Complete' status Save so no extra write is needed).
+     * - Multi-chunk items: the item was split into several vectors, so per-chunk provenance is
+     *   recorded in ContentItemChunk rows (ContentItemID, Sequence, Text, VectorRecordID) and
+     *   ContentItem.VectorRecordID is left null (the chunk table is the source of truth).
+     *
+     * `allChunks` and `records` are parallel arrays (buildVectorRecords maps 1:1), so
+     * records[i].id is the vector-DB id for allChunks[i]. Best-effort: a persistence failure
+     * for one item is logged but does not abort the batch — the vectors are already upserted.
+     */
+    private async persistVectorReferences(
+        batch: MJContentItemEntity[],
+        allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string; chunkId: string }[],
+        records: VectorRecord[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Group (chunkIndex, text, vectorRecordID) by content item, preserving order.
+        const byItem = new Map<string, { chunkIndex: number; text: string; vectorRecordID: string }[]>();
+        for (let idx = 0; idx < allChunks.length; idx++) {
+            const c = allChunks[idx];
+            const key = NormalizeUUID(c.item.ID);
+            const list = byItem.get(key) ?? [];
+            list.push({ chunkIndex: c.chunkIndex, text: c.text, vectorRecordID: String(records[idx].id) });
+            byItem.set(key, list);
+        }
+
+        for (const item of batch) {
+            const chunks = byItem.get(NormalizeUUID(item.ID));
+            if (!chunks || chunks.length === 0) continue;
+            try {
+                if (chunks.length === 1) {
+                    // Single vector — the record id lives on the content item itself.
+                    item.VectorRecordID = chunks[0].vectorRecordID;
+                } else {
+                    // Multiple vectors — record per-chunk provenance; the item-level id is not meaningful.
+                    item.VectorRecordID = null;
+                    await this.replaceContentItemChunks(item.ID, chunks, contextUser);
+                }
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`persistVectorReferences: failed to persist chunk references for item ${item.ID}: ${msg}`);
+            }
+        }
+    }
+
+    /**
+     * Supersede a content item's current (live) chunks with a freshly-embedded set: the live
+     * chunks are SOFT-deleted (DeleteStatus='Pending', rows kept) and the new chunks appended,
+     * atomically. A later PurgeDeletedChunks removes the superseded chunks' vectors from the
+     * 3rd-party store and flips them to 'Deleted'. Either the swap commits or it rolls back;
+     * on failure this throws and the caller (persistVectorReferences) logs it and moves on.
+     *
+     * Provider discipline (server, multi-user): the RunView read, the entity objects, and the
+     * transaction ALL go through `this.ProviderToUse` — the connection allocated to this request.
+     * A bare `new RunView()` would run on the process-global provider/connection, outside this
+     * transaction and under the wrong user's context.
+     */
+    private async replaceContentItemChunks(
+        contentItemID: string,
+        chunks: { chunkIndex: number; text: string; vectorRecordID: string }[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        const rv = this.ProviderToUse as unknown as IRunViewProvider;
+
+        // Load only the LIVE chunks (not already soft-deleted) — those are the ones being
+        // superseded by this re-vectorization. Chunks already marked for deletion are left alone.
+        const existing = await rv.RunView<MJContentItemChunkEntity>({
+            EntityName: 'MJ: Content Item Chunks',
+            ExtraFilter: `ContentItemID='${contentItemID}' AND DeleteStatus IS NULL`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        if (!existing.Success) {
+            throw new Error(`failed to load existing chunks for item ${contentItemID}: ${existing.ErrorMessage}`);
+        }
+
+        const newRows = await this.buildChunkRows(contentItemID, chunks, contextUser);
+        await this.commitChunkReplacement(contentItemID, existing.Results, newRows);
+    }
+
+    /**
+     * Build (in-memory only — no DB access) the replacement ContentItemChunk rows for an item.
+     * These rows are created only after the chunk's vector has been successfully embedded and
+     * upserted (see persistVectorReferences), so each row is stamped EmbeddingStatus='Complete'
+     * with LastEmbeddedAt=now — mirroring how the parent ContentItem is stamped on a successful
+     * embed. TaggingStatus is left at its 'Pending' default (chunks are not tagged individually;
+     * tagging happens at the Content Item level) and DeleteStatus is left null (not slated for
+     * deletion).
+     */
+    private async buildChunkRows(
+        contentItemID: string,
+        chunks: { chunkIndex: number; text: string; vectorRecordID: string }[],
+        contextUser: UserInfo
+    ): Promise<MJContentItemChunkEntity[]> {
+        const md = this.ProviderToUse;
+        const now = new Date();
+        const rows: MJContentItemChunkEntity[] = [];
+        for (const chunk of chunks) {
+            const row = await md.GetEntityObject<MJContentItemChunkEntity>('MJ: Content Item Chunks', contextUser);
+            row.NewRecord();
+            // Each chunk carries a unique, persistent vector-DB id (minted per chunk in
+            // buildChunksForBatch) in VectorRecordID. A re-chunk mints fresh ids for its new rows,
+            // so a superseded (soft-deleted) chunk and its replacement never share a vector id —
+            // which is what makes PurgeDeletedChunks safe.
+            row.ContentItemID = contentItemID;
+            row.Sequence = chunk.chunkIndex;
+            row.Text = chunk.text;
+            row.VectorRecordID = chunk.vectorRecordID;
+            row.EmbeddingStatus = 'Complete';
+            row.LastEmbeddedAt = now;
+            rows.push(row);
+        }
+        return rows;
+    }
+
+    /**
+     * In one server-side transaction (SQL-only — no third-party calls): SOFT-delete the superseded
+     * live chunks (set DeleteStatus='Pending', keeping the rows) and insert the new chunks. Either
+     * the whole swap commits or it rolls back.
+     *
+     * The superseded chunks' vectors are removed from the vector database out-of-band by
+     * PurgeDeletedChunks, which batches the remote deletes to each provider's limits — a
+     * cross-system delete can't live inside this SQL transaction (it can't be rolled back if the
+     * remote store already applied it). Keeping the rows (soft delete) also preserves history and
+     * lets the vector purge be retried. There is no unique constraint on (ContentItemID, Sequence),
+     * so a superseded chunk and its replacement may share a Sequence until the old one is purged.
+     */
+    private async commitChunkReplacement(
+        contentItemID: string,
+        supersededRows: MJContentItemChunkEntity[],
+        newRows: MJContentItemChunkEntity[]
+    ): Promise<void> {
+        const provider = this.ProviderToUse as unknown as DatabaseProviderBase;
+        await provider.BeginTransaction();
+        let committed = false;
+        try {
+            // Soft-delete the superseded live chunks, then insert the new ones. Both phases fire
+            // in parallel (Promise.all) — this is SQL-only inside the transaction (no third-party
+            // call), and MJ's provider serializes transaction queries onto the single connection,
+            // so parallel dispatch is safe.
+            supersededRows.forEach(row => { row.DeleteStatus = 'Pending'; });
+            const softDeleteResults = await Promise.all(supersededRows.map(row => row.Save()));
+            const failedSoftDelete = supersededRows.find((_row, i) => !softDeleteResults[i]);
+            if (failedSoftDelete) {
+                throw new Error(`failed to soft-delete chunk ${failedSoftDelete.ID}: ${failedSoftDelete.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+
+            const saveResults = await Promise.all(newRows.map(row => row.Save()));
+            const failedSave = newRows.find((_row, i) => !saveResults[i]);
+            if (failedSave) {
+                throw new Error(`failed to save chunk ${failedSave.Sequence}: ${failedSave.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+
+            await provider.CommitTransaction();
+            committed = true;
+        } catch (e) {
+            // Guard the rollback so it can never mask the original error: a commit that throws has
+            // already self-rolled-back inside the provider (nulling its transaction, so a second
+            // rollback here throws "no active transaction"), and a rollback can fail on its own. The
+            // provider clears its transaction state on every path, so this never leaves one open.
+            if (!committed) {
+                try {
+                    await provider.RollbackTransaction();
+                } catch (rollbackErr) {
+                    const rbMsg = rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
+                    LogError(`commitChunkReplacement: rollback failed for item ${contentItemID}: ${rbMsg}`);
+                }
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Actually remove chunks that have been soft-deleted (DeleteStatus='Pending'): delete their
+     * vectors from whatever 3rd-party vector store holds them, then flip the row to 'Deleted' with
+     * LastDeletedAt (the SQL row is kept as a tombstone). Bounded per run (maxItems) and per remote
+     * call (PURGE_VECTORDB_SUBBATCH) + rate-limited, so a large backlog or a single big re-chunk
+     * can't hammer the DB or the vector provider. Meant to run out-of-band from vectorization
+     * (on demand or scheduled).
+     *
+     * Ordering is delete-vector-first, then mark 'Deleted': if the run dies mid-way the chunk stays
+     * 'Pending' and is retried next run (at worst a redundant remote delete, which is idempotent for
+     * the vector stores we target).
+     *
+     * @returns counts of chunks purged (vector removed + marked Deleted), failed, and skipped
+     *          (no VectorRecordID — marked Deleted directly, nothing to remove remotely).
+     */
+    public async PurgeDeletedChunks(
+        contextUser: UserInfo,
+        options?: { maxItems?: number }
+    ): Promise<ChunkPurgeStats> {
+        await AIEngine.Instance.Config(false, contextUser);
+        const maxItems = options?.maxItems && options.maxItems > 0 ? options.maxItems : DEFAULT_PURGE_BATCH_SIZE;
+        const stats: ChunkPurgeStats = { purged: 0, failed: 0, skipped: 0 };
+
+        const chunks = await this.loadPendingChunks(contextUser, maxItems);
+        if (chunks.length === 0) return stats;
+
+        // Chunks with no vector id have nothing to remove remotely — mark Deleted directly.
+        for (const c of chunks.filter(x => !x.VectorRecordID)) {
+            if (await this.markChunkDeleted(c)) stats.skipped++; else stats.failed++;
+        }
+
+        // Remove the rest from the vector DB (grouped by infrastructure), then mark Deleted.
+        const toPurge = chunks.filter(c => !!c.VectorRecordID);
+        if (toPurge.length > 0) {
+            await this.purgeChunksByInfrastructure(toPurge, contextUser, stats);
+        }
+
+        LogStatus(`PurgeDeletedChunks: ${stats.purged} purged, ${stats.skipped} skipped (no vector), ${stats.failed} failed`);
+        return stats;
+    }
+
+    /** Load soft-deleted chunks awaiting purge (bounded, oldest first). Returns [] on failure. */
+    private async loadPendingChunks(contextUser: UserInfo, maxItems: number): Promise<MJContentItemChunkEntity[]> {
+        const rv = this.ProviderToUse as unknown as IRunViewProvider;
+        const result = await rv.RunView<MJContentItemChunkEntity>({
+            EntityName: 'MJ: Content Item Chunks',
+            ExtraFilter: `DeleteStatus = 'Pending'`,
+            OrderBy: '__mj_CreatedAt ASC',
+            MaxRows: maxItems,
+            ResultType: 'entity_object'
+        }, contextUser);
+        if (!result.Success) {
+            LogError(`PurgeDeletedChunks: failed to load pending chunks: ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results;
+    }
+
+    /** Load the parent Content Items for a set of chunks (needed for infra resolution). null on failure. */
+    private async loadChunkParentItems(
+        chunks: MJContentItemChunkEntity[],
+        contextUser: UserInfo
+    ): Promise<MJContentItemEntity[] | null> {
+        const rv = this.ProviderToUse as unknown as IRunViewProvider;
+        const itemIDs = [...new Set(chunks.map(c => NormalizeUUID(c.ContentItemID)))];
+        const result = await rv.RunView<MJContentItemEntity>({
+            EntityName: 'MJ: Content Items',
+            ExtraFilter: `ID IN (${itemIDs.map(id => `'${id}'`).join(',')})`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        if (!result.Success) {
+            LogError(`PurgeDeletedChunks: failed to load parent items: ${result.ErrorMessage}`);
+            return null;
+        }
+        return result.Results;
+    }
+
+    /** Group chunks by their parent item's vector infrastructure and purge each group's vectors. */
+    private async purgeChunksByInfrastructure(
+        toPurge: MJContentItemChunkEntity[],
+        contextUser: UserInfo,
+        stats: ChunkPurgeStats
+    ): Promise<void> {
+        const items = await this.loadChunkParentItems(toPurge, contextUser);
+        if (!items) { stats.failed += toPurge.length; return; }
+
+        const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(items, contextUser);
+        const itemGroups = this.groupItemsByInfrastructure(items, sourceMap, typeMap);
+
+        for (const [groupKey, groupItems] of itemGroups) {
+            const groupItemIDs = new Set(groupItems.map(i => NormalizeUUID(i.ID)));
+            const groupChunks = toPurge.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
+            if (groupChunks.length === 0) continue;
+
+            let infra: ResolvedVectorInfrastructure;
+            try {
+                infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
+            } catch (e) {
+                LogError(`PurgeDeletedChunks: infrastructure resolve failed for group ${groupKey}: ${e instanceof Error ? e.message : String(e)}`);
+                stats.failed += groupChunks.length;
+                continue;
+            }
+            await this.purgeChunkGroup(groupChunks, infra, stats);
+        }
+    }
+
+    /** Delete one infra group's chunk vectors in bounded sub-batches, then mark the rows Deleted. */
+    private async purgeChunkGroup(
+        groupChunks: MJContentItemChunkEntity[],
+        infra: ResolvedVectorInfrastructure,
+        stats: ChunkPurgeStats
+    ): Promise<void> {
+        for (let i = 0; i < groupChunks.length; i += PURGE_VECTORDB_SUBBATCH) {
+            const batch = groupChunks.slice(i, i + PURGE_VECTORDB_SUBBATCH);
+            if (await this.deleteChunkVectors(batch, infra)) {
+                for (const c of batch) {
+                    if (await this.markChunkDeleted(c)) stats.purged++; else stats.failed++;
+                }
+            } else {
+                stats.failed += batch.length; // left 'Pending' → retried on the next run
+            }
+        }
+    }
+
+    /** Remove a batch of chunk vectors from the vector DB (rate-limited). Returns whether it succeeded. */
+    private async deleteChunkVectors(
+        batch: MJContentItemChunkEntity[],
+        infra: ResolvedVectorInfrastructure
+    ): Promise<boolean> {
+        const records: VectorRecord[] = batch.map(c => ({ id: c.VectorRecordID as string, values: [], metadata: {} }));
+        await this.VectorDBRateLimiter.Acquire();
+        try {
+            const resp = await infra.vectorDB.DeleteRecords(records, infra.indexName);
+            if (!resp.success) LogError(`PurgeDeletedChunks: DeleteRecords failed for index ${infra.indexName}: ${resp.message}`);
+            return resp.success;
+        } catch (e) {
+            LogError(`PurgeDeletedChunks: DeleteRecords threw for index ${infra.indexName}: ${e instanceof Error ? e.message : String(e)}`);
+            return false;
+        }
+    }
+
+    /** Mark a soft-deleted chunk as fully Deleted (its vector already removed). Best-effort save. */
+    private async markChunkDeleted(chunk: MJContentItemChunkEntity): Promise<boolean> {
+        chunk.DeleteStatus = 'Deleted';
+        chunk.LastDeletedAt = new Date();
+        const saved = await chunk.Save();
+        if (!saved) {
+            LogError(`PurgeDeletedChunks: failed to mark chunk ${chunk.ID} Deleted: ${chunk.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return saved;
     }
 
     /**
