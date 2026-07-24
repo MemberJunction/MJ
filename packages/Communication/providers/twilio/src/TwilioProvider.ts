@@ -740,7 +740,7 @@ export class TwilioProvider extends BaseCommunicationProvider {
    * delivered, no endpoint-validation handshake is performed, management is supported
    * (pointing/clearing a number's `smsUrl`), and the full message is delivered inline.
    */
-  public override getSubscriptionCapabilities(): SubscriptionCapabilities {
+  public override GetSubscriptionCapabilities(): SubscriptionCapabilities {
     return {
       MaxLifetimeMinutes: undefined, // Twilio webhooks never expire
       SupportedChangeTypes: ['created'],

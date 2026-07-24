@@ -1019,7 +1019,7 @@ export class GmailProvider extends BaseCommunicationProvider {
    * (no endpoint validation handshake), are programmatically managed, and are HINT-mode
    * (the payload carries only a historyId, never the message inline).
    */
-  public override getSubscriptionCapabilities(): SubscriptionCapabilities {
+  public override GetSubscriptionCapabilities(): SubscriptionCapabilities {
     return {
       MaxLifetimeMinutes: GMAIL_MAX_SUBSCRIPTION_MINUTES, // Gmail watch expires ~7 days; must re-watch
       SupportedChangeTypes: ['created'],

@@ -22,12 +22,12 @@ vi.mock('@sendgrid/mail', () => ({
 }));
 
 // Mirror the real BaseCommunicationProvider: SupportsPush derives from
-// getSubscriptionCapabilities() so a subclass opts in simply by overriding it.
+// GetSubscriptionCapabilities() so a subclass opts in simply by overriding it.
 vi.mock('@memberjunction/communication-types', () => ({
   BaseCommunicationProvider: class {
     getSupportedOperations() { return []; }
-    getSubscriptionCapabilities() { return undefined; }
-    get SupportsPush() { return this.getSubscriptionCapabilities() !== undefined; }
+    GetSubscriptionCapabilities() { return undefined; }
+    get SupportsPush() { return this.GetSubscriptionCapabilities() !== undefined; }
   },
   resolveCredentialValue: (requestVal: string | undefined, envVal: string | undefined, disableFallback: boolean) => {
     if (requestVal) return requestVal;
@@ -115,14 +115,14 @@ describe('SendGridProvider Inbound Parse', () => {
   });
 
   describe('SupportsPush', () => {
-    it('is true (derived from getSubscriptionCapabilities)', () => {
+    it('is true (derived from GetSubscriptionCapabilities)', () => {
       expect(provider.SupportsPush).toBe(true);
     });
   });
 
-  describe('getSubscriptionCapabilities', () => {
+  describe('GetSubscriptionCapabilities', () => {
     it('reflects the Inbound Parse model (inline, managed, no expiry)', () => {
-      const caps = provider.getSubscriptionCapabilities()!;
+      const caps = provider.GetSubscriptionCapabilities()!;
       expect(caps.DeliversPayloadInline).toBe(true);
       expect(caps.SupportsSubscriptionManagement).toBe(true);
       expect(caps.MaxLifetimeMinutes).toBeUndefined();

@@ -59,7 +59,7 @@ class SubscriptionManagedPushProvider extends TestProvider {
             'ParseNotification' as const,
         ];
     }
-    public override getSubscriptionCapabilities() {
+    public override GetSubscriptionCapabilities() {
         return {
             MaxLifetimeMinutes: 4230,
             SupportedChangeTypes: ['created' as const],
@@ -88,7 +88,7 @@ class InlineParsePushProvider extends TestProvider {
             'ParseNotification' as const,
         ];
     }
-    public override getSubscriptionCapabilities() {
+    public override GetSubscriptionCapabilities() {
         return {
             MaxLifetimeMinutes: undefined,
             SupportedChangeTypes: ['created' as const],
@@ -321,8 +321,8 @@ describe('BaseCommunicationProvider', () => {
             expect(result.SuggestedResponseStatus).toBe(400);
         });
 
-        it('getSubscriptionCapabilities should return undefined by default', () => {
-            expect(provider.getSubscriptionCapabilities()).toBeUndefined();
+        it('GetSubscriptionCapabilities should return undefined by default', () => {
+            expect(provider.GetSubscriptionCapabilities()).toBeUndefined();
         });
 
         it('subscription operations are absent from getSupportedOperations by default', () => {
@@ -337,7 +337,7 @@ describe('BaseCommunicationProvider', () => {
         });
 
         it('capability gate holds for the default provider: no capabilities, no push, no ops', () => {
-            expect(provider.getSubscriptionCapabilities()).toBeUndefined();
+            expect(provider.GetSubscriptionCapabilities()).toBeUndefined();
             expect(provider.SupportsPush).toBe(false);
             const ops = provider.getSupportedOperations();
             expect(ops.includes('ParseNotification' as never)).toBe(false);
@@ -345,21 +345,21 @@ describe('BaseCommunicationProvider', () => {
     });
 
     describe('push capability gate (SupportsPush + generalized invariant)', () => {
-        it('SupportsPush derives from getSubscriptionCapabilities (subscription-managed provider)', () => {
+        it('SupportsPush derives from GetSubscriptionCapabilities (subscription-managed provider)', () => {
             const p = new SubscriptionManagedPushProvider();
-            expect(p.getSubscriptionCapabilities()).toBeDefined();
+            expect(p.GetSubscriptionCapabilities()).toBeDefined();
             expect(p.SupportsPush).toBe(true);
         });
 
-        it('SupportsPush derives from getSubscriptionCapabilities (inline-parse provider)', () => {
+        it('SupportsPush derives from GetSubscriptionCapabilities (inline-parse provider)', () => {
             const p = new InlineParsePushProvider();
-            expect(p.getSubscriptionCapabilities()).toBeDefined();
+            expect(p.GetSubscriptionCapabilities()).toBeDefined();
             expect(p.SupportsPush).toBe(true);
         });
 
         it('GENERALIZED INVARIANT: SupportsPush IFF capabilities defined, for every shape', () => {
             for (const p of [new TestProvider(), new SubscriptionManagedPushProvider(), new InlineParsePushProvider()]) {
-                expect(p.SupportsPush).toBe(p.getSubscriptionCapabilities() !== undefined);
+                expect(p.SupportsPush).toBe(p.GetSubscriptionCapabilities() !== undefined);
             }
         });
 
@@ -372,7 +372,7 @@ describe('BaseCommunicationProvider', () => {
 
         it('SupportsSubscriptionManagement agrees with Create/Delete ops being present', () => {
             for (const p of [new SubscriptionManagedPushProvider(), new InlineParsePushProvider()]) {
-                const caps = p.getSubscriptionCapabilities()!;
+                const caps = p.GetSubscriptionCapabilities()!;
                 const hasCreate = p.supportsOperation('CreateSubscription');
                 const hasDelete = p.supportsOperation('DeleteSubscription');
                 expect(caps.SupportsSubscriptionManagement).toBe(hasCreate && hasDelete);
@@ -381,17 +381,17 @@ describe('BaseCommunicationProvider', () => {
 
         it('RenewSubscription op present IFF the service has a finite MaxLifetimeMinutes', () => {
             const managed = new SubscriptionManagedPushProvider();
-            expect(managed.getSubscriptionCapabilities()!.MaxLifetimeMinutes).toBeTypeOf('number');
+            expect(managed.GetSubscriptionCapabilities()!.MaxLifetimeMinutes).toBeTypeOf('number');
             expect(managed.supportsOperation('RenewSubscription')).toBe(true);
 
             const inline = new InlineParsePushProvider();
-            expect(inline.getSubscriptionCapabilities()!.MaxLifetimeMinutes).toBeUndefined();
+            expect(inline.GetSubscriptionCapabilities()!.MaxLifetimeMinutes).toBeUndefined();
             expect(inline.supportsOperation('RenewSubscription')).toBe(false);
         });
 
         it('HINT-mode notifications carry MessageIDs and no inline Message', async () => {
             const p = new SubscriptionManagedPushProvider();
-            expect(p.getSubscriptionCapabilities()!.DeliversPayloadInline).toBe(false);
+            expect(p.GetSubscriptionCapabilities()!.DeliversPayloadInline).toBe(false);
             const result = await p.ParseNotification({ Headers: {}, QueryParams: {}, RawBody: '{}' });
             expect(result.Notifications[0].MessageIDs.length).toBeGreaterThan(0);
             expect(result.Notifications[0].Message).toBeUndefined();
@@ -399,7 +399,7 @@ describe('BaseCommunicationProvider', () => {
 
         it('INLINE-mode notifications carry the Message payload directly (no re-fetch)', async () => {
             const p = new InlineParsePushProvider();
-            expect(p.getSubscriptionCapabilities()!.DeliversPayloadInline).toBe(true);
+            expect(p.GetSubscriptionCapabilities()!.DeliversPayloadInline).toBe(true);
             const result = await p.ParseNotification({ Headers: {}, QueryParams: {}, RawBody: '' });
             expect(result.Notifications[0].Message).toBeDefined();
             expect(result.Notifications[0].Message?.Body).toBe('hello');

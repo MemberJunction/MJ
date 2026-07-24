@@ -1099,7 +1099,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
      * 4230 minutes (~3 days), support all three change types, and require synchronous
      * endpoint validation at create time.
      */
-    public override getSubscriptionCapabilities(): SubscriptionCapabilities {
+    public override GetSubscriptionCapabilities(): SubscriptionCapabilities {
         return {
             MaxLifetimeMinutes: MSGRAPH_MAX_SUBSCRIPTION_MINUTES,
             SupportedChangeTypes: ['created', 'updated', 'deleted'],

@@ -12,10 +12,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@memberjunction/communication-types', () => ({
   BaseCommunicationProvider: class {
     getSupportedOperations() { return []; }
-    // SupportsPush derives from getSubscriptionCapabilities() in the real base class;
+    // SupportsPush derives from GetSubscriptionCapabilities() in the real base class;
     // replicate that here so the test exercises the same derivation.
-    get SupportsPush() { return this.getSubscriptionCapabilities() !== undefined; }
-    getSubscriptionCapabilities() { return undefined; }
+    get SupportsPush() { return this.GetSubscriptionCapabilities() !== undefined; }
+    GetSubscriptionCapabilities() { return undefined; }
   },
   resolveCredentialValue: (requestVal: string | undefined, envVal: string | undefined, disableFallback: boolean) => {
     if (requestVal) return requestVal;
@@ -149,7 +149,7 @@ describe('GmailProvider push-notification subscriptions', () => {
     });
 
     it('capability invariant: capabilities defined IFF the four ops are present', () => {
-      const caps = provider.getSubscriptionCapabilities();
+      const caps = provider.GetSubscriptionCapabilities();
       const ops = provider.getSupportedOperations();
       const subOps = ['CreateSubscription', 'RenewSubscription', 'DeleteSubscription', 'ParseNotification'];
       const allPresent = subOps.every((op) => ops.includes(op as never));
@@ -163,9 +163,9 @@ describe('GmailProvider push-notification subscriptions', () => {
     });
   });
 
-  describe('getSubscriptionCapabilities', () => {
+  describe('GetSubscriptionCapabilities', () => {
     it('matches the Gmail watch spec', () => {
-      const caps = provider.getSubscriptionCapabilities();
+      const caps = provider.GetSubscriptionCapabilities();
       expect(caps).toEqual({
         MaxLifetimeMinutes: 10080,
         SupportedChangeTypes: ['created'],

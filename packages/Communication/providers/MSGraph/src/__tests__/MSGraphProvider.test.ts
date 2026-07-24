@@ -177,7 +177,7 @@ describe('MSGraphProvider', () => {
     });
 
     it('capability invariant: capabilities defined IFF ops present', () => {
-      const caps = provider.getSubscriptionCapabilities();
+      const caps = provider.GetSubscriptionCapabilities();
       const ops = provider.getSupportedOperations() as string[];
       const subOps = ['CreateSubscription', 'RenewSubscription', 'DeleteSubscription', 'ParseNotification'];
       const allPresent = subOps.every((op) => ops.includes(op));
@@ -185,9 +185,9 @@ describe('MSGraphProvider', () => {
     });
   });
 
-  describe('getSubscriptionCapabilities', () => {
+  describe('GetSubscriptionCapabilities', () => {
     it('matches the Graph mail spec', () => {
-      const caps = provider.getSubscriptionCapabilities();
+      const caps = provider.GetSubscriptionCapabilities();
       expect(caps).toEqual({
         MaxLifetimeMinutes: 4230,
         SupportedChangeTypes: ['created', 'updated', 'deleted'],

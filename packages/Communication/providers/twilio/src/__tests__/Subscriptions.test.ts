@@ -50,9 +50,9 @@ vi.mock('twilio', () => {
 vi.mock('@memberjunction/communication-types', () => ({
   BaseCommunicationProvider: class {
     getSupportedOperations() { return []; }
-    getSubscriptionCapabilities() { return undefined; }
-    // SupportsPush derives from getSubscriptionCapabilities, as in the real base class.
-    get SupportsPush() { return this.getSubscriptionCapabilities() !== undefined; }
+    GetSubscriptionCapabilities() { return undefined; }
+    // SupportsPush derives from GetSubscriptionCapabilities, as in the real base class.
+    get SupportsPush() { return this.GetSubscriptionCapabilities() !== undefined; }
   },
   resolveCredentialValue: (requestVal: string | undefined, envVal: string | undefined, disableFallback: boolean) => {
     if (requestVal) return requestVal;
@@ -109,14 +109,14 @@ describe('TwilioProvider — push subscriptions', () => {
   });
 
   describe('SupportsPush', () => {
-    it('is true (derived from getSubscriptionCapabilities)', () => {
+    it('is true (derived from GetSubscriptionCapabilities)', () => {
       expect(provider.SupportsPush).toBe(true);
     });
   });
 
-  describe('getSubscriptionCapabilities', () => {
+  describe('GetSubscriptionCapabilities', () => {
     it('describes an inline-payload, non-expiring, managed provider', () => {
-      const caps = provider.getSubscriptionCapabilities();
+      const caps = provider.GetSubscriptionCapabilities();
       expect(caps).toEqual({
         MaxLifetimeMinutes: undefined,
         SupportedChangeTypes: ['created'],

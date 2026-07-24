@@ -801,7 +801,7 @@ export type DeleteSubscriptionParams<T = Record<string, any>> = {
 /**
  * Provider metadata describing its subscription capabilities, so consumers can schedule
  * renewals and validate change types generically. Returned by
- * {@link BaseCommunicationProvider.getSubscriptionCapabilities}; `undefined` there means
+ * {@link BaseCommunicationProvider.GetSubscriptionCapabilities}; `undefined` there means
  * subscriptions are not supported.
  */
 export type SubscriptionCapabilities = {
@@ -1301,7 +1301,7 @@ export abstract class BaseCommunicationProvider {
     //     ParseNotification populates NormalizedNotification.Message. Management may exist
     //     (Twilio SmsUrl, SendGrid Parse Settings) but there is no expiry/renewal.
     //
-    // CAPABILITY GATE: SupportsPush === (getSubscriptionCapabilities() !== undefined). The
+    // CAPABILITY GATE: SupportsPush === (GetSubscriptionCapabilities() !== undefined). The
     // default SupportsPush getter derives from capabilities, so a provider "opts in" simply
     // by returning capabilities - no separate flag to keep in sync (avoids the drift a hand-
     // maintained boolean invites). Any push provider MUST implement ParseNotification and
@@ -1316,14 +1316,14 @@ export abstract class BaseCommunicationProvider {
      * short-circuit — `if (provider.SupportsPush) { ... }` — instead of probing individual
      * operations.
      *
-     * Derived from {@link getSubscriptionCapabilities} so it stays in lockstep with actual
+     * Derived from {@link GetSubscriptionCapabilities} so it stays in lockstep with actual
      * capability: providers that support push return capabilities and thereby report
      * `SupportsPush === true` for free; providers that don't return `undefined` and report
      * `false`. Subclasses normally do NOT override this — override
-     * {@link getSubscriptionCapabilities} instead.
+     * {@link GetSubscriptionCapabilities} instead.
      */
     public get SupportsPush(): boolean {
-        return this.getSubscriptionCapabilities() !== undefined;
+        return this.GetSubscriptionCapabilities() !== undefined;
     }
 
     /**
@@ -1414,7 +1414,7 @@ export abstract class BaseCommunicationProvider {
      * to appear in {@link getSupportedOperations}.
      * @returns SubscriptionCapabilities when supported, otherwise undefined
      */
-    public getSubscriptionCapabilities(): SubscriptionCapabilities | undefined {
+    public GetSubscriptionCapabilities(): SubscriptionCapabilities | undefined {
         return undefined;
     }
 

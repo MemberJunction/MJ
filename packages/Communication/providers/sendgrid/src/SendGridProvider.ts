@@ -511,7 +511,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
      * endpoint validation handshake, are manageable via the REST API, and deliver the full
      * payload inline.
      */
-    public override getSubscriptionCapabilities(): SubscriptionCapabilities {
+    public override GetSubscriptionCapabilities(): SubscriptionCapabilities {
         return {
             MaxLifetimeMinutes: undefined, // Inbound Parse settings never expire
             SupportedChangeTypes: ['created'],
