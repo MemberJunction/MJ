@@ -80,7 +80,9 @@
 .search-input-wrapper {
     display: flex;
     align-items: center;
+    gap: 8px;
     width: 100%;
+    padding-left: 10px;
     border: 1px solid var(--mj-border-strong);
     border-radius: 4px;
     background: var(--mj-bg-surface);
@@ -94,15 +96,16 @@
 
 .search-icon {
     color: var(--mj-text-disabled);
-    margin-left: 10px;
     font-size: 14px;
+    flex-shrink: 0;
 }
 
 .search-input {
     flex: 1;
+    min-width: 0;
     border: none;
     outline: none;
-    padding: 8px 10px;
+    padding: 8px 0;
     font-size: 14px;
     background: transparent;
 }

@@ -1,0 +1,16 @@
+# Build outputs
+node_modules/
+dist/
+.astro/
+
+# Generated at build time by scripts/ingest.mjs — never edit, never commit.
+# (The list mirrors GENERATED_PATHS in scripts/ingest.mjs.)
+src/content/docs/guides/
+src/content/docs/packages/
+src/content/docs/community/
+src/content/docs/overview.md
+src/content/docs/deployment.md
+src/content/docs/upgrade-v5.md
+src/content/docs/metadata.md
+src/content/docs/ecosystem.md
+src/content/docs/ai-and-agents/skills.md
