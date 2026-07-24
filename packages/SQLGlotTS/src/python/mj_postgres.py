@@ -204,6 +204,14 @@ def _is_isjson(node: exp.Expression) -> bool:
     return isinstance(node, exp.Anonymous) and (node.name or "").upper() == "ISJSON"
 
 
+def _contains_isjson_call(node: exp.Expression) -> bool:
+    """True if `node`'s subtree contains a genuine ISJSON(...) call. Distinguishes the CHECK
+    predicate `ISJSON(x)` from a column merely NAMED `IsJsonEnabled` or the string literal
+    'ISJSON' — neither parses to an exp.Anonymous, so a substring match would false-drop them
+    (issue #3252 review). See _is_isjson."""
+    return any(_is_isjson(n) for n in node.find_all(exp.Anonymous))
+
+
 def _rewrite_isjson_eq(node: exp.Expression) -> exp.Expression:
     """SS `ISJSON(x) = 1` / `ISJSON(x) = 0` → PG `x IS JSON` / `x IS NOT JSON`.
     PG has no ISJSON function; it has the SQL:2016 `IS JSON` predicate (PG16+)."""
@@ -493,10 +501,15 @@ def _strip_collate(node: exp.Expression) -> exp.Expression:
 def _drop_isjson_checks(node: exp.Expression) -> exp.Expression:
     """Drop CHECK constraints using ISJSON() — PG has no ISJSON (validity enforced elsewhere).
 
-    Handles both column-level (a constraint on a ColumnDef) and table-level
-    (`CONSTRAINT ck CHECK (ISJSON(...))` in a CREATE, or `ADD CONSTRAINT ... CHECK
-    (ISJSON(...))` in an ALTER). Table-level forms are removed outright (return None);
-    an ALTER left with no actions is dropped downstream by the empty-ALTER guard.
+    Detection is by the ISJSON *function call* (exp.Anonymous via _contains_isjson_call), never a
+    substring of rendered SQL — so a CHECK on a column NAMED `IsJsonEnabled` or comparing to the
+    literal 'ISJSON' is preserved (issue #3252 review). Filtering is per INDIVIDUAL constraint: an
+    `ADD CONSTRAINT pk PRIMARY KEY (...), CONSTRAINT ck CHECK (ISJSON(...))` drops only the ISJSON
+    check and KEEPS the sibling PK/FK — previously the whole AddConstraint (hence the sibling) was
+    silently lost. Column-level checks are filtered on the ColumnDef; a table-level named CHECK
+    that is entirely ISJSON is removed outright (return None); an ALTER left with no actions is
+    dropped downstream by the empty-ALTER guard. Runs BEFORE _rewrite_isjson_eq/_bare, so a
+    CHECK-context ISJSON is still an exp.Anonymous when this pass inspects it.
     """
     if isinstance(node, exp.ColumnDef):
         kept = [
@@ -504,12 +517,19 @@ def _drop_isjson_checks(node: exp.Expression) -> exp.Expression:
             if not (
                 isinstance(c, exp.ColumnConstraint)
                 and isinstance(c.kind, exp.CheckColumnConstraint)
-                and "ISJSON" in c.kind.sql(dialect="tsql").upper()
+                and _contains_isjson_call(c.kind)
             )
         ]
         node.set("constraints", kept)
         return node
-    if isinstance(node, (exp.Constraint, exp.AddConstraint)) and "ISJSON" in node.sql(dialect="tsql").upper():
+    if isinstance(node, exp.AddConstraint):
+        exprs = node.args.get("expressions") or []
+        kept = [e for e in exprs if not _contains_isjson_call(e)]
+        if not kept:
+            return None  # every action was an ISJSON check → drop the whole ADD (ALTER-ACTIONLESS)
+        node.set("expressions", kept)
+        return node
+    if isinstance(node, exp.Constraint) and _contains_isjson_call(node):
         return None
     return node
 
@@ -981,10 +1001,43 @@ def _routine_body_end(text: str, head_end: int) -> int:
     return n
 
 
+def _atom_masked_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) spans of `text` occupied by a string literal, comment, or quoted/bracketed
+    identifier — everything `_scan_atom` skips as a non-code atom. A regex head that STARTS
+    inside one of these is not real SQL (e.g. the phrase `IF EXISTS (SELECT ...)` mentioned in a
+    seeded template/prompt body or an example-SQL literal) and must never be mistaken for a
+    statement head — doing so shattered the surrounding INSERT and fabricated a live DO-block
+    (issue #3252 RC1/RC2 regression). Spans are returned sorted and non-overlapping."""
+    spans: list[tuple[int, int]] = []
+    i, n = 0, len(text)
+    while i < n:
+        j = _scan_atom(text, i)
+        if j != i:
+            spans.append((i, j))
+            i = j
+        else:
+            i += 1
+    return spans
+
+
+def _pos_in_spans(pos: int, spans: list[tuple[int, int]]) -> bool:
+    """True if pos falls within any (sorted, non-overlapping) masked span from _atom_masked_spans."""
+    for s, e in spans:
+        if s > pos:
+            return False
+        if pos < e:
+            return True
+    return False
+
+
 def _find_if_exists_begin(text: str, pos: int = 0) -> _IfExistsMatch | None:
     """Find the next `IF [NOT] EXISTS (<select>) BEGIN <body> END` block — OR the block-less
-    `IF [NOT] EXISTS (<select>) <single-statement>;` form (issue #3252 RC1) — at/after pos."""
+    `IF [NOT] EXISTS (<select>) <single-statement>;` form (issue #3252 RC1) — at/after pos.
+    Heads inside a string literal or comment are skipped (see _atom_masked_spans)."""
+    masked = _atom_masked_spans(text)
     for head in _IF_EXISTS_HEAD.finditer(text, pos):
+        if _pos_in_spans(head.start(), masked):
+            continue  # the phrase lives inside a string literal / comment — not a statement
         cond_close = _match_paren(text, head.end() - 1)
         if cond_close < 0:
             continue
@@ -1653,6 +1706,18 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
 
 _RAISERROR = _re.compile(r"RAISERROR\s*\(\s*(N?'(?:[^']|'')*'|@?\w+)", _re.IGNORECASE)
 
+
+def _raiserror_has_siblings(body: str) -> bool:
+    """True if `body` contains a meaningful statement OTHER than RAISERROR (PRINT / comments /
+    empties don't count). The RAISERROR→RAISE-EXCEPTION guard fast path is only safe when
+    RAISERROR stands alone; a paired real statement would be silently dropped (issue #3252)."""
+    for s in _split_top_level_statements(body):
+        stmt = _strip_leading_sql_comments(s).strip(" \t\r\n;")
+        if not stmt or _RAISERROR.match(stmt) or _re.match(r"PRINT\b", stmt, _re.IGNORECASE):
+            continue
+        return True
+    return False
+
 # Inline entity-metadata INSERTs (Entity / EntityField / ApplicationEntity / …) in a
 # FEATURE migration are KEPT and transpiled — NOT dropped. Empirically, `mj codegen` on
 # PostgreSQL regenerates SQL *objects* (views, CRUD functions, triggers — already dropped
@@ -1827,8 +1892,13 @@ def _transpile_if_exists_begin(m: _IfExistsMatch) -> tuple[str, list[dict], list
         cond_sql, u1, d1 = _transpile_plain(cond_raw)
         cond_inner = cond_sql.rstrip(";").strip()
         cond_full = f"{neg}EXISTS ({cond_inner})" if cond_inner else None
-    # Guard blocks (IF EXISTS(...) BEGIN RAISERROR('conflict') END) → RAISE EXCEPTION.
+    # Guard blocks (IF EXISTS(...) BEGIN RAISERROR('conflict') END) → RAISE EXCEPTION — but ONLY
+    # when RAISERROR is the sole governed statement. A body pairing it with real statements (e.g.
+    # RAISERROR(...) then INSERT ...) cannot collapse to one RAISE (which aborts) without silently
+    # dropping the siblings; report the whole guard unhandled so it is hand-authored (#3252 review).
     rr = _RAISERROR.search(raw_body)
+    if rr and _raiserror_has_siblings(raw_body):
+        return "", (u1 + [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}]), d1
     if rr:
         msg = rr.group(1)
         msg = _pg_string(_unquote_tsql_string(msg)) if msg.lstrip("Nn").startswith("'") else "'migration guard failed'"

@@ -909,6 +909,89 @@ check_raw("nested */ in emitted block comment is broken to *space/ (valid PG on 
           expect_unhandled=0)
 
 
+# --- IF-EXISTS envelope must not match inside a string literal (issue #3252 review, RC1/RC2
+# regression). The block-less IF-EXISTS finder scans raw text for `IF [NOT] EXISTS (SELECT ...)`
+# heads; before this fix it also matched heads that fall INSIDE a T-SQL string literal — e.g. a
+# migration seeding an AI-prompt/template body or an example SQL snippet that mentions the phrase.
+# That shattered the surrounding INSERT into parse-error gaps AND, when the literal held a full
+# `IF EXISTS (...) <DML>;`, FABRICATED a live DO-block running that DML (a phantom `DELETE FROM y`
+# emitted to a discoverable .pg.sql). On origin/next the INSERT converted cleanly. The head-scan
+# is now atom-aware (skips string/comment spans), so a literal that merely contains the phrase is
+# inert. must_not_contain uses the DO-block markers (not "DELETE FROM", which legitimately appears
+# INSIDE the preserved string literal).
+check("IF-EXISTS inside a string literal does not fabricate a DO-block (INSERT stays intact)",
+      "INSERT INTO ${flyway:defaultSchema}.tmpl (Body) VALUES "
+      "('IF EXISTS (SELECT 1 FROM x) DELETE FROM y;');",
+      must_contain=['INSERT INTO ${flyway:defaultSchema}."tmpl"',
+                    "IF EXISTS (SELECT 1 FROM x) DELETE FROM y;"],
+      must_not_contain=["DO $$", "END IF", "THEN"],
+      expect_unhandled=0)
+check("IF-EXISTS phrase in prose template body leaves the INSERT intact (no gap shatter)",
+      "INSERT INTO ${flyway:defaultSchema}.AIPrompt (ID, Name, Body) VALUES "
+      "('a', 'P', 'Check IF EXISTS (SELECT 1 FROM Users WHERE X = 1) before running');",
+      must_contain=['INSERT INTO ${flyway:defaultSchema}."AIPrompt"'],
+      must_not_contain=["DO $$", "END IF"],
+      expect_unhandled=0)
+check_accounting("IF-EXISTS-in-literal INSERT reconciles with no leak, no drop",
+                 "INSERT INTO ${flyway:defaultSchema}.tmpl (Body) VALUES "
+                 "('IF EXISTS (SELECT 1 FROM x) DELETE FROM y;');")
+
+
+# --- ISJSON CHECK drop is by FUNCTION CALL and PER-CONSTRAINT (issue #3252 review). PG has no
+# ISJSON(), so a CHECK using it is dropped — but (a) the OLD substring match `"ISJSON" in sql`
+# also nuked a CHECK on a column merely NAMED `IsJsonEnabled` or comparing to the literal
+# 'ISJSON', and (b) a multi-constraint `ADD CONSTRAINT pk PRIMARY KEY (...), CONSTRAINT ck CHECK
+# (ISJSON(...))` dropped the WHOLE AddConstraint — silently losing the sibling PK/FK. Both are
+# silent structural losses (#3252 invariant #1). The fix detects the ISJSON *call* (exp.Anonymous)
+# and filters individual constraints, keeping the PK/FK.
+check("multi-constraint ADD with an ISJSON CHECK keeps the sibling PRIMARY KEY",
+      "ALTER TABLE ${flyway:defaultSchema}.T "
+      "ADD CONSTRAINT PK_T PRIMARY KEY NONCLUSTERED (ID), CONSTRAINT CK_j CHECK (ISJSON(D) = 1);",
+      must_contain=['ADD CONSTRAINT "PK_T" PRIMARY KEY ("ID")'],
+      must_not_contain=["ISJSON"],
+      expect_unhandled=0)
+check("multi-constraint ADD with an ISJSON CHECK keeps the sibling FOREIGN KEY",
+      "ALTER TABLE ${flyway:defaultSchema}.T "
+      "ADD CONSTRAINT FK_x FOREIGN KEY (PID) REFERENCES ${flyway:defaultSchema}.P(ID), "
+      "CONSTRAINT CK_j CHECK (ISJSON(D) = 1);",
+      must_contain=['ADD CONSTRAINT "FK_x" FOREIGN KEY ("PID") REFERENCES ${flyway:defaultSchema}."P" ("ID")'],
+      must_not_contain=["ISJSON"],
+      expect_unhandled=0)
+check("CHECK on a column NAMED IsJsonEnabled is not an ISJSON call — preserved",
+      "ALTER TABLE ${flyway:defaultSchema}.T ADD CONSTRAINT CK_Flag CHECK (IsJsonEnabled = 'yes');",
+      must_contain=['ADD CONSTRAINT "CK_Flag" CHECK'],
+      expect_unhandled=0)
+check("CHECK comparing to the literal 'ISJSON' is not an ISJSON call — preserved",
+      "ALTER TABLE ${flyway:defaultSchema}.T ADD CONSTRAINT CK_s CHECK (Kind IN ('ISJSON', 'OTHER'));",
+      must_contain=['ADD CONSTRAINT "CK_s" CHECK'],
+      expect_unhandled=0)
+check_accounting("pure ISJSON CHECK is still dropped (ALTER left actionless), no leak",
+                 "ALTER TABLE ${flyway:defaultSchema}.T ADD CONSTRAINT CK_j CHECK (ISJSON(D) = 1);",
+                 expect_dropped_kinds=["ALTER-ACTIONLESS"])
+
+
+# --- RAISERROR guard fast path must not swallow sibling statements (issue #3252 review). An
+# IF-EXISTS guard whose body is ONLY RAISERROR (the common `BEGIN RAISERROR('conflict') END`
+# migration guard) still becomes a single RAISE EXCEPTION. But a body that pairs RAISERROR with
+# real statements (e.g. RAISERROR(...) then INSERT ...) cannot be modeled as one RAISE (which
+# aborts) without SILENTLY dropping the siblings — the old fast path emitted only the RAISE and
+# the INSERT vanished from every bucket. Report the whole guard as unhandled instead, so it is
+# hand-authored and never silently lost.
+check("RAISERROR-only guard still becomes a single RAISE EXCEPTION (fast path preserved)",
+      "IF EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Conflict) "
+      "BEGIN RAISERROR('conflict detected', 16, 1); END;",
+      must_contain=["DO $$", "RAISE EXCEPTION 'conflict detected'"],
+      expect_unhandled=0)
+check("RAISERROR + sibling INSERT is reported unhandled, not silently dropped",
+      "IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.cfg) "
+      "BEGIN RAISERROR('missing cfg', 16, 1); INSERT INTO ${flyway:defaultSchema}.cfg (a) VALUES (1); END;",
+      must_not_contain=["DO $$", "RAISE EXCEPTION"],
+      expect_unhandled=1)
+check_accounting("RAISERROR + sibling INSERT reconciles as an unhandled guard, no leak",
+                 "IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.cfg) "
+                 "BEGIN RAISERROR('missing cfg', 16, 1); INSERT INTO ${flyway:defaultSchema}.cfg (a) VALUES (1); END;")
+
+
 # --- Version-skew guard (issue #3252 review): every `exp.<Name>` the dialect references
 # must exist in the RUNNING sqlglot. A bare attribute access on a node type the installed
 # version lacks (e.g. exp.IfBlock, added in sqlglot 29.0.0, absent from the committed pin
