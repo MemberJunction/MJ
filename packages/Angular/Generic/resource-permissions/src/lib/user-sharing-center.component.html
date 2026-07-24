@@ -41,8 +41,12 @@
             <mj-empty-state class="empty" Size="compact"
                 Icon="fa-solid fa-inbox"
                 Title="Nothing has been shared directly with you yet." />
+        } @else if (FilteredSharedWithMe.length === 0) {
+            <mj-empty-state class="empty" Size="compact" Variant="no-results"
+                Icon="fa-solid fa-magnifying-glass"
+                Title="No shared resources match your filters." />
         } @else {
-            @for (group of SharedWithMe; track TrackByDomain($index, group)) {
+            @for (group of FilteredSharedWithMe; track TrackByDomain($index, group)) {
                 <mj-accordion-panel Size="sm" [FlushBody]="true"
                     [Expanded]="group.Expanded"
                     (ExpandedChange)="OnGroupExpandedChange(group, $event)">
@@ -78,8 +82,12 @@
             <mj-empty-state class="empty" Size="compact"
                 Icon="fa-solid fa-paper-plane"
                 Title="You haven't shared anything with others yet." />
+        } @else if (FilteredSharedByMe.length === 0) {
+            <mj-empty-state class="empty" Size="compact" Variant="no-results"
+                Icon="fa-solid fa-magnifying-glass"
+                Title="No shared resources match your filters." />
         } @else {
-            @for (group of SharedByMe; track TrackByDomain($index, group)) {
+            @for (group of FilteredSharedByMe; track TrackByDomain($index, group)) {
                 <mj-accordion-panel Size="sm" [FlushBody]="true"
                     [Expanded]="group.Expanded"
                     (ExpandedChange)="OnGroupExpandedChange(group, $event)">

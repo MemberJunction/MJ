@@ -2,26 +2,234 @@
     <mj-page-header
         Title="Sharing Center"
         Icon="fa-solid fa-share-nodes"
-        Subtitle="See what's shared with you, manage what you've shared, and review everything you can access.">
+        Subtitle="See what's shared with you, manage what you've shared, and understand your access.">
         <div actions>
             <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="OnRefresh()"></mj-refresh-button>
         </div>
 
         <div toolbar>
             <mj-tab-nav [Tabs]="Tabs" [ActiveKey]="ActiveTab" (TabChange)="OnTabChange($event)"></mj-tab-nav>
+            <mj-page-search
+                Placeholder="Search shared resources and activity..."
+                [Value]="SearchTerm"
+                (ValueChange)="OnSearchChange($event)">
+            </mj-page-search>
+            <mj-filter-popover
+                Label="Filters"
+                Icon="fa-solid fa-filter"
+                [ActiveCount]="ActiveFilterCount"
+                [ShowClearAll]="ActiveFilterCount > 0"
+                (ClearAllRequested)="OnResetFilters()">
+                <div class="sharing-center-dashboard__filter-field">
+                    <label for="sharing-center-domain-filter">Permission domain</label>
+                    <select
+                        id="sharing-center-domain-filter"
+                        class="sharing-center-dashboard__domain-select"
+                        [ngModel]="DomainFilter"
+                        (ngModelChange)="OnDomainFilterChange($event)">
+                        <option [ngValue]="''">All domains</option>
+                        @for (domain of AvailableDomains; track domain) {
+                            <option [ngValue]="domain">{{ domain }}</option>
+                        }
+                    </select>
+                </div>
+            </mj-filter-popover>
         </div>
     </mj-page-header>
 
     <mj-page-body>
-        <div class="sharing-center-dashboard__body">
-            <mj-user-sharing-center
-                [Provider]="Provider"
-                [ActiveTab]="ActiveTab"
-                [ShowTabBar]="false"
-                [ShowCloseButton]="false"
-                (ActiveTabChange)="OnTabChange($event)"
-                (ResourceClicked)="OnResourceClicked($event)">
-            </mj-user-sharing-center>
+        <div class="sharing-center-dashboard">
+            <section class="sharing-center-dashboard__stats" aria-label="Sharing summary">
+                <article class="sharing-center-dashboard__stat">
+                    <span class="sharing-center-dashboard__stat-icon"><i class="fa-solid fa-inbox"></i></span>
+                    <span class="sharing-center-dashboard__stat-copy">
+                        <span class="sharing-center-dashboard__stat-label">Shared with me</span>
+                        <strong class="sharing-center-dashboard__stat-value">
+                            @if (SharedWithMeCount === null) { — } @else { {{ SharedWithMeCount }} }
+                        </strong>
+                    </span>
+                </article>
+                <article class="sharing-center-dashboard__stat">
+                    <span class="sharing-center-dashboard__stat-icon"><i class="fa-solid fa-paper-plane"></i></span>
+                    <span class="sharing-center-dashboard__stat-copy">
+                        <span class="sharing-center-dashboard__stat-label">Shared by me</span>
+                        <strong class="sharing-center-dashboard__stat-value">
+                            @if (SharedByMeCount === null) { — } @else { {{ SharedByMeCount }} }
+                        </strong>
+                    </span>
+                </article>
+                <article class="sharing-center-dashboard__stat">
+                    <span class="sharing-center-dashboard__stat-icon"><i class="fa-solid fa-shield-halved"></i></span>
+                    <span class="sharing-center-dashboard__stat-copy">
+                        <span class="sharing-center-dashboard__stat-label">Resources I can access</span>
+                        <strong class="sharing-center-dashboard__stat-value">
+                            @if (HasLoadedMyAccess) { {{ MyAccessCount }} } @else { — }
+                        </strong>
+                    </span>
+                </article>
+                <article class="sharing-center-dashboard__stat">
+                    <span class="sharing-center-dashboard__stat-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                    <span class="sharing-center-dashboard__stat-copy">
+                        <span class="sharing-center-dashboard__stat-label">Recent activity</span>
+                        <strong class="sharing-center-dashboard__stat-value">
+                            @if (HasLoadedActivity) { {{ ActivityEntries.length }} } @else { — }
+                        </strong>
+                    </span>
+                </article>
+            </section>
+
+            @if (TransparencyErrorMessage) {
+                <mj-alert Variant="error">{{ TransparencyErrorMessage }}</mj-alert>
+            }
+
+            <section
+                class="sharing-center-dashboard__share-panel"
+                [class.sharing-center-dashboard__share-panel--hidden]="!IsShareTab">
+                <mj-user-sharing-center
+                    [Provider]="Provider"
+                    [ActiveTab]="ActiveShareTab"
+                    [ShowTabBar]="false"
+                    [ShowCloseButton]="false"
+                    [SearchTerm]="SearchTerm"
+                    [DomainFilter]="DomainFilter"
+                    (ActiveTabChange)="OnTabChange($event)"
+                    (ResourceClicked)="OnResourceClicked($event)"
+                    (SharesLoaded)="OnSharesLoaded($event)">
+                </mj-user-sharing-center>
+            </section>
+
+            @switch (ActiveTab) {
+                @case ('my-access') {
+                    <section class="sharing-center-dashboard__panel" aria-labelledby="sharing-center-my-access-title">
+                        <header class="sharing-center-dashboard__panel-header">
+                            <div>
+                                <h2 id="sharing-center-my-access-title">My Access</h2>
+                                <p>Everything you can reach, grouped by permission domain.</p>
+                            </div>
+                            @if (HasLoadedMyAccess) {
+                                <span class="sharing-center-dashboard__panel-count">{{ FilteredMyAccessGroups.length }} domains</span>
+                            }
+                        </header>
+
+                        @if (IsLoadingMyAccess) {
+                            <div class="sharing-center-dashboard__loading">
+                                <i class="fa-solid fa-spinner fa-spin"></i> Loading your access report…
+                            </div>
+                        } @else if (!HasLoadedMyAccess) {
+                            <mj-empty-state
+                                Size="compact"
+                                Icon="fa-solid fa-shield-halved"
+                                Title="Your access report is not available yet." />
+                        } @else if (MyAccessGroups.length === 0) {
+                            <mj-empty-state
+                                Size="compact"
+                                Icon="fa-solid fa-shield-halved"
+                                Title="No accessible resources were found." />
+                        } @else if (FilteredMyAccessGroups.length === 0) {
+                            <mj-empty-state
+                                Size="compact"
+                                Variant="no-results"
+                                Icon="fa-solid fa-magnifying-glass"
+                                Title="No access records match your filters." />
+                        } @else {
+                            <div class="sharing-center-dashboard__groups">
+                                @for (group of FilteredMyAccessGroups; track TrackByDomain($index, group)) {
+                                    <mj-accordion-panel
+                                        Size="sm"
+                                        [FlushBody]="true"
+                                        [Expanded]="group.Expanded"
+                                        (ExpandedChange)="OnAccessGroupExpandedChange(group, $event)">
+                                        <ng-template mjAccordionTitle>
+                                            <span class="sharing-center-dashboard__group-icon"><i [class]="group.Icon"></i></span>
+                                            <span class="sharing-center-dashboard__group-name">{{ group.DomainName }}</span>
+                                            <span class="mj-accordion-badge mj-accordion-badge--right">{{ group.Rows.length }}</span>
+                                        </ng-template>
+                                        <ng-template mjAccordionBody>
+                                            <div class="sharing-center-dashboard__access-rows">
+                                                @for (row of group.Rows; track TrackByPermission($index, row)) {
+                                                    <button
+                                                        type="button"
+                                                        class="sharing-center-dashboard__access-row"
+                                                        (click)="OnResourceClicked(row)">
+                                                        <span class="sharing-center-dashboard__resource">
+                                                            <strong>{{ row.ResourceName || row.ResourceID || row.ResourceType }}</strong>
+                                                            <small>{{ row.ResourceType }}</small>
+                                                        </span>
+                                                        <span
+                                                            class="sharing-center-dashboard__source"
+                                                            [class]="AccessSourceClass(row)">
+                                                            {{ AccessSourceLabel(row) }}
+                                                        </span>
+                                                        <span class="sharing-center-dashboard__actions">{{ ActionsLabel(row.Actions) }}</span>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </ng-template>
+                                    </mj-accordion-panel>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
+                @case ('activity') {
+                    <section class="sharing-center-dashboard__panel" aria-labelledby="sharing-center-activity-title">
+                        <header class="sharing-center-dashboard__panel-header">
+                            <div>
+                                <h2 id="sharing-center-activity-title">Activity</h2>
+                                <p>Recent permission changes you made, shown newest first.</p>
+                            </div>
+                            @if (HasLoadedActivity) {
+                                <span class="sharing-center-dashboard__panel-count">{{ FilteredActivityEntries.length }} changes</span>
+                            }
+                        </header>
+
+                        @if (IsLoadingActivity) {
+                            <div class="sharing-center-dashboard__loading">
+                                <i class="fa-solid fa-spinner fa-spin"></i> Loading recent activity…
+                            </div>
+                        } @else if (!HasLoadedActivity) {
+                            <mj-empty-state
+                                Size="compact"
+                                Icon="fa-solid fa-clock-rotate-left"
+                                Title="Your recent activity is not available yet." />
+                        } @else if (ActivityEntries.length === 0) {
+                            <mj-empty-state
+                                Size="compact"
+                                Icon="fa-solid fa-clock-rotate-left"
+                                Title="No recent permission changes." />
+                        } @else if (FilteredActivityEntries.length === 0) {
+                            <mj-empty-state
+                                Size="compact"
+                                Variant="no-results"
+                                Icon="fa-solid fa-magnifying-glass"
+                                Title="No activity matches your filters." />
+                        } @else {
+                            <ol class="sharing-center-dashboard__timeline">
+                                @for (entry of FilteredActivityEntries; track TrackByActivity($index, entry)) {
+                                    <li class="sharing-center-dashboard__timeline-entry">
+                                        <span class="sharing-center-dashboard__timeline-icon">
+                                            <i [class]="ChangeIcon(entry.ChangeType)"></i>
+                                        </span>
+                                        <div class="sharing-center-dashboard__timeline-content">
+                                            <div class="sharing-center-dashboard__timeline-heading">
+                                                <strong>{{ entry.ChangeType }} permission</strong>
+                                                <time>{{ entry.ChangedAt | date:'medium' }}</time>
+                                            </div>
+                                            <p>
+                                                {{ entry.ChangedByUserName || 'You' }} changed access in
+                                                <strong>{{ entry.DomainName }}</strong>.
+                                            </p>
+                                            @if (entry.Summary) {
+                                                <p class="sharing-center-dashboard__timeline-summary">{{ entry.Summary }}</p>
+                                            }
+                                        </div>
+                                    </li>
+                                }
+                            </ol>
+                        }
+                    </section>
+                }
+            }
         </div>
     </mj-page-body>
 </mj-page-layout>

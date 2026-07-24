@@ -95,6 +95,27 @@ describe('UserSharingCenterComponent (DOM, data-bound)', () => {
     expect(text(f, '.rows .row .resource')).toBe('Sales Dashboard');
   });
 
+  it('filters the embedded share list by a host-provided search term', () => {
+    const f = render({ SearchTerm: 'sales' }, (c) => {
+      c.SharedWithMe = [group({
+        Rows: [
+          permission({ ResourceName: 'Sales Dashboard' }),
+          permission({ ResourceName: 'Executive Overview', SourceRecordID: 'perm2' })
+        ]
+      })];
+    });
+    expect(queryAll(f, '.rows .row').length).toBe(1);
+    expect(text(f, '.rows .row .resource')).toBe('Sales Dashboard');
+  });
+
+  it('shows a no-results state when a host-provided domain filter excludes every share', () => {
+    const f = render({ DomainFilter: 'Query Permissions' }, (c) => {
+      c.SharedWithMe = [group({ DomainName: 'Dashboard Permissions' })];
+    });
+    expect(query(f, '.rows')).toBeNull();
+    expect(text(f, 'mj-empty-state')).toContain('No shared resources match your filters.');
+  });
+
   it('hides rows when the group is collapsed', () => {
     const f = render({}, (c) => {
       c.SharedWithMe = [group({ Expanded: false })];

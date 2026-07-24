@@ -116,6 +116,12 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
      */
     @Input() ShowTabBar = true;
 
+    /** Shared full-page search text. Empty means do not constrain either share list. */
+    @Input() SearchTerm = '';
+
+    /** Optional exact domain name selected by an embedding host's filter UI. */
+    @Input() DomainFilter = '';
+
     /** Title text displayed in the confirm-revoke dialog. */
     @Input() RevokeConfirmTitle = 'Revoke access';
 
@@ -143,6 +149,9 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
     /** Fired whenever an error is shown to the user. Useful for parent telemetry. */
     @Output() ErrorOccurred = new EventEmitter<string>();
 
+    /** Fired after either share list finishes loading or refreshing. */
+    @Output() SharesLoaded = new EventEmitter<SharingCenterTab>();
+
     // ─── Public state (read by template) ───────────────────────────────────────
 
     SharedWithMe: SharingCenterDomainGroup[] = [];
@@ -153,6 +162,18 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
 
     ErrorMessage: string | null = null;
 
+    get FilteredSharedWithMe(): SharingCenterDomainGroup[] {
+        return this.filterGroups(this.SharedWithMe);
+    }
+
+    get FilteredSharedByMe(): SharingCenterDomainGroup[] {
+        return this.filterGroups(this.SharedByMe);
+    }
+
+    get HasActiveFilters(): boolean {
+        return this.SearchTerm.trim().length > 0 || this.DomainFilter.trim().length > 0;
+    }
+
     async ngOnInit(): Promise<void> {
         await this.loadTab(this.ActiveTab);
     }
@@ -161,6 +182,9 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
         const activeTabChange = changes['ActiveTab'];
         if (activeTabChange && !activeTabChange.firstChange) {
             void this.loadTab(this.ActiveTab);
+        }
+        if (changes['SearchTerm'] || changes['DomainFilter']) {
+            this.cdr.markForCheck();
         }
     }
 
@@ -236,7 +260,11 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
      * group. OnPush, so an explicit detectChanges() is required to reflect the change.
      */
     OnGroupExpandedChange(group: SharingCenterDomainGroup, expanded: boolean): void {
-        group.Expanded = expanded;
+        const groups = this.ActiveTab === 'shared-with-me' ? this.SharedWithMe : this.SharedByMe;
+        const sourceGroup = groups.find((candidate) => candidate.DomainName === group.DomainName);
+        if (sourceGroup) {
+            sourceGroup.Expanded = expanded;
+        }
         this.cdr.detectChanges();
     }
 
@@ -278,9 +306,11 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
             this.SharedWithMe = this.groupByDomain(rows);
         } catch (e) {
             this.setError(`Failed to load shares: ${e instanceof Error ? e.message : String(e)}`);
+        } finally {
+            this.IsLoadingWithMe = false;
+            this.SharesLoaded.emit('shared-with-me');
+            this.cdr.detectChanges();
         }
-        this.IsLoadingWithMe = false;
-        this.cdr.detectChanges();
     }
 
     private async loadSharedByMe(): Promise<void> {
@@ -295,9 +325,11 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
             this.SharedByMe = this.groupByDomain(rows);
         } catch (e) {
             this.setError(`Failed to load grants: ${e instanceof Error ? e.message : String(e)}`);
+        } finally {
+            this.IsLoadingByMe = false;
+            this.SharesLoaded.emit('shared-by-me');
+            this.cdr.detectChanges();
         }
-        this.IsLoadingByMe = false;
-        this.cdr.detectChanges();
     }
 
     private groupByDomain(rows: NormalizedPermission[]): SharingCenterDomainGroup[] {
@@ -317,6 +349,44 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
             });
         }
         return groups.sort((a, b) => a.DomainName.localeCompare(b.DomainName));
+    }
+
+    private filterGroups(groups: SharingCenterDomainGroup[]): SharingCenterDomainGroup[] {
+        const searchTerm = this.SearchTerm.trim().toLocaleLowerCase();
+        const domainFilter = this.DomainFilter.trim().toLocaleLowerCase();
+        if (!searchTerm && !domainFilter) {
+            return groups;
+        }
+
+        const filtered: SharingCenterDomainGroup[] = [];
+        for (const group of groups) {
+            if (domainFilter && group.DomainName.toLocaleLowerCase() !== domainFilter) {
+                continue;
+            }
+
+            const rows = group.Rows.filter((row) => this.rowMatchesSearch(row, searchTerm));
+            if (rows.length > 0) {
+                filtered.push({ ...group, Rows: rows });
+            }
+        }
+        return filtered;
+    }
+
+    private rowMatchesSearch(row: NormalizedPermission, searchTerm: string): boolean {
+        if (!searchTerm) {
+            return true;
+        }
+        return [
+            row.DomainName,
+            row.ResourceName,
+            row.ResourceID,
+            row.ResourceType,
+            row.GranteeName,
+            row.GranteeID,
+            row.GranteeType,
+            row.Actions.join(' '),
+            row.Effect,
+        ].some((value) => (value ?? '').toLocaleLowerCase().includes(searchTerm));
     }
 
     private setError(message: string): void {
