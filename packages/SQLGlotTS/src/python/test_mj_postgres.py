@@ -990,6 +990,25 @@ check("RAISERROR + sibling INSERT is reported unhandled, not silently dropped",
 check_accounting("RAISERROR + sibling INSERT reconciles as an unhandled guard, no leak",
                  "IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.cfg) "
                  "BEGIN RAISERROR('missing cfg', 16, 1); INSERT INTO ${flyway:defaultSchema}.cfg (a) VALUES (1); END;")
+# T-SQL makes the statement-terminating `;` optional, so a guard body routinely pairs RAISERROR
+# with a semicolon-LESS sibling on the next line (`RAISERROR(...) \n UPDATE ...`). The sibling gate
+# must catch that shape too — splitting on `;` alone treats the whole `RAISERROR(...) UPDATE ...`
+# run as one RAISERROR-only piece and the UPDATE vanishes into no bucket (silent drop, #3252).
+check("RAISERROR + semicolon-LESS sibling UPDATE is reported unhandled, not silently dropped",
+      "IF EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.foo WHERE id = 1) "
+      "BEGIN RAISERROR('conflict', 16, 1) UPDATE ${flyway:defaultSchema}.foo SET bar = 1 WHERE id = 2 END;",
+      must_not_contain=["DO $$", "RAISE EXCEPTION"],
+      expect_unhandled=1)
+check_accounting("RAISERROR + semicolon-LESS sibling UPDATE reconciles, no leak",
+                 "IF EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.foo WHERE id = 1) "
+                 "BEGIN RAISERROR('conflict', 16, 1) UPDATE ${flyway:defaultSchema}.foo SET bar = 1 WHERE id = 2 END;")
+# A semicolon-less trailing RETURN is NOT a real sibling: RAISE EXCEPTION already aborts, so the
+# RETURN is moot. The RAISERROR-only fast path must survive a trailing RETURN (do not over-report).
+check("RAISERROR + trailing RETURN (no semicolon) still fast-paths to a single RAISE EXCEPTION",
+      "IF EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Conflict) "
+      "BEGIN RAISERROR('conflict detected', 16, 1) RETURN END;",
+      must_contain=["DO $$", "RAISE EXCEPTION 'conflict detected'"],
+      expect_unhandled=0)
 
 
 # --- Version-skew guard (issue #3252 review): every `exp.<Name>` the dialect references

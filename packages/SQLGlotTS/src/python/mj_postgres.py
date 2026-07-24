@@ -1707,13 +1707,38 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
 _RAISERROR = _re.compile(r"RAISERROR\s*\(\s*(N?'(?:[^']|'')*'|@?\w+)", _re.IGNORECASE)
 
 
+def _is_raiserror_only(stmt: str) -> bool:
+    """True if `stmt` is a lone RAISERROR(...) call with no REAL statement glued after it. T-SQL
+    makes the terminating `;` optional, so a sibling routinely follows with no separator
+    (`RAISERROR(...) \n UPDATE ...`); _split_top_level_statements breaks on `;` only, so it hands
+    that whole run in as ONE piece. Scan past the RAISERROR call's matched `)` (atom-aware, so a
+    `(` inside the message string doesn't fool it) and treat only a trailing RETURN / PRINT /
+    comment / blank as non-sibling — a RETURN is moot after the RAISE aborts. Anything else riding
+    after the call (UPDATE / INSERT / a second RAISERROR) makes this NOT raiserror-only (#3252)."""
+    if not _RAISERROR.match(stmt):
+        return False
+    open_paren = stmt.find("(")
+    if open_paren < 0:
+        return False
+    close = _match_paren(stmt, open_paren)
+    if close < 0:
+        return False
+    for piece in _split_top_level_statements(stmt[close:]):
+        rest = _strip_leading_sql_comments(piece).strip(" \t\r\n;")
+        if not rest or _re.match(r"(PRINT|RETURN)\b", rest, _re.IGNORECASE):
+            continue
+        return False
+    return True
+
+
 def _raiserror_has_siblings(body: str) -> bool:
     """True if `body` contains a meaningful statement OTHER than RAISERROR (PRINT / comments /
     empties don't count). The RAISERROR→RAISE-EXCEPTION guard fast path is only safe when
-    RAISERROR stands alone; a paired real statement would be silently dropped (issue #3252)."""
+    RAISERROR stands alone; a paired real statement would be silently dropped (issue #3252).
+    _is_raiserror_only handles the semicolon-less sibling shape that a bare `;`-split misses."""
     for s in _split_top_level_statements(body):
         stmt = _strip_leading_sql_comments(s).strip(" \t\r\n;")
-        if not stmt or _RAISERROR.match(stmt) or _re.match(r"PRINT\b", stmt, _re.IGNORECASE):
+        if not stmt or _re.match(r"PRINT\b", stmt, _re.IGNORECASE) or _is_raiserror_only(stmt):
             continue
         return True
     return False
