@@ -468,6 +468,6 @@ migrations/v2/
 
 - [MCP Specification](https://spec.modelcontextprotocol.io/)
 - [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
-- [MemberJunction Actions](../packages/Actions/CLAUDE.md)
+- [MemberJunction Actions](../../packages/Actions/CLAUDE.md)
 - [MemberJunction Credentials](../packages/Credentials/)
 - [MemberJunction MCP Server](../packages/AI/MCPServer/)

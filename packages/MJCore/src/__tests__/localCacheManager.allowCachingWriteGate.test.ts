@@ -663,7 +663,11 @@ describe('LocalCacheManager AllowCaching write gate (PR #2475)', () => {
             // 2KB total, ~1KB per write means a second write would evict the first.
             resetLocalCacheManager();
             const tightCache = LocalCacheManager.Instance;
-            await tightCache.Initialize(mockStorage, { maxSizeBytes: 2 * 1024 });
+            // Disable the per-entry size cap here: this test isolates the AllowCaching
+            // gate + global eviction, and its ~4KB payloads intentionally exceed a tight
+            // 2KB budget. With the default 25% per-entry cap those payloads would be
+            // rejected by the size gate before this scenario could run.
+            await tightCache.Initialize(mockStorage, { maxSizeBytes: 2 * 1024, maxEntryPercentOfCache: 0 });
             restoreMetadata = setMetadataProvider([CACHEABLE, NON_CACHEABLE]);
 
             // Step 1: write a cacheable entry with a sizeable payload.

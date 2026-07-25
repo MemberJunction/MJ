@@ -49,6 +49,12 @@ export interface MJTranspileResult {
   sql: string[];
   /** Per-statement T-SQL the transpiler refused to emit — the gap report. */
   unhandled: UnhandledStatement[];
+  /**
+   * Statements the dialect INTENTIONALLY discarded (batch-control noise, an actionless ALTER,
+   * a swallowed routine `END`, …) — accounted, not vanished (issue #3252 1d). Optional so a test
+   * stub can omit it; when absent it is treated as empty.
+   */
+  dropped?: UnhandledStatement[];
 }
 
 /**
@@ -82,6 +88,32 @@ export interface KeptTSQL {
   droppedCodeGenLines: number;
 }
 
+/**
+ * A coarse source→output statement-count reconciliation for one migration (issue #3252
+ * Phase 3, fix direction #2). Deliberately NOT an exact per-statement byte-balance — the
+ * dialect emits multi-statement `DO $$…$$` expansions and GO-batching changes chunk counts,
+ * so an exact balance is fragile and false-positive-prone (matches the design of the external
+ * `check-pg-migration-content.mjs` detector, which also counts coarsely). The load-bearing
+ * signal is `suspiciousEmptyOutput`: substantive T-SQL went to the dialect but nothing came
+ * back — the RC1/RC2 silent-drop signature — which the caller surfaces as a gap.
+ */
+export interface ConversionReconciliation {
+  /** Content (non-noise) source statements in the whole file, GO-batch granularity. */
+  sourceStatements: number;
+  /** Content statements in the emitted PG body (coarse chunk count; 0 for a marker). */
+  emittedStatements: number;
+  /** Statements surfaced as gaps for a human: `unhandled.length + handProcedural.length`. */
+  gaps: number;
+  /** The dialect's own per-call self-check reported an ACCOUNTING-LEAK (a missed drop site). */
+  accountingLeak: boolean;
+  /**
+   * The classifier fed SUBSTANTIVE T-SQL to the dialect, yet the dialect emitted nothing AND
+   * reported no gap — content vanished without a trace. Belt-and-suspenders beyond the dialect's
+   * own EMPTY-EMISSION guard; when true the caller appends a `RECONCILIATION-EMPTY-OUTPUT` gap.
+   */
+  suspiciousEmptyOutput: boolean;
+}
+
 export interface MigrationConversionResult {
   fileName: string;
   status: ConversionStatus;
@@ -99,6 +131,8 @@ export interface MigrationConversionResult {
   droppedObjects: string[];
   /** Human-readable notes describing what happened to each category. */
   notes: string[];
+  /** Coarse source→output statement-count reconciliation (issue #3252 Phase 3). */
+  reconciliation: ConversionReconciliation;
 }
 
 export interface ConvertMigrationOptions {
@@ -126,6 +160,15 @@ const STATEMENT_MODE_KEEP: ReadonlySet<StatementKind> = new Set<StatementKind>([
   'hand-procedural',
 ]);
 
+/**
+ * Batch-evidence prefixes that mark a GENUINE squashed snapshot (baseline / old-style file):
+ * a generated VIEW or CRUD PROCEDURE/FUNCTION. `MigrationStatementSplitter` sets a codegen-object
+ * batch's `evidence` to `"<KEYWORD> <name>"` (e.g. `"VIEW vwFoo"`, `"PROCEDURE spCreateFoo"`),
+ * so this keys off the keyword. Triggers and auto-FK indexes are deliberately EXCLUDED — they are
+ * not sufficient evidence of a snapshot (issue #3252 RC2).
+ */
+const SNAPSHOT_CODEGEN_OBJECT = /^(?:VIEW|PROCEDURE|PROC|FUNCTION)\b/i;
+
 /** Classify a migration and return the kept T-SQL to transpile — the single classification entry point. */
 export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   const split = splitMigration(sql, fileName);
@@ -134,9 +177,18 @@ export function extractKeptTSQL(sql: string, fileName: string): KeptTSQL {
   // Baselines and old-style migrations have NO banner but DO contain generated
   // objects (squashed snapshots). Banner-based splitting can't separate them — use
   // statement-level classification instead.
+  //
+  // A genuine snapshot always carries generated VIEWS and CRUD PROCEDURES/FUNCTIONS. We gate
+  // the statement-mode flip on the presence of such an object — matched on the batch EVIDENCE
+  // string (a `kind` of 'codegen-object' alone can't discriminate: it also covers triggers and
+  // auto-FK indexes). This stops a LONE codegen-named trigger/index in an otherwise
+  // hand-authored file from flipping the whole file into statement-mode, where its other
+  // batches would be dropped (issue #3252 RC2 defense-in-depth). Such a file stays banner-mode,
+  // where a stray hand routine is flagged needs-hand-authoring instead of silently dropped.
   const stmts = splitByStatement(sql);
   const isUnbanneredSnapshot =
-    split.boundaryMethod === 'no-codegen-block' && stmts.some((s) => s.kind === 'codegen-object');
+    split.boundaryMethod === 'no-codegen-block' &&
+    stmts.some((s) => s.kind === 'codegen-object' && SNAPSHOT_CODEGEN_OBJECT.test(s.evidence));
   if (isUnbanneredSnapshot) {
     return classifyStatementMode(split, stmts, droppedCodeGenLines);
   }
@@ -253,18 +305,61 @@ export async function convertMigration(
   options: ConvertMigrationOptions = {},
 ): Promise<MigrationConversionResult> {
   const kept = extractKeptTSQL(sql, fileName);
+  const stmts = splitByStatement(sql);
+  const sourceStatements = stmts.filter((s) => s.kind !== 'noise').length;
 
   if (!kept.tsql.trim()) {
+    // Marker path: the classifier found nothing translatable. The emptiness is USUALLY explained
+    // by CodeGen-block / metadata-sync / baseline routing (which the classifier owns) — but the
+    // marker must not be accepted BLINDLY, or a hand-authored statement dropped to a "clean"
+    // marker is exactly the RC1 silent-drop class (issue #3252). Reconcile before trusting it:
+    // a `schema-ddl` batch, or a `hand-procedural` routine beyond those already reported, that
+    // vanished into an empty marker is content NEITHER `mj codegen` NOR `mj sync push` reproduces.
+    // Objects named to a CodeGen convention (vw*/spCreate*/fn*…) are deliberately EXCLUDED — they
+    // classify as `codegen-object` and ARE regenerated; a hand-authored object that collides with
+    // those names is governed by MigrationStatementSplitter's HAND_WRITTEN_OBJECT_ALLOWLIST, not
+    // this net (surfacing every convention-named drop would false-flag every baseline snapshot).
+    const unreportedHand = Math.max(
+      0,
+      stmts.filter((s) => s.kind === 'hand-procedural').length - kept.handProcedural.length,
+    );
+    const droppedSchemaDdl = stmts.filter((s) => s.kind === 'schema-ddl').length;
+    const suspiciousEmptyOutput = unreportedHand + droppedSchemaDdl > 0;
+
+    const unhandled: UnhandledStatement[] = [];
+    const notes = [...kept.notes];
+    if (suspiciousEmptyOutput) {
+      unhandled.push({
+        kind: 'RECONCILIATION-EMPTY-OUTPUT',
+        snippet:
+          `${unreportedHand + droppedSchemaDdl} hand-authored statement(s) were routed to an empty marker ` +
+          'with no PG output and no reported gap — CodeGen/sync push will not reproduce them; hand-author the PG form.',
+      });
+      notes.push(
+        'Reconciliation: hand-authored DDL was dropped to an empty marker with no output or gap — surfaced as a conversion gap.',
+      );
+    }
+
     return {
       fileName: kept.fileName,
-      status: kept.status,
-      pgSQL: regenOnlyMarker(kept),
+      // A silent-drop marker must NOT masquerade as a clean reseed/regen file: promote it to
+      // needs-hand-authoring so the CLI writes `.needs-hand` (never a discoverable `.pg.sql` that
+      // Skyway could apply) and the bake batch halts on it.
+      status: suspiciousEmptyOutput ? 'needs-hand-authoring' : kept.status,
+      pgSQL: suspiciousEmptyOutput ? emptyDropGapMarker(kept, stmts) : regenOnlyMarker(kept),
       split: kept.split,
       droppedCodeGenLines: kept.droppedCodeGenLines,
-      unhandled: [],
+      unhandled,
       handProcedural: kept.handProcedural,
       droppedObjects: kept.droppedObjects,
-      notes: kept.notes,
+      notes,
+      reconciliation: {
+        sourceStatements,
+        emittedStatements: 0,
+        gaps: kept.handProcedural.length + unhandled.length,
+        accountingLeak: false,
+        suspiciousEmptyOutput,
+      },
     };
   }
 
@@ -277,7 +372,28 @@ export async function convertMigration(
 
   const transpiled = await options.transpiler.transpile(kept.tsql);
   const schema = options.schema ?? '__mj';
-  const pgSQL = assemblePgSQL(kept, transpiled, schema, options.includeHeader ?? true);
+
+  const emittedStatements = transpiled.sql.filter((s) => s.trim().length > 0).length;
+  const accountingLeak = transpiled.unhandled.some((u) => u.kind === 'ACCOUNTING-LEAK');
+  // The RC1/RC2 signature: substantive T-SQL went in, nothing came out, nothing was reported,
+  // AND nothing was intentionally dropped — the content VANISHED. An all-dropped file (e.g. a
+  // lone actionless ALTER PG discards) legitimately emits nothing and must NOT be flagged, so
+  // the guard also requires zero drops. The dialect's EMPTY-EMISSION guard should make a true
+  // vanish impossible; this is the second net that surfaces a gap so the run fails loudly.
+  const suspiciousEmptyOutput =
+    emittedStatements === 0 && transpiled.unhandled.length === 0 && (transpiled.dropped?.length ?? 0) === 0;
+
+  const unhandled: UnhandledStatement[] = [...transpiled.unhandled];
+  const notes = [...kept.notes];
+  if (suspiciousEmptyOutput) {
+    unhandled.push({
+      kind: 'RECONCILIATION-EMPTY-OUTPUT',
+      snippet: `${sourceStatements} source statement(s) classified as translatable produced NO PG output and NO reported gap — content vanished; hand-author the PG form.`,
+    });
+    notes.push('Reconciliation: kept T-SQL produced empty output with no reported gap — surfaced as a conversion gap.');
+  }
+
+  const pgSQL = assemblePgSQL(kept, { ...transpiled, unhandled }, schema, options.includeHeader ?? true);
 
   return {
     fileName: kept.fileName,
@@ -285,10 +401,17 @@ export async function convertMigration(
     pgSQL,
     split: kept.split,
     droppedCodeGenLines: kept.droppedCodeGenLines,
-    unhandled: transpiled.unhandled,
+    unhandled,
     handProcedural: kept.handProcedural,
     droppedObjects: kept.droppedObjects,
-    notes: kept.notes,
+    notes,
+    reconciliation: {
+      sourceStatements,
+      emittedStatements,
+      gaps: unhandled.length + kept.handProcedural.length,
+      accountingLeak,
+      suspiciousEmptyOutput,
+    },
   };
 }
 
@@ -494,4 +617,20 @@ function regenOnlyMarker(kept: KeptTSQL): string {
   }
   lines.push('');
   return lines.join('\n');
+}
+
+/**
+ * Gap-marker body for a file whose ONLY content is hand-authored DDL the classifier dropped to an
+ * empty marker without transpiling or reporting it (the reconciliation net in `convertMigration`).
+ * Names each dropped statement so a human can author the PG form — never a misleading "no DDL to
+ * translate" marker over content that silently vanished.
+ */
+function emptyDropGapMarker(kept: KeptTSQL, stmts: StatementBatch[]): string {
+  const dropped = stmts.filter((s) => s.kind === 'schema-ddl' || s.kind === 'hand-procedural');
+  return [
+    `-- ${kept.fileName} — CONVERSION GAP: hand-authored DDL dropped with no PG translation.`,
+    '-- `mj codegen` / `mj sync push` do NOT reproduce the following; author the PG form by hand:',
+    ...dropped.map((s) => `--   • ${s.evidence}`),
+    '',
+  ].join('\n');
 }

@@ -201,6 +201,39 @@ INSERT INTO ${flyway:defaultSchema}.AIVendor (ID, Name, Description, __mj_Create
 VALUES (@VendorID, 'Vendor Name', 'Description', GETUTCDATE(), GETUTCDATE());
 ```
 
+### 4b. Never Create Foreign Key Indexes — CodeGen Generates Them
+
+**NEVER create indexes for foreign key columns in a migration.** CodeGen creates these automatically with the naming pattern `IDX_AUTO_MJ_FKEY_<table>_<column>`. Manual FK indexes duplicate CodeGen's work and leave two competing indexes on the same column.
+
+Together with rule 4 above, this gives the full list of what **CodeGen handles automatically** and must therefore be **omitted** from `CREATE TABLE` statements:
+
+1. **Timestamp columns** — `__mj_CreatedAt` / `__mj_UpdatedAt` (CodeGen adds these with proper defaults and triggers; including them manually causes conflicts)
+2. **Foreign key indexes** — `IDX_AUTO_MJ_FKEY_<table>_<column>`
+
+```sql
+-- ✅ CORRECT - Only business columns and constraints
+CREATE TABLE ${flyway:defaultSchema}.DashboardPermission (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    DashboardID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL,
+    CanRead BIT NOT NULL DEFAULT 1,
+    CanEdit BIT NOT NULL DEFAULT 0,
+    SharedByUserID UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT PK_DashboardPermission PRIMARY KEY (ID),
+    CONSTRAINT FK_DashboardPermission_Dashboard FOREIGN KEY (DashboardID) REFERENCES ${flyway:defaultSchema}.Dashboard(ID),
+    CONSTRAINT FK_DashboardPermission_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.User(ID),
+    CONSTRAINT UQ_DashboardPermission UNIQUE (DashboardID, UserID)
+);
+
+-- ❌ WRONG - Don't include these (CodeGen handles them)
+-- __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- CREATE INDEX IDX_DashboardPermission_DashboardID ON DashboardPermission(DashboardID);
+-- CREATE INDEX IDX_DashboardPermission_UserID ON DashboardPermission(UserID);
+```
+
+Note that **primary keys and foreign keys** are also exempt from the `sp_addextendedproperty` requirement — CodeGen handles their descriptions. Every *other* new column needs one.
+
 ### 5. Use Correct Schema Placeholder
 Always use Flyway's schema placeholder without adding the schema prefix:
 
@@ -251,6 +284,11 @@ When adding AI models and vendors:
 5. **Driver Class Names**: Follow existing conventions
    - Examples: "OpenAILLM", "AnthropicLLM", "GroqLLM"
    - Not: "OpenAIAPIService", "AnthropicService", etc.
+
+6. **Capability flags**: set `SupportsEffortLevel` and `SupportsStreaming` based on what the
+   **inference provider** actually supports, not what the model is theoretically capable of.
+   Check the provider's documentation — a provider's implementation frequently differs from the
+   model's published capabilities (the same reason token limits must come from the provider).
 
 ### 8. Testing Migrations
 

@@ -287,15 +287,18 @@ export async function deleteById(entity: string, id: string, provider: IMetadata
  */
 export async function purgeAgentRun(runId: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
     const rv = new RunView();
-    // Prompt runs first (AIPromptRun.AgentRunID FK), then steps, then the run.
-    const [promptRuns, steps] = await rv.RunViews<{ ID: string }>([
-        { EntityName: 'MJ: AI Prompt Runs', ExtraFilter: `AgentRunID='${runId}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
-        { EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${runId}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
-    ], user);
-    for (const p of (promptRuns.Success ? promptRuns.Results : [])) {
-        await deleteById('MJ: AI Prompt Runs', p.ID, provider, user);
+    // Steps first (they reference prompt runs via TargetLogID for prompt-type steps), then the run.
+    const stepsResult = await rv.RunView<{ ID: string; StepType: string; TargetLogID: string | null }>({
+        EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${runId}'`,
+        Fields: ['ID', 'StepType', 'TargetLogID'], ResultType: 'simple', BypassCache: true,
+    }, user);
+    const steps = stepsResult.Success ? stepsResult.Results : [];
+    // Delete prompt runs linked through prompt-type steps
+    const promptRunIds = steps.filter(s => s.StepType === 'Prompt' && s.TargetLogID).map(s => s.TargetLogID!);
+    for (const prId of promptRunIds) {
+        await deleteById('MJ: AI Prompt Runs', prId, provider, user);
     }
-    for (const s of (steps.Success ? steps.Results : [])) {
+    for (const s of steps) {
         await deleteById('MJ: AI Agent Run Steps', s.ID, provider, user);
     }
     await deleteById('MJ: AI Agent Runs', runId, provider, user);
