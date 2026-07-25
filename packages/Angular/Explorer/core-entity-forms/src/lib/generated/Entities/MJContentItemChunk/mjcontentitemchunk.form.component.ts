@@ -17,7 +17,7 @@ export class MJContentItemChunkFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'chunkDetails', sectionName: 'Chunk Details', isExpanded: true },
             { sectionKey: 'chunkContent', sectionName: 'Chunk Content', isExpanded: true },
-            { sectionKey: 'vectorInformation', sectionName: 'Vector Information', isExpanded: true },
+            { sectionKey: 'vectorIntegration', sectionName: 'Vector Integration', isExpanded: true },
             { sectionKey: 'lifecycleStatus', sectionName: 'Lifecycle Status', isExpanded: true },
             { sectionKey: 'lifecycleTimestamps', sectionName: 'Lifecycle Timestamps', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
