@@ -193,6 +193,19 @@ export function classifyBatch(batch: string): StatementType {
   if (/^DROP\s+(?:VIEW|PROCEDURE|PROC|FUNCTION)\s/i.test(upper)) return 'SKIP_SQLSERVER';
   if (/^DROP\s+TABLE\s/i.test(upper)) return 'SKIP_SQLSERVER';
 
+  // Bare mj-sync CRUD sp calls → EXEC_BLOCK. mj-sync emits record DELETIONS as a
+  // bare `EXEC [schema].[spDeleteX] @ID = '<uuid>'` with no DECLARE block
+  // (creates/updates always carry one), so before this carve-out they fell
+  // through to the bare-EXEC skip below and were dropped without a trace — the
+  // v5.45 Metadata_Sync spDeleteComponentRegistry drop (issue #3253). The
+  // sp-name prefix alone cannot discriminate: CodeGen maintenance procs also
+  // start with spUpdate/spDelete (spUpdateEntityFieldRelatedEntityNameFieldMap,
+  // spDeleteUnneededEntityFields) and must keep skipping — so the match requires
+  // mj-sync's full delete signature: a single `@ID = '<uuid literal>'` argument.
+  if (/^EXEC\s+\[?\w+\]?\s*\.\s*\[?sp(?:Create|Update|Delete)\w*\]?\s+@ID\s*=\s*N?'[0-9A-F-]{36}'\s*;?\s*$/i.test(upper)) {
+    return 'EXEC_BLOCK';
+  }
+
   // EXEC calls (not sp_addextendedproperty, which is handled above) → skip
   if (/^EXEC\s/i.test(upper)) return 'SKIP_SQLSERVER';
 

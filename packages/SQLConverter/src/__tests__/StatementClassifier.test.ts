@@ -722,4 +722,21 @@ END`;
       expect(classifyBatch(sql)).toBe('SKIP_SQLSERVER');
     });
   });
+
+  describe('bare EXEC CRUD sp calls (mj-sync deletes — issue #3253)', () => {
+    it('should classify a bare schema-qualified EXEC spDelete as EXEC_BLOCK, not platform noise', () => {
+      // mj-sync emits record deletions as a bare EXEC with inline params — no DECLARE
+      // block. The v5.45 metadata sync's spDeleteComponentRegistry was silently
+      // dropped because this shape fell through to the bare-EXEC SKIP_SQLSERVER rule.
+      const sql = `EXEC [__mj].[spDeleteComponentRegistry] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';`;
+      expect(classifyBatch(sql)).toBe('EXEC_BLOCK');
+    });
+
+    it('should keep skipping maintenance procs whose names start with spDelete but lack the @ID-uuid signature', () => {
+      // spDeleteUnneededEntityFields is a CodeGen maintenance proc, not an entity
+      // CRUD sp — the near-miss the signature requirement exists for.
+      const sql = `EXEC [__mj].spDeleteUnneededEntityFields @ExcludedSchemaNames = 'sys,staging';`;
+      expect(classifyBatch(sql)).toBe('SKIP_SQLSERVER');
+    });
+  });
 });

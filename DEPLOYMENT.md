@@ -515,7 +515,7 @@ MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migra
 
 This is not hypothetical. It has happened in both directions:
 
-- **v5.45** shipped `Metadata_Sync.pg.sql` as a **126-byte marker** — 12,041 lines of SQL Server metadata DML reduced to two comment lines. PostgreSQL deployments migrating through v5.45 silently received none of that release's curated metadata (issue #3253).
+- **v5.45** shipped `Metadata_Sync.pg.sql` as a **126-byte marker** — 12,041 lines of SQL Server metadata DML reduced to two comment lines. PostgreSQL deployments migrating through v5.45 silently received none of that release's curated metadata (issue #3253). The v5.46 PG baseline was dumped from a gapped database, so **fresh installs from that baseline were gapped too**. Healed forward in v5.50 by the idempotent reseed `V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql` (derivation: `scripts/generate-v545-metadata-reseed.mjs`; decision record: `plans/adr/0001-forward-dated-reseed-for-ledger-gaps.md`) — no `mj sync push` required.
 - In a later build the converter emitted **three** header-only stubs and one file containing six bare `;` statements where six `CREATE INDEX` statements belonged — while reporting `unhandled stmts: 0` and exiting successfully (issue #3252).
 
 **Always diff output size against source before committing:**
@@ -529,6 +529,16 @@ for f in migrations/v5/V*.sql; do
   [ "$p" -le 25 ] && [ "$ss" -gt 60 ] && printf 'SUSPECT %-58s SS=%s PG=%s\n' "${b:0:56}" "$ss" "$p"
 done
 ```
+
+**Also check DELETE parity in the metadata sync specifically.** mj-sync emits record deletions as bare `EXEC …spDelete… @ID = '…'` batches with no `DECLARE` block. The legacy converter (the mandated path for `*_Metadata_Sync.sql`) used to silently skip these — they vanished into the anonymous "skipped" count while the run reported OK, which is how v5.45's `spDeleteComponentRegistry` was dropped (issue #3253). It was never the only one: **196 such deletions across 10 metadata syncs (v5.9 through v5.45) reached zero committed PG counterparts.** The converter now converts all 196 (see `StatementClassifier` "bare EXEC CRUD sp calls" and `ExecBlockRule.splitIntoBlocks`), but size-diffing still can't catch a single missing statement, so keep counting them directly as the cheap release-time proof:
+
+```bash
+# Counts must match between the SS metadata sync and its PG conversion
+grep -c "spDelete" migrations/v5/V*__v5.XX.x__Metadata_Sync.sql
+grep -c "spDelete" migrations-pg/v5/V*__v5.XX.x__Metadata_Sync.pg.sql
+```
+
+If they differ, hand-port the missing delete(s) as guarded `DO` blocks (`IF EXISTS (SELECT 1 FROM __mj."<Table>" WHERE "ID" = '…') THEN PERFORM __mj."spDelete<Table>"(p_ID := '…'); END IF;` — see the synthesized delete in `V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql` for the exact shape).
 
 **An empty counterpart is sometimes correct** — do not blindly treat every hit as a defect. Two legitimate cases:
 

@@ -91,8 +91,9 @@ const GRANDFATHERED = new Map([
 
   ['V202607071019__v5.45.x__Metadata_Sync',
    'NOT correct — a real, shipped gap (issue #3253). The converter emitted a 126-byte ' +
-   'reseed marker for 12,041 lines of metadata DML. PG deployments that migrated through ' +
-   'v5.45 need `mj sync push` to be whole. Immutable now; tracked for a forward-fix.'],
+   'reseed marker for 12,041 lines of metadata DML. Immutable now; healed forward by ' +
+   'V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql (see ' +
+   'plans/adr/0001-forward-dated-reseed-for-ledger-gaps.md).'],
 
   ['V202607202000__v5.49.x__SS_Materialize_Catalog_Views_spUpdateExistingEntityFields',
    'Correctly empty — same proc/TypeScript split as the v5.38 entry above. Committed ' +

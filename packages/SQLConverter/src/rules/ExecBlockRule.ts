@@ -59,8 +59,13 @@ export class ExecBlockRule implements IConversionRule {
 
   /**
    * Split a batch that may contain multiple DECLARE/SET/EXEC blocks.
-   * Splits on `DECLARE @` at the start of a line, respecting string literal boundaries.
-   * Leading comments are attached to the following block.
+   * Splits on `DECLARE @` at the start of a line — and on a line-starting `EXEC`
+   * once the current block already holds a complete EXEC, which is how a
+   * standalone sp call (an mj-sync delete) trailing a save in the SAME batch gets
+   * its own block instead of being swallowed by the preceding one. Older mj-sync
+   * emitters wrote an entire session as one GO-less batch, so that shape drops the
+   * delete silently without this split (issue #3253). String literal boundaries are
+   * respected throughout; leading comments attach to the following block.
    */
   private splitIntoBlocks(sql: string): string[] {
     const lines = sql.split('\n');
@@ -71,7 +76,16 @@ export class ExecBlockRule implements IConversionRule {
     for (const line of lines) {
       const trimmed = line.trim();
 
-      if (!inString && /^DECLARE\s+@/i.test(trimmed) && current.length > 0) {
+      // A second EXEC at line start begins a new statement. `findExecPosition`
+      // scans the accumulated block (not just this line) so its own string-literal
+      // tracking decides whether the earlier EXEC was real code or prompt text.
+      const startsNewExec =
+        !inString &&
+        /^EXEC\s/i.test(trimmed) &&
+        current.length > 0 &&
+        this.findExecPosition(current.join('\n')) >= 0;
+
+      if (!inString && (/^DECLARE\s+@/i.test(trimmed) || startsNewExec) && current.length > 0) {
         // Move trailing blank/comment lines from current block to new block
         const trailingComments: string[] = [];
         while (current.length > 0) {
@@ -111,7 +125,13 @@ export class ExecBlockRule implements IConversionRule {
     const assignments = this.parseSets(setSection);
     const exec = this.parseExec(execSection);
 
-    if (!exec || declareVars.length === 0) {
+    // A block with no DECLARE section is convertible as long as every argument is
+    // an inline literal — mj-sync emits deletes this way (`EXEC schema.spDeleteX
+    // @ID = '<uuid>'`, issue #3253). A var-referencing argument with no matching
+    // declaration is genuinely broken input and stays a visible skip.
+    const referencesUndeclaredVar =
+      declareVars.length === 0 && exec?.params.some(p => /^p_\w+$/.test(p.valueExpr.trim()));
+    if (!exec || referencesUndeclaredVar) {
       return `-- SKIPPED: EXEC block (auto-conversion not supported)\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
     }
 
@@ -188,6 +208,9 @@ export class ExecBlockRule implements IConversionRule {
 
   /** Find where the DECLARE section ends (first SET at start of line) */
   private findDeclareEnd(body: string): number {
+    // No DECLARE at all (bare EXEC block, e.g. an mj-sync delete): the declare
+    // section is empty — everything belongs to the SET/EXEC scan that follows.
+    if (!/^DECLARE\b/i.test(body.trimStart())) return 0;
     const lines = body.split('\n');
     let pos = 0;
     for (const line of lines) {
@@ -550,9 +573,11 @@ export class ExecBlockRule implements IConversionRule {
     // producing `syntax error at or near "{"` (or similar). Tagged delimiter
     // matches PG's documented recommendation and executes identically.
     out.push('DO $mj$');
-    out.push('DECLARE');
-    for (const v of vars) {
-      out.push(`  ${v.name} ${v.pgType};`);
+    if (vars.length > 0) {
+      out.push('DECLARE');
+      for (const v of vars) {
+        out.push(`  ${v.name} ${v.pgType};`);
+      }
     }
     out.push('BEGIN');
 
