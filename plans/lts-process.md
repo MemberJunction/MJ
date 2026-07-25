@@ -1,9 +1,9 @@
 # MemberJunction LTS Release Process
 
-> **Status: PROPOSAL** — v1.1, 2026-07-25. Owner: Craig Adam (certification owner).
-> v1.1 incorporates the PR #3241 exec thread (metadata-vs-DDL migration policy, the reserved minor band, hackathon-date flexibility) and the 2026-07-24 **MJ Platform Versioning & Open App Alignment** memo (§3.2, Appendix C).
+> **Status: PROPOSAL** — v1.2, 2026-07-25. Owner: Craig Adam (certification owner).
+> v1.2 replaces v1.1's reserved-minor-band design with the **Edge-prerelease version grammar** (§3.1): normal semver versions are certified/candidate builds only; Edge releases are semver prereleases of the next line. Introduced **all at once** at the 6.x era open — no staged transition. The band, and its open band-size question, are gone.
 > Under team review: comments requested from Robert Kihm, John, and Johanna Snider; scan requested from the wider group tagged on the PR. On merge, this document becomes canon.
-> Decisions explicitly open: **starting cadence** (§9.1) and **reserved-band size** (§3.1).
+> Decisions explicitly open: **starting cadence** (§9.1). Gating prerequisite: the **changesets pre-mode dry run** (§15 item 5).
 > Follow-ups on this branch after blessing: punch-list items 1–3 (§15) and a root-level `VERSIONING.md` distillation for humans and agents.
 
 ---
@@ -12,7 +12,7 @@
 
 MJ's pace of architectural innovation is a huge asset — and our biggest source of pain. Regressions in new builds hurt customers, and some core functionality was never fully locked down in the first place. Nothing we've shipped has been through a true "production ready" test.
 
-The answer is a formal **LTS (Long Term Support)** process: heavily-tested releases certified as production-ready, produced on a predictable cycle, with the LTS designation **machine-readable and enforced by default** everywhere MJ gets installed or upgraded — the CLI, npm, and MJC. A policy that lives only in a document erodes; this one is enforced by tooling.
+The answer is a formal **LTS (Long Term Support)** process: heavily-tested releases certified as production-ready, produced on a predictable cycle, with the LTS designation **machine-readable and enforced by default** everywhere MJ gets installed or upgraded — the CLI, npm, and MJC. A policy that lives only in a document erodes; this one is enforced by tooling — and under the v1.2 grammar, by the version string itself.
 
 Two commitments live under the one label:
 
@@ -25,25 +25,45 @@ Two commitments live under the one label:
 
 | Term | Meaning |
 |---|---|
-| **Edge channel** | The fast lane — today's flow, unchanged: many minors per week from `next` → `main` → npm. Where all features land first. (Named *Edge* deliberately: the npm dist-tag `next` would collide confusingly with the repo's `next` *branch*, and "current" collides with "the current certified build." See §4.2.) |
-| **Candidate** | An already-published Edge build declared as a certification candidate. Not a special artifact — a normal release put under the microscope. |
-| **Certification** | The gate process (§6). Completes when the gates genuinely pass — however short or long that takes. The calendar schedules candidate *cuts*; it never forces certification *completion*. |
-| **LTS build** | A specific build (e.g. `6.20.1`) that passed certification and carries the label. |
-| **Line** | The version territory a certified build lives on: its base minor plus a **reserved minor band** (§3.1) — e.g. line **6.20 LTS** owns `6.20.x – 6.29.x`, maintained on branch `lts/6.20` after the cut. Patches are the norm; minor steps within the band occur only for migration-bearing fixes (§12). |
+| **Edge channel** | The fast lane — today's cadence, unchanged: many releases per week from `next` → `main` → npm. Where all features land first. From the 6.x era on, Edge versions are **semver prereleases of the next line**: `6.2.0-edge.0`, `6.2.0-edge.1`, … (§3.1). |
+| **Line** | A certified minor: line **6.1** = `6.1.x`, all of it, forever — normal (unsuffixed) versions belong to lines and nothing else. Lines take **patches only**; maintained on branch `lts/6.1`. Under this grammar, lines land at **consecutive minors** (6.1 → 6.2 → 6.3 …). |
+| **Candidate** | The build that opens a line: publishing the unsuffixed tuple the Edge stream was building toward (`6.2.0` after `6.2.0-edge.N`). Same commit as the tip of Edge — the suffix strip *is* the candidacy. |
+| **Certification** | The gate process (§6). Completes when the gates genuinely pass — however long that takes. The calendar schedules candidate *cuts*; it never forces certification *completion*. |
+| **LTS build** | A specific build (e.g. `6.1.1`) that passed certification and carries the label. |
 | **Era** | A major version (5.x, 6.x, …). **Majors are for eras, not cycles** — a major signals a genuine architectural epoch **and pins the infrastructure contract** (§3.2). Never a routine certification. |
-| **Cycle** | One candidate-to-certification pass. Cycle #1 is the **LTS bootstrap cycle** (special, freeze-based, §14). Every cycle after it is a **regular cycle** (branch-based, no freeze). |
-| **Metadata migration** | A migration file containing only data changes (inserts/updates to metadata & configuration tables) — no DDL, no CodeGen impact. Distinct from a **schema (DDL) migration**, which alters structure and triggers CodeGen. The line-fix rules differ sharply (§12). |
+| **Cycle** | One candidate-to-certification pass. Cycle #1 is the **LTS bootstrap cycle** (special, freeze-based, 5.x-era grammar, §14). Every cycle after it is a **regular cycle**. |
+| **Metadata migration** | A migration file containing only data changes (inserts/updates to metadata & configuration tables) — no DDL, no CodeGen impact. Distinct from a **schema (DDL) migration**. The line-fix rules differ sharply (§12). |
+| **`dbImpact`** | Per-release metadata (`none | metadata | schema`) in `release-lines.json` + release notes: "does this update touch the DB, and how?" — surfaced by `mj versions` and at upgrade time. The honest replacement for smuggling that signal into version digits. |
 | **Platform manifest** | The per-era pin set for underlying infrastructure (Angular, Node, TypeScript, zone.js, …), published in `release-lines.json` (§3.2, §4.1). |
 | **cert-blocker** | An issue that blocks certification: P0/P1 regressions, data loss/corruption, install or upgrade failure, or breakage of a core flow (navigation, search, views, forms, auth). Cosmetic and P3 issues are recorded on the scorecard but do not block. |
 
 ## 3. Versioning Strategy
 
-### 3.1 Majors are for eras, not cycles — and lines own a reserved band
+### 3.1 The version grammar: normal versions are certified; Edge is the prerelease stream of the next line
 
-- **One era split now:** the bootstrap cycle certifies a 5.x build; 5.x becomes the first maintenance line; new development opens on **6.x** around the Utah hackathon (§14). The major-version pipeline work (new migration baseline, version-guard update, docker tags — §15 item 4) happens once, here. Because Edge leaves 5.x entirely, the 5.x line owns all remaining 5.x version space — no band needed for the bootstrap line.
-- **Every later certification freezes a line, not a major:** a certified `6.20.1` defines line **6.20 LTS**. Edge keeps shipping at full speed. Future majors (7.x) happen only for genuine breaking/architectural epochs, on their own schedule.
-- **Reserved minor band (adopted from Amith's PR-thread proposal — size open):** at the line cut, Edge doesn't just skip one minor — it jumps past a reserved band (**default 10 minors**, configurable per era). Cutting candidate `6.20.0` reserves `6.20 – 6.29` for the line; Edge's next release is `6.30.0`. Why: it lets a line take **minor** bumps for migration-bearing fixes (per the universal migration-⇒-minor rule, §12) without ever colliding with Edge, and it visibly separates LTS lines from the Edge minors between them. The mechanics: the line-cut script sets Edge's base version to the band ceiling so the next Edge minor lands past it (§15 item 5). Cost: skipped version numbers — which are free. **Open item: confirm band size** (10 is Amith's "or something"; it needs a decided value).
-- **Semver promise, stated plainly (from the PR thread):** within an era, upgrades are backward-compatible — LTS 6.20 → LTS 6.55 should be safe. Crossing an era boundary (6.x → 7.x) is the signal to review carefully and expect work. That promise is exactly why the major must not be spent on routine certifications.
+**The rule, in one line: an unsuffixed semver version is a candidate or LTS build; everything else is `‑edge`.** Introduced whole at the 6.x era open — net-new, one grammar, no transition phases. The 5.x era (bootstrap line included) keeps classic versioning; its line follows the same patch-only behavior regardless.
+
+| You see | It means |
+|---|---|
+| `6.1.1` | Line 6.1 — certified stream. Patch = line maintenance |
+| `6.2.0-edge.14` | Edge — the 15th uncertified release on the way to what will become line 6.2 |
+| `6.2.0` | The moment of candidacy: the suffix came off; certification testing begins |
+| `7.0.0-edge.0` | A new era opened (new infrastructure contract) |
+
+Mechanics:
+
+- **Edge runs in changesets prerelease mode permanently** (from the era open). Between certifications, accumulated bumps target **the next line's tuple** — bumps don't compound, so every Edge release between line 6.1 and the next cut is `6.2.0-edge.N` with N incrementing per publish. The Edge stream is *literally* the prerelease series of the next LTS.
+- **Candidate cut = `pre exit` → publish `6.2.0` → branch `lts/6.2` → `pre enter` (Edge resumes at `6.3.0-edge.0`).** One scripted dance (§15 item 5). A withdrawn candidate consumes its minor (harmless) and the next cycle targets the next one.
+- **Lines are patch-only, forever.** `6.1.0 → 6.1.1 → 6.1.2 …`. Migrations on a line ride **labeled patches** (§12) — the migration-⇒-minor rule is **Edge-tuple grammar only** (a release containing migrations must carry a minor-or-higher tuple, which every `X.Y.0-edge.N` does by construction). There is no band, because there is nothing to reserve: Edge never occupies line minors, and lines never occupy Edge's — the suffix partitions the space.
+- **Consequently, lines land at consecutive minors**: 6.1, 6.2, 6.3 … — the minor number reads as "the Nth certification of the era."
+
+What the grammar buys, mechanically (verified against npm's `semver` package):
+
+- **Precedence tells the truth:** `6.2.0-edge.5 < 6.2.0 < 6.2.1` — every uncertified build sorts below the certified build it was leading up to. Semver §9's definition of a prerelease ("unstable, might not satisfy the intended compatibility requirements") is *literally what Edge is*.
+- **Ranges resolve only certified builds:** `^6.1.0` matches `6.1.2`, never `6.2.0-edge.N` (semver ranges exclude prereleases). Every range-shaped surface — user-authored ranges, **the Open App `mj-app.json` dependency ranges from §3.2** — binds to certified builds automatically. "LTS is the default everywhere" gets enforced by npm's own resolver, even for people who never read our docs. Tools that hide prereleases by default (Dependabot, Renovate, version pickers) hide exactly the right channel.
+- **Glanceability is total:** no lookup table, no band arithmetic. Suffix = channel; minor = line; patch = maintenance.
+
+**Precedent — this is the ecosystem-standard answer, not an invention:** TypeScript's `@next` channel ships `X.Y.0-dev.<date>` prereleases of the upcoming stable minor; Ember's release train graduates `X.Y.0-beta.N` to stable `X.Y.0` every cycle; React's canary channel is `X.Y.0-canary-<sha>`. In each case the dev channel is the tuple-anchored prerelease stream of the next stable release, and stable releases own the normal version space. No major project runs a *major-anchored* perpetual prerelease stream (e.g. everything hanging off `6.0.0-edge.*`) — that shape makes every Edge build sort below every certified build of the era forever, and was considered and rejected here (PR thread, 2026-07-25).
 
 ### 3.2 The major is the infrastructure contract (2026-07-24 memo, adopted)
 
@@ -51,10 +71,10 @@ Per the **MJ Platform Versioning & Open App Alignment** memo:
 
 - **Each MJ era pins an exact infrastructure set** — Angular, Node, TypeScript, RxJS, zone.js. MJ 5.x pins Angular 21.1.3; MJ 6.x pins whatever its manifest says (initially the same pins, until the era genuinely moves — e.g. Angular 22). The pins live in the **platform manifest**, published per era in `release-lines.json` (§4.1) — one source of truth, not hand-copied lists that rot.
 - **Every Open App's major must match the MJ major it runs on.** bizapps-common, -tasks, -accounting, -orders, and everything after them: 5.x apps on MJ 5.x, moving to 6.x in lockstep when MJ does. Minors and patches are each app's own business. Apps do **not** declare infrastructure versions — they declare the `mjVersionRange` they target, and tooling derives the npm `overrides` block from the era's platform manifest.
-- **Apps give up the major for their own breaking changes — consciously.** An app-level breaking change is a minor within the era, and consumers express precise requirements through npm-style dependency ranges in `mj-app.json` (`"mj-bizapps-accounting": { "version": ">=5.3.0 <6.0.0" }`). App-level breaking changes should be rare within an era; where unavoidable they can usually wait for the next MJ major.
+- **Apps give up the major for their own breaking changes — consciously.** An app-level breaking change is a minor within the era, and consumers express precise requirements through npm-style dependency ranges in `mj-app.json` (`"mj-bizapps-accounting": { "version": ">=5.3.0 <6.0.0" }`). Under the §3.1 grammar those ranges match certified MJ builds only — exactly the right default; app development against Edge uses exact pins (which `mj bump` produces anyway).
 - **Violations fail fast:** `mj app install` / `mj app link` hard-error on app-major ≠ host-MJ-major (a clear message, not an ERESOLVE or a runtime DI crash); `mj doctor` validates major alignment across the installed app graph, duplicate `@angular/*` in the tree, and drift between the generated overrides block and the platform manifest. (§15 item 10.)
-- **Why this belongs in the LTS doc:** the alignment policy is only livable *because* majors are era-scale. Under the abandoned major-per-cycle model, every Open App would have been dragged through a major bump monthly — impossible. Conversely, alignment strengthens the LTS story: "does app X work with LTS 6.20?" is answered by reading the major. One era split (5→6) does obligate every app to bump majors once (Appendix C) — that's the deliberate, occasional cost of the contract.
-- The per-app remediation asks from the memo (version-scheme reconciliation, overrides blocks, the stale bizapps-common checkout) are tracked in **Appendix C** — app-repo work, out of scope for this repo but part of this rollout.
+- **Why this belongs in the LTS doc:** the alignment policy is only livable *because* majors are era-scale. Under the abandoned major-per-cycle model, every Open App would have been dragged through a major bump monthly — impossible. Conversely, alignment strengthens the LTS story: "does app X work with LTS 6.1?" is answered by reading the major. One era split (5→6) does obligate every app to bump majors once (Appendix C) — the deliberate, occasional cost of the contract.
+- The per-app remediation asks from the memo are tracked in **Appendix C** — app-repo work, out of scope for this repo but part of this rollout.
 
 ### 3.3 Breaking-change signal
 
@@ -68,79 +88,77 @@ A repo-root file, Node.js-`schedule.json` style. Everything else — CLI, MJC, `
 
 ```jsonc
 {
-  "edge": { "newest": "6.34.2" },
+  "edge": { "newest": "6.2.0-edge.14" },
   "eras": {
     "5": {
       "platform": { "angular": "21.1.3", "node": ">=18.0.0", "typescript": "5.9.x", "zone.js": "0.16.x" }
     },
     "6": {
-      "platform": { "angular": "21.1.3", "node": ">=18.0.0", "typescript": "5.9.x", "zone.js": "0.16.x" },
-      "minorBandSize": 10
+      "platform": { "angular": "21.1.3", "node": ">=18.0.0", "typescript": "5.9.x", "zone.js": "0.16.x" }
     }
   },
   "lines": {
-    "6.20": {
+    "6.1": {
       "status": "certified",            // candidate | certified | maintenance | eol | withdrawn
-      "certifiedBuild": "6.20.1",
-      "newest": "6.21.0",               // may step minors within the band (migration-bearing fixes)
-      "bandCeiling": "6.29",            // reserved through here; Edge resumed at 6.30.0
+      "certifiedBuild": "6.1.1",
+      "newest": "6.1.3",
       "candidateDate": "2026-09-28",
       "certifiedDate": "2026-10-06",    // support clock starts HERE (slip-tolerant)
       "supportEnds": "2027-02-06",      // extend-only
       "upgradeImpact": "none",
-      "scorecard": "certifications/6.20.1.md"
+      "releases": {
+        "6.1.2": { "dbImpact": "none" },
+        "6.1.3": { "dbImpact": "schema", "labels": ["security-exception"] }
+      },
+      "scorecard": "certifications/6.1.1.md"
     }
   }
 }
 ```
 
 - **Status transitions happen only via PR**, and the file is CODEOWNERS-gated to the certification owner (§8).
-- Publish workflows may append *mechanical* fields (`newest`) via direct push; they never touch `status`/`certifiedBuild`/dates.
+- Publish workflows may append *mechanical* fields (`newest`, `releases`) via direct push; they never touch `status`/`certifiedBuild`/dates.
 - Dates are **extend-only**: windows may lengthen, never shrink.
 - The `eras.*.platform` block **is** the platform manifest (§3.2) — `mj app` tooling generates consuming repos' npm `overrides` from it.
 
-### 4.2 npm dist-tags — and the `latest` flip
+### 4.2 npm dist-tags
 
 From the first certification onward, **every "default" surface resolves to certified bits**:
 
 | Tag | Points at | Moved by |
 |---|---|---|
 | `latest` | Newest build of the newest **certified** line | Certification (atomic 233-package move via `ci/dist-tag-all.mjs`), and line publishes when their line is the newest certified |
-| `edge` | Newest Edge release | `publish.yml` (routine publishes gain `--tag edge`) |
-| `lts-6.20` | Newest build of that line | `publish-lts.yml` on every line release |
+| `edge` | Newest Edge prerelease | `publish.yml` (routine publishes carry `--tag edge`) |
+| `lts-6.1` | Newest build of that line | `publish-lts.yml` on every line release |
 
-**Why `edge` and not `next`:** the repo's `next` branch is the trunk everyone PRs into, while what actually publishes is built from `main` after the release PR. An npm tag named `next` would imply "builds of the `next` branch" and confuse maintainers and collaborators. `current` was rejected because it collides with "the current certified build" in support language. `edge` is unambiguous, has ecosystem precedent, and reads correctly as "ahead of stable."
+Notes:
 
-Rules:
-
-- **No publish anywhere omits its explicit `--tag`** after the flip (routine = `edge`, line = `lts-x.y`). On npm ≤ 10, a bare publish of an older version silently drags `latest` backward across every package published — with 233 packages that is a catastrophic footgun. npm 11 fixed the default; we still never rely on it. Post-publish `dist-tag ls` assertions on a sample; one-time drill against a scratch scope before cycle #1's flip.
-- The flip itself is a **one-time comms event** (Vue and Express both did exactly this, with dedicated posts — see Appendix A.3). Nothing changes until the first certification.
+- **Tag and suffix now agree** (`@edge` installs `…-edge.N`) — self-describing on both axes. The tag remains necessary: a later Edge tuple outranks an older line's patches in raw precedence (`6.2.0-edge.0 > 6.1.3`), so bare installs are governed by `latest`, not by sort order. And `next` was rejected as a tag name because it would collide confusingly with the repo's `next` *branch* (published builds actually come from `main`).
+- **No publish anywhere omits its explicit `--tag`** (routine = `edge`, line = `lts-x.y`). On npm ≤ 10, a bare publish of an older version silently drags `latest` backward across every package published — with 233 packages that is a catastrophic footgun. npm 11 fixed the default; we still never rely on it. Post-publish `dist-tag ls` assertions on a sample; one-time drill against a scratch scope.
+- The `latest` flip is a **one-time comms event** at first certification (Vue and Express precedent — Appendix A.3). Additionally, **anyone tracking Edge via semver ranges stops receiving updates at the era open** (ranges can't see prereleases) — that's intended behavior, but it must be in the era-open comms, not discovered.
 - Edge-case: a brand-new package's first publish under `--tag edge` needs explicit `latest` handling (npm gives a first publish only the tag passed). Pre-publish validation currently blocks first-time packages anyway; §15 item 3 covers it.
-- **EOL:** `npm deprecate @memberjunction/*@">=6.20.0 <6.30.0" "…EOL — see upgrade guide"` (the line's full band), scripted across the set, plus `eol` status in `release-lines.json`.
+- **EOL:** `npm deprecate @memberjunction/*@"6.1.x" "…EOL — see upgrade guide"`, scripted across the set, plus `eol` status in `release-lines.json`.
 
 ### 4.3 GitHub Releases & Docker
 
-- Routine Edge releases publish with `make_latest: false`; certification sets the certified build as the repo's **latest release**. Existing CLIs' "newest stable" auto-pick then lands on certified bits with zero CLI code changes — enforcement precedes the CLI work.
+- Edge releases publish with `make_latest: false`; certification sets the certified build as the repo's **latest release**. Existing CLIs' "newest stable" auto-pick then lands on certified bits with zero CLI code changes — enforcement precedes the CLI work.
 - Certified releases carry "(LTS)" in the title and link their scorecard.
-- Docker: `:latest` follows certified (consistent with the flip); `:edge` for the fast channel; per-line tags (`:6.20`).
+- Docker: `:latest` follows certified; `:edge` for the fast channel; per-line tags (`:6.1`).
 
 ## 5. The Two Cycle Shapes
 
 ### 5.1 The LTS bootstrap cycle (cycle #1 — only)
 
-The candidate is the tip of `next`; cert fixes merge to `next`; each patch build is a normal release (a cert fix carrying a migration advances the candidate a minor under the standing Edge rule — fine, the line freezes at whatever version certifies). This works because a **merge freeze** is in effect (already running). **The freeze does not recur.** Details and dates in §14.
+Runs entirely in the 5.x era under classic versioning: the candidate is the tip of `next`; cert fixes merge to `next`; each patch build is a normal release (a cert fix carrying a migration advances the candidate a minor under the standing Edge rule — fine, the line freezes at whatever version certifies). This works because a **merge freeze** is in effect (already running). **The freeze does not recur.** The 5.x line owns all remaining 5.x space after the era split — patch-only from certification on, like every line. Details and dates in §14.
 
 ### 5.2 Regular cycles (cycle #2 onward — `next` never stops)
 
-1. **Candidacy = branch cut + band reservation.** `lts/6.20` is cut from the candidate's tag; the line-cut script reserves the minor band and moves Edge's base version past the ceiling (§3.1); Edge flows at full speed throughout.
-2. **Fixes land on `next` first**, then reach the line by label: `backport lts/6.20` on the merged PR → [korthout/backport-action](https://github.com/korthout/backport-action) opens the cherry-pick PR automatically (conflicts become a draft PR a human finishes). The only exceptions to next-first: fixes for code that no longer exists on the dev line, and genuinely line-specific metadata corrections (certification-owner triage).
-3. **Line releases** ship from a parameterized `publish-lts.yml`: `changeset publish --tag lts-6.20`, git tag `v6.20.N` (or `v6.21.0` on a band-minor step), GitHub Release (`make_latest` only if newest certified). Line publishes never merge back to `next`.
-4. **Line guard** (CI on `lts/*` branches — the migration-⇒-minor rule stays universal; the guard controls *what kind* of change may ride it):
-   - No `migrations/` diff → **patch only**.
-   - `migrations/` diff scanned for DDL (CREATE/ALTER/DROP/…): **data-only** → requires the `metadata-migration` label, ships as a **minor within the band**; **contains DDL** → requires the `security-exception` label (§12), also a band minor.
-   - Any bump that would cross `bandCeiling` fails the build (then the line is out of space — a signal to move users forward, not to widen the band retroactively).
+1. **Candidate cut = the pre-exit dance** (scripted): `changeset pre exit` → version → publish **`6.2.0`** (normal, `make_latest: false` until certified) → branch **`lts/6.2`** from the tag → `changeset pre enter edge` (Edge resumes at `6.3.0-edge.0`). `next` flows at full speed throughout.
+2. **Fixes land on `next` first**, then reach the line by label: `backport lts/6.2` on the merged PR → [korthout/backport-action](https://github.com/korthout/backport-action) opens the cherry-pick PR automatically (conflicts become a draft PR a human finishes). The only exceptions to next-first: fixes for code that no longer exists on the dev line, and genuinely line-specific metadata corrections (certification-owner triage).
+3. **Line releases** ship from a parameterized `publish-lts.yml`: `changeset publish --tag lts-6.2`, git tag `v6.2.N`, GitHub Release (`make_latest` only if newest certified). Line publishes never merge back to `next`.
+4. **Line guard** (CI on `lts/*` branches): **patch-only, always.** A `migrations/` diff is scanned for DDL (CREATE/ALTER/DROP/…): **data-only** → requires the `metadata-migration` label; **contains DDL** → requires the `security-exception` label (§12). Either way the release remains a patch; `dbImpact` records the DB touch.
 
-The existing `next → main → publish → merge-back` pipeline is untouched for Edge, in every cycle, forever.
+The existing `next → main → publish → merge-back` pipeline is untouched for Edge in every cycle — it just runs in prerelease mode.
 
 ## 6. Certification Gates — the Checklist
 
@@ -157,7 +175,7 @@ The existing `next → main → publish → merge-back` pipeline is untouched fo
 | 7 | **Zero open `cert-blocker`s** | Process | Label query returns empty |
 | 8 | **Certification sign-off** | Authority | Craig approves the `release-lines.json` PR — the only way the label applies |
 
-**Mini-certification for line releases:** any post-certification line release — P0 hotfix patch or a `metadata-migration` band minor — re-runs the automated gates (1–3) before the new build inherits the LTS label. No human cert week — but never a silent inherit.
+**Mini-certification for line releases:** every post-certification line patch — code-only, `metadata-migration`, or `security-exception` — re-runs the automated gates (1–3) before the new build inherits the LTS label. No human cert week — but never a silent inherit.
 
 ## 7. RACI
 
@@ -191,7 +209,7 @@ R = does the work · A = accountable/sole approver · C = consulted · I = infor
 
 | Guarantees | Does NOT guarantee — and the mitigation |
 |---|---|
-| With branch protection "require review from Code Owners" enabled on the target branch, **no PR touching those paths can merge without Craig's approval** | **Direct pushes bypass PR review entirely.** Mitigation: branch protection restricts direct pushes on `next`/`main` to the release bot; the release workflows only ever append mechanical fields (`newest`), never status transitions |
+| With branch protection "require review from Code Owners" enabled on the target branch, **no PR touching those paths can merge without Craig's approval** | **Direct pushes bypass PR review entirely.** Mitigation: branch protection restricts direct pushes on `next`/`main` to the release bot; the release workflows only ever append mechanical fields (`newest`, `releases`), never status transitions |
 | The gate is visible: every label change is a reviewable PR in history | **Repo admins can bypass protection.** By policy, that bypass *is* the recorded escalation — deliberately visible in git history, which is exactly the accountability we want |
 | — | **Nothing stops a compromised/buggy workflow from writing the file.** Mitigation (§15 item 1): a CI check fails any push where `status`/`certifiedBuild`/date fields changed outside an approved-PR context |
 
@@ -213,11 +231,13 @@ The argument for monthly: more practice cycles to harden the gates fast. If chos
 
 | Cycle | Candidate cut | Shape | Effective support (current + grace) |
 |---|---|---|---|
-| #1 — 5.50 LTS (bootstrap) | ~Jul 27, 2026 | Freeze-based (the only one) | **Fixed 6 months** |
-| #2 — first 6.x LTS | Late Sep 2026 | Regular (branch-based) | ~4 months |
-| #3 | Late Nov 2026 | Regular | ~4–6 months (transition) |
-| **Review** | Dec 2026 | Retro on cycles 1–3: cert cost, backport volume, gate reliability → confirm quarterly for 2027 | — |
+| #1 — 5.50 LTS (bootstrap) | ~Jul 27, 2026 | Freeze-based (the only one); 5.x-era classic grammar | **Fixed 6 months** |
+| #2 — line 6.1 (first of the era) | Late Sep 2026 | Regular (pre-exit dance debuts) | ~4 months |
+| #3 — line 6.2 | Late Nov 2026 | Regular | ~4–6 months (transition) |
+| **Review** | Dec 2026 | Retro on cycles 1–3: cert cost, backport volume, gate reliability, pre-mode behavior → confirm quarterly for 2027 | — |
 | 2027 steady state | Quarterly (Mar / Jun / Sep / Dec) | Regular | ~6 months each; longer as maturity proves out (extend-only) |
+
+*(Line numbers illustrative: the first 6-era certification defines line 6.1, the second 6.2, and so on — consecutive by construction, §3.1.)*
 
 ### 9.3 Window model
 
@@ -228,41 +248,49 @@ The argument for monthly: more practice cycles to harden the gates fast. If chos
 
 ## 10. Worked Examples
 
-Assume: line **6.20 LTS** is the newest certified (certified build `6.20.1`, band `6.20–6.29`, `latest` → its newest build), Edge is at `6.34.x`, and a regular cycle for candidate **6.40.0** is underway on branch `lts/6.40` (band `6.40–6.49`; Edge resumed at `6.50.0`).
+The core walkthrough (this is the scenario from the PR discussion, and the grammar it settled on). Assume line **6.1** is the newest certified line (certified build `6.1.1`) and Edge is streaming toward line 6.2.
 
-1. **Routine feature merge during certification.** A contributor merges a feature to `next` as always. It ships on Edge (`6.50.0`, `--tag edge`). The 6.40 candidate is untouched (its branch was cut already). Nothing to do — this is the whole point of regular cycles: `next` never stops.
-2. **Cert testing finds a bug in candidate 6.40.0.** Fix PR → `next` (lands in Edge first, per next-first). On merge, apply `backport lts/6.40` → the action opens a cherry-pick PR against `lts/6.40` → merge → `publish-lts.yml` ships **6.40.1** under `lts-6.40` → gates re-run on 6.40.1. Certification, when granted, names 6.40.1.
-3. **P0 hotfix on certified 6.20 between cycles.** Fix → `next` → `backport lts/6.20` → **6.20.2** ships from the line. Mini-cert (gates 1–3) re-runs before 6.20.2 inherits the label; since 6.20 is the newest certified line, `latest` moves to 6.20.2.
-4. **A normal bug fix on a certified line needs a metadata change.** The fix ships as a **metadata migration** (data-only — no DDL, no CodeGen). It lands on `next` first, is backported byte-identically (same Flyway version string + content), and carries the `metadata-migration` label — the line guard verifies the migration is DDL-free and the release ships as a **band minor: 6.21.0**. Mini-cert runs; label inherits; `latest` moves. This is expected, routine line maintenance (per the PR thread: metadata is a different beast from schema).
-5. **A security fix on a certified line truly requires DDL.** Rarest of occasions — allowing schema+CodeGen churn on a stable line undermines the stability promise, so the bar is security-driven necessity. Additive-only (Publish-No-Break), next-first, byte-identical backport, `security-exception` label; ships as a band minor. DBs that applied it on the line and later upgrade to Edge skip it cleanly (same version string).
-6. **Cherry-pick conflict.** The action opens a **draft PR** with the first conflict committed plus resolution instructions; a human finishes it. The original PR gets a comment either way — no silent failures.
-7. **A contributor asks "do I need to do anything for LTS?"** Default: no. Backporting is opt-in by label; the certification owner also runs a weekly sweep to catch fixes that *should* have been labeled (`backport-declined` records the considered-and-rejected ones).
-8. **Certification slips past the next cut date.** 6.40 isn't certified when the next cut comes due → the cut waits. 6.20's windows extend automatically (they're defined by supersession). Slipping is a schedule event; certifying weak is a credibility event.
-9. **A candidate fails outright** (regression scale beyond patching). Status → `withdrawn` in `release-lines.json`; no label ever applied; the branch is retired (its band stays skipped — version numbers are free); the next cycle proceeds on schedule with a fresh candidate.
-10. **An installation upgrades LTS → LTS** (5.50.x → 6.20.x, skipping Edge). `mj bump` to 6.20.x; migrations apply in order, including the 6.x baseline; if the old line had backported migrations, `mj migrate`'s upgrade mode handles the out-of-order case (§12, §15 item 8). The CLI warns if the path crosses an `upgradeImpact: breaking` entry.
-11. **An Open App and a certified line.** An app at `5.7.0` declaring `mjVersionRange >=5.49.0 <6.0.0` runs on any certified 5.x line — compatibility is read from the major (§3.2). When the app targets MJ 6.x, the app bumps to `6.x` and inherits the 6-era platform pins; `mj app install` hard-errors if someone tries to mix a 5.x app into a 6.x host.
-12. **A breaking change is needed on Edge.** Rare and deliberate: if era-scale (including any infrastructure-contract change like an Angular major), it's a new era (7.x) with its own platform manifest, baseline, and comms. Otherwise it ships in a minor with `upgradeImpact: breaking` on its release entry — badged in notes, warned on upgrade paths. It reaches LTS users only when a future line certifies past it, with the flag intact.
-13. **Bootstrap-cycle special case.** During the freeze there is no line branch: cert fixes merge straight to `next` and the next release *is* the new candidate patch. A cert fix carrying a migration advances the candidate a minor (e.g. 5.50.0 → 5.51.0) under the standing Edge rule — fine, the line freezes at whatever version certifies, and the 5.x line inherits all remaining 5.x space after the era split.
+| # | Event | Version | Mechanics |
+|---|---|---|---|
+| 1 | First 6-era certification | **6.1.1** | Candidate 6.1.0 was cut (pre-exit dance); cert fixes produced 6.1.1; gates passed on it. `latest` → 6.1.1; line branch `lts/6.1` live |
+| 2 | Dev ships a feature with a migration | **6.2.0-edge.0** | Edge (pre-mode) targets the next line's tuple; migration satisfies the minor-tuple rule by construction |
+| 3 | Non-migration bug found in 6.1.1 | **6.1.2** | Fix on `next` first → `backport lts/6.1` → line patch; mini-cert (gates 1–3); label inherits; `latest` → 6.1.2. `dbImpact: none` |
+| 4 | More Edge work, then a bug fix to it | **6.2.0-edge.1**, **6.2.0-edge.2** | Counter increments per publish; tuple holds at 6.2.0 |
+| 5 | **Security hole requiring a migration on the LTS line** | **6.1.3** + twin on Edge (**6.2.0-edge.3**) | Fix + migration land on `next` first (rides the Edge stream); backported **byte-identical** (same Flyway version string + content) with `security-exception` → ships as a **patch** carrying a migration. `dbImpact: schema`; mini-cert; `latest` → 6.1.3. A 6.1.3 DB later upgrading to line 6.2+ skips the migration (same Flyway version) |
+| 6 | Cycle #2 candidate cut | **6.2.0** | Pre-exit dance: suffix comes off the stream's tuple; branch `lts/6.2`; Edge resumes at **6.3.0-edge.0** |
+| 7 | Cert testing finds a bug in 6.2.0 | **6.2.1** | Same next-first + backport flow as any line fix; certification, when granted, names 6.2.1 |
+| 8 | Certification of line 6.2 | — | `latest` → 6.2.1; line 6.1 enters grace (critical + security only) |
+
+Edge cases:
+
+9. **A contributor asks "do I need to do anything for LTS?"** Default: no. Backporting is opt-in by label; the certification owner runs a weekly sweep to catch fixes that *should* have been labeled (`backport-declined` records the considered-and-rejected ones).
+10. **Cherry-pick conflict.** The action opens a **draft PR** with the first conflict committed plus resolution instructions; a human finishes it. The original PR gets a comment either way — no silent failures.
+11. **Certification slips past the next cut date.** The cut waits; the previous line's windows extend automatically (defined by supersession). Slipping is a schedule event; certifying weak is a credibility event.
+12. **A candidate fails outright.** Status → `withdrawn`; no label; branch retired; its minor is consumed (version numbers are free); next cycle targets the next tuple.
+13. **An installation upgrades LTS → LTS** (5.50.x → 6.2.x, skipping Edge). `mj bump` to 6.2.x; migrations apply in order, including the 6-era baseline; backported migrations already applied are skipped (same Flyway version); `mj migrate`'s upgrade mode handles the out-of-order case (§12, §15 item 9). The CLI warns if the path crosses an `upgradeImpact: breaking` entry.
+14. **An Open App and a certified line.** An app at `6.4.0` declaring `mjVersionRange >=6.1.0 <7.0.0` runs on any certified 6.x line — and that range *cannot* accidentally resolve an Edge build (prerelease exclusion). App development against Edge pins exact (`6.3.0-edge.7`), which is what `mj bump` produces.
+15. **A breaking change is needed on Edge.** Rare and deliberate: if era-scale (including any infrastructure-contract change like an Angular major), it's a new era (`7.0.0-edge.0`) with its own platform manifest, baseline, and comms. Otherwise it ships in the Edge stream with `upgradeImpact: breaking` on its release entry — badged in notes, warned on upgrade paths. It reaches LTS users only when a future line certifies past it, with the flag intact.
 
 ## 11. Contributor Impact (what actually changes for the Core team)
 
-- Day-to-day: **nothing changes.** PRs → `next`, changesets as usual, Edge ships as fast as ever (after the bootstrap freeze ends, permanently).
+- Day-to-day: **nothing changes.** PRs → `next`, changesets as usual, Edge ships as fast as ever (after the bootstrap freeze ends, permanently). Version strings on Edge grow an `-edge.N` suffix at the 6.x era open — that's the visible difference.
 - New labels exist: `backport lts/<line>` (opt-in backporting), `cert-blocker` (jumps every queue during a cycle), `metadata-migration` (data-only line fix), `security-exception` (DDL on a line — rarest), `backport-declined`.
 - During a regular cycle, the only team-wide effect is that `cert-blocker` fixes take priority. No freezes.
-- Educating the team on this process is part of the process: the bootstrap cycle is announced with Appendix A.1, and Craig trains delegates on the human gates during cycles 2–3.
+- Educating the team on this process is part of the process: the bootstrap cycle is announced with Appendix A.1, the era-open grammar change with A.3, and Craig trains delegates on the human gates during cycles 2–3.
 
 ## 12. Migrations, Metadata & CodeGen Policy
 
-Three tiers, per the PR-thread convergence:
+Three tiers, per the PR-thread convergence. **On a line, everything is a patch** — the tiers differ in what's allowed and how it's labeled, with `dbImpact` carrying the operational signal:
 
-| Change type | On a certified line? | Version effect | Label |
+| Change type | On a certified line? | Version effect | Label / `dbImpact` |
 |---|---|---|---|
-| **Code-only fix** | Yes — normal maintenance | Patch | — |
-| **Metadata migration** (data-only: inserts/updates to metadata & config tables; includes AI model/vendor/pricing seeds) | Yes — permissible for normal bug fixes; "metadata is a different beast" | Band minor (migration ⇒ minor, universally) | `metadata-migration` (CI verifies the file is DDL-free) |
-| **Schema (DDL) migration + CodeGen** | **Rarest of occasions — security-driven necessity only.** A schema+CodeGen step on a stable line undermines the stability promise | Band minor | `security-exception`; additive-only (Publish-No-Break), next-first, **byte-identical** (same Flyway version string + content) |
+| **Code-only fix** | Yes — normal maintenance | Patch | — / `none` |
+| **Metadata migration** (data-only: inserts/updates to metadata & config tables; includes AI model/vendor/pricing seeds) | Yes — permissible for normal bug fixes; "metadata is a different beast" | Patch | `metadata-migration` (CI verifies the file is DDL-free) / `metadata` |
+| **Schema (DDL) migration + CodeGen** | **Rarest of occasions — security-driven necessity only.** A schema+CodeGen step on a stable line undermines the stability promise | Patch | `security-exception`; additive-only (Publish-No-Break), next-first, **byte-identical** (same Flyway version string + content) / `schema` |
 
-- **During candidacy:** migrations of both kinds are allowed; the standing guard advances the candidate's version. Certification freezes whatever version passed.
-- **Byte-identical + next-first** applies to any backported migration (both tiers) so a line DB later upgrading to Edge skips it cleanly instead of running it twice. Genuinely line-specific metadata corrections (no `next` equivalent) are the triage-approved exception.
+- **On Edge**, the migration-⇒-minor rule holds at tuple level: migrations only ever ship in minor-or-higher-tupled releases — which every `X.Y.0-edge.N` is by construction (§3.1).
+- **During candidacy** (post-cut, pre-certification), the line rules above already apply — the candidate's fixes are line patches.
+- **Byte-identical + next-first** applies to any backported migration (both tiers) so a line DB later upgrading past it skips it cleanly instead of running it twice. Genuinely line-specific metadata corrections (no `next` equivalent) are the triage-approved exception.
 - **Punch list dependencies:** the line-guard DDL scanner; `mj migrate` out-of-order upgrade mode + an LTS→Edge upgrade test rig; the identical-version-string rule must hold across per-era migration folders after the 5→6 split.
 
 ## 13. Enforcement Surfaces
@@ -271,7 +299,7 @@ Three tiers, per the PR-thread convergence:
 
 - **Default = newest certified** via `release-lines.json` (+ the GH latest-release flag for older CLIs). The picker groups by channel with status + dates.
 - **Edge is explicit opt-in:** `--channel edge` per command, or `releaseChannel: 'edge'` in `mj.config.cjs` — deliberately a committed, review-visible file, so a project's opt-out is a team decision, not a forgotten personal flag. Interactive non-LTS selections get one confirm prompt; non-interactive runs simply require the explicit flag.
-- **Status awareness:** `mj versions` prints the support table; version-touching commands warn on maintenance (gentle) / EOL (loud) lines and on upgrade paths crossing `upgradeImpact: breaking`. Never blocking.
+- **Status awareness:** `mj versions` prints the support table incl. per-release `dbImpact`; version-touching commands warn on maintenance (gentle) / EOL (loud) lines, on upgrade paths crossing `upgradeImpact: breaking`, and note DB-touching patches ("6.1.3 includes a schema migration — `mj migrate` will apply it"). Never blocking.
 - **Open App guardrails (§3.2):** `mj app install` / `mj app link` hard-error on app-major ≠ host-MJ-major; the overrides block in consuming repos is *generated* from the era's platform manifest; `mj doctor` validates major alignment, duplicate `@angular/*`, and overrides drift.
 
 ### 13.2 MJC — LTS-only
@@ -290,10 +318,10 @@ Three tiers, per the PR-thread convergence:
 | When | What |
 |---|---|
 | **Jul 20–26** | This process doc + exec review round (Robert Kihm, John, Johanna Snider + scan group) + cadence decision (§9.1) · team freeze work: core-functionality sweep (navigation, search, views, performance), known-defect backlog (Johanna Snider's list → GitHub issue, assigned Craig), integration-suite expansion · punch items 1–3 (§15) · gate-3 pass criteria + delegated-execution dry run (Caeleb) · **name the UNKNOWNs in §7** · comms A.1 goes out |
-| **~Jul 27** | Candidate cut (5.50.x era) + gate-checklist tracking issue · comms A.2 |
+| **~Jul 27** | Candidate cut (5.50.x era, classic grammar) + gate-checklist tracking issue · comms A.2 |
 | **Jul 27 – Aug 2** | Full gate run (§6) · patch loop on `next` (freeze model) |
 | **When gates pass** (target ~Aug 2, flexible per Amith) | Certification sign-off → label, scorecard, `latest` flip, GH latest flag · comms A.3 to MJ Dev (All Companies) |
-| **6.x era opens** (target Aug 3, hackathon) | Era-split tooling (baseline migration, version guard, docker tags) + 6-era platform manifest published (§3.2) · freeze ends permanently · 5.x line branch + backport machinery live · Open App 6.x alignment begins per Appendix C timing |
+| **6.x era opens** (target Aug 3, hackathon) | Era-split tooling (baseline migration, version guard, docker tags) + 6-era platform manifest published (§3.2) + **Edge prerelease grammar begins** (`changeset pre enter edge`; first Edge release `6.1.0-edge.0`) · freeze ends permanently · 5.x line branch + backport machinery live · Open App 6.x alignment begins per Appendix C timing |
 | **Freeze merge rules (bootstrap only)** | cert-blocker fixes and quality/test/docs PRs merge; feature and refactor PRs queue until 6.x opens |
 
 Cycle #1 additionally carries the **baseline mandate**: certification testing catches things that worked and then broke; it won't catch things that never worked well. The sweep above means the first label reflects the baseline actually being held to the bar, not grandfathered past it.
@@ -304,36 +332,37 @@ Ordered so that **items 1–3 are enough to label and enforce** the first LTS; t
 
 | # | Item | When | Where |
 |---|---|---|---|
-| 1 | `release-lines.json` (incl. `eras.*.platform` manifests) + schema + CODEOWNERS entry + the status-fields CI check (§8) | Before Jul 27 | This branch |
+| 1 | `release-lines.json` (incl. `eras.*.platform` manifests, per-release `dbImpact`) + schema + CODEOWNERS entry + the status-fields CI check (§8) | Before Jul 27 | This branch |
 | 2 | `publish.yml`: `make_latest: false` on routine releases; cert flow sets certified build as GH latest; `--tag edge` on routine npm publishes | Before Jul 27 | This branch |
 | 3 | `ci/dist-tag-all.mjs` — atomic 233-package tag moves + post-move assertions (+ scratch-scope drill; new-package first-publish edge case) | Before the flip | This branch |
-| 4 | Era-split tooling: expected-version guard, changesets major flow, v6 migration baseline (`/create-new-baseline-migration`), docker tags, stale-comment cleanup | 6.x era open | Follow-up PR |
-| 5 | Line machinery: line-cut script (branch + **band reservation** — sets Edge's base version to the band ceiling) · `publish-lts.yml` · korthout/backport-action + labels · line guard incl. **DDL scanner** + band-ceiling check | Before cycle #2 (backport action + guard sooner if 5.x line needs a patch) | Follow-up PR |
-| 6 | CLI channels: channel resolution, `mj versions`, maintenance/EOL/breaking warnings, `releaseChannel` config | Aug–Sep (GH-latest flag covers the default meanwhile) | Follow-up PR |
-| 7 | MJC: LTS-only catalog policy (now, operational) · `release-lines.json` auto-ingest (later) | MJC team's schedule | **MJC repo — out of scope here** |
-| 8 | `mj migrate` out-of-order upgrade mode + LTS→Edge upgrade test rig | Before cycle #2 | Follow-up PR |
-| 9 | Root `VERSIONING.md` — the human/agent-facing distillation of this doc (incl. §3.2 platform policy) | After blessing | This branch |
+| 4 | Era-split tooling: expected-version guard (incl. prerelease grammar), changesets major flow, v6 migration baseline (`/create-new-baseline-migration`), docker tags, stale-comment cleanup | 6.x era open | Follow-up PR |
+| 5 | **Edge prerelease versioning** (the biggest tooling bet — **mandatory scratch-scope dry run before era open**): permanent changesets pre-mode wiring at 233-package lockstep scale; the scripted pre-exit/enter candidate-cut dance; `mj bump` + installer + version-compare prerelease awareness; verify pre-mode tuple math matches §3.1 intent (non-compounding bumps → next-line tuple) | Before 6.x era open | Follow-up PR |
+| 6 | Line machinery: `publish-lts.yml` · korthout/backport-action + labels · line guard (patch-only + DDL scanner) | Before first post-cert 5.x backport | Follow-up PR |
+| 7 | CLI channels: channel resolution, `mj versions` (+`dbImpact`), maintenance/EOL/breaking warnings, `releaseChannel` config | Aug–Sep (GH-latest flag covers the default meanwhile) | Follow-up PR |
+| 8 | MJC: LTS-only catalog policy (now, operational) · `release-lines.json` auto-ingest (later) | MJC team's schedule | **MJC repo — out of scope here** |
+| 9 | `mj migrate` out-of-order upgrade mode + LTS→Edge upgrade test rig | Before cycle #2 | Follow-up PR |
 | 10 | Open App alignment tooling (§3.2): overrides generation from the era platform manifest · `mj app install`/`link` major-mismatch hard error · `mj doctor` checks (alignment, duplicate `@angular/*`, overrides drift) · linking cache-clear scripting | Aug–Sep, with the app 6.x alignment | Follow-up PR(s) |
+| 11 | Root `VERSIONING.md` — the human/agent-facing distillation of this doc (incl. the §3.1 grammar and §3.2 platform policy) | After blessing | This branch |
 
-**Delivery mechanics:** this document rides the `lts-process` feature branch. After exec blessing, items 1–3 (+9) land on the same branch so the doc and its enforcement merge together; items 4–8 and 10 follow as small focused PRs on the dates above. Item 7 belongs to the MJC team and repo; the per-app version bumps are Appendix C (app repos).
+**Delivery mechanics:** this document rides the `lts-process` feature branch. After exec blessing, items 1–3 (+11) land on the same branch so the doc and its enforcement merge together; items 4–7 and 9–10 follow as small focused PRs on the dates above. Item 8 belongs to the MJC team and repo; the per-app version bumps are Appendix C (app repos).
 
 ## 16. Risks
 
-1. **Process lands inside the runway** (top risk, now with Amith's explicit slack): mitigations are the §14 flexibility, punch-list ordering (1–3 suffice), and treating this doc as the week's primary deliverable.
-2. **Label inflation:** one pressured certification and the label means nothing. Blocking authority is CODEOWNERS-mechanical; overrides are recorded escalations; cycle #1 sets the slip-beats-weak precedent.
-3. **AI-suite reliability as a gate:** flaky gates either block spuriously or get ignored. The gate-3 pass criteria + rerun policy are load-bearing and land before cycle #1.
-4. **Backport tax replaces the freeze tax from cycle #2:** cherry-pick volume hits the cert crew while `next` runs hot. Measured in cycles 2–3; primary input to the December review.
-5. **Stage-env availability:** gate 5 has four UNKNOWN owners today. Unowned, the gate silently degrades. Naming them is a this-week deliverable.
-6. **dist-tag drift:** always `--tag`, assertions, npm 11 runners, scratch-scope drill.
-7. **Flip-day confusion:** `latest` moving to certified will surprise Edge users; comms A.3 and `@edge` documentation land the same day.
-8. **Band-size guess:** 10 minors is a proposal, not a law. Too small and a long-lived line runs out of space for metadata fixes; too large and version numbers look gappy (harmless). Confirm the default (§17) and revisit at the December review.
+1. **Process lands inside the runway** (top risk, with Amith's explicit slack): mitigations are the §14 flexibility, punch-list ordering (1–3 suffice), and treating this doc as the week's primary deliverable.
+2. **The pre-mode bet (new in v1.2):** permanent changesets prerelease mode at 233-package lockstep scale is the design's biggest tooling assumption — changesets' own docs call pre-mode sharp-edged, and the §3.1 tuple math (non-compounding bumps) must be verified, not assumed. Mitigation: item 5's **mandatory scratch-scope dry run before the era open**, with a thin custom version-calc wrapper as the fallback if pre-mode misbehaves. The grammar is the design; changesets is merely the first-choice implementation.
+3. **Label inflation:** one pressured certification and the label means nothing. Blocking authority is CODEOWNERS-mechanical; overrides are recorded escalations; cycle #1 sets the slip-beats-weak precedent.
+4. **AI-suite reliability as a gate:** flaky gates either block spuriously or get ignored. The gate-3 pass criteria + rerun policy are load-bearing and land before cycle #1.
+5. **Backport tax replaces the freeze tax from cycle #2:** cherry-pick volume hits the cert crew while `next` runs hot. Measured in cycles 2–3; primary input to the December review.
+6. **Stage-env availability:** gate 5 has four UNKNOWN owners today. Unowned, the gate silently degrades. Naming them is a this-week deliverable.
+7. **dist-tag drift:** always `--tag`, assertions, npm 11 runners, scratch-scope drill.
+8. **Era-open comms burden:** two simultaneous surprises for Edge users — `latest` now means certified, and Edge versions grew a suffix that semver ranges can't see (range-trackers silently stop updating). Comms A.3 + `@edge` documentation must land the same day, and the era open is the one-time moment to absorb both.
 9. **App-alignment rollout friction:** four app repos change versioning schemes at once (Appendix C), and bizapps-common needs its local checkout reconciled before anyone builds on it. Sequenced with the 6.x era open, owned by app teams.
 
 ## 17. Open Items
 
 1. **Cadence** — §9.1, Amith's call. Everything else in §9.2 adjusts mechanically.
-2. **Reserved-band size** — default 10 proposed (Amith's PR comment); Craig to confirm on-thread; stored per era in `release-lines.json`.
-3. **Name the UNKNOWNs** (§7): build engineer; stage-env owners for CDP, Skip, Izzy, MJC; fresh-install crew. Due before the candidate cut.
+2. **Name the UNKNOWNs** (§7): build engineer; stage-env owners for CDP, Skip, Izzy, MJC; fresh-install crew. Due before the candidate cut.
+3. **Pre-mode dry run** (§15 item 5) — must pass before the 6.x era opens; fallback is a thin custom version-calc step.
 4. **Review-round feedback** — Robert Kihm, John, Johanna Snider comments + the scan group (per Amith on the PR) may reshape sections; fold in before merge.
 5. **Gate-6 minimum person-hours** — set after the bootstrap cycle calibrates what "enough hammering" costs.
 6. **endoflife.date registration + public schedule page** — once cadence stabilizes (post-December review).
@@ -350,7 +379,7 @@ Ordered so that **items 1–3 are enough to label and enforce** the first LTS; t
 >
 > - **Now → 6.x era open:** the quality freeze is in effect. Cert-blocker fixes, quality, test, and docs PRs merge; feature/refactor PRs queue. Point your energy at the core-functionality sweep and the defect backlog.
 > - **~Jul 27:** we cut the first LTS candidate from the current line and run the full certification: AI regression suite, fresh installs, stage upgrades (CDP/Skip/Izzy/MJC), and structured human testing. Issues found get the `cert-blocker` label and jump every queue.
-> - **At the hackathon (target Aug 3):** 6.x opens for new development and the freeze ends — permanently. Future certifications run on branches; `next` never freezes again.
+> - **At the hackathon (target Aug 3):** 6.x opens for new development and the freeze ends — permanently. From 6.x on, Edge releases are versioned as prereleases of the next LTS (`6.1.0-edge.0`, `-edge.1`, …) and certified builds own the normal version numbers. Future certifications run on branches; `next` never freezes again.
 > - **After that, your day-to-day is unchanged.** PRs → `next`, changesets as usual. One new habit: if your merged fix should also reach a certified line, add the `backport lts/<line>` label (there's also a weekly sweep, so nothing falls through silently).
 >
 > The full process doc is in `plans/lts-process.md` (PR #3241). Craig owns certification sign-off; questions → Craig.
@@ -361,17 +390,17 @@ Ordered so that **items 1–3 are enough to label and enforce** the first LTS; t
 >
 > Candidate **<version>** is now under certification (tracking issue #___, gate checklist inside). What this means: `cert-blocker` fixes take priority until certification completes; everything else proceeds as normal[, and `next` is unaffected — regular cycle]. Fresh-install and stage-upgrade owners: your gate requests are in the tracking issue with a 2-business-day turnaround ask. Findings → issues labeled `cert-blocker` (blocks) or noted on the scorecard (doesn't block).
 
-### A.3 To MJ Dev (All Companies) — certification + flip day (send at first certification)
+### A.3 To MJ Dev (All Companies) — certification + the new version grammar (send at first certification / era open)
 
-> **Subject: MemberJunction <version> is our first LTS release — and `latest` now means certified**
+> **Subject: MemberJunction <version> is our first LTS release — and version numbers now tell you the channel**
 >
 > Today we certified **MJ <version>** as our first LTS (Long Term Support) release. LTS builds have passed a documented certification: the full AI UX regression suite, fresh-install testing, upgrade testing against live stage environments, and structured human testing — with a published scorecard.
 >
 > **What changes for you:**
 > - `npm install @memberjunction/*` (and Docker `:latest`, and `mj install`) now resolves to the **newest certified LTS build** — the stable thing, by default.
-> - Want the fast lane? It's now the **Edge channel**: `@memberjunction/*@edge`, `mj install --channel edge`, Docker `:edge`. Same rapid releases as always — just explicitly chosen.
+> - **Version numbers now carry the channel.** Certified builds are plain semver (`6.1.1`). Fast-lane builds are prereleases of the next LTS: `6.2.0-edge.3`. Same rapid releases as always — explicitly marked. If you tracked the fast lane with a semver range, switch to the **Edge channel** explicitly: `@memberjunction/*@edge`, `mj install --channel edge`, Docker `:edge` (ranges intentionally don't match prerelease versions).
 > - Production deployments of MJ-hosted SaaS run **only** on LTS builds from here on.
-> - Support status for every line is machine-readable in `release-lines.json` (and `mj versions`).
+> - Support status for every line is machine-readable in `release-lines.json` (and `mj versions`, including whether a given patch touches the database).
 >
 > Certified line **<line>** is supported per the published schedule; windows only ever extend. Questions → Craig (certification owner).
 
@@ -379,15 +408,16 @@ Ordered so that **items 1–3 are enough to label and enforce** the first LTS; t
 
 | Thing | Convention |
 |---|---|
-| Line branch | `lts/6.20` (bootstrap era line: `lts/5.50`) |
-| Line version territory | Base minor + reserved band (default 10): line 6.20 owns `6.20.x – 6.29.x`; Edge resumes at `6.30.0`. Bootstrap 5.x line owns all remaining 5.x |
-| Backport request | Label `backport lts/6.20` on the merged `next` PR |
+| Version grammar | Normal semver (`6.1.1`) = candidate/LTS only · `6.2.0-edge.N` = Edge (prerelease of the next line) · era 5 keeps classic grammar |
+| Line | Consecutive minors per era: 6.1, 6.2, … Line = its minor, patches only, forever. Bootstrap 5.x line owns all remaining 5.x |
+| Line branch | `lts/6.1` (bootstrap era line: `lts/5.50`) |
+| Backport request | Label `backport lts/6.1` on the merged `next` PR |
 | Blocks certification | Label `cert-blocker` |
-| Data-only line migration | Label `metadata-migration` (CI-verified DDL-free; ships as band minor) |
-| DDL on a line — rarest, security-driven | Label `security-exception` (additive-only, next-first, byte-identical; band minor) |
+| Data-only line migration | Label `metadata-migration` (CI-verified DDL-free; ships as a patch, `dbImpact: metadata`) |
+| DDL on a line — rarest, security-driven | Label `security-exception` (additive-only, next-first, byte-identical; ships as a patch, `dbImpact: schema`) |
 | Considered, not backported | Label `backport-declined` |
-| npm | `latest` = newest certified · `edge` = fast channel · `lts-6.20` = per-line |
-| Docker | `:latest` = certified · `:edge` · `:6.20` |
+| npm | `latest` = newest certified · `edge` = fast channel · `lts-6.1` = per-line |
+| Docker | `:latest` = certified · `:edge` · `:6.1` |
 | Scorecards | `certifications/<version>.md`, linked from the GitHub Release |
 
 ## Appendix C — Open App Alignment Asks (from the 2026-07-24 memo; app-repo work, tracked here)
