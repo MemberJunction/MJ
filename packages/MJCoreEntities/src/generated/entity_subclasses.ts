@@ -66945,6 +66945,33 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
     /** Enable vectorization for this source. Default true */
     EnableVectorization?: boolean;
     /**
+     * Vector-database record-id strategy for this source's chunks. Default 'recordId'.
+     * - 'recordId' (default, recommended): each ContentItemChunk's unique RecordID is used as its
+     *   vector-DB record id. Safe with the soft-delete + PurgeDeletedChunks flow — a re-chunk mints
+     *   new rows with new ids, so a superseded (soft-deleted) chunk and its replacement never share
+     *   a vector id, and purging the old one can't orphan the live chunk's vector.
+     * - 'hash': a deterministic hash of the parent content item id (5.49 EntityDocument parity).
+     *   NOT safe with re-chunking + purge — a replacement chunk reuses the superseded chunk's id,
+     *   so purging the old chunk would delete the live chunk's vector. Use only for sources that
+     *   are never re-chunked or purged.
+     */
+    VectorIDStrategy?: 'hash' | 'recordId';
+    /**
+     * How chunk text + vectors are stored for this source. Default 'alwaysChunk'.
+     * - 'alwaysChunk' (default): every content item gets at least one ContentItemChunk row holding
+     *   its text — even items small enough to fit in a single chunk — and ContentItem.VectorRecordID
+     *   is never set. The ContentItemChunk table is always the single source of truth for vectors.
+     * - 'mixed': items that fit in a single chunk keep their text and vector id on the ContentItem
+     *   (no chunk row); only larger items are split into ContentItemChunk rows.
+     */
+    ChunkTextStorage?: 'mixed' | 'alwaysChunk';
+    /**
+     * Controls what goes into each vector's metadata. Vector-store metadata has real storage +
+     * performance cost, so this lets a source keep it minimal. Falls back to the ContentType's
+     * default, then 'default'.
+     */
+    VectorMetadata?: MJContentSourceEntity_IContentSourceVectorMetadataConfig;
+    /**
      * Lower confidence band (0.0-1.0) that routes a semantic match into the human-in-the-loop
      * `MJ:Tag Suggestions` queue instead of auto-applying or auto-creating. A score `s` is
      * routed as: `s >= TagMatchThreshold` → apply; `SuggestThreshold <= s < TagMatchThreshold`
@@ -67010,6 +67037,62 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * implementation; other source types will follow the same pattern as their knobs grow.
      */
     Website?: MJContentSourceEntity_IContentSourceWebsiteConfiguration;
+}
+
+/**
+ * Controls which keys land in a content vector's metadata. Mirrors the entity-vectorization
+ * pipeline's metadata-control structure (field strategy, per-field overrides, storage-type
+ * coercion, truncation, opt-out toggles), adapted to content-item vectors.
+ */
+export interface MJContentSourceEntity_IContentSourceVectorMetadataConfig {
+    /**
+     * Which ContentItem fields go into metadata. Mirrors the entity pipeline's field strategy.
+     * When UNSET, the standard curated content set is used (the historical default): the identity
+     * keys + ContentSourceID / ContentSourceTypeID + Title / Description / URL + Tags. When set:
+     * - 'all': every eligible ContentItem field (non-PK, non-uniqueidentifier, non-binary,
+     *   non-system) plus the toggle-driven keys below.
+     * - 'include': ONLY the ContentItem fields marked `Included: true` in `Fields` (explicit
+     *   inclusion wins over the eligibility heuristics — a uniqueidentifier / PK / __mj_* field
+     *   can be included by name; only genuinely unstorable binary types are refused).
+     * - 'exclude': all eligible fields EXCEPT those marked `Included: false` in `Fields`.
+     * - 'explicit': EXACTLY the fields in `Fields` — no system keys except `Entity` (always kept so
+     *   content search results stay correctly labeled), and the toggles flip to opt-in (default
+     *   false). Keeps metadata minimal. NOTE: under 'explicit' a search hit's record id is
+     *   recoverable only when VectorIDStrategy='recordId' (the default), where the vector's own id
+     *   is the chunk id; with 'hash' the id would need to be kept explicitly.
+     */
+    FieldStrategy?: 'all' | 'include' | 'exclude' | 'explicit';
+    /** Per-field overrides keyed by ContentItem field name (see {@link MJContentSourceEntity_IContentSourceVectorMetadataFieldConfig}). */
+    Fields?: Record<string, MJContentSourceEntity_IContentSourceVectorMetadataFieldConfig>;
+    /** Global default truncation limit (characters) for large string fields. Default 1000. */
+    DefaultTruncationLimit?: number;
+    /** Include the content entity's icon. Default true under a set strategy; opt-in under 'explicit'. */
+    IncludeEntityIcon?: boolean;
+    /** Include __mj_UpdatedAt for recency sorting. Default true under a set strategy; opt-in under 'explicit'. */
+    IncludeUpdatedAt?: boolean;
+    /** Include the item's Tags array. Default true (and under the curated default); opt-in under 'explicit'. */
+    IncludeTags?: boolean;
+    /**
+     * When true, include the embedded text in metadata under the 'Text' key (which surfaces as the
+     * search snippet). Default false — external hydrators read the authoritative text from the
+     * ContentItem / ContentItemChunk row, so the copy is usually unnecessary storage. Honored under
+     * every strategy (including the curated default).
+     */
+    IncludeText?: boolean;
+}
+
+/** Per-field metadata override, keyed by ContentItem field name. Mirrors the entity pipeline. */
+export interface MJContentSourceEntity_IContentSourceVectorMetadataFieldConfig {
+    /** Include this field under 'include'/'explicit', or exclude it (false) under 'all'/'exclude'. */
+    Included?: boolean;
+    /** Override the truncation limit (characters) for this field. */
+    TruncationLimit?: number;
+    /**
+     * How to store this field's value: 'string' (default, truncated), 'number', 'boolean',
+     * 'epochSeconds' / 'epochMilliseconds' (parse a date to Unix epoch for numeric range filters).
+     * SQL numeric column types store as numbers automatically without setting this.
+     */
+    StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
 }
 
 /**
@@ -67481,6 +67564,62 @@ export interface MJContentTypeEntity_IContentTypeConfiguration {
     ShareTaxonomyWithLLM?: boolean;
     /** Default tag taxonomy mode for sources of this type. Can be overridden per source */
     DefaultTagTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
+    /**
+     * Default vector-database record-id strategy for sources of this type. Overridable per source
+     * via {@link IContentSourceConfiguration.VectorIDStrategy}. Default 'recordId' (the safe,
+     * purge-compatible strategy); 'hash' is legacy parity and unsafe with re-chunk + purge.
+     */
+    VectorIDStrategy?: 'hash' | 'recordId';
+    /**
+     * Default chunk text/vector storage mode for sources of this type. Overridable per source via
+     * {@link IContentSourceConfiguration.ChunkTextStorage}. Default 'alwaysChunk' — every item gets
+     * a ContentItemChunk row and ContentItem.VectorRecordID is never set; 'mixed' keeps
+     * single-chunk items' text/vector on the ContentItem.
+     */
+    ChunkTextStorage?: 'mixed' | 'alwaysChunk';
+    /**
+     * Default vector-metadata configuration for sources of this type. Overridable per source via
+     * {@link IContentSourceConfiguration.VectorMetadata}. Controls how minimal each vector's
+     * metadata is kept.
+     */
+    VectorMetadata?: MJContentTypeEntity_IContentTypeVectorMetadataConfig;
+}
+
+/**
+ * Content-type-level default for vector metadata shape. Structurally identical to
+ * {@link IContentSourceConfiguration.VectorMetadata}; a source's own setting overrides it.
+ */
+export interface MJContentTypeEntity_IContentTypeVectorMetadataConfig {
+    /**
+     * Which ContentItem fields go into metadata (mirrors the entity pipeline). Unset ⇒ the curated
+     * default (identity + ContentSourceID/Type + Title / Description / URL + Tags).
+     * - 'all': every eligible ContentItem field. - 'include': only `Fields` marked Included.
+     * - 'exclude': all eligible except `Fields` marked Included:false. - 'explicit': exactly
+     * `Fields`, no system keys except Entity, toggles opt-in.
+     */
+    FieldStrategy?: 'all' | 'include' | 'exclude' | 'explicit';
+    /** Per-field overrides keyed by ContentItem field name. */
+    Fields?: Record<string, MJContentTypeEntity_IContentTypeVectorMetadataFieldConfig>;
+    /** Global default truncation limit (characters) for large string fields. Default 1000. */
+    DefaultTruncationLimit?: number;
+    /** Include the content entity's icon. Default true under a set strategy; opt-in under 'explicit'. */
+    IncludeEntityIcon?: boolean;
+    /** Include __mj_UpdatedAt for recency sorting. Default true under a set strategy; opt-in under 'explicit'. */
+    IncludeUpdatedAt?: boolean;
+    /** Include the item's Tags array. Default true (and under the curated default); opt-in under 'explicit'. */
+    IncludeTags?: boolean;
+    /** Include the embedded text under the 'Text' key. Default false. Honored under every strategy. */
+    IncludeText?: boolean;
+}
+
+/** Per-field metadata override, keyed by ContentItem field name. Mirrors the entity pipeline. */
+export interface MJContentTypeEntity_IContentTypeVectorMetadataFieldConfig {
+    /** Include this field under 'include'/'explicit', or exclude it (false) under 'all'/'exclude'. */
+    Included?: boolean;
+    /** Override the truncation limit (characters) for this field. */
+    TruncationLimit?: number;
+    /** How to store this field's value ('string' default, 'number', 'boolean', 'epochSeconds', 'epochMilliseconds'). */
+    StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
 }
 
 /**
