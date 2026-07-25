@@ -1234,7 +1234,7 @@ The published image bundles `dist/` of every `@memberjunction/*` package. Trim t
 1. Marking your package's expensive dependencies as `optionalDependencies` or `peerDependenciesMeta`.
 2. Using dynamic `import()` for runtime-discovered modules (the existing `mj test regression` CLI does this for testing-cli).
 
-See the [Dynamic Import policy in CLAUDE.md](../../CLAUDE.md#8-no-dynamic-import-unless-narrowly-justified) for the rules — runtime plugin discovery is one of the allowed exemptions.
+See the [Dynamic Import policy](../../.claude/rules/typescript-style.md) for the rules — runtime plugin discovery is one of the allowed exemptions.
 
 ---
 

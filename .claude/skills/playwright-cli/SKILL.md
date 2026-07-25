@@ -248,12 +248,62 @@ playwright-cli tracing-stop
 playwright-cli close
 ```
 
+## MemberJunction workflow
+
+### Managing dev servers
+
+Start and stop MJAPI and MJExplorer as **background processes yourself** rather than relying on
+the user to manage them externally — this lets you restart them after code changes.
+
+```bash
+# MJAPI — port 4001 (set by GRAPHQL_PORT=4001 in .env)
+# Run as a background task from: packages/MJAPI/
+npm run start
+
+# MJExplorer — port 4201 (set by --port 4201 in its start script)
+# Run as a background task from: packages/MJExplorer/
+npm run start
+```
+
+- Always confirm both servers are healthy before launching the browser (wait for "listening on" / compilation success)
+- After rebuilding a **server-side** package, restart MJAPI to pick up the change
+- After rebuilding an **Angular library**, MJExplorer's Vite dev server auto-detects and reloads the browser — no restart needed
+
+### Persistent auth profile
+
+MJ uses MSAL; authenticate once and the session caches for 30+ days.
+
+```bash
+# First launch — requires a manual login in the headed browser
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+
+# Subsequent launches reuse cached auth automatically
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+```
+
+`.playwright-cli/` is gitignored, so profile data stays local.
+
+### UI bug investigation loop
+
+1. Start MJAPI and MJExplorer as background processes (if not already running)
+2. Wait for both to be ready
+3. Launch the browser with the persistent profile (above)
+4. Authenticate once if needed
+5. `snapshot` to inspect the page; `click` / `type` to interact
+6. `console info` / `console error` to check for issues
+7. Make code fixes, rebuild the affected package — restart MJAPI for server-side changes; Vite auto-reloads for Angular
+8. Re-test to verify
+
 ## Specific tasks
 
-* **Request mocking** [references/request-mocking.md](references/request-mocking.md)
-* **Running Playwright code** [references/running-code.md](references/running-code.md)
-* **Browser session management** [references/session-management.md](references/session-management.md)
-* **Storage state (cookies, localStorage)** [references/storage-state.md](references/storage-state.md)
-* **Test generation** [references/test-generation.md](references/test-generation.md)
-* **Tracing** [references/tracing.md](references/tracing.md)
-* **Video recording** [references/video-recording.md](references/video-recording.md)
+playwright-cli also supports the topics below. This skill originally linked to bundled
+`references/*.md` files for each, but those files were never shipped with it — consult
+`npx playwright-cli --help` or the upstream playwright-cli documentation instead.
+
+* **Request mocking**
+* **Running Playwright code** (`run-code`)
+* **Browser session management**
+* **Storage state** (cookies, localStorage, sessionStorage)
+* **Test generation**
+* **Tracing**
+* **Video recording**
