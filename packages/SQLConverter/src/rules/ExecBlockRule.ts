@@ -125,13 +125,18 @@ export class ExecBlockRule implements IConversionRule {
     const assignments = this.parseSets(setSection);
     const exec = this.parseExec(execSection);
 
-    // A block with no DECLARE section is convertible as long as every argument is
-    // an inline literal — mj-sync emits deletes this way (`EXEC schema.spDeleteX
-    // @ID = '<uuid>'`, issue #3253). A var-referencing argument with no matching
-    // declaration is genuinely broken input and stays a visible skip.
-    const referencesUndeclaredVar =
-      declareVars.length === 0 && exec?.params.some(p => /^p_\w+$/.test(p.valueExpr.trim()));
-    if (!exec || referencesUndeclaredVar) {
+    // A block with no DECLARE section is convertible only when it needs no variables
+    // at all — mj-sync emits deletes that way (`EXEC schema.spDeleteX @ID = '<uuid>'`,
+    // issue #3253). Anything that would reference a p_ variable without a matching
+    // declaration is broken input and must stay a VISIBLE skip: emitting it produces
+    // PL/pgSQL that fails at apply time with `"p_x" is not a known variable`, which is
+    // strictly worse than a skip a reader can see. Two ways that arises, both barred —
+    // a SET assignment (a DECLARE the parser could not read, e.g. a dotted user type)
+    // and a var-referencing EXEC argument.
+    const needsUndeclaredVar =
+      declareVars.length === 0 &&
+      (assignments.length > 0 || (exec?.params.some(p => /^p_\w+$/.test(p.valueExpr.trim())) ?? false));
+    if (!exec || needsUndeclaredVar) {
       return `-- SKIPPED: EXEC block (auto-conversion not supported)\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
     }
 

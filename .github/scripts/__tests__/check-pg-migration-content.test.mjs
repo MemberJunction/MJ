@@ -6,6 +6,8 @@ import { promisify } from 'node:util';
 import {
     countContentStatements,
     classify,
+    deleteParity,
+    deleteParityGaps,
     staleGrandfatherWarnings,
     SOURCE_STATEMENT_FLOOR,
     PG_EMPTY_CEILING,
@@ -142,6 +144,47 @@ describe('staleGrandfatherWarnings', () => {
         expect(warnings).toHaveLength(1);
         expect(warnings[0]).toContain('V1__x');
         expect(warnings[0]).toMatch(/no longer classifies as suspect/i);
+    });
+});
+
+describe('deleteParity — mj-sync record deletions must survive conversion', () => {
+    // The exact v5.45 shape: one deletion in the source, none in the counterpart.
+    // 196 such deletions across 10 releases reached zero committed PG files (issue #3253),
+    // and no automated check noticed, because a missing statement changes size by ~90 bytes.
+    it('flags a source deletion that never reached the counterpart', () => {
+        const ss = `EXEC [\${flyway:defaultSchema}].[spDeleteComponentRegistry] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';`;
+        expect(deleteParity(ss, HEADER)).toEqual({ ss: 1, pg: 0, matched: false });
+    });
+
+    // A gate that cries wolf gets disabled, so everything named spDelete that ISN'T a
+    // record deletion must score zero: CodeGen's maintenance procs take no ID argument,
+    // and CREATE/DROP FUNCTION statements define the sproc rather than call it.
+    it('ignores spDelete names that are not record deletions', () => {
+        const ss = [
+            'EXEC [__mj].[spDeleteUnneededEntityFields];',
+            'CREATE PROCEDURE [__mj].[spDeleteAIAgent] AS BEGIN SET NOCOUNT ON; END;',
+        ].join('\n');
+        const pg = [
+            'DROP FUNCTION IF EXISTS __mj."spDeleteAIAgent"(uuid);',
+            'CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgent"(p_id uuid) RETURNS uuid AS $$ BEGIN RETURN p_id; END; $$;',
+        ].join('\n');
+        expect(deleteParity(ss, pg)).toEqual({ ss: 0, pg: 0, matched: true });
+    });
+
+    it('reports a new gap but lets the immutable historical ones through', () => {
+        const entries = [
+            { stem: 'V202603081507__v5.9.x__Metadata_Sync', ss: 1, pg: 0 },   // shipped, immutable
+            { stem: 'V202608010000__v5.51.x__Metadata_Sync', ss: 3, pg: 2 },  // new — must fail
+            { stem: 'V202608020000__v5.51.x__Other', ss: 4, pg: 4 },          // healthy
+        ];
+        const gaps = deleteParityGaps(entries, ['V202603081507__v5.9.x__Metadata_Sync']);
+        expect(gaps).toEqual([{ stem: 'V202608010000__v5.51.x__Metadata_Sync', ss: 3, pg: 2 }]);
+    });
+
+    it('reports a counterpart that gained a deletion the source never had', () => {
+        // Parity is an equality, not a floor — an EXTRA deletion on the PG side would
+        // remove a row SQL Server keeps, silently diverging the two platforms.
+        expect(deleteParityGaps([{ stem: 'V1__x', ss: 0, pg: 1 }], [])).toHaveLength(1);
     });
 });
 

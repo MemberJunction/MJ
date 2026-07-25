@@ -502,4 +502,21 @@ describe('convertFile (BatchConverter)', () => {
     );
     expect(result.OutputSQL).not.toContain('SKIPPED');
   });
+
+  it('should skip visibly rather than assign to variables it never declared', () => {
+    // Allowing DECLARE-less blocks (for mj-sync deletes) must not extend to blocks that
+    // DO carry SET assignments — those need a DECLARE section for their p_ variables.
+    // A DECLARE whose type the parser cannot read (here a dotted user type) yields zero
+    // declared vars, and emitting the SETs anyway produces PL/pgSQL that fails at apply
+    // time with `"p_id_a" is not a known variable`. A visible skip is the honest output.
+    const sql = [
+      'DECLARE @ID_a dbo.MyUuidType',
+      'SET',
+      "  @ID_a = '411AA5E8-7F8E-4092-B6B1-9566847E2A3A'",
+      "EXEC [__mj].[spCreateAPIScope] @ID = '411AA5E8-7F8E-4092-B6B1-9566847E2A3A', @Name = N'search';",
+    ].join('\n');
+    const result = convertFile(makeConfig(sql));
+    expect(result.OutputSQL).toContain('SKIPPED');
+    expect(result.OutputSQL).not.toMatch(/^\s*p_\w+ :=/m);
+  });
 });

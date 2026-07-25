@@ -46,7 +46,8 @@
  *     instead of the committed migration silently changing.
  */
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const V45_SOURCE = 'migrations/v5/V202607071019__v5.45.x__Metadata_Sync.sql';
 const V45_TIMESTAMP = '202607071019';
@@ -54,7 +55,12 @@ const OUTPUT_DEFAULT = 'migrations-pg/v5/V202607241200__v5.50.x__Reseed_v545_Met
 
 const EXPECTED = { creates: 161, updatesKept: 13, updatesDropped: 20, deletes: 1 };
 
-main();
+// Guarded so the module can be IMPORTED without executing — `findSupersededCreates` is
+// exported for unit tests, and without this guard a bare `import` would run the whole
+// generation (and process.exit) before any test could call it.
+const invokedDirectly =
+  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) main();
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -64,6 +70,8 @@ function main() {
   const blocks = parseConvertedBlocks(convertedText);
   const supersededByLater = collectLaterSyncTargets();
   const v45UpdateFields = collectUpdateFieldSets(v45SourceText);
+
+  assertNoSupersededCreates(blocks, supersededByLater);
 
   const out = [];
   const dropped = [];
@@ -174,6 +182,47 @@ function splitSsBlocks(text) {
 /** Names of the fields an mj-sync SS block assigns (`@Field_ab12cd34 = …`). */
 function fieldSet(block) {
   return new Set([...block.matchAll(/@(\w+?)_[0-9a-f]{8}\s*=/g)].map((m) => m[1]));
+}
+
+/**
+ * Creates whose row a LATER release's sync also touched — every one is unsafe to reseed.
+ *
+ * The update path drops superseded rows so v5.45's older values never overwrite newer
+ * state. A CREATE has the same hazard with no way to resolve it: on a gapped database the
+ * row was absent when the later sync ran, and PostgreSQL's generated spUpdateX silently
+ * no-ops on a missing row (GET DIAGNOSTICS ROW_COUNT = 0 -> RETURN), so that update
+ * vanished without a trace. Creating the row now from v5.45's values would make the loss
+ * permanent and invisible. There is no correct automatic fix — the values would have to be
+ * merged by hand — so this reports and the caller refuses to generate.
+ *
+ * Currently empty for all 161 creates (verified against v5.46-v5.49), which is exactly why
+ * it must be asserted rather than assumed: nothing else would notice if that changed.
+ *
+ * @param {Array<{verb:string, entity:string, id:string}>} blocks
+ * @param {Map<string,{file:string}>} supersededByLater keyed "Entity:ID"
+ * @returns {Array<{entity:string, id:string, file:string}>}
+ */
+export function findSupersededCreates(blocks, supersededByLater) {
+  const offenders = [];
+  for (const block of blocks) {
+    if (block.verb !== 'Create') continue;
+    const later = supersededByLater.get(`${block.entity}:${block.id}`);
+    if (later) offenders.push({ entity: block.entity, id: block.id, file: later.file });
+  }
+  return offenders;
+}
+
+/** Refuse to generate when any create would overwrite newer state (see above). */
+function assertNoSupersededCreates(blocks, supersededByLater) {
+  const offenders = findSupersededCreates(blocks, supersededByLater);
+  if (offenders.length === 0) return;
+  fail(
+    `cannot reseed ${offenders.length} create(s) — a later release's sync already touched ` +
+      `the same row, so seeding v5.45's values would overwrite newer state that PostgreSQL's ` +
+      `spUpdate silently skipped on gapped databases:\n` +
+      offenders.map((o) => `  ${o.entity} ${o.id} (re-touched by ${o.file})`).join('\n') +
+      `\nMerge the newer values into the reseed by hand before regenerating.`
+  );
 }
 
 /**

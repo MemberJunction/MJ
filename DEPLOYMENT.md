@@ -530,15 +530,14 @@ for f in migrations/v5/V*.sql; do
 done
 ```
 
-**Also check DELETE parity in the metadata sync specifically.** mj-sync emits record deletions as bare `EXEC …spDelete… @ID = '…'` batches with no `DECLARE` block. The legacy converter (the mandated path for `*_Metadata_Sync.sql`) used to silently skip these — they vanished into the anonymous "skipped" count while the run reported OK, which is how v5.45's `spDeleteComponentRegistry` was dropped (issue #3253). It was never the only one: **196 such deletions across 10 metadata syncs (v5.9 through v5.45) reached zero committed PG counterparts.** The converter now converts all 196 (see `StatementClassifier` "bare EXEC CRUD sp calls" and `ExecBlockRule.splitIntoBlocks`), but size-diffing still can't catch a single missing statement, so keep counting them directly as the cheap release-time proof:
+**Also check DELETE parity in the metadata sync specifically.** mj-sync emits record deletions as bare `EXEC …spDelete… @ID = '…'` batches with no `DECLARE` block. The legacy converter (the mandated path for `*_Metadata_Sync.sql`) used to silently skip these — they vanished into the anonymous "skipped" count while the run reported OK, which is how v5.45's `spDeleteComponentRegistry` was dropped (issue #3253). It was never the only one: **196 such deletions across 10 metadata syncs (v5.9 through v5.45) reached zero committed PG counterparts.** The converter now converts all 196 (see `StatementClassifier` "bare EXEC CRUD sp calls" and `ExecBlockRule.splitIntoBlocks`), and **you no longer check this by hand** — size-diffing can't see one missing statement, so `scripts/check-pg-migration-content.mjs` counts the deletions on both sides and fails the build when they disagree. It runs in CI (`pg-migrations.yml`) and locally:
 
 ```bash
-# Counts must match between the SS metadata sync and its PG conversion
-grep -c "spDelete" migrations/v5/V*__v5.XX.x__Metadata_Sync.sql
-grep -c "spDelete" migrations-pg/v5/V*__v5.XX.x__Metadata_Sync.pg.sql
+node scripts/check-pg-migration-content.mjs
+# → PG content OK — … Delete parity OK — 10 pair(s) with deletions, 10 grandfathered, 0 mismatched.
 ```
 
-If they differ, hand-port the missing delete(s) as guarded `DO` blocks (`IF EXISTS (SELECT 1 FROM __mj."<Table>" WHERE "ID" = '…') THEN PERFORM __mj."spDelete<Table>"(p_ID := '…'); END IF;` — see the synthesized delete in `V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql` for the exact shape).
+The 10 historical gaps are grandfathered in `DELETE_PARITY_GRANDFATHERED` because committed `.pg.sql` files are Flyway-checksummed and immutable. **A new release must have parity** — do not add an entry to silence a failure; a new gap means the converter dropped a statement. If a deletion genuinely doesn't apply to PostgreSQL, hand-port it as a guarded `DO` block (`IF EXISTS (SELECT 1 FROM __mj."<Table>" WHERE "ID" = '…') THEN PERFORM __mj."spDelete<Table>"(p_ID := '…'); END IF;` — see the synthesized delete in `V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql` for the exact shape) and say why in the migration.
 
 **An empty counterpart is sometimes correct** — do not blindly treat every hit as a defect. Two legitimate cases:
 
