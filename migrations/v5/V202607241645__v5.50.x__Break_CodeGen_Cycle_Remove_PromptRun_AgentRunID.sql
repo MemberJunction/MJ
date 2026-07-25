@@ -2140,11 +2140,11 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedB
 -----               BASE TABLE:  AIPromptRun
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-IF OBJECT_ID('[__mj].[vwAIPromptRuns]', 'V') IS NOT NULL
-    DROP VIEW [__mj].[vwAIPromptRuns];
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwAIPromptRuns]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwAIPromptRuns];
 GO
 
-CREATE VIEW [__mj].[vwAIPromptRuns]
+CREATE VIEW [${flyway:defaultSchema}].[vwAIPromptRuns]
 AS
 SELECT
     a.*,
@@ -2162,57 +2162,57 @@ SELECT
     root_ParentID.RootID AS [RootParentID],
     root_RerunFromPromptRunID.RootID AS [RootRerunFromPromptRunID]
 FROM
-    [__mj].[AIPromptRun] AS a
+    [${flyway:defaultSchema}].[AIPromptRun] AS a
 INNER JOIN
-    [__mj].[AIPrompt] AS MJAIPrompt_PromptID
+    [${flyway:defaultSchema}].[AIPrompt] AS MJAIPrompt_PromptID
   ON
     [a].[PromptID] = MJAIPrompt_PromptID.[ID]
 INNER JOIN
-    [__mj].[AIModel] AS MJAIModel_ModelID
+    [${flyway:defaultSchema}].[AIModel] AS MJAIModel_ModelID
   ON
     [a].[ModelID] = MJAIModel_ModelID.[ID]
 INNER JOIN
-    [__mj].[AIVendor] AS MJAIVendor_VendorID
+    [${flyway:defaultSchema}].[AIVendor] AS MJAIVendor_VendorID
   ON
     [a].[VendorID] = MJAIVendor_VendorID.[ID]
 LEFT OUTER JOIN
-    [__mj].[AIAgent] AS MJAIAgent_AgentID
+    [${flyway:defaultSchema}].[AIAgent] AS MJAIAgent_AgentID
   ON
     [a].[AgentID] = MJAIAgent_AgentID.[ID]
 LEFT OUTER JOIN
-    [__mj].[AIConfiguration] AS MJAIConfiguration_ConfigurationID
+    [${flyway:defaultSchema}].[AIConfiguration] AS MJAIConfiguration_ConfigurationID
   ON
     [a].[ConfigurationID] = MJAIConfiguration_ConfigurationID.[ID]
 LEFT OUTER JOIN
-    [__mj].[AIPromptRun] AS MJAIPromptRun_ParentID
+    [${flyway:defaultSchema}].[AIPromptRun] AS MJAIPromptRun_ParentID
   ON
     [a].[ParentID] = MJAIPromptRun_ParentID.[ID]
 LEFT OUTER JOIN
-    [__mj].[AIModel] AS MJAIModel_OriginalModelID
+    [${flyway:defaultSchema}].[AIModel] AS MJAIModel_OriginalModelID
   ON
     [a].[OriginalModelID] = MJAIModel_OriginalModelID.[ID]
 LEFT OUTER JOIN
-    [__mj].[AIPromptRun] AS MJAIPromptRun_RerunFromPromptRunID
+    [${flyway:defaultSchema}].[AIPromptRun] AS MJAIPromptRun_RerunFromPromptRunID
   ON
     [a].[RerunFromPromptRunID] = MJAIPromptRun_RerunFromPromptRunID.[ID]
 LEFT OUTER JOIN
-    [__mj].[AIPrompt] AS MJAIPrompt_JudgeID
+    [${flyway:defaultSchema}].[AIPrompt] AS MJAIPrompt_JudgeID
   ON
     [a].[JudgeID] = MJAIPrompt_JudgeID.[ID]
 LEFT OUTER JOIN
-    [__mj].[AIPrompt] AS MJAIPrompt_ChildPromptID
+    [${flyway:defaultSchema}].[AIPrompt] AS MJAIPrompt_ChildPromptID
   ON
     [a].[ChildPromptID] = MJAIPrompt_ChildPromptID.[ID]
 LEFT OUTER JOIN
-    [__mj].[vwTestRuns] AS MJTestRun_TestRunID
+    [${flyway:defaultSchema}].[vwTestRuns] AS MJTestRun_TestRunID
   ON
     [a].[TestRunID] = MJTestRun_TestRunID.[ID]
 OUTER APPLY
-    [__mj].[fnAIPromptRunParentID_GetRootID]([a].[ID], [a].[ParentID]) AS root_ParentID
+    [${flyway:defaultSchema}].[fnAIPromptRunParentID_GetRootID]([a].[ID], [a].[ParentID]) AS root_ParentID
 OUTER APPLY
-    [__mj].[fnAIPromptRunRerunFromPromptRunID_GetRootID]([a].[ID], [a].[RerunFromPromptRunID]) AS root_RerunFromPromptRunID
+    [${flyway:defaultSchema}].[fnAIPromptRunRerunFromPromptRunID_GetRootID]([a].[ID], [a].[RerunFromPromptRunID]) AS root_RerunFromPromptRunID
 GO
-GRANT SELECT ON [__mj].[vwAIPromptRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration]-----------------------------------------------------------------
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIPromptRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integration]-----------------------------------------------------------------
 -- SQL Code Generation
 -- Entity: MJ: Conversation Details
 -- Item: vwConversationDetails
@@ -2227,11 +2227,11 @@ GRANT SELECT ON [__mj].[vwAIPromptRuns] TO [cdp_UI], [cdp_Developer], [cdp_Integ
 -----               BASE TABLE:  ConversationDetail
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-IF OBJECT_ID('[__mj].[vwConversationDetails]', 'V') IS NOT NULL
-    DROP VIEW [__mj].[vwConversationDetails];
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwConversationDetails]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwConversationDetails];
 GO
 
-CREATE VIEW [__mj].[vwConversationDetails]
+CREATE VIEW [${flyway:defaultSchema}].[vwConversationDetails]
 AS
 SELECT
     c.*,
@@ -2244,39 +2244,39 @@ SELECT
     MJTestRun_TestRunID.[Test] AS [TestRun],
     root_ParentID.RootID AS [RootParentID]
 FROM
-    [__mj].[ConversationDetail] AS c
+    [${flyway:defaultSchema}].[ConversationDetail] AS c
 INNER JOIN
-    [__mj].[Conversation] AS MJConversation_ConversationID
+    [${flyway:defaultSchema}].[Conversation] AS MJConversation_ConversationID
   ON
     [c].[ConversationID] = MJConversation_ConversationID.[ID]
 LEFT OUTER JOIN
-    [__mj].[User] AS MJUser_UserID
+    [${flyway:defaultSchema}].[User] AS MJUser_UserID
   ON
     [c].[UserID] = MJUser_UserID.[ID]
 LEFT OUTER JOIN
-    [__mj].[ConversationArtifact] AS MJConversationArtifact_ArtifactID
+    [${flyway:defaultSchema}].[ConversationArtifact] AS MJConversationArtifact_ArtifactID
   ON
     [c].[ArtifactID] = MJConversationArtifact_ArtifactID.[ID]
 LEFT OUTER JOIN
-    [__mj].[vwConversationArtifactVersions] AS MJConversationArtifactVersion_ArtifactVersionID
+    [${flyway:defaultSchema}].[vwConversationArtifactVersions] AS MJConversationArtifactVersion_ArtifactVersionID
   ON
     [c].[ArtifactVersionID] = MJConversationArtifactVersion_ArtifactVersionID.[ID]
 LEFT OUTER JOIN
-    [__mj].[ConversationDetail] AS MJConversationDetail_ParentID
+    [${flyway:defaultSchema}].[ConversationDetail] AS MJConversationDetail_ParentID
   ON
     [c].[ParentID] = MJConversationDetail_ParentID.[ID]
 LEFT OUTER JOIN
-    [__mj].[AIAgent] AS MJAIAgent_AgentID
+    [${flyway:defaultSchema}].[AIAgent] AS MJAIAgent_AgentID
   ON
     [c].[AgentID] = MJAIAgent_AgentID.[ID]
 LEFT OUTER JOIN
-    [__mj].[vwTestRuns] AS MJTestRun_TestRunID
+    [${flyway:defaultSchema}].[vwTestRuns] AS MJTestRun_TestRunID
   ON
     [c].[TestRunID] = MJTestRun_TestRunID.[ID]
 OUTER APPLY
-    [__mj].[fnConversationDetailParentID_GetRootID]([c].[ID], [c].[ParentID]) AS root_ParentID
+    [${flyway:defaultSchema}].[fnConversationDetailParentID_GetRootID]([c].[ID], [c].[ParentID]) AS root_ParentID
 GO
-GRANT SELECT ON [__mj].[vwConversationDetails] TO [cdp_Developer], [cdp_UI], [cdp_Integration]-----------------------------------------------------------------
+GRANT SELECT ON [${flyway:defaultSchema}].[vwConversationDetails] TO [cdp_Developer], [cdp_UI], [cdp_Integration]-----------------------------------------------------------------
 -- SQL Code Generation
 -- Entity: MJ: AI Prompt Runs
 -- Item: spCreateAIPromptRun
@@ -2288,11 +2288,11 @@ GRANT SELECT ON [__mj].[vwConversationDetails] TO [cdp_Developer], [cdp_UI], [cd
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR AIPromptRun
 ------------------------------------------------------------
-IF OBJECT_ID('[__mj].[spCreateAIPromptRun]', 'P') IS NOT NULL
-    DROP PROCEDURE [__mj].[spCreateAIPromptRun];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateAIPromptRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateAIPromptRun];
 GO
 
-CREATE PROCEDURE [__mj].[spCreateAIPromptRun]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIPromptRun]
     @ID uniqueidentifier = NULL,
     @PromptID uniqueidentifier,
     @ModelID uniqueidentifier,
@@ -2461,7 +2461,7 @@ BEGIN
     IF @ID IS NOT NULL
     BEGIN
         -- User provided a value, use it
-        INSERT INTO [__mj].[AIPromptRun]
+        INSERT INTO [${flyway:defaultSchema}].[AIPromptRun]
             (
                 [ID],
                 [PromptID],
@@ -2644,7 +2644,7 @@ BEGIN
     ELSE
     BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [__mj].[AIPromptRun]
+        INSERT INTO [${flyway:defaultSchema}].[AIPromptRun]
             (
                 [PromptID],
                 [ModelID],
@@ -2823,10 +2823,10 @@ BEGIN
             )
     END
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwAIPromptRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [${flyway:defaultSchema}].[vwAIPromptRuns] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
-GRANT EXECUTE ON [__mj].[spCreateAIPromptRun] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIPromptRun] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
     -----------------------------------------------------------------
 -- SQL Code Generation
 -- Entity: MJ: AI Prompt Runs
@@ -2839,11 +2839,11 @@ GRANT EXECUTE ON [__mj].[spCreateAIPromptRun] TO [cdp_UI], [cdp_Developer], [cdp
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR AIPromptRun
 ------------------------------------------------------------
-IF OBJECT_ID('[__mj].[spUpdateAIPromptRun]', 'P') IS NOT NULL
-    DROP PROCEDURE [__mj].[spUpdateAIPromptRun];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateAIPromptRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateAIPromptRun];
 GO
 
-CREATE PROCEDURE [__mj].[spUpdateAIPromptRun]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIPromptRun]
     @ID uniqueidentifier,
     @PromptID uniqueidentifier = NULL,
     @ModelID uniqueidentifier = NULL,
@@ -3008,7 +3008,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [__mj].[AIPromptRun]
+        [${flyway:defaultSchema}].[AIPromptRun]
     SET
         [PromptID] = ISNULL(@PromptID, [PromptID]),
         [ModelID] = ISNULL(@ModelID, [ModelID]),
@@ -3101,40 +3101,40 @@ BEGIN
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [__mj].[vwAIPromptRuns] WHERE 1=0
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAIPromptRuns] WHERE 1=0
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
         SELECT
                                         *
                                     FROM
-                                        [__mj].[vwAIPromptRuns]
+                                        [${flyway:defaultSchema}].[vwAIPromptRuns]
                                     WHERE
                                         [ID] = @ID
                                     
 END
 GO
 
-GRANT EXECUTE ON [__mj].[spUpdateAIPromptRun] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIPromptRun] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
 GO
 
 ------------------------------------------------------------
 ----- TRIGGER FOR __mj_UpdatedAt field for the AIPromptRun table
 ------------------------------------------------------------
-IF OBJECT_ID('[__mj].[trgUpdateAIPromptRun]', 'TR') IS NOT NULL
-    DROP TRIGGER [__mj].[trgUpdateAIPromptRun];
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateAIPromptRun]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateAIPromptRun];
 GO
-CREATE TRIGGER [__mj].trgUpdateAIPromptRun
-ON [__mj].[AIPromptRun]
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIPromptRun
+ON [${flyway:defaultSchema}].[AIPromptRun]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [__mj].[AIPromptRun]
+        [${flyway:defaultSchema}].[AIPromptRun]
     SET
         __mj_UpdatedAt = GETUTCDATE()
     FROM
-        [__mj].[AIPromptRun] AS _organicTable
+        [${flyway:defaultSchema}].[AIPromptRun] AS _organicTable
     INNER JOIN
         INSERTED AS I ON
         _organicTable.[ID] = I.[ID];
@@ -3152,11 +3152,11 @@ GO
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ConversationDetail
 ------------------------------------------------------------
-IF OBJECT_ID('[__mj].[spCreateConversationDetail]', 'P') IS NOT NULL
-    DROP PROCEDURE [__mj].[spCreateConversationDetail];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateConversationDetail]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateConversationDetail];
 GO
 
-CREATE PROCEDURE [__mj].[spCreateConversationDetail]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateConversationDetail]
     @ID uniqueidentifier = NULL,
     @ConversationID uniqueidentifier,
     @ExternalID_Clear bit = 0,
@@ -3217,7 +3217,7 @@ BEGIN
     IF @ID IS NOT NULL
     BEGIN
         -- User provided a value, use it
-        INSERT INTO [__mj].[ConversationDetail]
+        INSERT INTO [${flyway:defaultSchema}].[ConversationDetail]
             (
                 [ID],
                 [ConversationID],
@@ -3288,7 +3288,7 @@ BEGIN
     ELSE
     BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [__mj].[ConversationDetail]
+        INSERT INTO [${flyway:defaultSchema}].[ConversationDetail]
             (
                 [ConversationID],
                 [ExternalID],
@@ -3355,10 +3355,10 @@ BEGIN
             )
     END
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].[vwConversationDetails] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [${flyway:defaultSchema}].[vwConversationDetails] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
-GRANT EXECUTE ON [__mj].[spCreateConversationDetail] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversationDetail] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
     -----------------------------------------------------------------
 -- SQL Code Generation
 -- Entity: MJ: Conversation Details
@@ -3371,11 +3371,11 @@ GRANT EXECUTE ON [__mj].[spCreateConversationDetail] TO [cdp_Developer], [cdp_UI
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ConversationDetail
 ------------------------------------------------------------
-IF OBJECT_ID('[__mj].[spUpdateConversationDetail]', 'P') IS NOT NULL
-    DROP PROCEDURE [__mj].[spUpdateConversationDetail];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateConversationDetail]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateConversationDetail];
 GO
 
-CREATE PROCEDURE [__mj].[spUpdateConversationDetail]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateConversationDetail]
     @ID uniqueidentifier,
     @ConversationID uniqueidentifier = NULL,
     @ExternalID_Clear bit = 0,
@@ -3432,7 +3432,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [__mj].[ConversationDetail]
+        [${flyway:defaultSchema}].[ConversationDetail]
     SET
         [ConversationID] = ISNULL(@ConversationID, [ConversationID]),
         [ExternalID] = CASE WHEN @ExternalID_Clear = 1 THEN NULL ELSE ISNULL(@ExternalID, [ExternalID]) END,
@@ -3469,40 +3469,40 @@ BEGIN
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [__mj].[vwConversationDetails] WHERE 1=0
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwConversationDetails] WHERE 1=0
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
         SELECT
                                         *
                                     FROM
-                                        [__mj].[vwConversationDetails]
+                                        [${flyway:defaultSchema}].[vwConversationDetails]
                                     WHERE
                                         [ID] = @ID
                                     
 END
 GO
 
-GRANT EXECUTE ON [__mj].[spUpdateConversationDetail] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversationDetail] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
 GO
 
 ------------------------------------------------------------
 ----- TRIGGER FOR __mj_UpdatedAt field for the ConversationDetail table
 ------------------------------------------------------------
-IF OBJECT_ID('[__mj].[trgUpdateConversationDetail]', 'TR') IS NOT NULL
-    DROP TRIGGER [__mj].[trgUpdateConversationDetail];
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateConversationDetail]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateConversationDetail];
 GO
-CREATE TRIGGER [__mj].trgUpdateConversationDetail
-ON [__mj].[ConversationDetail]
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateConversationDetail
+ON [${flyway:defaultSchema}].[ConversationDetail]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [__mj].[ConversationDetail]
+        [${flyway:defaultSchema}].[ConversationDetail]
     SET
         __mj_UpdatedAt = GETUTCDATE()
     FROM
-        [__mj].[ConversationDetail] AS _organicTable
+        [${flyway:defaultSchema}].[ConversationDetail] AS _organicTable
     INNER JOIN
         INSERTED AS I ON
         _organicTable.[ID] = I.[ID];
