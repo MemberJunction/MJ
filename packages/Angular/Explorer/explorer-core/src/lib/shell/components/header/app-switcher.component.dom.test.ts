@@ -187,6 +187,15 @@ describe('AppSwitcherComponent (DOM)', () => {
     expect(current).toEqual(['Marketing']);
   });
 
+  it('Enter while filtering opens the top result (the footer advertises "↵ open")', () => {
+    const fixture = render();
+    const selected = capture(fixture.componentInstance.appSelected);
+    openLauncher(fixture);
+    typeFilter(fixture, 'a'); // Matches multiple apps — Sales first
+    pressKey(fixture, 'Enter');
+    expect(selected).toEqual(['a1']);
+  });
+
   it('Escape clears an active filter first, then closes the launcher', () => {
     const fixture = render();
     openLauncher(fixture);

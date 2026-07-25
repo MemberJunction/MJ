@@ -196,7 +196,8 @@
   position: relative; /* Anchor for the hover-reveal action cluster */
 }
 
-.app-item-content:hover {
+.app-item-content:hover,
+.app-item-content:focus-within {
   border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
   background: var(--mj-bg-surface-hover);
 }
@@ -279,30 +280,38 @@
   pointer-events: auto;
 }
 
-
-.app-actions .mj-btn-ghost {
-  background: transparent;
-  color: var(--mj-text-secondary);
+/* Touch devices have no hover: keep the actions permanently visible and in
+   the normal flex flow (the hover-reveal overlay would be unreachable, and
+   HTML5 drag reorder doesn't work on touch — buttons are the only reorder
+   path there). */
+@media (hover: none) {
+  .app-actions {
+    position: static;
+    transform: none;
+    padding-left: 0;
+    background: none;
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
-.app-actions .mj-btn-ghost:hover:not(:disabled) {
-  background: var(--mj-bg-surface-hover);
-  color: var(--mj-text-primary);
-}
 
-.app-actions .mj-btn-ghost:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.app-actions .mj-btn-sm {
+/* Compact icon-square sizing for the row actions. Wrapper-scoped element
+   selector per the mjButton rule (never override .mj-btn classes; the old
+   single-dash .mj-btn-ghost/-sm/-danger selectors here matched nothing the
+   directive emits and were dead). */
+.app-actions > button {
   width: 1.75rem;
   height: 1.75rem;
+  min-width: 0;
   padding: 0;
   font-size: 0.8rem;
+  justify-content: center;
 }
 
-.app-actions .mj-btn-danger:hover:not(:disabled) {
+/* Remove is a quiet flat button that turns danger-tinted on hover — a solid
+   red button appearing on every row hover is too loud for a tertiary action */
+.app-actions > .remove-btn:hover:not(:disabled) {
   background: var(--mj-status-error-bg);
   color: var(--mj-status-error);
 }
@@ -361,7 +370,7 @@
   display: none;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   /* Swap layouts */
   .desktop-only {
     display: none !important;

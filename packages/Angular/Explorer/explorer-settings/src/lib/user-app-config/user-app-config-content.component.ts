@@ -407,7 +407,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
 
     const saved = await userApp.Save();
     if (!saved) {
-      throw new Error(`Failed to update UserApplication for ${item.app.Name}: ${userApp.LatestResult}`);
+      throw new Error(`Failed to update UserApplication for ${item.app.Name}: ${userApp.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
 
     item.isDirty = false;
@@ -425,7 +425,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
 
     const saved = await userApp.Save();
     if (!saved) {
-      throw new Error(`Failed to create UserApplication for ${item.app.Name}: ${userApp.LatestResult}`);
+      throw new Error(`Failed to create UserApplication for ${item.app.Name}: ${userApp.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
 
     item.userAppId = userApp.ID;

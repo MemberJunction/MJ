@@ -51,9 +51,11 @@
   outline-offset: 2px;
 }
 /* Active = brand-primary everywhere; the app's metadata color is an identity
-   accent (icon glyphs), never a state color. */
+   accent (icon glyphs), never a state color. Shared active-tint recipe:
+   color-mix(in srgb, var(--mj-brand-primary) 10%, transparent) — keep in sync
+   across nav pills, pinned app buttons, launcher cards, and omnibar rows. */
 .nav-list .nav-item.active {
-  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   color: var(--mj-brand-primary);
 }
 .nav-list .nav-item.active i {
@@ -172,7 +174,8 @@
   outline-offset: -2px;
 }
 .nav-more-item.active {
-  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
+  /* Shared active-tint recipe */
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   color: var(--mj-brand-primary);
 }
 .nav-more-item .badge {
@@ -217,6 +220,12 @@
 @keyframes nav-skeleton-pulse {
   0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-skeleton-pill {
+    animation: none;
+    opacity: 0.7;
+  }
 }
 
 /* Mobile drawer vertical layout */

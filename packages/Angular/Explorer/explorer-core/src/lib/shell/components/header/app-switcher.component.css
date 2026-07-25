@@ -53,18 +53,17 @@
   color: var(--mj-text-muted);
 }
 
-/* ---- Launcher overlay ---- */
-/* Whole-screen scrim (matches the omnibar): the header dims behind the
-   launcher for full modal focus. */
-.launcher-scrim {
-  position: fixed;
-  inset: 0;
-  background: var(--mj-bg-overlay);
-  z-index: 9999;
-  animation: launcher-fade-in var(--mj-transition-fast);
-}
-
+/* ---- Launcher overlay ----
+   The panel is a native <dialog> opened with showModal(): it renders in the
+   browser TOP LAYER (above every app stacking context, incl. the header's
+   z-index:500 context, the chat FAB, and toasts), the page behind it is
+   inert, and the whole-screen scrim is the dialog's ::backdrop. */
 .launcher-panel {
+  /* Reset dialog UA defaults, then apply the command-surface spec */
+  padding: 0;
+  margin: 0;
+  inset: unset;
+  max-width: none;
   position: fixed;
   top: calc(60px + var(--mj-connectivity-banner-height, 0px) + var(--mj-space-6));
   left: 50%;
@@ -72,14 +71,20 @@
   width: min(880px, calc(100vw - var(--mj-space-12)));
   max-height: calc(100vh - 60px - var(--mj-connectivity-banner-height, 0px) - var(--mj-space-12));
   background: var(--mj-bg-surface-elevated);
+  color: inherit;
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-lg);
   box-shadow: var(--mj-shadow-xl);
-  display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: 10000;
   animation: launcher-pop .13s ease-out;
+}
+.launcher-panel[open] {
+  display: flex;
+}
+.launcher-panel::backdrop {
+  background: var(--mj-bg-overlay);
+  animation: launcher-fade-in var(--mj-transition-fast);
 }
 
 @keyframes launcher-fade-in {
@@ -204,6 +209,28 @@
   min-height: 0;
   overflow: hidden;
 }
+/* Inline unsaved-changes bar: lives inside the panel because a body-appended
+   confirm dialog would sit beneath (and inert to) the top layer. */
+.launcher-discard-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2-5);
+  margin: var(--mj-space-2) var(--mj-space-4) 0;
+  padding: var(--mj-space-2) var(--mj-space-3);
+  background: var(--mj-status-warning-bg);
+  border: 1px solid var(--mj-status-warning-border);
+  border-radius: var(--mj-radius-md);
+  flex-shrink: 0;
+}
+.launcher-discard-bar i {
+  color: var(--mj-status-warning);
+}
+.launcher-discard-bar .discard-msg {
+  flex: 1;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-status-warning-text);
+}
 
 /* ---- Scrollable card area ---- */
 .launcher-scroll {
@@ -256,7 +283,8 @@
   outline-offset: -1px;
 }
 .app-card.active {
-  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  /* Shared active-tint recipe */
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, transparent);
 }
 .app-card.loading {
@@ -421,8 +449,8 @@
 
 /* ---- Reduced motion ---- */
 @media (prefers-reduced-motion: reduce) {
-  .launcher-scrim,
-  .launcher-panel {
+  .launcher-panel,
+  .launcher-panel::backdrop {
     animation: none;
   }
   .app-card,

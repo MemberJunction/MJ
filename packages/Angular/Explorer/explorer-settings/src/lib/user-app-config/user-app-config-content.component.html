@@ -145,7 +145,8 @@
                           <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
                         </button>
                         <button
-                          mjButton variant="danger" size="sm"
+                          mjButton variant="flat" size="sm"
+                          class="remove-btn"
                           (click)="RemoveApp(item); $event.stopPropagation()"
                           title="Remove from your apps"
                           [attr.aria-label]="'Remove ' + item.app.Name"

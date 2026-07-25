@@ -20,18 +20,25 @@
   </div>
 
   @if (showDropdown) {
-    <div class="launcher-scrim" (click)="CloseLauncher()" aria-hidden="true"></div>
-    <div class="launcher-panel"
+    <!-- Native <dialog> + showModal(): lives in the browser TOP LAYER (above
+         every app stacking context — chat FAB, toasts), background is inert
+         (real focus trap), and focus restores to the trigger on close. The
+         backdrop is ::backdrop; clicks on it arrive as clicks on the dialog
+         element itself (onDialogClick). -->
+    <dialog class="launcher-panel"
       #panel
       role="dialog"
       aria-modal="true"
-      aria-label="Application launcher"
+      [attr.aria-label]="ConfigMode ? null : 'Application launcher'"
+      [attr.aria-labelledby]="ConfigMode ? 'mj-launcher-config-title' : null"
+      (click)="onDialogClick($event)"
+      (cancel)="onDialogCancel($event)"
       (keydown)="onPanelKeydown($event)">
 
       @if (ConfigMode) {
         <!-- Configuration view: same panel, body swapped -->
         <div class="launcher-head launcher-head--config">
-          <button class="launcher-back" type="button" aria-label="Back to apps" (click)="ExitConfigMode()">
+          <button class="launcher-back" type="button" aria-label="Back to apps" (click)="RequestExitConfigMode()">
             <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
           </button>
           <h2 class="launcher-title" id="mj-launcher-config-title">Configure apps</h2>
@@ -39,10 +46,18 @@
             <i class="fa-solid fa-xmark" aria-hidden="true"></i>
           </button>
         </div>
+        @if (PendingDiscard) {
+          <div class="launcher-discard-bar" role="alert">
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+            <span class="discard-msg">You have unsaved changes.</span>
+            <button mjButton variant="danger" size="sm" (click)="ConfirmDiscard()">Discard</button>
+            <button mjButton size="sm" (click)="CancelDiscard()">Keep editing</button>
+          </div>
+        }
         <mj-user-app-config-content
           class="launcher-config-body"
           (Saved)="ExitConfigMode()"
-          (Cancelled)="ExitConfigMode()">
+          (Cancelled)="RequestExitConfigMode()">
         </mj-user-app-config-content>
       } @else {
       <div class="launcher-head">
@@ -89,6 +104,11 @@
               <ng-container *ngTemplateOutlet="appCard; context: { $implicit: app, idx: i + RecentApps.length }"></ng-container>
             }
           </div>
+          @if (VisibleApps.length === 0) {
+            <div class="launcher-empty">
+              No applications are enabled for you yet — use Configure… below to add some.
+            </div>
+          }
         }
       </div>
 
@@ -106,7 +126,7 @@
 
       <span class="sr-only" role="status">{{ VisibleApps.length }} applications available</span>
       }
-    </div>
+    </dialog>
   }
 </div>
 

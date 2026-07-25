@@ -32,7 +32,6 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
   private destroy$ = new Subject<void>();
   private _app: BaseApplication | null = null;
   private _cachedNavItems: NavItem[] = [];
-  private _cachedAppColor: string = 'var(--mj-brand-primary)';
   private _servicesInjected = false;
 
   /**
@@ -64,8 +63,9 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
   /** True when even one item + More can't fit — the lone visible pill
    *  shrinks with an ellipsis instead of clipping the More button. */
   public Tight = false;
-  /** Flex gap between nav items — must match --mj-space-1 in the CSS */
-  private static readonly ITEM_GAP = 4;
+  /** Flex gap between nav items — measured from the rendered row (falls back
+   *  to --mj-space-1's default of 4px until first measurement) */
+  private itemGap = 4;
   /** How many leading nav items are currently visible inline */
   public VisibleCount = Number.MAX_SAFE_INTEGER;
   /** Whether the More dropdown is open */
@@ -142,6 +142,15 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
       this.resizeObserver = new ResizeObserver(() => this.recomputeFit());
       this.resizeObserver.observe(this.host.nativeElement);
     }
+    // Widths measured before webfonts arrive are stale (Explorer's Montserrat
+    // loads late over the fallback stack) — invalidate the cache once fonts
+    // settle so the fit is computed against real glyph metrics.
+    if (this._overflowEnabled && typeof document !== 'undefined' && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        this.itemWidths = [];
+        this.recomputeFit();
+      });
+    }
   }
 
   ngOnDestroy(): void {
@@ -185,11 +194,8 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Only show items with Status 'Active' or undefined (default to Active)
       this._cachedNavItems = items.filter(item => !item.Status || item.Status === 'Active');
-
-      this._cachedAppColor = this._app.GetColor() || 'var(--mj-brand-primary)';
     } else {
       this._cachedNavItems = [];
-      this._cachedAppColor = 'var(--mj-brand-primary)';
     }
 
     this.Loading = false;
@@ -242,6 +248,12 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
       return; // View out of sync (mid-CD) — the next update cycle re-measures
     }
     this.itemWidths = els.map(el => el.offsetWidth);
+    // Measure the real flex gap (rem-based tokens can differ from the 4px
+    // fallback if the root font-size changes)
+    const gap = parseFloat(getComputedStyle(list).columnGap);
+    if (!Number.isNaN(gap)) {
+      this.itemGap = gap;
+    }
   }
 
   /**
@@ -281,7 +293,7 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
       this.moreBtnWidth = this.moreBtnRef.nativeElement.offsetWidth || this.moreBtnWidth;
     }
 
-    const gap = AppNavComponent.ITEM_GAP;
+    const gap = this.itemGap;
     const n = this.itemWidths.length;
     const totalAll = this.itemWidths.reduce((a, b) => a + b, 0) + gap * (n - 1);
 
@@ -455,13 +467,6 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   get navItems(): NavItem[] {
     return this._cachedNavItems;
-  }
-
-  /**
-   * Get cached app color (no computation in getter)
-   */
-  get appColor(): string {
-    return this._cachedAppColor;
   }
 
   /**

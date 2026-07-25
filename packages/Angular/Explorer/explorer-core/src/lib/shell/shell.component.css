@@ -124,9 +124,10 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 /* Active = brand-primary (matches nav pills + switcher items); the app's
-   metadata color is reserved for identity accents, never state. */
+   metadata color is reserved for identity accents, never state.
+   Shared active-tint recipe. */
 .nav-bar-app-btn.active {
-  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   color: var(--mj-brand-primary);
 }
 

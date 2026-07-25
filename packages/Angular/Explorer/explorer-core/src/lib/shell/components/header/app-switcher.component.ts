@@ -1,5 +1,6 @@
-import { Component, Input, Output, EventEmitter, HostListener, ViewChild, ElementRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef } from '@angular/core';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
+import { UserAppConfigContentComponent } from '@memberjunction/ng-explorer-settings';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
@@ -21,13 +22,20 @@ interface RecentAppEntry {
  * of app cards (identity glyph + name + Description summary), with the user's
  * most recently used apps surfaced first.
  *
+ * Rendering model: the panel is a native <dialog> opened with showModal(),
+ * so it lives in the browser's TOP LAYER — above every stacking context in
+ * the app (the shell header's z-index:500 context, chat FAB, toasts). The
+ * modal state also makes the rest of the document inert (focus cannot
+ * escape) and the browser restores focus to the trigger on close.
+ *
  * Accessibility model: every app card is a real focusable control (via
  * mjClickable), so Tab walks filter → close → cards → Configure, and
  * Enter/Space activate the focused card. Arrow keys are the fast path:
  * ArrowDown from the filter focuses the first card; arrows move between
- * cards; ArrowUp from the first card returns to the filter. Escape clears
- * an active filter first, then closes. Tab is trapped inside the panel and
- * focus returns to the trigger on close.
+ * cards; ArrowUp from the first card returns to the filter. Escape layers:
+ * discard-bar → config view → filter → close. Exiting the config view with
+ * unsaved changes shows an inline discard bar (a body-appended confirm
+ * dialog would be inert/beneath the top layer).
  */
 @Component({
   standalone: false,
@@ -44,11 +52,14 @@ export class AppSwitcherComponent {
 
   @ViewChild('filterInput') private filterInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('trigger') private triggerRef?: ElementRef<HTMLElement>;
-  @ViewChild('panel') private panelRef?: ElementRef<HTMLElement>;
+  @ViewChild('panel') private panelRef?: ElementRef<HTMLDialogElement>;
+  @ViewChild(UserAppConfigContentComponent) private configContent?: UserAppConfigContentComponent;
 
   showDropdown = false;
   /** When true, the launcher body shows the app-configuration view instead of the card grid */
   public ConfigMode = false;
+  /** Pending action awaiting the inline unsaved-changes discard bar ('exit' = back to grid, 'close' = close launcher) */
+  public PendingDiscard: 'exit' | 'close' | null = null;
 
   /** Live filter text — matches app names AND Description summaries */
   public FilterText = '';
@@ -166,15 +177,33 @@ export class AppSwitcherComponent {
     this.loadRecents();
     this.FilterText = '';
     this.ConfigMode = false;
+    this.PendingDiscard = null;
     this.showDropdown = true;
-    // Focus the filter once the panel renders
-    requestAnimationFrame(() => this.filterInputRef?.nativeElement?.focus());
+    // The dialog element renders under @if next frame: put it in the top
+    // layer via showModal() (jsdom fallback: plain open attribute), then
+    // focus the filter.
+    requestAnimationFrame(() => {
+      const dialog = this.panelRef?.nativeElement;
+      if (dialog && !dialog.open) {
+        if (typeof dialog.showModal === 'function') {
+          dialog.showModal();
+        } else {
+          dialog.setAttribute('open', '');
+        }
+      }
+      this.filterInputRef?.nativeElement?.focus();
+    });
   }
 
   private closeLauncher(restoreFocus = true): void {
+    const dialog = this.panelRef?.nativeElement;
+    if (dialog?.open && typeof dialog.close === 'function') {
+      dialog.close(); // Browser restores focus to the trigger automatically
+    }
     this.showDropdown = false;
     this.FilterText = '';
     this.ConfigMode = false;
+    this.PendingDiscard = null;
     if (restoreFocus) {
       requestAnimationFrame(() => {
         this.triggerRef?.nativeElement?.focus();
@@ -182,9 +211,44 @@ export class AppSwitcherComponent {
     }
   }
 
-  /** Public close hook for template (scrim / close button) */
+  /** Guarded close for template paths (backdrop / close button): unsaved
+   *  config changes surface the inline discard bar instead of closing. */
   CloseLauncher(): void {
+    if (this.ConfigMode && this.configContent?.HasChanges()) {
+      this.PendingDiscard = 'close';
+      return;
+    }
     this.closeLauncher();
+  }
+
+  /** Backdrop clicks arrive as clicks on the <dialog> element itself */
+  onDialogClick(event: MouseEvent): void {
+    if (event.target === this.panelRef?.nativeElement) {
+      this.CloseLauncher();
+    }
+  }
+
+  /** Native cancel (Esc while the browser owns the dialog) — route through
+   *  our layered Escape handling instead of closing unconditionally. */
+  onDialogCancel(event: Event): void {
+    event.preventDefault();
+    this.handleEscape();
+  }
+
+  /** Inline discard bar: confirm — perform the pending action, dropping changes */
+  ConfirmDiscard(): void {
+    const action = this.PendingDiscard;
+    this.PendingDiscard = null;
+    if (action === 'close') {
+      this.closeLauncher();
+    } else if (action === 'exit') {
+      this.ExitConfigMode();
+    }
+  }
+
+  /** Inline discard bar: keep editing */
+  CancelDiscard(): void {
+    this.PendingDiscard = null;
   }
 
   onFilterChange(): void {
@@ -202,23 +266,21 @@ export class AppSwitcherComponent {
         break;
       case 'Enter':
         event.preventDefault();
-        // Enter in the filter opens an unambiguous single result
-        if (visible.length === 1) {
+        // While filtering, Enter opens the top result (omnibar semantics —
+        // the footer advertises "↵ open"); unfiltered it needs an unambiguous
+        // single app.
+        if (this.IsFiltering && visible.length > 0) {
+          this.selectApp(visible[0]);
+        } else if (visible.length === 1) {
           this.selectApp(visible[0]);
         }
         break;
       case 'Escape':
         event.preventDefault();
         // Stop the bubble: the panel's own Escape handler would otherwise
-        // re-evaluate AFTER we've cleared the filter and close the launcher
-        // in the same keystroke.
+        // re-evaluate AFTER we've mutated state and double-handle the key.
         event.stopPropagation();
-        if (this.IsFiltering) {
-          this.FilterText = '';
-          this.onFilterChange();
-        } else {
-          this.closeLauncher();
-        }
+        this.handleEscape();
         break;
     }
   }
@@ -266,41 +328,27 @@ export class AppSwitcherComponent {
   }
 
   /** Keep Tab cycling within the launcher's real focusables (filter, close, Configure) */
+  /** Escape layering: discard bar → config view (guarded) → filter → close.
+   *  Tab is NOT manually trapped — showModal() makes the background inert,
+   *  which is a real trap (no leak when focus sits on a non-focusable). */
   onPanelKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      // Escape layering: config view backs out to the app grid first; an
-      // active filter clears next; only then does Escape close the launcher.
       event.preventDefault();
-      if (this.ConfigMode) {
-        this.ExitConfigMode();
-      } else if (this.IsFiltering) {
-        this.FilterText = '';
-        this.filterInputRef?.nativeElement?.focus();
-      } else {
-        this.closeLauncher();
-      }
-      return;
+      event.stopPropagation();
+      this.handleEscape();
     }
-    if (event.key !== 'Tab') {
-      return;
-    }
-    const panel = this.panelRef?.nativeElement;
-    if (!panel) {
-      return;
-    }
-    const focusables = Array.from(
-      panel.querySelectorAll<HTMLElement>('input, button:not([disabled]), [tabindex="0"]'));
-    if (focusables.length === 0) {
-      return;
-    }
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
+  }
+
+  private handleEscape(): void {
+    if (this.PendingDiscard) {
+      this.CancelDiscard();
+    } else if (this.ConfigMode) {
+      this.RequestExitConfigMode();
+    } else if (this.IsFiltering) {
+      this.FilterText = '';
+      this.filterInputRef?.nativeElement?.focus();
+    } else {
+      this.closeLauncher();
     }
   }
 
@@ -324,17 +372,6 @@ export class AppSwitcherComponent {
   /** Case-insensitive UUID check whether an app is the one currently loading. */
   IsLoadingApp(app: BaseApplication): boolean {
     return UUIDsEqual(app.ID, this.loadingAppId);
-  }
-
-  /**
-   * Close launcher when clicking outside
-   */
-  @HostListener('document:click', ['$event'])
-  onClickOutside(event: MouseEvent): void {
-    const target = event.target as HTMLElement;
-    if (this.showDropdown && !target.closest('.app-switcher-container')) {
-      this.closeLauncher(false);
-    }
   }
 
   // ---- Recents persistence (MJ: User Settings via UserInfoEngine) ----
@@ -373,11 +410,22 @@ export class AppSwitcherComponent {
   EnterConfigMode(): void {
     this.ConfigMode = true;
     this.FilterText = '';
+    this.PendingDiscard = null;
     // Move focus into the config view (the back button is its first focusable)
     requestAnimationFrame(() => {
       this.panelRef?.nativeElement
         ?.querySelector<HTMLElement>('.launcher-back')?.focus();
     });
+  }
+
+  /** Guarded exit from the config view: unsaved changes surface the inline
+   *  discard bar instead of silently dropping the user's edits. */
+  RequestExitConfigMode(): void {
+    if (this.configContent?.HasChanges()) {
+      this.PendingDiscard = 'exit';
+      return;
+    }
+    this.ExitConfigMode();
   }
 
   /**

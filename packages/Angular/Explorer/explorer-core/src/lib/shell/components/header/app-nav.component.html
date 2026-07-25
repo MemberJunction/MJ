@@ -1,4 +1,4 @@
-<nav class="nav-list" #navList [class.tight]="Tight" [style.--app-color]="appColor">
+<nav class="nav-list" #navList [class.tight]="Tight">
   @if (Loading && navItems.length === 0) {
     <!-- Skeleton pills while GetNavItems() resolves — prevents header pop-in -->
     <div class="nav-skeleton" aria-hidden="true">
