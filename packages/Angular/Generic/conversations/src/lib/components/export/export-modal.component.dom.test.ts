@@ -7,7 +7,7 @@ import type { UserInfo } from '@memberjunction/core';
 import type { MJConversationEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
 import { ExportModalComponent } from './export-modal.component';
-import { ExportService } from '../../services/export.service';
+import { ExportService, ExportBranding } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 
@@ -111,5 +111,85 @@ describe('ExportModalComponent (DOM)', () => {
     const f = render();
     (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
     expect(exportServiceStub.exportConversation).toHaveBeenCalledWith('c1', 'markdown', currentUser, expect.objectContaining({ includeMessages: true }));
+  });
+
+  describe('branding ("Include branding" checkbox)', () => {
+    /** Mimic the runtime input order: branding is bound before visibility flips true
+     *  (the isVisible setter defaults includeTheme from the branding present at open).
+     *  Async because ngModel's initial model→view write is a microtask — the checkbox
+     *  mounts on the HTML-format click and reflects `includeTheme` after whenStable. */
+    const renderWithBranding = async (branding: ExportBranding | null) => {
+      const f = render({ isVisible: false });
+      f.componentRef.setInput('branding', branding);
+      f.componentRef.setInput('isVisible', true);
+      f.detectChanges();
+      // Select the HTML format so the format-specific options render.
+      (queryAll(f, '.format-option')[2] as HTMLElement).click();
+      f.detectChanges();
+      await f.whenStable();
+      f.detectChanges();
+      return f;
+    };
+    const themeCheckbox = (f: ReturnType<typeof render>) =>
+      queryAll(f, '.format-specific-options input[type="checkbox"]')[1] as HTMLInputElement;
+
+    it('renders unchecked for the HTML format when the host supplied no branding', async () => {
+      const f = await renderWithBranding(null);
+      expect(text(f, '.format-specific-options')).toContain('Include branding');
+      expect(themeCheckbox(f).checked).toBe(false);
+    });
+
+    it('defaults checked when the host supplied export branding', async () => {
+      const f = await renderWithBranding({ brandTokens: { '--mj-brand-primary': '#ff0000' } });
+      expect(themeCheckbox(f).checked).toBe(true);
+    });
+
+    it('mentions the logo in the hint only when branding carries one', async () => {
+      const withLogo = await renderWithBranding({ logoUrl: 'https://x/logo.png' });
+      expect(text(withLogo, '.format-specific-options')).toContain('and logo');
+    });
+
+    it('threads branding + includeTheme through to the export service when checked', async () => {
+      exportServiceStub.exportConversation.mockClear();
+      const branding: ExportBranding = { brandTokens: { '--mj-brand-primary': '#ff0000' } };
+      const f = await renderWithBranding(branding);
+      (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
+      expect(exportServiceStub.exportConversation).toHaveBeenCalledWith(
+        'c1',
+        'html',
+        currentUser,
+        expect.objectContaining({ includeTheme: true, branding })
+      );
+    });
+
+    it('unchecking "Include CSS styling" also turns branding off (no unstyled-logo leak)', async () => {
+      exportServiceStub.exportConversation.mockClear();
+      const f = await renderWithBranding({ brandTokens: { '--mj-brand-primary': '#ff0000' }, logoUrl: 'https://x/l.png' });
+      const cssCheckbox = queryAll(f, '.format-specific-options input[type="checkbox"]')[0] as HTMLInputElement;
+      cssCheckbox.click();
+      f.detectChanges();
+      expect(f.componentInstance.exportOptions.includeTheme).toBe(false);
+      (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
+      expect(exportServiceStub.exportConversation).toHaveBeenCalledWith(
+        'c1',
+        'html',
+        currentUser,
+        expect.objectContaining({ includeCSS: false, includeTheme: false, branding: undefined })
+      );
+    });
+
+    it('omits branding when the user unchecks the box', async () => {
+      exportServiceStub.exportConversation.mockClear();
+      const f = await renderWithBranding({ brandTokens: { '--mj-brand-primary': '#ff0000' } });
+      themeCheckbox(f).click();
+      f.detectChanges();
+      (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
+      expect(exportServiceStub.exportConversation).toHaveBeenCalledWith(
+        'c1',
+        'html',
+        currentUser,
+        expect.objectContaining({ includeTheme: false, branding: undefined })
+      );
+    });
   });
 });

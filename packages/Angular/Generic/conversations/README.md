@@ -10,7 +10,7 @@ The widget exposes three layers of extension:
 
 | Surface | What it lets you do |
 |---|---|
-| **6 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **7 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected). Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
 | **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
 | **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
 
@@ -147,6 +147,41 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
   [showAgentPicker]="false">
 </mj-conversation-chat-area>
 ```
+
+#### Header customization
+
+Beyond the boolean toggles, the header's Export button is re-brandable and the action strip is extensible:
+
+- `exportButtonLabel` (default `'Export'`) and `exportButtonIcon` (default `'fas fa-download'`) — relabel/re-icon the Export button (e.g. a white-label "Download").
+- The **`headerActions` slot** adds host buttons INSIDE the default header's action strip, after the stock buttons — unlike the `header` slot, which replaces the whole header (and therefore suppresses `headerActions`). Context carries the conversation, its ID, and `isProcessing`. Use `mjButton variant="flat" size="sm"` for visual parity:
+
+```html
+<mj-conversation-chat-area [conversationId]="conversationId">
+  <ng-template mjChatSlot="headerActions" let-conversation let-isProcessing="isProcessing">
+    <button mjButton variant="flat" size="sm" [disabled]="isProcessing" (click)="printConversation(conversation)">
+      <i class="fas fa-print"></i>
+      <span class="btn-label">Print</span>
+    </button>
+  </ng-template>
+</mj-conversation-chat-area>
+```
+
+#### Branded export
+
+The HTML export can carry the app's theme instead of the stock palette. Supply `exportBranding` on the chat area (forwarded to the export modal, where it defaults the HTML format's "Include branding" checkbox on):
+
+```typescript
+// ExportBranding (from the export service)
+{
+  brandTokens?: Record<string, string>;  // ':root{}' block baked into the file; when omitted and
+                                         // includeTheme is on, DEFAULT_EXPORT_THEME_TOKENS are
+                                         // auto-snapshotted from the live document at export time
+  logoUrl?: string;                      // inlined as a data URI above the title (raw URL on fetch failure)
+  title?: string;                        // overrides the document title (defaults to the conversation name)
+}
+```
+
+Without branding the exported file is unchanged from previous releases — the stylesheet reads `var(--mj-…, legacyHex)` so every color resolves to the exact prior value when no `:root` block is emitted. JSON/markdown/text formats ignore branding (they're data formats, not documents). Programmatic consumers can build export content without a download via `ExportService.BuildExportContent(...)` and snapshot the live theme via `ExportService.SnapshotBrandTokens()`.
 
 ### Chat Overlay
 

@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
-import { ExportService, ExportFormat, ExportOptions } from '../../services/export.service';
+import { ExportService, ExportFormat, ExportOptions, ExportBranding } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 
@@ -85,10 +85,19 @@ import { ToastService } from '../../services/toast.service';
                 <label class="checkbox-label">
                   <input
                     type="checkbox"
-                    [(ngModel)]="exportOptions.includeCSS"
+                    [ngModel]="exportOptions.includeCSS"
+                    (ngModelChange)="onIncludeCSSChanged($event)"
                     [disabled]="isExporting">
                   <span>Include CSS styling</span>
                   <small>Embed styles for better presentation</small>
+                </label>
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="exportOptions.includeTheme"
+                    [disabled]="isExporting || !exportOptions.includeCSS">
+                  <span>Include branding</span>
+                  <small>Embed the app's theme colors{{ branding?.logoUrl ? ' and logo' : '' }} in the exported file</small>
                 </label>
               </div>
             }
@@ -303,9 +312,29 @@ import { ToastService } from '../../services/toast.service';
   `]
 })
 export class ExportModalComponent {
-  @Input() isVisible = false;
+  private _isVisible = false;
+  @Input()
+  set isVisible(value: boolean) {
+    const opening = value && !this._isVisible;
+    this._isVisible = value;
+    if (opening) {
+      // Fresh open: "Include branding" defaults ON only when the host explicitly
+      // configured export branding — plain MJ Explorer keeps today's unthemed file.
+      this.exportOptions.includeTheme = !!this.branding;
+    }
+  }
+  get isVisible(): boolean {
+    return this._isVisible;
+  }
+
   @Input() conversation?: MJConversationEntity;
   @Input() currentUser!: UserInfo;
+  /**
+   * Host-supplied export branding (theme tokens / logo / title). When set, the
+   * HTML format's "Include branding" checkbox defaults on and the branding is
+   * passed to {@link ExportService} on export. See `ExportBranding`.
+   */
+  @Input() branding: ExportBranding | null = null;
   @Output() cancelled = new EventEmitter<void>();
   @Output() exported = new EventEmitter<void>();
 
@@ -317,8 +346,23 @@ export class ExportModalComponent {
     includeMessages: true,
     includeMetadata: true,
     prettyPrint: true,
-    includeCSS: true
+    includeCSS: true,
+    includeTheme: false
   };
+
+  /**
+   * "Include CSS styling" changed. Turning it OFF also turns "Include branding"
+   * off — branding is meaningless without the stylesheet, and leaving it
+   * stale-true would leak an unstyled logo + title override into a CSS-less
+   * export (the checkbox is disabled while CSS is off, so the user couldn't
+   * even see or undo it).
+   */
+  onIncludeCSSChanged(value: boolean): void {
+    this.exportOptions.includeCSS = value;
+    if (!value) {
+      this.exportOptions.includeTheme = false;
+    }
+  }
 
   get exportTitle(): string {
     return `Export: ${this.conversation?.Name || 'Conversation'}`;
@@ -387,7 +431,11 @@ export class ExportModalComponent {
         this.conversation.ID,
         this.selectedFormat!,
         this.currentUser,
-        this.exportOptions
+        {
+          ...this.exportOptions,
+          // Host branding rides along only when the user left "Include branding" on.
+          branding: this.exportOptions.includeTheme ? (this.branding ?? undefined) : undefined
+        }
       );
 
       this.toastService.success('Conversation exported successfully');
@@ -414,7 +462,8 @@ export class ExportModalComponent {
       includeMessages: true,
       includeMetadata: true,
       prettyPrint: true,
-      includeCSS: true
+      includeCSS: true,
+      includeTheme: !!this.branding
     };
     this.isVisible = false;
   }
