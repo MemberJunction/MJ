@@ -478,10 +478,10 @@ cd /Users/jordanfanapour/Documents/GitHub/MJ/../Skip-Brain/apps/API && npm run b
 ## References
 
 ### MemberJunction Documentation
-- [CLAUDE.md](CLAUDE.md) - Main development guide
-- [migrations/CLAUDE.md](migrations/CLAUDE.md) - Migration guidelines
-- [packages/Actions/CLAUDE.md](packages/Actions/CLAUDE.md) - Actions design philosophy
-- [packages/Angular/CLAUDE.md](packages/Angular/CLAUDE.md) - Angular guidelines
+- [CLAUDE.md](../CLAUDE.md) - Main development guide
+- [migrations/CLAUDE.md](../migrations/CLAUDE.md) - Migration guidelines
+- [packages/Actions/CLAUDE.md](../packages/Actions/CLAUDE.md) - Actions design philosophy
+- [packages/Angular/CLAUDE.md](../packages/Angular/CLAUDE.md) - Angular guidelines
 
 ### External Resources
 - [Google AI API Error Codes](https://ai.google.dev/api/rest/v1/Status) - Gemini error handling

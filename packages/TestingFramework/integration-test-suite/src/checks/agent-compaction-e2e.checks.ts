@@ -126,17 +126,34 @@ async function compactionStepCount(ctx: IntegrationCheckContext, runId: string):
 }
 
 async function boundarySummaryPresent(ctx: IntegrationCheckContext, conversationId: string): Promise<boolean> {
-  const r = await new RunView().RunView<{ SummaryOfEarlierConversation: string | null; SummaryPromptRunID: string | null }>(
+  const rv = new RunView();
+  const detailsResult = await rv.RunView<{ ID: string; SummaryOfEarlierConversation: string | null }>(
     {
       EntityName: 'MJ: Conversation Details',
       ExtraFilter: `ConversationID='${conversationId}'`,
-      Fields: ['SummaryOfEarlierConversation', 'SummaryPromptRunID'],
+      Fields: ['ID', 'SummaryOfEarlierConversation'],
       ResultType: 'simple',
       BypassCache: true,
     },
     ctx.User,
   );
-  return r.Success && r.Results.some((d) => !!d.SummaryOfEarlierConversation && d.SummaryOfEarlierConversation.trim().length > 0 && !!d.SummaryPromptRunID);
+  if (!detailsResult.Success) return false;
+  const boundaryRows = detailsResult.Results.filter((d) => !!d.SummaryOfEarlierConversation && d.SummaryOfEarlierConversation.trim().length > 0);
+  if (boundaryRows.length === 0) return false;
+
+  // Verify audit record exists in the ConversationCompactionRun table
+  const boundaryIds = boundaryRows.map((d) => `'${d.ID}'`).join(',');
+  const auditResult = await rv.RunView<{ ID: string }>(
+    {
+      EntityName: 'MJ: Conversation Compaction Runs',
+      ExtraFilter: `ConversationDetailID IN (${boundaryIds})`,
+      Fields: ['ID'],
+      ResultType: 'simple',
+      BypassCache: true,
+    },
+    ctx.User,
+  );
+  return auditResult.Success && auditResult.Results.length > 0;
 }
 
 export const AgentCompactionE2EChecks: NamedCheck[] = [
