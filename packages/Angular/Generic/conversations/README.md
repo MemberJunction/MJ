@@ -148,6 +148,19 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 </mj-conversation-chat-area>
 ```
 
+#### Assistant identity
+
+White-label hosts can brand the AI side of the message feed through the component contract (no CSS on `.message-sender` / `.avatar-circle` internals). Both default to `null` — the engine-resolved agent identity, today's behavior:
+
+| Input | Overrides |
+|---|---|
+| `assistantDisplayName` | The display name on AI messages (e.g. a per-tenant persona like "Betty the Teacher"). Display-only: internal logic such as the conversation-manager check keeps comparing the real agent name |
+| `assistantAvatarUrl` | The AI message avatar — an image replaces the agent's Font Awesome icon |
+
+These complement `agentCharacterConfig`, which drives only the `agentPresence` strip — the two inputs extend the same identity into every message bubble. Runtime changes propagate to already-rendered messages (branding configs that resolve after first render, per-conversation persona switches), and a broken/whitespace avatar URL degrades to the agent icon rather than a broken-image glyph.
+
+**Scope — what the override deliberately does NOT cover:** the run-details expander header and its record link (they describe the *real* agent's diagnostics), the role tooltip (the agent record's `Description`), and realtime session cards. Hosts needing those surfaces hidden from end users gate them with `showAgentRunDetails` / their own chrome rather than relabeling internal data.
+
 ### Chat Overlay
 
 A floating chat panel (bottom-right corner) that wraps the chat area for persistent agent access across the application. Collapses to a bubble icon, expands to a full chat panel.

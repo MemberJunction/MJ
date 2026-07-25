@@ -1,6 +1,7 @@
 <div [class]="messageClasses" [attr.data-message-id]="message.ID" (click)="onMessageBubbleClick($event)">
   <div class="message-avatar">
-    <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
+    <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage"
+         [class.avatar-has-image]="isAIMessage && effectiveAssistantAvatarUrl !== null">
       @if (isUserMessage) {
         @if (userAvatarUrl) {
           <img [src]="userAvatarUrl" alt="User avatar" class="avatar-image" />
@@ -10,7 +11,12 @@
           <i class="fas fa-user"></i>
         }
       } @else if (isAIMessage) {
-        <i class="fas" [ngClass]="aiAgentInfo?.iconClass || 'fa-robot'"></i>
+        @if (effectiveAssistantAvatarUrl) {
+          <img [src]="effectiveAssistantAvatarUrl" alt="Assistant avatar" class="avatar-image"
+               (error)="assistantAvatarFailed = true" />
+        } @else {
+          <i class="fas" [ngClass]="aiAgentInfo?.iconClass || 'fa-robot'"></i>
+        }
       }
     </div>
   </div>
@@ -234,8 +240,11 @@
               <div class="agent-details-header">
                 <i class="fas fa-chart-line"></i>
                 <span>
+                  <!-- Deliberately the ENGINE-resolved name: this header labels the real
+                       agent's diagnostics, and the link opens the real agent record — a
+                       host assistantDisplayName override must not relabel either. -->
                   <a class="agent-name-link" (click)="openAgentRecord()" title="Open agent details">
-                    {{ aiAgentInfo?.name || 'Agent' }}
+                    {{ engineAgentInfo?.name || 'Agent' }}
                   </a>
                   Run Details
                 </span>

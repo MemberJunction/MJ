@@ -91,6 +91,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public allowPinning: boolean = true;
   @Input() public allowMessageEdit: boolean = true;
   @Input() public allowMessageDelete: boolean = true;
+  /** Assistant identity overrides — static host config forwarded to every message item (null = engine identity). */
+  @Input() public assistantDisplayName: string | null = null;
+  @Input() public assistantAvatarUrl: string | null = null;
   @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
   @Input() public agentRunMap: Map<string, MJAIAgentRunEntityExtended> = new Map();
   @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
@@ -238,6 +241,20 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // agent name / status chip once the (async, batched) session lookup lands
     if (changes['sessionMetaMap'] && this.messages && this.messageContainerRef) {
       this.updateMessages(this.messages);
+    }
+
+    // Assistant identity can land AFTER first render (branding configs resolve
+    // async) or change mid-session (per-conversation persona). The overrides are
+    // stamped onto message items as static host config, so restamp every
+    // rendered item when they change — otherwise existing bubbles keep the old
+    // identity until the next messages-array mutation.
+    if (changes['assistantDisplayName'] || changes['assistantAvatarUrl']) {
+      for (const entry of this._renderedMessages.values()) {
+        if (entry.kind === 'component') {
+          this.applyMessageItemFeatureFlags(entry.ref.instance);
+          entry.ref.changeDetectorRef.markForCheck();
+        }
+      }
     }
   }
 
@@ -470,6 +487,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.allowPinning = this.allowPinning;
     instance.allowMessageEdit = this.allowMessageEdit;
     instance.allowMessageDelete = this.allowMessageDelete;
+    instance.assistantDisplayName = this.assistantDisplayName;
+    instance.assistantAvatarUrl = this.assistantAvatarUrl;
   }
 
   /**

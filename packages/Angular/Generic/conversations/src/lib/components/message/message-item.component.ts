@@ -122,6 +122,32 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public allowMessageEdit: boolean = true;
   /** Allow deleting the user's own messages (the per-message delete button). */
   @Input() public allowMessageDelete: boolean = true;
+  /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
+  @Input() public assistantDisplayName: string | null = null;
+  /** Host image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
+  @Input()
+  public set assistantAvatarUrl(value: string | null) {
+    if (value !== this._assistantAvatarUrl) {
+      this._assistantAvatarUrl = value;
+      // A new URL gets a fresh chance even if the previous one 404'd.
+      this.assistantAvatarFailed = false;
+    }
+  }
+  public get assistantAvatarUrl(): string | null {
+    return this._assistantAvatarUrl;
+  }
+  private _assistantAvatarUrl: string | null = null;
+
+  /** The last assistantAvatarUrl failed to load — fall back to the icon branch. */
+  public assistantAvatarFailed = false;
+
+  /** The avatar image URL actually rendered: trimmed, and null after a load error
+   *  so a broken/whitespace URL degrades to the agent icon instead of a broken-image glyph. */
+  public get effectiveAssistantAvatarUrl(): string | null {
+    if (this.assistantAvatarFailed) return null;
+    const url = this._assistantAvatarUrl?.trim();
+    return url ? url : null;
+  }
 
   @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
@@ -369,11 +395,28 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.message.Role?.trim().toLowerCase() === 'ai';
   }
 
+  /**
+   * The agent identity as shown in the UI: the ENGINE-resolved identity (see
+   * {@link engineAgentInfo}) with the host's `assistantDisplayName` override
+   * applied to the name when set. Internal logic that must compare against the
+   * real agent name (e.g. {@link isConversationManager}) uses `engineAgentInfo`
+   * directly, so a display override can never change routing/behavior decisions.
+   */
   public get aiAgentInfo(): { name: string; iconClass: string; role: string } | null {
+    const info = this.engineAgentInfo;
+    if (!info) return null;
+    const override = this.assistantDisplayName?.trim();
+    return override ? { ...info, name: override } : info;
+  }
+
+  /** The engine-resolved agent identity — no host display overrides applied.
+   *  Protected (not private) so the template's run-details header — which labels
+   *  the REAL agent's diagnostics and record link — can read it directly. */
+  protected get engineAgentInfo(): { name: string; iconClass: string; role: string } | null {
     if (!this.isAIMessage) return null;
 
     // Get agent ID from denormalized field (populated when message is created)
-    const agentID = (this.message as any).AgentID;
+    const agentID = this.message.AgentID;
 
     // Look up agent from AIEngineBase cache
     if (agentID && AIEngineBase.Instance?.Agents) {
@@ -452,9 +495,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // the code-const Sage fallback. Replaces the previous hardcoded 'Sage'
     // name check. Returns false until the agent service has cached the
     // resolved agent (warmed by message-input's first routing call).
+    // Compares the ENGINE-resolved name deliberately: a host assistantDisplayName
+    // override renames what the user SEES, never what the component decides.
     const cmName = this.agentService.ConversationManagerAgentName;
     if (!cmName) return false;
-    return this.aiAgentInfo?.name === cmName;
+    return this.engineAgentInfo?.name === cmName;
   }
 
   public get displayMessage(): string {
