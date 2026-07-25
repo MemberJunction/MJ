@@ -9,18 +9,19 @@ import { AppSwitcherComponent } from './app-switcher.component';
 
 /**
  * DOM coverage for <mj-app-switcher> — the header trigger + centered launcher overlay
- * (filterable app-card grid). Apps come from a faked ApplicationManager.GetAppSwitcherApps();
- * the heavy <mj-user-app-config> child is replaced with a lightweight stub. Recents
- * persistence (UserInfoEngine) fails silently in the test environment by design, so the
- * launcher renders with no Recent section here.
+ * (filterable app-card grid + in-panel configuration view swap). Apps come from a faked
+ * ApplicationManager.GetAppSwitcherApps(); the heavy <mj-user-app-config-content> child
+ * is replaced with a lightweight stub. Recents persistence (UserInfoEngine) fails
+ * silently in the test environment by design, so the launcher renders with no Recent
+ * section here.
  */
 
-// Lightweight stand-in for the heavy config dialog child.
-@Component({ standalone: true, selector: 'mj-user-app-config', template: '' })
-class UserAppConfigStub {
-  @Input() ShowDialog = false;
-  @Output() ShowDialogChange = new EventEmitter<boolean>();
-  @Output() ConfigSaved = new EventEmitter<void>();
+// Lightweight stand-in for the heavy config content child.
+@Component({ standalone: true, selector: 'mj-user-app-config-content', template: '<div class="config-stub"></div>' })
+class UserAppConfigContentStub {
+  @Input() Provider: unknown = null;
+  @Output() Saved = new EventEmitter<void>();
+  @Output() Cancelled = new EventEmitter<void>();
 }
 
 const makeApp = (id: string, name: string, description = '') => ({
@@ -34,7 +35,7 @@ const APPS = [
 
 function render(inputs: Record<string, unknown> = {}) {
   return renderComponentFixture(AppSwitcherComponent, {
-    imports: [CommonModule, MJClickableDirective, UserAppConfigStub],
+    imports: [CommonModule, MJClickableDirective, UserAppConfigContentStub],
     declarations: [AppSwitcherComponent],
     providers: [{ provide: ApplicationManager, useValue: { GetAppSwitcherApps: () => APPS } }],
     inputs,
@@ -204,5 +205,52 @@ describe('AppSwitcherComponent (DOM)', () => {
     (query(fixture, '.launcher-close') as HTMLElement).click();
     fixture.detectChanges();
     expect(query(fixture, '.launcher-panel')).toBeNull();
+  });
+
+  it('Configure swaps the body to the in-panel config view (no separate dialog)', () => {
+    const fixture = render();
+    openLauncher(fixture);
+    (query(fixture, '.launcher-configure') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(query(fixture, 'mj-user-app-config-content')).not.toBeNull();
+    expect(query(fixture, '.launcher-filter')).toBeNull(); // grid head replaced
+    expect(queryAll(fixture, '.app-card')).toHaveLength(0);
+    expect(query(fixture, '.launcher-title')?.textContent?.trim()).toBe('Configure apps');
+  });
+
+  it('the back button returns from config view to the app grid', () => {
+    const fixture = render();
+    openLauncher(fixture);
+    (query(fixture, '.launcher-configure') as HTMLElement).click();
+    fixture.detectChanges();
+    (query(fixture, '.launcher-back') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(query(fixture, 'mj-user-app-config-content')).toBeNull();
+    expect(queryAll(fixture, '.app-card')).toHaveLength(3);
+  });
+
+  it('Escape in config view backs out to the grid instead of closing the launcher', () => {
+    const fixture = render();
+    openLauncher(fixture);
+    (query(fixture, '.launcher-configure') as HTMLElement).click();
+    fixture.detectChanges();
+    (query(fixture, '.launcher-panel') as HTMLElement)
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(query(fixture, '.launcher-panel')).not.toBeNull(); // still open
+    expect(query(fixture, 'mj-user-app-config-content')).toBeNull(); // back on grid
+  });
+
+  it('a save from the config view returns to the grid and keeps the launcher open', () => {
+    const fixture = render();
+    openLauncher(fixture);
+    (query(fixture, '.launcher-configure') as HTMLElement).click();
+    fixture.detectChanges();
+    const stub = fixture.debugElement.query((de) => de.name === 'mj-user-app-config-content');
+    (stub.componentInstance as UserAppConfigContentStub).Saved.emit();
+    fixture.detectChanges();
+    expect(query(fixture, '.launcher-panel')).not.toBeNull();
+    expect(query(fixture, 'mj-user-app-config-content')).toBeNull();
+    expect(queryAll(fixture, '.app-card')).toHaveLength(3);
   });
 });

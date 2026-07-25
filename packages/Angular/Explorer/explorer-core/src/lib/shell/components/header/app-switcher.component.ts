@@ -1,6 +1,5 @@
 import { Component, Input, Output, EventEmitter, HostListener, ViewChild, ElementRef } from '@angular/core';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
-import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
@@ -43,13 +42,13 @@ export class AppSwitcherComponent {
   @Input() loadingAppId: string | null = null;
   @Output() appSelected = new EventEmitter<string>();
 
-  @ViewChild('appConfigDialog') appConfigDialog!: UserAppConfigComponent;
   @ViewChild('filterInput') private filterInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('trigger') private triggerRef?: ElementRef<HTMLElement>;
   @ViewChild('panel') private panelRef?: ElementRef<HTMLElement>;
 
   showDropdown = false;
-  showConfigDialog = false;
+  /** When true, the launcher body shows the app-configuration view instead of the card grid */
+  public ConfigMode = false;
 
   /** Live filter text — matches app names AND Description summaries */
   public FilterText = '';
@@ -166,6 +165,7 @@ export class AppSwitcherComponent {
   private openLauncher(): void {
     this.loadRecents();
     this.FilterText = '';
+    this.ConfigMode = false;
     this.showDropdown = true;
     // Focus the filter once the panel renders
     requestAnimationFrame(() => this.filterInputRef?.nativeElement?.focus());
@@ -174,6 +174,7 @@ export class AppSwitcherComponent {
   private closeLauncher(restoreFocus = true): void {
     this.showDropdown = false;
     this.FilterText = '';
+    this.ConfigMode = false;
     if (restoreFocus) {
       requestAnimationFrame(() => {
         this.triggerRef?.nativeElement?.focus();
@@ -267,10 +268,12 @@ export class AppSwitcherComponent {
   /** Keep Tab cycling within the launcher's real focusables (filter, close, Configure) */
   onPanelKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      // Escape anywhere in the panel (e.g. focus on a card or Configure):
-      // clear an active filter first (returning focus to the input), else close.
+      // Escape layering: config view backs out to the app grid first; an
+      // active filter clears next; only then does Escape close the launcher.
       event.preventDefault();
-      if (this.IsFiltering) {
+      if (this.ConfigMode) {
+        this.ExitConfigMode();
+      } else if (this.IsFiltering) {
         this.FilterText = '';
         this.filterInputRef?.nativeElement?.focus();
       } else {
@@ -363,28 +366,29 @@ export class AppSwitcherComponent {
   }
 
   /**
-   * Open the app configuration dialog
+   * Swap the launcher body to the app-configuration view (in-panel, seamless —
+   * no separate dialog). The embedded mj-user-app-config-content loads on
+   * creation.
    */
-  openConfigDialog(): void {
-    this.closeLauncher(false);
-    this.showConfigDialog = true;
-    // Use setTimeout to ensure ViewChild is available
-    setTimeout(() => {
-      if (this.appConfigDialog) {
-        this.appConfigDialog.Open();
-      }
-    }, 0);
+  EnterConfigMode(): void {
+    this.ConfigMode = true;
+    this.FilterText = '';
+    // Move focus into the config view (the back button is its first focusable)
+    requestAnimationFrame(() => {
+      this.panelRef?.nativeElement
+        ?.querySelector<HTMLElement>('.launcher-back')?.focus();
+    });
   }
 
   /**
-   * Handle when config is saved — close the dialog.
-   * The app list refreshes reactively: each UserApplication save fires a BaseEntity
-   * event, UserInfoEngine's debounced refresh (short DebounceTime on the
-   * 'MJ: User Applications' config) emits DataChange$, and
-   * ApplicationManager.syncFromEngine() pushes the new list to applications$,
-   * which the `apps` getter reads. No explicit reload needed here.
+   * Return from the configuration view to the app grid.
+   * The app list refreshes reactively after a save: each UserApplication save
+   * fires a BaseEntity event, UserInfoEngine's debounced refresh emits
+   * DataChange$, and ApplicationManager.syncFromEngine() pushes the new list
+   * to applications$, which the `apps` getter reads. No explicit reload needed.
    */
-  onConfigSaved(): void {
-    this.showConfigDialog = false;
+  ExitConfigMode(): void {
+    this.ConfigMode = false;
+    requestAnimationFrame(() => this.filterInputRef?.nativeElement?.focus());
   }
 }

@@ -160,6 +160,51 @@
   outline-offset: 2px;
 }
 
+/* ---- In-panel configuration view (view swap) ---- */
+.launcher-head--config {
+  align-items: center;
+  gap: var(--mj-space-2-5);
+  padding-bottom: var(--mj-space-2);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+.launcher-back {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--mj-radius-md);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-base);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--mj-transition-fast);
+}
+.launcher-back:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.launcher-back:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
+}
+.launcher-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--mj-text-base);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+.launcher-config-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* ---- Scrollable card area ---- */
 .launcher-scroll {
   overflow-y: auto;
