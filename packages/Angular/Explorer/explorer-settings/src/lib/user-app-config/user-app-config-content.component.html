@@ -45,7 +45,7 @@
 
             @for (item of AvailableApps; track item.app.ID) {
               <div class="available-app-item" (dblclick)="AddApp(item)">
-                <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                <div class="app-icon" [style.--app-color]="item.app.GetColor()">
                   <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
                 </div>
 
@@ -109,12 +109,12 @@
                     (dragenter)="OnDragEnter($event, i)"
                     (dblclick)="RemoveApp(item); $event.stopPropagation()"
                   >
-                    <div class="app-item-content" [style.border-left-color]="item.app.GetColor()">
+                    <div class="app-item-content">
                       <div class="drag-handle">
                         <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
                       </div>
 
-                      <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                      <div class="app-icon" [style.--app-color]="item.app.GetColor()">
                         <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
                       </div>
 
@@ -187,7 +187,7 @@
                 >
                   <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
                 </div>
-                <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                <div class="app-icon" [style.--app-color]="item.app.GetColor()">
                   <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
                 </div>
                 <span class="mobile-app-name">{{ item.app.Name }}</span>
@@ -212,7 +212,7 @@
             <div class="mobile-section-label">Available</div>
             @for (item of AvailableApps; track item.app.ID) {
               <div class="mobile-app-row inactive">
-                <div class="app-icon" [style.background-color]="item.app.GetColor()">
+                <div class="app-icon" [style.--app-color]="item.app.GetColor()">
                   <i [class]="item.app.Icon || 'fa-solid fa-cube'" aria-hidden="true"></i>
                 </div>
                 <span class="mobile-app-name">{{ item.app.Name }}</span>

@@ -180,21 +180,25 @@
   transform: scale(0.98);
 }
 
+/* Rows share the launcher's app-card language: surface bg, default border,
+   radius-lg, brand-tinted border + surface-hover on hover. Identity lives in
+   the tinted glyph (no left color bar). No hover lift here — these rows are
+   drag-reorder targets and a transform would fight the drag affordance. */
 .app-item-content {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  background: var(--mat-sys-surface);
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-left-width: 4px;
-  border-radius: var(--mat-sys-corner-small);
-  transition: all 0.2s ease;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-3-5);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  transition: border-color var(--mj-transition-fast), background var(--mj-transition-fast);
+  position: relative; /* Anchor for the hover-reveal action cluster */
 }
 
 .app-item-content:hover {
-  border-color: var(--mat-sys-primary);
-  box-shadow: var(--mat-sys-elevation-1);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+  background: var(--mj-bg-surface-hover);
 }
 
 .drag-handle {
@@ -207,15 +211,18 @@
   cursor: grabbing;
 }
 
+/* Identity glyph — the launcher card treatment: color-tinted tile with the
+   app-colored icon, driven by --app-color from the template. */
 .app-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--mat-sys-corner-small);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--mj-radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 1.1rem;
+  color: var(--app-color, var(--mj-text-muted));
+  background: color-mix(in srgb, var(--app-color, var(--mj-text-muted)) 14%, var(--mj-bg-surface));
+  font-size: var(--mj-text-lg);
   flex-shrink: 0;
 }
 
@@ -228,26 +235,48 @@
 }
 
 .app-name {
-  font: var(--mat-sys-body-large);
-  font-weight: 500;
-  color: var(--mat-sys-on-surface);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-bold);
+  color: var(--mj-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .app-description {
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
+  font-size: var(--mj-text-xs);
+  line-height: var(--mj-leading-snug);
+  color: var(--mj-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Hover-reveal actions: out of the flex flow (absolute over the row's right
+   edge) so the title/description get the full row width; revealed on row
+   hover or keyboard focus within the row. The left gradient fades the
+   underlying text out beneath the cluster for legibility. */
 .app-actions {
   display: flex;
   gap: 0.25rem;
   flex-shrink: 0;
+  position: absolute;
+  right: var(--mj-space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  padding-left: var(--mj-space-6);
+  /* Fades to the row's HOVER background — the cluster is only ever visible
+     while the row is hovered/focused, when that bg is active. */
+  background: linear-gradient(to right, transparent, var(--mj-bg-surface-hover) 1.25rem);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--mj-transition-fast);
+}
+
+.app-item-content:hover .app-actions,
+.app-item-content:focus-within .app-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 
@@ -278,22 +307,22 @@
   color: var(--mj-status-error);
 }
 
-/* Available app items */
+/* Available app items — same card language as the selected rows */
 .available-app-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.5rem;
-  background: var(--mat-sys-surface);
-  border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: var(--mat-sys-corner-small);
-  transition: all 0.2s ease;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-3-5);
+  margin-bottom: var(--mj-space-2);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  transition: border-color var(--mj-transition-fast), background var(--mj-transition-fast);
 }
 
 .available-app-item:hover {
-  border-color: var(--mat-sys-primary);
-  background: var(--mat-sys-surface-container);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+  background: var(--mj-bg-surface-hover);
 }
 
 .available-app-item .app-info {
@@ -486,7 +515,8 @@
 @media (prefers-reduced-motion: reduce) {
   .app-item,
   .app-item-content,
-  .available-app-item {
+  .available-app-item,
+  .app-actions {
     transition: none;
   }
 }
