@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoisted mock variables
-const { mockRunViewFn, mockAvailable } = vi.hoisted(() => {
+const { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef } = vi.hoisted(() => {
     const mockRunViewFn = vi.fn();
     const mockAvailable = { value: false };
-    return { mockRunViewFn, mockAvailable };
+    const mockKHConfig = vi.fn();
+    const mockEntityDocumentsRef: { value: Array<{ VectorIndexID: string; Entity: string }> } = { value: [] };
+    return { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef };
 });
 
 vi.mock('@memberjunction/core', () => {
@@ -43,13 +45,20 @@ vi.mock('@memberjunction/core', () => {
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         UserInfo: vi.fn(),
-        UUIDsEqual: vi.fn(),
+        UUIDsEqual: (a: unknown, b: unknown) =>
+        typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase(),
     };
 });
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJVectorIndexEntity: vi.fn(),
     MJVectorDatabaseEntity: vi.fn(),
+    KnowledgeHubMetadataEngine: {
+        Instance: {
+            Config: mockKHConfig,
+            get EntityDocuments() { return mockEntityDocumentsRef.value; },
+        },
+    },
 }));
 
 vi.mock('@memberjunction/aiengine', () => ({
@@ -79,7 +88,8 @@ vi.mock('@memberjunction/global', () => ({
             },
         },
     },
-    UUIDsEqual: vi.fn(),
+    UUIDsEqual: (a: unknown, b: unknown) =>
+        typeof a === 'string' && typeof b === 'string' && a.trim().toLowerCase() === b.trim().toLowerCase(),
     RegisterClass: () => (target: Function) => target,
 }));
 
@@ -106,6 +116,8 @@ describe('VectorSearchProvider', () => {
         provider = new VectorSearchProvider();
         contextUser = createMockUser();
         mockRunViewFn.mockReset();
+        mockKHConfig.mockReset().mockResolvedValue(undefined);
+        mockEntityDocumentsRef.value = [];
     });
 
     describe('SourceType', () => {
@@ -276,6 +288,164 @@ describe('VectorSearchProvider', () => {
             expect(results[0].EntityName).toBe('Unknown');
         });
 
+        // Chunk-Identity Contract (content autotagging): chunk vectors are written with the
+        // chunk's own identity in metadata (Entity='MJ: Content Item Chunks', RecordID=<chunk PK>,
+        // ContentItemID=<parent>). This asserts a scoped-search hit on such a vector surfaces the
+        // matched CHUNK id (not the parent content item) with no search-side transformation — the
+        // read side of that contract, guarding against future drift in convertMatches.
+        it('surfaces the ContentItemChunk id + chunk entity for a chunk-identity match', () => {
+            const convertFn = (provider as unknown as {
+                convertMatches: (
+                    matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
+                    indexName: string
+                ) => Array<{ ID: string; EntityName: string; RecordID: string; RawMetadata: string }>
+            }).convertMatches;
+
+            const chunkID = '7c3f2a10-9b4d-4e6a-8f21-0a1b2c3d4e5f';
+            const results = convertFn.call(provider, [{
+                id: chunkID, // recordId strategy: the vector id IS the chunk id
+                score: 0.83,
+                metadata: {
+                    Entity: 'MJ: Content Item Chunks',
+                    RecordID: chunkID,            // bare UUID (not composite-key format)
+                    ContentItemID: 'item-parent-1',
+                    Sequence: 0,
+                },
+            }], 'content-index');
+
+            // The result identifies the CHUNK: entity + record id both point at the chunk row...
+            expect(results[0].EntityName).toBe('MJ: Content Item Chunks');
+            expect(results[0].RecordID).toBe(chunkID);
+            expect(results[0].ID).toBe(chunkID);
+            // ...and the parent content item id is available for the external hydrator via metadata.
+            expect(JSON.parse(results[0].RawMetadata).ContentItemID).toBe('item-parent-1');
+        });
+
+        it('should use the fallback entity name when metadata has no Entity field', () => {
+            const convertFn = (provider as unknown as {
+                convertMatches: (
+                    matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
+                    indexName: string,
+                    fallbackEntityName?: string | null
+                ) => Array<{ EntityName: string }>
+            }).convertMatches;
+
+            const results = convertFn.call(provider, [
+                { id: 'match-1', score: 0.5, metadata: {} },
+                { id: 'match-2', score: 0.4, metadata: { Entity: 'Companies' } },
+            ], 'test-index', 'Content Items');
+
+            // Missing Entity → fallback; explicit Entity metadata always wins
+            expect(results[0].EntityName).toBe('Content Items');
+            expect(results[1].EntityName).toBe('Companies');
+        });
+
+        it('should resolve record identity from the vector ID when RecordID metadata is absent', () => {
+            const convertFn = (provider as unknown as {
+                convertMatches: (
+                    matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
+                    indexName: string
+                ) => Array<{ RecordID: string }>
+            }).convertMatches;
+
+            // Vector populated with vectorIdStrategy 'recordId' + fieldStrategy 'explicit':
+            // the vector ID IS the record's UUID and metadata carries no RecordID
+            const results = convertFn.call(provider, [
+                { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', score: 0.5, metadata: {} },
+            ], 'test-index');
+
+            expect(results[0].RecordID).toBe('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+        });
+    });
+
+    describe('getFallbackEntityName / resolveIndexEntityName', () => {
+        type GetFallback = (
+            matches: Array<{ metadata?: Record<string, unknown> }> | undefined,
+            vectorIndex: { ID: string },
+            contextUser: UserInfo
+        ) => Promise<string | null>;
+
+        function getFallbackFn(): GetFallback {
+            return (provider as unknown as { getFallbackEntityName: GetFallback }).getFallbackEntityName.bind(provider);
+        }
+
+        it('should skip the lookup entirely when every match carries Entity metadata', async () => {
+            const result = await getFallbackFn()(
+                [{ metadata: { Entity: 'People' } }, { metadata: { Entity: 'People' } }],
+                { ID: 'idx-1' },
+                contextUser
+            );
+            expect(result).toBeNull();
+            expect(mockKHConfig).not.toHaveBeenCalled();
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('should resolve the entity name from the cached KnowledgeHubMetadataEngine entity documents when a match lacks Entity', async () => {
+            mockEntityDocumentsRef.value = [{ VectorIndexID: 'idx-1', Entity: 'Content Items' }];
+
+            const result = await getFallbackFn()(
+                [{ metadata: {} }],
+                { ID: 'idx-1' },
+                contextUser
+            );
+            expect(result).toBe('Content Items');
+            expect(mockKHConfig).toHaveBeenCalledWith(false, contextUser);
+            // No RunView/RunQuery — this is a lookup against the already-cached engine, never a query.
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('should match VectorIndexID case-insensitively', async () => {
+            mockEntityDocumentsRef.value = [{ VectorIndexID: 'IDX-1', Entity: 'Content Items' }];
+
+            const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-1' }, contextUser);
+            expect(result).toBe('Content Items');
+        });
+
+        it('should return null when the index serves multiple entities (ambiguous)', async () => {
+            mockEntityDocumentsRef.value = [
+                { VectorIndexID: 'idx-2', Entity: 'Content Items' },
+                { VectorIndexID: 'idx-2', Entity: 'People' },
+            ];
+
+            const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-2' }, contextUser);
+            expect(result).toBeNull();
+        });
+
+        it('should ignore entity documents belonging to other vector indexes', async () => {
+            mockEntityDocumentsRef.value = [
+                { VectorIndexID: 'idx-other', Entity: 'People' },
+                { VectorIndexID: 'idx-3', Entity: 'Content Items' },
+            ];
+
+            const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-3' }, contextUser);
+            expect(result).toBe('Content Items');
+        });
+
+        it('should resolve consistently across repeated calls without issuing a RunView/RunQuery', async () => {
+            // KnowledgeHubMetadataEngine IS the cache — Config() is a cheap no-op once loaded,
+            // so there is no need for (and no correctness benefit to) a second, hand-rolled
+            // per-index cache layer inside VectorSearchProvider.
+            mockEntityDocumentsRef.value = [{ VectorIndexID: 'idx-4', Entity: 'Content Items' }];
+
+            const fn = getFallbackFn();
+            const r1 = await fn([{ metadata: {} }], { ID: 'idx-4' }, contextUser);
+            const r2 = await fn([{ metadata: {} }], { ID: 'idx-4' }, contextUser);
+
+            expect(r1).toBe('Content Items');
+            expect(r2).toBe('Content Items');
+            expect(mockKHConfig).toHaveBeenCalledTimes(2);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('should return null (and not throw) when the engine fails to load', async () => {
+            mockKHConfig.mockRejectedValueOnce(new Error('metadata unavailable'));
+
+            const result = await getFallbackFn()([{ metadata: {} }], { ID: 'idx-5' }, contextUser);
+            expect(result).toBeNull();
+        });
+    });
+
+    describe('Search — score handling', () => {
         it('should handle zero score in metadata', () => {
             const convertFn = (provider as unknown as {
                 convertMatches: (
@@ -314,6 +484,7 @@ describe('VectorSearchProvider', () => {
             queryText: string,
             topK: number,
             filter: object | undefined,
+            providerConfig: Record<string, unknown> | undefined,
             contextUser: UserInfo
         ) => Promise<Array<{ Score: number }>>;
 
@@ -338,7 +509,7 @@ describe('VectorSearchProvider', () => {
 
             const queryOneIndex = (provider as unknown as { queryOneIndex: QueryOneIndex }).queryOneIndex;
             const results = await queryOneIndex.call(
-                provider, { Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1, 0.2], 'climate policy', 5, undefined, contextUser
+                provider, { Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1, 0.2], 'climate policy', 5, undefined, undefined, contextUser
             );
 
             expect(tryWire).toHaveBeenCalledTimes(1);
@@ -370,7 +541,7 @@ describe('VectorSearchProvider', () => {
 
             const queryOneIndex = (provider as unknown as { queryOneIndex: QueryOneIndex }).queryOneIndex;
             const results = await queryOneIndex.call(
-                provider, { Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1], 'q', 5, undefined, contextUser
+                provider, { Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1], 'q', 5, undefined, undefined, contextUser
             );
 
             expect(queryIndex).toHaveBeenCalledTimes(1);

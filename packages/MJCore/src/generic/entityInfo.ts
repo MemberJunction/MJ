@@ -1467,6 +1467,18 @@ export class EntityInfo extends BaseInfo {
      */
     VirtualEntity: boolean = null
     /**
+     * If set, this entity is backed by an external data source (Snowflake, MongoDB,
+     * external SQL/PostgreSQL/MySQL, ...) and is read-only. Reads are proxied live
+     * through the registered ExternalDataSourceReadRouter. Null = backed by the MJ database.
+     */
+    ExternalDataSourceID: string = null
+    /**
+     * Remote object name (table/view/collection) on the external system that backs
+     * this entity. Resolved against the data source defaults when unqualified. Only
+     * meaningful when ExternalDataSourceID is set.
+     */
+    ExternalObjectName: string = null
+    /**
      * Whether to track all changes to records in the RecordChange table
      */
     TrackRecordChanges: boolean = null
@@ -2842,9 +2854,9 @@ export class RecordMergeDetailResult {
      */
     Success: boolean
     /**
-     * Deletion Log ID for the specific record that was merged
+     * Deletion Log ID (uniqueidentifier) for the specific record that was merged
      */
-    RecordMergeDeletionLogID: number | null
+    RecordMergeDeletionLogID: string | null
     /**
      * Status message, if any, for the specific record that was merged
      */

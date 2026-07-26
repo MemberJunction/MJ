@@ -17,6 +17,7 @@ import { BaseEntity, CompositeKey, RunView } from '@memberjunction/core';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { KnowledgeHubMetadataEngine, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentSourceEntity } from '@memberjunction/core-entities';
 import {
@@ -33,6 +34,7 @@ import { formatNumber, formatDate, computeDuration, displayStatus, getSourceType
 })
 export class ClassifySourcesTabComponent extends BaseAngularComponent {
     private cdr = inject(ChangeDetectorRef);
+    private confirmService = inject(MJConfirmService);
 
     // ── Shared raw inputs (host is the data orchestrator) ──
 
@@ -453,7 +455,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
     // ════════════════════════════════════════════
 
     public async DeleteSource(card: SourceCard): Promise<void> {
-        if (!confirm(`Delete source "${card.Name}"? This cannot be undone.`)) return;
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Source', message: `Delete source "${card.Name}"?`, detail: 'This action cannot be undone.' }))) return;
 
         try {
             const p = this.ProviderToUse;
@@ -566,7 +568,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
      */
     public async RemoveSchedule(card: SourceCard): Promise<void> {
         if (!card.ScheduledActionID) return;
-        if (!confirm(`Remove the schedule "${card.ScheduleDescription ?? 'schedule'}" from "${card.Name}"?`)) return;
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Schedule', message: `Remove the schedule "${card.ScheduleDescription ?? 'schedule'}" from "${card.Name}"?`, confirmText: 'Remove' }))) return;
 
         try {
             await this.linkScheduleToSource(card.ID, null);

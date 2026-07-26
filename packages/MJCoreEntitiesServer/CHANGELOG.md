@@ -1,5 +1,294 @@
 # @memberjunction/core-entities-server
 
+## 5.49.0
+
+### Patch Changes
+
+- c5e4b9e: Agent conversation compaction: durable cross-turn summaries stored on the conversation (Sequence + SummaryPromptRunID, budget knobs on AIAgentType/AIAgent, Compaction run steps), conversation-history retrieval tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange), edit handling with OriginalMessageChanged flagging and a wired chat edit affordance, plus hardening fixes: failed message expansions now surface a reason to the model (breaks an unbounded retry loop), json5 ESM import fix restores the local JSON-repair tier, and SQLConverter no longer truncates PG column comments at escaped apostrophes.
+- 6c910ef: Dialect-aware query extraction with QuerySQL-triggered re-extraction, PG double-quoted identifier unwrapping in SQL parser, lazy-load QueryEngine in MJQuerySQLEntityServer, and suppress full_access scope probe from API key usage logs
+- b52ffa8: Fix four silent-failure bugs found while triaging the open issue backlog. Each one looked correct from the outside while doing nothing, or doing the wrong thing, at runtime. No schema changes.
+
+  **`BaseLLM` silently truncated streamed responses (`@memberjunction/ai`).** The streaming chunk loop caught any mid-stream error, logged it, and then finalized the response as a **success**. A dropped connection, a provider fault, or an abort part-way through a stream produced truncated content that the caller was told was complete — under every provider, for every streaming consumer. Genuine failures now surface as failures; cancellation is still routed to the driver's `finalizeStreamingResponse`, since providers differ on whether an abort throws there or simply ends iteration.
+
+  **No LLM driver honored `ChatParams.cancellationToken`** (13 provider packages). The field existed on `ChatParams` and zero drivers read it, so an aborted or timed-out request abandoned the promise while the socket kept streaming and pinning buffers. Now forwarded to the SDK across all 19 drivers — 13 fixed directly, the remaining 6 inheriting from `OpenAILLM` / `GeminiLLM` — on both the streaming and non-streaming paths. The mechanism differs per provider and was verified rather than assumed — Bedrock takes `abortSignal` (not `signal`); Ollama has no per-request hook at all, so the signal is threaded through a custom `fetch`; and `Inception` overrides both chat paths without calling `super`, so it does not inherit the fix from `OpenAILLM` despite appearing to. An abort is reported `Fatal` / `canFailover: false`, because `ErrorAnalyzer` otherwise classifies it as retriable — meaning a request the user just cancelled would have been retried.
+
+  **Prompt execution could not be bounded (`@memberjunction/ai-prompts`, `@memberjunction/ai-core-plus`).** On the single-model path the model call was awaited with no bound unless the caller hand-supplied an `AbortSignal`, so a hung provider connection never resolved. Adds a per-request `AIPromptParams.timeoutMS` and a typed `AIPromptTimeoutError` that `ErrorAnalyzer` classifies as retriable, so a timeout now flows into the existing retry/failover machinery instead of hanging. The timeout and any caller-supplied token compose — neither is discarded. Enforcement lives in `executeModel`, the one method the parallel coordinator also inherits, so the single-model and parallel paths cannot diverge. (Issue #3064 was filed as "`AIPromptRunner` does not enforce `AIPrompt.TimeoutMS`", but that column does not exist — the bound could not be expressed at all. A prompt-level column is tracked separately in #3133.)
+
+  **A malformed deny-list silently disarmed the Predictive Studio leakage guard** (`@memberjunction/predictive-studio*`, `@memberjunction/core-entities-server`, `@memberjunction/ng-dashboards`). Pasting a bracketed list into the pipeline editor produced `DenyFields: ["[CheckInTime", …, "Status]"]`; the deny-set then matched nothing, so the most dangerous leak columns trained completely unguarded and the save was accepted. The editor no longer manufactures the bad input, a new `MJMLTrainingPipelineEntityServer.ValidateAsync` rejects it at save, and the dominance threshold is clamped at enforcement time so rows written before this validation existed cannot disable the guard. Also unifies `DEFAULT_DOMINANCE_THRESHOLD`, which was defined twice with different values (`0.85` vs `0.6`) — agent-authored pipelines had been held to a materially laxer guard than hand-authored ones.
+
+  **Dead CSS shipped to production (`@memberjunction/ng-dashboards`, `@memberjunction/ng-conversations`).** These packages build with bare `ngc` — no Sass step — so `styleUrls` content is embedded verbatim. Native CSS nesting makes `&:hover` accidentally work, but it cannot do string concatenation, so every `&__elem` / `&--modifier` rule was silently dropped. Three components were affected. **This resurrects styling that has never rendered**: the realtime media-surface tab bar had no active-tab indicator, and evidence playback had no active-turn highlight and no played-progress color on its waveform. A new `check:ui-ngc-scss` CI gate prevents the trap re-arming.
+
+  Also fixes `@memberjunction/ai-azure`, whose unit tests had never actually run — the package had test files and a vitest config but no `test` script.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [88d707b]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [6c910ef]
+- Updated dependencies [42a680a]
+- Updated dependencies [48fa886]
+- Updated dependencies [314f667]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [7d6e8fb]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/sql-converter@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/scheduling-engine@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/sql-parser@5.49.0
+  - @memberjunction/integration-engine@5.49.0
+  - @memberjunction/predictive-studio-core@5.49.0
+  - @memberjunction/ai-vectordb@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/tag-engine@5.49.0
+  - @memberjunction/ai-vector-dupe@5.49.0
+  - @memberjunction/ai-vectors-memory@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/doc-utils@5.49.0
+  - @memberjunction/integration-pk-classifier@5.49.0
+  - @memberjunction/ai-provider-bundle@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/tag-engine@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-vectordb@5.48.0
+  - @memberjunction/ai-vector-dupe@5.48.0
+  - @memberjunction/ai-vectors-memory@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/doc-utils@5.48.0
+  - @memberjunction/integration-engine@5.48.0
+  - @memberjunction/integration-pk-classifier@5.48.0
+  - @memberjunction/scheduling-engine@5.48.0
+  - @memberjunction/ai-provider-bundle@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-converter@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+  - @memberjunction/sql-parser@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+- Updated dependencies [936a286]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/sqlserver-dataprovider@5.47.0
+  - @memberjunction/sql-converter@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/tag-engine@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/ai-vector-dupe@5.47.0
+  - @memberjunction/ai-vectors-memory@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/doc-utils@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/integration-engine@5.47.0
+  - @memberjunction/integration-pk-classifier@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/scheduling-engine@5.47.0
+  - @memberjunction/sql-parser@5.47.0
+  - @memberjunction/ai-provider-bundle@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/tag-engine@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/ai-vector-dupe@5.46.0
+  - @memberjunction/ai-vectors-memory@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/doc-utils@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/integration-engine@5.46.0
+  - @memberjunction/integration-pk-classifier@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/scheduling-engine@5.46.0
+  - @memberjunction/ai-provider-bundle@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-converter@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+  - @memberjunction/sql-parser@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/tag-engine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-vector-dupe@5.45.1
+  - @memberjunction/scheduling-engine@5.45.1
+  - @memberjunction/generic-database-provider@5.45.1
+  - @memberjunction/sqlserver-dataprovider@5.45.1
+  - @memberjunction/ai-provider-bundle@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/ai-vectordb@5.45.1
+  - @memberjunction/ai-vectors-memory@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/doc-utils@5.45.1
+  - @memberjunction/integration-engine@5.45.1
+  - @memberjunction/integration-pk-classifier@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/sql-converter@5.45.1
+  - @memberjunction/sql-dialect@5.45.1
+  - @memberjunction/sql-parser@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- 19ec4b0: Phase 2 of the core AI Skill library: seven new skills (Document Builder, Communications, Data Import & Transform, File Management, Scheduling & Automation, Lists & Audiences, Code & Computation) with externalized instruction templates and bundled actions/sub-agents; the SkillSmith meta-agent (interviews, discovers bundle members, drafts guardrailed instructions, persists skills as Pending for review); and MJAISkillEntityServer, which defaults AISkill.CreatedByUserID to the context user so programmatic creation paths (Create Record action, scripts) work without knowing the acting user's ID.
+- c1f2d3d: User Routines (P1.5): user-owned scheduled/monitoring routines that run an Agent, Action, or Prompt on a cron schedule. New UserRoutine/UserRoutineRecipient/UserRoutineRun schema; UserRoutineDispatcherDriver scheduled-job driver (1-minute sweep, claim-before-run, bounded concurrency, per-routine isolation, runs as the owner, Template-driven notifications with OnChange result-hash detection, RequestedSkillIDs pre-arming for Agent targets); pure UserRoutineProcessor schedule/notify primitives shared with MJUserRoutineEntityServer (NextRunAt on save, cron validation) and MJUserRoutineRecipientEntityServer (User-xor-Email); lazy non-startup UserRoutineEngine; new @memberjunction/ng-user-routines widget set (list/editor/history + command-center composite + slide-in, cancelable Before/After events, Agent-only creation with categorical ng-trees picker); conversations bottom-sidebar Routines section gated by ShowRoutines input AND entity-Read permission (hosted in both the generic workspace sidebar and Explorer's Chat wrapper); Routines Explorer app; pure cron preset/describe helpers now in @memberjunction/global (CronUtils); mj-tree gains a DefaultExpansion input ('first-level' | 'all' | 'none'); BaseScheduledJob gains IsHighFrequencyByDesign so by-design pollers (the routine dispatcher) opt out of the high-frequency cron warning; Agent-target routines run inside a dedicated per-routine Conversation (Application-scoped via the Routines app so it stays out of the default chat list; RunAgentInConversation writes proper user/assistant turns; standalone fallback when the app is absent); UserRoutine.ConversationID schema + open-conversation and open-execution-record event chains through the conversations hosts; server-side cascade delete (recipients + run bookkeeping) so routines that have run delete cleanly; agent picker is a compact mj-tree-dropdown (DefaultExpansion pass-through added); mj-slide-panel settles to transform:none when open so position:fixed descendants (dropdown panels) keep true viewport coordinates; time-relative sidebar/card/history text is snapshot-based (NG0100 fix); 16-test live integration suite + live Playwright E2E; Explorer notifications page rebuilt (day-grouped cards, sanitized HTML + Markdown message rendering with expand/collapse previews, snapshot relative times, removal of a test harness that created junk Conversations on Mark-All-Read) and the seeded routine notification template gains a compact Markdown Text body that the dispatcher now prefers for in-app delivery (the HTML document stays for email); new @memberjunction/ng-composer package extracts the conversations message composer (mention editor + dropdown + message input box) so the routine editor's InitialMessage field uses the mention editor without an ng-conversations dependency cycle — and the composer's mention/command triggers are PLUGGABLE: a generic ComposerTriggerProvider contract (TriggerChar/Key/Priority/GetSuggestions, generic MentionSuggestion with provider-supplied presets) with two supply modes (explicit [TriggerProviders] list, or ClassFactory discovery via @RegisterClass(ComposerTriggerProvider,'<key>') filtered by [ExcludedTriggerKeys]), leaving ng-composer with ZERO AI knowledge; the AI plugins moved to ng-conversations (composer-plugins: 'agent-mentions' '@' agents+users w/ configuration presets, 'record-mentions' '#' entities+queries, 'skill-commands' '/' skills — tree-shake-guarded by LoadComposerPlugins(); MentionAutocompleteService moved back to ng-conversations as a BaseSingleton engine shared by plugins and components) plus a new mj-ai-composer wrapped component that proxies the full mj-message-input-box surface with the AI triggers built in and familiar EnableAgentMentions/EnableEntityMentions/EnableSkillCommands convenience flags (the chat composer now uses it); the routine editor uses discovery mode with agent-mentions excluded.
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [f99cbc1]
+- Updated dependencies [11d5b4e]
+- Updated dependencies [fbee64c]
+- Updated dependencies [81a8aa2]
+- Updated dependencies [82ca89b]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+- Updated dependencies [d461df0]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/integration-engine@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/scheduling-engine@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/tag-engine@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/ai-vector-dupe@5.45.0
+  - @memberjunction/ai-vectors-memory@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/doc-utils@5.45.0
+  - @memberjunction/integration-pk-classifier@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/ai-provider-bundle@5.45.0
+  - @memberjunction/sql-converter@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+  - @memberjunction/sql-parser@5.45.0
+
+## 5.44.0
+
+### Minor Changes
+
+- 1367fbb: AI Skill permissions (full agent parity) + `/skill` composer invocation. Skills now use the same dedicated-table, **open-by-default** permission model as AI Agents via `MJ: AI Skill Permissions`: a cached runtime helper (`AISkillPermissionHelper`, open-by-default) and a unified-engine provider (`AISkillPermissionProvider`, closed-by-default / Sharing Center), grantee-exclusivity enforced by `MJAISkillPermissionEntityServer`, and a `GetSkillsForAgent(agent, user?)` filter so the model's skill catalog is intersected with the acting user's Run permission. The old `AI Skills` Resource-Type sharing is retired in favor of a skill-scoped permissions grid (`SkillPermissionsPanel`/`Dialog`/`Service`), with the `Can Share Skills` authorization repointed to it. End users invoke a skill for a message by typing `/skill-name` in the conversation composer (mirrors `@agent`/`#entity`; picker filtered by permission, chips use `AISkill.IconClass`/`Color`); selected IDs thread through the client → resolver → runtime chain as `ExecuteAgentParams.requestedSkillIDs` (both the `RunAIAgent` and `RunAIAgentFromConversationDetail` mutations), and `BaseAgent.preActivateRequestedSkills` activates them at run start only if they survive the guard (agent-accepted ∩ user-permitted). Requires the companion Agent Skills migration + CodeGen.
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-engine-base@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ai-vectordb@5.44.0
+  - @memberjunction/ai-vector-dupe@5.44.0
+  - @memberjunction/ai-vectors-memory@5.44.0
+  - @memberjunction/tag-engine@5.44.0
+  - @memberjunction/ai-prompts@5.44.0
+  - @memberjunction/skip-types@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/sqlserver-dataprovider@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/doc-utils@5.44.0
+  - @memberjunction/integration-engine@5.44.0
+  - @memberjunction/integration-pk-classifier@5.44.0
+  - @memberjunction/ai-provider-bundle@5.44.0
+  - @memberjunction/sql-converter@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+  - @memberjunction/sql-parser@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

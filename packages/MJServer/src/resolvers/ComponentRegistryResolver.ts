@@ -3,6 +3,7 @@ import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual, MJLruCache } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { CredentialEngine } from '@memberjunction/credentials';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
     ComponentRegistryClient,
@@ -249,7 +250,7 @@ export class ComponentRegistryExtendedResolver {
             }
 
             // --- Tier 2: Fetch from external registry ---
-            const registryClient = this.createClientForRegistry(registry);
+            const registryClient = await this.createClientForRegistry(registry, user);
 
             const response = await registryClient.getComponentWithHash({
                 registry: registry.Name,
@@ -329,7 +330,7 @@ export class ComponentRegistryExtendedResolver {
                     throw new Error(`Registry not found: ${params.registryId}`);
                 }
                 
-                const client = this.createClientForRegistry(registry);
+                const client = await this.createClientForRegistry(registry, user);
                 
                 const result = await client.searchComponents({
                     namespace: params.namespace,
@@ -356,7 +357,7 @@ export class ComponentRegistryExtendedResolver {
                 try {
                     await this.checkUserAccess(user, registry.ID);
                     
-                    const client = this.createClientForRegistry(registry);
+                    const client = await this.createClientForRegistry(registry, user);
                     const result = await client.searchComponents({
                         namespace: params.namespace,
                         query: params.query,
@@ -413,8 +414,8 @@ export class ComponentRegistryExtendedResolver {
             await this.checkUserAccess(user, registry.ID);
             
             // Create client on-demand
-            const client = this.createClientForRegistry(registry);
-            
+            const client = await this.createClientForRegistry(registry, user);
+
             const tree = await client.resolveDependencies(componentId);
             return tree as ComponentDependencyTreeType;
         } catch (error) {
@@ -499,17 +500,22 @@ export class ComponentRegistryExtendedResolver {
      * Create a client for a registry on-demand
      * Checks configuration first, then falls back to default settings
      */
-    private createClientForRegistry(registry: MJComponentRegistryEntity): ComponentRegistryClient {
+    private async createClientForRegistry(registry: MJComponentRegistryEntity, user?: UserInfo): Promise<ComponentRegistryClient> {
         // Check if there's a configuration for this registry
         const config = configInfo.componentRegistries?.find(r =>
             UUIDsEqual(r.id, registry.ID) || r.name === registry.Name
         );
 
-        // Get API key from environment or config
+        // Get API key from environment or config, falling back to the encrypted
+        // credential store (a credential named "Component Registry: <RegistryName>").
+        // The credential-store path lets an installer provision the key once, without
+        // an env var or a plaintext entry in mj.config.cjs. Env/config still win so
+        // existing deployments are unchanged.
         const apiKey = process.env[`REGISTRY_API_KEY_${registry.ID.replace(/-/g, '_').toUpperCase()}`] ||
                       process.env[`REGISTRY_API_KEY_${registry.Name?.replace(/-/g, '_').toUpperCase()}`] ||
-                      config?.apiKey;
-        
+                      config?.apiKey ||
+                      await this.resolveRegistryApiKeyFromCredentialStore(registry, user);
+
         // Get the registry URI (with possible override)
         const baseUrl = this.getRegistryUri(registry);
         
@@ -529,6 +535,26 @@ export class ComponentRegistryExtendedResolver {
             retryPolicy: retryPolicy,
             headers: config?.headers
         });
+    }
+
+    /**
+     * Resolves a registry's API key from the encrypted credential store, using the
+     * convention credential name "Component Registry: <RegistryName>". Returns undefined
+     * when no such credential exists (e.g. public registries that need no key) or the
+     * store is unavailable — callers treat the missing key as "unauthenticated".
+     */
+    private async resolveRegistryApiKeyFromCredentialStore(registry: MJComponentRegistryEntity, user?: UserInfo): Promise<string | undefined> {
+        try {
+            await CredentialEngine.Instance.Config(false, user);
+            const resolved = await CredentialEngine.Instance.getCredential<{ apiKey: string }>(
+                `Component Registry: ${registry.Name}`,
+                { contextUser: user, subsystem: 'ComponentRegistry' }
+            );
+            return resolved?.values?.apiKey || undefined;
+        } catch {
+            // Credential not found or store unavailable — fall through to no key.
+            return undefined;
+        }
     }
 
     /**
@@ -585,7 +611,7 @@ export class ComponentRegistryExtendedResolver {
 
             // Create client using the same pattern as GetRegistryComponent
             // This respects REGISTRY_URI_OVERRIDE_* and REGISTRY_API_KEY_* environment variables
-            const registryClient = this.createClientForRegistry(registry);
+            const registryClient = await this.createClientForRegistry(registry, user);
 
             const sdkParams: SDKComponentFeedbackParams = {
                 componentName: feedback.componentName,

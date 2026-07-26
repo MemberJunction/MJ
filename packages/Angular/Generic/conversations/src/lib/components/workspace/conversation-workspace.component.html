@@ -43,8 +43,11 @@
             [renamedConversationId]="renamedConversationId"
             [isSidebarPinned]="isSidebarPinned"
             [isMobileView]="isMobileView"
+            [ShowRoutines]="ShowRoutines"
+            [Provider]="Provider"
             (conversationSelected)="onConversationSelected($event)"
             (newConversationRequested)="startNewConversation()"
+            (openEntityRecord)="onOpenEntityRecord($event)"
             (pinSidebarRequested)="pinSidebar()"
             (unpinSidebarRequested)="unpinSidebar()">
           </mj-conversation-sidebar>

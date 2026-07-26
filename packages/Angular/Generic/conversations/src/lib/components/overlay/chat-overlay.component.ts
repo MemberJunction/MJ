@@ -33,7 +33,7 @@ import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { ConversationBridgeService, ConversationSwitchEvent } from '../../services/conversation-bridge.service';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
-import { PendingAttachment } from '../mention/mention-editor.component';
+import { PendingAttachment } from '@memberjunction/ng-composer';
 
 /** Visual state of the overlay panel */
 export type ChatOverlayState = 'collapsed' | 'expanded' | 'maximized';

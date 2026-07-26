@@ -9,6 +9,9 @@ export default mergeConfig(
   defineProject({
     test: {
       name: '@memberjunction/ng-markdown',
+      // Web-only DOM utilities (copy buttons, collapsible toggles, svg sanitize)
+      // need a document; the pure parsing logic is tested in @memberjunction/markdown-core.
+      environment: 'jsdom',
     },
   }),
 );

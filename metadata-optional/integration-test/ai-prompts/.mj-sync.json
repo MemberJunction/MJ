@@ -1,0 +1,67 @@
+{
+  "entity": "MJ: AI Prompts",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat"
+  },
+  "ignoreDirectories": [
+    "templates",
+    "output"
+  ],
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".it-agent-prompts.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name LIKE 'IT:%'",
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "preserveFields": [
+      "TemplateText",
+      "OutputExample"
+    ],
+    "excludeFields": [
+      "TemplateID"
+    ],
+    "externalizeFields": [
+      {
+        "field": "TemplateText",
+        "pattern": "@file:templates/{Name}.template.md"
+      },
+      {
+        "field": "OutputExample",
+        "pattern": "@file:output/{Name}.example.json"
+      }
+    ],
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "MJ: AI Prompt Categories",
+        "field": "Name"
+      },
+      "TypeID": {
+        "entity": "MJ: AI Prompt Types",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": {
+        "entity": "MJ: AI Prompt Models",
+        "foreignKey": "PromptID",
+        "filter": "Status = 'Active'",
+        "lookupFields": {
+          "ModelID": {
+            "entity": "MJ: AI Models",
+            "field": "Name"
+          },
+          "VendorID": {
+            "entity": "MJ: AI Vendors",
+            "field": "Name"
+          }
+        }
+      }
+    }
+  }
+}

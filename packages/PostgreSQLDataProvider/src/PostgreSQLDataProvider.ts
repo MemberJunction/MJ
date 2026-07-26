@@ -882,10 +882,12 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         let paramIndex = 0;
         for (const [field, value] of fieldValues) {
             values.push(PGQueryParameterProcessor.ProcessParameterValue(value));
-            // Baseline-shipped sp* CRUD functions use `p_<lowercased flat field name>`
-            // (no inner separator) — e.g. `p_categoryid` for column "CategoryID".
-            // toSnakeCase would produce `p_category_id` and fail every Save.
-            placeholders.push(`p_${field.Name.toLowerCase()} => $${paramIndex + 1}`);
+            // Param name via the canonical builder (ParameterRef → `p_<lowercased CodeName>`,
+            // no inner separator) so it EXACTLY matches the CRUD function's declared signature,
+            // which is emitted by PostgreSQLCodeGenProvider using the same ParameterRef. Using
+            // CodeName (not Name) also keeps this correct for fields whose display Name differs
+            // from the code identifier (e.g. spaces). See ParameterRef in postgresqlDialect.ts.
+            placeholders.push(`${pgDialect.ParameterRef(field.CodeName)} => $${paramIndex + 1}`);
             paramIndex++;
 
             if ((value === null || value === undefined) && field.NeedsClearCompanion) {
@@ -900,7 +902,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         if (isUpdate) {
             for (const pkv of entity.PrimaryKey.KeyValuePairs) {
                 values.push(PGQueryParameterProcessor.ProcessParameterValue(pkv.Value));
-                placeholders.push(`p_${pkv.FieldName.toLowerCase()} => $${paramIndex + 1}`);
+                placeholders.push(`${pgDialect.ParameterRef(pkv.FieldName)} => $${paramIndex + 1}`);
                 paramIndex++;
             }
         }
@@ -1216,6 +1218,19 @@ SELECT * FROM delete_result`;
      */
     private buildRecordIDFromCTE(entityInfo: EntityInfo, cteAlias: string): string {
         const pkFields = entityInfo.PrimaryKeys;
+        // U4 — keyless entity guard: an entity with NO primary key fields would interpolate an
+        // EMPTY RecordID expression into the record-change CTE, producing malformed SQL
+        // (`SELECT $N::uuid, , …` → a bare comma parse error far from the real cause). A keyless
+        // entity is a resolution/codegen defect (the RSU pipeline drops PK-less objects
+        // before entity generation) — name it precisely so the operator lands on the actual
+        // problem instead of a PG syntax error.
+        if (pkFields.length === 0) {
+            throw new Error(
+                `Entity "${entityInfo.Name}" has no primary key — cannot build a RecordID for record-change tracking. ` +
+                `A keyless entity cannot be saved through the provider; resolve a (soft) primary key for it ` +
+                `(additionalSchemaInfo / IsSoftPrimaryKey) and re-run CodeGen.`
+            );
+        }
         const parts = pkFields.map(pk =>
             `'${pk.CodeName}' || '|' || ${cteAlias}.${pgDialect.QuoteIdentifier(pk.Name)}::text`
         );
@@ -1428,7 +1443,9 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
         'NEWSEQUENTIALID', 'NEWID', 'GETUTCDATE', 'GETDATE', 'SYSDATETIMEOFFSET',
         'OBJECT_ID', 'SCOPE_IDENTITY',
         // Aggregate / scalar functions
-        'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
+        'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'ROUND', 'NULLIF', 'ABS', 'CEIL', 'CEILING', 'FLOOR',
+        'SIGN', 'MOD', 'POWER', 'SQRT', 'LOG', 'EXP', 'RANDOM',
+        'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
         'LEN', 'LENGTH', 'DATALENGTH', 'LOWER', 'UPPER', 'LTRIM', 'RTRIM', 'TRIM', 'REPLACE',
         'SUBSTRING', 'CHARINDEX', 'PATINDEX', 'STUFF', 'CONCAT', 'FORMAT',
         'POSITION', 'OVERLAY', 'EXTRACT', 'GREATEST', 'LEAST',

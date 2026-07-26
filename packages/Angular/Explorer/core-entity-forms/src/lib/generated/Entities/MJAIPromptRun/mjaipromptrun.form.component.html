@@ -130,15 +130,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="AgentRunID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="RerunFromPromptRunID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -250,6 +241,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AgentRun"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
@@ -977,6 +976,56 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDuplicateRunDetailMatches', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- User Routine Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJUserRoutineRuns"
+        SectionName="User Routine Runs"
+        Icon="fa fa-play-circle"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJUserRoutineRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Routine Runs','PromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: User Routine Runs')"
+                [AllowLoad]="IsSectionExpanded('mJUserRoutineRuns')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJUserRoutineRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Conversation Compaction Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJConversationCompactionRuns"
+        SectionName="Conversation Compaction Runs"
+        Icon="fa fa-link"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJConversationCompactionRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Compaction Runs','PromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Compaction Runs')"
+                [AllowLoad]="IsSectionExpanded('mJConversationCompactionRuns')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationCompactionRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

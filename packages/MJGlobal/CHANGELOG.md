@@ -1,5 +1,71 @@
 # Change Log - @memberjunction/global
 
+## 5.49.0
+
+### Patch Changes
+
+- a8cb2b6: Explicit ClassFactory resolution failure + permission provider fault isolation (B34/B35)
+
+  `ClassFactory.CreateInstance` has never returned `null` for an unregistered key — it falls back to
+  instantiating the anchor base class — so every call site written as `if (instance) { use } else { error }`
+  had a dead failure branch and silently installed a hollow base-class object.
+  - **`@memberjunction/global`**: adds `TryCreateInstance` / `TryCreateInstanceAsync`, which return an
+    explicit `ClassResolutionResult<T>` (`Resolved` / `Instance` / `Reason`). Bases that cannot function
+    standalone opt in with `static readonly RequiresSubclass = true`: on a fallback they now throw from
+    `CreateInstance` and return `{Resolved: false, Instance: null}` from `TryCreateInstance`. Bases without
+    the marker keep the historical base-class fallback (e.g. `BaseEntity`) and emit a structured, once-per-key
+    warning listing the registered keys for that base plus the call-site stack. `CreateInstance`,
+    `CreateInstanceAsync`, and the `Try*` variants all route through one shared resolution path.
+  - **`@memberjunction/core`**: `PermissionProviderBase` declares `RequiresSubclass = true` — every member is
+    abstract, so a base instance is a method-less stub.
+  - **`@memberjunction/core-entities`**: `PermissionEngine.instantiateProviders` uses `TryCreateInstance`, so
+    an unresolvable `ProviderClassName` is now genuinely skipped instead of installing a stub as a live
+    provider. The `GetAllUserPermissions` / `GetPermissionsGrantedByUser` / `GetPermissionsSharedWithUser`
+    fan-outs defer each provider call into a promise body so a SYNCHRONOUS throw (a missing method) is
+    isolated by `Promise.allSettled` instead of rejecting the entire aggregate for every user.
+
+- 13d9b8e: Stop the ClassFactory resolution-fallback instrumentation (added in #3197) from flooding builds.
+
+  Two false-positive classes were being reported as fallback "failures":
+  - **Null/empty key** — `CreateInstance(LoggerBase, null)` means "give me the default implementation for this base". Landing on the base is the _intended_ outcome, not a failed lookup.
+  - **Unbounded volume on hot paths** — the dedup keyed on `(base, key)`, which does nothing for callers whose key varies per item. Every `EntityField` hydration calls `CreateInstance(EntityField, '<entity>.<field>')`, so a full repo build emitted thousands of distinct warnings and buried anything real.
+
+  Null-key fallbacks are no longer reported, and remaining fallbacks are capped **per base class** (3, then one summary line). Marker-bearing (`@RequiresSubclass()`) bases are never capped — those are hard errors.
+
+  Suppressing by "this base has no registrations" was tried and **reverted**: a tree-shaken registration leaves zero registrations, which is exactly the B34/B35 shape this instrumentation exists to catch. The unit tests caught that regression.
+
+  Verified: full repo build (293 + 265 tasks) emits **zero** ClassFactory warnings; MJGlobal 581 tests pass.
+
+- 9c07270: Convert the `RequiresSubclass` marker from a static class property to a `@RequiresSubclass()` decorator, and fix an inheritance bug in how it was read.
+
+  `@RequiresSubclass()` applies an own, non-enumerable marker (`__mj_RequiresSubclass`) to the class prototype, and `ClassRequiresSubclass(classOrInstance)` reads it via an **own-property** check.
+
+  That own-property semantics is the substantive change. The previous `(baseClass as X).RequiresSubclass === true` read walked the constructor prototype chain, so **every subclass of a marked base also reported `true`** — meaning a ClassFactory resolution against a concrete, perfectly instantiable subclass would have wrongly thrown. The marker now applies to exactly the class that declared it.
+
+  The decorator also matches the existing `@RegisterClass` idiom, keeps the marker key defined in one place rather than retyped as a literal per base, and centralizes the own-property check so call sites can't get it wrong.
+
+  Backward compatible: the legacy `static RequiresSubclass = true` form is still honored (with the same own-property semantics).
+
+## 5.48.0
+
+## 5.47.0
+
+## 5.46.0
+
+## 5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- c1f2d3d: User Routines (P1.5): user-owned scheduled/monitoring routines that run an Agent, Action, or Prompt on a cron schedule. New UserRoutine/UserRoutineRecipient/UserRoutineRun schema; UserRoutineDispatcherDriver scheduled-job driver (1-minute sweep, claim-before-run, bounded concurrency, per-routine isolation, runs as the owner, Template-driven notifications with OnChange result-hash detection, RequestedSkillIDs pre-arming for Agent targets); pure UserRoutineProcessor schedule/notify primitives shared with MJUserRoutineEntityServer (NextRunAt on save, cron validation) and MJUserRoutineRecipientEntityServer (User-xor-Email); lazy non-startup UserRoutineEngine; new @memberjunction/ng-user-routines widget set (list/editor/history + command-center composite + slide-in, cancelable Before/After events, Agent-only creation with categorical ng-trees picker); conversations bottom-sidebar Routines section gated by ShowRoutines input AND entity-Read permission (hosted in both the generic workspace sidebar and Explorer's Chat wrapper); Routines Explorer app; pure cron preset/describe helpers now in @memberjunction/global (CronUtils); mj-tree gains a DefaultExpansion input ('first-level' | 'all' | 'none'); BaseScheduledJob gains IsHighFrequencyByDesign so by-design pollers (the routine dispatcher) opt out of the high-frequency cron warning; Agent-target routines run inside a dedicated per-routine Conversation (Application-scoped via the Routines app so it stays out of the default chat list; RunAgentInConversation writes proper user/assistant turns; standalone fallback when the app is absent); UserRoutine.ConversationID schema + open-conversation and open-execution-record event chains through the conversations hosts; server-side cascade delete (recipients + run bookkeeping) so routines that have run delete cleanly; agent picker is a compact mj-tree-dropdown (DefaultExpansion pass-through added); mj-slide-panel settles to transform:none when open so position:fixed descendants (dropdown panels) keep true viewport coordinates; time-relative sidebar/card/history text is snapshot-based (NG0100 fix); 16-test live integration suite + live Playwright E2E; Explorer notifications page rebuilt (day-grouped cards, sanitized HTML + Markdown message rendering with expand/collapse previews, snapshot relative times, removal of a test harness that created junk Conversations on Mark-All-Read) and the seeded routine notification template gains a compact Markdown Text body that the dispatcher now prefers for in-app delivery (the HTML document stays for email); new @memberjunction/ng-composer package extracts the conversations message composer (mention editor + dropdown + message input box) so the routine editor's InitialMessage field uses the mention editor without an ng-conversations dependency cycle — and the composer's mention/command triggers are PLUGGABLE: a generic ComposerTriggerProvider contract (TriggerChar/Key/Priority/GetSuggestions, generic MentionSuggestion with provider-supplied presets) with two supply modes (explicit [TriggerProviders] list, or ClassFactory discovery via @RegisterClass(ComposerTriggerProvider,'<key>') filtered by [ExcludedTriggerKeys]), leaving ng-composer with ZERO AI knowledge; the AI plugins moved to ng-conversations (composer-plugins: 'agent-mentions' '@' agents+users w/ configuration presets, 'record-mentions' '#' entities+queries, 'skill-commands' '/' skills — tree-shake-guarded by LoadComposerPlugins(); MentionAutocompleteService moved back to ng-conversations as a BaseSingleton engine shared by plugins and components) plus a new mj-ai-composer wrapped component that proxies the full mj-message-input-box surface with the AI triggers built in and familiar EnableAgentMentions/EnableEntityMentions/EnableSkillCommands convenience flags (the chat composer now uses it); the routine editor uses discovery mode with agent-mentions excluded.
+
+## 5.44.0
+
+### Patch Changes
+
+- 5396d90: Add permission-constrained engine loading to BaseEngine — pre-checks entity read permissions during Config() and skips all entity configs (all-or-nothing) when the user lacks access, preventing endless retry loops and console error flooding for org-scoped SaaS users. Engine getters now use GetConfigData() which throws a typed PermissionConstrainedError instead of silently returning empty arrays. Also fixes unsafe GetHighestPowerModel/GetHighestPowerLLM return types and resolves FK_AIAgentRunStep_ParentID race in fire-and-forget step saves.
+
 ## 5.43.0
 
 ### Minor Changes

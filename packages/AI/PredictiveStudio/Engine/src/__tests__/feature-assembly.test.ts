@@ -382,4 +382,46 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
 
     expect(score.matrix).toEqual(train.matrix);
   });
+
+  it("hydrates the AsOfStrategy 'column' date when the scored rows' projection dropped it", async () => {
+    // Real-world repro: Event No-Show Risk (AsOf column = RegistrationDate). The on-demand scope
+    // handed rows without RegistrationDate → every record failed at resolveAsOfDate → 0/6747 +
+    // circuit breaker. The as-of column must be hydrated exactly like a feature column.
+    const narrowRows: SourceRow[] = [
+      { ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' },
+      { ID: 'm2', AutoRenew: 0, MembershipType: 'Student' },
+    ];
+    const viewRows: SourceRow[] = [
+      { ID: 'm1', AutoRenew: 1, MembershipType: 'Individual', RegistrationDate: '2026-01-10T00:00:00Z' },
+      { ID: 'm2', AutoRenew: 0, MembershipType: 'Student', RegistrationDate: '2026-02-20T00:00:00Z' },
+    ];
+
+    const result = await new FeatureAssemblyExecutor().assemble({
+      ...base,
+      asOf: { Mode: 'column', Column: 'RegistrationDate' },
+      records: narrowRows,
+      dataAccess: new InMemoryDataAccess({ Members: viewRows }),
+      context: 'on-demand',
+    });
+
+    // Without hydration this throws "AsOfStrategy column 'RegistrationDate' is missing…" per record.
+    expect(result.matrix.rows).toHaveLength(2);
+    expect(result.matrix.rows[0]).toEqual([1, 'Individual']);
+  });
+
+  it("hard-fails when the AsOfStrategy 'column' date cannot be resolved at score time", async () => {
+    // The view fixture ALSO lacks RegistrationDate → hydration cannot fill it → refuse to assemble
+    // via the required-columns guardrail (not a per-record resolveAsOfDate crash).
+    const rows: SourceRow[] = [{ ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' }];
+
+    await expect(
+      new FeatureAssemblyExecutor().assemble({
+        ...base,
+        asOf: { Mode: 'column', Column: 'RegistrationDate' },
+        records: rows,
+        dataAccess: new InMemoryDataAccess({ Members: rows }),
+        context: 'on-demand',
+      }),
+    ).rejects.toThrow(/required feature column\(s\) \[RegistrationDate\] are absent/);
+  });
 });

@@ -1,5 +1,217 @@
 # Change Log - @memberjunction/cli
 
+## 5.49.0
+
+### Patch Changes
+
+- 70c658c: Add configurable startup mode ('full' | 'task') for fast CLI/script boot. StartupManager.Startup() accepts startup options; 'task' mode skips all @RegisterForStartup engine pre-warm (engines lazy-load on first touch) while 'full' preserves existing behavior. Mode resolves via a shared four-level precedence chain (MJ_STARTUP_MODE env var > programmatic option > mj.config.cjs startup.mode > entry-point default). MJAPI defaults to 'full'; MJCLI, mj-sync, and CodeGen default to 'task'. Measured 14x CPU reduction on mj sync validate.
+- Updated dependencies [486b276]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [a7733a9]
+- Updated dependencies [3b23275]
+- Updated dependencies [505c8b5]
+- Updated dependencies [ebe5b88]
+- Updated dependencies [6c910ef]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [38c69a6]
+- Updated dependencies [7d6e8fb]
+- Updated dependencies [b64efd1]
+- Updated dependencies [d23aa89]
+- Updated dependencies [85575cf]
+- Updated dependencies [04cdd67]
+- Updated dependencies [38c220c]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [fc1c693]
+- Updated dependencies [70c658c]
+  - @memberjunction/codegen-lib@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/server-bootstrap-lite@5.49.0
+  - @memberjunction/sql-converter@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/testing-cli@5.49.0
+  - @memberjunction/metadata-sync@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/ai-cli@5.49.0
+  - @memberjunction/db-auto-doc@5.49.0
+  - @memberjunction/open-app-engine@5.49.0
+  - @memberjunction/query-gen@5.49.0
+  - @memberjunction/cli-core@5.49.0
+  - @memberjunction/config@5.49.0
+  - @memberjunction/installer@5.49.0
+  - @memberjunction/sqlglot-ts@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- c798b90: Declare `@memberjunction/cli` as a devDependency of the MJExplorer and MJAPI apps so their `prebuild` invocation of `mj codegen manifest` always runs against a built CLI. Without the edge, turbo's affected-package PR filtering (`--filter=...[origin/next]`) never selected or ordered the CLI build, leaving the workspace `mj` bin an empty oclif shell — `Error: command codegen:manifest not found` — and MJExplorer's build then failed hard (TS2307) because its generated class-registrations manifest is gitignored and has no committed fallback. The apps themselves are unpublished (`mj_*` is changeset-ignored); this entry records the CLI-consumption contract fix in the release notes.
+- Updated dependencies [09e1b4b]
+- Updated dependencies [a94bd16]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/open-app-engine@5.48.0
+  - @memberjunction/codegen-lib@5.48.0
+  - @memberjunction/metadata-sync@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-cli@5.48.0
+  - @memberjunction/db-auto-doc@5.48.0
+  - @memberjunction/query-gen@5.48.0
+  - @memberjunction/server-bootstrap-lite@5.48.0
+  - @memberjunction/testing-cli@5.48.0
+  - @memberjunction/cli-core@5.48.0
+  - @memberjunction/config@5.48.0
+  - @memberjunction/installer@5.48.0
+  - @memberjunction/sql-converter@5.48.0
+  - @memberjunction/sqlglot-ts@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- 073842c: Fix `spawn E2BIG` in PostgreSQL migration conversion. The cross-file BIT-column
+- Updated dependencies [073842c]
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+- Updated dependencies [92ecbf8]
+- Updated dependencies [f4dce92]
+- Updated dependencies [f9f60d7]
+- Updated dependencies [936a286]
+- Updated dependencies [bfd0de1]
+  - @memberjunction/sqlglot-ts@5.47.0
+  - @memberjunction/core@5.47.0
+  - @memberjunction/open-app-engine@5.47.0
+  - @memberjunction/codegen-lib@5.47.0
+  - @memberjunction/sqlserver-dataprovider@5.47.0
+  - @memberjunction/sql-converter@5.47.0
+  - @memberjunction/ai-cli@5.47.0
+  - @memberjunction/db-auto-doc@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/metadata-sync@5.47.0
+  - @memberjunction/query-gen@5.47.0
+  - @memberjunction/server-bootstrap-lite@5.47.0
+  - @memberjunction/testing-cli@5.47.0
+  - @memberjunction/cli-core@5.47.0
+  - @memberjunction/config@5.47.0
+  - @memberjunction/installer@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/open-app-engine@5.46.0
+  - @memberjunction/ai-cli@5.46.0
+  - @memberjunction/codegen-lib@5.46.0
+  - @memberjunction/db-auto-doc@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/metadata-sync@5.46.0
+  - @memberjunction/query-gen@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/server-bootstrap-lite@5.46.0
+  - @memberjunction/testing-cli@5.46.0
+  - @memberjunction/cli-core@5.46.0
+  - @memberjunction/config@5.46.0
+  - @memberjunction/installer@5.46.0
+  - @memberjunction/sql-converter@5.46.0
+  - @memberjunction/sqlglot-ts@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.45.1
+- @memberjunction/codegen-lib@5.45.1
+- @memberjunction/query-gen@5.45.1
+- @memberjunction/server-bootstrap-lite@5.45.1
+- @memberjunction/generic-database-provider@5.45.1
+- @memberjunction/sqlserver-dataprovider@5.45.1
+- @memberjunction/metadata-sync@5.45.1
+- @memberjunction/db-auto-doc@5.45.1
+- @memberjunction/testing-cli@5.45.1
+- @memberjunction/cli-core@5.45.1
+- @memberjunction/config@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/installer@5.45.1
+- @memberjunction/open-app-engine@5.45.1
+- @memberjunction/sql-converter@5.45.1
+- @memberjunction/sqlglot-ts@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- 037f3af: Fix: honor the configured request timeout on the MetadataSync/OpenApp provider pool. `mj app remove` (and other `mj app …` / `mj sync` commands sharing this provider) built the SQL Server connection without `requestTimeout`, so it silently fell back to mssql's 15s default — dropping a large app schema could time out regardless of `dbRequestTimeout` config. The configured value now flows through `toMJConfig` → `MJConfig.dbRequestTimeout` → the mssql pool's `requestTimeout` (and the PostgreSQL client's `statement_timeout` for parity). When unset, each driver's own default still applies.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [e370816]
+- Updated dependencies [037f3af]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [b18fcd0]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/server-bootstrap-lite@5.45.0
+  - @memberjunction/metadata-sync@5.45.0
+  - @memberjunction/open-app-engine@5.45.0
+  - @memberjunction/codegen-lib@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/ai-cli@5.45.0
+  - @memberjunction/db-auto-doc@5.45.0
+  - @memberjunction/query-gen@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/testing-cli@5.45.0
+  - @memberjunction/cli-core@5.45.0
+  - @memberjunction/config@5.45.0
+  - @memberjunction/installer@5.45.0
+  - @memberjunction/sql-converter@5.45.0
+  - @memberjunction/sqlglot-ts@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- 7119e17: Defer the DB-provider import in the MJCLI `postrun` hook so light commands no longer eagerly load the sqlserver-dataprovider/metadata-sync/core stack (~2.7s warm, far more cold). The import is now gated on `app:*` commands (the only ones that open a connection pool), fixing the deterministic `claude-pack` subprocess test spawn-timeout that was failing the unit-test CI gate on every PR.
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6cf6c43]
+- Updated dependencies [e315b2f]
+- Updated dependencies [6f74b17]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core@5.44.0
+  - @memberjunction/server-bootstrap-lite@5.44.0
+  - @memberjunction/codegen-lib@5.44.0
+  - @memberjunction/open-app-engine@5.44.0
+  - @memberjunction/ai-cli@5.44.0
+  - @memberjunction/query-gen@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/sqlserver-dataprovider@5.44.0
+  - @memberjunction/metadata-sync@5.44.0
+  - @memberjunction/testing-cli@5.44.0
+  - @memberjunction/db-auto-doc@5.44.0
+  - @memberjunction/cli-core@5.44.0
+  - @memberjunction/config@5.44.0
+  - @memberjunction/installer@5.44.0
+  - @memberjunction/sql-converter@5.44.0
+  - @memberjunction/sqlglot-ts@5.44.0
+
 ## 5.43.0
 
 ### Minor Changes

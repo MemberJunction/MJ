@@ -1,5 +1,100 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 5.49.0
+
+### Patch Changes
+
+- ea945da: Expand optional embedding `dimensions` support to the remaining drivers whose underlying APIs support output-dimension control. `params.dimensions` (added to `EmbedTextParams`/`EmbedTextsParams`/`EmbedContentParams` in `@memberjunction/ai`) is opt-in everywhere: when unset, prior behavior is unchanged.
+  - **`@memberjunction/ai-cohere`** — forwarded as `outputDimension` on the v2 embed API (`EmbedText`, `embedBatch`, and multimodal `EmbedContent`). Supported by `embed-v4.0` (256/512/1024/1536).
+  - **`@memberjunction/ai-gemini`** — forwarded as `config.outputDimensionality` (`EmbedText`, the per-text concurrent `EmbedTexts` path, and multimodal `EmbedContent`).
+  - **`@memberjunction/ai-mistral`** — forwarded as `outputDimension`; only effective on models supporting output truncation (e.g. `codestral-embed`).
+  - **`@memberjunction/ai-azure`** — the REST body previously hardcoded `dimensions: 1536` on every request; `dimensions` is now sent only when the caller explicitly provides it. This fixes a latent bug: older models (e.g. `text-embedding-ada-002`, the driver's default) don't accept the parameter, and models with larger native outputs (e.g. `text-embedding-3-large` at 3072) were being silently truncated to 1536. Omitting it lets the selected model produce its native dimensionality. Note: deployments that relied on the implicit 1536 truncation with `text-embedding-3-*` models should now set the dimension explicitly via `VectorIndex.Dimensions`.
+  - **`@memberjunction/ai-bedrock`** — forwarded as `dimensions` for `amazon.titan-embed*` models (supported by Titan Embed Text V2: 256/512/1024; V1 rejects it, so it is only sent on explicit opt-in). Also threaded through the per-text batch fallback loop.
+
+  Not applicable (unchanged): Ollama (no output-dimension API parameter) and LocalEmbeddings (transformers.js has no output truncation).
+
+- b52ffa8: Fix four silent-failure bugs found while triaging the open issue backlog. Each one looked correct from the outside while doing nothing, or doing the wrong thing, at runtime. No schema changes.
+
+  **`BaseLLM` silently truncated streamed responses (`@memberjunction/ai`).** The streaming chunk loop caught any mid-stream error, logged it, and then finalized the response as a **success**. A dropped connection, a provider fault, or an abort part-way through a stream produced truncated content that the caller was told was complete — under every provider, for every streaming consumer. Genuine failures now surface as failures; cancellation is still routed to the driver's `finalizeStreamingResponse`, since providers differ on whether an abort throws there or simply ends iteration.
+
+  **No LLM driver honored `ChatParams.cancellationToken`** (13 provider packages). The field existed on `ChatParams` and zero drivers read it, so an aborted or timed-out request abandoned the promise while the socket kept streaming and pinning buffers. Now forwarded to the SDK across all 19 drivers — 13 fixed directly, the remaining 6 inheriting from `OpenAILLM` / `GeminiLLM` — on both the streaming and non-streaming paths. The mechanism differs per provider and was verified rather than assumed — Bedrock takes `abortSignal` (not `signal`); Ollama has no per-request hook at all, so the signal is threaded through a custom `fetch`; and `Inception` overrides both chat paths without calling `super`, so it does not inherit the fix from `OpenAILLM` despite appearing to. An abort is reported `Fatal` / `canFailover: false`, because `ErrorAnalyzer` otherwise classifies it as retriable — meaning a request the user just cancelled would have been retried.
+
+  **Prompt execution could not be bounded (`@memberjunction/ai-prompts`, `@memberjunction/ai-core-plus`).** On the single-model path the model call was awaited with no bound unless the caller hand-supplied an `AbortSignal`, so a hung provider connection never resolved. Adds a per-request `AIPromptParams.timeoutMS` and a typed `AIPromptTimeoutError` that `ErrorAnalyzer` classifies as retriable, so a timeout now flows into the existing retry/failover machinery instead of hanging. The timeout and any caller-supplied token compose — neither is discarded. Enforcement lives in `executeModel`, the one method the parallel coordinator also inherits, so the single-model and parallel paths cannot diverge. (Issue #3064 was filed as "`AIPromptRunner` does not enforce `AIPrompt.TimeoutMS`", but that column does not exist — the bound could not be expressed at all. A prompt-level column is tracked separately in #3133.)
+
+  **A malformed deny-list silently disarmed the Predictive Studio leakage guard** (`@memberjunction/predictive-studio*`, `@memberjunction/core-entities-server`, `@memberjunction/ng-dashboards`). Pasting a bracketed list into the pipeline editor produced `DenyFields: ["[CheckInTime", …, "Status]"]`; the deny-set then matched nothing, so the most dangerous leak columns trained completely unguarded and the save was accepted. The editor no longer manufactures the bad input, a new `MJMLTrainingPipelineEntityServer.ValidateAsync` rejects it at save, and the dominance threshold is clamped at enforcement time so rows written before this validation existed cannot disable the guard. Also unifies `DEFAULT_DOMINANCE_THRESHOLD`, which was defined twice with different values (`0.85` vs `0.6`) — agent-authored pipelines had been held to a materially laxer guard than hand-authored ones.
+
+  **Dead CSS shipped to production (`@memberjunction/ng-dashboards`, `@memberjunction/ng-conversations`).** These packages build with bare `ngc` — no Sass step — so `styleUrls` content is embedded verbatim. Native CSS nesting makes `&:hover` accidentally work, but it cannot do string concatenation, so every `&__elem` / `&--modifier` rule was silently dropped. Three components were affected. **This resurrects styling that has never rendered**: the realtime media-surface tab bar had no active-tab indicator, and evidence playback had no active-turn highlight and no played-progress color on its waveform. A new `check:ui-ngc-scss` CI gate prevents the trap re-arming.
+
+  Also fixes `@memberjunction/ai-azure`, whose unit tests had never actually run — the package had test files and a vitest config but no `test` script.
+
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [15e3017]
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [c20723a]
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.47.0
+- @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.46.0
+- @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- 89ea055: feat(ai): SupportsBatchEmbeddings + safe default EmbedTexts on BaseEmbeddings; rename GeminiEmbedding2 → GeminiEmbedding
+
+  `BaseEmbeddings.EmbedTexts` is now a concrete dispatcher on a new `SupportsBatchEmbeddings` getter (default `false`): providers with a native batch endpoint return `true` and implement `embedBatch()`; everyone else inherits a safe per-text fallback (`embedPerText` — bounded concurrency, per-text retry-with-backoff, a hard 1:1 count guard, and a graceful empty-on-failure contract) that can never silently collapse a batch into fewer/blended vectors. A provider that claims batch support but doesn't implement `embedBatch()` throws, keeping the flag and the implementation honest.
+
+  Per-text embedding on the fallback path (and in Gemini's own `EmbedTexts`) now retries transient failures with bounded exponential backoff before giving up, so one transient 429/500 among N texts no longer degrades the whole batch — addressing the failure-rate-scales-with-N concern from review.
+
+  The OpenAI, Azure, Cohere, and Mistral embedding providers declare `SupportsBatchEmbeddings = true` and move their array call into `embedBatch()`. This generalizes the `GeminiEmbedding2` batch-collapse fix to the whole embedding layer and prevents the class of bug for any future provider that only implements single-text `EmbedText`.
+
+  Also renames the `GeminiEmbedding2` class (and its `@RegisterClass` key / `DriverClass`) to `GeminiEmbedding` — the class outlives any single model version. The `DriverClass` change is carried by the AI-models metadata (`metadata/ai-models/.ai-models.json`) and the regenerated class-registration manifests in the bootstrap packages; no hand-written migration.
+
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

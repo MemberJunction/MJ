@@ -40,7 +40,7 @@ import {
   selector: 'ps-home',
   imports: [CommonModule, MJButtonDirective],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-home.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-home.component.css'],
   template: `
     <div class="ps-panel ps-home" data-testid="ps-home-panel">
       <!-- Hero -->

@@ -27,6 +27,7 @@ import {
 import { BaseFormComponent } from '../base-form-component';
 import { RestoreVersionEvent, RecordChangesComponent } from '@memberjunction/ng-record-changes';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
 
 /**
@@ -756,6 +757,28 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   OnListManagementClosed(): void {
     this.ShowListManagement = false;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Fired when the list-management dialog applies changes. Surfaces the
+   * outcome — especially silently-skipped duplicates and failures, which
+   * users otherwise misread as "everything was added".
+   */
+  OnListManagementComplete(result: ListManagementResult): void {
+    const s = result.summary;
+    if (s && (s.added > 0 || s.removed > 0 || s.skipped > 0 || s.failed > 0)) {
+      const parts: string[] = [];
+      if (s.added > 0) parts.push(`added to ${result.added.length} list${result.added.length === 1 ? '' : 's'}`);
+      if (s.removed > 0) parts.push(`removed from ${result.removed.length} list${result.removed.length === 1 ? '' : 's'}`);
+      if (s.skipped > 0) parts.push(`${s.skipped} duplicate${s.skipped === 1 ? '' : 's'} skipped`);
+      if (s.failed > 0) parts.push(`${s.failed} failed`);
+      this.notificationService.CreateSimpleNotification(
+        `List changes applied: ${parts.join(', ')}`,
+        s.failed > 0 ? 'warning' : 'success',
+        s.failed > 0 ? 5000 : 3500,
+      );
+    }
+    this.OnListManagementClosed();
   }
 
   OnShowChangesRequested(): void {

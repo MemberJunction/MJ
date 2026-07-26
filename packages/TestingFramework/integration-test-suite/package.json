@@ -1,0 +1,75 @@
+{
+  "name": "@memberjunction/integration-test-suite",
+  "version": "5.49.0",
+  "private": true,
+  "description": "MemberJunction's OWN integration-test content — every check bundle, the special rigs, and their heavy dependencies. Deliberately private/non-published: the shippable framework (registry, contracts, driver, bootstraps) lives in @memberjunction/testing-integration; this package is the repo-local test content loaded into `mj test` at runtime.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@memberjunction/testing-integration": "5.49.0",
+    "@memberjunction/core": "5.49.0",
+    "@memberjunction/core-entities": "5.49.0",
+    "@memberjunction/global": "5.49.0",
+    "@memberjunction/graphql-dataprovider": "5.49.0",
+    "@memberjunction/query-processor": "5.49.0",
+    "@memberjunction/sqlserver-dataprovider": "5.49.0",
+    "@memberjunction/ai-engine-base": "5.49.0",
+    "@memberjunction/aiengine": "5.49.0",
+    "@memberjunction/ai-core-plus": "5.49.0",
+    "@memberjunction/ai-agents": "5.49.0",
+    "@memberjunction/actions": "5.49.0",
+    "@memberjunction/actions-base": "5.49.0",
+    "@memberjunction/scheduling-engine": "5.49.0",
+    "@memberjunction/record-set-processor": "5.49.0",
+    "@memberjunction/record-set-processor-base": "5.49.0",
+    "@memberjunction/content-autotagging": "5.49.0",
+    "@memberjunction/ai-prompts": "5.49.0",
+    "@memberjunction/api-keys": "5.49.0",
+    "@memberjunction/predictive-studio": "5.49.0",
+    "@memberjunction/predictive-studio-core": "5.49.0",
+    "@memberjunction/codegen-lib": "5.49.0",
+    "@memberjunction/open-app-engine": "5.49.0",
+    "@memberjunction/metadata-sync": "5.49.0",
+    "@memberjunction/search-engine": "5.49.0",
+    "@memberjunction/ai-bridge-base": "5.49.0",
+    "@memberjunction/ai-bridge-server": "5.49.0",
+    "@memberjunction/templates": "5.49.0",
+    "@memberjunction/templates-base-types": "5.49.0",
+    "@memberjunction/communication-engine": "5.49.0",
+    "@memberjunction/communication-types": "5.49.0",
+    "@memberjunction/communication-sendgrid": "5.49.0",
+    "@memberjunction/communication-gmail": "5.49.0",
+    "@memberjunction/communication-twilio": "5.49.0",
+    "@memberjunction/communication-ms-graph": "5.49.0",
+    "@memberjunction/communication-expo-push": "5.49.0",
+    "dotenv": "17.2.4",
+    "mssql": "^12.2.0",
+    "@memberjunction/notifications": "5.49.0",
+    "@memberjunction/conversations-runtime": "5.49.0",
+    "@memberjunction/ai": "5.49.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./checks/*": {
+      "types": "./dist/checks/*.d.ts",
+      "default": "./dist/checks/*.js"
+    }
+  }
+}

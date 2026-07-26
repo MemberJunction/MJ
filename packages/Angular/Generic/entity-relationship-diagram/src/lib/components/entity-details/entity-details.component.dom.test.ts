@@ -3,6 +3,10 @@ import { ComponentFixture } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+// EntityDetailsComponent's template uses <mj-accordion-panel> for its Fields and Related-Entities
+// sections, so the isolated TestBed must register the accordion (the real app registers it via
+// entity-relationship-diagram.module.ts). Without it, rendering throws NG0304.
+import { MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { EntityDetailsComponent } from './entity-details.component';
 
 /**
@@ -56,7 +60,7 @@ function fakeProviderWithEntities(): ReturnType<typeof createFakeProvider> {
 
 function render(inputs: Record<string, unknown> = {}): ComponentFixture<EntityDetailsComponent> {
   return renderComponentFixture(EntityDetailsComponent, {
-    imports: [CommonModule],
+    imports: [CommonModule, MJAccordionModule],
     declarations: [EntityDetailsComponent],
     inputs: {
       Provider: fakeProviderWithEntities(),
@@ -89,7 +93,8 @@ describe('EntityDetailsComponent (DOM)', () => {
   it('renders all matching fields in the fields list with the count in the header', () => {
     const f = render({ selectedEntity: entityInfo({}), allEntityFields: FIELDS });
     expect(queryAll(f, '.fields-list .field-item').length).toBe(3);
-    expect(text(f, '.fields-section h4')).toBe('Fields (3)');
+    // The Fields header now lives in the accordion title (first .erd-section-title in the DOM).
+    expect(text(f, '.erd-section-title')).toBe('Fields (3)');
   });
 
   it('marks the All field-filter button active by default', () => {
@@ -131,7 +136,9 @@ describe('EntityDetailsComponent (DOM)', () => {
   it('emits fieldsSectionToggle when the fields section header is clicked', () => {
     const f = render({ selectedEntity: entityInfo({}), allEntityFields: FIELDS });
     const toggled = capture(f.componentInstance.fieldsSectionToggle);
-    (query(f, '.fields-section .section-title-group') as HTMLElement).click();
+    // The Fields section is the first accordion panel; its header button's Toggle() emits
+    // ExpandedChange, which the template wires to toggleFieldsSection() → fieldsSectionToggle.
+    (query(f, '.mj-accordion-header') as HTMLElement).click();
     expect(toggled).toHaveLength(1);
   });
 

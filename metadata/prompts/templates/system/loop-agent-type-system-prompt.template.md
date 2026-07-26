@@ -32,6 +32,11 @@ interface LoopAgentResponse {
     /** Explore artifacts via tools. Specify artifactId (A, B, etc.), tool name, and input params. Results appear next turn. */
     artifactToolCalls?: Array<{ artifactId: string; tool: string; input: Record<string, unknown> }>;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.conversationToolCalls != false and _CONVERSATION_TOOLS %}
+{# The tool-name union below is a contract — keep in sync with ConversationToolNames in packages/AI/Agents/src/ConversationToolManager.ts #}
+    /** Page exact stored conversation messages back in by sequence, search history, or summarize a range through a lens (see Conversation History Tools). Results appear next turn. */
+    conversationToolCalls?: Array<{ tool: 'getMessageBySequence' | 'getMessagesByRange' | 'searchConversation' | 'summarizeRange'; input: Record<string, unknown> }>;
+{% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.memoryWrites != false and _MEMORY_WRITES_ENABLED %}
     /** Record durable facts/preferences to remember across runs (see Durable Memory). Processed inline, zero turn cost. */
     memoryWrites?: Array<{ note: string; type: 'Preference' | 'Context'; scopeHint?: 'user' | 'agent' }>;
@@ -48,7 +53,7 @@ interface LoopAgentResponse {
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
 {% if skillCount > 0 %}
         /** Skill(s) to activate by catalog name (when type='Skill') — see Skills section below */
-        skills?: Array<{ name: string }>;
+        skills?: Array<{ name: string; reason?: string }>;
 {% endif %}
 {% if planModeActive and not planApproved %}
         /** The proposed plan (when type='Plan') — see Plan Mode section below. REQUIRED before you may use type='Actions' or type='Sub-Agent' this run. */
@@ -564,7 +569,7 @@ Execute multiple in parallel if independent. Retry failed actions up to 3x with 
 
 {%- if skillCount > 0 %}
 ## Skills ({{skillCount}} available)
-Skills are **capability bundles** — activating one appends its full instructions to your context and enables any Actions/sub-agents it bundles, for the rest of this run. Below is the CATALOG: name + description only. You will not see a skill's full instructions until you activate it. Set `type: "Skill"` with `skills: [{ "name": "..." }]` to activate one or more. Activating an already-active skill is a harmless no-op — don't hesitate to re-check the catalog if unsure whether one is active.
+Skills are **capability bundles** — activating one appends its full instructions to your context and enables any Actions/sub-agents it bundles, for the rest of this run. Below is the CATALOG: name + description only. You will not see a skill's full instructions until you activate it. Set `type: "Skill"` with `skills: [{ "name": "...", "reason": "..." }]` to activate one or more — include a brief one-sentence `reason` explaining why the task needs the skill; it is recorded in the run's audit trail so humans can review why capabilities were expanded. Activating an already-active skill is a harmless no-op — don't hesitate to re-check the catalog if unsure whether one is active.
 
 {{ skillsCatalog | safe }}
 
@@ -575,7 +580,7 @@ Skills are **capability bundles** — activating one appends its full instructio
   "reasoning": "This request needs the Report Builder skill's specialized instructions",
   "nextStep": {
     "type": "Skill",
-    "skills": [{ "name": "Report Builder" }]
+    "skills": [{ "name": "Report Builder", "reason": "User asked for a formatted quarterly report" }]
   }
 }
 ```
@@ -661,11 +666,25 @@ conversation message on your next turn (header `Artifact tool result:` /
 are present verbatim in your conversation history. Older results may be
 compacted to a short preview to preserve context — if you need the full data
 back, re-call the tool. Don't re-call a tool whose result is still present in
-your visible history; just read it.
+your visible history; just read it. Because results arrive on your NEXT turn,
+never combine tool calls with `taskComplete: true` or a `Chat` step — make the
+calls alone, read the results, then respond. (If you do combine them, the
+framework forces an extra turn.)
 
 {{ _ARTIFACT_MANIFEST | safe }}
 
 {{ _ARTIFACT_TOOLS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includeConversationToolsDocs != false and _CONVERSATION_TOOLS %}
+{{ _CONVERSATION_TOOLS | safe }}
+
+**How results reach you:** each call's result is delivered as a regular conversation
+message on your next turn (header `Conversation history tool result:`). Older results
+may be compacted to a short preview — re-call the tool if you need the full data back.
+Because results arrive on your NEXT turn, never combine tool calls with
+`taskComplete: true` or a `Chat` step — make the calls alone, read the results, then
+respond. (If you do combine them, the framework forces an extra turn.)
 {% endif %}
 
 {% if __agentTypePromptParams.includeMemoryWritesDocs != false and _MEMORY_WRITES_ENABLED %}

@@ -221,6 +221,68 @@ export interface RealtimeConfigSection {
      * with the accumulated union rather than the array-replaced top layer.
      */
     allowedAgents?: RealtimeAllowedAgent[];
+    /**
+     * Provider-session tuning knobs, folded into the driver's open Config bag by the session
+     * builders (both topologies) — the SAME pact `voice`/`disableAutoResponse` ride. Drivers
+     * translate each key to their native wire field ONLY when their profile confirms support and
+     * scrub it otherwise, so a shared co-agent config is safe on every provider.
+     */
+    session?: RealtimeSessionTuningConfig;
+}
+
+/**
+ * Provider-session tuning for a Realtime co-agent — the config-cascade source for the driver
+ * feature keys ({@link GetSessionTuningSettings} projects these onto the flat bag keys the
+ * drivers consume). Every field is optional; absent fields contribute NOTHING to the bag.
+ */
+export interface RealtimeSessionTuningConfig {
+    /**
+     * MJ-normalized effort level (the `ChatParams.effortLevel` vocabulary: numeric 1–100 or a
+     * named level). Providers with reasoning realtime models (OpenAI gpt-realtime-2.x) map it to
+     * their native literals; others scrub it.
+     */
+    effortLevel?: string | number;
+    /** Whether the model may run tool calls in parallel (GA reasoning realtime models). */
+    parallelToolCalls?: boolean;
+    /**
+     * Remote MCP server tool declarations (provider-native `{ type:'mcp', server_label,
+     * server_url|connector_id, … }` objects) for providers that support MCP in `session.tools`.
+     * Until an approval UX exists, declare servers with `require_approval: 'never'` — an approval
+     * request is auto-denied by the driver.
+     */
+    mcpTools?: JSONObjectLike[];
+    /** Per-session input-transcription model override (OpenAI-protocol providers). */
+    inputTranscriptionModel?: string;
+}
+
+/**
+ * Projects the effective config's `realtime.session` tuning section onto the FLAT Config-bag keys
+ * the realtime drivers consume (`effortLevel`, `parallelToolCalls`, `mcpTools`,
+ * `inputTranscriptionModel`). Returns `null` when the section is absent or contributes nothing —
+ * callers then skip the merge entirely, preserving the prior bag byte-for-byte.
+ *
+ * @param config The effective configuration.
+ * @returns The flat tuning bag, or `null` when nothing is configured.
+ */
+export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | undefined): JSONObjectLike | null {
+    const tuning = config?.realtime?.session;
+    if (!tuning) {
+        return null;
+    }
+    const bag: JSONObjectLike = {};
+    if (typeof tuning.effortLevel === 'string' || typeof tuning.effortLevel === 'number') {
+        bag['effortLevel'] = tuning.effortLevel;
+    }
+    if (typeof tuning.parallelToolCalls === 'boolean') {
+        bag['parallelToolCalls'] = tuning.parallelToolCalls;
+    }
+    if (Array.isArray(tuning.mcpTools) && tuning.mcpTools.length > 0) {
+        bag['mcpTools'] = tuning.mcpTools;
+    }
+    if (typeof tuning.inputTranscriptionModel === 'string' && tuning.inputTranscriptionModel.trim().length > 0) {
+        bag['inputTranscriptionModel'] = tuning.inputTranscriptionModel.trim();
+    }
+    return Object.keys(bag).length > 0 ? bag : null;
 }
 
 /** The fully-normalized effective configuration for a Realtime co-agent. */
@@ -578,7 +640,54 @@ function normalizeConfig(merged: JSONObjectLike): RealtimeCoAgentConfig {
         section.turnTaking = turnTaking;
     }
 
+    const sessionTuning = normalizeSession(rawRealtime['session']);
+    if (sessionTuning) {
+        section.session = sessionTuning;
+    }
+
     return Object.keys(section).length > 0 ? { realtime: section } : { realtime: {} };
+}
+
+/**
+ * Normalizes the `realtime.session` tuning sub-object from a merged config layer, keeping ONLY the
+ * recognized, correctly-typed knobs (the input is parsed JSON of unknown shape). Returns
+ * `undefined` when nothing valid is present so {@link normalizeConfig} omits the key entirely.
+ *
+ * Per-key deep-merge across layers is handled upstream by {@link DeepMergeConfigs} (plain-object
+ * layers merge; the merged blob is what this normalizer sees), so this only validates + projects.
+ *
+ * @param raw The raw `session` value from a merged config layer.
+ * @returns The normalized tuning config, or `undefined` when empty/invalid.
+ */
+function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined {
+    if (!isPlainObject(raw)) {
+        return undefined;
+    }
+    const tuning: RealtimeSessionTuningConfig = {};
+
+    const effort = raw['effortLevel'];
+    if (typeof effort === 'string' && effort.trim().length > 0) {
+        tuning.effortLevel = effort.trim();
+    }
+    else if (typeof effort === 'number' && Number.isFinite(effort)) {
+        tuning.effortLevel = effort;
+    }
+
+    if (typeof raw['parallelToolCalls'] === 'boolean') {
+        tuning.parallelToolCalls = raw['parallelToolCalls'];
+    }
+
+    const mcpTools = raw['mcpTools'];
+    if (Array.isArray(mcpTools) && mcpTools.length > 0 && mcpTools.every(isPlainObject)) {
+        tuning.mcpTools = mcpTools as JSONObjectLike[];
+    }
+
+    const itModel = raw['inputTranscriptionModel'];
+    if (typeof itModel === 'string' && itModel.trim().length > 0) {
+        tuning.inputTranscriptionModel = itModel.trim();
+    }
+
+    return Object.keys(tuning).length > 0 ? tuning : undefined;
 }
 
 /** Normalizes the `turnTaking` block (participation mode + room moderator); returns `null` when nothing usable survives. */

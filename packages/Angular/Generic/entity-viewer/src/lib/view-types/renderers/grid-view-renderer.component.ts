@@ -113,6 +113,7 @@ export interface GridViewConfig {
       #grid
       [Provider]="Provider"
       [Data]="records"
+      [ExportDataProvider]="exportDataProvider"
       [Params]="effectiveParams"
       [FilterText]="filterText ?? ''"
       [GridState]="config.gridState ?? null"
@@ -192,6 +193,12 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
 
   /** The records to render (already loaded / filtered / paged by the host). Fed into `[Data]`. */
   @Input() records: Record<string, unknown>[] = [];
+
+  /**
+   * Optional full-result-set fetcher supplied by the host, forwarded to the grid's ExportDataProvider
+   * so exports cover every matching row rather than just the loaded page (bug C1).
+   */
+  @Input() exportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
 
   /** Primary-key string of the currently selected record, if any. */
   @Input() selectedRecordId: string | null = null;

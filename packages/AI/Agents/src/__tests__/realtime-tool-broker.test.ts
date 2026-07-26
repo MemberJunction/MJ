@@ -177,6 +177,32 @@ describe('RealtimeToolBroker', () => {
         expect(() => broker.AbortInFlight()).not.toThrow();
     });
 
+    it('aborts EVERY concurrent delegation on AbortInFlight — not just the most recent (parallel tool calls)', async () => {
+        const signals: AbortSignal[] = [];
+        const resolvers: Array<(r: DelegatedResult) => void> = [];
+        const { broker } = buildBroker({
+            DelegateToTarget: vi.fn((req: DelegateToTargetRequest) => {
+                signals.push(req.AbortSignal);
+                return new Promise<DelegatedResult>((resolve) => { resolvers.push(resolve); });
+            }),
+        });
+
+        // Two invoke-target calls in flight at once (the model emitted them before the first resolved):
+        const a = broker.ExecuteToolCall({ ...targetCall, CallID: 'call-A' });
+        const b = broker.ExecuteToolCall({ ...targetCall, CallID: 'call-B' });
+        await Promise.resolve();
+        expect(signals).toHaveLength(2);
+        expect(signals.every((s) => !s.aborted)).toBe(true);
+
+        // Barge-in must cancel BOTH — pre-fix the single-controller broker aborted only call-B and left
+        // call-A running, so call-A's stale result could still be relayed.
+        broker.AbortInFlight();
+        expect(signals.map((s) => s.aborted)).toEqual([true, true]);
+
+        resolvers.forEach((r) => r({ Success: false, Output: 'cancelled' }));
+        await Promise.all([a, b]); // neither throws
+    });
+
     it('propagates PausedRunID from the delegate onto ExecutedToolCall (AwaitingFeedback resume linkage)', async () => {
         const { broker } = buildBroker({
             DelegateToTarget: vi.fn(async (): Promise<DelegatedResult> => ({

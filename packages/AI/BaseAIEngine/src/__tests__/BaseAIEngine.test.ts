@@ -448,6 +448,68 @@ describe('AIEngineBase', () => {
     });
 
     // -----------------------------------------------
+    // GetAutoActivatableSkillsForAgent — the DOUBLE activation gate (v5.45)
+    // Self-activation requires 'Auto' on BOTH the agent (SkillActivationMode) and
+    // each skill (ActivationMode). Defaults are 'RequestedOnly' on both sides, so
+    // the "super agent" posture is always a deliberate double opt-in.
+    // -----------------------------------------------
+    describe('GetAutoActivatableSkillsForAgent', () => {
+        it("returns [] when the agent's SkillActivationMode is 'RequestedOnly' (default), even for Auto skills", () => {
+            set('_skills', [{ ID: 's1', Status: 'Active', ActivationMode: 'Auto' }]);
+            set('_agentSkills', []);
+            const agent = { ID: 'a1', AcceptsSkills: 'All', SkillActivationMode: 'RequestedOnly' } as never;
+            expect(AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(agent)).toHaveLength(0);
+        });
+
+        it("returns [] when SkillActivationMode is undefined (column never touched) — safe default", () => {
+            set('_skills', [{ ID: 's1', Status: 'Active', ActivationMode: 'Auto' }]);
+            set('_agentSkills', []);
+            expect(AIEngineBase.Instance.GetAutoActivatableSkillsForAgent({ ID: 'a1', AcceptsSkills: 'All' } as never)).toHaveLength(0);
+        });
+
+        it("filters out RequestedOnly skills even when the agent side is 'Auto'", () => {
+            set('_skills', [
+                { ID: 's1', Status: 'Active', ActivationMode: 'Auto' },
+                { ID: 's2', Status: 'Active', ActivationMode: 'RequestedOnly' },
+            ]);
+            set('_agentSkills', []);
+            const agent = { ID: 'a1', AcceptsSkills: 'All', SkillActivationMode: 'Auto' } as never;
+            const result = AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(agent);
+            expect(result).toHaveLength(1);
+            expect(result[0].ID).toBe('s1');
+        });
+
+        it('Auto × Auto passes — but still honors the availability gates (AcceptsSkills + skill Status)', () => {
+            set('_skills', [
+                { ID: 's1', Status: 'Active', ActivationMode: 'Auto' },
+                { ID: 's2', Status: 'Deprecated', ActivationMode: 'Auto' }, // catalog gate still applies
+            ]);
+            set('_agentSkills', []);
+            const auto = { ID: 'a1', AcceptsSkills: 'All', SkillActivationMode: 'Auto' } as never;
+            expect(AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(auto).map((s: { ID: string }) => s.ID)).toEqual(['s1']);
+            // AcceptsSkills='None' still yields nothing no matter the ActivationMode dials
+            const none = { ID: 'a2', AcceptsSkills: 'None', SkillActivationMode: 'Auto' } as never;
+            expect(AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(none)).toHaveLength(0);
+        });
+
+        it("'Limited' agents intersect the auto set with their Active grants", () => {
+            set('_skills', [
+                { ID: 's1', Status: 'Active', ActivationMode: 'Auto' },
+                { ID: 's2', Status: 'Active', ActivationMode: 'Auto' },
+            ]);
+            set('_agentSkills', [{ AgentID: 'a1', SkillID: 's1', Status: 'Active' }]);
+            const agent = { ID: 'a1', AcceptsSkills: 'Limited', SkillActivationMode: 'Auto' } as never;
+            const result = AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(agent);
+            expect(result.map((s: { ID: string }) => s.ID)).toEqual(['s1']);
+        });
+
+        it('returns [] for a null agent', () => {
+            set('_skills', [{ ID: 's1', Status: 'Active', ActivationMode: 'Auto' }]);
+            expect(AIEngineBase.Instance.GetAutoActivatableSkillsForAgent(null as never)).toHaveLength(0);
+        });
+    });
+
+    // -----------------------------------------------
     // GetSkillActionIDs / GetSkillSubAgentIDs
     // -----------------------------------------------
     describe('GetSkillActionIDs', () => {

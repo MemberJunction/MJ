@@ -31,6 +31,13 @@ from sqlglot import exp
 from sqlglot.dialects.postgres import Postgres
 from sqlglot.dialects.tsql import TSQL
 
+# sqlglot's node type for a T-SQL `IF …` statement varies across versions — `exp.If` in
+# older releases, `exp.IfBlock` only from 29.0.0. The committed pin (requirements.txt,
+# sqlglot~=27.18.0) has NO IfBlock, so a bare `exp.IfBlock` attribute access would raise
+# AttributeError on every statement reaching the plain-SQL path. Resolve whichever names
+# exist ONCE at import, so the isinstance guard is version-tolerant (issue #3252 review).
+_IF_NODE_TYPES = tuple(t for t in (getattr(exp, "If", None), getattr(exp, "IfBlock", None)) if t is not None)
+
 # The Flyway schema macro is not SQL; protect it to a sentinel identifier for the
 # parse, then the Generator restores it verbatim.
 FLYWAY_MACRO = "${flyway:defaultSchema}"
@@ -195,6 +202,14 @@ def _rewrite_insert_booleans(node: exp.Expression) -> exp.Expression:
 
 def _is_isjson(node: exp.Expression) -> bool:
     return isinstance(node, exp.Anonymous) and (node.name or "").upper() == "ISJSON"
+
+
+def _contains_isjson_call(node: exp.Expression) -> bool:
+    """True if `node`'s subtree contains a genuine ISJSON(...) call. Distinguishes the CHECK
+    predicate `ISJSON(x)` from a column merely NAMED `IsJsonEnabled` or the string literal
+    'ISJSON' — neither parses to an exp.Anonymous, so a substring match would false-drop them
+    (issue #3252 review). See _is_isjson."""
+    return any(_is_isjson(n) for n in node.find_all(exp.Anonymous))
 
 
 def _rewrite_isjson_eq(node: exp.Expression) -> exp.Expression:
@@ -486,10 +501,15 @@ def _strip_collate(node: exp.Expression) -> exp.Expression:
 def _drop_isjson_checks(node: exp.Expression) -> exp.Expression:
     """Drop CHECK constraints using ISJSON() — PG has no ISJSON (validity enforced elsewhere).
 
-    Handles both column-level (a constraint on a ColumnDef) and table-level
-    (`CONSTRAINT ck CHECK (ISJSON(...))` in a CREATE, or `ADD CONSTRAINT ... CHECK
-    (ISJSON(...))` in an ALTER). Table-level forms are removed outright (return None);
-    an ALTER left with no actions is dropped downstream by the empty-ALTER guard.
+    Detection is by the ISJSON *function call* (exp.Anonymous via _contains_isjson_call), never a
+    substring of rendered SQL — so a CHECK on a column NAMED `IsJsonEnabled` or comparing to the
+    literal 'ISJSON' is preserved (issue #3252 review). Filtering is per INDIVIDUAL constraint: an
+    `ADD CONSTRAINT pk PRIMARY KEY (...), CONSTRAINT ck CHECK (ISJSON(...))` drops only the ISJSON
+    check and KEEPS the sibling PK/FK — previously the whole AddConstraint (hence the sibling) was
+    silently lost. Column-level checks are filtered on the ColumnDef; a table-level named CHECK
+    that is entirely ISJSON is removed outright (return None); an ALTER left with no actions is
+    dropped downstream by the empty-ALTER guard. Runs BEFORE _rewrite_isjson_eq/_bare, so a
+    CHECK-context ISJSON is still an exp.Anonymous when this pass inspects it.
     """
     if isinstance(node, exp.ColumnDef):
         kept = [
@@ -497,37 +517,96 @@ def _drop_isjson_checks(node: exp.Expression) -> exp.Expression:
             if not (
                 isinstance(c, exp.ColumnConstraint)
                 and isinstance(c.kind, exp.CheckColumnConstraint)
-                and "ISJSON" in c.kind.sql(dialect="tsql").upper()
+                and _contains_isjson_call(c.kind)
             )
         ]
         node.set("constraints", kept)
         return node
-    if isinstance(node, (exp.Constraint, exp.AddConstraint)) and "ISJSON" in node.sql(dialect="tsql").upper():
+    if isinstance(node, exp.AddConstraint):
+        exprs = node.args.get("expressions") or []
+        kept = [e for e in exprs if not _contains_isjson_call(e)]
+        if not kept:
+            return None  # every action was an ISJSON check → drop the whole ADD (ALTER-ACTIONLESS)
+        node.set("expressions", kept)
+        return node
+    if isinstance(node, exp.Constraint) and _contains_isjson_call(node):
         return None
     return node
 
 
 def _fold_clustered_constraints(node: exp.Expression) -> exp.Expression:
-    """`PRIMARY KEY CLUSTERED (cols)` / `UNIQUE NONCLUSTERED (cols)` → PG `PRIMARY KEY (cols)` / `UNIQUE (cols)`.
+    """`PRIMARY KEY {CLUSTERED|NONCLUSTERED} (cols)` / `UNIQUE {CLUSTERED|NONCLUSTERED} (cols)`
+    → PG `PRIMARY KEY (cols)` / `UNIQUE (cols)`.
 
     SQL Server's CLUSTERED/NONCLUSTERED qualifier parses into a sibling
-    Clustered/NonClusteredColumnConstraint that holds the columns; PG has no such
-    qualifier, so fold the columns into the PK/UNIQUE and drop the qualifier.
+    Clustered/NonClusteredColumnConstraint that holds the columns; PG has no such qualifier, so
+    fold the columns into the PK/UNIQUE and drop the qualifier. BOTH qualifiers must be handled
+    for BOTH constraint kinds: sqlglot folds PK+CLUSTERED and UNIQUE+NONCLUSTERED on its own, but
+    leaks the cross pairs — PK+NONCLUSTERED emits the invalid `PRIMARY KEY, NONCLUSTERED (cols)`
+    (spurious comma) and UNIQUE+CLUSTERED keeps the CLUSTERED keyword. Treat the two qualifier
+    node types identically so all four combinations fold.
     """
-    def cols_of(clustered):
-        return [o.this if isinstance(o, exp.Ordered) else o for o in (clustered.this or [])]
+    _QUALIFIER = (exp.ClusteredColumnConstraint, exp.NonClusteredColumnConstraint)
 
-    # PK CLUSTERED: PrimaryKeyColumnConstraint + ClusteredColumnConstraint are siblings.
+    def cols_of(qualifier):
+        return [o.this if isinstance(o, exp.Ordered) else o for o in (qualifier.this or [])]
+
+    # PK {CLUSTERED|NONCLUSTERED}: PrimaryKeyColumnConstraint + a qualifier node are siblings.
     if isinstance(node, exp.Constraint):
         exprs = node.args.get("expressions") or []
-        clustered = next((e for e in exprs if isinstance(e, exp.ClusteredColumnConstraint)), None)
-        if clustered is not None and any(isinstance(e, exp.PrimaryKeyColumnConstraint) for e in exprs):
-            node.set("expressions", [exp.PrimaryKey(expressions=cols_of(clustered))])
+        qualifier = next((e for e in exprs if isinstance(e, _QUALIFIER)), None)
+        if qualifier is not None and any(isinstance(e, exp.PrimaryKeyColumnConstraint) for e in exprs):
+            node.set("expressions", [exp.PrimaryKey(expressions=cols_of(qualifier))])
         return node
 
-    # UNIQUE NONCLUSTERED: UniqueColumnConstraint wraps a NonClusteredColumnConstraint holding the cols.
-    if isinstance(node, exp.UniqueColumnConstraint) and isinstance(node.this, exp.NonClusteredColumnConstraint):
+    # UNIQUE {CLUSTERED|NONCLUSTERED}: UniqueColumnConstraint wraps the qualifier holding the cols.
+    if isinstance(node, exp.UniqueColumnConstraint) and isinstance(node.this, _QUALIFIER):
         node.set("this", exp.Schema(expressions=cols_of(node.this)))
+    return node
+
+
+def _split_multi_add_constraint(node: exp.Expression) -> exp.Expression:
+    """`ALTER TABLE t ADD CONSTRAINT a ..., CONSTRAINT b ...` → one `ADD` per constraint.
+
+    T-SQL lets a single `ADD` govern a comma-separated constraint list; PG requires `ADD`
+    before EACH action in a multi-action ALTER. sqlglot parses the list into ONE
+    AddConstraint holding N Constraint children and emits one `ADD` + comma list — PG rejects
+    the trailing bare `CONSTRAINT` with `syntax error at or near "CONSTRAINT"`, a SILENT
+    invalid emission (no unhandled). Split into one AddConstraint per constraint so the
+    generator repeats `ADD`. (sqlglot already repeats `ADD` for multiple ADD COLUMN actions;
+    only the constraint list leaks. Real occurrences: v5.49 Compaction two CHECKs on
+    AIAgentType, v5.24 KnowledgeHub CHECK + FK on Tag.)
+    """
+    if not isinstance(node, exp.Alter):
+        return node
+    actions = node.args.get("actions") or []
+    new_actions = []
+    changed = False
+    for action in actions:
+        exprs = action.args.get("expressions") if isinstance(action, exp.AddConstraint) else None
+        if exprs and len(exprs) > 1:
+            new_actions.extend(exp.AddConstraint(expressions=[e.copy()]) for e in exprs)
+            changed = True
+        else:
+            new_actions.append(action)
+    if changed:
+        node.set("actions", new_actions)
+    return node
+
+
+def _sanitize_nested_comments(node: exp.Expression) -> exp.Expression:
+    """Neutralize `/*` and `*/` inside a node's attached comment text.
+
+    sqlglot relocates T-SQL `--` line comments into inline `/* ... */` block comments on AST
+    nodes. PostgreSQL block comments NEST, so a comment body containing `/*` (e.g. `image/*`)
+    opens a nested comment and one containing `*/` closes early — either yields
+    `unterminated /* comment` and aborts the whole file. sqlglot 30.x sanitizes this at emit,
+    but the committed pin (27.18) emits comment text VERBATIM — a version-skew invalid
+    emission. Insert a space to break the sequence (identical to sqlglot 30's own behavior, so
+    the emitted SQL matches across versions). Comment text only — never touches SQL.
+    """
+    if node.comments:
+        node.comments = [c.replace("/*", "/ *").replace("*/", "* /") for c in node.comments]
     return node
 
 
@@ -586,6 +665,18 @@ def _rewrite_boolean_defaults(node: exp.Expression) -> exp.Expression:
     return node
 
 
+def _strip_default_constraint_names(node: exp.Expression) -> exp.Expression:
+    """T-SQL permits a NAME on a column default (`CONSTRAINT [DF_x] DEFAULT (75)`); PG does
+    NOT — it errors at `CONSTRAINT`. Strip the name from a DEFAULT column-constraint, leaving
+    a bare unnamed `DEFAULT (75)` (issue #3252 RC3, the inline-column form; the standalone
+    `ADD CONSTRAINT ... DEFAULT ... FOR col` form is handled by _transpile_default_constraint).
+    Named CHECK/FK/UNIQUE column constraints are valid PG and are left untouched."""
+    if isinstance(node, exp.ColumnConstraint) and isinstance(node.kind, exp.DefaultColumnConstraint) \
+            and node.args.get("this") is not None:
+        node.set("this", None)
+    return node
+
+
 import re as _re
 
 # `GO` is a batch separator (SSMS/sqlcmd tooling), not SQL — split on it before parsing.
@@ -609,10 +700,14 @@ def _first_keyword(text: str) -> str:
 # fixed shape. We recognize the envelope structurally and transpile the real SQL
 # *inside* it (predicates, INSERT bodies, descriptions) through the AST dialect.
 
-# CodeGen object naming convention (mirrors MigrationStatementSplitter.CODEGEN_NAME):
-# views, the CRUD/recompile sprocs, fn* functions, trg* triggers — all regenerated by
-# `mj codegen`, so their extended-property comments must be skipped (object is dropped).
-_CODEGEN_OBJECT_NAME = _re.compile(r"^(spCreate|spUpdate|spDelete|spRecompile|vw|fn|trgUpdate|trgCreate|trgDelete|trg)", _re.IGNORECASE)
+# CodeGen object naming convention — MUST mirror MigrationStatementSplitter.CODEGEN_NAME exactly:
+# views (vw*), the CRUD/recompile sprocs, fn* functions, and the CodeGen triggers trgUpdate/
+# trgCreate/trgDelete — all regenerated by `mj codegen`, so their extended-property comments are
+# skipped (the object itself is dropped). Bare `trg` was REMOVED in RC2 (issue #3252): it matched
+# EVERY trigger name, so a HAND-written trigger (e.g. trgConversationDetail_AssignSequence) was
+# misclassified as CodeGen and its comment silently skipped. The two classifiers must not drift —
+# a `trg*` object that isn't trgUpdate/trgCreate/trgDelete is hand-authored, kept, and reported.
+_CODEGEN_OBJECT_NAME = _re.compile(r"^(spCreate|spUpdate|spDelete|spRecompile|vw|fn|trgUpdate|trgCreate|trgDelete)", _re.IGNORECASE)
 
 # EXEC sp_addextendedproperty @name=N'MS_Description', @value=N'...', ... ;
 # The terminating `;` must be the one OUTSIDE the quoted args — description @values
@@ -752,16 +847,208 @@ class _IfExistsMatch:
         return self._text[self._start:self._end] if key == 0 else self._groups[key]
 
 
+def _scan_block_less_body(text: str, i: int) -> tuple[int, bool]:
+    """From i (start of a block-less IF's single governed statement), scan atom-aware to the
+    statement's terminating top-level ';'. Returns (end, is_if_else):
+      - end: index just past ';' (or at a top-level ELSE, or len(text) if it runs to the end).
+      - is_if_else: True when a top-level ELSE (outside any CASE…END) is reached before ';'
+        — i.e. this is an IF … ELSE, which we don't model and must NOT capture.
+    CASE…END nesting is tracked so a CASE-expression ELSE does not falsely trip the bail."""
+    n = len(text)
+    case_depth = 0
+    while i < n:
+        j = _scan_atom(text, i)
+        if j != i:
+            i = j
+            continue
+        w = _WORD.match(text, i)
+        if w:
+            kw = w.group(0).upper()
+            if kw == "CASE":
+                case_depth += 1
+            elif kw == "END" and case_depth > 0:
+                case_depth -= 1
+            elif kw == "ELSE" and case_depth == 0:
+                return i, True
+            i = w.end()
+            continue
+        if text[i] == ";":
+            return i + 1, False
+        i += 1
+    return n, False
+
+
+def _next_keyword(text: str, i: int) -> str:
+    """The next SQL word at/after i, skipping whitespace and comments, uppercased ('' if none)."""
+    n = len(text)
+    while i < n:
+        if text[i].isspace():
+            i += 1
+            continue
+        j = _scan_atom(text, i)
+        if j != i and text[i] in ("-", "/"):  # comments
+            i = j
+            continue
+        break
+    m = _WORD.match(text, i)
+    return m.group(0).upper() if m else ""
+
+
+def _next_keyword_pos(text: str, i: int) -> int:
+    """Index of the next SQL word at/after i, skipping whitespace and comments (n if none)."""
+    n = len(text)
+    while i < n:
+        if text[i].isspace():
+            i += 1
+            continue
+        j = _scan_atom(text, i)
+        if j != i and text[i] in ("-", "/"):
+            i = j
+            continue
+        break
+    return i
+
+
+def _has_code_word(text: str, word: str) -> bool:
+    """True when `word` appears as a standalone SQL keyword OUTSIDE strings / comments /
+    bracketed identifiers (atom-aware scan)."""
+    target = word.upper()
+    i, n = 0, len(text)
+    while i < n:
+        j = _scan_atom(text, i)
+        if j != i:
+            i = j
+            continue
+        m = _WORD.match(text, i)
+        if m:
+            if m.group(0).upper() == target:
+                return True
+            i = m.end()
+            continue
+        i += 1
+    return False
+
+
+# ── Routine envelope (issue #3252 heavy smoke — the routine-body containment fix) ──────
+# A hand-written CREATE PROCEDURE/FUNCTION/TRIGGER must be absorbed WHOLE, from raw text,
+# BEFORE any parsing: sqlglot (both the pinned 27.x and 30.x, in different ways) fragments
+# routine bodies at inner `;` boundaries, letting body statements ESCAPE the routine gap —
+# a body UPDATE then emits as top-level migration SQL (executing against the whole table at
+# apply time), a dangling `END` emits as `END;` (which PostgreSQL parses as COMMIT — ending
+# Flyway's migration transaction mid-flight), and cursor fragments emit as invalid PG.
+# The envelope reports the whole routine as ONE gap and resumes after its balanced END.
+_ROUTINE_HEAD = _re.compile(r"CREATE\s+(?:OR\s+ALTER\s+)?(?P<kind>PROC(?:EDURE)?|FUNCTION|TRIGGER)\b", _re.IGNORECASE)
+
+
+class _RoutineMatch:
+    """Minimal match-alike for a routine envelope (start/end/kind/snippet)."""
+    __slots__ = ("_start", "_end", "kind", "snippet")
+
+    def __init__(self, start: int, end: int, kind: str, snippet: str):
+        self._start, self._end, self.kind, self.snippet = start, end, kind, snippet
+
+    def start(self) -> int:
+        return self._start
+
+    def end(self) -> int:
+        return self._end
+
+
+def _find_routine_envelope(text: str, pos: int = 0) -> _RoutineMatch | None:
+    """Find the next hand-routine header at a CODE position (never inside a string literal —
+    baseline metadata seeds embed 'CREATE PROCEDURE' in prompt-template strings) and span it
+    to its balanced `AS BEGIN … END` end. A body with no `AS BEGIN` (block-less T-SQL proc
+    body) absorbs the rest of the chunk — per T-SQL semantics the body IS the rest of the
+    batch. Returns None when no routine head exists at/after pos."""
+    i, n = pos, len(text)
+    while i < n:
+        j = _scan_atom(text, i)
+        if j != i:
+            i = j
+            continue
+        if text[i] not in ("C", "c"):
+            i += 1
+            continue
+        m = _ROUTINE_HEAD.match(text, i)
+        if not m:
+            i += 1
+            continue
+        end = _routine_body_end(text, m.end())
+        kind = m.group("kind").upper()
+        kind = "PROCEDURE" if kind == "PROC" else kind
+        snippet = " ".join(text[m.start():m.start() + 120].split())[:80]
+        return _RoutineMatch(m.start(), end, kind, snippet)
+    return None
+
+
+def _routine_body_end(text: str, head_end: int) -> int:
+    """From just after a routine header, find the index past the body's balanced END.
+    Looks for the first `AS` whose next keyword is `BEGIN` (skipping `@p AS INT` param
+    forms, whose next word is a type, not BEGIN); no such `AS BEGIN` → the body is
+    block-less and runs to the end of the chunk (T-SQL batch semantics)."""
+    i, n = head_end, len(text)
+    while i < n:
+        j = _scan_atom(text, i)
+        if j != i:
+            i = j
+            continue
+        w = _WORD.match(text, i)
+        if not w:
+            i += 1
+            continue
+        if w.group(0).upper() == "AS" and _next_keyword(text, w.end()) == "BEGIN":
+            k = _next_keyword_pos(text, w.end())          # start of BEGIN
+            bw = _WORD.match(text, k)                     # the BEGIN word
+            _, block_end = _match_block_end(text, bw.end())
+            return block_end if block_end >= 0 else n     # unterminated → absorb rest
+        i = w.end()
+    return n
+
+
+def _atom_masked_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) spans of `text` occupied by a string literal, comment, or quoted/bracketed
+    identifier — everything `_scan_atom` skips as a non-code atom. A regex head that STARTS
+    inside one of these is not real SQL (e.g. the phrase `IF EXISTS (SELECT ...)` mentioned in a
+    seeded template/prompt body or an example-SQL literal) and must never be mistaken for a
+    statement head — doing so shattered the surrounding INSERT and fabricated a live DO-block
+    (issue #3252 RC1/RC2 regression). Spans are returned sorted and non-overlapping."""
+    spans: list[tuple[int, int]] = []
+    i, n = 0, len(text)
+    while i < n:
+        j = _scan_atom(text, i)
+        if j != i:
+            spans.append((i, j))
+            i = j
+        else:
+            i += 1
+    return spans
+
+
+def _pos_in_spans(pos: int, spans: list[tuple[int, int]]) -> bool:
+    """True if pos falls within any (sorted, non-overlapping) masked span from _atom_masked_spans."""
+    for s, e in spans:
+        if s > pos:
+            return False
+        if pos < e:
+            return True
+    return False
+
+
 def _find_if_exists_begin(text: str, pos: int = 0) -> _IfExistsMatch | None:
-    """Find the next `IF [NOT] EXISTS (<select>) BEGIN <body> END` block at/after pos."""
+    """Find the next `IF [NOT] EXISTS (<select>) BEGIN <body> END` block — OR the block-less
+    `IF [NOT] EXISTS (<select>) <single-statement>;` form (issue #3252 RC1) — at/after pos.
+    Heads inside a string literal or comment are skipped (see _atom_masked_spans)."""
+    masked = _atom_masked_spans(text)
     for head in _IF_EXISTS_HEAD.finditer(text, pos):
+        if _pos_in_spans(head.start(), masked):
+            continue  # the phrase lives inside a string literal / comment — not a statement
         cond_close = _match_paren(text, head.end() - 1)
         if cond_close < 0:
             continue
         cond = text[head.end():cond_close - 1]
         if not _re.match(r"\s*SELECT\b", _strip_leading_sql_comments(cond), _re.IGNORECASE):
             continue
-        # Expect the block's BEGIN next (skipping whitespace/comments).
+        # Skip whitespace/comments after the condition to the first real token.
         i, n = cond_close, len(text)
         while i < n:
             if text[i].isspace():
@@ -773,12 +1060,21 @@ def _find_if_exists_begin(text: str, pos: int = 0) -> _IfExistsMatch | None:
                 continue
             break
         m = _WORD.match(text, i)
-        if not m or m.group(0).upper() != "BEGIN":
+        if m and m.group(0).upper() == "BEGIN":
+            body_end, block_end = _match_block_end(text, m.end())
+            if body_end < 0:
+                continue
+            return _IfExistsMatch(text, head.start(), block_end, head.group("neg"), cond, text[m.end():body_end])
+        # Block-less form: capture the single governed statement (to its terminating ';').
+        # IF/ELSE is not modeled — bail so it falls to the plain path, where the 1b If/IfBlock
+        # guard reports it and never silently drops it. Detect ELSE both mid-statement (the
+        # governed statement has no trailing ';' before ELSE) and after a terminating ';'.
+        if not m or m.group(0).upper() in ("ELSE", "END"):
             continue
-        body_end, block_end = _match_block_end(text, m.end())
-        if body_end < 0:
+        stmt_end, is_if_else = _scan_block_less_body(text, i)
+        if is_if_else or _next_keyword(text, stmt_end) == "ELSE":
             continue
-        return _IfExistsMatch(text, head.start(), block_end, head.group("neg"), cond, text[m.end():body_end])
+        return _IfExistsMatch(text, head.start(), stmt_end, head.group("neg"), cond, text[i:stmt_end])
     return None
 
 
@@ -1054,30 +1350,33 @@ def _transpile_sp_dropextendedproperty(args: str) -> str | None:
 
 
 def _split_top_level_statements(sql: str) -> list[str]:
-    """Split SQL on top-level `;`, ignoring semicolons inside single-quoted strings and
-    `--` / `/* */` comments. Used to recover good statements when a whole-gap parse fails
-    on one bad statement (a poison statement must not drop its neighbors)."""
+    """Split SQL on top-level `;`, ignoring semicolons inside strings, `--`/`/* */` comments,
+    `[bracketed]`/`"quoted"` identifiers, and BEGIN…END / CASE…END blocks (BEGIN TRAN pairs
+    with COMMIT, not END, so it does not open a block). Used to (a) recover good statements
+    when a whole-gap parse fails on one poison statement (a poison must not drop its neighbors)
+    and (b) measure the true top-level statement count so a MERGED whole-parse — sqlglot 30.x
+    absorbing the statement that FOLLOWS a block-less IF into the IF node (issue #3252 heavy
+    smoke) — can be detected and re-split. Block-awareness keeps a legitimate multi-statement
+    BEGIN…END intact instead of shattering it at its interior `;`."""
     out: list[str] = []
     buf: list[str] = []
-    i, n, in_str = 0, len(sql), False
+    i, n, depth = 0, len(sql), 0
     while i < n:
+        j = _scan_atom(sql, i)
+        if j != i:  # string / comment / [bracketed] / "quoted" — copy verbatim
+            buf.append(sql[i:j]); i = j; continue
+        w = _WORD.match(sql, i)
+        if w:
+            kw = w.group(0).upper()
+            if kw == "BEGIN" and _peek_word(sql, w.end()) not in ("TRAN", "TRANSACTION"):
+                depth += 1
+            elif kw == "CASE":
+                depth += 1
+            elif kw == "END" and depth > 0:
+                depth -= 1
+            buf.append(w.group(0)); i = w.end(); continue
         c = sql[i]
-        if in_str:
-            buf.append(c)
-            if c == "'":
-                if i + 1 < n and sql[i + 1] == "'":  # escaped '' inside string
-                    buf.append("'"); i += 2; continue
-                in_str = False
-            i += 1; continue
-        if c == "'":
-            in_str = True; buf.append(c); i += 1; continue
-        if c == "-" and i + 1 < n and sql[i + 1] == "-":  # line comment
-            j = sql.find("\n", i); j = n if j < 0 else j
-            buf.append(sql[i:j]); i = j; continue
-        if c == "/" and i + 1 < n and sql[i + 1] == "*":  # block comment
-            j = sql.find("*/", i); j = n if j < 0 else j + 2
-            buf.append(sql[i:j]); i = j; continue
-        if c == ";":
+        if c == ";" and depth == 0:
             buf.append(";"); out.append("".join(buf)); buf = []; i += 1; continue
         buf.append(c); i += 1
     tail = "".join(buf)
@@ -1086,18 +1385,44 @@ def _split_top_level_statements(sql: str) -> list[str]:
     return out
 
 
+def _has_sql_content(piece: str) -> bool:
+    """True if `piece` holds any non-whitespace, non-comment SQL. Used to count REAL statements
+    (a trailing comment-only or blank split fragment must not inflate the count and falsely
+    trip the merged-whole-parse fallback)."""
+    i, n = 0, len(piece)
+    while i < n:
+        c = piece[i]
+        if c.isspace():
+            i += 1; continue
+        if c == "-" and piece.startswith("--", i):
+            j = piece.find("\n", i); i = n if j < 0 else j + 1; continue
+        if c == "/" and piece.startswith("/*", i):
+            j = piece.find("*/", i); i = n if j < 0 else j + 2; continue
+        return True
+    return False
+
+
 def _parse_resilient(protected: str) -> list[tuple[exp.Expression | None, str]]:
     """Parse a SQL chunk into (statement, raw_text) pairs. Fast path: one `sqlglot.parse`.
-    On failure, fall back to per-statement parsing so a single unparseable statement only
-    drops itself, not the valid DDL around it (returns (None, raw) for the failures)."""
+    Fall back to per-statement parsing in TWO cases, so no statement is lost:
+      1. The whole-parse raised — a single unparseable statement must only drop itself, not
+         the valid DDL around it (returns (None, raw) for the failures).
+      2. The whole-parse SILENTLY MERGED statements — sqlglot 30.x absorbs the statement that
+         follows a block-less `IF <cond> <stmt>` into the IF node, so an unconditional rider
+         (e.g. an `ALTER … ADD CONSTRAINT` after an `IF @c … EXEC(…)` guard) neither emits nor
+         is reported. Detected by comparing the whole-parse statement count against the
+         block-aware top-level split: fewer statements than real `;`-delimited units means a
+         merge happened. (27.x splits these correctly, so this is a no-op there.)
+    Per-piece re-parsing restores the true statement boundaries in both cases."""
+    pieces = [p for p in _split_top_level_statements(protected) if _has_sql_content(p)]
     try:
-        return [(s, "") for s in sqlglot.parse(protected, read="tsql") if s is not None]
+        fast = [s for s in sqlglot.parse(protected, read="tsql") if s is not None]
+        if len(fast) >= len(pieces):  # no merge — trust the (faster) whole-parse
+            return [(s, "") for s in fast]
     except Exception:  # noqa: BLE001
         pass
     results: list[tuple[exp.Expression | None, str]] = []
-    for piece in _split_top_level_statements(protected):
-        if not piece.strip():
-            continue
+    for piece in pieces:
         try:
             for s in sqlglot.parse(piece, read="tsql"):
                 if s is not None:
@@ -1107,25 +1432,111 @@ def _parse_resilient(protected: str) -> list[tuple[exp.Expression | None, str]]:
     return results
 
 
-def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
-    """Transpile a chunk of regular SQL via the AST dialect; report unparseable bits."""
-    out, unhandled = [], []
+# T-SQL `ALTER TABLE t WITH [NO]CHECK ADD CONSTRAINT …` — the enforcement toggle has no PG
+# form. Stripped pre-parse (see _transpile_plain) so `WITH CHECK` (which otherwise emits the
+# invalid `… WITH CHECK ADD …`) and `WITH NOCHECK` (an opaque Command → unhandled) both become
+# a plain, validating `ADD CONSTRAINT …`. The `(?=ADD\b)` lookahead keeps it from touching a
+# view's `WITH CHECK OPTION` (there the next token is OPTION, not ADD).
+_WITH_CHECK_ADD = _re.compile(r"\bWITH\s+(?:NOCHECK|CHECK)\s+(?=ADD\b)", _re.IGNORECASE)
+
+
+def _has_computed_column(stmt: exp.Expression) -> bool:
+    """True if `stmt` declares a computed/generated column (T-SQL `col AS (expr) [PERSISTED]`).
+    Such columns cannot be transpiled mechanically: sqlglot emits `GENERATED ALWAYS AS (...)
+    STORED` WITHOUT the PG-required column type (invalid), and a non-persisted T-SQL computed
+    column has no STORED equivalent at all. Callers report the statement rather than emit it."""
+    for cd in stmt.find_all(exp.ColumnDef):
+        for c in cd.args.get("constraints") or []:
+            if isinstance(c.args.get("kind"), exp.ComputedColumnConstraint):
+                return True
+    return False
+
+
+def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], list[dict]]:
+    """Transpile a chunk of regular SQL via the AST dialect; report unparseable bits.
+
+    Returns (sql, unhandled, dropped). `dropped` records every INTENTIONAL drop (batch-control
+    noise, swallowed routine `END`, statement-level RAISERROR, actionless ALTER, …) so that
+    accounting reconciles: parsed == emitted + unhandled + dropped (issue #3252 1d). The
+    reconciliation is SOFT — a mismatch appends an ACCOUNTING-LEAK gap to `unhandled`, it
+    never raises (a raise would crash the transpiler and, via the CLI catch, lose all
+    artifacts — the exact RC3 pathology this fix eliminates)."""
+    out, unhandled, dropped = [], [], []
+    parsed = 0
     protected = sql.replace(FLYWAY_MACRO, FLYWAY_SENTINEL)
+    # Strip the SQL Server `WITH [NO]CHECK` enforcement toggle before `ADD CONSTRAINT` — it has
+    # no PG equivalent and otherwise leaks as invalid `… WITH CHECK ADD …` (see _WITH_CHECK_ADD).
+    # ATOM-AWARE: rewrite the toggle ONLY at a real code position. The identical phrase occurring
+    # inside a string literal (e.g. a seeded `N'… WITH CHECK ADD …'`) or a comment is data/prose,
+    # not the toggle — stripping it there silently corrupts emitted content (issue #3252: never
+    # silently alter output). Matches whose head sits in a masked atom are left verbatim.
+    _wca_spans = _atom_masked_spans(protected)
+    protected = _WITH_CHECK_ADD.sub(
+        lambda m: m.group(0) if _pos_in_spans(m.start(), _wca_spans) else "",
+        protected,
+    )
     # Set after reporting a CREATE PROCEDURE/FUNCTION/TRIGGER: the routine's closing
     # `END` often parses as its own dangling statement — it belongs to the routine we
     # just reported, not to a new gap.
     swallow_routine_end = False
     for stmt, raw in _parse_resilient(protected):
+        parsed += 1
         if swallow_routine_end:
             swallow_routine_end = False
             tail = (raw or (stmt.sql(dialect="tsql") if stmt is not None else "")).strip().rstrip(";").strip()
             if tail.upper() == "END":
+                dropped.append({"kind": "ROUTINE-END", "snippet": tail[:80]})
                 continue
         if stmt is None:
             unhandled.append({"kind": "parse-error", "snippet": raw.strip()[:80]})
             continue
+        # A T-SQL `IF …` statement that the IF-EXISTS envelope did NOT capture (e.g. a
+        # block-less IF/ELSE — issue #3252 RC1) reaches here as exp.If/exp.IfBlock. sqlglot's
+        # PG generator emits an EMPTY string for these, which is a SILENT DROP (the six bare
+        # `;` of the original bug). Report it as a gap; never let it emit nothing.
+        if isinstance(stmt, _IF_NODE_TYPES):
+            txt = stmt.sql(dialect="tsql")
+            unhandled.append({"kind": "IF-BLOCK", "snippet": txt[:80]})
+            continue
         # Standalone seed of schema-derived metadata → drop; CodeGen regenerates it.
+        # (The _METADATA_TABLES matcher is intentionally disabled today; instrumented for
+        # accounting completeness should it ever be re-enabled.)
         if isinstance(stmt, exp.Insert) and _METADATA_TABLES.search(stmt.sql(dialect="tsql")):
+            dropped.append({"kind": "METADATA-INSERT", "snippet": stmt.sql(dialect="tsql")[:80]})
+            continue
+        # Hand-written routines MUST be detected BEFORE the Declare/Parameter branch below:
+        # a routine body is full of `@params`, and version-dependently the whole routine can
+        # carry exp.Parameter nodes (the pinned 27.x models proc params that way; 30.x does
+        # not). If the Parameter branch caught it first, the routine would be reported WITHOUT
+        # `swallow_routine_end`, leaving the resilient split's dangling `END` as a spurious
+        # second gap (27.x) or a bogus emitted `END;` (30.x). Two forms:
+        #  (a) well-parsed exp.Create PROCEDURE/FUNCTION/TRIGGER — the dedicated branch just
+        #      below (hoisted above the Parameter branch for exactly this reason);
+        #  (b) a routine header sqlglot mis-parsed as an opaque Command (e.g. some
+        #      `CREATE TRIGGER … ON …` forms) — the text-based fallback here.
+        if not isinstance(stmt, exp.Create):
+            head_txt = _strip_leading_sql_comments(stmt.sql(dialect="tsql"))
+            if _re.match(r"^\s*CREATE\s+(?:OR\s+ALTER\s+)?(?:PROC(?:EDURE)?|FUNCTION|TRIGGER)\b", head_txt, _re.IGNORECASE):
+                unhandled.append({"kind": _first_keyword(head_txt), "snippet": head_txt[:80]})
+                swallow_routine_end = True
+                continue
+        # Hand-written routines: a T-SQL PROCEDURE/FUNCTION/TRIGGER body cannot be
+        # transpiled mechanically (parameter syntax, control flow, and the body itself
+        # are all T-SQL) — naive emission produces invalid PG like `$x INT AS BEGIN …`.
+        # The classifier flags these files needs-hand-authoring; here we report the
+        # routine so it lands in the gap comments instead of half-translated output.
+        if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() in (
+            "PROCEDURE",
+            "FUNCTION",
+            "TRIGGER",
+        ):
+            txt = stmt.sql(dialect="tsql")
+            name = stmt.find(exp.Table)
+            unhandled.append({
+                "kind": f"CREATE-{(stmt.args.get('kind') or '').upper()}",
+                "snippet": (name.sql(dialect="tsql") + " — " if name else "") + txt[:80],
+            })
+            swallow_routine_end = True
             continue
         # T-SQL procedural glue with no standalone PG equivalent — DECLARE @v / SET @v /
         # SELECT @v = ... / IF @v ... EXEC('...'). In Category-B (regular DDL/DML) these
@@ -1150,23 +1561,21 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
             txt = stmt.sql(dialect="tsql")
             unhandled.append({"kind": "UPDATE-OUTER-JOIN", "snippet": txt[:80]})
             continue
-        # Hand-written routines: a T-SQL PROCEDURE/FUNCTION/TRIGGER body cannot be
-        # transpiled mechanically (parameter syntax, control flow, and the body itself
-        # are all T-SQL) — naive emission produces invalid PG like `$x INT AS BEGIN …`.
-        # The classifier flags these files needs-hand-authoring; here we report the
-        # routine so it lands in the gap comments instead of half-translated output.
-        if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() in (
-            "PROCEDURE",
-            "FUNCTION",
-            "TRIGGER",
-        ):
-            txt = stmt.sql(dialect="tsql")
-            name = stmt.find(exp.Table)
-            unhandled.append({
-                "kind": f"CREATE-{(stmt.args.get('kind') or '').upper()}",
-                "snippet": (name.sql(dialect="tsql") + " — " if name else "") + txt[:80],
-            })
-            swallow_routine_end = True
+        # T-SQL `DELETE TOP (n) FROM t` misparses on BOTH versions into a spurious multi-table
+        # DELETE (`DELETE "TOP" AS _t0(n) FROM t`) — invalid PG with no mechanical rewrite (PG
+        # would need a ctid/CTE form). The signature is a DELETE carrying a `tables` list (PG puts
+        # the target in `this`, not `tables`) whose entry is the swallowed `TOP` keyword.
+        if isinstance(stmt, exp.Delete) and any(
+                isinstance(t, exp.Table) and (t.name or "").upper() == "TOP"
+                for t in (stmt.args.get("tables") or [])):
+            unhandled.append({"kind": "DELETE-TOP", "snippet": stmt.sql(dialect="tsql")[:80]})
+            continue
+        # Computed/generated columns (`col AS (expr) [PERSISTED]`) can't be transpiled — report
+        # (would emit a type-less `GENERATED ALWAYS AS (...) STORED`; see _has_computed_column).
+        # Only CREATE/ALTER declare columns — gate on type so the subtree walk skips the huge
+        # metadata INSERTs in baseline dumps (thousands of VALUES rows) it could never match.
+        if isinstance(stmt, (exp.Create, exp.Alter)) and _has_computed_column(stmt):
+            unhandled.append({"kind": "COMPUTED-COLUMN", "snippet": stmt.sql(dialect="tsql")[:80]})
             continue
         if isinstance(stmt, exp.Command):
             # sqlglot may glom a preceding comment onto the Command (`/* note */ ALTER …`),
@@ -1185,8 +1594,17 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
                 continue
             # SQL Server batch-control noise — not needed on PG, drop silently.
             if _re.match(r"^\s*(BEGIN\s+TRY|END\s+TRY|BEGIN\s+CATCH|END\s+CATCH|SET\s+NOEXEC|GO)\b", txt, _re.IGNORECASE):
+                dropped.append({"kind": "BATCH-CONTROL", "snippet": txt[:80]})
                 continue
             unhandled.append({"kind": _first_keyword(txt), "snippet": txt[:80]})
+            continue
+        # T-SQL `SET IDENTITY_INSERT t ON/OFF` — no PG equivalent (PG uses OVERRIDING SYSTEM
+        # VALUE per-INSERT). `…ON` lands as an unhandled Command; `…OFF` parses to exp.Set and
+        # would emit invalid `SET "IDENTITY_INSERT" = t AS "OFF"`. Report (must precede the
+        # SET-NOISE drop below so it lands as a gap, not a silent drop).
+        if isinstance(stmt, exp.Set) and _re.search(
+                r"\bIDENTITY_INSERT\b", stmt.sql(dialect="tsql"), _re.IGNORECASE):
+            unhandled.append({"kind": "SET-IDENTITY-INSERT", "snippet": stmt.sql(dialect="tsql")[:80]})
             continue
         # SS session/batch-control SETs have no PG equivalent and error as unrecognized
         # config params — drop them (NOEXEC, NOCOUNT, XACT_ABORT, QUOTED_IDENTIFIER, ANSI_*).
@@ -1194,10 +1612,12 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
             r"\b(NOEXEC|NOCOUNT|XACT_ABORT|QUOTED_IDENTIFIER|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|"
             r"ARITHABORT|CONCAT_NULL_YIELDS_NULL|NUMERIC_ROUNDABORT)\b",
             stmt.sql(dialect="tsql"), _re.IGNORECASE):
+            dropped.append({"kind": "SET-NOISE", "snippet": stmt.sql(dialect="tsql")[:80]})
             continue
         # RAISERROR(...) at statement level is invalid PG outside a function — drop it
         # (inside an IF…BEGIN guard it is handled as RAISE EXCEPTION by the DO-block path).
         if isinstance(stmt, exp.Anonymous) and (stmt.name or "").upper() == "RAISERROR":
+            dropped.append({"kind": "RAISERROR", "snippet": stmt.sql(dialect="tsql")[:80]})
             continue
         # `ALTER TABLE t ALTER COLUMN c <type>` with NO nullability spec parses cleanly
         # (unlike the `… NULL`/`… NOT NULL` forms, which land as opaque Commands). Route
@@ -1210,28 +1630,59 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
                 if ac is not None:
                     out.append(ac)
                     continue
-        if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() == "NONCLUSTERED INDEX":
-            stmt.set("kind", "INDEX")  # PG has no NONCLUSTERED qualifier
+        # DROP kind normalization / gating (issue #3252 heavy smoke):
+        #  • `DROP PROC` — sqlglot keeps the T-SQL abbreviation, which is invalid PG. Spell it
+        #    out to PROCEDURE. (The ONE real invalid-PG emission in the v5 ledger — V202605091143.)
+        #  • `DROP TRIGGER` — PG requires an `ON <table>` clause; sqlglot (30.x) emits it WITHOUT
+        #    one (invalid). 27.x parses it as an opaque Command (already unhandled). Report so
+        #    both versions converge on a gap rather than emit the ON-less form.
+        if isinstance(stmt, exp.Drop):
+            dk = (stmt.args.get("kind") or "").upper()
+            if dk == "PROC":
+                stmt.set("kind", "PROCEDURE")
+            elif dk == "TRIGGER":
+                unhandled.append({"kind": "DROP-TRIGGER", "snippet": stmt.sql(dialect="tsql")[:80]})
+                continue
+        if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() in (
+                "NONCLUSTERED INDEX", "CLUSTERED INDEX"):
+            stmt.set("kind", "INDEX")  # PG has no CLUSTERED/NONCLUSTERED qualifier
         stmt = _rewrite_boolean_int_comparisons(stmt)
+        # copy=False mutates the parsed tree IN PLACE across all passes. Each pass otherwise
+        # deep-copies the whole statement AST (sqlglot's transform default), so a 15-pass chain
+        # was 15 full tree deep-copies per statement — the dominant cost on 50 MB baselines
+        # (deepcopy alone was ~40% of total runtime; see the perf note in _next_match). The
+        # parsed `stmt` is used once here and discarded, so in-place mutation is safe, and the
+        # pass ordering is unchanged: each pass still sees the prior pass's edits.
         stmt = (
-            stmt.transform(_rewrite_update_from_alias)  # restructures UPDATE before other rewrites
-            .transform(_rewrite_insert_booleans)  # seed-INSERT 1/0 → TRUE/FALSE for bit cols
-            .transform(_fix_misparsed_table_constraint)
-            .transform(_rewrite_functions)
-            .transform(_rewrite_boolean_defaults)
-            .transform(_rewrite_string_concat)
-            .transform(_strip_national)
-            .transform(_strip_collate)
-            .transform(_drop_isjson_checks)  # drop ISJSON CHECK constraints BEFORE…
-            .transform(_rewrite_isjson_eq)   # …rewriting surviving ISJSON predicates (WHERE)
-            .transform(_rewrite_isjson_bare)
-            .transform(_fold_clustered_constraints)
-            .transform(_strip_nulls_ordering)
-            .transform(_column_fk_to_reference)
+            stmt.transform(_rewrite_update_from_alias, copy=False)  # restructures UPDATE before other rewrites
+            .transform(_rewrite_insert_booleans, copy=False)  # seed-INSERT 1/0 → TRUE/FALSE for bit cols
+            .transform(_fix_misparsed_table_constraint, copy=False)
+            .transform(_rewrite_functions, copy=False)
+            .transform(_rewrite_boolean_defaults, copy=False)
+            .transform(_strip_default_constraint_names, copy=False)  # PG has no named column defaults
+            .transform(_rewrite_string_concat, copy=False)
+            .transform(_strip_national, copy=False)
+            .transform(_strip_collate, copy=False)
+            .transform(_drop_isjson_checks, copy=False)  # drop ISJSON CHECK constraints BEFORE…
+            .transform(_rewrite_isjson_eq, copy=False)   # …rewriting surviving ISJSON predicates (WHERE)
+            .transform(_rewrite_isjson_bare, copy=False)
+            .transform(_fold_clustered_constraints, copy=False)
+            .transform(_strip_nulls_ordering, copy=False)
+            .transform(_column_fk_to_reference, copy=False)
+            .transform(_split_multi_add_constraint, copy=False)  # PG needs ADD per constraint; run last
+            .transform(_sanitize_nested_comments, copy=False)  # break /* */ in comments (pin version-skew)
         )
         # An ALTER TABLE whose only action was dropped (e.g. an ISJSON ADD CONSTRAINT)
         # is left actionless — emitting bare `ALTER TABLE x` is a PG syntax error. Skip.
+        # NOTE: do NOT render the actionless ALTER to T-SQL for the snippet — sqlglot's
+        # tsql alter_sql does actions[0] and raises IndexError on an empty action list.
+        # Use the (safe) table name instead.
         if isinstance(stmt, exp.Alter) and not stmt.args.get("actions"):
+            tbl = stmt.find(exp.Table)
+            dropped.append({
+                "kind": "ALTER-ACTIONLESS",
+                "snippet": (tbl.sql(dialect="tsql") if tbl is not None else "ALTER TABLE")[:80],
+            })
             continue
         # Behavioral self-check: any `boolean = integer` comparison the coercion pass didn't
         # eliminate would abort on PG. Surface it as a gap (not silent output) so the gap
@@ -1240,11 +1691,122 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict]]:
         if residual:
             unhandled.append({"kind": "BOOL-INT-RESIDUAL", "snippet": "; ".join(residual)[:120]})
             continue
-        out.append(stmt.sql(dialect=MJPostgres, pretty=pretty, identify=True))
-    return (";\n".join(out) + (";" if out else "")), unhandled
+        # EMPTY-EMISSION postcondition (issue #3252 1b): sqlglot's generator treats an
+        # unsupported node as a WARNING and returns "" — which would append a bare `;` and
+        # vanish the source statement silently. Any non-empty source statement that renders
+        # to empty/whitespace is REPORTED as a gap, never emitted. This closes the whole
+        # class of "generator warned and returned nothing", not just the IfBlock instance.
+        rendered = stmt.sql(dialect=MJPostgres, pretty=pretty, identify=True)
+        if not rendered.strip().strip(";").strip():
+            txt = stmt.sql(dialect="tsql")
+            unhandled.append({"kind": "EMPTY-EMISSION", "snippet": txt[:80]})
+            continue
+        out.append(rendered)
+    # SOFT reconciliation (issue #3252 1d): every parsed statement must land in exactly one
+    # bucket. A mismatch means a drop site was missed — surface it as a gap so it is loud and
+    # gets artifacts, but NEVER raise (a raise would abort the whole conversion run with zero
+    # artifacts). `emitted` is counted at source-statement granularity (len(out)), NOT by
+    # re-splitting the emitted body — a single statement can expand to a multi-`;` DO block.
+    accounted = len(out) + len(unhandled) + len(dropped)
+    if parsed != accounted:
+        unhandled.append({
+            "kind": "ACCOUNTING-LEAK",
+            "snippet": f"parsed={parsed} but emitted={len(out)}+unhandled={len(unhandled)}+dropped={len(dropped)}={accounted}",
+        })
+    return (";\n".join(out) + (";" if out else "")), unhandled, dropped
 
 
 _RAISERROR = _re.compile(r"RAISERROR\s*\(\s*(N?'(?:[^']|'')*'|@?\w+)", _re.IGNORECASE)
+
+# Statement-starter keywords that begin a NEW T-SQL statement. PRINT and RETURN are EXCLUDED:
+# after a RAISERROR aborts (→ RAISE EXCEPTION) they are moot, so the guard fast path treats a
+# trailing PRINT/RETURN as benign. Any OTHER starter glued on with no `;` (T-SQL makes the
+# terminator optional) is a REAL statement the fast path must NOT swallow (issue #3252 code review:
+# `RAISERROR(...) PRINT 'x' UPDATE …` — the UPDATE rode in behind the PRINT and vanished silently).
+_REAL_STMT_STARTERS = frozenset({
+    "UPDATE", "INSERT", "DELETE", "MERGE", "SELECT", "EXEC", "EXECUTE", "CREATE",
+    "ALTER", "DROP", "TRUNCATE", "DECLARE", "SET", "WHILE", "RAISERROR", "THROW",
+    "GRANT", "REVOKE", "DENY", "BEGIN", "COMMIT", "ROLLBACK", "SAVE", "WAITFOR",
+    "GOTO", "USE", "BREAK", "CONTINUE", "IF",
+})
+
+
+def _has_real_stmt_starter(s: str) -> bool:
+    """True if `s` has a real statement-starter (see _REAL_STMT_STARTERS) at paren depth 0,
+    atom-aware. A scalar PRINT/RETURN argument never places one at depth 0 — a subquery's SELECT
+    lives inside parens (depth > 0) — so a depth-0 hit means a real statement is glued on with no
+    semicolon and must NOT be swallowed by the PRINT/RETURN exemption (issue #3252 code review)."""
+    i, n, depth = 0, len(s), 0
+    while i < n:
+        j = _scan_atom(s, i)
+        if j != i:  # string / comment / [bracketed] / "quoted" — a keyword inside is data, not code
+            i = j
+            continue
+        c = s[i]
+        if c == "(":
+            depth += 1
+            i += 1
+            continue
+        if c == ")":
+            depth = max(0, depth - 1)
+            i += 1
+            continue
+        m = _WORD.match(s, i)
+        if m:
+            if depth == 0 and m.group(0).upper() in _REAL_STMT_STARTERS:
+                return True
+            i = m.end()
+            continue
+        i += 1
+    return False
+
+
+def _is_raiserror_only(stmt: str) -> bool:
+    """True if `stmt` is a lone RAISERROR(...) call with no REAL statement glued after it. T-SQL
+    makes the terminating `;` optional, so a sibling routinely follows with no separator
+    (`RAISERROR(...) \n UPDATE ...`); _split_top_level_statements breaks on `;` only, so it hands
+    that whole run in as ONE piece. Scan past the RAISERROR call's matched `)` (atom-aware, so a
+    `(` inside the message string doesn't fool it): a trailing RETURN / PRINT / comment / blank is
+    NOT a sibling (a RETURN is moot after the RAISE aborts), but a REAL statement riding after them
+    — even glued behind a semicolon-less PRINT (`… PRINT 'x' UPDATE …`) — makes this NOT
+    raiserror-only (#3252 code review). The PRINT/RETURN exemption is narrow, not a blanket skip."""
+    if not _RAISERROR.match(stmt):
+        return False
+    open_paren = stmt.find("(")
+    if open_paren < 0:
+        return False
+    close = _match_paren(stmt, open_paren)
+    if close < 0:
+        return False
+    return not _has_real_stmt_starter(stmt[close:])
+
+
+def _raiserror_has_siblings(body: str) -> bool:
+    """True if `body` contains a meaningful statement OTHER than a single RAISERROR (a benign
+    trailing PRINT / RETURN / comment / blank doesn't count). The RAISERROR→RAISE-EXCEPTION guard
+    fast path collapses the guard to ONE `RAISE EXCEPTION`, so it is only safe when exactly ONE
+    RAISERROR stands alone; a paired real statement — OR a SECOND RAISERROR — would be silently
+    dropped (issue #3252). Because T-SQL's `;` is optional, a real statement can ride glued after a
+    PRINT with no separator, so a piece that merely STARTS with PRINT is NOT automatically benign:
+    consume the PRINT/RETURN and check the remainder for a real starter. _is_raiserror_only handles
+    the semicolon-less RAISERROR shape a bare `;`-split misses; the count guards the semicolon-
+    SEPARATED double-RAISERROR (`RAISERROR('a'); RAISERROR('b')`), whose second call splits into its
+    own lone-raiserror piece and must not fold away unaccounted (issue #3252 code review 2)."""
+    raiserrors = 0
+    for s in _split_top_level_statements(body):
+        stmt = _strip_leading_sql_comments(s).strip(" \t\r\n;")
+        if not stmt:
+            continue
+        if _is_raiserror_only(stmt):
+            raiserrors += 1
+            if raiserrors > 1:
+                return True  # a 2nd RAISERROR can't fold into the single RAISE EXCEPTION — a sibling
+            continue
+        head = _re.match(r"(?:PRINT|RETURN)\b", stmt, _re.IGNORECASE)
+        if head and not _has_real_stmt_starter(stmt[head.end():]):
+            continue  # a lone benign PRINT/RETURN — nothing real glued after it
+        return True
+    return False
 
 # Inline entity-metadata INSERTs (Entity / EntityField / ApplicationEntity / …) in a
 # FEATURE migration are KEPT and transpiled — NOT dropped. Empirically, `mj codegen` on
@@ -1260,12 +1822,14 @@ _RAISERROR = _re.compile(r"RAISERROR\s*\(\s*(N?'(?:[^']|'')*'|@?\w+)", _re.IGNOR
 _METADATA_TABLES = _re.compile(r"(?!x)x")
 
 
-def _transpile_extprop_segment(text: str, pretty: bool = False) -> tuple[str, list[dict]]:
+def _transpile_extprop_segment(text: str, pretty: bool = False) -> tuple[str, list[dict], list[dict]]:
     """Transpile a text segment that may interleave sp_add/dropextendedproperty envelopes
     with plain SQL — used for IF…BEGIN bodies, where a guarded INSERT can sit next to an
-    extprop EXEC (the top-level batch walker handles the same mix outside blocks)."""
+    extprop EXEC (the top-level batch walker handles the same mix outside blocks).
+    Returns (sql, unhandled, dropped) — `dropped` accumulated from the plain-SQL gaps."""
     out: list[str] = []
     unhandled: list[dict] = []
+    dropped: list[dict] = []
     pos = 0
     while pos < len(text):
         ext = _SP_EXTPROP.search(text, pos)
@@ -1273,10 +1837,11 @@ def _transpile_extprop_segment(text: str, pretty: bool = False) -> tuple[str, li
         nxt = min([x for x in (ext, dxp) if x], key=lambda x: x.start(), default=None)
         gap = text[pos:] if nxt is None else text[pos:nxt.start()]
         if gap.strip():
-            s, u = _transpile_plain(gap, pretty)
+            s, u, d = _transpile_plain(gap, pretty)
             if s.strip():
                 out.append(s)
             unhandled.extend(u)
+            dropped.extend(d)
         if nxt is None:
             break
         if nxt is ext:
@@ -1292,7 +1857,7 @@ def _transpile_extprop_segment(text: str, pretty: bool = False) -> tuple[str, li
             elif comment is None:
                 unhandled.append({"kind": "sp_dropextendedproperty", "snippet": nxt.group(0)[:80]})
         pos = nxt.end()
-    return "\n".join(out), unhandled
+    return "\n".join(out), unhandled, dropped
 
 
 # SS catalog references in a guard condition (sys.* views / OBJECT_ID()) — meaningless
@@ -1380,12 +1945,13 @@ def _translate_sys_guard(cond: str, neg: bool) -> str | None:
     return None
 
 
-def _transpile_if_exists_begin(m: _IfExistsMatch) -> tuple[str, list[dict]]:
-    """IF [NOT] EXISTS(<sel>) BEGIN <body> END → PG DO $$ … IF … THEN … END IF; … $$;"""
+def _transpile_if_exists_begin(m: _IfExistsMatch) -> tuple[str, list[dict], list[dict]]:
+    """IF [NOT] EXISTS(<sel>) BEGIN <body> END → PG DO $$ … IF … THEN … END IF; … $$;
+    Returns (sql, unhandled, dropped) — see _transpile_plain for the accounting contract."""
     raw_body = m.group("body").strip()
     # Idempotent seed of schema-derived metadata → drop; CodeGen regenerates it.
     if _METADATA_TABLES.search(raw_body):
-        return "", []
+        return "", [], [{"kind": "IF-GUARD-METADATA", "snippet": m.group(0)[:80]}]
     # Extended-property comment dance: a guard whose body consists EXCLUSIVELY of
     # sp_add/dropextendedproperty EXECs (plus PRINT/comment noise) is SQL-Server-only —
     # PG `COMMENT ON … IS …` overwrites unconditionally and `mj codegen` re-syncs every
@@ -1401,37 +1967,43 @@ def _transpile_if_exists_begin(m: _IfExistsMatch) -> tuple[str, list[dict]]:
             and not _re.match(r"\s*PRINT\b", _strip_leading_sql_comments(s), _re.IGNORECASE)
         ]
         if not leftover:
-            return "", []
+            return "", [], [{"kind": "IF-GUARD-EXTPROP", "snippet": m.group(0)[:80]}]
     neg = "NOT " if m.group("neg") else ""
     cond_raw = m.group("cond").strip()
     u1: list[dict] = []
+    d1: list[dict] = []
     # SS catalog guards (sys.* / OBJECT_ID()) fail at apply on PG — translate the common
     # shapes; anything unrecognized is reported whole, never emitted as sys.* SQL.
     if _SYS_CATALOG_REF.search(cond_raw):
         cond_full = _translate_sys_guard(cond_raw, bool(m.group("neg")))
         if cond_full is None:
-            return "", [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}]
+            return "", [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}], []
     else:
-        cond_sql, u1 = _transpile_plain(cond_raw)
+        cond_sql, u1, d1 = _transpile_plain(cond_raw)
         cond_inner = cond_sql.rstrip(";").strip()
         cond_full = f"{neg}EXISTS ({cond_inner})" if cond_inner else None
-    # Guard blocks (IF EXISTS(...) BEGIN RAISERROR('conflict') END) → RAISE EXCEPTION.
+    # Guard blocks (IF EXISTS(...) BEGIN RAISERROR('conflict') END) → RAISE EXCEPTION — but ONLY
+    # when RAISERROR is the sole governed statement. A body pairing it with real statements (e.g.
+    # RAISERROR(...) then INSERT ...) cannot collapse to one RAISE (which aborts) without silently
+    # dropping the siblings; report the whole guard unhandled so it is hand-authored (#3252 review).
     rr = _RAISERROR.search(raw_body)
+    if rr and _raiserror_has_siblings(raw_body):
+        return "", (u1 + [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}]), d1
     if rr:
         msg = rr.group(1)
         msg = _pg_string(_unquote_tsql_string(msg)) if msg.lstrip("Nn").startswith("'") else "'migration guard failed'"
-        body_sql, u2 = f"RAISE EXCEPTION {msg};", []
+        body_sql, u2, d2 = f"RAISE EXCEPTION {msg};", [], []
     else:
-        body_sql, u2 = _transpile_extprop_segment(raw_body)
+        body_sql, u2, d2 = _transpile_extprop_segment(raw_body)
     if not cond_full or not body_sql.strip():
-        return "", (u1 + u2 + [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}])
+        return "", (u1 + u2 + [{"kind": "IF-EXISTS-BEGIN", "snippet": m.group(0)[:80]}]), (d1 + d2)
     do = (
         "DO $$\nBEGIN\n"
         f"  IF {cond_full} THEN\n"
         f"    {body_sql.strip()}\n"
         "  END IF;\nEND $$;"
     )
-    return do, (u1 + u2)
+    return do, (u1 + u2), (d1 + d2)
 
 
 def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dict:
@@ -1454,19 +2026,34 @@ def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dic
     # coerce 1/0 → TRUE/FALSE in seed INSERTs that target core tables (e.g. User.IsActive).
     global _BIT_COLS
     _BIT_COLS = _collect_bit_columns(sql)
-    extra = _os.environ.get("MJ_EXTRA_BIT_COLS")
+    # Registry transport: prefer a file path (MJ_EXTRA_BIT_COLS_FILE) so a large
+    # registry never has to ride an env var (which caps at ~128 KB and fails the
+    # spawn with E2BIG). Fall back to the inline MJ_EXTRA_BIT_COLS env for callers
+    # (and tests) that still set it directly.
+    extra = None
+    extra_file = _os.environ.get("MJ_EXTRA_BIT_COLS_FILE")
+    if extra_file:
+        try:
+            with open(extra_file, "r", encoding="utf-8") as _f:
+                extra = _f.read()
+        except Exception:  # noqa: BLE001
+            extra = None
+    if extra is None:
+        extra = _os.environ.get("MJ_EXTRA_BIT_COLS")
     if extra:
         try:
             _BIT_COLS |= {(t.lower(), c.lower()) for t, c in _json.loads(extra)}
         except Exception:  # noqa: BLE001
             pass
 
+    dropped: list[dict] = []
     for batch in _GO_SPLIT.split(sql):
         if not batch.strip():
             continue
-        out_sql, u = _transpile_batch(batch, pretty)
+        out_sql, u, d = _transpile_batch(batch, pretty)
         out.extend(out_sql)
         unhandled.extend(u)
+        dropped.extend(d)
 
     # Final safety net: the macro is protected to FLYWAY_SENTINEL by a blanket text
     # replace before parsing, and restored at the AST level in identifier_sql (identifier
@@ -1483,8 +2070,16 @@ def mj_transpile(sql: str, *, pretty: bool = True, identify: bool = True) -> dic
         {**u, "snippet": u["snippet"].replace(FLYWAY_SENTINEL, FLYWAY_MACRO)}
         for u in unhandled
     ]
+    dropped = [
+        {**d, "snippet": d["snippet"].replace(FLYWAY_SENTINEL, FLYWAY_MACRO)}
+        for d in dropped
+    ]
 
-    return {"sql": out, "unhandled": unhandled}
+    # `dropped` lists every INTENTIONALLY-discarded statement (batch-control noise, swallowed
+    # routine `END`, metadata-guard drops, …) so the TS/CLI reconciliation layer (issue #3252
+    # Phase 3) can account for what the dialect discarded. Backward-compatible: existing
+    # consumers read only `sql`/`unhandled`.
+    return {"sql": out, "unhandled": unhandled, "dropped": dropped}
 
 
 # Baseline extended-property EXECs come wrapped in per-statement error handling:
@@ -1507,10 +2102,29 @@ def _strip_catch_noise(batch: str) -> str:
     return _CATCH_BLOCK.sub(repl, batch)
 
 
-def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[dict]]:
-    """Scan one GO batch into envelope chunks + plain SQL, transpiling each in order."""
+_UNSET = object()  # "finder not yet run", distinct from a finder returning None (no match)
+
+
+def _next_match(cache: dict, key: str, finder, batch: str, pos: int):
+    """Memoized "next match at/after pos" for the batch walker. A cached match with
+    start() >= pos is reused; a cached None is STICKY (a finder that found nothing from a
+    lower pos finds nothing from a higher one); a finder is re-run only after pos advances
+    PAST its last hit. Without this, the walker re-scans the whole batch with every finder on
+    every iteration — O(statements × batch length), which on 50 MB baselines with thousands of
+    sp_addextendedproperty envelopes turns the Python-level `_find_routine_envelope` scan into
+    an O(N²) hang. With it, each finder runs O(number of its matches)."""
+    cached = cache.get(key, _UNSET)
+    if cached is _UNSET or (cached is not None and cached.start() < pos):
+        cache[key] = finder(batch, pos)
+    return cache[key]
+
+
+def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[dict], list[dict]]:
+    """Scan one GO batch into envelope chunks + plain SQL, transpiling each in order.
+    Returns (sql_list, unhandled, dropped) — see _transpile_plain for the accounting contract."""
     out: list[str] = []
     unhandled: list[dict] = []
+    dropped: list[dict] = []
 
     # Extended-property batches: drop the SS error-handling plumbing around the EXECs
     # (see _strip_catch_noise), then let the walk below handle EVERYTHING in the batch —
@@ -1519,45 +2133,64 @@ def _transpile_batch(batch: str, pretty: bool = False) -> tuple[list[str], list[
         batch = _strip_catch_noise(batch)
 
     pos = 0
+    cache: dict = {}  # memoizes each finder's next hit so the walk stays O(N) (see _next_match)
     # Walk the batch, alternating between recognized envelopes and plain SQL gaps.
     while pos < len(batch):
-        ext = _SP_EXTPROP.search(batch, pos)
-        dxp = _SP_DROPEXTPROP.search(batch, pos)
-        ife = _find_if_exists_begin(batch, pos)
-        nxt = min([m for m in (ext, dxp, ife) if m], key=lambda m: m.start(), default=None)
+        ext = _next_match(cache, "ext", _SP_EXTPROP.search, batch, pos)
+        dxp = _next_match(cache, "dxp", _SP_DROPEXTPROP.search, batch, pos)
+        ife = _next_match(cache, "ife", _find_if_exists_begin, batch, pos)
+        rtn = _next_match(cache, "rtn", _find_routine_envelope, batch, pos)
+        nxt = min([m for m in (ext, dxp, ife, rtn) if m], key=lambda m: m.start(), default=None)
         if nxt is None:
             gap = batch[pos:]
             if gap.strip():
-                s, u = _transpile_plain(gap, pretty)
+                s, u, d = _transpile_plain(gap, pretty)
                 if s.strip():
                     out.append(s)
                 unhandled.extend(u)
+                dropped.extend(d)
             break
         gap = batch[pos:nxt.start()]
         if gap.strip():
-            s, u = _transpile_plain(gap, pretty)
+            s, u, d = _transpile_plain(gap, pretty)
             if s.strip():
                 out.append(s)
             unhandled.extend(u)
+            dropped.extend(d)
         if nxt is ext:
             comment = _transpile_sp_addextendedproperty(nxt.group("args"))
             if comment:
                 out.append(comment)
-            elif comment is None:  # "" is an intentional CodeGen-object skip, not a failure
+            elif comment is None:  # a genuine failure to transpile the envelope — report it
                 unhandled.append({"kind": "sp_addextendedproperty", "snippet": nxt.group(0)[:80]})
+            else:  # "" — an intentional CodeGen-object comment skip: RECORD it as a drop so every
+                # empty result is accounted for and a real drop can never hide here (issue #3252 P2)
+                dropped.append({"kind": "sp_addextendedproperty-codegen-skip", "snippet": nxt.group(0)[:80]})
         elif nxt is dxp:
             comment = _transpile_sp_dropextendedproperty(nxt.group("args"))
             if comment:
                 out.append(comment)
             elif comment is None:
                 unhandled.append({"kind": "sp_dropextendedproperty", "snippet": nxt.group(0)[:80]})
+            else:  # "" — intentional CodeGen-object skip, accounted as a drop (issue #3252 P2)
+                dropped.append({"kind": "sp_dropextendedproperty-codegen-skip", "snippet": nxt.group(0)[:80]})
+        elif nxt is rtn:
+            # A hand-written CREATE PROCEDURE/FUNCTION/TRIGGER can't be auto-transpiled to PG
+            # (different procedural language + delimiter syntax). Report the routine WHOLE as
+            # ONE gap and emit NOTHING for it — this is the containment that stops body
+            # statements from escaping as top-level migration SQL (issue #3252 bugs #3/#4:
+            # a body UPDATE running table-wide at apply time, a dangling END emitting as a
+            # transaction-ending COMMIT, cursor fragments emitting as invalid PG). MJ's own
+            # CodeGen routines are regenerated by the bake path, never routed through here.
+            unhandled.append({"kind": f"CREATE-{rtn.kind}", "snippet": rtn.snippet})
         else:
-            do, u = _transpile_if_exists_begin(nxt)
+            do, u, d = _transpile_if_exists_begin(nxt)
             if do.strip():
                 out.append(do)
             unhandled.extend(u)
+            dropped.extend(d)
         pos = nxt.end()
-    return out, unhandled
+    return out, unhandled, dropped
 
 
 if __name__ == "__main__":

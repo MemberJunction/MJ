@@ -56,8 +56,13 @@ export class SearchInputComponent implements OnInit, OnDestroy {
     /** Whether to show the keyboard shortcut hint badge */
     @Input() ShowShortcutHint = true;
 
-    /** Text to display in the shortcut hint badge */
-    @Input() ShortcutHint = 'Ctrl+K';
+    /**
+     * Text to display in the shortcut hint badge. Defaults platform-aware:
+     * "⌘K" on macOS, "Ctrl+K" elsewhere (matching the actual chord, which hosts
+     * bind with metaKey on Mac). Set explicitly only to advertise a different
+     * chord.
+     */
+    @Input() ShortcutHint = SearchInputComponent.defaultShortcutHint();
 
     /** Debounce time in milliseconds before QueryChange emits */
     @Input() DebounceMs = 400;
@@ -157,6 +162,13 @@ export class SearchInputComponent implements OnInit, OnDestroy {
     }
 
     // --- Private ---
+
+    /** Platform-correct default for the shortcut badge (same detection idiom as
+        the Ctrl/Cmd+K keydown handlers that actually bind the chord). */
+    private static defaultShortcutHint(): string {
+        const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        return isMac ? '⌘K' : 'Ctrl+K';
+    }
 
     private setupDebounce(): void {
         this.queryInput$

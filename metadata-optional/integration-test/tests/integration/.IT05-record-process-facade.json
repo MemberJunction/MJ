@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT05 - RecordProcessExecutor Facade",
+    "Description": "Exercises the RecordProcessExecutor facade above the substrate (deterministic, no model calls). A real MJ: Record Processes definition with a 0-row Filter scope (fully deterministic, zero side effects) is resolved + run, and the persisted MJ: Process Runs row must be Completed, linked back via RecordProcessID, and reflect SourceType=Filter with 0 rows processed. RPF1 runs it via executor.Run(definition); RPF2 via executor.RunByID(id) (the load-by-id entry point). The bundle creates + tears down its own Record Process + ProcessRun fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "executor.Run and executor.RunByID each persist a Completed ProcessRun linked to the Record Process, SourceType=Filter, 0 rows processed."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "record-process-facade"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "828A95DA-9927-4C4F-AA83-AE794E08E885"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T18:38:01.142Z",
+    "checksum": "ca39e06445fe543b0ce58105ff48725ca289b7fd4998a5cbc90b7e6f4d226f32"
+  }
+}

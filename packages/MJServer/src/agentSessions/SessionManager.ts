@@ -7,6 +7,7 @@ import {
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import { GetHostInstanceID } from './HostInstance.js';
+import { writeReturningVisitorRecap } from './ReturningVisitorRecap.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -160,6 +161,10 @@ export class SessionManager {
         await this.disconnectChannels(agentSessionID, contextUser, provider, preloadedChannels);
         await this.finalizeObservabilityRuns(session, contextUser, provider);
         await this.notifyChannelPluginsSessionClosed(agentSessionID, closeReason);
+        // Returning-visitor recap (RV2): if this session's conversation is returning-visitor-enabled,
+        // summarize it into an Active memory note so the visitor's next session opens with prior context.
+        // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
+        await writeReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
     }
 
@@ -316,6 +321,31 @@ export class SessionManager {
         conversation.NewRecord();
         conversation.UserID = input.userID;
         conversation.Name = 'Agent Session';
+        // For a magic-link-anonymous principal (e.g. a public web-widget voice guest), stamp the
+        // session's conversation with the signed per-session scope so the Widget Guest RLS filters
+        // ({{ScopeResourceID}}) isolate this session — and everything chained to it (AI Agent
+        // Sessions via ConversationID, Session Channels via the session) — from other guests
+        // sharing the Anonymous UserID. No-op for named principals (no scope → default ExternalID).
+        if (contextUser.MagicLinkScope?.ResourceID) {
+            conversation.ExternalID = contextUser.MagicLinkScope.ResourceID;
+        }
+
+        // Returning-visitor memory (RV1/RV2/RV4) for the VOICE path: the widget guest token carries the
+        // resolved VisitorKey / prior-conversation / linked identity (surfaced on ReturningVisitorContext),
+        // so a server-created voice conversation gets the same anchor the text path stamps client-side.
+        // The resolved counterparty reuses the existing polymorphic LinkedEntityID/LinkedRecordID pair.
+        // Absent for non-widget sessions and widgets with returning-visitor memory off — a no-op default.
+        const visitor = contextUser.ReturningVisitorContext;
+        if (visitor?.VisitorKey) {
+            conversation.VisitorKey = visitor.VisitorKey;
+            if (visitor.LastConversationID) {
+                conversation.LastConversationID = visitor.LastConversationID;
+            }
+            if (visitor.LinkedEntityID && visitor.LinkedRecordID) {
+                conversation.LinkedEntityID = visitor.LinkedEntityID;
+                conversation.LinkedRecordID = visitor.LinkedRecordID;
+            }
+        }
 
         const saved = await conversation.Save();
         if (!saved) {
@@ -343,6 +373,14 @@ export class SessionManager {
         session.HostInstanceID = GetHostInstanceID();
         session.Config_ = input.config ?? null;
         session.LastActiveAt = new Date();
+        // Mirror the conversation's resolved counterparty onto the session's own polymorphic pair, so a
+        // session carries its linked identity directly (parallels Conversation.LinkedEntityID/RecordID).
+        // Sourced from the same widget visitor context; a no-op for non-widget / anonymous sessions.
+        const visitor = contextUser.ReturningVisitorContext;
+        if (visitor?.LinkedEntityID && visitor.LinkedRecordID) {
+            session.LinkedEntityID = visitor.LinkedEntityID;
+            session.LinkedRecordID = visitor.LinkedRecordID;
+        }
 
         const saved = await session.Save();
         if (!saved) {

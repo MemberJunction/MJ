@@ -34,7 +34,7 @@ export interface PipelineResult {
  */
 export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<PipelineResult> {
     // ── STAGE 1: PARSE ──
-    const parseResult = parseQuerySQL(ctx.sql);
+    const parseResult = parseQuerySQL(ctx.sql, ctx.platform);
 
     // ── STAGE 2: RESOLVE ──
     const resolveResult = resolve(ctx, parseResult);
@@ -154,7 +154,7 @@ async function sync(
     // Fields: when finalFields is null, preserve existing fields instead of deleting them.
     // Deletion only happens when we have a positive new field list (handled inside SyncFields via diff).
     if (finalFields) {
-        syncPromises.push(SyncFields(ctx.queryID, finalFields, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+        syncPromises.push(SyncFields(ctx.queryID, finalFields, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, ctx.platform));
     }
     // When finalFields is null, we intentionally do NOT call RemoveAllRecords — existing fields are preserved.
 

@@ -2,11 +2,33 @@ import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, Cla
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Mistral } from "@mistralai/mistralai";
 import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice, ChatCompletionStreamRequest } from '@mistralai/mistralai/models/components';
+// Type-only import (elided at emit) — RequestOptions is the SDK's per-call options bag, which
+// extends RequestInit and therefore accepts a `signal` for cancellation.
+import type { RequestOptions } from '@mistralai/mistralai/lib/sdks';
+
+/**
+ * True when `error` represents a client-initiated cancellation rather than a genuine provider or
+ * network failure. The Mistral SDK normalizes a fired `AbortSignal` into a `RequestAbortedError`
+ * (name: `'RequestAbortedError'`); a raw `fetch` abort surfaces as `AbortError` / `TimeoutError`.
+ * Note the SDK's retry policy only retries timeout/connection errors, so an abort is never retried.
+ */
+function isMistralCancellationError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+        return false;
+    }
+    const name = (error as { name?: string }).name;
+    return name === 'RequestAbortedError' || name === 'AbortError' || name === 'TimeoutError';
+}
 
 @RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
     private _client: Mistral;
-    
+
+    // Cancellation token for the in-flight STREAMING request. The base class's streaming loop
+    // swallows mid-stream iteration errors, so finalizeStreamingResponse() consults this to detect
+    // that the stream ended because the caller aborted rather than because the model finished.
+    private _streamingCancellationToken: AbortSignal | null = null;
+
     // State tracking for streaming thinking extraction
     private _streamingState: {
         accumulatedThinking: string;
@@ -104,7 +126,17 @@ export class MistralLLM extends BaseLLM {
         // Note: Mistral doesn't have a direct equivalent to effortLevel/reasoning_effort as of current API version
         // If/when Mistral adds this functionality, it should be added here
 
-        const chatResponse = await this.Client.chat.complete(params_obj);
+        let chatResponse: Awaited<ReturnType<Mistral['chat']['complete']>>;
+        try {
+            this.throwIfCancelled(params.cancellationToken);
+            chatResponse = await this.Client.chat.complete(params_obj, this.buildRequestOptions(params.cancellationToken));
+        }
+        catch (e) {
+            if (this.isCancelled(e, params.cancellationToken)) {
+                return this.buildCancelledResult(startTime, e, params.cancellationToken);
+            }
+            throw e;
+        }
 
         const endTime = new Date();
 
@@ -182,14 +214,74 @@ export class MistralLLM extends BaseLLM {
             pendingContent: '',
             thinkingComplete: false
         };
+        this._streamingCancellationToken = null;
     }
-    
+
+    /**
+     * Build the per-call Mistral {@link RequestOptions}, threading the caller's cancellation token
+     * through as the `fetch` request's `signal`. `RequestOptions` extends `RequestInit`, so the
+     * signal reaches the underlying `fetch` directly and an abort tears down the HTTP socket.
+     */
+    private buildRequestOptions(token: AbortSignal | undefined): RequestOptions | undefined {
+        return token ? { signal: token } : undefined;
+    }
+
+    /** Throw immediately (before any socket is opened) when the caller has already cancelled. */
+    private throwIfCancelled(token: AbortSignal | undefined): void {
+        if (token?.aborted) {
+            throw this.createCancellationError(token);
+        }
+    }
+
+    /** The canonical abort error we raise for a pre-aborted request, shaped like fetch's own. */
+    private createCancellationError(token: AbortSignal): Error {
+        const error = new Error(this.describeCancellation(token));
+        error.name = 'AbortError';
+        return error;
+    }
+
+    /** True when this failure is the caller's cancellation rather than a provider/network fault. */
+    private isCancelled(error: unknown, token: AbortSignal | undefined): boolean {
+        return token?.aborted === true || isMistralCancellationError(error);
+    }
+
+    /** Human-readable reason for a cancellation, preferring the signal's own reason when present. */
+    private describeCancellation(token: AbortSignal | undefined): string {
+        const reason: unknown = token?.reason;
+        if (reason instanceof Error && reason.message) {
+            return `Mistral request cancelled: ${reason.message}`;
+        }
+        if (typeof reason === 'string' && reason.length > 0) {
+            return `Mistral request cancelled: ${reason}`;
+        }
+        return 'Mistral request cancelled by caller';
+    }
+
+    /**
+     * Build the typed ChatResult for a cancelled request — a normal failed ChatResult, the same
+     * shape every other Mistral error path produces, never an unhandled rejection.
+     */
+    private buildCancelledResult(startTime: Date, error: unknown, token: AbortSignal | undefined): ChatResult {
+        const result = new ChatResult(false, startTime, new Date());
+        result.statusText = 'Cancelled';
+        result.errorMessage = this.describeCancellation(token);
+        result.exception = error;
+        result.errorInfo = ErrorAnalyzer.analyzeError(error, 'Mistral');
+        result.data = {
+            choices: [],
+            usage: new ModelUsage(0, 0)
+        };
+        return result;
+    }
+
     /**
      * Create a streaming request for Mistral
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
+        this.throwIfCancelled(params.cancellationToken);
+        this._streamingCancellationToken = params.cancellationToken ?? null;
         let responseFormat: ResponseFormat | undefined = undefined;
         switch (params.responseFormat) {
             case 'JSON':
@@ -246,7 +338,7 @@ export class MistralLLM extends BaseLLM {
         // Note: Mistral doesn't have a direct equivalent to effortLevel/reasoning_effort as of current API version
         // If/when Mistral adds this functionality, it should be added here
         
-        return this.Client.chat.stream(params_obj);
+        return this.Client.chat.stream(params_obj, this.buildRequestOptions(params.cancellationToken));
     }
     
     /**
@@ -387,12 +479,20 @@ export class MistralLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
+        // A mid-stream abort surfaces as an iteration error that the base class swallows, so the
+        // token is the only reliable signal here. Report cancellation as a clean failure instead of
+        // passing off a truncated stream as a successful completion.
+        const cancellationToken = this._streamingCancellationToken;
+        if (cancellationToken?.aborted) {
+            return this.buildCancelledResult(new Date(), this.createCancellationError(cancellationToken), cancellationToken);
+        }
+
         // Create dates (will be overridden by base class)
         const now = new Date();
-        
+
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
-        
+
         // Get thinking content from streaming state
         const thinkingContent = this._streamingState.accumulatedThinking.trim();
         

@@ -151,15 +151,16 @@ describe('AddServerDynamicPackages — B4 (anchor insert to module.exports, not 
         expect(content).toContain('function helper'); // trailing code untouched
     });
 
-    it('fails loudly when module.exports is not a direct object literal (module.exports = cfg;)', () => {
+    it('follows a variable reference when module.exports = cfg; and inserts into the variable object', () => {
         const config = ['const cfg = { dbHost: "localhost" };', 'module.exports = cfg;'].join('\n');
         setupConfigFile(config);
 
         const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest('acme-app', '@acme/server'));
 
-        expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toBeDefined();
-        expect(mockedWriteFileSync).not.toHaveBeenCalled();
+        expect(result.Success).toBe(true);
+        const content = writtenContent();
+        expect(content).toContain('@acme/server');
+        expect(content).toContain('module.exports = cfg;');
     });
 });
 

@@ -25,11 +25,13 @@ import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
 import { AboutDialogService } from './services/about-dialog.service';
 import { ProfileDialogService } from './services/profile-dialog.service';
+import { IsOmnibarAvailable, IsOmnibarEnabledForUser, OMNIBAR_PROMO_DISMISSED_KEY, OMNIBAR_USER_SETTING_KEY } from '../omnibar/omnibar-user-setting';
+import { GetOmnibarShortcutLabel } from '../omnibar/omnibar-shortcut';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
+import { MJUserEntity, InstanceConfigEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
@@ -44,6 +46,20 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
  * - Golden Layout-based tab container
  * - Unified workspace state management
  */
+/**
+ * Instance-config-backed shell chrome flags, resolved once from InstanceConfigEngine
+ * and cached for the component's lifetime. Angular change detection evaluates the
+ * getters that expose these constantly, so a per-read engine lookup would run
+ * thousands of times; resolving the whole set once keeps every read a field access.
+ */
+interface ShellChromeFlags {
+  searchBar: boolean;
+  searchPreview: boolean;
+  notifications: boolean;
+  appSwitcher: boolean;
+  appNav: boolean;
+}
+
 @Component({
   standalone: false,
   selector: 'mj-shell',
@@ -121,19 +137,142 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
-  // Universal search bar
+  // Legacy universal search overlay (omnibar-off MOBILE path) — opened by the
+  // mobile search icon or Ctrl/Cmd+K when the inline composite isn't visible.
+  // Desktop omnibar-off uses the inline header composite instead.
+  LegacySearchOpen = false;
+
+  // Instance configuration feature flags — all resolved through the single
+  // memoized `chromeFlags` accessor below (see ShellChromeFlags) so Angular's
+  // change detection reads a cached field instead of hitting the engine per pass.
+  private _chromeFlags: ShellChromeFlags | null = null;
+
+  /**
+   * Resolve the instance-config chrome flags once and cache them. Computed live
+   * from the fail-open defaults until InstanceConfigEngine has loaded, then frozen
+   * on the first post-load read — so the pre-load defaults are never cached over
+   * the real values, and every steady-state read is a plain field access.
+   */
+  private get chromeFlags(): ShellChromeFlags {
+      if (this._chromeFlags) {
+          return this._chromeFlags;
+      }
+      const engine = InstanceConfigEngine.Instance;
+      const flags: ShellChromeFlags = {
+          searchBar: engine.GetBoolean('Shell.SearchBar.Enabled', true),
+          searchPreview: engine.GetBoolean('Shell.SearchBar.EnablePreview', true),
+          notifications: engine.GetBoolean('Shell.Notifications.Enabled', true),
+          appSwitcher: engine.GetBoolean('Shell.AppSwitcher.Enabled', true),
+          appNav: engine.GetBoolean('Shell.AppNav.Enabled', true),
+      };
+      if (engine.Loaded) {
+          this._chromeFlags = flags;
+      }
+      return flags;
+  }
+
+  get ShowSearchBar(): boolean {
+      return this.chromeFlags.searchBar;
+  }
+  /** Instance Config gate for the notification bell + unread badge (desktop and mobile). */
+  get ShowNotifications(): boolean {
+      return this.chromeFlags.notifications;
+  }
+  /** Instance Config gate for the app switcher (also the add/configure-apps entry point). */
+  get ShowAppSwitcher(): boolean {
+      return this.chromeFlags.appSwitcher;
+  }
+  /** Instance Config gate for the app navigation strip (desktop and the mobile drawer). */
+  get ShowAppNav(): boolean {
+      return this.chromeFlags.appNav;
+  }
+  get ShowSearchPreview(): boolean {
+      return this.chromeFlags.searchPreview;
+  }
+  /**
+   * Two-layer gate for the unified Ctrl+K command palette (omnibar):
+   * the 'Shell.Omnibar.Enabled' Instance Config row is the master AVAILABILITY
+   * switch (default TRUE; false = legacy trio for everyone), and each user
+   * opts in personally via My Profile → Command Palette (a UserInfoEngine
+   * setting, so the choice follows them across devices). ON = the header shows
+   * the palette affordance and Ctrl+K / Ctrl+/ open the palette; OFF = the
+   * legacy trio (search composite + app command palette + search popup) behaves
+   * exactly as before. Both reads are synchronous cache hits.
+   */
+  get UseOmnibar(): boolean {
+      return IsOmnibarEnabledForUser();
+  }
+
+  /** Platform-correct summon-shortcut label ('⌘K' on Mac, 'Ctrl+K' elsewhere). */
+  get OmnibarShortcutLabel(): string {
+      return GetOmnibarShortcutLabel();
+  }
+
+  /**
+   * Whether the legacy search surfaces advertise the omnibar: the instance makes
+   * it available, the user hasn't opted in yet, and they haven't dismissed the
+   * promo. Fail-closed (never advertise during boot / permission constraints).
+   */
+  get ShowOmnibarPromo(): boolean {
+      try {
+          return IsOmnibarAvailable()
+              && !IsOmnibarEnabledForUser()
+              && UserInfoEngine.Instance.GetSetting(OMNIBAR_PROMO_DISMISSED_KEY) !== 'true';
+      } catch {
+          return false;
+      }
+  }
+
+  /** Promo copy shown in the legacy search surfaces. */
+  readonly OmnibarPromoText = 'Try the new command palette — search, jump to records, switch apps, and message agents from one box.';
+
+  /**
+   * Promo accepted: opt the user in (same UserInfoEngine setting as the My
+   * Profile toggle, so it follows them across devices), then open the palette
+   * pre-seeded with whatever they were just searching — same query, new
+   * surface, immediate demonstration.
+   */
+  OnOmnibarPromoAccepted(query: string): void {
+      // Demonstration first, persistence second: close the legacy surface and open
+      // the palette with the carried query IMMEDIATELY (the palette element renders
+      // unconditionally, so it doesn't need the setting to have landed). Awaiting
+      // the server write first read as a dead click on slow links.
+      this.LegacySearchOpen = false;
+      this.cdr.detectChanges();
+      this.OpenOmnibar(query?.trim() ?? '');
+      void UserInfoEngine.Instance.SetSetting(OMNIBAR_USER_SETTING_KEY, 'true').then((saved) => {
+          if (!saved) {
+              LogError('Omnibar promo opt-in failed to persist — palette will open for this session only');
+          }
+      });
+  }
+
+  /** Promo dismissed: persist server-side so it never shows again, on any device. */
+  OnOmnibarPromoDismissed(): void {
+      UserInfoEngine.Instance.SetSettingDebounced(OMNIBAR_PROMO_DISMISSED_KEY, 'true');
+  }
+
+  /** Palette footer gear → My Profile (where the Command Palette section lives). */
+  OnPaletteSettingsRequested(): void {
+      this.profileDialogService.open(this.viewContainerRef, {
+          avatarUrl: this.userImageURL || null,
+          avatarIconClass: this.userIconClass || null
+      });
+  }
+
+  @ViewChild('omnibarPalette') omnibarPalette?: { Open(initialQuery?: string): void };
+
+  /** Legacy inline search composite (omnibar-off desktop). Structural typing keeps
+      the shell decoupled from the ng-search component class. */
   @ViewChild('shellSearchComposite') shellSearchComposite: {
     Focus?(): void;
     MinRelevancePercent?: number;
     SelectedScopeIDs?: string[];
   } | undefined;
 
-  // Instance configuration feature flags
-  get ShowSearchBar(): boolean {
-      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.Enabled', true);
-  }
-  get ShowSearchPreview(): boolean {
-      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
+  /** Header affordance click → open the palette. */
+  OpenOmnibar(initialQuery = ''): void {
+      this.omnibarPalette?.Open(initialQuery);
   }
 
   // Tab container reference for thumbnail capture
@@ -1331,7 +1470,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         case 'records':
           // /app/:appName/record/:entityName/:recordId
           if (entityName && recordId) {
-            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`);
+            // recordId is a CompositeKey URL segment ("ID|<value>") — the '|' MUST be encoded.
+            // Angular's UrlSerializer percent-encodes '|' to %7C in router.url, so if we embed it raw
+            // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
+            // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
+            // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
+            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
           }
           break;
 
@@ -1408,7 +1552,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     switch (resourceType) {
       case 'records':
         if (entityName && recordId) {
-          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${recordId}`);
+          // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
+          // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
+          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
         }
         break;
 
@@ -2458,9 +2604,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   @HostListener('document:keydown', ['$event'])
   handleGlobalKeyboardShortcuts(event: KeyboardEvent): void {
-    // Skip if user is typing in an input/textarea
+    // Skip if user is typing in an input/textarea — EXCEPT when the omnibar is on:
+    // a modal palette is summonable from anywhere (incl. the chat composer), like
+    // Slack/Linear. The legacy path keeps the guard (its binding steals focus).
     const target = event.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+    const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+    if (inEditable && !this.UseOmnibar) {
       return;
     }
 
@@ -2468,11 +2617,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
 
-    // Cmd+/ or Ctrl+/ opens command palette
+    // Cmd+/ or Ctrl+/ opens the palette (omnibar '/' mode when enabled, legacy otherwise)
     if (isCtrlOrCmd && event.key === '/') {
       event.preventDefault();
       event.stopPropagation();
-      this.commandPaletteService.Open();
+      if (this.UseOmnibar) {
+        this.OpenOmnibar('/');
+      } else {
+        this.commandPaletteService.Open();
+      }
     }
   }
 
@@ -2590,6 +2743,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * Toggle search popup visibility
    */
   toggleSearch(): void {
+    if (this.UseOmnibar) {
+      this.OpenOmnibar();
+      return;
+    }
     this.isSearchOpen = !this.isSearchOpen;
 
     // Focus on search input when opened
@@ -2647,16 +2804,40 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   @HostListener('document:keydown', ['$event'])
   OnGlobalKeydown(event: KeyboardEvent): void {
+      // Ctrl/Cmd+K summons search. Omnibar: the modal palette opens from anywhere,
+      // even while typing (explicit chord, Slack/Linear semantics). Legacy: the
+      // chord FOCUSES the inline header composite on desktop (results attach
+      // beneath it), so keep the don't-steal-focus-mid-typing guard; on mobile
+      // (no composite rendered) it opens the Spotlight overlay instead.
       const target = event.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if (inEditable && !this.UseOmnibar) {
+          return;
+      }
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
       if (isCtrlOrCmd && event.key === 'k') {
           event.preventDefault();
           event.stopPropagation();
-          if (this.shellSearchComposite?.Focus) {
-              this.shellSearchComposite.Focus();
-          }
+          this.OnHeaderSearchClick();
+      }
+  }
+
+  /** Header search affordance / Ctrl+K: route to whichever search surface applies.
+      The mobile check matters: below the breakpoint the composite is CSS-hidden
+      (.desktop-only) but its ViewChild still exists — focusing an invisible input
+      would silently eat the interaction. */
+  OnHeaderSearchClick(): void {
+      const isMobile = window.matchMedia('(max-width: 768px)').matches;
+      if (this.UseOmnibar) {
+          this.OpenOmnibar();
+      } else if (!isMobile && this.shellSearchComposite?.Focus) {
+          // Omnibar-off desktop: the inline composite is on screen — focus it and
+          // let its attached suggest dropdown do the work.
+          this.shellSearchComposite.Focus();
+      } else {
+          // Omnibar-off mobile: no visible inline composite — open the Spotlight overlay.
+          this.LegacySearchOpen = true;
       }
   }
 
@@ -2675,6 +2856,21 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
 
+  /** Legacy search overlay selection → same navigation path as the old composite. */
+  OnOverlayResultSelected(event: { Result: { EntityName: string; RecordID: string; ResultType?: string; RawMetadata?: string } }): void {
+      this.LegacySearchOpen = false;
+      this.OnSearchResultSelected(event.Result);
+  }
+
+  /** Legacy search overlay "See all results" → the full Search Results workspace
+      (same destination as the omnibar's see-all row). */
+  OnOverlaySeeAll(query: string): void {
+      this.LegacySearchOpen = false;
+      this.navigationService.OpenSearch(query);
+  }
+
+  /** Inline composite submit (Enter) → full Search Results workspace, carrying the
+      composite's relevance/scope selections. */
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
           const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
@@ -2686,6 +2882,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
   }
 
+  /** Inline composite's suggest-dropdown "See all N results" footer. */
   OnSeeAllSearch(query: string): void {
       this.OnSearchSubmitted(query);
   }

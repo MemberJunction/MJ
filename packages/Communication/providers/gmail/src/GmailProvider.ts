@@ -35,7 +35,16 @@ import {
   ListAttachmentsResult,
   MessageAttachment,
   DownloadAttachmentParams,
-  DownloadAttachmentResult
+  DownloadAttachmentResult,
+  CreateSubscriptionParams,
+  RenewSubscriptionParams,
+  DeleteSubscriptionParams,
+  SubscriptionResult,
+  SubscriptionCapabilities,
+  WebhookNotificationInput,
+  NormalizedNotification,
+  ParseNotificationResult,
+  BaseMessageResult
 } from "@memberjunction/communication-types";
 import { RegisterClass, MJLruCache } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
@@ -80,6 +89,43 @@ interface ResolvedGmailCredentials {
 interface CachedGmailClient {
   client: googleApis.gmail_v1.Gmail;
   userEmail: string | null;
+}
+
+/**
+ * Gmail's mailbox watch (a `users.watch` registration) expires after roughly 7 days,
+ * so the consumer MUST re-watch before then. Expressed in minutes (7 × 24 × 60) to match
+ * {@link SubscriptionCapabilities.MaxLifetimeMinutes}.
+ */
+const GMAIL_MAX_SUBSCRIPTION_MINUTES = 10080;
+
+/**
+ * Provider-specific extras for a Gmail push subscription, passed via
+ * {@link CreateSubscriptionParams.ContextData} / {@link RenewSubscriptionParams.ContextData}.
+ */
+interface GmailSubscriptionContext {
+  /**
+   * The fully-qualified Google Cloud Pub/Sub topic the mailbox watch publishes to, e.g.
+   * `projects/{project}/topics/{topic}`. REQUIRED - Gmail delivers push via Pub/Sub, not
+   * an HTTP endpoint.
+   */
+  topicName?: string;
+  /**
+   * Label IDs to restrict the watch to. Defaults to `['INBOX']`.
+   */
+  labelIds?: string[];
+  /**
+   * Whether {@link GmailSubscriptionContext.labelIds} are an allow-list (`'include'`) or a
+   * deny-list (`'exclude'`). Passed through to Gmail verbatim when set.
+   */
+  labelFilterBehavior?: string;
+}
+
+/**
+ * The JSON payload Gmail base64-encodes into the Pub/Sub `message.data` field.
+ */
+interface GmailPushData {
+  emailAddress?: string;
+  historyId?: string | number;
 }
 
 /**
@@ -285,6 +331,20 @@ export class GmailProvider extends BaseCommunicationProvider {
       // Resolve credentials (request credentials with env fallback)
       const creds = this.resolveCredentials(credentials);
       const cached = this.getGmailClient(creds);
+
+      // DRY RUN: run the full local pipeline (credential resolution/validation, OAuth2 client
+      // construction, complete base64url RFC-2822 payload construction) but NEVER contact Google —
+      // which is why the getUserEmail() profile round-trip below is also skipped on this path.
+      if (message.DryRun) {
+        this.createEmailContent(message, creds);
+        LogStatus(`[DryRun] Gmail: raw RFC-2822 payload constructed for ${message.To} — external send skipped`);
+        return {
+          Message: message,
+          Success: true,
+          Error: '',
+          DryRun: true
+        };
+      }
 
       // Get user email
       const userEmail = await this.getUserEmail(cached);
@@ -740,8 +800,233 @@ export class GmailProvider extends BaseCommunicationProvider {
       'ArchiveMessage',
       'SearchMessages',
       'ListAttachments',
-      'DownloadAttachment'
+      'DownloadAttachment',
+      'CreateSubscription',
+      'RenewSubscription',
+      'DeleteSubscription',
+      'ParseNotification'
     ];
+  }
+
+  // ========================================================================
+  // PUSH-NOTIFICATION SUBSCRIPTIONS
+  // Gmail is SUBSCRIPTION-MANAGED and HINT-mode. A mailbox `users.watch` registration
+  // tells Gmail to publish change notifications to a Google Cloud Pub/Sub topic; the
+  // push body carries only a historyId, so the consumer re-fetches changed messages via
+  // GetMessages/the Gmail history API — the content is NEVER delivered inline. The
+  // provider stays stateless: the consumer persists the mailbox userId + expiration.
+  //
+  // Pub/Sub prerequisite (document, not implemented): the target topic MUST grant the
+  // `pubsub.publisher` role to `gmail-api-push@system.gserviceaccount.com`, or `users.watch`
+  // fails. See https://developers.google.com/gmail/api/guides/push.
+  // ========================================================================
+
+  /**
+   * Creates a Gmail mailbox watch so change notifications are published to a Google Cloud
+   * Pub/Sub topic. Gmail delivers via Pub/Sub (not an HTTP endpoint), so
+   * {@link CreateSubscriptionParams.NotificationUrl} is NOT required here.
+   *
+   * @requires Gmail API scope: https://www.googleapis.com/auth/gmail.readonly (or broader,
+   *           e.g. gmail.modify).
+   * @requires The Pub/Sub topic named in `ContextData.topicName` must grant publish rights
+   *           to `gmail-api-push@system.gserviceaccount.com`.
+   * @param params - What to watch; `ContextData.topicName` (Pub/Sub topic) is REQUIRED
+   * @param credentials - Optional credentials override for this request
+   * @returns Promise<SubscriptionResult> - The mailbox userId (as SubscriptionID) and expiration
+   */
+  public override async CreateSubscription(
+    params: CreateSubscriptionParams,
+    credentials?: GmailCredentials
+  ): Promise<SubscriptionResult> {
+    const context = params.ContextData as GmailSubscriptionContext | undefined;
+
+    // Fail-fast input validation (before any Gmail call). Gmail push requires a Pub/Sub
+    // topic; there is no HTTP endpoint, so NotificationUrl is intentionally NOT required.
+    if (!context?.topicName) {
+      return { Success: false, ErrorMessage: 'CreateSubscription requires a Pub/Sub topic in ContextData.topicName (e.g. projects/{project}/topics/{topic})' };
+    }
+
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+      const userId = params.Identifier || 'me';
+
+      return await this.issueWatch(cached.client, userId, context);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error creating subscription';
+      LogError('Error creating subscription via Gmail', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: `Error creating subscription: ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Renews a Gmail mailbox watch by re-issuing `users.watch` for the same mailbox. Gmail
+   * has no distinct renewal call — re-watching before the ~7-day expiry is the renewal.
+   *
+   * @requires Gmail API scope: https://www.googleapis.com/auth/gmail.readonly (or broader).
+   * @param params - `SubscriptionID` is the mailbox userId; `ContextData.topicName` is REQUIRED
+   * @param credentials - Optional credentials override for this request
+   * @returns Promise<SubscriptionResult> - The mailbox userId (as SubscriptionID) and new expiration
+   */
+  public override async RenewSubscription(
+    params: RenewSubscriptionParams,
+    credentials?: GmailCredentials
+  ): Promise<SubscriptionResult> {
+    const context = params.ContextData as GmailSubscriptionContext | undefined;
+
+    if (!context?.topicName) {
+      return { Success: false, ErrorMessage: 'RenewSubscription requires a Pub/Sub topic in ContextData.topicName (e.g. projects/{project}/topics/{topic})' };
+    }
+
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+      return await this.issueWatch(cached.client, params.SubscriptionID, context);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Error renewing subscription';
+      LogError('Error renewing subscription via Gmail', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: `Error renewing subscription: ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Stops the Gmail mailbox watch (`users.stop`). Idempotent from the consumer's
+   * perspective: a 404 / not-found is treated as success.
+   *
+   * @requires Gmail API scope: https://www.googleapis.com/auth/gmail.readonly (or broader).
+   * @param params - `SubscriptionID` is the mailbox userId whose watch to stop
+   * @param credentials - Optional credentials override for this request
+   * @returns Promise<BaseMessageResult> - Result of the stop operation
+   */
+  public override async DeleteSubscription(
+    params: DeleteSubscriptionParams,
+    credentials?: GmailCredentials
+  ): Promise<BaseMessageResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const cached = this.getGmailClient(creds);
+      await cached.client.users.stop({ userId: params.SubscriptionID });
+      LogStatus(`Gmail mailbox watch stopped for '${params.SubscriptionID}'`);
+      return { Success: true };
+    } catch (error: unknown) {
+      if (this.isNotFoundError(error)) {
+        // Already gone - stopping a non-existent watch is idempotent success.
+        return { Success: true };
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Error stopping subscription';
+      LogError('Error stopping subscription via Gmail', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: `Error deleting subscription: ${errorMessage}`
+      };
+    }
+  }
+
+  /**
+   * Parses an inbound Gmail Pub/Sub push notification. Pure: no network, never throws on
+   * hostile/garbage input (returns `Success: false` + a 400 suggested status instead).
+   *
+   * The Pub/Sub push body is JSON of the shape
+   * `{ message: { data: <base64 of JSON {emailAddress, historyId}>, messageId, publishTime }, subscription }`.
+   * This is HINT-mode: the decoded payload only carries a `historyId`, so
+   * {@link NormalizedNotification.MessageIDs} is empty and the consumer must re-fetch the
+   * changed messages via the Gmail history API / GetMessages.
+   *
+   * NOTE: no cryptographic signature scheme is applied here, so
+   * {@link ParseNotificationResult.SignatureValid} is left undefined. Pub/Sub push
+   * authenticity is normally established via OIDC token verification on the push endpoint,
+   * which is out of scope for this pure parser (the consumer's HTTP layer owns it).
+   *
+   * @param input - Transport-neutral capture of the inbound webhook request
+   * @returns Promise<ParseNotificationResult> - One normalized notification, or a 400 failure
+   */
+  public override async ParseNotification(
+    input: WebhookNotificationInput,
+    _credentials?: GmailCredentials
+  ): Promise<ParseNotificationResult> {
+    const malformed = (reason: string): ParseNotificationResult => ({
+      Success: false,
+      ErrorMessage: reason,
+      Notifications: [],
+      SuggestedResponseStatus: 400
+    });
+
+    try {
+      // 1. Parse the outer Pub/Sub envelope.
+      let envelope: unknown;
+      try {
+        envelope = JSON.parse(input?.RawBody ?? '');
+      } catch {
+        return malformed('Malformed notification body (invalid JSON)');
+      }
+
+      // 2. Pull the base64-encoded message.data field.
+      const message = (envelope as { message?: { data?: unknown } } | null)?.message;
+      const data = message?.data;
+      if (typeof data !== 'string' || data.length === 0) {
+        return malformed('Notification body missing message.data');
+      }
+
+      // 3. base64-decode and JSON.parse the inner payload. Buffer.from is lenient on bad
+      //    base64 (it won't throw), so the JSON.parse below is what catches garbage input.
+      let payload: GmailPushData;
+      try {
+        const decoded = Buffer.from(data, 'base64').toString('utf-8');
+        payload = JSON.parse(decoded) as GmailPushData;
+      } catch {
+        return malformed('Malformed message.data (invalid base64 or JSON)');
+      }
+
+      // 4. Require the fields Gmail always sends.
+      if (typeof payload?.emailAddress !== 'string' || payload.emailAddress.length === 0) {
+        return malformed('Decoded payload missing emailAddress');
+      }
+      if (payload.historyId == null) {
+        return malformed('Decoded payload missing historyId');
+      }
+
+      const notification: NormalizedNotification = {
+        Kind: 'message',
+        Identifier: payload.emailAddress,
+        ChangeType: 'created',
+        // HINT-mode: empty — the consumer re-fetches changed messages via the history API.
+        MessageIDs: [],
+        RawData: payload
+      };
+
+      return {
+        Success: true,
+        // Pub/Sub acks the message on any 2xx; 204 is the conventional ack response.
+        SuggestedResponseStatus: 204,
+        Notifications: [notification]
+      };
+    } catch (error: unknown) {
+      // Final safety net — this method must never throw on hostile input.
+      const errorMessage = error instanceof Error ? error.message : 'Error parsing notification';
+      return malformed(errorMessage);
+    }
+  }
+
+  /**
+   * Returns Gmail's subscription capabilities. Gmail mailbox watches expire after ~7 days
+   * (so they must be re-watched), notify only on new/changed mail, deliver via Pub/Sub
+   * (no endpoint validation handshake), are programmatically managed, and are HINT-mode
+   * (the payload carries only a historyId, never the message inline).
+   */
+  public override GetSubscriptionCapabilities(): SubscriptionCapabilities {
+    return {
+      MaxLifetimeMinutes: GMAIL_MAX_SUBSCRIPTION_MINUTES, // Gmail watch expires ~7 days; must re-watch
+      SupportedChangeTypes: ['created'],
+      RequiresEndpointValidation: false,
+      SupportsSubscriptionManagement: true,
+      DeliversPayloadInline: false
+    };
   }
 
   /**
@@ -1228,6 +1513,53 @@ export class GmailProvider extends BaseCommunicationProvider {
   // ========================================================================
   // HELPER METHODS
   // ========================================================================
+
+  /**
+   * Issues a Gmail `users.watch` for a mailbox and shapes the result. Shared by
+   * {@link CreateSubscription} and {@link RenewSubscription} (renewal is just re-watching).
+   *
+   * Gmail has no service-side subscription ID — the mailbox userId identifies the watch —
+   * so {@link SubscriptionResult.SubscriptionID} is the userId. Gmail returns the expiration
+   * as a milliseconds-since-epoch string.
+   */
+  private async issueWatch(
+    client: googleApis.gmail_v1.Gmail,
+    userId: string,
+    context: GmailSubscriptionContext
+  ): Promise<SubscriptionResult> {
+    const requestBody: googleApis.gmail_v1.Schema$WatchRequest = {
+      topicName: context.topicName,
+      labelIds: context.labelIds && context.labelIds.length > 0 ? context.labelIds : ['INBOX']
+    };
+    if (context.labelFilterBehavior) {
+      requestBody.labelFilterBehavior = context.labelFilterBehavior;
+    }
+
+    const resp = await client.users.watch({ userId, requestBody });
+    const watch = resp.data;
+
+    LogStatus(`Gmail mailbox watch registered for '${userId}' -> ${context.topicName}`);
+    return {
+      Success: true,
+      // Gmail has no service-side subscription ID; the mailbox userId identifies the watch.
+      SubscriptionID: userId,
+      ExpiresAt: watch.expiration != null ? new Date(Number(watch.expiration)) : undefined,
+      Result: watch
+    };
+  }
+
+  /**
+   * Best-effort detection of a "not found" (HTTP 404) error from the googleapis client, so
+   * {@link DeleteSubscription} can treat an already-stopped watch as idempotent success.
+   * Gaxios errors expose the status on `.code` and/or `.response.status`.
+   */
+  private isNotFoundError(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null) {
+      return false;
+    }
+    const err = error as { code?: unknown; status?: unknown; response?: { status?: unknown } };
+    return err.code === 404 || err.code === '404' || err.status === 404 || err.response?.status === 404;
+  }
 
   /**
    * Decodes a Gmail part body. Gmail returns part data as base64url

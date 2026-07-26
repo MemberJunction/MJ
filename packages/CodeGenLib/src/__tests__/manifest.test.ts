@@ -1232,4 +1232,124 @@ describe('Lazy Config Generation - Integration', () => {
         // Should report an error for the collision
         expect(result.errors.some(e => e.includes('collision') || e.includes('AIModels'))).toBe(true);
     });
+
+    it('should not include packages reachable only through root devDependencies (build tooling)', async () => {
+        // Mirror the #3139 fallout: the app devDepends on a build tool whose RUNTIME deps
+        // include a server-side package with subpath exports + keyed classes. That package
+        // must never contribute browser lazy chunks.
+        virtualFiles[`${appDir}/package.json`] = JSON.stringify({
+            name: 'test-lazy-app',
+            dependencies: { '@test/dashboards': '1.0.0' },
+            devDependencies: { '@test/buildtool': '1.0.0' }
+        }, null, 2);
+
+        virtualFiles[`${appDir}/node_modules/@test/buildtool/package.json`] = JSON.stringify({
+            name: '@test/buildtool',
+            version: '1.0.0',
+            dependencies: { '@test/serverlib': '1.0.0' }
+        });
+
+        virtualFiles[`${appDir}/node_modules/@test/serverlib/package.json`] = JSON.stringify({
+            name: '@test/serverlib',
+            version: '1.0.0',
+            exports: {
+                '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                './plugins': { types: './dist/plugins.d.ts', default: './dist/plugins.js' }
+            },
+            dependencies: {}
+        });
+        virtualFiles[`${appDir}/node_modules/@test/serverlib/dist/index.d.ts`] = 'export {};\n';
+        virtualFiles[`${appDir}/node_modules/@test/serverlib/dist/plugins.d.ts`] =
+            'import * as i0 from "./plugins/server.plugin";\nexport declare class ServerPluginsModule {}\n';
+        virtualFiles[`${appDir}/node_modules/@test/serverlib/dist/plugins/server.plugin.d.ts`] =
+            'export declare class ServerPlugin extends BaseResourceComponent {}\n';
+        virtualFiles[`${appDir}/node_modules/@test/serverlib/src/plugins/server.plugin.ts`] = [
+            "import { RegisterClass } from '@memberjunction/global';",
+            "@RegisterClass(BaseResourceComponent, 'ServerPlugin')",
+            "export class ServerPlugin extends BaseResourceComponent {}"
+        ].join('\n');
+
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            excludePackages: ['@test/'],
+            lazyConfigPath,
+            lazyBaseClasses: ['BaseResourceComponent'],
+        });
+
+        expect(result.success).toBe(true);
+        const lazyWrite = writtenFiles.find(w => w.path === lazyConfigPath);
+        expect(lazyWrite).toBeDefined();
+        const content = lazyWrite!.content;
+
+        // Runtime-dependency chunks are present...
+        expect(content).toContain("'BaseResourceComponent::AIModels'");
+        // ...but nothing reachable only via the devDependency made it in
+        expect(content).not.toContain('@test/serverlib');
+        expect(content).not.toContain('ServerPlugin');
+    });
+
+    it('should package-qualify loader variable names when two packages share a subpath name', async () => {
+        // Two runtime dependencies both exposing './plugins' — subpath-derived loader names
+        // would both be `loadPlugins` (TS2451 redeclaration in the generated file).
+        function addPluginPackage(shortName: string, key: string): void {
+            const pkgRoot = `${appDir}/node_modules/@test/${shortName}`;
+            virtualFiles[`${pkgRoot}/package.json`] = JSON.stringify({
+                name: `@test/${shortName}`,
+                version: '1.0.0',
+                exports: {
+                    '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                    './plugins': { types: './dist/plugins.d.ts', default: './dist/plugins.js' }
+                },
+                dependencies: {}
+            });
+            virtualFiles[`${pkgRoot}/dist/index.d.ts`] = 'export {};\n';
+            virtualFiles[`${pkgRoot}/dist/plugins.d.ts`] =
+                `import * as i0 from "./plugins/${shortName}.plugin";\nexport declare class ${key}Module {}\n`;
+            virtualFiles[`${pkgRoot}/dist/plugins/${shortName}.plugin.d.ts`] =
+                `export declare class ${key} extends BaseResourceComponent {}\n`;
+            virtualFiles[`${pkgRoot}/src/plugins/${shortName}.plugin.ts`] = [
+                "import { RegisterClass } from '@memberjunction/global';",
+                `@RegisterClass(BaseResourceComponent, '${key}')`,
+                `export class ${key} extends BaseResourceComponent {}`
+            ].join('\n');
+        }
+
+        virtualFiles[`${appDir}/package.json`] = JSON.stringify({
+            name: 'test-lazy-app',
+            dependencies: { '@test/alpha': '1.0.0', '@test/beta': '1.0.0' }
+        }, null, 2);
+        addPluginPackage('alpha', 'AlphaPlugin');
+        addPluginPackage('beta', 'BetaPlugin');
+
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            excludePackages: ['@test/'],
+            lazyConfigPath,
+            lazyBaseClasses: ['BaseResourceComponent'],
+        });
+
+        expect(result.success).toBe(true);
+        const lazyWrite = writtenFiles.find(w => w.path === lazyConfigPath);
+        expect(lazyWrite).toBeDefined();
+        const content = lazyWrite!.content;
+
+        // No bare collision-prone name — both members of the colliding group get qualified
+        expect(content).not.toContain('const loadPlugins ');
+        expect(content).toContain('const loadAlphaPlugins ');
+        expect(content).toContain('const loadBetaPlugins ');
+
+        // Every declared loader const is unique (the actual TS2451 guarantee)
+        const declared = [...content.matchAll(/const (load\w+) =/g)].map(m => m[1]);
+        expect(new Set(declared).size).toBe(declared.length);
+
+        // Keys still map to their (renamed) loaders
+        expect(content).toMatch(/'BaseResourceComponent::AlphaPlugin':\s*loadAlphaPlugins/);
+        expect(content).toMatch(/'BaseResourceComponent::BetaPlugin':\s*loadBetaPlugins/);
+    });
 });

@@ -41,6 +41,13 @@ export interface EmbeddingRunParams {
     ParentRunID?: string;
     /** Optional: human-readable description for the AIPromptRun record */
     Description?: string;
+    /**
+     * Optional: reduced embedding dimensions. Forwarded to the embedding provider's EmbedTexts call
+     * for models that support dimension reduction (e.g. OpenAI text-embedding-3-*); ignored by
+     * models that don't. The authoritative source is `MJ: Vector Indexes.Dimensions` — callers
+     * should read it from there and pass it here.
+     */
+    Dimensions?: number;
 }
 
 /**
@@ -130,7 +137,8 @@ export class AIModelRunner {
 
             const embedResult = await embeddingInstance.EmbedTexts({
                 texts: params.Texts,
-                model: modelInfo.APIName
+                model: modelInfo.APIName,
+                dimensions: params.Dimensions
             });
 
             if (!embedResult || !embedResult.vectors || embedResult.vectors.length === 0) {

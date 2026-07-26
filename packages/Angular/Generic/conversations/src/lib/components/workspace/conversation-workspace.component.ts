@@ -37,6 +37,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
@@ -47,7 +48,6 @@ import { Subject, takeUntil } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionableCommand, AutomaticCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
-import { PendingAttachment } from '../mention/mention-editor.component';
 
 /**
  * Top-level workspace component for conversations
@@ -71,6 +71,13 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @Input() currentUser!: UserInfo;
   @Input() activeContext?: 'library' | 'task';
   @Input() contextItemId?: string;
+  /**
+   * Show the Routines section at the very bottom of the left sidebar. Default true;
+   * hosts that don't want routines (or embed a reduced chat surface) set false.
+   * The section additionally hides itself when the current user lacks Read
+   * permission on 'MJ: User Routines'.
+   */
+  @Input() ShowRoutines: boolean = true;
 
   // Navigation properties for external control (deep linking from URL)
   @Input() set activeTabInput(value: 'conversations' | 'collections' | 'tasks' | undefined) {
@@ -205,12 +212,13 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public pendingArtifactVersionNumber: number | null = null;
 
   private engine = ConversationEngine.Instance;
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocompleteService = MentionAutocompleteService.Instance;
 
   constructor(
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
-    private mentionAutocompleteService: MentionAutocompleteService,
     private notificationService: MJNotificationService,
     private streamingService: ConversationStreamingService,
     private uiCommandHandler: UICommandHandlerService,

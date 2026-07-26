@@ -1,5 +1,166 @@
 # Change Log - @memberjunction/ng-simple-record-list
 
+## 5.49.0
+
+### Patch Changes
+
+- d3f9d77: Angular DOM unit-testing — Phase 3 (`Angular/Explorer/**`) complete: 100% in-scope
+  component coverage (129/129 unit-DOM-testable components; deferred buckets catalogued in the
+  Phase-3 deferral register, no silent gaps). Test-only additions — no runtime/API change.
+
+  Build hygiene (the one shipped-artifact change): each DOM-testing Explorer package's build
+  `tsconfig.json` now excludes `*.test.ts` / `*.spec.ts` / `__tests__/**` (previously several
+  compiled specs into `dist`). Specs are type-checked via each package's `tsconfig.spec.json` and
+  run under the vitest DOM preset; they are no longer emitted into the published output.
+
+- 14e2117: Explorer performance quick wins:
+  - **Omnibar `#` jump-to-record**: debounce trigger-mode keystrokes (150ms) instead of issuing a `RunView` on every character, which flooded MJAPI during a typing burst. The intentional empty-term "browse top 5" behavior is preserved, and the existing stale-response guard / on-destroy timer cleanup already cover the deferred fire.
+  - **List detail "Add from views"**: batch the per-view lookups into a single `RunViews` call instead of a sequential `RunView` per selected view (N round-trips → 1).
+  - **Simple record list**: use `EntityByName` (O(1), case-insensitive) instead of the O(N) `Entities.find` scan, per the metadata-lookup convention.
+
+  No API or behavior changes beyond the debounce timing.
+
+- Updated dependencies [d3f9d77]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/ng-entity-form-dialog@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ng-shared-generic@5.49.0
+  - @memberjunction/ng-ui-components@5.49.0
+  - @memberjunction/ng-base-types@5.49.0
+  - @memberjunction/ng-container-directives@5.49.0
+  - @memberjunction/ng-notifications@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ng-entity-form-dialog@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/ng-container-directives@5.48.0
+  - @memberjunction/ng-notifications@5.48.0
+  - @memberjunction/ng-shared-generic@5.48.0
+  - @memberjunction/ng-ui-components@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ng-entity-form-dialog@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-container-directives@5.47.0
+  - @memberjunction/ng-notifications@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ng-entity-form-dialog@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-container-directives@5.46.0
+  - @memberjunction/ng-notifications@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-entity-form-dialog@5.45.1
+- @memberjunction/ng-notifications@5.45.1
+- @memberjunction/ng-base-types@5.45.1
+- @memberjunction/ng-container-directives@5.45.1
+- @memberjunction/ng-shared-generic@5.45.1
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ng-entity-form-dialog@5.45.0
+  - @memberjunction/ng-base-types@5.45.0
+  - @memberjunction/ng-container-directives@5.45.0
+  - @memberjunction/ng-notifications@5.45.0
+  - @memberjunction/ng-shared-generic@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [1e5e449]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [0476455]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ng-ui-components@5.44.0
+  - @memberjunction/ng-notifications@5.44.0
+  - @memberjunction/ng-entity-form-dialog@5.44.0
+  - @memberjunction/ng-base-types@5.44.0
+  - @memberjunction/ng-shared-generic@5.44.0
+  - @memberjunction/ng-container-directives@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

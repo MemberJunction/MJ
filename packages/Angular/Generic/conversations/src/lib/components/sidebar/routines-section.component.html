@@ -1,0 +1,28 @@
+@if (IsVisible) {
+  <div class="crs-section">
+    <button type="button" class="crs-header" [title]="HeaderTitle" (click)="OpenRoutines()">
+      <i class="fa-solid fa-business-time crs-mark"></i>
+      <span class="crs-title">Routines</span>
+      @if (ActiveCount > 0) {
+        <span class="crs-count">{{ ActiveCount }}</span>
+      }
+      <span class="crs-spacer"></span>
+      <span class="crs-add" role="button" title="New routine" (click)="NewRoutine($event)">
+        <i class="fa-solid fa-plus"></i>
+      </span>
+      <span class="crs-details" role="button" title="Open routines">
+        <i class="fa-solid fa-chevron-right"></i>
+      </span>
+    </button>
+
+    <mj-user-routines-slide-in
+      [Provider]="Provider"
+      [(Visible)]="SlideInVisible"
+      [InitialRoutineID]="SlideInRoutineID"
+      [StartInNewRoutine]="SlideInNewRoutine"
+      (Closed)="OnSlideInClosed()"
+      (HistoryRecordOpened)="OnHistoryRecordOpened($event)"
+      (ConversationOpened)="OnConversationOpened($event)">
+    </mj-user-routines-slide-in>
+  </div>
+}

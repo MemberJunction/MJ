@@ -425,6 +425,59 @@ export type AgentSubAgentRequest<TContext = any> = {
 export type AgentSkillActivationRequest = {
     /** Name of the skill (MJ: AI Skills.Name) to activate */
     name: string;
+    /**
+     * Brief agent-stated rationale for why this skill is being activated. Optional — supplied
+     * by the LLM when it self-activates a skill mid-run, and carried through to the run step's
+     * {@link AgentSkillInvocation} record for observability. User-requested activations
+     * (/skill mentions) don't carry a reason.
+     */
+    reason?: string;
+}
+
+/**
+ * One skill's involvement in an agent run step, recorded in `AIAgentRunStep.Skills`
+ * (a JSON array of these, or null when no skills are in play). This is the observability
+ * contract for skills: every step touched by a skill records WHICH skill, HOW it entered
+ * the run, and the PROVENANCE OF AUTHORITY that admitted it.
+ *
+ * Population rules (implemented in BaseAgent):
+ * - **Skill steps** record the activation(s) that step performed (with {@link Reason} when
+ *   agent-initiated).
+ * - **Prompt steps** record the full set of skills in effect for that turn, so prompt
+ *   injection is always visible.
+ * - **Actions / Sub-Agent steps** record the skill(s) through which the executed tool
+ *   became available; null/absent means the tool was a native agent grant.
+ *
+ * The canonical JSON-type interface for CodeGen lives at
+ * `metadata/entities/JSONType-interfaces/AgentSkillInvocation.ts` — keep the two in sync.
+ */
+export type AgentSkillInvocation = {
+    /** ID of the activated skill (MJ: AI Skills.ID) */
+    SkillID: string;
+    /** Name of the activated skill at activation time */
+    SkillName: string;
+    /** How the skill entered the run: explicit user request (/skill mention) or agent self-activation */
+    ActivationType: 'requested' | 'auto';
+    /** The gate values that admitted this skill — the provenance of authority */
+    Provenance: AgentSkillInvocationProvenance;
+    /** Agent-stated rationale (only for ActivationType='auto', from skillActivations[].reason) */
+    Reason?: string;
+}
+
+/**
+ * The gate values in effect when a skill was admitted to a run — recorded so an auditor can
+ * see exactly which configuration allowed the activation, even if the configuration has
+ * since changed.
+ */
+export type AgentSkillInvocationProvenance = {
+    /** The agent's AcceptsSkills value at activation ('All' or 'Limited' — 'None' can never activate) */
+    AgentAcceptsSkills: string;
+    /** The skill's ActivationMode at activation ('Auto' | 'RequestedOnly') */
+    SkillActivationMode: string;
+    /** The agent's SkillActivationMode at activation ('Auto' | 'RequestedOnly') */
+    AgentSkillActivationMode: string;
+    /** Who pulled the trigger: the user's /skill request or the agent's own decision */
+    RequestedBy: 'user-request' | 'agent-decision';
 }
 
 /**
@@ -539,6 +592,16 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * Processed inline (zero turn cost) alongside payload and scratchpad changes.
      */
     artifactToolCalls?: { artifactId: string; tool: string; input: Record<string, unknown> }[];
+    /**
+     * Conversation-history retrieval tool calls from the agent's response — page exact
+     * stored messages back in by their persisted Sequence handles, or search history.
+     * Processed inline (zero turn cost) alongside artifact tool calls; only honored
+     * when the run has a conversationId.
+     * NOTE: structural duplicate of ConversationToolCall in @memberjunction/ai-agents
+     * (CorePlus sits below Agents and cannot import from it), mirroring how
+     * artifactToolCalls duplicates ArtifactToolCall above.
+     */
+    conversationToolCalls?: { tool: string; input: Record<string, unknown> }[];
     /**
      * Durable memory writes from the agent's response. Each entry records a
      * fact/preference that persists across runs as a provisional agent note.
@@ -758,6 +821,16 @@ export type AgentExecutionStreamingCallback = (chunk: {
     stepEntityId?: string;
     /** Model name producing this content (for prompt steps) */
     modelName?: string;
+    /**
+     * Content discriminator for chat-client rendering. `'final-response'` marks chunks
+     * that are deltas of the user-facing final reply — safe for the conversation client
+     * to accumulate and render into the message bubble as they arrive. Chunks WITHOUT a
+     * kind are raw prompt output (e.g. a Loop agent's streamed JSON turn envelope) and
+     * are not rendered by the conversation client. Emitters that compose the final
+     * answer as plain prose (outside the turn envelope) set this on their compose
+     * stream; future kinds (e.g. inter-turn progress narration) extend this union.
+     */
+    kind?: 'final-response';
 }) => void;
 
 /**
@@ -996,10 +1069,25 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional conversation detail ID to associate with this agent execution.
      * When provided, this value is stored in the ConversationDetailID column within
-     * the to be created AIAgentRun record. This allows for linking the agent run 
+     * the to be created AIAgentRun record. This allows for linking the agent run
      * to a specific conversation detail for tracking and reporting purposes.
      */
     conversationDetailId?: string;
+
+    /**
+     * Optional conversation ID — the PREFERRED input for conversation-driven runs.
+     * All durable cross-turn context features (persistent summary compaction, the
+     * summary-windowed context assembly via `ConversationEngine.AssembleContextWindow`
+     * over `LoadWindowRowsFresh` rows, and conversation-history retrieval tools) are
+     * gated on this being present.
+     * When absent, the agent behaves exactly as before: the caller supplies
+     * `conversationMessages` and only in-turn (per-run) context management applies —
+     * programmatic runs, internal sub-agent invocations, and tests need no change.
+     * When present alongside caller-supplied `conversationMessages`, the supplied
+     * messages win (deliberate override/escape hatch); the id still flows to the run
+     * record and gates the compaction/retrieval features.
+     */
+    conversationId?: string;
 
     /**
      * Optional flag to automatically populate the payload from the last run.
@@ -1554,11 +1642,25 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'chat' | 'system' | 'user';
+    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
     /** Name of the sub-agent (only for sub-agent-result messages) */
     subAgentName?: string;
     /** ID of the sub-agent (only for sub-agent-result messages) */
     subAgentId?: string;
+    /**
+     * `ConversationDetail.Sequence` of the row this message came from. Stamped by
+     * `ConversationEngine.AssembleContextWindow` (kept assignment-compatible with its
+     * locally-defined `ConversationContextMetadata` — that package cannot import this
+     * type without creating a cycle). The symbolic handle for conversation-history
+     * retrieval tools.
+     */
+    sequence?: number;
+    /** ID of the `ConversationDetail` row this message came from (window-assembled messages only) */
+    conversationDetailId?: string;
+    /** True only on the synthetic first message carrying the persisted cross-turn conversation summary */
+    isConversationSummary?: boolean;
+    /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
+    summaryBoundarySequence?: number;
 }
 
 /**

@@ -14,6 +14,7 @@ import type { MJComponentEntity, MJEntityFormOverrideEntity, MJConversationEntit
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import type { NavigationRequest } from '@memberjunction/ng-conversations';
@@ -469,6 +470,7 @@ export class FormBuilderResourceComponent
     private readonly notifications = inject(MJNotificationService);
     private readonly overrideService = inject(EntityFormOverrideService);
     private readonly conversationBridge = inject(ConversationBridgeService);
+    private readonly confirmService = inject(MJConfirmService);
 
     /**
      * Name of the Application this cockpit lives in — must match the
@@ -2100,7 +2102,7 @@ export class FormBuilderResourceComponent
     }
 
     public async OnFormPicked(form: FormComponentSummary): Promise<void> {
-        if (this.DirtyFlag && !this.confirmDiscard()) return;
+        if (this.DirtyFlag && !(await this.confirmDiscard())) return;
         try {
             const provider = this.provider;
             if (!provider) return;
@@ -2296,8 +2298,8 @@ export class FormBuilderResourceComponent
         return entityInfo?.Name ?? null;
     }
 
-    public OnNewForm(): void {
-        if (this.DirtyFlag && !this.confirmDiscard()) return;
+    public async OnNewForm(): Promise<void> {
+        if (this.DirtyFlag && !(await this.confirmDiscard())) return;
         this.SelectedFormID = null;
         // Empty default — the user fills the toolbar name input, OR picking
         // an entity auto-fills it with the entity's identifier. Either path
@@ -2331,8 +2333,8 @@ export class FormBuilderResourceComponent
         this.registerAgentContext();
     }
 
-    private confirmDiscard(): boolean {
-        return window.confirm('You have unsaved changes. Discard them?');
+    private async confirmDiscard(): Promise<boolean> {
+        return this.confirmService.Confirm('You have unsaved changes. Discard them?');
     }
 
     /**
@@ -2736,7 +2738,7 @@ export class FormBuilderResourceComponent
         if (!this.SelectedFormID) return;
         const formID = this.SelectedFormID;
         const formName = this.SelectedFormName || 'this form';
-        if (!window.confirm(`Delete "${formName}" and any overrides pointing at it? This cannot be undone.`)) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Form', message: `Delete "${formName}" and any overrides pointing at it?`, detail: 'This action cannot be undone.' }))) {
             return;
         }
         const provider = this.provider;
@@ -2778,7 +2780,7 @@ export class FormBuilderResourceComponent
                 this.notifications.CreateSimpleNotification(
                     `Form ${formName} not found — may have already been deleted.`, 'warning', 4000);
                 await this.loadExistingForms();
-                this.OnNewForm();
+                await this.OnNewForm();
                 return;
             }
             const deleted = await componentEntity.Delete();

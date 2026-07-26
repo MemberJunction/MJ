@@ -1329,6 +1329,13 @@ export type RunQueryResult = {
      */
     AppliedParameters?: Record<string, any>;
     /**
+     * The fully rendered SQL that was actually executed against the database.
+     * On error, this reveals transformations applied by the render pipeline
+     * (composition, Nunjucks templates, MaxRows wrapping, paging) that may
+     * have caused the failure — e.g., an ORDER BY moved into a derived table.
+     */
+    RenderedSQL?: string;
+    /**
      * Whether this result was served from cache
      */
     CacheHit?: boolean;

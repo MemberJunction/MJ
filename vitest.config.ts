@@ -19,6 +19,8 @@ export default defineConfig({
       'packages/GraphQLDataProvider',
       'packages/DBAutoDoc',
       'packages/MJExportEngine',
+      'packages/MarkdownCore',
+      'packages/Angular/Generic/markdown',
       'packages/ContentAutotagging',
       // AI packages
       'packages/AI/Agents',

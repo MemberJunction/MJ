@@ -19,6 +19,7 @@ import {
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type { TrainRequest, TrainResponse, MatrixData } from '@memberjunction/predictive-studio-core';
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
+import { MLSidecarProvider } from '../sidecar-provider';
 import type { IEntityFactory, IRecordLoader, ISidecarTrainer } from './types';
 
 /**
@@ -94,20 +95,48 @@ export class RunViewRecordLoader implements IRecordLoader {
     }
     return (result.Results[0].Version ?? 0) + 1;
   }
+
+  /** @inheritdoc */
+  public async resolveAlgorithmDriverKey(
+    algorithmId: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<string | null> {
+    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const result = await rv.RunView<{ DriverClass: string }>(
+      {
+        EntityName: 'MJ: ML Algorithms',
+        ExtraFilter: `ID='${algorithmId}'`,
+        Fields: ['DriverClass'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      contextUser,
+    );
+    if (!result.Success || result.Results.length === 0) {
+      return null;
+    }
+    return result.Results[0].DriverClass ?? null;
+  }
 }
 
 /**
  * {@link ISidecarTrainer} backed by the self-managing {@link MLSidecar} client.
  * Lazily starts the sidecar on first use (managed or remote mode is decided by
- * `MLSidecar` from options/env).
+ * `MLSidecar` from options/env). Defaults to the process-shared
+ * {@link MLSidecarProvider} instance rather than constructing a private `MLSidecar`
+ * — see that class's doc comment for why a per-instance sidecar leaked a Python
+ * child process per action run. Tests (and callers that genuinely need an isolated
+ * sidecar) can still inject their own via the constructor parameter.
  */
 export class MJSidecarTrainer implements ISidecarTrainer {
   private started = false;
 
   /**
-   * @param sidecar an `MLSidecar` instance (managed or remote)
+   * @param sidecar an `MLSidecar` instance (managed or remote); defaults to the
+   *   shared, process-lifetime instance from {@link MLSidecarProvider}
    */
-  constructor(private readonly sidecar: MLSidecar = new MLSidecar()) {}
+  constructor(private readonly sidecar: MLSidecar = MLSidecarProvider.Instance.GetSidecar()) {}
 
   /** @inheritdoc */
   public async train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse> {

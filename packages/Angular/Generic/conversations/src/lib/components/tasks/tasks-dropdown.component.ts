@@ -519,6 +519,17 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
+  /**
+   * Wall-clock snapshot the elapsed-time template bindings read from. The template
+   * must NOT call Date.now() (directly or via getElapsedTime) — a change-detection
+   * pass that straddles a second boundary would then see two different values for
+   * the same binding and throw NG0100 in dev mode. Instead this snapshot is stable
+   * within a CD pass and advances via a 1s interval that runs only while the
+   * dropdown is open (the only time elapsed text is rendered).
+   */
+  private _now = Date.now();
+  private elapsedTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(
     private activeTasksService: ActiveTasksService
   ) {}
@@ -542,6 +553,7 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    this.stopElapsedTimer();
   }
 
   private groupTasks(): void {
@@ -556,10 +568,35 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
 
   toggleDropdown(): void {
     this.isOpen = !this.isOpen;
+    if (this.isOpen) {
+      this.startElapsedTimer();
+    } else {
+      this.stopElapsedTimer();
+    }
   }
 
   closeDropdown(): void {
     this.isOpen = false;
+    this.stopElapsedTimer();
+  }
+
+  private startElapsedTimer(): void {
+    this._now = Date.now(); // fresh snapshot for the first render
+    if (this.elapsedTimer) {
+      return;
+    }
+    // Zone-patched interval: each tick triggers CD, so the elapsed text advances
+    // once per second while the dropdown is open. Stopped on close/destroy.
+    this.elapsedTimer = setInterval(() => {
+      this._now = Date.now();
+    }, 1000);
+  }
+
+  private stopElapsedTimer(): void {
+    if (this.elapsedTimer) {
+      clearInterval(this.elapsedTimer);
+      this.elapsedTimer = null;
+    }
   }
 
   onTaskClick(task: ActiveTask): void {
@@ -576,7 +613,8 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
   }
 
   getElapsedTime(task: ActiveTask): string {
-    const elapsed = Date.now() - task.startTime;
+    // Reads the CD-stable snapshot, never Date.now() — see _now for why (NG0100).
+    const elapsed = Math.max(0, this._now - task.startTime);
     const seconds = Math.floor(elapsed / 1000);
 
     if (seconds < 60) {

@@ -11,6 +11,7 @@ import {
     QueryRowClickEvent
 } from '@memberjunction/ng-query-viewer';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { validateStringParam, boundNameList } from '../shared/agent-tool-validation';
 import {
     DEFAULT_QUERY_MAX_ROWS,
@@ -201,7 +202,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     constructor(
         private cdr: ChangeDetectorRef,
         private elementRef: ElementRef,
-        private zone: NgZone
+        private zone: NgZone,
+        private confirmService: MJConfirmService
     ) {
         super();
     }
@@ -1166,7 +1168,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     @HostListener('document:keydown.escape')
     public OnEscapeKey(): void {
         if (this.ShowQueryDrawer) {
-            this.CloseDrawer();
+            void this.CloseDrawer();
         }
     }
 
@@ -1214,9 +1216,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /**
      * Close the drawer. If dirty, ask for confirmation unless force=true.
      */
-    public CloseDrawer(force = false): void {
+    public async CloseDrawer(force = false): Promise<void> {
         if (!force && this.IsDrawerDirty) {
-            if (!confirm('You have unsaved changes. Discard them?')) return;
+            if (!(await this.confirmService.Confirm('You have unsaved changes. Discard them?'))) return;
         }
         this.ShowQueryDrawer = false;
         this.cdr.markForCheck();
@@ -1224,7 +1226,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     /** Close drawer when clicking the backdrop. */
     public OnDrawerBackdropClick(): void {
-        this.CloseDrawer();
+        void this.CloseDrawer();
     }
 
     // ========================================
@@ -1332,7 +1334,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             'MJ: Queries',
             CompositeKey.FromID(this.DrawerQueryId)
         );
-        this.CloseDrawer(true);
+        void this.CloseDrawer(true);
     }
 
     // ========================================

@@ -52,9 +52,76 @@ import { ConversationMessageResolver } from '../utils/ConversationMessageResolve
  * }
  * ```
  */
+/**
+ * Maximum consecutive turns the inline-read-tool pre-emption may force before the
+ * terminal step is honored anyway. The pre-emption retries are deliberately
+ * "productive" (exempt from the unproductive-retry limit) because each one injects
+ * fresh tool results — but a model that insists on terminal-plus-read-tools every
+ * turn must not be able to extend the run indefinitely on that exemption.
+ */
+const MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS = 3;
+
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
     private _evaluator = new SafeExpressionEvaluator();
+
+    /**
+     * Consecutive inline-read-tool pre-emptions forced so far. Per-run safe: a fresh
+     * LoopAgentType instance is created for each agent run (ClassFactory.CreateInstance
+     * in BaseAgentType.GetAgentTypeInstance). Reset whenever a response arrives without
+     * the terminal-step-plus-read-tools combination.
+     */
+    private consecutiveReadToolPreemptions = 0;
+
+    /**
+     * Handles the terminal-step-plus-inline-read-tools combination. Inline READ tools
+     * (artifact/conversation) are yield/await: results arrive on the NEXT turn, so a
+     * terminal step in the same response would orphan them — the tools execute and inject
+     * their results, but the run ends and the user gets "one moment…" and silence. Mirrors
+     * the Pipeline/client-tools pre-emption: force one more (non-terminal) turn so the LLM
+     * responds after reading the results. taskComplete + clientTools is excluded — the
+     * ClientTools path already re-enters the loop and consumes the injected results.
+     * memoryWrites/scratchpad are fire-and-forget writes and never trigger pre-emption.
+     *
+     * @returns The forced Retry step, or null when no pre-emption applies — including when
+     * the consecutive cap is reached (the caller then honors the terminal step; pre-emption
+     * retries are exempt from the unproductive-retry limit, so without the ceiling the
+     * combination could extend a run indefinitely).
+     */
+    private buildReadToolPreemptionStep<P>(response: LoopAgentResponse, hasClientTools: boolean): BaseAgentNextStep<P> | null {
+        const hasInlineReadTools = (response.artifactToolCalls?.length || 0) + (response.conversationToolCalls?.length || 0) > 0;
+        const wantsTerminalStep = response.nextStep?.type === 'Chat' || (response.taskComplete === true && !hasClientTools);
+
+        if (!(hasInlineReadTools && wantsTerminalStep)) {
+            this.consecutiveReadToolPreemptions = 0;
+            return null;
+        }
+        if (this.consecutiveReadToolPreemptions >= MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS) {
+            LogStatusEx({
+                message: `⚠️ Loop Agent: terminal step + inline read tools recurred ${MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS} consecutive turns — honoring the terminal step instead of forcing another turn`
+            });
+            return null;
+        }
+
+        this.consecutiveReadToolPreemptions++;
+        LogStatusEx({
+            message: '🔁 Loop Agent: inline tool call(s) combined with a terminal step — forcing one more turn so the results can be read',
+            verboseOnly: true
+        });
+        return this.createNextStep('Retry', {
+            terminate: false,
+            artifactToolCalls: response.artifactToolCalls,
+            conversationToolCalls: response.conversationToolCalls,
+            memoryWrites: response.memoryWrites,
+            scratchpad: response.scratchpad,
+            payloadChangeRequest: response.payloadChangeRequest,
+            reasoning: response.reasoning,
+            confidence: response.confidence
+            // deliberately NO errorMessage/message/retryInstructions: that keeps this
+            // retry "productive" (only errorMessage-bearing retries count toward the
+            // unproductive-retry limit) and suppresses the "Retrying due to:" message.
+        });
+    }
 
     public async InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS> {
         // Loop agents do not require agent-type specific state initialization
@@ -125,11 +192,20 @@ export class LoopAgentType extends BaseAgentType {
                     terminate: false,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
+                    conversationToolCalls: response.conversationToolCalls,
                     memoryWrites: response.memoryWrites,
                     payloadChangeRequest: response.payloadChangeRequest,
                     reasoning: response.reasoning,
                     confidence: response.confidence
                 });
+            }
+
+            // Computed once here — consumed by the read-tool pre-emption AND the
+            // taskComplete gate below (client tools are yield/await, see both sites).
+            const hasClientTools = (response.nextStep?.clientTools?.length || 0) > 0;
+            const preemptionStep = this.buildReadToolPreemptionStep<P>(response, hasClientTools);
+            if (preemptionStep) {
+                return preemptionStep;
             }
 
             // Check for Chat nextStep BEFORE checking taskComplete
@@ -148,6 +224,7 @@ export class LoopAgentType extends BaseAgentType {
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
+                    conversationToolCalls: response.conversationToolCalls,
                     memoryWrites: response.memoryWrites,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
@@ -161,8 +238,8 @@ export class LoopAgentType extends BaseAgentType {
             // Client tools are yield/await: the LLM can't know the result until they execute.
             // After tools run, executeClientToolsStep calls executePromptStep which re-enters
             // the LLM loop. If taskComplete was true, the LLM will naturally complete on the
-            // next iteration after seeing tool results.
-            const hasClientTools = response.nextStep?.clientTools && response.nextStep.clientTools.length > 0;
+            // next iteration after seeing tool results. (hasClientTools is computed above,
+            // where the inline read-tool pre-emption also consults it.)
             if (response.taskComplete && !hasClientTools) {
                 LogStatusEx({
                     message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,
@@ -175,6 +252,7 @@ export class LoopAgentType extends BaseAgentType {
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
+                    conversationToolCalls: response.conversationToolCalls,
                     memoryWrites: response.memoryWrites,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
@@ -192,6 +270,7 @@ export class LoopAgentType extends BaseAgentType {
                 payloadChangeRequest: response.payloadChangeRequest,
                 scratchpad: response.scratchpad,
                 artifactToolCalls: response.artifactToolCalls,
+                conversationToolCalls: response.conversationToolCalls,
                 memoryWrites: response.memoryWrites,
                 terminate: response.taskComplete,
                 responseForm: response.responseForm,
@@ -263,7 +342,8 @@ export class LoopAgentType extends BaseAgentType {
                     else {
                         retVal.step = 'Skill' as BaseAgentNextStep['step'];
                         retVal.skillActivations = response.nextStep.skills.map(skill => ({
-                            name: skill.name
+                            name: skill.name,
+                            ...(skill.reason ? { reason: skill.reason } : {})
                         }));
                     }
                     break;

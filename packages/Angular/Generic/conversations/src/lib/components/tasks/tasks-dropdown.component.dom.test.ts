@@ -81,4 +81,49 @@ describe('TasksDropdownComponent (DOM)', () => {
     expect(navSpy).toHaveBeenCalledWith({ conversationId: 'c2', taskId: 't2' });
     expect(clickSpy).toHaveBeenCalledWith(otherTask);
   });
+
+  // Regression for the NG0100 flake (issue #3026): the elapsed-time binding used to
+  // call Date.now() from the template, so a change-detection pass straddling a second
+  // boundary saw two different values for the same expression and threw
+  // ExpressionChangedAfterItHasBeenCheckedError. The binding now reads a snapshot
+  // that is stable within a CD pass and advances via a 1s interval while open.
+  describe('elapsed time is CD-stable (no wall-clock in the template)', () => {
+    it('returns the same value across consecutive evaluations even when wall-clock time crosses a second boundary', () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(10_000);
+        const task: ActiveTask = { ...currentTask, startTime: 9_200 }; // 800ms ago
+        const f = open(render([task]));
+
+        const first = f.componentInstance.getElapsedTime(task);
+        // Advance wall-clock past the second boundary WITHOUT firing the 1s interval —
+        // exactly the mid-CD-pass window that used to produce two different values.
+        vi.setSystemTime(10_500); // task is now 1.3s old; pre-fix this flipped '0s' → '1s'
+        const second = f.componentInstance.getElapsedTime(task);
+
+        expect(first).toBe('0s');
+        expect(second).toBe(first);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('advances once the interval ticks, and stops ticking when the dropdown closes', () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(10_000);
+        const task: ActiveTask = { ...currentTask, startTime: 9_200 };
+        const f = open(render([task]));
+
+        vi.advanceTimersByTime(1_000); // interval fires → snapshot refreshes
+        expect(f.componentInstance.getElapsedTime(task)).toBe('1s');
+
+        f.componentInstance.closeDropdown(); // timer stops with the dropdown
+        vi.advanceTimersByTime(5_000);
+        expect(f.componentInstance.getElapsedTime(task)).toBe('1s'); // frozen — no leaked interval
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

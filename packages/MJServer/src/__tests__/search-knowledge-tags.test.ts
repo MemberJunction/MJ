@@ -127,7 +127,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult());
 
-            const result = await resolver.SearchKnowledge('test query', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('test query', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             expect(mockSearch).toHaveBeenCalledOnce();
             expect(result.Success).toBe(true);
@@ -139,7 +139,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult());
 
-            await resolver.SearchKnowledge('cheese', 50, undefined, undefined, fakeContext as never);
+            await resolver.SearchKnowledge('cheese', 50, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             const searchParams = mockSearch.mock.calls[0][0];
             expect(searchParams.Query).toBe('cheese');
@@ -151,7 +151,7 @@ describe('SearchKnowledgeResolver', () => {
             mockSearch.mockResolvedValueOnce(createMockSearchResult());
 
             const filters = { EntityNames: ['Contacts'], SourceTypes: undefined, Tags: ['VIP'] };
-            await resolver.SearchKnowledge('test', 20, filters as never, undefined, fakeContext as never);
+            await resolver.SearchKnowledge('test', 20, filters as never, undefined, undefined, undefined, undefined, fakeContext as never);
 
             const searchParams = mockSearch.mock.calls[0][0];
             expect(searchParams.Filters).toEqual({
@@ -165,7 +165,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult());
 
-            await resolver.SearchKnowledge('test', 20, undefined, 0.5, fakeContext as never);
+            await resolver.SearchKnowledge('test', 20, undefined, 0.5, undefined, undefined, undefined, fakeContext as never);
 
             const searchParams = mockSearch.mock.calls[0][0];
             expect(searchParams.MinScore).toBe(0.5);
@@ -175,7 +175,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult());
 
-            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             const item = result.Results[0];
             expect(item.ID).toBe('result-1');
@@ -193,7 +193,7 @@ describe('SearchKnowledgeResolver', () => {
                 SourceCounts: { Vector: 5, FullText: 3, Entity: 10, Storage: 0 }
             }));
 
-            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             expect(result.SourceCounts.Vector).toBe(5);
             expect(result.SourceCounts.FullText).toBe(3);
@@ -204,7 +204,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult({ Success: false, ErrorMessage: 'Query cannot be empty' }));
 
-            const result = await resolver.SearchKnowledge('   ', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('   ', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             expect(mockSearch).toHaveBeenCalled();
             expect(result.Success).toBe(false);
@@ -214,7 +214,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = new SearchKnowledgeResolver();
             (resolver as Record<string, unknown>)['GetUserFromPayload'] = vi.fn().mockReturnValue(null);
 
-            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('current user');
@@ -224,7 +224,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockRejectedValueOnce(new Error('Connection failed'));
 
-            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('Connection failed');

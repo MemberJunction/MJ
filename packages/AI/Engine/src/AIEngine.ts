@@ -13,7 +13,7 @@ import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, Us
 import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
-         MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity,
+         MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
          MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
          MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
@@ -259,6 +259,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get AgentSkills(): MJAIAgentSkillEntity[] { return this.Base.AgentSkills; }
     public get SkillPermissions(): MJAISkillPermissionEntity[] { return this.Base.SkillPermissions; }
     public GetSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] { return this.Base.GetSkillsForAgent(agent, user); }
+    /** Double-gated self-activation set — see {@link AIEngineBase.GetAutoActivatableSkillsForAgent}. */
+    public GetAutoActivatableSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] { return this.Base.GetAutoActivatableSkillsForAgent(agent, user); }
     public GetSkillActionIDs(skillID: string): string[] { return this.Base.GetSkillActionIDs(skillID); }
     public GetSkillSubAgentIDs(skillID: string): string[] { return this.Base.GetSkillSubAgentIDs(skillID); }
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
@@ -266,6 +268,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get AgentPermissions(): MJAIAgentPermissionEntity[] { return this.Base.AgentPermissions; }
     public get AgentNotes(): MJAIAgentNoteEntity[] { return this.Base.AgentNotes; }
     public get ScopedPromptParts(): MJScopedPromptPartEntity[] { return this.Base.ScopedPromptParts; }
+    public get ScopedPromptConfigs(): MJScopedPromptConfigEntity[] { return this.Base.ScopedPromptConfigs; }
     public get AgentExamples(): MJAIAgentExampleEntity[] { return this.Base.AgentExamples; }
     public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] { return this.Base.VendorTypeDefinitions; }
     public get InferenceProviderTypeID(): string | undefined { return this.Base.InferenceProviderTypeID; }

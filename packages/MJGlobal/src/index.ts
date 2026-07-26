@@ -11,6 +11,7 @@ export * from './DeepDiff'
 export * from './ClassUtils'
 export * from './util/PatternUtils';
 export * from './util/UUIDUtils';
+export * from './util/CronUtils';
 export * from './util/SerializationUtils';
 export * from './ValidationTypes'
 export * from './JSONValidator'
@@ -27,6 +28,8 @@ export * from './KeyedSerialTaskQueue'
 // Export the main classes
 export * from './Global'
 export * from './RegisterClass'
+export * from './RequiresSubclass'
+export * from './OptionalKeyedSpecialization'
 
 // NOTE: RegisterForStartup has moved to @memberjunction/core
 // Import from there instead of here

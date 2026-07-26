@@ -166,3 +166,29 @@ export class MyProviderLLM extends OpenAILLM {
 - `@memberjunction/ai` - Core AI abstractions
 - `@memberjunction/global` - Class registration
 - `openai` - Official OpenAI SDK
+
+## Realtime driver family (`OpenAIRealtime`)
+
+`OpenAIRealtime` / `OpenAIRealtimeSession` implement the OpenAI **GA Realtime API** wire protocol ONCE, parameterized by an `OpenAIRealtimeProfile` (transcription model, turn detection, config timing, live-reconfigure support, GA feature gates, effort mapping). OpenAI-compatible providers **subclass** this driver with their own profile instead of cloning it — xAI Grok Voice (`@memberjunction/ai-xai`) via the same SDK socket, and self-hosted HuggingFace (`@memberjunction/ai-huggingface`) via the exported `RawRealtimeWebSocketConnection` adapter (raw WS speaking OpenAI frames → `IOpenAIRealtimeConnection`, with send-buffering until open and SDK-mirroring dual error channels).
+
+### Session `Config` bag keys
+
+MJ-idiomatic keys are extracted (`ExtractRealtimeFeatures`), translated to provider-native fields **only when the profile confirms support**, and always scrubbed so raw keys never reach a provider:
+
+| Key | Meaning |
+|---|---|
+| `effortLevel` | MJ-normalized effort (`ChatParams.effortLevel` vocabulary: numeric 1–100 or named). Mapped per provider via the profile's `mapEffortLevel` seam — OpenAI: quintiles over `minimal/low/medium/high/xhigh` (`MapEffortLevelToOpenAIRealtime`). |
+| `reasoningEffort` | Provider-native effort literal — explicit override, wins over `effortLevel`. |
+| `parallelToolCalls` | → `parallel_tool_calls`. |
+| `mcpTools` | Remote MCP server tools appended to `session.tools`. **No approval UX exists yet — approval requests are AUTO-DENIED** (the model voices the refusal); declare servers with `require_approval: 'never'`. |
+| `inputTranscriptionModel` | Per-session ASR override (falls back to the profile's model; natively-transcribing profiles send no block). |
+| `voice` / `disableAutoResponse` | Output voice / meeting-mode gating (as before). |
+| `endpoint`, `sampleRate`, `proxyBaseUrl` | MJ-side transport settings — always scrubbed. |
+
+**Protected wire fields**: `type`, `instructions`, and `tools` can never be overridden through the bag (scrubbed with a diag log); `audio` remains the one documented override channel. Residual provider-native keys (`tool_choice`, `output_modalities`, …) spread into the session payload **identically on both topologies** (server-bridged `session.update` and the client-direct minted `SessionConfig`).
+
+### Readiness, usage, and lifecycle
+
+- `WaitForConfigApplied()` resolves once the initial config is on the socket (deferred to `session.created` on OpenAI). A **15s readiness deadline** (`configReadinessTimeoutMs`, overridable) rejects awaiting callers on a silent endpoint WITHOUT cancelling the deferred apply.
+- `response.done` usage surfaces **per-modality token detail** (`RealtimeUsage.InputTokenDetails`/`OutputTokenDetails`: text/audio/image/cached) — required for multi-channel cost attribution (audio-in bills ~8× text-in on GPT Realtime 2.1).
+- `Capabilities.CanReconfigureTurnMode` is profile-gated (`supportsLiveReconfigure`); `Reconfigure` no-ops on profiles that declare no support.

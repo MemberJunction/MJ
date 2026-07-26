@@ -27,6 +27,7 @@ import {
     RealtimeTranscript,
     RealtimeToolCall,
     RealtimeUsage,
+    RealtimeUsageModalityDetail,
     RealtimeToolDefinition,
     RealtimeSessionError,
     RealtimeMediaKind,
@@ -151,11 +152,50 @@ export interface RealtimeSessionRunnerDeps {
     FinalizeRecording?: () => Promise<void>;
 
     /**
+     * Drains any transcript writes still queued by {@link PersistTranscript}.
+     *
+     * Transcript frames are dispatched FIRE-AND-FORGET (so a slow write can never stall the
+     * conversation), which means writes for the final turns of a session can still be in flight when
+     * {@link RealtimeSessionRunner.Stop} runs. Without this drain those writes land AFTER the runner
+     * has returned its result — the turn count can undercount, and a process torn down promptly after
+     * the session (serverless / container stop) can lose the tail.
+     *
+     * Called during {@link RealtimeSessionRunner.Stop} AFTER the provider session is closed (so no new
+     * frames can arrive) and BEFORE the result is built. Bounded by
+     * {@link TranscriptFlushTimeoutMs} — a hung write must never wedge teardown. Optional: when
+     * omitted the drain is skipped entirely (existing behavior).
+     */
+    FlushTranscripts?: () => Promise<void>;
+
+    /**
+     * Upper bound (ms) on the {@link FlushTranscripts} drain during teardown. Defaults to 5000. On
+     * expiry the runner logs and finalizes anyway — losing a tail write is strictly better than
+     * hanging the session teardown on a stuck database call.
+     */
+    TranscriptFlushTimeoutMs?: number;
+
+    /**
      * Checkpoints the *accumulated* usage onto the single long-lived `AIPromptRun`. The runner
      * accumulates `OnUsage` deltas and invokes this on a debounced cadence and on close, so a
      * crash-driven janitor close finalizes from the last-persisted values and loses nothing.
      */
     CheckpointUsage: (usage: RealtimeUsage) => Promise<void>;
+
+    /**
+     * Optional abort signal (the agent layer passes the chained caller-token + agent-timeout
+     * signal). When it fires, the runner stops + finalizes the session — realtime sessions honor
+     * the same cancellation/wall-clock semantics as every other agent run instead of relying on
+     * the janitor's coarse staleness sweep. Absent ⇒ prior behavior.
+     */
+    AbortSignal?: AbortSignal;
+
+    /**
+     * Maximum bounded RECONNECT attempts after a FATAL transport drop (socket death, credential
+     * teardown) before the runner finalizes. Each attempt opens a fresh provider session with the
+     * SAME params + tool set, re-wires handlers, and injects a context note so the model knows
+     * the line dropped. Accumulated usage/transcripts span the reconnect. Default 1; 0 disables.
+     */
+    MaxTransportReconnects?: number;
 
     /** Optional debounce window (ms) for usage checkpoints. Defaults to 5000ms. */
     UsageCheckpointDebounceMs?: number;
@@ -206,6 +246,9 @@ export interface RealtimeSessionResult {
  * drive the session to completion, or {@link Start}/{@link Stop} to control it explicitly.
  */
 export class RealtimeSessionRunner {
+    /** Default upper bound (ms) on the teardown transcript drain — see `TranscriptFlushTimeoutMs`. */
+    private static readonly DefaultTranscriptFlushTimeoutMs = 5000;
+
     // ── Delegated-run progress narration (server-bridged B3) ──────────────────
     /** First spoken update fires no earlier than this long after a delegation burst starts. */
     private static readonly FirstNarrationDelayMs = 5000;
@@ -226,6 +269,12 @@ export class RealtimeSessionRunner {
 
     /** Accumulated usage across all `OnUsage` deltas, flushed to the checkpoint on debounce/close. */
     private accumulatedUsage: RealtimeUsage = { InputTokens: 0, OutputTokens: 0 };
+    /** The registered abort listener (removed on Stop so a late signal can't touch a dead runner). */
+    private abortListener: (() => void) | null = null;
+    /** Fatal-transport reconnect attempts consumed so far (bounded by deps.MaxTransportReconnects). */
+    private reconnectAttempts = 0;
+    /** True while a reconnect is IN FLIGHT — prevents concurrent reconnects at a budget >= 2. */
+    private reconnecting = false;
     /** Whether there is accumulated usage that has not yet been checkpointed. */
     private usageDirty = false;
     /** Pending debounce timer handle for usage checkpoints. */
@@ -367,9 +416,30 @@ export class RealtimeSessionRunner {
         // providers like Gemini Live, the ONLY effective) registration path. A post-start
         // RegisterTools with the identical set would be a contract-mandated no-op, so the
         // runner does not make that redundant call.
+        // Cancellation semantics (C4): realtime sessions honor the same chained caller-token +
+        // agent-timeout signal as every other agent run. Already-aborted ⇒ never open the socket.
+        const signal = this.deps.AbortSignal;
+        if (signal?.aborted) {
+            throw new Error('Realtime session aborted before start (cancellation signal already fired).');
+        }
+
         this.session = await this.deps.Model.StartSession(params);
         this.wireHandlers(this.session);
         this.attachRecording(this.session);
+
+        if (signal) {
+            this.abortListener = () => {
+                this.deps.LogStatus?.('🛑 Cancellation signal fired — stopping the realtime session.', false);
+                void this.Stop();
+            };
+            signal.addEventListener('abort', this.abortListener, { once: true });
+            // C4 window: the signal may have fired DURING the StartSession await above — an
+            // already-aborted signal never dispatches 'abort' again, so the listener alone would
+            // miss it. Re-check and finalize now.
+            if (signal.aborted) {
+                void this.Stop();
+            }
+        }
 
         this.deps.LogStatus?.(
             `🎙️ Realtime session started with ${tools.length} tool(s) (target-independent set).`,
@@ -409,11 +479,23 @@ export class RealtimeSessionRunner {
      * @param session The active session to wire.
      */
     private wireHandlers(session: IRealtimeSession): void {
-        session.OnTranscript((t) => void this.handleTranscript(t));
-        session.OnToolCall((call) => void this.handleToolCall(call));
-        session.OnUsage((u) => this.handleUsage(u));
-        session.OnInterruption(() => this.handleInterruption());
-        session.OnError((error) => this.handleSessionError(error));
+        // Every handler is IDENTITY-GUARDED against `this.session`: after a transport reconnect
+        // (attemptTransportReconnect) the OLD session may still emit late events (a trailing fatal,
+        // a stale tool call carrying a call_id the new session never issued). Those must NEVER
+        // touch the runner state that now belongs to the FRESH session — otherwise an old-session
+        // fatal could tear down the healthy reconnected session, or a stale tool result could be
+        // relayed to a provider session that has no matching pending call.
+        session.OnTranscript((t) => { if (this.session === session) void this.handleTranscript(t); });
+        session.OnToolCall((call) => { if (this.session === session) void this.handleToolCall(call); });
+        // Usage is runner-GLOBAL (cumulative across the whole session lifetime incl. reconnects),
+        // NOT session-scoped — so a late usage frame from a just-superseded session must still
+        // accumulate (never dropped by the session-identity guard the other handlers use). The gate
+        // here is the RUNNER lifecycle instead: once Stop() has finalized (`stopped`), a trailing
+        // usage frame flushed on the closing socket must NOT accumulate — it would diverge from the
+        // already-returned FinalUsage AND arm a fresh debounce timer that checkpoints post-finalize.
+        session.OnUsage((u) => { if (!this.stopped) this.handleUsage(u); });
+        session.OnInterruption(() => { if (this.session === session) this.handleInterruption(); });
+        session.OnError((error) => { if (this.session === session) this.handleSessionError(error); });
     }
 
     /**
@@ -429,10 +511,109 @@ export class RealtimeSessionRunner {
     private handleSessionError(error: RealtimeSessionError): void {
         const code = error.Code ? ` [${error.Code}]` : '';
         if (error.Fatal) {
+            const maxReconnects = this.deps.MaxTransportReconnects ?? 1;
+            if (!this.stopped && !this.reconnecting && this.reconnectAttempts < maxReconnects) {
+                this.reconnectAttempts++;
+                this.reconnecting = true; // re-entrancy guard: no concurrent reconnect at budget >= 2
+                this.deps.LogError?.(`Fatal realtime session error${code} — attempting bounded reconnect ${this.reconnectAttempts}/${maxReconnects}: ${error.Message}`);
+                void this.attemptTransportReconnect();
+                return;
+            }
             this.deps.LogError?.(`Fatal realtime session error${code} — finalizing session: ${error.Message}`);
             void this.Stop();
         } else {
             this.deps.LogError?.(`Realtime session error (non-fatal)${code}: ${error.Message}`);
+        }
+    }
+
+    /**
+     * Attempts ONE transport reconnect after a fatal drop: quietly discards the dead session,
+     * opens a fresh provider session with the SAME params + tool set, re-wires handlers +
+     * recording, and injects a context note so the model can acknowledge the blip. Accumulated
+     * usage and transcript counts span the reconnect (the same long-lived AIPromptRun continues).
+     * A failed attempt finalizes via {@link Stop} (further fatal errors on the new session
+     * consume the remaining attempt budget).
+     */
+    private async attemptTransportReconnect(): Promise<void> {
+        try {
+            // SEAM-2: the OLD session is dead — abort any in-flight delegation (its result would
+            // otherwise be relayed to the fresh session as a function_call_output carrying a
+            // call_id the new provider session never issued) and drop any queued (now-stale)
+            // progress-narration text. We do NOT blanket-reset activeDelegations: each in-flight
+            // delegation frame self-decrements via its own finally (AbortInFlight unwinds them), so
+            // zeroing the shared counter here would corrupt it for a CONCURRENT delegation that
+            // outlives the reconnect (its completion would decrement a count that now belongs to a
+            // newly-started delegation, suppressing the new one's narration).
+            this.toolBroker.AbortInFlight();
+            this.cancelPendingNarration();
+
+            try {
+                await this.session?.Close();
+            } catch {
+                /* the dead socket may throw on close — irrelevant */
+            }
+            this.session = null;
+
+            const tools = this.BuildToolSet();
+            const params: RealtimeSessionParams = { ...this.deps.SessionParams, Tools: tools };
+            const fresh = await this.deps.Model.StartSession(params);
+
+            // SEAM-1: the runner may have been Stop()ed (consumer abort / a second fatal) WHILE we
+            // awaited StartSession. Stop() found this.session === null (a no-op close) and set
+            // stopped — so if we blindly adopted `fresh` we'd leak a live, never-closed session
+            // whose handlers fire into a finalized runner. Close the fresh session and bail.
+            if (this.stopped) {
+                try { await fresh.Close(); } catch { /* fresh may throw on close — irrelevant */ }
+                return;
+            }
+
+            this.session = fresh;
+            this.wireHandlers(fresh);
+            this.attachRecording(fresh);
+            fresh.SendContextNote?.('NOTE: the audio connection dropped briefly and has been re-established. Briefly acknowledge the interruption if the user was mid-conversation, then continue where things left off.');
+            this.deps.LogStatus?.('🔁 Realtime transport reconnected after a fatal drop — session resumed.', false);
+        } catch (reconnectError) {
+            this.logError(reconnectError, 'reconnecting after a fatal transport drop');
+            void this.Stop();
+        } finally {
+            this.reconnecting = false; // reconnect settled (success/fail) — allow the next one
+        }
+    }
+
+    /**
+     * Awaits the injected {@link RealtimeSessionRunnerDeps.FlushTranscripts} drain under a hard time
+     * bound, so queued transcript writes land before the result is built without letting a stuck write
+     * hang teardown. A timeout (or a rejected drain) is logged and swallowed — finalizing with a
+     * possibly-missing tail write is strictly better than never finalizing at all.
+     */
+    private async flushTranscriptsBounded(): Promise<void> {
+        const flush = this.deps.FlushTranscripts;
+        if (!flush) {
+            return;
+        }
+        const timeoutMs = this.deps.TranscriptFlushTimeoutMs ?? RealtimeSessionRunner.DefaultTranscriptFlushTimeoutMs;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        try {
+            await Promise.race([
+                flush(),
+                new Promise<void>((resolve) => {
+                    timer = setTimeout(() => {
+                        this.logError(
+                            `Timed out after ${timeoutMs}ms draining queued transcript writes; finalizing anyway (a tail write may be lost).`,
+                            'flushing transcripts'
+                        );
+                        resolve();
+                    }, timeoutMs);
+                    // Never hold the process open purely for this guard timer.
+                    (timer as unknown as { unref?: () => void }).unref?.();
+                }),
+            ]);
+        } catch (error) {
+            this.logError(error, 'flushing transcripts');
+        } finally {
+            if (timer) {
+                clearTimeout(timer);
+            }
         }
     }
 
@@ -467,8 +648,12 @@ export class RealtimeSessionRunner {
      * @param call The tool-call request emitted by the model.
      */
     private async handleToolCall(call: RealtimeToolCall): Promise<void> {
+        // Capture the session the call originated on. Tool execution (esp. an invoke-target-agent
+        // DELEGATION) can span a transport reconnect; the result must NOT be relayed to a DIFFERENT
+        // (freshly-reconnected) provider session, which never issued this call_id.
+        const originatingSession = this.session;
         const executed = await this.toolBroker.ExecuteToolCall(call);
-        await this.dispatchToolResult(call.CallID, executed.ResultJson, 'sending tool result');
+        await this.dispatchToolResult(call.CallID, executed.ResultJson, 'sending tool result', originatingSession);
     }
 
     /**
@@ -478,8 +663,16 @@ export class RealtimeSessionRunner {
      * @param resultJson The JSON-stringified result to send.
      * @param operation A short description of the send operation, used in error logging.
      */
-    private async dispatchToolResult(callID: string, resultJson: string, operation: string): Promise<void> {
-        if (!this.session) {
+    private async dispatchToolResult(
+        callID: string,
+        resultJson: string,
+        operation: string,
+        originatingSession?: IRealtimeSession | null
+    ): Promise<void> {
+        // Relay only when the live session is STILL the one that issued the call (see handleToolCall).
+        // A result computed on a since-replaced session carries a call_id the current session never
+        // saw — sending it would confuse/reject the fresh turn.
+        if (!this.session || (originatingSession !== undefined && this.session !== originatingSession)) {
             return;
         }
         try {
@@ -497,10 +690,39 @@ export class RealtimeSessionRunner {
     private handleUsage(usage: RealtimeUsage): void {
         this.accumulatedUsage = {
             InputTokens: this.accumulatedUsage.InputTokens + usage.InputTokens,
-            OutputTokens: this.accumulatedUsage.OutputTokens + usage.OutputTokens
+            OutputTokens: this.accumulatedUsage.OutputTokens + usage.OutputTokens,
+            ...(this.sumModalityDetail(this.accumulatedUsage.InputTokenDetails, usage.InputTokenDetails)
+                ? { InputTokenDetails: this.sumModalityDetail(this.accumulatedUsage.InputTokenDetails, usage.InputTokenDetails)! }
+                : {}),
+            ...(this.sumModalityDetail(this.accumulatedUsage.OutputTokenDetails, usage.OutputTokenDetails)
+                ? { OutputTokenDetails: this.sumModalityDetail(this.accumulatedUsage.OutputTokenDetails, usage.OutputTokenDetails)! }
+                : {}),
         };
         this.usageDirty = true;
         this.scheduleUsageCheckpoint();
+    }
+
+    /**
+     * Sums two per-modality detail blocks field-wise (absent fields contribute 0; a field present
+     * in EITHER side appears in the sum). Returns `undefined` when both sides are absent, so
+     * totals-only providers never grow phantom empty detail blocks.
+     */
+    private sumModalityDetail(
+        a: RealtimeUsageModalityDetail | undefined,
+        b: RealtimeUsageModalityDetail | undefined
+    ): RealtimeUsageModalityDetail | undefined {
+        if (!a && !b) {
+            return undefined;
+        }
+        const sum: RealtimeUsageModalityDetail = {};
+        for (const key of ['TextTokens', 'AudioTokens', 'ImageTokens', 'CachedTokens'] as const) {
+            const av = a?.[key];
+            const bv = b?.[key];
+            if (typeof av === 'number' || typeof bv === 'number') {
+                sum[key] = (av ?? 0) + (bv ?? 0);
+            }
+        }
+        return sum;
     }
 
     /**
@@ -530,7 +752,9 @@ export class RealtimeSessionRunner {
         this.usageDirty = false;
         const snapshot: RealtimeUsage = {
             InputTokens: this.accumulatedUsage.InputTokens,
-            OutputTokens: this.accumulatedUsage.OutputTokens
+            OutputTokens: this.accumulatedUsage.OutputTokens,
+            ...(this.accumulatedUsage.InputTokenDetails ? { InputTokenDetails: { ...this.accumulatedUsage.InputTokenDetails } } : {}),
+            ...(this.accumulatedUsage.OutputTokenDetails ? { OutputTokenDetails: { ...this.accumulatedUsage.OutputTokenDetails } } : {}),
         };
         try {
             await this.deps.CheckpointUsage(snapshot);
@@ -582,7 +806,14 @@ export class RealtimeSessionRunner {
      * sequential tool calls seconds apart can never narrate faster than the interval).
      */
     private beginDelegationBurst(): void {
-        if (this.activeDelegations === 0) {
+        // Anchor a fresh burst either when nothing else is in flight OR when the burst state was reset
+        // (narrationBurstStartedAt === 0) by a {@link cancelPendingNarration} — e.g. a reconnect that
+        // aborted the prior delegation(s). The second condition matters when a prior delegation FAILED
+        // to honor its abort and left {@link activeDelegations} elevated: without it this new delegation
+        // would inherit the dead burst's stale anchor (collapsing the 5s first-narration delay) and its
+        // climbing update count. Decoupling the re-anchor from the counter keeps burst timing correct
+        // regardless of a stuck delegate.
+        if (this.activeDelegations === 0 || this.narrationBurstStartedAt === 0) {
             this.narrationBurstStartedAt = Date.now();
             this.narrationCount = 0;
             this.pendingNarrationMessages = [];
@@ -690,13 +921,22 @@ export class RealtimeSessionRunner {
         );
     }
 
-    /** Cancels any deferred spoken update and drops the digest buffer. */
+    /**
+     * Cancels any deferred spoken update, drops the digest buffer, and RESETS the burst-timing state
+     * (anchor time, spoken-update count, dedup tail). Callers invoke this exactly when the current
+     * burst is ending or being torn down (delegation done, barge-in, reconnect, Stop), so clearing the
+     * anchor to 0 marks "no active burst" — {@link beginDelegationBurst} then re-anchors the next
+     * delegation cleanly even if {@link activeDelegations} is still elevated by a stuck delegate.
+     */
     private cancelPendingNarration(): void {
         if (this.narrationTimer) {
             clearTimeout(this.narrationTimer);
             this.narrationTimer = null;
         }
         this.pendingNarrationMessages = [];
+        this.narrationBurstStartedAt = 0;
+        this.narrationCount = 0;
+        this.lastNarratedTail = '';
     }
 
     /**
@@ -712,6 +952,12 @@ export class RealtimeSessionRunner {
             return this.buildResult(true);
         }
         this.stopped = true;
+
+        // Detach the cancellation listener — a late signal must not touch a finalized runner.
+        if (this.abortListener && this.deps.AbortSignal) {
+            this.deps.AbortSignal.removeEventListener('abort', this.abortListener);
+            this.abortListener = null;
+        }
 
         // Cancel any pending debounce and force a final flush so partial usage is never lost.
         if (this.usageDebounceTimer) {
@@ -735,6 +981,10 @@ export class RealtimeSessionRunner {
         } finally {
             this.session = null;
         }
+
+        // Drain queued transcript writes now that the socket is closed and no new frames can arrive.
+        // Bounded — a stuck write must not wedge teardown (see FlushTranscripts).
+        await this.flushTranscriptsBounded();
 
         // Finalize the recording AFTER the socket is closed: stop accumulating, then encode → store →
         // stamp the session. A recording failure is logged inside FinalizeRecording and must never fail
@@ -764,7 +1014,9 @@ export class RealtimeSessionRunner {
             Success: success,
             FinalUsage: {
                 InputTokens: this.accumulatedUsage.InputTokens,
-                OutputTokens: this.accumulatedUsage.OutputTokens
+                OutputTokens: this.accumulatedUsage.OutputTokens,
+                ...(this.accumulatedUsage.InputTokenDetails ? { InputTokenDetails: { ...this.accumulatedUsage.InputTokenDetails } } : {}),
+                ...(this.accumulatedUsage.OutputTokenDetails ? { OutputTokenDetails: { ...this.accumulatedUsage.OutputTokenDetails } } : {}),
             },
             TranscriptTurnCount: this.transcriptTurnCount,
             ErrorMessage: errorMessage

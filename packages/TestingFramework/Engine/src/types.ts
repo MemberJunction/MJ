@@ -39,7 +39,8 @@ export {
   TestSuiteVariablesConfig,
   ResolvedTestVariables,
   TestVariableValue,
-  TestRunOutputItem
+  TestRunOutputItem,
+  SuiteFixtureContext
 } from '@memberjunction/testing-engine-base';
 
 // Import types we need for local interfaces
@@ -47,7 +48,8 @@ import {
   TestRunOptions,
   OracleResult,
   ResolvedTestVariables,
-  TestRunOutputItem
+  TestRunOutputItem,
+  SuiteFixtureContext
 } from '@memberjunction/testing-engine-base';
 
 /**
@@ -112,6 +114,16 @@ export interface DriverExecutionContext {
     applicationContext?: string;
     [key: string]: unknown;
   };
+
+  /**
+   * Suite-scoped fixtures established by the driver's `SetupSuite` before the first
+   * test of the suite runs, threaded into every `Execute` of that suite run and torn
+   * down (guaranteed) by `TeardownSuite`. Keyed by `SuiteRunID`.
+   *
+   * Undefined for the standalone `RunTest` path (no suite ⇒ no suite hooks fire), so
+   * fixture-dependent tests must be run via `mj test suite`.
+   */
+  fixtures?: SuiteFixtureContext;
 }
 
 /**

@@ -45,6 +45,18 @@
       </div>
     }
 
+    @if (SkillInvocations.length > 0) {
+      <div class="timeline-skills">
+        @for (inv of SkillInvocations; track inv.SkillID) {
+          <span class="skill-chip" [attr.data-activation]="inv.ActivationType" [title]="GetSkillChipTooltip(inv)">
+            <i class="fas fa-wand-magic-sparkles"></i>
+            {{ inv.SkillName }}
+            <span class="skill-chip-mode">{{ inv.ActivationType === 'requested' ? 'user' : 'auto' }}</span>
+          </span>
+        }
+      </div>
+    }
+
     <div class="timeline-meta">
       @if (item.duration) {
         <span class="duration">

@@ -18,6 +18,25 @@
 import { convertMigration } from './MigrationConverter.js';
 import type { TSQLToPGTranspiler, ConversionStatus, UnhandledStatement } from './MigrationConverter.js';
 
+/**
+ * Thrown when the working-DB apply/capture fails DURING a bake — carries the already-transpiled
+ * `transpiledBody` so the caller can still write it to `.needs-hand` instead of discarding it for a
+ * bare error stub (issue #3252 review P2). The transpiled DDL is computed BEFORE the first
+ * `db.apply` can throw and is the expensive, useful artifact; a working-DB failure (a dependent-view
+ * CASCADE, a mid-sequence metadata corruption) must not throw it away. Distinct from a `convertMigration`
+ * failure (which has no body to preserve and propagates as an ordinary error).
+ */
+export class BakeApplyError extends Error {
+  constructor(
+    public readonly fileName: string,
+    public readonly transpiledBody: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'BakeApplyError';
+  }
+}
+
 /** Native PG CodeGen captured for one entity (the return of `generateSingleEntitySQLToSeparateFiles`). */
 export interface CapturedEntitySQL {
   /** Indexes, FK-root helper fns, base view, CRUD sprocs and trigger — with GRANTs inline. */
@@ -41,6 +60,13 @@ export interface BakerWorkingDB {
    * working DB (keeping the DB current for later migrations), and return the captured SQL.
    */
   captureEntity(entityDisplayName: string): Promise<CapturedEntitySQL>;
+  /**
+   * Every entity CodeGen generates objects for, in generation order — the full set
+   * `mj codegen` would process (`IncludeInAPI`, minus excluded schemas). A baseline has
+   * NO CodeGen banners, so `MigrationSplitter.extractAffectedEntities` yields `[]`; baking
+   * a baseline instead captures native CodeGen for THIS full set (see `bakeMigration`).
+   */
+  listBakeableEntities(): Promise<string[]>;
 }
 
 export interface IncrementalBakerOptions {
@@ -66,12 +92,20 @@ export interface BakedMigrationResult {
    * `'baked'` — native CodeGen captured + assembled into `pgSQL`.
    * `'preserved'` — a transpile gap (unhandled statement / hand-procedural) made an auto-bake
    * unsafe, so `pgSQL` is the hand-verified committed file (re-bake mode only).
+   * `'gap-no-bake'` — FORWARD mode hit a gap, so the working DB was NOT touched (no apply, no
+   * capture) and `pgSQL` is the transpile-only artifact for hand-authoring (issue #3252 RC3).
    */
-  mode: 'baked' | 'preserved';
+  mode: 'baked' | 'preserved' | 'gap-no-bake';
 }
 
 const DEFAULT_SCHEMA = '__mj';
 const CODEGEN_SECTION_HEADER = '-- ===================== CodeGen (native PG, baked) =====================';
+
+/** A baseline migration (`B<timestamp>__…`) — a full from-scratch schema snapshot. Mirrors the
+ *  `/^B\d/` test in MigrationConverter's statement-mode baseline handling. */
+function isBaselineFile(fileName: string): boolean {
+  return /^B\d/.test(fileName);
+}
 
 export class IncrementalBaker {
   private readonly schema: string;
@@ -94,6 +128,16 @@ export class IncrementalBaker {
    * Known limitation — a new-entity migration's `ALTER COLUMN` preamble CASCADE-drops dependent
    * metadata views (e.g. `vwApplicationSettings`) that per-entity capture doesn't restore, which
    * corrupts the metadata load mid-sequence; prefer the re-bake path for a full set.
+   *
+   * BASELINE mode (`fileName` is a `B…` baseline): a baseline is a full from-scratch snapshot with
+   * NO CodeGen banners, so the banner-derived `affectedEntities` is empty and the "apply the hand
+   * body then capture" flow can't bootstrap (the metadata views the provider reads don't exist on
+   * an empty DB). Instead the working DB is PRE-SEEDED to the baseline end-state by the caller
+   * (v5.x baseline + AST-transpiled deltas → all metadata views present), so we DON'T re-apply the
+   * hand body (its tables already exist) — we capture native CodeGen for the FULL entity set and
+   * pair it with the file's transpiled hand body. The 5 hand utility functions still surface as
+   * gaps (`needs-hand-authoring`); they aren't referenced by base views/sprocs, so the capture is
+   * complete regardless and the caller authors them into the final `.pg.sql`.
    */
   async bakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
     const conv = await convertMigration(ssSql, fileName, {
@@ -111,22 +155,67 @@ export class IncrementalBaker {
       handProcedural: conv.handProcedural,
     };
 
+    // The transpile-only artifact (header + gap comments + transpiled DDL, no CodeGen). Preserved
+    // into `.needs-hand` if the working-DB apply/capture below throws (issue #3252 review P2).
+    const transpiledArtifact = this.assemble(fileName, handBody, []);
+
     if (committedPgSql !== undefined) {
-      await this.opts.db.apply(committedPgSql); // advance via the known-good committed file
-      await this.opts.db.refreshMetadata();
-      if (conv.status === 'needs-hand-authoring' || conv.unhandled.length > 0) {
-        return { ...base, pgSQL: committedPgSql, mode: 'preserved' };
-      }
-      const captured = await this.captureEntities(entities);
-      return { ...base, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
+      return this.applyAndCapture(fileName, committedPgSql, async () => {
+        await this.opts.db.apply(committedPgSql); // advance via the known-good committed file
+        await this.opts.db.refreshMetadata();
+        if (conv.status === 'needs-hand-authoring' || conv.unhandled.length > 0) {
+          return { ...base, pgSQL: committedPgSql, mode: 'preserved' };
+        }
+        const captured = await this.captureEntities(entities);
+        return { ...base, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
+      });
     }
 
-    if (handBody) {
-      await this.opts.db.apply(this.withSearchPath(handBody));
+    if (isBaselineFile(fileName)) {
+      return this.applyAndCapture(fileName, transpiledArtifact, async () => {
+        await this.opts.db.refreshMetadata(); // read the pre-seeded metadata
+        const allEntities = await this.opts.db.listBakeableEntities();
+        const captured = await this.captureEntities(allEntities);
+        return { ...base, affectedEntities: allEntities, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
+      });
     }
-    await this.opts.db.refreshMetadata();
-    const captured = await this.captureEntities(entities);
-    return { ...base, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
+
+    // FORWARD mode. Gate BEFORE any apply/capture: a gappy conversion must NOT touch the
+    // working DB — applying gappy hand DDL crashed the DB or corrupted later bakes (issue
+    // #3252 RC3). Placed strictly here (after RE-BAKE and BASELINE, which are legitimately
+    // exempt), so those paths are untouched. The transpile-only artifact (header + gap
+    // comments + transpiled DDL, no CodeGen) is returned for the caller to write as .needs-hand.
+    if (conv.status === 'needs-hand-authoring' || conv.unhandled.length > 0) {
+      return { ...base, pgSQL: transpiledArtifact, mode: 'gap-no-bake' };
+    }
+
+    return this.applyAndCapture(fileName, transpiledArtifact, async () => {
+      if (handBody) {
+        await this.opts.db.apply(this.withSearchPath(handBody));
+      }
+      await this.opts.db.refreshMetadata();
+      const captured = await this.captureEntities(entities);
+      return { ...base, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
+    });
+  }
+
+  /**
+   * Run one bake path's working-DB apply/capture; on ANY failure, rethrow it as a BakeApplyError
+   * carrying `preservedBody` so the CLI can still write the transpiled artifact to `.needs-hand`
+   * rather than discard it for a bare error stub (issue #3252 review P2). An already-typed
+   * BakeApplyError passes through unwrapped.
+   */
+  private async applyAndCapture(
+    fileName: string,
+    preservedBody: string,
+    build: () => Promise<BakedMigrationResult>,
+  ): Promise<BakedMigrationResult> {
+    try {
+      return await build();
+    } catch (err) {
+      if (err instanceof BakeApplyError) throw err;
+      throw new BakeApplyError(fileName, preservedBody, err instanceof Error ? err.message : String(err));
+    }
   }
 
   /** Capture native CodeGen for each entity in order; strip volatile headers for determinism. */

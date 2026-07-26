@@ -666,7 +666,8 @@ docker compose down -v     # removes containers AND all data volumes
 | `auth-setup.sh` | Interactive Auth0 credential setup + Angular environment generation |
 | `db-bootstrap.sh` | Database creation and migration script |
 | `.zshrc` | Oh-My-Zsh config with all aliases (including browser automation) |
-| `.env.database` | SQL + MJAPI connection details (committed, docker-internal only) |
+| `.env.database` | SQL + MJAPI connection details, docker-internal only. **Gitignored — you must create it** (`cp .env.database.example .env.database`) or `docker compose up` fails with `env file … not found` |
+| `.env.database.example` | Template for the above (tracked) |
 | `.env.example` | Template for user-specific settings |
 | `claude-settings.json` | Pre-approved Claude Code permissions (includes playwright-cli) |
 | `start.sh` | One-command setup script |

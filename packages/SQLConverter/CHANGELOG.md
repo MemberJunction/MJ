@@ -1,5 +1,64 @@
 # @memberjunction/sql-converter
 
+## 5.49.0
+
+### Minor Changes
+
+- 7d6e8fb: Large-schema CodeGen fix (PostgreSQL): filter system namespaces (`pg_catalog`, `information_schema`, `pg_toast*`, `pg_temp*`) in the four catalog-introspection views (`vwForeignKeys`, `vwTablePrimaryKeys`, `vwTableUniqueKeys`, `vwSQLTablesAndEntities`). They previously scanned the entire cluster catalog with no namespace filter, so `vwSQLColumnsAndEntityFields` paid per-column introspection for every system relation — a cost that grows as CodeGen inflates the catalog mid-run. MJ entities can never live in system namespaces, so no legitimate row is dropped.
+
+  The fix is applied in BOTH channels so it survives a PG baseline regeneration: the migration patches the deployed views, and `@memberjunction/sql-converter`'s `CatalogViewRule` (the generator that emits these views when a PG baseline is cut) now emits the same filter — previously only the migration carried it, so the next regenerated baseline would have silently reverted the fix.
+
+### Patch Changes
+
+- c5e4b9e: Agent conversation compaction: durable cross-turn summaries stored on the conversation (Sequence + SummaryPromptRunID, budget knobs on AIAgentType/AIAgent, Compaction run steps), conversation-history retrieval tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange), edit handling with OriginalMessageChanged flagging and a wired chat edit affordance, plus hardening fixes: failed message expansions now surface a reason to the model (breaks an unbounded retry loop), json5 ESM import fix restores the local JSON-repair tier, and SQLConverter no longer truncates PG column comments at escaped apostrophes.
+  - @memberjunction/sql-dialect@5.49.0
+  - @memberjunction/sqlglot-ts@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.48.0
+- @memberjunction/sqlglot-ts@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [073842c]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+  - @memberjunction/sqlglot-ts@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.46.0
+- @memberjunction/sqlglot-ts@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.45.1
+- @memberjunction/sqlglot-ts@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.45.0
+- @memberjunction/sqlglot-ts@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.44.0
+- @memberjunction/sqlglot-ts@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes
