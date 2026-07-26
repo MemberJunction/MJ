@@ -2083,6 +2083,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             for (let i = 0; i < params.length; i++) {
                 // Shallow-clone: widening must never leak into the caller's objects
                 params[i] = { ...params[i], params: { ...params[i].params } };
+                // ── PreRunView data hooks (same enforcement seam as the standard
+                // PreRunView/PreRunViews pipeline) ──
+                // This path executes queries via buildWhereClauseForCacheCheck and
+                // InternalRunView directly, so registered hooks (e.g. tenant-filter
+                // middleware injecting scoping into ExtraFilter) would otherwise be
+                // SKIPPED for every CacheLocal read — and this operation is directly
+                // client-invokable over GraphQL. Apply them here, once per item,
+                // BEFORE the cache-currency WHERE clause is built and before any
+                // execution leg, so the currency check and the returned rows always
+                // agree with what the hooked non-cached path would produce.
+                // PlatformSQL resolves first (hooks expect plain-string filters),
+                // mirroring PreRunView's ordering.
+                this.ResolvePlatformSQLInParams(params[i].params);
+                params[i].params = await this.RunPreRunViewHooks(params[i].params, user);
                 const p = params[i].params;
                 const widenEntity = p.EntityName ? this.EntityByName(p.EntityName) : null;
                 if (widenEntity && this.runViewCacheEligible(p)) {
@@ -2262,6 +2276,43 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fullQueryResults = await Promise.all(queryPromises);
             const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
             allResults.sort((a, b) => a.viewIndex - b.viewIndex);
+
+            // ── PostRunView data hooks (OUTPUT half of the enforcement seam) ──
+            // The Pre hooks were applied to each item's params up front; the
+            // matching Post hooks (data masking / audit) run HERE, once per
+            // row-bearing item at the outbound boundary — mirroring
+            // ProviderBase.PostRunViews — so rows returned via ANY leg (fresh
+            // query, server-cache serve, or differential) get the same masking
+            // the hooked non-cached path applies. Applied AFTER projection
+            // (item.results is already the caller's shape) and PER REQUEST, so
+            // masking is never baked into the shared cache. 'current' and
+            // 'error' items carry no rows: a 'current' client keeps its own
+            // cache, which was masked when an earlier 'stale'/'differential'
+            // response populated it. Uses params[viewIndex] — the same hooked
+            // params object the Pre hooks produced.
+            for (const item of allResults) {
+                const rowBearing = item as { viewIndex: number; results?: T[]; rowCount?: number };
+                if (!Array.isArray(rowBearing.results)) {
+                    continue;
+                }
+                const viewParams = params[rowBearing.viewIndex]?.params;
+                if (!viewParams) {
+                    continue;
+                }
+                const hooked = await this.RunPostRunViewHooks(
+                    viewParams,
+                    {
+                        Success: true,
+                        Results: rowBearing.results,
+                        RowCount: rowBearing.results.length,
+                        TotalRowCount: rowBearing.rowCount ?? rowBearing.results.length,
+                    } as unknown as RunViewResult<T>,
+                    user,
+                );
+                if (hooked && Array.isArray(hooked.Results)) {
+                    rowBearing.results = hooked.Results as T[];
+                }
+            }
 
             const entities = params.map(p => p.params.EntityName || 'unknown').join(', ');
             const totalServerCacheHits = (itemsNeedingValidation.length - serverCacheMissItems.length) + noCacheStatusServedFromCache.length;

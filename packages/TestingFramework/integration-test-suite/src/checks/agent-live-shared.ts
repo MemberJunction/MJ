@@ -1,18 +1,20 @@
 /**
- * agent-live-shared.ts — shared helpers for the LIVE-MODEL, CLIENT-TRANSPORT agent bundles
+ * agent-live-shared.ts — shared helpers for the LIVE-MODEL agent bundles
  * (agent-loop-live, shipped-agents-live, agent-carry-forward).
  *
- * NOT a check bundle — registers nothing; imported by the sibling bundles so the wire-run
- * mechanics, run-id resolution, prompt-message reads, token rollups, and FK-safe purge live
- * once. Mirrors the precedent rig (rigs/agent-memory-tests.ts): agents run over the GraphQL
- * wire (GraphQLAIClient → live MJAPI) and EVERY assertion is on process-level, framework-
- * produced observables (AIAgentRun/Step lineage + Status, AIPromptRun.Messages, token
- * arithmetic) — never the model's prose.
+ * NOT a check bundle — registers nothing; imported by the sibling bundles so the run mechanics,
+ * run-id resolution, prompt-message reads, token rollups, and FK-safe purge live once. EVERY
+ * assertion is on process-level, framework-produced observables (AIAgentRun/Step lineage + Status,
+ * AIPromptRun.Messages, token arithmetic) — never the model's prose.
  *
- * Transport: CLIENT. These helpers construct a GraphQLAIClient from the run-scoped
- * ctx.Provider (a GraphQLDataProvider in the client suite), the doctrine-aligned choice
- * (plans/integration-test-expansion §3.6/Q8). Reads use BypassCache so post-mutation /
- * post-run DB truth is observed (the server wrote the rows via a different provider).
+ * TRANSPORT: SERVER-IN-PROCESS (Q8). Despite the "live" naming, these agents run in-process via
+ * AgentRunner.RunAgent — NOT over the GraphQL wire. The wire RunAIAgent mutation is fire-and-forget
+ * over PubSub the headless integration client cannot consume, and the correlation-heavy checks need
+ * a synchronous run handle (proposal §3.6/Q8; the dedicated wire path is IT63 agent-wire-callback).
+ * Because it runs in-process against the CLI's SQL provider, `makeAIClient` REQUIRES the run's
+ * `ctx.User` — `provider.CurrentUser` is null on a database provider, so a run without an explicit
+ * contextUser dies in BaseEngine.Load (issue #3251). Reads use BypassCache so post-run DB truth is
+ * observed regardless of any cache the run populated.
  */
 import { RunView, CompositeKey } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
@@ -44,10 +46,37 @@ export interface AgentInvoker {
     RunAIAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult>;
 }
 
-/** Build a server-in-process agent invoker bound to the run-scoped provider + its CurrentUser. */
-export function makeAIClient(provider: IMetadataProvider): AgentInvoker {
+/**
+ * Build a server-in-process agent invoker bound to the run-scoped provider + the run's context
+ * user. `user` is REQUIRED (pass `ctx.User`): the agent runs in-process via AgentRunner.RunAgent,
+ * so a null contextUser dies in BaseEngine.Load ("For server-side use of all engine classes...").
+ * The contract is `params.contextUser ?? user`, else a REJECTED promise with a harness-attributed
+ * error — deliberately NO fallback to `provider.CurrentUser` (null on the CLI's SQL provider; the
+ * pre-#3251 code relied on it and failed every server-in-process run, and borrowing the provider's
+ * ambient identity could silently run as the wrong user on a client provider).
+ */
+/**
+ * The ONE contextUser-resolution policy for the server-in-process agent invokers (makeAIClient
+ * here, resolveClient in _it-live-agent-harness.ts): `params.contextUser ?? boundUser`, else throw
+ * a harness-attributed error. Shared so the two invokers' fallback policy and error message cannot
+ * drift (#3251 review follow-up). Callers are async, so the throw always surfaces as a rejection.
+ */
+export function resolveContextUserOrThrow(explicitUser: UserInfo | undefined, boundUser: UserInfo, invokerName: string): UserInfo {
+    const contextUser = explicitUser ?? boundUser;
+    if (!contextUser) {
+        throw new Error(
+            'integration harness: no contextUser available for the server-in-process agent run — ' +
+            `pass ctx.User to ${invokerName} (there is deliberately no provider.CurrentUser fallback). (issue #3251)`);
+    }
+    return contextUser;
+}
+
+export function makeAIClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
     return {
-        RunAIAgent: (params: ExecuteAgentParams) => {
+        // async so a missing user surfaces as a REJECTION, never a sync throw — RunAIAgent
+        // returns a Promise, and a sync throw would escape a `.catch(...)`-style caller.
+        RunAIAgent: async (params: ExecuteAgentParams) => {
+            const contextUser = resolveContextUserOrThrow(params.contextUser, user, 'makeAIClient');
             // base-agent stamps AIAgentRun.ConversationID from params.data.conversationId
             // (base-agent.ts:7893), while carry-forward reads the top-level params.conversationId
             // (:5714) — so a conversation-linked run must carry it in BOTH places.
@@ -56,7 +85,7 @@ export function makeAIClient(provider: IMetadataProvider): AgentInvoker {
             return new AgentRunner(provider).RunAgent({
                 ...params,
                 data,
-                contextUser: params.contextUser ?? provider.CurrentUser,
+                contextUser,
                 provider,
             });
         },
@@ -79,7 +108,12 @@ export interface WireRunOptions {
     requestedSkillIDs?: string[];
 }
 
-/** Run an agent over the wire; returns the ExecuteAgentResult (never throws — errors become success=false). */
+/**
+ * Run an agent server-in-process (via the makeAIClient invoker) and return the ExecuteAgentResult.
+ * A run error normally becomes `result.success === false`, but the invoker REJECTS if no
+ * contextUser can be resolved (issue #3251) — call sites pass ctx.User, so that path indicates a
+ * harness bug.
+ */
 export async function runAgentOverWire(
     client: AgentInvoker,
     agent: MJAIAgentEntityExtended,
@@ -253,15 +287,18 @@ export async function deleteById(entity: string, id: string, provider: IMetadata
  */
 export async function purgeAgentRun(runId: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
     const rv = new RunView();
-    // Prompt runs first (AIPromptRun.AgentRunID FK), then steps, then the run.
-    const [promptRuns, steps] = await rv.RunViews<{ ID: string }>([
-        { EntityName: 'MJ: AI Prompt Runs', ExtraFilter: `AgentRunID='${runId}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
-        { EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${runId}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
-    ], user);
-    for (const p of (promptRuns.Success ? promptRuns.Results : [])) {
-        await deleteById('MJ: AI Prompt Runs', p.ID, provider, user);
+    // Steps first (they reference prompt runs via TargetLogID for prompt-type steps), then the run.
+    const stepsResult = await rv.RunView<{ ID: string; StepType: string; TargetLogID: string | null }>({
+        EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${runId}'`,
+        Fields: ['ID', 'StepType', 'TargetLogID'], ResultType: 'simple', BypassCache: true,
+    }, user);
+    const steps = stepsResult.Success ? stepsResult.Results : [];
+    // Delete prompt runs linked through prompt-type steps
+    const promptRunIds = steps.filter(s => s.StepType === 'Prompt' && s.TargetLogID).map(s => s.TargetLogID!);
+    for (const prId of promptRunIds) {
+        await deleteById('MJ: AI Prompt Runs', prId, provider, user);
     }
-    for (const s of (steps.Success ? steps.Results : [])) {
+    for (const s of steps) {
         await deleteById('MJ: AI Agent Run Steps', s.ID, provider, user);
     }
     await deleteById('MJ: AI Agent Runs', runId, provider, user);

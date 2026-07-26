@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/templates
 
+## 5.49.0
+
+### Patch Changes
+
+- 9d6e3d9: Add optional autoescape control to `TemplateEngineServer.RenderTemplateSimple`. The method now accepts a third `options?: { autoescape?: boolean }` argument, defaulting to the existing autoescape-on behavior. Passing `{ autoescape: false }` renders through a lazily-created, HTML-escape-free Nunjucks environment that shares the same custom filters (`json` / `jsoninline` / `jsonparse`) — intended for plain-text contexts such as email subject lines, where `Acme & Co` must not become `Acme &amp; Co`. Env construction was consolidated into a single factory so the autoescape and no-autoescape environments keep an identical filter surface. Fully backward-compatible: existing two-argument callers are unaffected.
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/templates-base-types@5.49.0
+  - @memberjunction/ai-provider-bundle@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes

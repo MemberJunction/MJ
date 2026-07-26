@@ -220,7 +220,6 @@ export class RealtimeTurnModerator {
         const params = new AIPromptParams();
         params.prompt = prompt;
         params.contextUser = ctx.ContextUser;
-        params.agentRunId = agentRunId; // ties this prompt run to the co-agent run for observability
         params.data = this.buildData(ctx, cfg);
         const result = await this.runner.ExecutePrompt<ModeratorDecision>(params);
         if (!result.success) {

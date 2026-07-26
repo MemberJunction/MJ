@@ -7,6 +7,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString } from '../utils/record.util';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
   EntityViewerConfig,
   DEFAULT_VIEWER_CONFIG,
@@ -138,6 +139,15 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * queries on very large entities. Generic — not tied to any specific view type.
    */
   private static readonly LOAD_ALL_MAX_RECORDS = 10000;
+
+  /**
+   * Safety cap for the EXPORT / add-all-to-list path (distinct from the in-memory render cap above).
+   * Exports must cover the full result set, so this is deliberately large; it exists only to prevent
+   * a runaway browser (out-of-memory) on a pathologically large entity. When the true result count
+   * exceeds this, the user is warned that the export/add was capped rather than silently truncated.
+   * Kept in lockstep with the query-viewer's equivalent so Export behaves the same everywhere.
+   */
+  private static readonly EXPORT_MAX_RECORDS = 100000;
 
   // ========================================
   // INPUTS (using getter/setter pattern)
@@ -1166,6 +1176,68 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   private _pendingReload = false;
 
   /**
+   * Fetches the FULL result set for the current entity/view (up to {@link EXPORT_MAX_RECORDS}),
+   * honoring the active sort, business filter (WhereClause) and user search — used by the grid's
+   * export and add-all-to-list flows so they aren't capped at the on-screen page (bugs C1/E3). Bound
+   * as an arrow property so it can be pushed to a dynamically-mounted renderer's `exportDataProvider`
+   * input without losing `this`. If the true result count exceeds the cap, the user is warned that
+   * the set was capped (rather than silently truncated). Returns the currently-loaded page on failure.
+   */
+  public FetchAllRowsForExport = async (): Promise<Record<string, unknown>[]> => {
+    const entity = this.EffectiveEntity;
+    if (!entity) {
+      return this.InternalRecords;
+    }
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const config = this.EffectiveConfig;
+
+      // Mirror the OrderBy resolution used by LoadData so the export matches the on-screen ordering.
+      let orderBy: string | undefined;
+      const sortState = this.EffectiveSortState;
+      if (config.serverSideSorting && sortState?.field && sortState.direction) {
+        orderBy = `${sortState.field} ${sortState.direction.toUpperCase()}`;
+      } else if (this.ViewEntity?.OrderByClause) {
+        orderBy = this.ViewEntity.OrderByClause;
+      } else if (this.GridState?.sortSettings?.length) {
+        orderBy = this.GridState.sortSettings
+          .map(s => `${s.field} ${(s.dir || 'asc').toUpperCase()}`)
+          .join(', ');
+      }
+
+      const result = await rv.RunView<Record<string, unknown>>({
+        EntityName: entity.Name,
+        ResultType: 'simple',
+        // No page window — load every matching row up to the safety cap, honoring the same
+        // business filter + user search as the paged load path.
+        MaxRows: EntityViewerComponent.EXPORT_MAX_RECORDS,
+        StartRow: 0,
+        OrderBy: orderBy,
+        ExtraFilter: this.ViewEntity?.WhereClause || undefined,
+        UserSearchString: config.serverSideFiltering && !this.ViewEntity?.SmartFilterEnabled
+          ? this.DebouncedFilterText || undefined
+          : undefined
+      });
+      if (result.Success) {
+        // Non-silent cap: if the entity has more matching rows than we're allowed to pull at once,
+        // tell the user the operation covered the first N — don't let it look like the full set.
+        if (result.TotalRowCount > EntityViewerComponent.EXPORT_MAX_RECORDS) {
+          MJNotificationService.Instance.CreateSimpleNotification(
+            `This operation is limited to the first ${EntityViewerComponent.EXPORT_MAX_RECORDS.toLocaleString()} of ` +
+            `${result.TotalRowCount.toLocaleString()} matching records. Narrow the view with a filter to include the rest.`,
+            'warning',
+            6000
+          );
+        }
+        return result.Results;
+      }
+    } catch {
+      // Fall through to the loaded page.
+    }
+    return this.InternalRecords;
+  };
+
+  /**
    * Load data for the current entity with server-side filtering/sorting/pagination
    */
   public async LoadData(): Promise<void> {
@@ -1451,6 +1523,28 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       return false;
     }
     return renderer.exportRecords(format);
+  }
+
+  /**
+   * Whether the ACTIVE view type provides its own export UI. Today only the Grid does (it has an
+   * in-toolbar Export button); Cards, Map and Timeline do not. Hosts use this to decide whether to
+   * render a FALLBACK export affordance for the view types that lack one — so those keep export,
+   * without a duplicate button on the grid.
+   *
+   * This reads the view type's DESCRIPTOR ({@link IViewTypeDescriptor.ProvidesOwnExport}), which is
+   * resolved synchronously the moment the active view type changes — NOT the mounted renderer
+   * instance, which lags a change-detection tick behind (reading the instance made the flag stale on
+   * the grid, so the fallback button wrongly appeared there).
+   */
+  public get ActiveViewTypeHasOwnExport(): boolean {
+    const opt = this.ActiveDynamicOption;
+    if (!opt) {
+      return false;
+    }
+    // Primary signal: the descriptor's declarative capability flag. Belt-and-suspenders: also match
+    // the grid's stable DriverClass key, in case a descriptor was resolved via the hardcoded fallback
+    // path (un-seeded MJ: View Types) as a shape that didn't carry the flag.
+    return opt.descriptor?.ProvidesOwnExport === true || opt.key === 'GridViewType';
   }
 
   // ========================================
@@ -1903,6 +1997,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     this.setDynamicInput(ref, 'provider', this.ProviderToUse);
     this.setDynamicInput(ref, 'Provider', this.Provider);
     this.setDynamicInput(ref, 'records', this.FilteredRecords);
+    this.setDynamicInput(ref, 'exportDataProvider', this.FetchAllRowsForExport);
     this.setDynamicInput(ref, 'selectedRecordId', this.SelectedRecordID);
     this.setDynamicInput(ref, 'filterText', this.DebouncedFilterText);
     this.setDynamicInput(ref, 'config', this.effectiveRendererConfig(option));

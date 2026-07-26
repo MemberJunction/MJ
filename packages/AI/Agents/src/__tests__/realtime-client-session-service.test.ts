@@ -1011,8 +1011,6 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         expect(promptRun.Status).toBe('Running');
         expect(promptRun.RunType).toBe('Single');
         expect(promptRun.RunAt).toBeInstanceOf(Date);
-        expect(promptRun.AgentRunID).toBe('co-run-real');
-
         // The single Timeline step: StepType Prompt targeting the system prompt + its prompt run.
         expect(runStep.NewRecord).toHaveBeenCalled();
         expect(runStep.AgentRunID).toBe('co-run-real');
