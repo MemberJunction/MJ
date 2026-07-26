@@ -1,252 +1,201 @@
-# Multimodal Embeddings & Semantic Chunking for MJ RAG — Proposal (v2)
+# Multimodal Embeddings & Semantic Chunking for MJ RAG — Design + Implementation (v3)
 
-**Status:** Draft for discussion (dray / topher / amith)
-**Author:** Claude (research + design pass)
+**Status:** Segmentation framework implemented; multimodal ingestion still proposed
+**Audience:** dray / topher / amith
 **Date:** 2026-07-26
 
-> v2 reframes v1 after feedback: the **ContentAutotagging pipeline** — not `EntityVectorSyncer` — is
-> the real ingestion pathway for unstructured content, and `MJ: Content Item Chunks` already ships
-> there. Everything below is grounded in the actual autotagger source
-> (`packages/ContentAutotagging/src/Engine/generic/AutotagBaseEngine.ts`, 2737 lines) and the in-flight
-> chunk-lifecycle work in PR #3275.
+> **v3** adds an adversarial review of the v2 proposal and ships the first workstream as code.
+> **v2** refocused from `EntityVectorSyncer` onto the ContentAutotagging pipeline.
+> **v1** was the original research pass.
 >
-> The paper PDF's full text couldn't be machine-extracted in this environment, so the paper-specific
-> figures (1 FPS / 32-frame video window → ~32s embedding window, 3072-dim vectors, modality-aware hard
-> negatives) come from the agent-thread summary and are treated as design inputs, not verified quotes.
+> Paper-specific figures (≈32s effective video window, 3072-dim vectors, modality-aware hard
+> negatives) come from the discussion thread, not from machine-extracted text — the PDF could not be
+> parsed in the authoring environment. Treat them as design inputs, not quotes.
 
 ---
 
-## 1. Correction from v1 — which pipeline actually matters
+## 1. What shipped in this PR
 
-MJ has **two** vectorization pathways; they are not equal for this work:
+A new package, **`@memberjunction/ai-segmentation`** — segmentation as a registered, swappable
+strategy, the same way `BaseEmbeddings` and `VectorDBBase` already work for providers.
 
-- **`EntityVectorSyncer`** (`@memberjunction/ai-vector-sync`) — takes **structured DB entity records**,
-  renders an `EntityDocument` Nunjucks template per record → **one vector per record** (`Entity Record
-  Documents`). Records rarely exceed one chunk, so semantic chunking here is **marginal**. *Not the target.*
-  (A chunking config type exists but is unused; leave it — low value.)
+| Piece | What it does |
+|---|---|
+| `BaseSegmenter` | Template-method base. Subclasses implement **one** method (`SegmentCore`); the base handles validation, the token ceiling, undersized merging, sequence numbering, parent remapping, cycle-safe depth, provenance. |
+| `StructuralTextSegmenter` | Markdown/HTML heading structure → sections with real hierarchy. The text default. |
+| `SemanticTextSegmenter` | LLM topic boundaries via `AIPromptRunner` (tracked `MJ: AI Prompt Run`), degrading to structural on any failure. |
+| `TranscriptSegmenter` | Timed cues → AV **chapters** with `StartMs`/`EndMs`, optional per-speaker sub-chapters, carrying media **and** transcript. |
+| `FixedWindowSegmenter` | Universal fallback: token windows for text, duration windows for untranscribed media. |
+| `ResolveSegmenter` / `SuggestSegmenterKey` | Metadata-driven selection that degrades instead of throwing on a stale config key. |
 
-- **`AutotagBaseEngine`** (`@memberjunction/content-autotagging`) — takes **unstructured content**
-  (websites, cloud files, RSS, local files, entity content) → extracts text → **chunks** → embeds →
-  stores vectors **and `Content Item Chunks` rows** → LLM-tags. **This is the pathway.** `Content Items`
-  / `Content Item Chunks` already ship; PR #3275 (topher, open) is hardening its chunk lifecycle,
-  config, dimensions, and purge. **All multimodal + semantic-chunking work belongs here.**
+Plus **two real bug fixes in `TextChunker`** (see §2.3) and a test suite covering all of it.
 
----
-
-## 2. The autotagger today — exact seams (read from source)
-
-**Orchestration:** GraphQL `RunAutotagPipeline` → the MJ Action `AutotagAndVectorizeContentAction`, which
-runs **two decoupled phases**: (1) **tag** — `RunAutotagProviders` iterates each `ContentSourceType`
-adapter's `Autotag(...)`; (2) **embed** — `RunDirectVectorization` loads `Content Items` where
-`EmbeddingStatus='Pending'` and calls `VectorizeContentItems`. Tag and embed are independent passes over
-the same `Content Items`.
-
-**Tagging entry:** `ExtractTextAndProcessWithLLM(...)` (line 152) → per content item:
-`buildProcessingParams` → `ProcessContentItemText`. (Tagging chunks are **not persisted** and chunks are
-**not tagged individually** — tagging is at Content-Item level.)
-
-**Text extraction (line ~14):** imports `pdf-parse` and `officeparser` directly — so **PDF and DOCX →
-text happens inside this engine** (unlike the vector-core `TextExtractor`, which defers binary parsing to
-callers). HTML/plain text handled too. **Only text-bearing formats are supported.**
-
-**Two separate chunking sites, both text-only, both naive:**
-1. **Tagging chunk** — `chunkExtractedText(text, tokenLimit)` (line 923) → `TextChunker.ChunkText` with a
-   `fallbackChunkText` char-split (line 952). Feeds `promptAndRetrieveResultsFromLLM` (line 784).
-2. **Embedding chunk** — `buildEmbeddingChunks(item): string[]` (line 2223): concatenates
-   `Name\nDescription\nText`, returns `[full]` if under `MAX_EMBEDDING_TOKENS` (= **7500**, so chunking
-   only fires on very long items), else `TextChunker` (overlap 100) or a char-split fallback. **Token
-   budget is `chars/4`.** No topic/section/heading awareness; no structure.
-
-**A `Content Item` is a text record.** `.Text` (nvarchar MAX) is the only payload carrier;
-`VectorizeContentItems` **silently skips** any item with empty `.Text` (line 1474). And
-`Content Item Chunks.Text` is **`NOT NULL`** — so a pure-media segment **cannot be persisted as a chunk
-today** without a schema change. These two facts are the concrete blockers for AV, not the embedding call.
-
-**Embedding (text-only):** `vectorizeGroup` (line 1523) → `buildChunksForBatch` (chunk tuple
-`{item, chunkIndex, text, chunkId}`, line 1614) → `AIModelRunner.RunEmbedding({ Texts, ModelID,
-PromptID })` (line 1554). `RunEmbedding` (AIModelRunner.ts:103) calls **`EmbedTexts` (line 131) only** —
-`EmbeddingRunParams.Texts: string[]`. **No `EmbedContent`, no media, anywhere in the chain.**
-
-**Vector write + chunk identity (this part is already good — reuse it):**
-- `buildVectorRecords` (line 1634): single-chunk items → deterministic item-level vector id; multi-chunk
-  → each chunk's own minted `chunkId` as vector id (purge-safe). `buildVectorMetadata` (line 2259) sets
-  `{RecordID, Entity:'MJ: Content Items', ContentSourceID, Title, Description, URL, Tags}`.
-- `upsertVectorRecords` → `vectorDB.CreateRecords`.
-- `persistVectorReferences` (line ~1665): single-chunk → `ContentItem.VectorRecordID`; multi-chunk →
-  `replaceContentItemChunks` (line 1716) writes `Content Item Chunks` rows
-  (`ContentItemID, Sequence, Text, VectorRecordID`).
-- **Lifecycle:** `EmbeddingStatus`/`DeleteStatus`/`TaggingStatus`, soft-delete + `PurgeDeletedChunks`
-  (line 1845, batched `DeleteRecords`), `Checksum` dedup, rate limiters (LLM/Embedding/VectorDB). Solid.
-
-**`Content Item Chunks` schema today:** `{ID, ContentItemID, Sequence, Text, VectorRecordID,
-EmbeddingStatus, DeleteStatus, TaggingStatus, LastEmbeddedAt, LastDeletedAt, LastTaggedAt}`. **No
-modality, no time offsets, no description, no transcript.**
-
-**Source adapters** (`Websites`, `CloudStorage`, `RSSFeed`, `Entity`, `LocalFileSystem`) all subclass
-`AutotagBase` — this is exactly the **integration-engine shape** (like HubSpot/Salesforce) that a
-Vimeo / Zoom / podcast-host adapter would follow. Adding AV sources is "another adapter," not new plumbing.
-
----
-
-## 3. The four seams, mapped to the autotagger
-
-| Parallel agent's warning | Autotagger reality | Where |
-|---|---|---|
-| **Chunking is the hard part** | `buildEmbeddingChunks` / `chunkExtractedText` — concat + `TextChunker` (chars/4), text-only, no structure, no AV. | `AutotagBaseEngine.ts:2223, 923` |
-| **Retrieval returns a pointer** | `Content Item Chunks` has no modality / time / description / transcript. A video segment can't be reasoned over. | chunk schema + `buildVectorMetadata:2259` |
-| **Modality bias** | One `VectorIndex` = one model = one dimension; multimodal vectors need their own index; `SearchFusion` has no per-modality normalization. | `SearchEngine` / index topology |
-| **Keep provider behind abstraction** | Already done (`BaseEmbeddings`/`VectorDBBase`, class-factory). Gap: `RunEmbedding`→`EmbedTexts` only; `EmbedContent` (#2834) has no caller. | `AIModelRunner.ts:131` |
-
----
-
-## 4. Proposal — extend the autotagger (additive, metadata-driven)
-
-### 4A. Extend `MJ: Content Item Chunks` for modality + time + dual representation
-
-Migration + CodeGen, folded into **#3275** so the chunk schema lands once. Proposed columns:
-
-| Column | Type | Purpose |
-|---|---|---|
-| `Modality` | CHECK `'text'\|'image'\|'audio'\|'video'\|'multimodal'` (default `'text'`) | Index routing + fusion. |
-| `StartMs` / `EndMs` | int null | AV time window (`14:22–15:05`). |
-| `StartOffset` / `EndOffset` | int null | Char offsets (already produced by `TextChunker`). |
-| `PageNumber` | int null | PDF/slide provenance. |
-| `Description` | nvarchar(max) null | **LLM description of the segment** — readable representation. |
-| `Transcript` | nvarchar(max) null | Verbatim transcript for AV. |
-| `SegmentTitle` | nvarchar null | Chapter/sub-chapter label. |
-| `ParentChunkID` | uniqueidentifier null | Chapter → sub-chapter hierarchy. |
-| `EmbeddedRepresentation` | nvarchar null | `'native'` \| `'description'` — which text was embedded for retrieval. |
-
-**Also relax `Content Item Chunks.Text` to nullable** — today it is `NOT NULL`, which is the single schema
-blocker preventing a pure-media segment from persisting. The rest of the chunk machinery
-(`replaceContentItemChunks`, `PurgeDeletedChunks`, the `VectorRecordID` single-vs-multi strategy, the
-status lifecycle) already keys off `VectorRecordID`, **not** `Text`, so it carries over to media unchanged.
-
-**Dual representation is the core commitment.** Every AV/image chunk stores **both** the native
-embedding (retrieval) **and** `Description`/`Transcript` (agent reasoning + keyword/FTS + reranking). This
-makes `followSourceLink` / `getMatchingChunks` return real content and lets `AgentPreExecutionRAG`'s
-`<retrieved_context>` be readable for a video hit. `buildVectorMetadata` gains `Modality`/`StartMs`/`EndMs`.
-
-> Asset modeling: keep the **asset** on `Content Items` (already has URL, Checksum, file type, hierarchy)
-> and the **segments** on `Content Item Chunks` — one lifecycle (#3275), not a forked one. Only introduce a
-> first-class `MJ: Media Assets` if AV provenance needs fields `Content Items` can't hold.
-
-### 4B. A `Segmenter` abstraction — semantic text + AV chapters
-
-Introduce `BaseSegmenter` (class-factory-selected, same pattern as `BaseEmbeddings`/`VectorDBBase`),
-configured per `Content Type` / `Content Source` via the `Configuration` JSON that #3275 already parses.
-**Replace the two ad-hoc chunk sites** (`buildEmbeddingChunks`, `chunkExtractedText`) with a call into
-the resolved segmenter; keep `TextChunker` as the within-segment splitter.
+### Layering — and why a new package
 
 ```
-BaseSegmenter.Segment(item, extracted): Promise<Segment[]>
-  Segment = { Modality, Text?, MediaRef?, StartMs?, EndMs?, StartOffset?, EndOffset?,
-              PageNumber?, SegmentTitle?, ParentIndex? }
+@memberjunction/ai-vectors        TextChunker   — "split this string to fit a budget"
+        ▲ uses
+@memberjunction/ai-segmentation   BaseSegmenter — "what are the meaningful units of this content"
+        ▲ consumed by
+   ingestion pipelines (content autotagging, vector sync, knowledge pipeline)
 ```
 
-- **`StructuralTextSegmenter`** — headings/markdown/HTML structure + `TextChunker` per section. Cheap
-  default; strictly better than today for docs/PDF. **This alone replaces "dumb chunking" for text.**
-- **`SemanticTextSegmenter`** — LLM topic-boundary + chapter-title pass (via `AIPromptRunner`), cost-bounded.
-- **`TranscriptSegmenter`** (audio/video) — **consume MJ's existing realtime-capture timed transcripts**
-  (speaker turns + timings + `peaks.json`; `REALTIME_SESSION_CAPTURE_GUIDE.md`) when present, else ASR;
-  detect boundaries by topic shift + speaker change + (video) scene/slide transitions → **chapters →
-  sub-chapters** with `StartMs`/`EndMs`. This realizes "break audio/video into chapters."
-- **`FixedWindowAVSegmenter`** — naive ~32s-window fallback (the paper's default) when no transcript/budget.
-
-Semantic segmentation is the preprocessing pass the paper says most engineering goes into — the embedder
-is the easy part.
-
-### 4C. Wire `EmbedContent` into the autotagger (close the #2834 gap)
-
-1. **Extraction stage** learns media: for image/audio/video `ContentFileType`s, produce a `MediaRef`
-   (bytes / storage URL via `@memberjunction/storage` + `MediaStreamHandler`) instead of extracted text.
-2. **Chunk tuple** carries `Modality` + `MediaRef` + time (extends `buildChunksForBatch`).
-3. **Embed branch in `vectorizeGroup`:**
-   - text segments → `RunEmbedding({ Texts })` → text `VectorIndex` (unchanged).
-   - image/audio/video segments → build `ChatMessageContent` (media block ± transcript) → **`EmbedContent`**
-     → **dedicated multimodal `VectorIndex`** (own model + dimension, e.g. Gemini 3072-dim).
-   - **also** embed the LLM `Description` as text into the text index → AV becomes discoverable by cheap
-     text-to-text + keyword/FTS ("hybrid retrieval for free").
-4. **New plumbing:** add a `Content?`/`RunContentEmbedding` path to `EmbeddingRunParams` / `AIModelRunner`
-   (mirroring `RunEmbedding`, with `AIPromptRun` tracking) that calls `EmbedContent`. Currently it only
-   knows `EmbedTexts`.
-6. **Group by `(model, index, modality)`, not just item.** `groupItemsByInfrastructure` (line 2075) keys on
-   `(embeddingModelID, vectorIndexID)` per item; since AV uses a different (multimodal) model + index than
-   text, batching must key on **chunk modality** too, so a mixed item fans its text chunks to the text
-   index and its media chunks to the multimodal index.
-7. **Un-skip media items:** `VectorizeContentItems` filters out empty-`.Text` items (line 1474) — that
-   filter must become "no embeddable segments," or media items are silently dropped.
-
-**Why this is lower-risk than it sounds:** the only two seams that must change are `buildChunksForBatch`
-(line 1614, the sole chunk producer) and the single `EmbedTexts` call (`AIModelRunner.ts:131`, the modality
-switch). Everything downstream — upsert, `VectorRecordID` strategy, chunk persistence, purge, status
-lifecycle — is already modality-agnostic except the `Text NOT NULL` column (4A).
-5. **Fix #2834's error-swallowing:** `EmbedContent` returns an empty vector on failure. For a **paid AV
-   embed**, make `EmbedResult` extend `BaseResult` (the deferred #2834 decision) so failures surface
-   instead of silently storing `[]` and marking the chunk Complete. Batch multimodal (`EmbedContents`)
-   can come later — start with bounded-concurrency per-segment calls under the existing rate limiter.
-
-### 4D. Modality-aware retrieval
-
-- **Retrieve top-k per index/modality, merge via RRF** (rank-based fusion is scale-free — lean on the
-  existing `ComputeRRF` rather than a global raw-cosine top-k that skews text-heavy). Ensure
-  `VectorSearchProvider` contributes each modality's ranked list.
-- Optional **per-modality score normalization** for score-based callers.
-- **Rerank over the readable representation** — cross-encoder rerankers (Cohere/Voyage/OpenAI/BGE) can't
-  score a raw video vector, but with 4A's `Description`/`Transcript` they rank AV hits fairly.
-- `SearchResultSetToolLibrary` gains `filterByModality`; `followSourceLink` returns time-windowed
-  playback deep-links via `MediaStreamHandler`.
-
-### 4E. Cost & portability
-
-- Keep the **multimodal index isolated** so an AV re-embed (provider/dimension change) never touches text
-  vectors. `VectorIndex.Dimensions` + #3175 reduced-dim support already make this config-only.
-- AV backfills **resumable + bounded** — reuse chunk `EmbeddingStatus`/`DeleteStatus` + keyset pagination.
-- **Cost pre-flight / dry-run**: estimate `segments × per-modality price` before a full-archive embed
-  (video embedding is a real budget line). Surface via the pipeline progress callback. Log any cap — never
-  silently truncate.
-- **Media source adapters** (Vimeo/Zoom/podcast) subclass `AutotagBase` like the existing Website/RSS/
-  CloudStorage adapters — the integration-engine pattern already in place.
+Segmentation deliberately does **not** live in `ai-vectors`: `ai-prompts → templates →
+ai-provider-bundle → ai-vectors-pinecone → ai-vectors`, so `ai-vectors` importing `ai-prompts` is a
+genuine cycle. Putting segmentation one layer up means the LLM segmenter can use `AIPromptRunner`
+directly — versioned prompt metadata, real cost/token attribution — instead of an injected callback
+that would have thrown all of that away. It also keeps segmentation reusable: had it gone inside
+ContentAutotagging, `ai-vector-sync` could not have used it without depending on the autotagger.
 
 ---
 
-## 5. Composition with in-flight work
+## 2. Retrospective review of the v2 proposal
 
-- **#3275 (topher)** hosts 4A + 4C: it already owns chunk identity, config on `Content Source`/`Content
-  Type`, dimensions, provider routing, `EmbedPendingChunks`/`PurgeDeletedChunks`. The modality/time/dual-
-  rep columns and the `EmbedContent` branch slot in. **One migration for the schema, not two.**
-- **#2715 (AN)** — land 4D's fusion changes behind the unified `Provider.SearchEntity` primitive.
-- `BaseSegmenter` (4B) is new and independent — prototype in `@memberjunction/ai-vectors` without blocking.
+Reviewed as a colleague's work. The core thesis held up — the autotagger *is* the right pathway, the
+seams *are* where v2 said they were, and the four-warning framing maps cleanly onto real code. The
+findings below are what did not survive scrutiny.
+
+### 2.1 🔴 Dual representation contradicts the single-vector chunk contract
+
+The most substantive gap. v2 commits to storing "both the native embedding **and** an LLM
+description/transcript," and separately proposes *also* embedding the description into the text index
+for free hybrid retrieval. That is **two vectors for one chunk**.
+
+But `MJ: Content Item Chunks` has a single `VectorRecordID` column, and #3275's Chunk-Identity
+Contract explicitly binds one chunk row to one vector id (that 1:1 binding is what makes the
+soft-delete/purge safe). v2 never reconciles this. Three ways out, none free:
+
+1. **Two chunk rows** (one `Modality: 'video'`, one `'text'`) sharing a `ParentChunkID` — preserves
+   #3275's contract untouched; doubles chunk rows and needs dedup at retrieval so one hit doesn't
+   surface twice.
+2. **A second column** (`DescriptionVectorRecordID`) — smallest schema delta; breaks the clean
+   "chunk = vector" invariant and every purge path has to learn about the second id.
+3. **A child `Chunk Vectors` table** — cleanest model, biggest change, most coordination with #3275.
+
+**Recommendation: option 1.** It changes no existing invariant, and "a chunk is one vector" is worth
+more than saving rows. This needs deciding *before* the migration, not after.
+
+### 2.2 🟠 "Only two seams must change" was optimistic
+
+v2's closing reassurance names `buildChunksForBatch` and the `EmbedTexts` call. The real list is
+larger, and v2 itself lists some of these elsewhere without reconciling them against the claim:
+
+- `groupItemsByInfrastructure` must key on modality (v2 says so at 4C.6 — contradicting its own summary)
+- the empty-`.Text` skip at `VectorizeContentItems:1474`
+- `AIModelRunner` needs a content path (`RunEmbedding` only knows `EmbedTexts`)
+- `Text NOT NULL` on the chunk table
+- **`DetectVectorDuplicates` is a second, unmentioned `EmbedTexts` caller** (`AutotagBaseEngine.ts:2474`).
+  Any change to how items are embedded has to consider dedup, which v2 never mentions.
+
+Call it five or six seams. Still tractable, but "two" would have set the wrong expectation in planning.
+
+### 2.3 🔴 The proposal wanted to persist offsets that were being computed wrong
+
+v2's §4A proposes `StartOffset`/`EndOffset` columns "already produced by `TextChunker`". They were
+produced — incorrectly. `buildChunkFromUnits` resolved a chunk's start with
+`originalText.indexOf(units[0])`, always searching from position 0, so any **repeated** sentence
+(boilerplate, a recurring header, "Thank you.") made later chunks report the offsets of the *first*
+occurrence. Demonstrated on an 86-character document: a chunk truly spanning 61–86 reported **0–86**.
+
+Persisting that as provenance would have silently corrupted the link from a search hit back to its
+source passage — the exact thing the column exists to provide. Fixed in this PR with a single
+forward-cursor pass (also O(n) instead of O(n²)), with regression tests.
+
+A second latent bug surfaced while testing: `chunkByFixed` could **never terminate** when
+`OverlapTokens ≥ MaxChunkTokens`, because the start cursor moved backwards each iteration. Fixed by
+capping overlap at half the window *and* guaranteeing forward progress. Both fixes are in
+`TextChunker`, independent of anything multimodal.
+
+### 2.4 🟡 v2 missed the second chunking site's purpose
+
+v2 correctly identifies two chunk sites but proposes replacing both with the segmenter. They serve
+different masters: `buildEmbeddingChunks` sizes for the **embedding model** (7500 tokens), while
+`chunkExtractedText` sizes for the **LLM context window** (`InputTokenLimit / 1.5`) and its output is
+never persisted. Unifying them behind one strategy is right; unifying their *budgets* is not. The
+`SegmentationOptions.MaxSegmentTokens` knob keeps them independent — worth stating explicitly so
+nobody "simplifies" them into one call later.
+
+### 2.5 🟡 Editorial defects
+
+Section 4C is numbered 1, 2, 3, 4, 6, 7 — item **5 is orphaned below a summary paragraph** that was
+inserted mid-list. Minor, but it's the section a reader most needs to follow in order.
+
+### 2.6 ✅ What held up
+
+- The pipeline refocus (autotagger, not `EntityVectorSyncer`) — correct, and the reasoning is sound:
+  a templated entity record rarely exceeds one chunk.
+- `Text NOT NULL` as the concrete blocker for media segments — verified against the generated ORM
+  (`get Text(): string`, not `string | null`).
+- Reusing `Content Items`/`Content Item Chunks` rather than forking a media-asset hierarchy.
+- The observation that downstream machinery keys off `VectorRecordID` rather than `Text`, so purge and
+  lifecycle carry over to media largely unchanged.
+- Identifying MJ's realtime session capture (speaker + timings per turn) as the AV transcript
+  substrate — `TranscriptSegmenter` consumes exactly that cue shape.
 
 ---
 
-## 6. Sequencing
+## 3. Where the autotagger stands
 
-1. **4A schema** on `Content Item Chunks`, folded into #3275.
-2. **`BaseSegmenter` + `StructuralTextSegmenter`** (4B) → immediate text/PDF quality win; wire into
-   `buildEmbeddingChunks` (and `chunkExtractedText`).
-3. **`EmbedContent` ingestion path (4C)** + `EmbedResult:BaseResult` fix, **image first** (simplest media),
-   dedicated multimodal `VectorIndex`.
-4. **`TranscriptSegmenter` (4B)** reusing realtime transcripts → AV chapters → `EmbedContent` + description
-   embedding. The "dead archive → searchable" headline.
-5. **`SemanticTextSegmenter` (4B)** — LLM topic boundaries where structure isn't enough.
-6. **Modality-aware fusion (4D)** in `SearchEngine`.
-7. **Cost pre-flight + resumable AV backfill (4E)**; price a representative association archive.
+Unchanged by this PR, and stated precisely (from source):
 
-Every step is independently shippable; the text path is untouched until a `Content Type` opts in.
+- **Extraction**: `pdf-parse` / `officeparser` / `cheerio` inside the engine; `parseFileFromPath`
+  supports **only** pdf/docx and throws otherwise. Extension-based, no MIME sniffing. No media decoders.
+- **Embedding chunk**: `buildEmbeddingChunks` concatenates `Name\nDescription\nText`, returns one
+  chunk under `MAX_EMBEDDING_TOKENS` (7500) — so today chunking fires only on very long items.
+- **Embedding**: `vectorizeGroup` → `AIModelRunner.RunEmbedding({ Texts })` → `EmbedTexts`
+  (`AIModelRunner.ts:131`). `EmbedContent` from #2834 still has **no ingestion caller**.
+- **Chunk lifecycle**: purge-safe vector ids, `replaceContentItemChunks`, `PurgeDeletedChunks`,
+  status columns, rate limiters. Solid; reuse as-is.
+
+### Why this PR does not modify `AutotagBaseEngine`
+
+Deliberate. #3275 is actively rewriting `buildChunksForBatch`, the config resolution, and the chunk
+lifecycle in that exact file; a competing edit would hand topher a painful merge for no benefit,
+because without the schema (§4) a segment's modality and time window would be flattened back to plain
+text on write. The framework is independently useful and fully tested now; the integration lands with
+the schema, on top of #3275 rather than against it.
 
 ---
 
-## 7. Open questions for the team
+## 4. Remaining roadmap
 
-1. **Asset modeling:** extend `Content Items`/`Content Item Chunks` (recommended) vs. first-class
-   `MJ: Media Assets` + `Media Segments`?
-2. **Default AV embed target:** native multimodal vector, description-text vector, or **both** (recommended)?
-3. **Semantic-segmentation budget:** LLM boundary pass per document, or gate to high-value corpora with
-   structural segmentation as default?
-4. **Provider commitment:** Gemini Embedding 2 (3072-dim, multimodal, non-portable) as AV default, Cohere
-   Embed v4 for image/text? Worth pricing before committing index topology.
-5. **`RunEmbedding` shape:** add a `Content` mode to `EmbeddingRunParams`/`AIModelRunner`, or a separate
-   `RunContentEmbedding`? (Affects `AIPromptRun` tracking uniformity.)
-6. **Reranker default for mixed modality:** keep Noop + opt-in, or default a cross-encoder rerank whenever
-   a scope spans >1 modality?
+**4A — Chunk schema** (fold into #3275, one migration): `Modality`, `StartMs`/`EndMs`,
+`StartOffset`/`EndOffset`, `PageNumber`, `Description`, `Transcript`, `SegmentTitle`,
+`ParentChunkID`, and **relax `Text` to nullable**. Resolve §2.1 (dual-vector representation) first —
+it determines whether this is one row or two per media segment.
+
+**4B — Autotagger integration**: swap `buildEmbeddingChunks` (and `chunkExtractedText`, with its own
+budget) onto `ResolveSegmenter`, selected from the `Content Source`/`Content Type` `Configuration`
+JSON that #3275 already parses. Persist segment metadata into the new columns.
+
+**4C — Multimodal embedding**: media-aware extraction → `MediaReference`; a content path on
+`AIModelRunner` calling `EmbedContent`; a dedicated multimodal `VectorIndex`; group by
+`(model, index, modality)`; un-skip empty-`.Text` items; fix #2834's silent error-swallow
+(`EmbedResult` should extend `BaseResult`) so a paid AV embed can't store `[]` and be marked Complete.
+Don't forget `DetectVectorDuplicates` (§2.2).
+
+**4D — Modality-aware retrieval**: per-index top-k merged via RRF (rank-based, so scale-free), rerank
+over `Description`/`Transcript`, `filterByModality` on `SearchResultSetToolLibrary`, time-windowed
+playback deep-links.
+
+**4E — Cost & portability**: isolated multimodal index, resumable/bounded backfills, a cost pre-flight
+dry-run before any full-archive embed. Log every cap — never truncate silently.
+
+**Sequencing**: 4A → 4B (immediate text-quality win, no media yet) → 4C image-first → 4C AV via
+`TranscriptSegmenter` → 4D → 4E.
+
+---
+
+## 5. Open questions
+
+1. **Dual-vector representation (§2.1)** — two chunk rows, a second column, or a child table?
+   *Blocks the migration.* Recommendation: two rows.
+2. **Default AV embed target** — native vector, description vector, or both? Drives index count and cost.
+3. **Semantic segmentation budget** — LLM boundary pass per document, or gate to high-value corpora
+   with `StructuralText` as the default? (Current default already skips docs under 750 tokens.)
+4. **Provider commitment** — Gemini Embedding 2 (3072-dim, multimodal, non-portable) as AV default,
+   Cohere Embed v4 for image/text? Worth pricing a representative archive before fixing index topology.
+5. **`RunEmbedding` shape** — add a `Content` mode to `EmbeddingRunParams`, or a separate
+   `RunContentEmbedding`? Affects `AIPromptRun` tracking uniformity.
+6. **Reranker default for mixed modality** — keep Noop + opt-in, or default a cross-encoder whenever a
+   scope spans more than one modality?
