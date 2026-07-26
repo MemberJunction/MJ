@@ -55,25 +55,38 @@ Reviewed as a colleague's work. The core thesis held up — the autotagger *is* 
 seams *are* where v2 said they were, and the four-warning framing maps cleanly onto real code. The
 findings below are what did not survive scrutiny.
 
-### 2.1 🔴 Dual representation contradicts the single-vector chunk contract
+### 2.1 🟡 Dual representation is one vector, not two — but v2's "hybrid for free" claim doesn't hold
 
-The most substantive gap. v2 commits to storing "both the native embedding **and** an LLM
-description/transcript," and separately proposes *also* embedding the description into the text index
-for free hybrid retrieval. That is **two vectors for one chunk**.
+An earlier revision of this review claimed dual representation forced two vectors per chunk and
+therefore broke #3275's Chunk-Identity Contract. **That misread the intent.** The design is:
 
-But `MJ: Content Item Chunks` has a single `VectorRecordID` column, and #3275's Chunk-Identity
-Contract explicitly binds one chunk row to one vector id (that 1:1 binding is what makes the
-soft-delete/purge safe). v2 never reconciles this. Three ways out, none free:
+- **one vector per media chunk** — the *native* multimodal vector, and only that;
+- the LLM **`Description`/`Transcript` stored as text columns on the chunk row**, hydrated at
+  retrieval so an agent has something readable;
+- optionally **mirrored into the vector record's metadata** for display/filtering.
 
-1. **Two chunk rows** (one `Modality: 'video'`, one `'text'`) sharing a `ParentChunkID` — preserves
-   #3275's contract untouched; doubles chunk rows and needs dedup at retrieval so one hit doesn't
-   surface twice.
-2. **A second column** (`DescriptionVectorRecordID`) — smallest schema delta; breaks the clean
-   "chunk = vector" invariant and every purge path has to learn about the second id.
-3. **A child `Chunk Vectors` table** — cleanest model, biggest change, most coordination with #3275.
+That keeps `VectorRecordID` 1:1 and leaves #3275's contract, soft-delete, and purge untouched. It is
+simpler than what this review originally proposed, and it is the right default.
 
-**Recommendation: option 1.** It changes no existing invariant, and "a chunk is one vector" is worth
-more than saving rows. This needs deciding *before* the migration, not after.
+What *does* survive is narrower and worth stating, because v2 asserts it explicitly:
+
+> "**also** embed the LLM `Description` as text into the text index → AV becomes discoverable by cheap
+> text-to-text + keyword/FTS ('hybrid retrieval for free')"
+
+With no description vector, that sentence is wrong — there is no free text-to-text recall path to a
+video chunk. A text query reaches media only via:
+
+1. **native text→media similarity** in the multimodal index — which is precisely the leg the paper
+   warns runs colder than text→text, and
+2. **lexical matching over the description**, which only exists if that column is actually indexed for
+   search. Vector-DB metadata does **not** provide this: metadata is filter/payload, not ranked
+   full-text, and it is size-capped per provider (MJ already truncates metadata text to 1000 chars in
+   `buildVectorMetadata`, so a full transcript does not belong there).
+
+So the concrete follow-through is: **index `Description`/`Transcript` lexically** — trivial in the
+colocated pgvector/SQL2025 path, which already fuses a `tsvector` with the vector via RRF in one
+statement, and otherwise via `FullTextSearch`. An optional description *vector* stays available as a
+per-corpus opt-in where text→media recall proves too weak, rather than a default that doubles cost.
 
 ### 2.2 🟠 "Only two seams must change" was optimistic
 
@@ -161,8 +174,10 @@ the schema, on top of #3275 rather than against it.
 
 **4A — Chunk schema** (fold into #3275, one migration): `Modality`, `StartMs`/`EndMs`,
 `StartOffset`/`EndOffset`, `PageNumber`, `Description`, `Transcript`, `SegmentTitle`,
-`ParentChunkID`, and **relax `Text` to nullable**. Resolve §2.1 (dual-vector representation) first —
-it determines whether this is one row or two per media segment.
+`ParentChunkID`, and **relax `Text` to nullable**. `VectorRecordID` stays a single column —
+one chunk, one vector (§2.1) — with `Description`/`Transcript` as text hydrated at retrieval and
+optionally mirrored (truncated) into vector metadata. Add lexical indexing over
+`Description`/`Transcript` so a text query can reach a media chunk without a description vector.
 
 **4B — Autotagger integration**: swap `buildEmbeddingChunks` (and `chunkExtractedText`, with its own
 budget) onto `ResolveSegmenter`, selected from the `Content Source`/`Content Type` `Configuration`
@@ -188,9 +203,11 @@ dry-run before any full-archive embed. Log every cap — never truncate silently
 
 ## 5. Open questions
 
-1. **Dual-vector representation (§2.1)** — two chunk rows, a second column, or a child table?
-   *Blocks the migration.* Recommendation: two rows.
-2. **Default AV embed target** — native vector, description vector, or both? Drives index count and cost.
+1. **Text→media recall (§2.1)** — with only a native vector per media chunk, is lexical indexing of
+   `Description`/`Transcript` enough to make a text query find a video chapter, or do specific corpora
+   need an opt-in description vector? Worth measuring on a real archive before defaulting either way.
+2. **How much description to mirror into vector metadata** — a short summary is useful for display and
+   filtering; a full transcript exceeds provider metadata limits and belongs only on the chunk row.
 3. **Semantic segmentation budget** — LLM boundary pass per document, or gate to high-value corpora
    with `StructuralText` as the default? (Current default already skips docs under 750 tokens.)
 4. **Provider commitment** — Gemini Embedding 2 (3072-dim, multimodal, non-portable) as AV default,
