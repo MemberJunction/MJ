@@ -86,6 +86,29 @@ text for that window. That dual payload is the point: the media reference is wha
 embeds for retrieval, while the transcript is what an agent can read, what a cross-encoder can rerank,
 and what keyword search can match.
 
+This is **one vector per chunk**, not two — the native multimodal vector — with the description and
+transcript stored as text alongside it. A short summary plus structured fields (`SegmentTitle`,
+`StartMs`/`EndMs`, `Speaker`, `Modality`) may be mirrored into the vector record's metadata for
+filtering and display; a full transcript should not be, since metadata is size-capped and is
+filter/payload rather than ranked full-text.
+
+### Making media findable from a text query
+
+| Path | Strong at | Weak at |
+|---|---|---|
+| Native text→media similarity | visual/audio semantics | runs colder than text→text |
+| Lexical (FTS/BM25) over the description | names, acronyms, jargon, titles | paraphrase |
+| A description *vector* (text→text) | paraphrase | rare proper nouns |
+
+Ship the first two; add a description vector selectively, once measurement shows paraphrase misses.
+When you do, add it as a **sibling text chunk row** pointing at the media chunk rather than a second
+vector on the same row — that keeps one vector per row and lets retrieval collapse duplicates on the
+parent key. For speech-dominant archives, also price transcript-only ingestion first: text chapters
+alone give full semantic search at zero multimodal embedding spend.
+
+See the [Content Segmentation Guide](../../../guides/CONTENT_SEGMENTATION_GUIDE.md) for the full
+rationale and the cross-package picture.
+
 ## Adding a new strategy
 
 Implement one method and register the class:

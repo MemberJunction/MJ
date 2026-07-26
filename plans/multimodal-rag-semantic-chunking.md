@@ -196,6 +196,14 @@ playback deep-links.
 **4E — Cost & portability**: isolated multimodal index, resumable/bounded backfills, a cost pre-flight
 dry-run before any full-archive embed. Log every cap — never truncate silently.
 
+**Price transcript-only ingestion first.** For speech-dominant archives — conference sessions,
+webinars, podcasts — the transcript carries nearly all retrievable meaning; the pixels add little.
+Transcript-derived text chapters with time windows give full text→text semantics, hybrid FTS, and
+reranking at **zero multimodal embedding spend** (the cost of ASR alone). That may deliver most of
+"dead archive → searchable" without a multimodal index at all. The native vector earns its place when
+visuals carry meaning the words don't: slide diagrams, product demos, image libraries. Measure the
+delta on a representative corpus before committing to the index topology in 4C.
+
 **Sequencing**: 4A → 4B (immediate text-quality win, no media yet) → 4C image-first → 4C AV via
 `TranscriptSegmenter` → 4D → 4E.
 
@@ -203,11 +211,19 @@ dry-run before any full-archive embed. Log every cap — never truncate silently
 
 ## 5. Open questions
 
-1. **Text→media recall (§2.1)** — with only a native vector per media chunk, is lexical indexing of
-   `Description`/`Transcript` enough to make a text query find a video chapter, or do specific corpora
-   need an opt-in description vector? Worth measuring on a real archive before defaulting either way.
-2. **How much description to mirror into vector metadata** — a short summary is useful for display and
-   filtering; a full transcript exceeds provider metadata limits and belongs only on the chunk row.
+1. ~~**Text→media recall**~~ — **decided.** Ship native similarity + **lexical** indexing of
+   `Description`/`Transcript`; treat a description vector as a per-corpus opt-in added only after
+   measurement shows paraphrase misses. Lexical and text→text fail in opposite directions, and lexical
+   covers the queries archives actually receive (speaker names, session titles, acronyms) nearly for
+   free in the colocated pgvector/SQL2025 path. When a description vector is warranted, add it as a
+   **sibling text chunk row** pointing at the media chunk — preserving one vector per row — and
+   collapse on the parent key after fusion. *Cost correction: the summary embed is a rounding error
+   next to the video embed; a description vector doubles vector rows, not spend. Its real cost is
+   schema and retrieval complexity.*
+2. ~~**Metadata payload**~~ — **decided.** Mirror a **short summary plus structured fields**
+   (`SegmentTitle`, `StartMs`/`EndMs`, `Speaker`, `Modality`, `PageNumber`) — structured fields are
+   worth more than prose there because they are filterable. Full transcript stays on the chunk row;
+   metadata is size-capped and is filter/payload, not ranked full-text.
 3. **Semantic segmentation budget** — LLM boundary pass per document, or gate to high-value corpora
    with `StructuralText` as the default? (Current default already skips docs under 750 tokens.)
 4. **Provider commitment** — Gemini Embedding 2 (3072-dim, multimodal, non-portable) as AV default,
