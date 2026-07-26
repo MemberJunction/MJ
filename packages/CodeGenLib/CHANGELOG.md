@@ -1,5 +1,155 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.49.0
+
+### Minor Changes
+
+- 70113b1: Align the integrations framework — resolution overlay, EM/EFM lifecycle, sync locking, watermark backfill, and the U1–U5/U7/U10/U11 upstream defects.
+
+  **Engine (`integration-engine`)**
+  - U1: `IntrospectSchema`/creation-pipeline mappings propagate `undefined` PK/FK flags instead of coercing to `false` — a sample's silence can no longer wipe a declared primary key (`SourceFieldInfo.IsPrimaryKey/IsForeignKey` widened to optional).
+  - Semantic overlay (`decideSemanticOverlay`): Description / DisplayName / IncrementalWatermarkField are external-wins-when-present, curated-fallback-when-silent (per-attribute overlay precedence).
+  - Content-hash basis: the content-hash match/write covers MAPPED fields only — a newly-appearing custom key no longer forces a row rewrite. Custom-key candidates + sizing statistics are aggregated in-memory per sync (`SyncResult.CustomKeyStats`, `foldCustomKeyStats`, `inferColumnTypeFromStats`) and flow to the promotion callback regardless of row skips. **Operational note (one-time):** because the content-hash basis becomes mapped-only, the first sync after this deploys re-hashes and re-writes every overflow-carrying row exactly once — a bounded one-time load spike plus Record-Changes churn — after which stored hashes converge and steady-state (skip-unchanged) writes resume.
+  - Maintenance lock (`AcquireMaintenanceLock`/`ReleaseMaintenanceLock`/`GetMaintenanceLock`): syncs refuse while a metadata refresh / schema evolution / RSU pipeline runs for the connection.
+  - U3: live sync progress is monotonic under concurrency (`RatchetProgressSnapshot`).
+  - U11: `IntrospectSchemaOptions.OnProgress` — determinate discovery progress (scanned/total).
+
+  **Server (`server`)**
+  - `IntegrationSchemaEvolution` is now the full re-resolution refresh: re-resolution → diff → removed objects' entity/field maps disabled (data kept) → changed objects' field maps reconciled + Pull watermarks reset (U10, backfills new columns) → new objects' tables created with entity maps born DISABLED (`autoEnableNewObjects` opts in) → RSU. Extended output: NewObjects/RemovedObjects/ChangedObjects/WatermarksReset.
+  - `IntegrationApplyAll`/`ApplyAllBatch`: `UnselectedAction` ('disable' default) — objects absent from the selection get their entity + field maps disabled; re-selection re-enables both. First-ever apply defaults to a FULL sync.
+  - U7: schedule creation is unique per (connection, job kind) — update-in-place instead of duplicates.
+  - U5: boot-time assert when RSU's additionalSchemaInfo write path diverges from CodeGen's read path.
+  - DAG exposure: `IntegrationListSourceObjects` items carry `DependsOn` parent names.
+  - U11: RSU status/progress expose CurrentStepName/StepIndex/StepTotal; pipeline steps carry StepIndex/StepTotal.
+
+  **SchemaEngine / schema-builder**
+  - additionalSchemaInfo per-table REPLACE semantics for soft FKs (`ClearForeignKeysForTables`) — a refresh's resolution replaces the prior run's FK entries for its tables.
+  - `RSUPendingWork`: `UnselectedAction` + `CreateDisabled` for the post-restart consumer; U11 step-index fields.
+
+  **CodeGenLib / PostgreSQLDataProvider**
+  - U2: `spUpdateExistingEntityFieldsFromSchema` honors `IsSoftPrimaryKey` on BOTH dialects (PG emitter + SQL Server migration) — schema sync no longer wipes resolved soft PKs.
+  - U4: a keyless entity now throws a named "has no primary key" error instead of emitting malformed record-change SQL.
+
+- 7d6e8fb: Large-schema CodeGen fix (PostgreSQL): filter system namespaces (`pg_catalog`, `information_schema`, `pg_toast*`, `pg_temp*`) in the four catalog-introspection views (`vwForeignKeys`, `vwTablePrimaryKeys`, `vwTableUniqueKeys`, `vwSQLTablesAndEntities`). They previously scanned the entire cluster catalog with no namespace filter, so `vwSQLColumnsAndEntityFields` paid per-column introspection for every system relation — a cost that grows as CodeGen inflates the catalog mid-run. MJ entities can never live in system namespaces, so no legitimate row is dropped.
+
+  The fix is applied in BOTH channels so it survives a PG baseline regeneration: the migration patches the deployed views, and `@memberjunction/sql-converter`'s `CatalogViewRule` (the generator that emits these views when a PG baseline is cut) now emits the same filter — previously only the migration carried it, so the next regenerated baseline would have silently reverted the fix.
+
+- fc1c693: SQL Server large-schema CodeGen fix: materialize the catalog-introspection views into #temp tables in `spUpdateExistingEntityFieldsFromSchema` before the reconciliation join. Joined directly, these views (over the `sys.*` catalog) get poor cardinality estimates and the optimizer nested-loops, going super-linear as CodeGen inflates the catalog mid-run — a single call measured 140s at 600 tables. #temp tables auto-get statistics so the join hash-joins (140s → 1.1s in isolation). Mirrors the pattern `spDeleteUnneededEntityFields` already uses. Migration only; behavior otherwise identical.
+
+### Patch Changes
+
+- 486b276: Advanced-generation (AI) CodeGen robustness + CPU hygiene:
+  - **Credential circuit breaker.** The advanced-generation path had no rate-limit, retry, or circuit-breaker and swallowed per-entity errors, so a keyless / mis-credentialed CodeGen run attempted a doomed LLM call for _every_ entity ("Invalid Vertex AI credentials" ×N) before finishing. `AdvancedGeneration` now trips a per-run circuit after 3 consecutive credential/authentication failures: it logs one clear message and the batch driver skips the remaining entities (no further round-trips, no error-log spam). A successful call resets the counter; non-credential errors don't trip it.
+  - **Field grouping.** The per-entity `allFields.filter(...)` in the advanced-generation batch driver was O(entities × fields) over the full pooled array (and dropped to the slow UUID-compare path on SQL Server upper-case IDs). Fields are now grouped into a `Map` by normalized EntityID once (O(total fields)), turning the per-entity lookup into O(1).
+
+  No behavior change on a normally-credentialed run beyond the CPU win; advanced generation is unchanged for entities that succeed.
+
+- a7733a9: Make CodeGen's auto-created application metadata idempotent. When CodeGen encounters a new schema it seeds an `__mj.Application` row plus its default `__mj.ApplicationRole` rows; these INSERTs were emitted bare into the generated migration, so replaying that block against a database where the rows already exist (e.g. after a schema teardown that leaves the app rows behind, an app reinstall, or a re-baseline) collided on `PK_Application_ID` / `UQ_ApplicationRole_App_Role`. Both INSERTs are now wrapped in the existing dialect-aware `conditionalInsert` guard (SQL Server `IF NOT EXISTS`, PostgreSQL `DO`-block) — the Application guarded on `ID`, the ApplicationRole on `(ApplicationID, RoleID)` — so the emitted SQL is safe to re-run. The guard is a no-op on a fresh database, matching the idempotency convention already used for the other folded metadata blocks.
+- 3b23275: feat(codegen): validate declared IS-A (Table-Per-Type) relationships.
+
+  IS-A intent is **declared, never inferred** — via the `additionalSchemaInfo` `ISARelationships` config or an `@lookup` on `Entity.ParentID` in a metadata-sync file. CodeGen now verifies that the declaration actually qualifies, instead of leaving a malformed one to fail confusingly at runtime.
+
+  **Gated on declared intent.** The check reads only entities with a non-null `ParentID`, so it is channel-agnostic (one check covers `ISARelationships`, `@lookup`, and any future mechanism) and has no blast radius: schema nobody declared as IS-A — including customer or external schema — is never examined and cannot be false-positived. There is no schema-shape inference anywhere in this change. On a 385-entity install it inspects 3 rows in ~9ms.
+
+  It reports **only provable-cannot-work defects** — never inference. A declared IS-A either passes silently or hard-fails on a certain defect: a composite PK on the child or the parent (the runtime routes one shared PK value and has no model for a multi-column subtype key), or a child PK type ≠ parent PK type (parent and child share one PK value, so it must be legal as both). Shapes that merely "look off" but still function — no physical FK to the parent, an FK to a different entity, a soft FK — pass silently: the runtime keys off `ParentID`, not the child PK's FK metadata, so those are valid working declarations and flagging them would misfire on correct schema.
+
+  Also included: an unresolvable-`ParentID` guard, kept as defense-in-depth only and documented as such — `FK_Entity_ParentID` makes that state unstorable, but the parent JOIN must be a `LEFT JOIN` regardless, and without the guard an unresolved parent would silently skip the remaining checks rather than fail.
+
+- ebe5b88: FK auto-indexing is now ON by default. `autoIndexForeignKeys()` previously returned `false`
+  when the `auto_index_foreign_keys` setting was absent, so any deployment that never set it
+  explicitly — including distribution installs, where the setting shipped commented out —
+  generated no `IDX_AUTO_MJ_FKEY_*` indexes at all.
+
+  **Notable behavior change:** after upgrading, a CodeGen run on a deployment that never set the
+  setting will begin emitting FK index DDL for new/modified entities where it previously emitted
+  none. The generated DDL is idempotent (`IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`), so
+  re-runs are no-ops. On large existing tables the initial index creation takes a lock and should
+  be scheduled accordingly. To keep the old behavior, set
+  `{ name: 'auto_index_foreign_keys', value: false }` explicitly in your config.
+
+  Rationale: neither SQL Server nor PostgreSQL auto-indexes FK columns, and MJ leans on them
+  heavily — generated base views join FK relationships, `RunView` filters on them, and CodeGen
+  emits cascade-delete logic that walks children by FK. A missing FK index degrades silently and
+  is hard to diagnose; a surplus index is cheap and trivially reversible.
+
+  `distribution.config.cjs` now ships the setting explicitly enabled so downstream installs are
+  immune to future default drift.
+
+  Additionally, `generateForeignKeyIndexes` moved from an `abstract` declaration to a template
+  method on `CodeGenDatabaseProvider`. Every dialect-independent decision — which fields qualify
+  as indexable foreign keys, and how the index name is composed and truncated — now lives in the
+  base class once; dialects supply only `formatIndexStatement`, `tableToken`, `columnToken`,
+  `indexPrefix`, and `maxIdentifierLength`.
+
+  This fixes a drift bug: the primary-key and virtual-field exclusions existed only in the
+  PostgreSQL provider, so SQL Server would emit a redundant index for a PK-that-is-also-FK (1:1
+  extension tables) and an invalid `CREATE INDEX` for a virtual field with no underlying column.
+  Both dialects now share the exclusions by construction. **Generated DDL is otherwise unchanged
+  and byte-identical** — index naming is deliberately NOT converged across dialects (SQL Server
+  names from `BaseTableCodeName`/`CodeName`, PostgreSQL from snake-cased `BaseTable`/`Name`), since
+  renaming would orphan every existing index in deployed databases.
+
+- 38c69a6: Large-schema CodeGen efficiency: batch the per-field metadata INSERTs in `createNewEntityFieldsFromSchema`. Previously one INSERT + one synchronous migration-log append per field (~40k on a 2k-table install, ~37s); now flushed in chunks through the existing `LogSQLBatchAndExecute`, preserving the exact per-row SQL and replayable migration output. createNew 37s → 10.6s. Both dialects.
+
+  Chunk size is configurable via the new top-level `metadataInsertBatchSize` CodeGen config field (default 250) for installs that want to tune round-trip size.
+
+- b64efd1: Large-schema CodeGen efficiency (PostgreSQL): route `executeSQLFileViaShell` / `regenerateBaseView` / `executeEntityPhased` through a pooled client instead of opening a fresh `new pg.Client()` per entity (~2,000 connection handshakes on a 2k-table install; far worse over a network-attached Aurora). Also applies the codegen `statement_timeout` GUC the ad-hoc clients lacked.
+- d23aa89: Large-schema CodeGen fix (PostgreSQL): eliminate the metadata-reconciliation quadratic. `spUpdateExistingEntityFieldsFromSchema` now materializes the catalog-introspection views into temp tables + `ANALYZE` before the reconciliation join (nested-loop → hash join; one call 77.8s → 0.5s at 600 tables), and `spDeleteUnneededEntityFields` uses `SET LOCAL enable_nestloop = off` to survive stale `pg_catalog` statistics in codegen Pass 2 (502s → 0.58s). Net: PG codegen at 2,000 tables ~87 min → ~85s.
+
+  Also carries the PostgreSQL half of the U2 soft-PK guard on this same sproc (a field with `IsSoftPrimaryKey` — resolved from `additionalSchemaInfo`, with no physical PK/unique constraint — is excluded from the PK/unique material-change predicate and its flags are frozen in the UPDATE, so the physical-schema sync no longer wipes it). The guard lives here, with the sproc it guards; the SQL Server half ships as a migration in the RSU-lifecycle PR.
+
+- 70c658c: Add configurable startup mode ('full' | 'task') for fast CLI/script boot. StartupManager.Startup() accepts startup options; 'task' mode skips all @RegisterForStartup engine pre-warm (engines lazy-load on first touch) while 'full' preserves existing behavior. Mode resolves via a shared four-level precedence chain (MJ_STARTUP_MODE env var > programmatic option > mj.config.cjs startup.mode > entry-point default). MJAPI defaults to 'full'; MJCLI, mj-sync, and CodeGen default to 'task'. Measured 14x CPU reduction on mj sync validate.
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [6c910ef]
+- Updated dependencies [42a680a]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [38c220c]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/core-entities-server@5.49.0
+  - @memberjunction/server-bootstrap-lite@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/sql-parser@5.49.0
+  - @memberjunction/postgresql-dataprovider@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/external-data-sources@5.49.0
+  - @memberjunction/external-data-source-mongodb@5.49.0
+  - @memberjunction/external-data-source-mysql@5.49.0
+  - @memberjunction/external-data-source-oracle@5.49.0
+  - @memberjunction/external-data-source-postgres@5.49.0
+  - @memberjunction/external-data-source-sqlserver@5.49.0
+  - @memberjunction/external-data-source-snowflake@5.49.0
+  - @memberjunction/cli-core@5.49.0
+  - @memberjunction/ai-provider-bundle@5.49.0
+  - @memberjunction/config@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes

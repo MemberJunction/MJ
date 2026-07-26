@@ -1,5 +1,12 @@
 # @memberjunction/predictive-studio-sidecar
 
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [b52ffa8]
+  - @memberjunction/predictive-studio-core@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes

@@ -445,12 +445,6 @@ export class AIPromptParams {
   onStreaming?: ExecutionStreamingCallback;
 
   /**
-   * Optional agent run ID to link this prompt execution to a parent agent run
-   * When provided, the AIPromptRun record will include this as AgentRunID for comprehensive execution tracking
-   */
-  agentRunId?: string;
-
-  /**
    * Optional ID of a previous prompt run to indicate this is a rerun.
    * When provided, the new AIPromptRun record will have its RerunFromPromptRunID
    * field set to this value, establishing a link between the original and rerun executions.

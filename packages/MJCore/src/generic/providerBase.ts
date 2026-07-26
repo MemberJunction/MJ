@@ -3112,8 +3112,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Runs all registered PreRunView hooks against a single RunViewParams,
      * returning the (possibly mutated) params.
+     *
+     * Protected (not private) on purpose: any subclass pipeline that executes
+     * view queries WITHOUT passing through PreRunView/PreRunViews — e.g. the
+     * RunViewsWithCacheCheck smart-cache path in GenericDatabaseProvider —
+     * MUST apply these hooks itself. Hooks are an enforcement seam (tenant
+     * scoping middleware injects filters here); a query path that skips them
+     * silently returns rows the hooked paths would have filtered out.
      */
-    private async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
+    protected async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
         const hooks = GetDataHooks<PreRunViewHook>('PreRunView');
         for (const hook of hooks) {
             params = await hook(params, contextUser);
@@ -3124,8 +3131,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Runs all registered PostRunView hooks against a single result,
      * returning the (possibly mutated) result.
+     *
+     * Protected (not private) for the same reason as RunPreRunViewHooks above:
+     * a subclass pipeline that returns view rows WITHOUT passing through
+     * PostRunView/PostRunViews — e.g. the RunViewsWithCacheCheck smart-cache
+     * path — MUST apply these hooks to the rows it returns. PostRunView is the
+     * OUTPUT half of the enforcement seam (data masking / audit); a path that
+     * skips it returns rows the hooked paths would have masked.
      */
-    private async RunPostRunViewHooks(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<RunViewResult> {
+    protected async RunPostRunViewHooks(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<RunViewResult> {
         const hooks = GetDataHooks<PostRunViewHook>('PostRunView');
         for (const hook of hooks) {
             result = await hook(params, result, contextUser);

@@ -42,20 +42,24 @@
                         <span>{{ isSavingAsList ? 'Saving...' : 'Save as List' }}</span>
                     </button>
                 }
-
-                <!-- Export Button -->
-                <button
-                    class="action-button export-button"
-                    (click)="onExport()"
-                    [disabled]="isExporting"
-                    title="Export to Excel">
-                    @if (isExporting) {
-                        <i class="fa-solid fa-spinner fa-spin"></i>
-                    } @else {
-                        <i class="fa-solid fa-file-excel"></i>
-                    }
-                    <span>{{ isExporting ? 'Exporting...' : 'Export' }}</span>
-                </button>
+                <!-- Fallback Export button. Shown ONLY for view types that lack their own export UI
+                     (Cards / Map / Timeline). The Grid renderer has its own in-toolbar Export (full
+                     result set + format/sampling dialog), so this is suppressed there to avoid a
+                     duplicate/confusing second button. -->
+                @if (showFallbackExportButton) {
+                    <button
+                        class="action-button export-button"
+                        (click)="onExport()"
+                        [disabled]="isExporting"
+                        title="Export">
+                        @if (isExporting) {
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                        } @else {
+                            <i class="fa-solid fa-file-excel"></i>
+                        }
+                        <span>{{ isExporting ? 'Exporting...' : 'Export' }}</span>
+                    </button>
+                }
             </div>
         </div>
 
@@ -69,6 +73,7 @@
             [AutoSaveView]="true"
             (RecordOpened)="onRecordOpened($any($event))"
             (OpenRelatedRecordRequested)="onOpenRelatedRecord($event)"
+            (AfterViewTypeChange)="onViewTypeChanged()"
             (DataLoaded)="onDataLoaded()">
         </mj-entity-viewer>
 

@@ -20,8 +20,10 @@ name: Integration Tier
 #   * `mj sync push --dir=metadata` pushes the default metadata dir — which includes the inert
 #     "Integration Test" TestType (metadata/test-types/). A SECOND push then applies the sibling
 #     `metadata-optional/integration-test/` root, which holds the actual test-only records — the
-#     IT01–IT23 Tests, the integration suite, AND the RLS security principals (users + scoped role +
-#     grant). It is kept out of `metadata/` so those synthetic accounts never reach a production DB
+#     IT01–IT66 Tests (67 records), the integration suite hierarchy, the RLS security principals
+#     (users + scoped role + grant), AND the synthetic AI stack the live tier drives (14 `IT: *`
+#     agents, 14 prompts, 42 model bindings, a skill, a search scope) — 242 records in total.
+#     It is kept out of `metadata/` so those synthetic accounts never reach a production DB
 #     (R2). Order matters: this root after metadata (the IT records @lookup the TestType by name), and
 #     its own directoryOrder (tests → test-suites → roles → entity-permissions → users) resolves
 #     every @lookup ref.
@@ -148,7 +150,7 @@ jobs:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
 
-      # The optional integration root holds the actual test-only records — the IT01–IT23 Tests, the
+      # The optional integration root holds the actual test-only records — the IT01–IT66 Tests, the
       # integration suite, AND the RLS security principals (users + scoped role + entity-permission
       # grant). (The inert "Integration Test" TestType itself lives in metadata/ and came in with the
       # main push above.) This root is deliberately kept OUT of the default-pushed metadata/ tree so

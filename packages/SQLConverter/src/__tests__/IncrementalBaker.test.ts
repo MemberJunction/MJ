@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { IncrementalBaker, stripVolatileHeaders } from '../IncrementalBaker.js';
+import { IncrementalBaker, stripVolatileHeaders, BakeApplyError } from '../IncrementalBaker.js';
 import type { BakerWorkingDB, CapturedEntitySQL } from '../IncrementalBaker.js';
 import type { TSQLToPGTranspiler } from '../MigrationConverter.js';
 
@@ -165,6 +165,57 @@ describe('IncrementalBaker', () => {
     expect(r.handProcedural.length).toBeGreaterThan(0);
   });
 
+  describe('forward-mode gap gate (issue #3252 RC3 / Phase 4)', () => {
+    const gapTranspiler: TSQLToPGTranspiler = {
+      async transpile(tsql: string) {
+        return { sql: [tsql], unhandled: [{ kind: 'IF-EXISTS-BEGIN', snippet: 'sys.foo guard' }] };
+      },
+    };
+
+    it('does NOT apply gappy SQL to the working DB; returns mode gap-no-bake', async () => {
+      // RC3: FORWARD mode used to apply the transpiled hand body even when it carried gaps,
+      // crashing the working DB / corrupting later bakes. The gate must skip apply + capture.
+      const db = new FakeDB(capturedFor);
+      const baker = new IncrementalBaker({ transpiler: gapTranspiler, db });
+      const sql = ssMigration('ALTER TABLE [${flyway:defaultSchema}].[AIAgentRun] ADD X INT NULL;', ['MJ: AI Agent Runs']);
+
+      const r = await baker.bakeMigration(sql, 'V1__Gappy.sql');
+
+      expect(r.mode).toBe('gap-no-bake');
+      expect(db.calls).not.toContain('apply');
+      expect(db.calls.filter((c) => c.startsWith('capture:'))).toHaveLength(0);
+      expect(r.unhandled.length).toBeGreaterThan(0);
+    });
+
+    it('bakes normally (mode baked, apply called) when the conversion is clean', async () => {
+      const db = new FakeDB(capturedFor);
+      const baker = new IncrementalBaker({ transpiler: echoTranspiler, db });
+      const sql = ssMigration('ALTER TABLE [${flyway:defaultSchema}].[AIAgentRun] ADD X INT NULL;', ['MJ: AI Agent Runs']);
+
+      const r = await baker.bakeMigration(sql, 'V1__Clean.sql');
+
+      expect(r.mode).toBe('baked');
+      expect(db.calls).toContain('apply');
+    });
+
+    it('does NOT gate a baseline that carries hand-utility gaps (baseline exemption, MAJOR-3)', async () => {
+      // A baseline legitimately carries needs-hand-authoring hand utilities yet bakes completely
+      // via the baseline branch (it never applies the hand body). It must NOT be halted.
+      const db = new FakeDB(capturedFor);
+      db.bakeable = ['Widgets'];
+      const baker = new IncrementalBaker({ transpiler: gapTranspiler, db });
+      const baselineSql = [
+        'CREATE TABLE [${flyway:defaultSchema}].[Widget] (ID UNIQUEIDENTIFIER NOT NULL);',
+        'GO',
+        'CREATE OR ALTER PROCEDURE [${flyway:defaultSchema}].[spHandUtil] AS BEGIN SELECT 1; END;',
+      ].join('\n');
+
+      const r = await baker.bakeMigration(baselineSql, 'B202607091514__v5.46.x__Baseline.sql');
+
+      expect(r.mode).toBe('baked');
+    });
+  });
+
   describe('baseline mode (B… snapshot)', () => {
     /** A minimal bannerless baseline: hand DDL + metadata seed, no CodeGen banners. Its
      *  affectedEntities is empty, so the baker must bake the FULL listBakeableEntities set. */
@@ -244,6 +295,33 @@ describe('IncrementalBaker', () => {
       expect(r.pgSQL).toBe(committed);
       // never captured — we kept the committed file wholesale
       expect(db.calls.some((c) => c.startsWith('capture:'))).toBe(false);
+    });
+  });
+
+  describe('working-DB failure preserves the transpiled body (issue #3252 review P2)', () => {
+    /** A working DB whose apply() throws — models a mid-sequence CASCADE / metadata corruption. */
+    class ThrowOnApplyDB extends FakeDB {
+      override async apply(): Promise<void> {
+        throw new Error('cannot drop dependent view vwApplicationSettings — apply failed');
+      }
+    }
+
+    it('throws a typed BakeApplyError carrying the already-transpiled body, not a bare error', async () => {
+      // The transpiled DDL is computed BEFORE the working-DB apply can fail. A failure there must
+      // NOT throw the useful artifact away — the baker rethrows it as a BakeApplyError so the CLI
+      // can still write the transpiled body into `.needs-hand` for hand-finishing.
+      const baker = new IncrementalBaker({ transpiler: echoTranspiler, db: new ThrowOnApplyDB(capturedFor) });
+      const sql = ssMigration(
+        'ALTER TABLE [${flyway:defaultSchema}].[AIAgentRun] ADD LastHeartbeatAt DATETIMEOFFSET NULL;',
+        ['MJ: AI Agent Runs'],
+      );
+
+      const err = await baker.bakeMigration(sql, 'V9__Heartbeat.sql').then(() => null, (e) => e);
+
+      expect(err).toBeInstanceOf(BakeApplyError);
+      expect(err.fileName).toBe('V9__Heartbeat.sql');
+      expect(err.transpiledBody).toContain('LastHeartbeatAt'); // the transpiled DDL is preserved
+      expect(err.message).toContain('vwApplicationSettings'); // the underlying failure is retained
     });
   });
 });

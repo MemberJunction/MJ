@@ -830,5 +830,5 @@ const mcpContext = await buildMCPToolContext(contextUser);
 
 - [MCP Specification](https://spec.modelcontextprotocol.io/)
 - [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
-- [MemberJunction Actions Documentation](../packages/Actions/CLAUDE.md)
+- [MemberJunction Actions Documentation](../../packages/Actions/CLAUDE.md)
 - [MemberJunction MCP Server Implementation](../packages/AI/MCPServer/)

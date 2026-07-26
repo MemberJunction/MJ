@@ -7,7 +7,9 @@
      disabled (dev builds, kill switch off), so it's safe to include here
      unconditionally. Lives at the shell so a pending update is visible
      across all routes. -->
-<mj-update-notification />
+@if (ShowUpdateNotifications) {
+  <mj-update-notification />
+}
 
 <!-- Normal authenticated view (not OAuth callback) -->
 @if ((authBase.isAuthenticated() | async) && !isOAuthCallback) {
@@ -23,7 +25,7 @@
       }
     </div>
     <!-- Floating chat overlay — persistent across navigation, hidden during load and in Conversations -->
-    @if (IsChatOverlayReady) {
+    @if (IsChatOverlayReady && ShowChatOverlay) {
       <mj-chat-agents-overlay
         [IsVisible]="!isChatRoute"
         [AppContext]="$any(AppContextSnapshot)"

@@ -1,5 +1,86 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.49.0
+
+### Patch Changes
+
+- 7af258e: Fix duplicate class names in CoreActions, and export the concrete auth providers.
+
+  `find-candidate-actions.action.ts` and `find-candidate-agents.action.ts` were copy-pasted from their `find-best-*` siblings and the class name was never changed, so each pair declared the same TypeScript class name (`FindBestActionAction` / `FindBestAgentAction`) under **different** ClassFactory keys.
+
+  This was not cosmetic. A barrel can only export one class per name, so only the copy was exported — which meant `find-best-action` / `find-best-agent` were **absent from the ServerBootstrap class manifest** and therefore unprotected from tree-shaking. A shaken-out registration resolves to `BaseAction`, producing a hollow action rather than a hard failure. It also made the manifest's `FindBestActionAction` symbol resolve to the _candidate_ implementation, so the manifest was actively misleading.
+
+  Renamed the copies to match their files and registration keys (`FindCandidateActionsAction` / `FindCandidateAgentsAction`) and exported all four.
+
+  Also exports the six concrete auth providers (`Auth0Provider`, `CognitoProvider`, `GoogleProvider`, `MSALProvider`, `OktaProvider`, `WorkOSProvider`). They are `@RegisterClass` plugins resolved by key at runtime, so they were reachable through the factory but not importable by name — leaving downstream consumers unable to subclass or reference them. `MagicLinkProvider` was already exported; this brings the rest to parity.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [88d707b]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [6c910ef]
+- Updated dependencies [42a680a]
+- Updated dependencies [48fa886]
+- Updated dependencies [314f667]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [5473e9a]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [373c5f6]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [78a5e44]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-agents@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/core-entities-server@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/communication-types@5.49.0
+  - @memberjunction/communication-engine@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/ai-vector-sync@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/integration-engine@5.49.0
+  - @memberjunction/ai-betty-bot@5.49.0
+  - @memberjunction/search-engine@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/ai-agent-manager@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/clustering-engine@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/ai-mcp-client@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/code-execution@5.49.0
+  - @memberjunction/content-autotagging@5.49.0
+  - @memberjunction/external-change-detection@5.49.0
+  - @memberjunction/interactive-component-types@5.49.0
+  - @memberjunction/lists@5.49.0
+  - @memberjunction/storage@5.49.0
+  - @memberjunction/react-linter@5.49.0
+  - @memberjunction/record-set-processor-base@5.49.0
+  - @memberjunction/record-set-processor@5.49.0
+  - @memberjunction/esignature@5.49.0
+  - @memberjunction/geo-core@5.49.0
+  - @memberjunction/lists-base@5.49.0
+  - @memberjunction/export-engine@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
 ## 5.48.0
 
 ### Minor Changes
