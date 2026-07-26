@@ -115,6 +115,39 @@ This makes the hand-DDL/generated boundary unmissable when scrolling a 9,000-lin
 
 Reference example: `V202607020230__v5.45.x__AISkill_ActivationMode.sql`.
 
+### 🚨 CodeGen Ordering — run `mj sync push` BEFORE `mj codegen` (REQUIRED)
+
+**CodeGen reads JSONType definitions from the DATABASE, not from `metadata/`.** The TypeScript
+interface behind a JSONType field (e.g. `ContentSource.Configuration`) is stored in
+`EntityField.JSONTypeDefinition` — a database column. The files under
+`metadata/entities/JSONType-interfaces/*.ts` are the *source*, but they only reach the database
+via `mj sync push`.
+
+So a database built from **migrations alone** carries whatever JSONType definitions the baseline
+shipped with. CodeGen faithfully regenerates the TypeScript from those stale definitions and
+**silently deletes** any properties added since — the generated interface simply comes back smaller.
+
+Correct order after any migration touching an entity that has a JSONType field:
+
+```bash
+mj migrate                 # schema
+mj sync push --include=entities   # run from the metadata/ directory
+mj codegen                 # now regenerates from current definitions
+```
+
+**Why this bites:** the failure is silent. It surfaced once only because a downstream package failed
+to compile against the shrunken interface; on an entity nothing imports, the truncated types would
+have been committed unnoticed and shipped as a breaking change to consumers.
+
+Two related points:
+
+- **Revert the `sync` block write-back.** `mj sync push` stamps `lastModified` + `checksum` into the
+  `metadata/**/*.json` files it pushed. Those belong to the release-time consolidated sync (see
+  `metadata/CLAUDE.md` rule 1b) — a feature PR must not carry them. Restore those lines before committing.
+- **Regenerate on a database at the last released version**, not a fresh install, or CodeGen emits
+  unrelated regenerations (validator functions, form fields) from the fresh-install state. Exclude
+  those from the appended section and say so in the header block.
+
 **The MemberJunction CodeGen system automatically handles:**
 - Creating/updating all views based on schema changes
 - Updating EntityField records for new columns
