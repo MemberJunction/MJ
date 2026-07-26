@@ -288,6 +288,39 @@ describe('VectorSearchProvider', () => {
             expect(results[0].EntityName).toBe('Unknown');
         });
 
+        // Chunk-Identity Contract (content autotagging): chunk vectors are written with the
+        // chunk's own identity in metadata (Entity='MJ: Content Item Chunks', RecordID=<chunk PK>,
+        // ContentItemID=<parent>). This asserts a scoped-search hit on such a vector surfaces the
+        // matched CHUNK id (not the parent content item) with no search-side transformation — the
+        // read side of that contract, guarding against future drift in convertMatches.
+        it('surfaces the ContentItemChunk id + chunk entity for a chunk-identity match', () => {
+            const convertFn = (provider as unknown as {
+                convertMatches: (
+                    matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
+                    indexName: string
+                ) => Array<{ ID: string; EntityName: string; RecordID: string; RawMetadata: string }>
+            }).convertMatches;
+
+            const chunkID = '7c3f2a10-9b4d-4e6a-8f21-0a1b2c3d4e5f';
+            const results = convertFn.call(provider, [{
+                id: chunkID, // recordId strategy: the vector id IS the chunk id
+                score: 0.83,
+                metadata: {
+                    Entity: 'MJ: Content Item Chunks',
+                    RecordID: chunkID,            // bare UUID (not composite-key format)
+                    ContentItemID: 'item-parent-1',
+                    Sequence: 0,
+                },
+            }], 'content-index');
+
+            // The result identifies the CHUNK: entity + record id both point at the chunk row...
+            expect(results[0].EntityName).toBe('MJ: Content Item Chunks');
+            expect(results[0].RecordID).toBe(chunkID);
+            expect(results[0].ID).toBe(chunkID);
+            // ...and the parent content item id is available for the external hydrator via metadata.
+            expect(JSON.parse(results[0].RawMetadata).ContentItemID).toBe('item-parent-1');
+        });
+
         it('should use the fallback entity name when metadata has no Entity field', () => {
             const convertFn = (provider as unknown as {
                 convertMatches: (
