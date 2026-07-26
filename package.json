@@ -98,6 +98,7 @@
     "check:alerts": "./.github/scripts/check-alerts.sh",
     "check:esm": "node .github/scripts/check-esm-imports.mjs packages",
     "check:esm:test": "vitest run --config .github/scripts/vitest.config.mts",
+    "check:claude-md": "node .github/scripts/check-claude-md.mjs",
     "change": "changeset",
     "version": "changeset version",
     "mergemain": "node ci/merge_main.mjs",

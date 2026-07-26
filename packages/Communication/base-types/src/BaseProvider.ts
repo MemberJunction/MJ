@@ -690,6 +690,308 @@ export type DownloadAttachmentResult<T = Record<string, any>> = BaseMessageResul
     Result?: T;
 };
 
+// ============================================================================
+// PUSH-NOTIFICATION SUBSCRIPTIONS - Types for provider-agnostic push support
+// These operations are optional and providers return "not supported" by default.
+// Providers stay stateless: they know HOW to create/renew/delete a subscription with
+// the remote service and HOW to parse an inbound notification, but never store state.
+// ============================================================================
+
+/**
+ * The kinds of change a subscription can watch. Providers support a subset (discover
+ * via {@link SubscriptionCapabilities.SupportedChangeTypes}).
+ */
+export type SubscriptionChangeType = 'created' | 'updated' | 'deleted';
+
+/**
+ * Parameters for creating a push-notification subscription with a remote messaging
+ * service (e.g. Microsoft Graph change notifications).
+ */
+export type CreateSubscriptionParams<T = Record<string, any>> = {
+    /**
+     * What to watch - same semantics as {@link GetMessagesParams.Identifier}: an email
+     * address/mailbox for email providers, a phone number for SMS, etc. Optional when
+     * the credential itself is scoped to one mailbox/number.
+     */
+    Identifier?: string;
+    /**
+     * Which changes to watch, e.g. ['created']. The provider validates these against
+     * what the remote service supports.
+     */
+    ChangeTypes: SubscriptionChangeType[];
+    /**
+     * Public HTTPS endpoint the remote service will call when a matching change occurs.
+     */
+    NotificationUrl: string;
+    /**
+     * Consumer-generated opaque secret the remote service echoes back in every
+     * notification (Graph `clientState`). The consumer uses it to authenticate inbound
+     * notifications. Providers pass it through; they do not store it.
+     */
+    ClientState: string;
+    /**
+     * Requested expiration. Providers clamp to the service maximum (Graph mail:
+     * 4230 minutes). Ignored by services whose registrations don't expire.
+     */
+    RequestedExpiration?: Date;
+    /**
+     * Optional secondary endpoint for lifecycle events (Graph
+     * `lifecycleNotificationUrl` - reauthorization required, subscription removed, etc.).
+     */
+    LifecycleNotificationUrl?: string;
+    /**
+     * Provider-specific extras (e.g. Graph: `{ folderName }` or `{ folderId }`;
+     * Gmail: Pub/Sub topic).
+     */
+    ContextData?: T;
+};
+
+/**
+ * Result of creating or renewing a subscription.
+ */
+export type SubscriptionResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * The remote service's subscription ID. The consumer must persist this to renew or
+     * delete the subscription later.
+     */
+    SubscriptionID?: string;
+    /**
+     * When the subscription expires and must be renewed. `undefined` = never expires.
+     */
+    ExpiresAt?: Date;
+    /**
+     * If populated, holds provider-specific result data (matches the existing
+     * `XResult<T>` convention across this file).
+     */
+    Result?: T;
+};
+
+/**
+ * Parameters for renewing an existing subscription before it expires.
+ */
+export type RenewSubscriptionParams<T = Record<string, any>> = {
+    /**
+     * The remote service's subscription ID returned from {@link CreateSubscriptionParams}.
+     */
+    SubscriptionID: string;
+    /**
+     * Requested new expiration. Providers clamp to the service maximum.
+     */
+    RequestedExpiration?: Date;
+    /**
+     * Optional, provider-specific context data.
+     */
+    ContextData?: T;
+};
+
+/**
+ * Parameters for deleting an existing subscription.
+ */
+export type DeleteSubscriptionParams<T = Record<string, any>> = {
+    /**
+     * The remote service's subscription ID to delete.
+     */
+    SubscriptionID: string;
+    /**
+     * Optional, provider-specific context data.
+     */
+    ContextData?: T;
+};
+
+/**
+ * Provider metadata describing its subscription capabilities, so consumers can schedule
+ * renewals and validate change types generically. Returned by
+ * {@link BaseCommunicationProvider.GetSubscriptionCapabilities}; `undefined` there means
+ * subscriptions are not supported.
+ */
+export type SubscriptionCapabilities = {
+    /**
+     * The maximum lifetime the remote service allows, in minutes. `undefined` = the
+     * service's subscriptions do not expire.
+     */
+    MaxLifetimeMinutes?: number;
+    /**
+     * The change types this provider/service supports watching.
+     */
+    SupportedChangeTypes: SubscriptionChangeType[];
+    /**
+     * True when the remote service validates the notification endpoint at create time
+     * (Graph performs a synchronous handshake requiring the endpoint to echo a token).
+     */
+    RequiresEndpointValidation: boolean;
+    /**
+     * True when the provider can programmatically create/delete the inbound registration
+     * with the remote service ({@link BaseCommunicationProvider.CreateSubscription} /
+     * {@link BaseCommunicationProvider.DeleteSubscription} are implemented). When false, the
+     * provider only PARSES inbound notifications ({@link BaseCommunicationProvider.ParseNotification})
+     * and the registration is managed out-of-band (DNS/console).
+     *
+     * Note {@link BaseCommunicationProvider.RenewSubscription} is independent: a provider may
+     * support management but have no renewal concept (its registrations don't expire -
+     * {@link SubscriptionCapabilities.MaxLifetimeMinutes} `undefined`), e.g. Twilio/SendGrid.
+     * Only providers with a finite `MaxLifetimeMinutes` implement `RenewSubscription`.
+     */
+    SupportsSubscriptionManagement: boolean;
+    /**
+     * True when {@link BaseCommunicationProvider.ParseNotification} returns the full message
+     * inline in {@link NormalizedNotification.Message} (SendGrid Inbound Parse, Twilio SMS),
+     * so consumers need not re-fetch. False for HINT-mode providers (Graph, Gmail) where the
+     * notification only carries {@link NormalizedNotification.MessageIDs} to pull with.
+     */
+    DeliversPayloadInline: boolean;
+};
+
+/**
+ * Transport-neutral capture of an inbound webhook call. The consumer owns the HTTP
+ * server and builds this from the raw request; base-types stays web-framework-free.
+ *
+ * DECODING CONTRACT: `Headers` and `QueryParams` contain framework-DECODED values
+ * (what Express/Fastify hand you). Providers use them verbatim and never URL-decode
+ * again. `RawBody` is the exact raw body string, byte-for-byte - required for
+ * signature-verification schemes.
+ */
+export type WebhookNotificationInput = {
+    /**
+     * HTTP headers with header names lower-cased; values already framework-decoded.
+     */
+    Headers: Record<string, string>;
+    /**
+     * Query-string parameters; values already framework-decoded - providers must not
+     * decode again.
+     */
+    QueryParams: Record<string, string>;
+    /**
+     * The exact raw body string, byte-for-byte.
+     */
+    RawBody: string;
+    /**
+     * The full public URL the notification was received on (used by signature schemes
+     * such as Twilio's, which sign the URL plus params).
+     */
+    RequestUrl?: string;
+    /**
+     * The HTTP method of the inbound request.
+     */
+    Method?: string;
+};
+
+/**
+ * A single normalized notification parsed from an inbound webhook payload.
+ *
+ * ## Two delivery modes: HINT vs. INLINE PAYLOAD
+ *
+ * A notification is a HINT by default: it signals that something changed and the consumer
+ * re-fetches content through the authenticated pull methods
+ * ({@link BaseCommunicationProvider.GetMessages} / {@link BaseCommunicationProvider.GetSingleMessage}),
+ * addressed by {@link NormalizedNotification.MessageIDs}. This is the safest mode - a forged
+ * notification is harmless (worst case: one extra empty sweep) because the real content only
+ * ever comes from an authenticated pull.
+ *
+ * Some transports, however, deliver the FULL message inline in the webhook body itself
+ * (SendGrid Inbound Parse posts the entire parsed email; Twilio posts the SMS body). For
+ * those, re-fetching is wasteful or impossible (SendGrid has no inbound-retrieval API at
+ * all). Such providers populate {@link NormalizedNotification.Message} with the parsed
+ * content, and the consumer uses it directly instead of pulling. A provider signals which
+ * mode it uses via {@link SubscriptionCapabilities.DeliversPayloadInline}.
+ *
+ * This inline-OR-pointer shape mirrors the established MJ duality (`FileOutputRef`'s
+ * `fileData?` vs `fileId?`, `ArtifactVersion.ContentMode` 'Text' vs 'File', `MediaOutput`'s
+ * `data?` vs `url?`): exactly one of the two carries the content for a given provider.
+ *
+ * SECURITY NOTE for inline mode: because the payload IS the data path, a provider that sets
+ * {@link NormalizedNotification.Message} MUST also authenticate the notification
+ * ({@link ParseNotificationResult.SignatureValid}) - or the consumer must - since a forged
+ * inline notification is no longer harmless. Providers whose inbound transport is unsigned
+ * (SendGrid Inbound Parse) rely on the consumer's URL secret / network controls; this is
+ * documented per-provider.
+ */
+export type NormalizedNotification = {
+    /**
+     * `'message'` for a content-change notification, `'lifecycle'` for a subscription
+     * lifecycle event (see {@link NormalizedNotification.LifecycleEvent}).
+     */
+    Kind: 'message' | 'lifecycle';
+    /**
+     * The remote subscription ID this notification concerns, when the service includes
+     * it (Graph does).
+     */
+    SubscriptionID?: string;
+    /**
+     * Echo of {@link CreateSubscriptionParams.ClientState}. The consumer MUST verify it
+     * (constant-time) against the secret stored alongside the subscription.
+     */
+    ClientState?: string;
+    /**
+     * Which mailbox / phone number this concerns, when derivable from the payload.
+     */
+    Identifier?: string;
+    /**
+     * The kind of change, when the service reports it.
+     */
+    ChangeType?: SubscriptionChangeType;
+    /**
+     * Provider message IDs when the notification carries them (Graph `resourceData.id`,
+     * Twilio `MessageSid`). An empty array means "something changed; do a targeted
+     * {@link BaseCommunicationProvider.GetMessages}". This is the HINT/pointer path; for
+     * inline-payload providers it may still be populated (e.g. Twilio's `MessageSid`) so a
+     * consumer CAN re-fetch, but {@link NormalizedNotification.Message} is present and
+     * authoritative.
+     */
+    MessageIDs: string[];
+    /**
+     * The fully parsed inbound message, present ONLY when the provider's transport delivers
+     * the content inline (see {@link SubscriptionCapabilities.DeliversPayloadInline}).
+     * When set, the consumer uses this directly and does NOT need to re-fetch via
+     * {@link BaseCommunicationProvider.GetMessages}. `undefined` for HINT-mode providers
+     * (Graph, Gmail), where the content must be pulled using {@link NormalizedNotification.MessageIDs}.
+     */
+    Message?: GetMessageMessage;
+    /**
+     * For `Kind: 'lifecycle'`: which lifecycle event occurred.
+     */
+    LifecycleEvent?: 'subscriptionRemoved' | 'missed' | 'reauthorizationRequired';
+    /**
+     * The raw provider payload for this item, for consumer needs beyond the normalized
+     * fields above.
+     */
+    RawData?: unknown;
+};
+
+/**
+ * Result of parsing an inbound push notification via
+ * {@link BaseCommunicationProvider.ParseNotification}.
+ */
+export type ParseNotificationResult = BaseMessageResult & {
+    /**
+     * Endpoint-validation handshake (Graph `validationToken`). When set, the consumer
+     * MUST send exactly this response and process nothing else.
+     */
+    Handshake?: {
+        /** The HTTP status to respond with (Graph handshake: 200). */
+        ResponseStatus: number;
+        /** The exact body to respond with (the validation token). */
+        ResponseBody: string;
+        /** The Content-Type to respond with (Graph handshake: 'text/plain'). */
+        ResponseContentType: string;
+    };
+    /**
+     * Cryptographic signature-verification outcome, where the provider has a scheme
+     * (Twilio HMAC, SendGrid ECDSA). `undefined` = no signature scheme exists (Graph) -
+     * the consumer authenticates via {@link NormalizedNotification.ClientState} instead.
+     */
+    SignatureValid?: boolean;
+    /**
+     * The normalized notifications extracted from the payload (one per item in the
+     * service's batch). Empty for handshake and malformed-input results.
+     */
+    Notifications: NormalizedNotification[];
+    /**
+     * The HTTP status the consumer should respond with after accepting (Graph expects a
+     * fast 202).
+     */
+    SuggestedResponseStatus: number;
+};
+
 /**
  * Enumeration of all supported provider operations.
  * Use with getSupportedOperations() to discover provider capabilities.
@@ -708,7 +1010,11 @@ export type ProviderOperation =
     | 'ArchiveMessage'
     | 'SearchMessages'
     | 'ListAttachments'
-    | 'DownloadAttachment';
+    | 'DownloadAttachment'
+    | 'CreateSubscription'
+    | 'RenewSubscription'
+    | 'DeleteSubscription'
+    | 'ParseNotification';
 
 
 /**
@@ -979,6 +1285,137 @@ export abstract class BaseCommunicationProvider {
             Success: false,
             ErrorMessage: `${this.ProviderName} does not support DownloadAttachment (MessageID: ${params.MessageID}, AttachmentID: ${params.AttachmentID}, credentials provided: ${!!credentials})`
         };
+    }
+
+    // ========================================================================
+    // PUSH-NOTIFICATION SUBSCRIPTIONS - Override in subclasses to provide push support
+    // Default implementations return "not supported". Providers stay stateless: they
+    // create/renew/delete subscriptions with the remote service and parse inbound
+    // notifications, but never persist subscription state. See the type docs above.
+    //
+    // TWO PUSH SHAPES (a provider is one or the other, never neither-when-SupportsPush):
+    //   • Subscription-managed (Graph, Gmail): the provider programmatically creates the
+    //     registration (CreateSubscription), the service delivers HINT notifications, the
+    //     consumer re-fetches via GetMessages. May expire (RenewSubscription).
+    //   • Inbound-parse (SendGrid, Twilio): the notification carries the payload inline;
+    //     ParseNotification populates NormalizedNotification.Message. Management may exist
+    //     (Twilio SmsUrl, SendGrid Parse Settings) but there is no expiry/renewal.
+    //
+    // CAPABILITY GATE: SupportsPush === (GetSubscriptionCapabilities() !== undefined). The
+    // default SupportsPush getter derives from capabilities, so a provider "opts in" simply
+    // by returning capabilities - no separate flag to keep in sync (avoids the drift a hand-
+    // maintained boolean invites). Any push provider MUST implement ParseNotification and
+    // list it in getSupportedOperations(). Whether it ALSO implements Create/Renew/Delete is
+    // expressed by SubscriptionCapabilities.SupportsSubscriptionManagement + MaxLifetimeMinutes,
+    // and those ops must appear in getSupportedOperations() when implemented.
+    // ========================================================================
+
+    /**
+     * Convenience gate: `true` when this provider supports inbound push in ANY form
+     * (subscription-managed or inbound-parse), `false` otherwise. Lets callers cleanly
+     * short-circuit — `if (provider.SupportsPush) { ... }` — instead of probing individual
+     * operations.
+     *
+     * Derived from {@link GetSubscriptionCapabilities} so it stays in lockstep with actual
+     * capability: providers that support push return capabilities and thereby report
+     * `SupportsPush === true` for free; providers that don't return `undefined` and report
+     * `false`. Subclasses normally do NOT override this — override
+     * {@link GetSubscriptionCapabilities} instead.
+     */
+    public get SupportsPush(): boolean {
+        return this.GetSubscriptionCapabilities() !== undefined;
+    }
+
+    /**
+     * Creates a push-notification subscription with the remote messaging service.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters describing what to watch and where to notify
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<SubscriptionResult> - The created subscription's ID and expiration
+     */
+    public async CreateSubscription(
+        params: CreateSubscriptionParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<SubscriptionResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support CreateSubscription (Identifier: ${params.Identifier}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Renews an existing subscription before it expires. The caller MUST pass credentials
+     * for the same account/app registration used to create the subscription.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters identifying the subscription and the new expiration
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<SubscriptionResult> - The renewed subscription's expiration
+     */
+    public async RenewSubscription(
+        params: RenewSubscriptionParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<SubscriptionResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support RenewSubscription (SubscriptionID: ${params.SubscriptionID}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Deletes an existing subscription. The caller MUST pass credentials for the same
+     * account/app registration used to create the subscription. Implementations should
+     * treat "already gone" (e.g. 404) as success - deletion is idempotent from the
+     * consumer's perspective.
+     * Override in subclasses that support this operation.
+     * @param params - Parameters identifying the subscription to delete
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<BaseMessageResult> - Result of the delete operation
+     */
+    public async DeleteSubscription(
+        params: DeleteSubscriptionParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<BaseMessageResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support DeleteSubscription (SubscriptionID: ${params.SubscriptionID}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Parses and validates an inbound push notification. This is a pure operation: no
+     * network calls. It MUST be safe on hostile/garbage input - never throw on malformed
+     * payloads; return `Success: false` with `SuggestedResponseStatus: 400` instead.
+     *
+     * When the result carries a {@link ParseNotificationResult.Handshake}, the consumer
+     * must send exactly that response and process nothing else (endpoint validation).
+     * Override in subclasses that support this operation.
+     * @param input - Transport-neutral capture of the inbound webhook request
+     * @param credentials - Optional credentials override (for schemes that verify signatures)
+     * @returns Promise<ParseNotificationResult> - Normalized notifications and/or handshake
+     */
+    public async ParseNotification(
+        input: WebhookNotificationInput,
+        credentials?: ProviderCredentialsBase
+    ): Promise<ParseNotificationResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support ParseNotification (body length: ${input.RawBody?.length ?? 0}, credentials provided: ${!!credentials})`,
+            Notifications: [],
+            SuggestedResponseStatus: 400
+        };
+    }
+
+    /**
+     * Returns this provider's subscription capabilities, or `undefined` when subscriptions
+     * are not supported. Consumers use this to schedule renewals and validate change types
+     * generically. Override in subclasses that support subscriptions.
+     *
+     * INVARIANT: returning a defined value here REQUIRES the four subscription operations
+     * to appear in {@link getSupportedOperations}.
+     * @returns SubscriptionCapabilities when supported, otherwise undefined
+     */
+    public GetSubscriptionCapabilities(): SubscriptionCapabilities | undefined {
+        return undefined;
     }
 
 }

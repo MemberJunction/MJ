@@ -74,9 +74,9 @@ describe('SendGridProvider', () => {
   });
 
   describe('getSupportedOperations', () => {
-    it('should only support SendSingleMessage', () => {
+    it('should support SendSingleMessage plus the Inbound Parse operations', () => {
       const ops = provider.getSupportedOperations();
-      expect(ops).toEqual(['SendSingleMessage']);
+      expect(ops).toEqual(['SendSingleMessage', 'CreateSubscription', 'DeleteSubscription', 'ParseNotification']);
     });
   });
 
