@@ -2449,6 +2449,35 @@ export abstract class BaseEntity<T = unknown> {
                 if (!parentResult) {
                     // Parent save failed — rollback if we started the transaction
                     await this.RollbackISATransaction(isISAInitiator);
+
+                    // RECORD the failure on THIS entity's ResultHistory before returning. Without
+                    // this the caller gets `false` with LatestResult === null and an empty
+                    // ResultHistory, because every result was written to the PARENT object — which
+                    // callers have no reference to (`_parentEntity` is private). The diagnosis is
+                    // then invisible: e.g. saving an IS-A child whose parent has NOT NULL columns
+                    // the child never set fails with literally no message anywhere the caller can
+                    // reach. Mirrors the transaction-group-failure and catch-block paths below.
+                    if (currentResultCount === this.ResultHistory.length) {
+                        const parentLatest = this._parentEntity.LatestResult;
+                        const parentErrors = parentLatest?.Errors ?? [];
+                        // A failed parent commonly reports its detail ONLY in Errors (validation
+                        // failures leave Message empty), so fall back to the error text rather than
+                        // handing the caller a message that says nothing.
+                        const detail =
+                            parentLatest?.Message ||
+                            parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
+                            'no error detail was reported by the parent';
+                        newResult.Success = false;
+                        newResult.Type = this.IsSaved ? 'update' : 'create';
+                        newResult.Message =
+                            `Failed to save parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
+                        // Surface the parent's field-level errors so the caller can act on them.
+                        newResult.Errors = parentErrors;
+                        newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                        newResult.EndedAt = new Date();
+                        this.RegisterResultHistoryEntry(newResult);
+                    }
+
                     return false;
                 }
             }
