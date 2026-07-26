@@ -786,6 +786,17 @@
             "Sequence": 27,
             "Status": "Active"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT67 - Content Vectorization Pipeline",
+            "Sequence": 32,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3EB937A9-1C1F-4DB4-AD95-5698FD27F705"
+          }
         }
       ]
     },
