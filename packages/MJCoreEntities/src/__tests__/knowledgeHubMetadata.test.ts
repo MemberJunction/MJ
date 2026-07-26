@@ -237,57 +237,57 @@ describe('KnowledgeHubMetadataEngine', () => {
     });
 
     // ================================================================
-    // GetEntityDocumentById
+    // GetEntityDocumentByID
     // ================================================================
 
-    describe('GetEntityDocumentById', () => {
+    describe('GetEntityDocumentByID', () => {
         it('should find a document by exact ID', () => {
-            const result = engine.GetEntityDocumentById('ED-AAA');
+            const result = engine.GetEntityDocumentByID('ED-AAA');
             expect(result).toBeDefined();
             expect(result!.Entity).toBe('Contacts');
         });
 
         it('should find by ID with case-insensitive UUID comparison', () => {
             // UUIDsEqual mock compares lowercase
-            const result = engine.GetEntityDocumentById('ed-aaa');
+            const result = engine.GetEntityDocumentByID('ed-aaa');
             expect(result).toBeDefined();
             expect(result!.Entity).toBe('Contacts');
         });
 
         it('should return undefined for non-existent ID', () => {
-            const result = engine.GetEntityDocumentById('non-existent-id');
+            const result = engine.GetEntityDocumentByID('non-existent-id');
             expect(result).toBeUndefined();
         });
 
         it('should return undefined for empty string', () => {
-            const result = engine.GetEntityDocumentById('');
+            const result = engine.GetEntityDocumentByID('');
             expect(result).toBeUndefined();
         });
     });
 
     // ================================================================
-    // GetVectorIndexById
+    // GetVectorIndexByID
     // ================================================================
 
-    describe('GetVectorIndexById', () => {
+    describe('GetVectorIndexByID', () => {
         it('should find a vector index by ID', () => {
-            const result = engine.GetVectorIndexById('VI-AAA');
+            const result = engine.GetVectorIndexByID('VI-AAA');
             expect(result).toBeDefined();
             expect(result!.Name).toBe('contacts-idx');
         });
 
         it('should be case-insensitive via UUIDsEqual', () => {
-            const result = engine.GetVectorIndexById('vi-aaa');
+            const result = engine.GetVectorIndexByID('vi-aaa');
             expect(result).toBeDefined();
         });
 
         it('should return undefined for non-existent ID', () => {
-            const result = engine.GetVectorIndexById('no-such-id');
+            const result = engine.GetVectorIndexByID('no-such-id');
             expect(result).toBeUndefined();
         });
 
         it('should return undefined for empty string', () => {
-            const result = engine.GetVectorIndexById('');
+            const result = engine.GetVectorIndexByID('');
             expect(result).toBeUndefined();
         });
     });
@@ -296,45 +296,45 @@ describe('KnowledgeHubMetadataEngine', () => {
     // O(1) by-id finders (content sources / types / source types)
     // ================================================================
 
-    describe('GetContentSourceById', () => {
+    describe('GetContentSourceByID', () => {
         it('should find a content source by ID', () => {
-            expect(engine.GetContentSourceById('CS-AAA')?.Name).toBe('RSS Feed');
+            expect(engine.GetContentSourceByID('CS-AAA')?.Name).toBe('RSS Feed');
         });
         it('should be case-insensitive', () => {
-            expect(engine.GetContentSourceById('cs-bbb')?.Name).toBe('Website');
+            expect(engine.GetContentSourceByID('cs-bbb')?.Name).toBe('Website');
         });
         it('should return undefined for non-existent ID', () => {
-            expect(engine.GetContentSourceById('CS-ZZZ')).toBeUndefined();
+            expect(engine.GetContentSourceByID('CS-ZZZ')).toBeUndefined();
         });
         it('should return undefined for empty string', () => {
-            expect(engine.GetContentSourceById('')).toBeUndefined();
+            expect(engine.GetContentSourceByID('')).toBeUndefined();
         });
         it('should reflect a swapped-out array (index rebuilds on next call after cache reset)', () => {
-            expect(engine.GetContentSourceById('CS-AAA')?.Name).toBe('RSS Feed'); // builds index
+            expect(engine.GetContentSourceByID('CS-AAA')?.Name).toBe('RSS Feed'); // builds index
             (engine as unknown as Record<string, MockContentSource[]>)['_contentSources'] = [
                 createMockContentSource({ ID: 'CS-NEW', Name: 'Fresh Source' }),
             ];
             (engine as unknown as { _idIndexes: Map<unknown, unknown> })._idIndexes.clear();
-            expect(engine.GetContentSourceById('CS-AAA')).toBeUndefined();
-            expect(engine.GetContentSourceById('CS-NEW')?.Name).toBe('Fresh Source');
+            expect(engine.GetContentSourceByID('CS-AAA')).toBeUndefined();
+            expect(engine.GetContentSourceByID('CS-NEW')?.Name).toBe('Fresh Source');
         });
     });
 
-    describe('GetContentTypeById', () => {
+    describe('GetContentTypeByID', () => {
         it('should find a content type by ID (case-insensitive)', () => {
-            expect(engine.GetContentTypeById('ct-aaa')?.Name).toBe('Article');
+            expect(engine.GetContentTypeByID('ct-aaa')?.Name).toBe('Article');
         });
         it('should return undefined for non-existent ID', () => {
-            expect(engine.GetContentTypeById('CT-ZZZ')).toBeUndefined();
+            expect(engine.GetContentTypeByID('CT-ZZZ')).toBeUndefined();
         });
     });
 
-    describe('GetContentSourceTypeById', () => {
+    describe('GetContentSourceTypeByID', () => {
         it('should find a content source type by ID (case-insensitive)', () => {
-            expect(engine.GetContentSourceTypeById('cst-aaa')?.Name).toBe('RSS');
+            expect(engine.GetContentSourceTypeByID('cst-aaa')?.Name).toBe('RSS');
         });
         it('should return undefined for non-existent ID', () => {
-            expect(engine.GetContentSourceTypeById('CST-ZZZ')).toBeUndefined();
+            expect(engine.GetContentSourceTypeByID('CST-ZZZ')).toBeUndefined();
         });
     });
 

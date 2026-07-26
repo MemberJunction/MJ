@@ -42,7 +42,7 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
 
     /**
      * Lazily-built `NormalizeUUID(ID) → row` indexes, one per cached array (keyed by array name),
-     * powering the O(1) `Get…ById` helpers. Cleared wholesale on any {@link DataChange$} emission
+     * powering the O(1) `Get…ByID` helpers. Cleared wholesale on any {@link DataChange$} emission
      * (see the constructor) so entries never go stale as the underlying caches mutate.
      */
     private _idIndexes = new Map<string, Map<string, BaseEntity>>();
@@ -138,7 +138,7 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
      * emission, so a returned index is always consistent with the current cache contents.
      * O(N) to build once, then O(1) per lookup.
      */
-    private getIdIndex<T extends BaseEntity>(key: string, rows: T[], idOf: (row: T) => string): Map<string, T> {
+    private getIDIndex<T extends BaseEntity>(key: string, rows: T[], idOf: (row: T) => string): Map<string, T> {
         // Downcast is safe by construction: each `key` is only ever paired with one row type.
         let index = this._idIndexes.get(key) as Map<string, T> | undefined;
         if (!index) {
@@ -153,33 +153,33 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     }
 
     /** Find an entity document by ID (case-insensitive UUID comparison). O(1) after first hit. */
-    public GetEntityDocumentById(id: string): MJEntityDocumentEntity | undefined {
+    public GetEntityDocumentByID(id: string): MJEntityDocumentEntity | undefined {
         if (!id) return undefined;
-        return this.getIdIndex('entityDocuments', this._entityDocuments, d => d.ID).get(NormalizeUUID(id));
+        return this.getIDIndex('entityDocuments', this._entityDocuments, d => d.ID).get(NormalizeUUID(id));
     }
 
     /** Find a content source by ID (case-insensitive UUID comparison). O(1) after first hit. */
-    public GetContentSourceById(id: string): MJContentSourceEntity | undefined {
+    public GetContentSourceByID(id: string): MJContentSourceEntity | undefined {
         if (!id) return undefined;
-        return this.getIdIndex('contentSources', this._contentSources, s => s.ID).get(NormalizeUUID(id));
+        return this.getIDIndex('contentSources', this._contentSources, s => s.ID).get(NormalizeUUID(id));
     }
 
     /** Find a content type by ID (case-insensitive UUID comparison). O(1) after first hit. */
-    public GetContentTypeById(id: string): MJContentTypeEntity | undefined {
+    public GetContentTypeByID(id: string): MJContentTypeEntity | undefined {
         if (!id) return undefined;
-        return this.getIdIndex('contentTypes', this._contentTypes, t => t.ID).get(NormalizeUUID(id));
+        return this.getIDIndex('contentTypes', this._contentTypes, t => t.ID).get(NormalizeUUID(id));
     }
 
     /** Find a content source type by ID (case-insensitive UUID comparison). O(1) after first hit. */
-    public GetContentSourceTypeById(id: string): MJContentSourceTypeEntity | undefined {
+    public GetContentSourceTypeByID(id: string): MJContentSourceTypeEntity | undefined {
         if (!id) return undefined;
-        return this.getIdIndex('contentSourceTypes', this._contentSourceTypes, t => t.ID).get(NormalizeUUID(id));
+        return this.getIDIndex('contentSourceTypes', this._contentSourceTypes, t => t.ID).get(NormalizeUUID(id));
     }
 
     /** Find a content file type by ID (case-insensitive UUID comparison). O(1) after first hit. */
-    public GetContentFileTypeById(id: string): MJContentFileTypeEntity | undefined {
+    public GetContentFileTypeByID(id: string): MJContentFileTypeEntity | undefined {
         if (!id) return undefined;
-        return this.getIdIndex('contentFileTypes', this._contentFileTypes, t => t.ID).get(NormalizeUUID(id));
+        return this.getIDIndex('contentFileTypes', this._contentFileTypes, t => t.ID).get(NormalizeUUID(id));
     }
 
     /** Find all entity documents for a given entity name (case-insensitive) */
@@ -190,9 +190,9 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
     }
 
     /** Find a vector index by ID (case-insensitive UUID comparison). O(1) after first hit. */
-    public GetVectorIndexById(id: string): MJVectorIndexEntity | undefined {
+    public GetVectorIndexByID(id: string): MJVectorIndexEntity | undefined {
         if (!id) return undefined;
-        return this.getIdIndex('vectorIndexes', this._vectorIndexes, v => v.ID).get(NormalizeUUID(id));
+        return this.getIDIndex('vectorIndexes', this._vectorIndexes, v => v.ID).get(NormalizeUUID(id));
     }
 
     /**

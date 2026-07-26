@@ -14,8 +14,8 @@ Follow-up polish for #3275 (resolves #3287) — no behavior change:
   construction is extracted into a new `protected buildVectorRecord(...)`, and `buildVectorRecords`
   plus its collaborators (`resolveChunkVectorId`, `buildVectorMetadata`, `buildProviderDirectives`,
   `resolveItemVectorStorageConfig`, `isItemLevelVector`) are now `protected` with TSDoc.
-- **O(1) by-id lookups in `KnowledgeHubMetadataEngine`**: `GetContentSourceById`,
-  `GetContentTypeById`, `GetContentSourceTypeById`, `GetContentFileTypeById` (plus the existing
-  `GetVectorIndexById` / `GetEntityDocumentById`) are now backed by lazily-built id indexes that
+- **O(1) by-id lookups in `KnowledgeHubMetadataEngine`**: `GetContentSourceByID`,
+  `GetContentTypeByID`, `GetContentSourceTypeByID`, `GetContentFileTypeByID` (plus the existing
+  `GetVectorIndexByID` / `GetEntityDocumentByID`) are now backed by lazily-built id indexes that
   self-invalidate on the engine's `DataChange$`. `AutotagBaseEngine` now routes its by-id lookups
   through these helpers instead of repeated `.find()` scans.

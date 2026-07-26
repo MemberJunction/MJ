@@ -28,7 +28,7 @@ export class EntityDocumentCache extends BaseSingleton<EntityDocumentCache> {
     }
 
     public GetDocument(EntityDocumentID: string): MJEntityDocumentEntity | null {
-        const document = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentById(EntityDocumentID);
+        const document = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentByID(EntityDocumentID);
         if (!document) {
             LogStatus(`EntityDocumentCache.GetDocument: Cache miss for EntityDocumentID: ${EntityDocumentID}`);
         }
