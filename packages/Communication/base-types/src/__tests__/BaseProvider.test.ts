@@ -24,6 +24,8 @@ import {
     BaseCommunicationProvider,
     MJCommunicationProviderEntityExtended,
     ProcessedMessage,
+    WebhookNotificationInput,
+    ParseNotificationResult,
 } from '../BaseProvider';
 
 // Concrete test implementation of the abstract class
@@ -42,6 +44,69 @@ class TestProvider extends BaseCommunicationProvider {
     }
     public async CreateDraft() {
         return { Success: true };
+    }
+}
+
+// A subscription-managed, HINT-mode push provider (Graph/Gmail shape): full CRUD, the
+// notification only carries MessageIDs to re-fetch with — never an inline Message.
+class SubscriptionManagedPushProvider extends TestProvider {
+    public override getSupportedOperations() {
+        return [
+            ...super.getSupportedOperations(),
+            'CreateSubscription' as const,
+            'RenewSubscription' as const,
+            'DeleteSubscription' as const,
+            'ParseNotification' as const,
+        ];
+    }
+    public override GetSubscriptionCapabilities() {
+        return {
+            MaxLifetimeMinutes: 4230,
+            SupportedChangeTypes: ['created' as const],
+            RequiresEndpointValidation: true,
+            SupportsSubscriptionManagement: true,
+            DeliversPayloadInline: false,
+        };
+    }
+    public override async ParseNotification(_input: WebhookNotificationInput): Promise<ParseNotificationResult> {
+        return {
+            Success: true,
+            Notifications: [{ Kind: 'message', MessageIDs: ['ext-1'] }],
+            SuggestedResponseStatus: 202,
+        };
+    }
+}
+
+// A parse-only, INLINE-mode push provider (SendGrid shape): no renewal, the notification
+// carries the full message inline in NormalizedNotification.Message (no re-fetch path).
+class InlineParsePushProvider extends TestProvider {
+    public override getSupportedOperations() {
+        return [
+            ...super.getSupportedOperations(),
+            'CreateSubscription' as const,
+            'DeleteSubscription' as const,
+            'ParseNotification' as const,
+        ];
+    }
+    public override GetSubscriptionCapabilities() {
+        return {
+            MaxLifetimeMinutes: undefined,
+            SupportedChangeTypes: ['created' as const],
+            RequiresEndpointValidation: false,
+            SupportsSubscriptionManagement: true,
+            DeliversPayloadInline: true,
+        };
+    }
+    public override async ParseNotification(_input: WebhookNotificationInput): Promise<ParseNotificationResult> {
+        return {
+            Success: true,
+            Notifications: [{
+                Kind: 'message',
+                MessageIDs: [],
+                Message: { From: 'a@x.com', To: 'b@y.com', Body: 'hello', Subject: 'hi' },
+            }],
+            SuggestedResponseStatus: 200,
+        };
     }
 }
 
@@ -214,6 +279,131 @@ describe('BaseCommunicationProvider', () => {
         it('should show credentials provided: false when no credentials', async () => {
             const result = await provider.GetSingleMessage({ MessageID: 'msg-1' });
             expect(result.ErrorMessage).toContain('credentials provided: false');
+        });
+    });
+
+    describe('subscription default implementations', () => {
+        it('CreateSubscription should return not supported', async () => {
+            const result = await provider.CreateSubscription({
+                ChangeTypes: ['created'],
+                NotificationUrl: 'https://example.com/hook',
+                ClientState: 'secret',
+                Identifier: 'mailbox@test.com',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support CreateSubscription');
+            expect(result.ErrorMessage).toContain('mailbox@test.com');
+        });
+
+        it('RenewSubscription should return not supported', async () => {
+            const result = await provider.RenewSubscription({ SubscriptionID: 'sub-1' });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support RenewSubscription');
+            expect(result.ErrorMessage).toContain('sub-1');
+        });
+
+        it('DeleteSubscription should return not supported', async () => {
+            const result = await provider.DeleteSubscription({ SubscriptionID: 'sub-1' });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support DeleteSubscription');
+            expect(result.ErrorMessage).toContain('sub-1');
+        });
+
+        it('ParseNotification should return not supported with empty notifications and a 400', async () => {
+            const result = await provider.ParseNotification({
+                Headers: {},
+                QueryParams: {},
+                RawBody: '{}',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support ParseNotification');
+            expect(result.Notifications).toEqual([]);
+            expect(result.SuggestedResponseStatus).toBe(400);
+        });
+
+        it('GetSubscriptionCapabilities should return undefined by default', () => {
+            expect(provider.GetSubscriptionCapabilities()).toBeUndefined();
+        });
+
+        it('subscription operations are absent from getSupportedOperations by default', () => {
+            expect(provider.supportsOperation('CreateSubscription')).toBe(false);
+            expect(provider.supportsOperation('RenewSubscription')).toBe(false);
+            expect(provider.supportsOperation('DeleteSubscription')).toBe(false);
+            expect(provider.supportsOperation('ParseNotification')).toBe(false);
+        });
+
+        it('SupportsPush is false by default (no capabilities)', () => {
+            expect(provider.SupportsPush).toBe(false);
+        });
+
+        it('capability gate holds for the default provider: no capabilities, no push, no ops', () => {
+            expect(provider.GetSubscriptionCapabilities()).toBeUndefined();
+            expect(provider.SupportsPush).toBe(false);
+            const ops = provider.getSupportedOperations();
+            expect(ops.includes('ParseNotification' as never)).toBe(false);
+        });
+    });
+
+    describe('push capability gate (SupportsPush + generalized invariant)', () => {
+        it('SupportsPush derives from GetSubscriptionCapabilities (subscription-managed provider)', () => {
+            const p = new SubscriptionManagedPushProvider();
+            expect(p.GetSubscriptionCapabilities()).toBeDefined();
+            expect(p.SupportsPush).toBe(true);
+        });
+
+        it('SupportsPush derives from GetSubscriptionCapabilities (inline-parse provider)', () => {
+            const p = new InlineParsePushProvider();
+            expect(p.GetSubscriptionCapabilities()).toBeDefined();
+            expect(p.SupportsPush).toBe(true);
+        });
+
+        it('GENERALIZED INVARIANT: SupportsPush IFF capabilities defined, for every shape', () => {
+            for (const p of [new TestProvider(), new SubscriptionManagedPushProvider(), new InlineParsePushProvider()]) {
+                expect(p.SupportsPush).toBe(p.GetSubscriptionCapabilities() !== undefined);
+            }
+        });
+
+        it('a push provider MUST support ParseNotification (the common denominator)', () => {
+            for (const p of [new SubscriptionManagedPushProvider(), new InlineParsePushProvider()]) {
+                expect(p.SupportsPush).toBe(true);
+                expect(p.supportsOperation('ParseNotification')).toBe(true);
+            }
+        });
+
+        it('SupportsSubscriptionManagement agrees with Create/Delete ops being present', () => {
+            for (const p of [new SubscriptionManagedPushProvider(), new InlineParsePushProvider()]) {
+                const caps = p.GetSubscriptionCapabilities()!;
+                const hasCreate = p.supportsOperation('CreateSubscription');
+                const hasDelete = p.supportsOperation('DeleteSubscription');
+                expect(caps.SupportsSubscriptionManagement).toBe(hasCreate && hasDelete);
+            }
+        });
+
+        it('RenewSubscription op present IFF the service has a finite MaxLifetimeMinutes', () => {
+            const managed = new SubscriptionManagedPushProvider();
+            expect(managed.GetSubscriptionCapabilities()!.MaxLifetimeMinutes).toBeTypeOf('number');
+            expect(managed.supportsOperation('RenewSubscription')).toBe(true);
+
+            const inline = new InlineParsePushProvider();
+            expect(inline.GetSubscriptionCapabilities()!.MaxLifetimeMinutes).toBeUndefined();
+            expect(inline.supportsOperation('RenewSubscription')).toBe(false);
+        });
+
+        it('HINT-mode notifications carry MessageIDs and no inline Message', async () => {
+            const p = new SubscriptionManagedPushProvider();
+            expect(p.GetSubscriptionCapabilities()!.DeliversPayloadInline).toBe(false);
+            const result = await p.ParseNotification({ Headers: {}, QueryParams: {}, RawBody: '{}' });
+            expect(result.Notifications[0].MessageIDs.length).toBeGreaterThan(0);
+            expect(result.Notifications[0].Message).toBeUndefined();
+        });
+
+        it('INLINE-mode notifications carry the Message payload directly (no re-fetch)', async () => {
+            const p = new InlineParsePushProvider();
+            expect(p.GetSubscriptionCapabilities()!.DeliversPayloadInline).toBe(true);
+            const result = await p.ParseNotification({ Headers: {}, QueryParams: {}, RawBody: '' });
+            expect(result.Notifications[0].Message).toBeDefined();
+            expect(result.Notifications[0].Message?.Body).toBe('hello');
+            expect(result.Notifications[0].MessageIDs).toEqual([]);
         });
     });
 });
