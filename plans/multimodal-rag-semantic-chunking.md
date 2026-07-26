@@ -179,9 +179,11 @@ one chunk, one vector (§2.1) — with `Description`/`Transcript` as text hydrat
 optionally mirrored (truncated) into vector metadata. Add lexical indexing over
 `Description`/`Transcript` so a text query can reach a media chunk without a description vector.
 
-**4B — Autotagger integration**: swap `buildEmbeddingChunks` (and `chunkExtractedText`, with its own
-budget) onto `ResolveSegmenter`, selected from the `Content Source`/`Content Type` `Configuration`
-JSON that #3275 already parses. Persist segment metadata into the new columns.
+**4B — Autotagger integration**: ✅ **done (behaviour-preserving).** `buildEmbeddingChunks` and
+`chunkExtractedText` now both resolve a segmenter through a shared `segmentTextForChunking` seam,
+defaulting to `FixedWindow` with each site's historical budget, with `resolveSegmenterKey()` as the
+override point. Remaining: resolve the key from the `Content Source`/`Content Type` `Configuration`
+JSON (needs a `SegmenterKey` field + CodeGen) and persist segment metadata into the 4A columns.
 
 **4C — Multimodal embedding**: media-aware extraction → `MediaReference`; a content path on
 `AIModelRunner` calling `EmbedContent`; a dedicated multimodal `VectorIndex`; group by

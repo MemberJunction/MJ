@@ -72,6 +72,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
         // Provide a per-test object store so AutotagBaseEngine instances resolve correctly.
         GetGlobalObjectStore: vi.fn(() => ({})),
         ClassFactory: {
+          // Segmenters resolve via TryCreateInstance; returning an unresolved result makes
+          // ResolveSegmenter fall through to its built-in FixedWindow instance, so tests
+          // exercise the real segmentation logic without the class registry.
+          TryCreateInstance: vi.fn(() => ({ Resolved: false, Instance: null })),
           CreateInstance: vi.fn().mockReturnValue({
             ChatCompletion: vi.fn().mockResolvedValue({
               data: {
@@ -353,61 +357,61 @@ describe('AutotagBaseEngine', () => {
   });
 
   describe('chunkExtractedText', () => {
-    it('should return single chunk for short text', () => {
+    it('should return single chunk for short text', async () => {
       const text = 'Short text';
       const tokenLimit = 1000;
 
-      const result = engine.chunkExtractedText(text, tokenLimit);
+      const result = await engine.chunkExtractedText(text, tokenLimit);
 
       expect(result).toHaveLength(1);
       expect(result[0]).toBe('Short text');
     });
 
-    it('should chunk text exceeding token limit', () => {
+    it('should chunk text exceeding token limit', async () => {
       // tokenLimit / 1.5 = 666 char limit * 4 chars/token = 2664 char threshold
       // With TextChunker, sentence-based chunking may produce different chunk counts
       const text = 'This is a sentence. '.repeat(200); // ~4000 chars, well above threshold
       const tokenLimit = 1000;
 
-      const result = engine.chunkExtractedText(text, tokenLimit);
+      const result = await engine.chunkExtractedText(text, tokenLimit);
       expect(result.length).toBeGreaterThan(1);
     });
 
-    it('should calculate text limit as tokenLimit / 1.5', () => {
+    it('should calculate text limit as tokenLimit / 1.5', async () => {
       const tokenLimit = 1500;
       const textLimit = Math.ceil(tokenLimit / 1.5); // 1000
 
       // Text below the threshold (textLimit * 4 chars) should not be chunked
       const shortText = 'Short text.';
-      const result = engine.chunkExtractedText(shortText, tokenLimit);
+      const result = await engine.chunkExtractedText(shortText, tokenLimit);
       expect(result).toHaveLength(1);
 
       // Text well above the threshold should be chunked
       const longText = 'This is a test sentence. '.repeat(500); // ~12500 chars
-      const result2 = engine.chunkExtractedText(longText, tokenLimit);
+      const result2 = await engine.chunkExtractedText(longText, tokenLimit);
       expect(result2.length).toBeGreaterThan(1);
     });
 
-    it('should handle empty text', () => {
-      const result = engine.chunkExtractedText('', 1000);
+    it('should handle empty text', async () => {
+      const result = await engine.chunkExtractedText('', 1000);
       expect(result).toHaveLength(1);
       expect(result[0]).toBe('');
     });
 
-    it('should handle very small token limit', () => {
+    it('should handle very small token limit', async () => {
       // With sentence-based chunking, a single sentence stays as one chunk
       const text = 'Hello World. This is another sentence. And a third.';
-      const result = engine.chunkExtractedText(text, 3);
+      const result = await engine.chunkExtractedText(text, 3);
       // Even with a tiny limit, the text is short enough or chunking produces at least the text
       expect(result.length).toBeGreaterThanOrEqual(1);
       expect(result.join('')).toContain('Hello World');
     });
 
-    it('should preserve all text across chunks', () => {
+    it('should preserve all text across chunks', async () => {
       const text = 'The quick brown fox jumps over the lazy dog. '.repeat(100);
       const tokenLimit = 100;
 
-      const result = engine.chunkExtractedText(text, tokenLimit);
+      const result = await engine.chunkExtractedText(text, tokenLimit);
       // With sentence-based chunking, each chunk's text should be part of the original
       for (const chunk of result) {
         expect(text).toContain(chunk.trim());

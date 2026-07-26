@@ -28,6 +28,11 @@ import type { EmbeddingRunResult } from '@memberjunction/ai-prompts'
 import { AIPromptParams } from '@memberjunction/ai-core-plus'
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
 import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
+import {
+    FIXED_WINDOW_SEGMENTER_KEY,
+    FixedWindowSegmentationOptions,
+    ResolveSegmenter,
+} from '@memberjunction/ai-segmentation'
 import { VectorDBBase, VectorRecord, BaseResponse } from '@memberjunction/ai-vectordb'
 import { TagEngine } from '@memberjunction/tag-engine'
 import { TagEngineBase } from '@memberjunction/tag-engine-base'
@@ -870,7 +875,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         const prompt = this.getAutotagPrompt();
         const tokenLimit = this.resolveTokenLimit(params.modelID);
-        const chunks = this.chunkExtractedText(params.text, tokenLimit);
+        const chunks = await this.chunkExtractedText(params.text, tokenLimit);
 
         if (chunks.length === 0 || (chunks.length === 1 && (!chunks[0] || chunks[0].trim().length === 0))) {
             LogError(`[Autotag] No text to process for item ${params.contentItemID}`);
@@ -997,29 +1002,64 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Chunks text using the shared TextChunker utility for token-aware splitting.
-     * Falls back to simple character-based splitting when TextChunker is not available.
+     * Registration key of the segmentation strategy this engine uses.
+     *
+     * Defaults to `FixedWindow`, which reproduces the engine's historical token-window
+     * behavior exactly — routing through the strategy layer is a refactor, not a behavior
+     * change. Override in a subclass (or, once the config field lands, resolve it from the
+     * Content Source / Content Type `Configuration`) to opt into structure-aware
+     * (`StructuralText`), topic-aware (`SemanticText`), or transcript-based (`Transcript`)
+     * segmentation.
+     *
+     * @see [Content Segmentation Guide](../../../../../guides/CONTENT_SEGMENTATION_GUIDE.md)
      */
-    public chunkExtractedText(text: string, tokenLimit: number): string[] {
+    protected resolveSegmenterKey(): string {
+        return FIXED_WINDOW_SEGMENTER_KEY;
+    }
+
+    /**
+     * Run the resolved segmentation strategy over `text` and return its text payloads.
+     *
+     * Returns null when segmentation fails, so callers can apply their own fallback rather
+     * than silently embedding nothing.
+     */
+    protected async segmentTextForChunking(
+        text: string,
+        options: FixedWindowSegmentationOptions
+    ): Promise<string[] | null> {
+        const segmenter = ResolveSegmenter(this.resolveSegmenterKey(), FIXED_WINDOW_SEGMENTER_KEY);
+        const result = await segmenter.Segment({ Text: text, Options: options });
+        if (!result.Success) {
+            LogError(`[Autotag] Segmentation failed (${result.SegmenterKey}): ${result.ErrorMessage ?? 'unknown error'}`);
+            return null;
+        }
+        const texts = result.Segments.map(s => s.Text ?? '').filter(t => t.trim().length > 0);
+        return texts.length > 0 ? texts : null;
+    }
+
+    /**
+     * Chunks text for the LLM tagging pass, sized to the *tagging model's* context window.
+     *
+     * Note the budget here is deliberately independent of the embedding budget
+     * ({@link MAX_EMBEDDING_TOKENS}) — these two chunk sites feed different consumers and
+     * must not be collapsed into one call. Tagging chunks are transient and never persisted.
+     */
+    public async chunkExtractedText(text: string, tokenLimit: number): Promise<string[]> {
         try {
             const maxChunkTokens = Math.ceil(tokenLimit / 1.5);
 
+            // Short-circuit: text that already fits is passed through verbatim, preserving its
+            // original whitespace (a segmenter would return a normalized reflow of the same text).
             if (text.length <= maxChunkTokens * 4) {
                 return [text];
             }
 
-            try {
-                const chunkParams: ChunkTextParams = {
-                    Text: text,
-                    MaxChunkTokens: maxChunkTokens,
-                    OverlapTokens: Math.ceil(maxChunkTokens * 0.1),
-                    Strategy: 'sentence',
-                };
-                const chunks = TextChunker.ChunkText(chunkParams);
-                return chunks.map(c => c.Text);
-            } catch {
-                return this.fallbackChunkText(text, maxChunkTokens);
-            }
+            const segments = await this.segmentTextForChunking(text, {
+                MaxSegmentTokens: maxChunkTokens,
+                OverlapTokens: Math.ceil(maxChunkTokens * 0.1),
+                TextStrategy: 'sentence',
+            });
+            return segments ?? this.fallbackChunkText(text, maxChunkTokens);
         } catch {
             LogError('Could not chunk the text');
             return [text];
@@ -1624,7 +1664,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const batch = items.slice(i, i + batchSize);
 
             // Build chunks for each item — items with long text produce multiple chunks
-            const allChunks = this.buildChunksForBatch(batch);
+            const allChunks = await this.buildChunksForBatch(batch);
 
             const texts = allChunks.map(c => c.text);
             // Rate limit embedding API call
@@ -1692,12 +1732,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Build text chunks for a batch of content items. Items with long text
      * produce multiple chunks via TextChunker.
      */
-    private buildChunksForBatch(
+    private async buildChunksForBatch(
         batch: MJContentItemEntity[]
-    ): EmbeddingChunk[] {
+    ): Promise<EmbeddingChunk[]> {
         const allChunks: EmbeddingChunk[] = [];
         for (const item of batch) {
-            const chunks = this.buildEmbeddingChunks(item);
+            const chunks = await this.buildEmbeddingChunks(item);
             for (let ci = 0; ci < chunks.length; ci++) {
                 // Mint a stable per-chunk id up front. This becomes BOTH the ContentItemChunk row's
                 // PK and (under the 'recordId' strategy) its vector-DB id, so a re-chunk produces
@@ -2617,7 +2657,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Build the text to embed for a content item, and chunk it if it exceeds
      * the embedding model's token limit. Returns one or more text chunks.
      */
-    private buildEmbeddingChunks(item: MJContentItemEntity): string[] {
+    private async buildEmbeddingChunks(item: MJContentItemEntity): Promise<string[]> {
         const parts: string[] = [];
         if (item.Name) parts.push(item.Name);
         if (item.Description) parts.push(item.Description);
@@ -2631,25 +2671,23 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             return [full];
         }
 
-        // Chunk using TextChunker for token-aware splitting
         LogStatus(`[Autotag] Chunking embedding text for "${item.Name}" (${full.length} chars, ~${Math.ceil(full.length / 4)} tokens)`);
-        try {
-            const chunkParams: ChunkTextParams = {
-                Text: full,
-                MaxChunkTokens: AutotagBaseEngine.MAX_EMBEDDING_TOKENS,
-                OverlapTokens: 100,
-            };
-            const chunks = TextChunker.ChunkText(chunkParams);
-            LogStatus(`[Autotag] Split into ${chunks.length} chunks for embedding`);
-            return chunks.map(c => c.Text);
-        } catch {
-            // Fallback: simple character-based splitting
-            const result: string[] = [];
-            for (let i = 0; i < full.length; i += charLimit) {
-                result.push(full.substring(i, i + charLimit));
-            }
-            return result;
+        const segments = await this.segmentTextForChunking(full, {
+            MaxSegmentTokens: AutotagBaseEngine.MAX_EMBEDDING_TOKENS,
+            OverlapTokens: 100,
+            TextStrategy: 'sentence',
+        });
+        if (segments) {
+            LogStatus(`[Autotag] Split into ${segments.length} chunks for embedding`);
+            return segments;
         }
+
+        // Fallback: simple character-based splitting
+        const result: string[] = [];
+        for (let i = 0; i < full.length; i += charLimit) {
+            result.push(full.substring(i, i + charLimit));
+        }
+        return result;
     }
 
     /**

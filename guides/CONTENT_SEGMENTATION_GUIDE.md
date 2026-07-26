@@ -121,6 +121,24 @@ Collapsing them into one call is **not** — their budgets are unrelated, and ty
 embedding-model change silently alters tagging behaviour. Keep them as two calls with different
 `MaxSegmentTokens`.
 
+### How ContentAutotagging wires this
+
+`AutotagBaseEngine` routes both sites through one seam:
+
+```typescript
+protected resolveSegmenterKey(): string { return FIXED_WINDOW_SEGMENTER_KEY; }
+
+protected async segmentTextForChunking(text: string, options): Promise<string[] | null> { ... }
+```
+
+`resolveSegmenterKey()` is the extension point. It defaults to `FixedWindow` with each site's
+historical budget, so routing through the strategy layer changed no behaviour — override it in a
+subclass, or resolve it from the Content Source / Content Type `Configuration`, to opt into
+`StructuralText`, `SemanticText`, or `Transcript`.
+
+`segmentTextForChunking` returns `null` on failure rather than an empty array, so each caller applies
+its own fallback instead of silently embedding nothing.
+
 ---
 
 ## Multimodal: one vector, dual representation
