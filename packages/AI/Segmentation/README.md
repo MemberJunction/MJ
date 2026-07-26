@@ -71,6 +71,19 @@ for (const segment of result.Segments) {
 Segmenters **never throw** for content-shaped problems; they return `Success: false` with an
 `ErrorMessage`, matching the convention used by `RunView` and `BaseEntity.Save()`.
 
+### Bootstrap
+
+Segmenters are resolved dynamically through the class factory, so bundlers may tree-shake them. Call
+the load-prevention export once from your application bootstrap:
+
+```typescript
+import { LoadContentSegmenters } from '@memberjunction/ai-segmentation';
+LoadContentSegmenters();
+```
+
+Skipping this doesn't produce an error — `ResolveSegmenter` degrades to the fallback strategy — so
+content still gets chunked, just by the wrong strategy and silently.
+
 ### Audio/video chapters
 
 ```typescript

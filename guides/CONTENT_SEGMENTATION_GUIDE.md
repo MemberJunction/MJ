@@ -99,6 +99,12 @@ A configured key that no longer resolves (renamed strategy, package not loaded) 
 configuration is data, and data drifts. Segmenters **never throw** for content-shaped problems; they
 return `Success: false`, matching `RunView` and `BaseEntity.Save()`.
 
+> **Bootstrap requirement.** Segmenters are instantiated dynamically through the class factory, so
+> bundlers can tree-shake them out. Call `LoadContentSegmenters()` once from your application
+> bootstrap. Skipping it produces **no error** — resolution just falls back to the default strategy,
+> so content is still chunked, silently by the wrong strategy. This is the same load-prevention
+> pattern used by `LoadExpoPushProvider`, `LoadMJComputerUse`, and other factory-resolved packages.
+
 ---
 
 ## Two chunk sites, two budgets — do not unify them
