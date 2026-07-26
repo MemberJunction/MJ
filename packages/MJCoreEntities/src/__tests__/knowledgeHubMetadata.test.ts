@@ -17,6 +17,12 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 vi.mock('@memberjunction/core', () => {
     return {
         BaseEngine: class MockBaseEngine {
+            // Minimal stand-in for BaseEngine.DataChange$ so the engine constructor's
+            // invalidation subscription is satisfied. Tests reset the index cache directly
+            // in beforeEach (they poke private arrays, bypassing the event path).
+            get DataChange$() {
+                return { subscribe: () => ({ unsubscribe: () => { /* no-op */ } }) };
+            }
             static getInstance<T>(): T {
                 const ctor = this as unknown as { _testInstance?: T; new (): T };
                 if (!ctor._testInstance) {
@@ -82,6 +88,20 @@ function createMockVectorIndex(overrides: Partial<MockVectorIndex> = {}): MockVe
     };
 }
 
+interface MockContentSource { ID: string; Name: string; }
+interface MockContentType { ID: string; Name: string; }
+interface MockContentSourceType { ID: string; Name: string; }
+
+function createMockContentSource(overrides: Partial<MockContentSource> = {}): MockContentSource {
+    return { ID: 'CS-0001-0000-0000-000000000001', Name: 'default-source', ...overrides };
+}
+function createMockContentType(overrides: Partial<MockContentType> = {}): MockContentType {
+    return { ID: 'CT-0001-0000-0000-000000000001', Name: 'default-type', ...overrides };
+}
+function createMockContentSourceType(overrides: Partial<MockContentSourceType> = {}): MockContentSourceType {
+    return { ID: 'CST-0001-0000-0000-000000000001', Name: 'default-source-type', ...overrides };
+}
+
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -105,6 +125,19 @@ describe('KnowledgeHubMetadataEngine', () => {
             createMockVectorIndex({ ID: 'VI-AAA', Name: 'contacts-idx' }),
             createMockVectorIndex({ ID: 'VI-BBB', Name: 'accounts-idx' }),
         ];
+        (engine as unknown as Record<string, MockContentSource[]>)['_contentSources'] = [
+            createMockContentSource({ ID: 'CS-AAA', Name: 'RSS Feed' }),
+            createMockContentSource({ ID: 'CS-BBB', Name: 'Website' }),
+        ];
+        (engine as unknown as Record<string, MockContentType[]>)['_contentTypes'] = [
+            createMockContentType({ ID: 'CT-AAA', Name: 'Article' }),
+        ];
+        (engine as unknown as Record<string, MockContentSourceType[]>)['_contentSourceTypes'] = [
+            createMockContentSourceType({ ID: 'CST-AAA', Name: 'RSS' }),
+        ];
+        // Tests inject data directly into the private arrays, bypassing the engine's event-driven
+        // invalidation, so reset the by-id index cache too (mirrors clearing the arrays above).
+        (engine as unknown as { _idIndexes: Map<unknown, unknown> })._idIndexes.clear();
     });
 
     // ================================================================
@@ -256,6 +289,52 @@ describe('KnowledgeHubMetadataEngine', () => {
         it('should return undefined for empty string', () => {
             const result = engine.GetVectorIndexById('');
             expect(result).toBeUndefined();
+        });
+    });
+
+    // ================================================================
+    // O(1) by-id finders (content sources / types / source types)
+    // ================================================================
+
+    describe('GetContentSourceById', () => {
+        it('should find a content source by ID', () => {
+            expect(engine.GetContentSourceById('CS-AAA')?.Name).toBe('RSS Feed');
+        });
+        it('should be case-insensitive', () => {
+            expect(engine.GetContentSourceById('cs-bbb')?.Name).toBe('Website');
+        });
+        it('should return undefined for non-existent ID', () => {
+            expect(engine.GetContentSourceById('CS-ZZZ')).toBeUndefined();
+        });
+        it('should return undefined for empty string', () => {
+            expect(engine.GetContentSourceById('')).toBeUndefined();
+        });
+        it('should reflect a swapped-out array (index rebuilds on next call after cache reset)', () => {
+            expect(engine.GetContentSourceById('CS-AAA')?.Name).toBe('RSS Feed'); // builds index
+            (engine as unknown as Record<string, MockContentSource[]>)['_contentSources'] = [
+                createMockContentSource({ ID: 'CS-NEW', Name: 'Fresh Source' }),
+            ];
+            (engine as unknown as { _idIndexes: Map<unknown, unknown> })._idIndexes.clear();
+            expect(engine.GetContentSourceById('CS-AAA')).toBeUndefined();
+            expect(engine.GetContentSourceById('CS-NEW')?.Name).toBe('Fresh Source');
+        });
+    });
+
+    describe('GetContentTypeById', () => {
+        it('should find a content type by ID (case-insensitive)', () => {
+            expect(engine.GetContentTypeById('ct-aaa')?.Name).toBe('Article');
+        });
+        it('should return undefined for non-existent ID', () => {
+            expect(engine.GetContentTypeById('CT-ZZZ')).toBeUndefined();
+        });
+    });
+
+    describe('GetContentSourceTypeById', () => {
+        it('should find a content source type by ID (case-insensitive)', () => {
+            expect(engine.GetContentSourceTypeById('cst-aaa')?.Name).toBe('RSS');
+        });
+        it('should return undefined for non-existent ID', () => {
+            expect(engine.GetContentSourceTypeById('CST-ZZZ')).toBeUndefined();
         });
     });
 
