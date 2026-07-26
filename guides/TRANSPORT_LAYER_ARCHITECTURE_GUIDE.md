@@ -278,7 +278,7 @@ The engine is **always** present — it's the home of the logic. Everything else
 
 ## 7. Related guides
 
-- Root [`CLAUDE.md`](../CLAUDE.md) — "Actions Design Philosophy" (when code→agent vs code→code), Rule #7 (`BaseSingleton`), Rule #5 (no cross-package re-exports — the client mirrors types, doesn't re-export them).
+- [`packages/Actions/CLAUDE.md`](../packages/Actions/CLAUDE.md) — "Actions are boundaries" (when code→agent vs code→code). [`.claude/rules/typescript-style.md`](../.claude/rules/typescript-style.md) — `BaseSingleton`, and no cross-package re-exports (the client mirrors types, doesn't re-export them).
 - [`guides/CACHING_AND_PUBSUB_GUIDE.md`](CACHING_AND_PUBSUB_GUIDE.md) — `GraphQLDataProvider` caching + `BaseEngine` reactive invalidation.
 - [`guides/DASHBOARD_BEST_PRACTICES.md`](DASHBOARD_BEST_PRACTICES.md) — Engine classes for UI domain logic + reactive `ObserveProperty`.
 - [`packages/Angular/CLAUDE.md`](../packages/Angular/CLAUDE.md) — multi-provider `Provider` threading for the UI layer.
