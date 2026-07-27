@@ -8,23 +8,35 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@memberjunction/communication-types', () => ({
-  BaseCommunicationProvider: class {
-    getSupportedOperations() { return []; }
-  },
-  resolveCredentialValue: (requestVal: string | undefined, envVal: string | undefined, disableFallback: boolean) => {
-    if (requestVal) return requestVal;
-    if (!disableFallback && envVal) return envVal;
-    return undefined;
-  },
-  validateRequiredCredentials: (creds: Record<string, unknown>, required: string[], provider: string) => {
-    for (const key of required) {
-      if (!creds[key]) {
-        throw new Error(`${provider}: Missing required credential: ${key}`);
+vi.mock('@memberjunction/communication-types', async () => {
+  // Pull the REAL address-list parser (a pure, dependency-free module) directly from the
+  // base-types source so the recipient-extraction tests exercise genuine parsing; importing
+  // the whole actual package would drag in @memberjunction/core-entities, which this test
+  // environment deliberately does not mock.
+  // Typed structurally (not via `typeof import(path)`) so the cross-package source file
+  // stays out of this package's TS program — a type-level path import violates rootDir.
+  const addressUtils = await vi.importActual<{
+    parseEmailAddressList: (headerValue: string | null | undefined) => string[];
+  }>('../../../../base-types/src/AddressUtils');
+  return {
+    ...addressUtils,
+    BaseCommunicationProvider: class {
+      getSupportedOperations() { return []; }
+    },
+    resolveCredentialValue: (requestVal: string | undefined, envVal: string | undefined, disableFallback: boolean) => {
+      if (requestVal) return requestVal;
+      if (!disableFallback && envVal) return envVal;
+      return undefined;
+    },
+    validateRequiredCredentials: (creds: Record<string, unknown>, required: string[], provider: string) => {
+      for (const key of required) {
+        if (!creds[key]) {
+          throw new Error(`${provider}: Missing required credential: ${key}`);
+        }
       }
-    }
-  },
-}));
+    },
+  };
+});
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -338,6 +350,65 @@ describe('GmailProvider', () => {
         ],
       });
       expect(body).toBe('');
+    });
+  });
+
+  describe('GetMessages recipient extraction', () => {
+    const b64url = (s: string) => Buffer.from(s, 'utf-8').toString('base64url');
+
+    /**
+     * Drives a single message with the given headers through the public GetMessages()
+     * path and returns the normalized message. Flow mirrors the body-extraction harness.
+     */
+    const getMessageFor = async (headers: Array<{ name: string; value: string }>) => {
+      mockMessagesList.mockResolvedValue({ data: { messages: [{ id: 'msg-1' }] } });
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: 'msg-1',
+          threadId: 'thread-1',
+          payload: { mimeType: 'text/plain', headers, body: { data: b64url('hello') } },
+        },
+      });
+
+      const result = await provider.GetMessages({ NumMessages: 1 } as never);
+      expect(result.Success).toBe(true);
+      expect(result.Messages).toHaveLength(1);
+      return result.Messages![0];
+    };
+
+    it('populates ToRecipients and CCRecipients as bare addresses', async () => {
+      const message = await getMessageFor([
+        { name: 'From', value: 'assistant@example.com' },
+        { name: 'To', value: 'us@example.org, other@example.com' },
+        { name: 'Cc', value: 'leader@example.com, staff@example.org' },
+      ]);
+      expect(message.ToRecipients).toEqual(['us@example.org', 'other@example.com']);
+      expect(message.CCRecipients).toEqual(['leader@example.com', 'staff@example.org']);
+    });
+
+    it('normalizes display-name forms, including quoted names with commas', async () => {
+      const message = await getMessageFor([
+        { name: 'From', value: 'assistant@example.com' },
+        { name: 'To', value: '"Doe, Jane" <jane@example.com>, Bob Smith <bob@example.com>' },
+        { name: 'Cc', value: 'Leader <leader@example.com>' },
+      ]);
+      expect(message.ToRecipients).toEqual(['jane@example.com', 'bob@example.com']);
+      expect(message.CCRecipients).toEqual(['leader@example.com']);
+    });
+
+    it('returns empty arrays when To/Cc headers are absent', async () => {
+      const message = await getMessageFor([{ name: 'From', value: 'assistant@example.com' }]);
+      expect(message.ToRecipients).toEqual([]);
+      expect(message.CCRecipients).toEqual([]);
+    });
+
+    it('leaves the legacy To field as the raw header value', async () => {
+      const rawTo = '"Doe, Jane" <jane@example.com>, bob@example.com';
+      const message = await getMessageFor([
+        { name: 'From', value: 'assistant@example.com' },
+        { name: 'To', value: rawTo },
+      ]);
+      expect(message.To).toBe(rawTo);
     });
   });
 

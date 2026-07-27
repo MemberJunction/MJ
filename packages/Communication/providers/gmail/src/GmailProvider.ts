@@ -13,6 +13,7 @@ import {
   ProviderCredentialsBase,
   ReplyToMessageParams,
   ReplyToMessageResult,
+  parseEmailAddressList,
   resolveCredentialValue,
   validateRequiredCredentials,
   ProviderOperation,
@@ -476,6 +477,8 @@ export class GmailProvider extends BaseCommunicationProvider {
         return {
           From: from || '',
           To: to || '',
+          ToRecipients: parseEmailAddressList(to),
+          CCRecipients: parseEmailAddressList(getHeader('cc')),
           ReplyTo: replyTo.map(r => r || ''),
           Subject: subject || '',
           Body: body,
@@ -1656,6 +1659,8 @@ export class GmailProvider extends BaseCommunicationProvider {
     return {
       From: from || '',
       To: to || '',
+      ToRecipients: parseEmailAddressList(to),
+      CCRecipients: parseEmailAddressList(getHeader('cc')),
       ReplyTo: replyTo.map(r => r || '').filter(r => r !== ''),
       Subject: subject || '',
       Body: body,
