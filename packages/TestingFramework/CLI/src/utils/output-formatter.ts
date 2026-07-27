@@ -13,6 +13,18 @@ import * as fs from 'fs';
  */
 export class OutputFormatter {
     /**
+     * True when a test's status represents a real failure the operator must act on.
+     *
+     * `'Skipped'` is neither a pass nor a failure — it means the test never executed, because a
+     * tier gate was closed or the bundle cannot apply to the active database platform. Rendering
+     * it as FAIL would make a correctly-configured PostgreSQL run look broken; rendering it as
+     * PASS is the false green this reporting exists to eliminate. It gets its own label.
+     */
+    public static isTestFailure(status: TestRunResult['status']): boolean {
+        return status !== 'Passed' && status !== 'Skipped';
+    }
+
+    /**
      * Format test run result based on output format
      */
     static formatTestResult(result: TestRunResult, format: OutputFormat): string {
@@ -53,8 +65,9 @@ export class OutputFormatter {
      * Format test result as Markdown
      */
     private static formatMarkdown(result: TestRunResult): string {
-        const passed = result.status === 'Passed';
-        const status = passed ? 'PASSED ✓' : 'FAILED ✗';
+        const status = result.status === 'Passed' ? 'PASSED ✓'
+            : result.status === 'Skipped' ? 'SKIPPED ⊘'
+            : 'FAILED ✗';
         const scorePercent = (result.score * 100).toFixed(1);
 
         let md = `# Test Run: ${result.testName}\n`;
@@ -114,9 +127,10 @@ export class OutputFormatter {
 
         // Final status
         lines.push('');
-        const passed = result.status === 'Passed';
-        if (passed) {
+        if (result.status === 'Passed') {
             lines.push(chalk.green.bold(`[TEST_PASS] ${result.testName}`));
+        } else if (result.status === 'Skipped') {
+            lines.push(chalk.yellow.bold(`[TEST_SKIP] ${result.testName}`));
         } else {
             lines.push(chalk.red.bold(`[TEST_FAIL] ${result.testName}`));
         }
@@ -141,13 +155,17 @@ export class OutputFormatter {
      * Format suite result as Markdown
      */
     private static formatSuiteMarkdown(result: TestSuiteRunResult): string {
-        const passRate = result.totalTests > 0 ? (result.passedTests / result.totalTests * 100).toFixed(1) : '0.0';
+        // Pass rate is over the tests that actually EXECUTED. Dividing by totalTests would
+        // silently depress the rate on a platform where some bundles legitimately do not apply.
+        const executedTests = result.totalTests - result.skippedTests;
+        const passRate = executedTests > 0 ? (result.passedTests / executedTests * 100).toFixed(1) : '0.0';
 
         let md = `# Test Suite: ${result.suiteName}\n`;
         md += `**Total Tests:** ${result.totalTests}\n`;
         md += `**Passed:** ${result.passedTests}\n`;
         md += `**Failed:** ${result.failedTests}\n`;
-        md += `**Pass Rate:** ${passRate}%\n`;
+        md += `**Skipped:** ${result.skippedTests}\n`;
+        md += `**Pass Rate:** ${passRate}% (of ${executedTests} executed)\n`;
         md += `**Duration:** ${(result.durationMs / 1000).toFixed(1)}s\n`;
         md += `**Total Cost:** $${result.totalCost.toFixed(4)}\n`;
 
@@ -156,13 +174,24 @@ export class OutputFormatter {
         md += '|------|--------|-------|----------|------|\n';
 
         for (const testResult of result.testResults) {
-            const passed = testResult.status === 'Passed';
-            const status = passed ? '✓ PASS' : '✗ FAIL';
+            const status = testResult.status === 'Passed' ? '✓ PASS'
+                : testResult.status === 'Skipped' ? '⊘ SKIP'
+                : '✗ FAIL';
             const cost = `$${testResult.totalCost.toFixed(4)}`;
             md += `| ${testResult.testName} | ${status} | ${testResult.score.toFixed(4)} | ${(testResult.durationMs / 1000).toFixed(1)}s | ${cost} |\n`;
         }
 
-        const failedTests = result.testResults.filter(t => t.status !== 'Passed');
+        const skipped = result.testResults.filter(t => t.status === 'Skipped');
+        if (skipped.length > 0) {
+            md += '\n## Skipped\n';
+            for (const testResult of skipped) {
+                // The gate oracle carries the reason — surface it, so a skip is always explainable.
+                const reason = testResult.oracleResults.find(o => o.oracleType === 'gate')?.message ?? 'no reason recorded';
+                md += `- **${testResult.testName}** — ${reason}\n`;
+            }
+        }
+
+        const failedTests = result.testResults.filter(t => OutputFormatter.isTestFailure(t.status));
         if (failedTests.length > 0) {
             md += '\n## Failures\n';
             for (const testResult of failedTests) {
@@ -199,15 +228,23 @@ export class OutputFormatter {
         for (let i = 0; i < result.testResults.length; i++) {
             const testResult = result.testResults[i];
             const number = chalk.gray(`[${i + 1}/${result.totalTests}]`);
-            const passed = testResult.status === 'Passed';
-            const symbol = passed ? chalk.green('✓') : chalk.red('✗');
-            const status = passed ? chalk.green('PASSED') : chalk.red('FAILED');
+            const failed = OutputFormatter.isTestFailure(testResult.status);
+            const isSkipped = testResult.status === 'Skipped';
+            const symbol = isSkipped ? chalk.yellow('⊘') : failed ? chalk.red('✗') : chalk.green('✓');
+            const status = isSkipped ? chalk.yellow('SKIPPED') : failed ? chalk.red('FAILED') : chalk.green('PASSED');
             const cost = `$${testResult.totalCost.toFixed(4)}`;
 
             lines.push(`${number} ${testResult.testName}`);
             lines.push(`${symbol} ${status} (${(testResult.durationMs / 1000).toFixed(1)}s, score: ${testResult.score.toFixed(4)}, cost: ${cost})`);
 
-            if (!passed) {
+            if (isSkipped) {
+                const reason = testResult.oracleResults.find(o => o.oracleType === 'gate')?.message;
+                if (reason) {
+                    lines.push(chalk.yellow(`  - ${reason}`));
+                }
+            }
+
+            if (failed) {
                 for (const oracle of testResult.oracleResults) {
                     if (!oracle.passed) {
                         lines.push(chalk.red(`  - Oracle '${oracle.oracleType}' failed: ${oracle.message}`));
@@ -221,12 +258,17 @@ export class OutputFormatter {
             lines.push('');
         }
 
-        // Summary
-        const passRate = result.totalTests > 0 ? (result.passedTests / result.totalTests * 100).toFixed(1) : '0.0';
+        // Summary. The pass rate is over EXECUTED tests — see formatSuiteMarkdown.
+        const executedTests = result.totalTests - result.skippedTests;
+        const passRate = executedTests > 0 ? (result.passedTests / executedTests * 100).toFixed(1) : '0.0';
         lines.push(chalk.bold('[SUITE_COMPLETE] ' + result.suiteName));
-        lines.push(chalk.bold(`[SUMMARY] ${result.passedTests}/${result.totalTests} passed (${passRate}%)`));
+        lines.push(chalk.bold(`[SUMMARY] ${result.passedTests}/${executedTests} executed tests passed (${passRate}%)`));
         lines.push(chalk.bold(`[DURATION] ${(result.durationMs / 1000).toFixed(1)}s`));
         lines.push(chalk.bold(`[COST] $${result.totalCost.toFixed(4)}`));
+
+        if (result.skippedTests > 0) {
+            lines.push(chalk.yellow.bold(`[SKIPPED] ${result.skippedTests} test(s) did not execute - see details above`));
+        }
 
         if (result.failedTests > 0) {
             lines.push(chalk.red.bold(`[FAILURES] ${result.failedTests} test(s) failed - see details above`));

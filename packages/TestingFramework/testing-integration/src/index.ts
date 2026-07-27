@@ -7,6 +7,7 @@
 export * from './config';
 export * from './tiers';
 export * from './instrumented-cache';
+export * from './pg-user-cache';
 export * from './test-runner';
 export * from './bootstrap';
 // bootstrapIntegrationClient lives in the server-FREE bootstrap-client module (so client

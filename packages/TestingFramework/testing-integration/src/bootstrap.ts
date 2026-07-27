@@ -18,9 +18,10 @@
  */
 import sql from 'mssql';
 import { LocalCacheManager, InMemoryLocalStorageProvider, Metadata, SetProvider } from '@memberjunction/core';
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { InstrumentedLocalStorageProvider } from './instrumented-cache';
+import { feedUserCacheFromPG } from './pg-user-cache';
 import { LoadEnv, LoadDbConfig } from './config';
 import type { DbConfig } from './config';
 import {
@@ -50,24 +51,6 @@ function resolveContextUser(email?: string): UserInfo {
         throw new Error('No context user found in UserCache. Set MJ_TEST_USER_EMAIL or ensure the Users table is populated.');
     }
     return user;
-}
-
-/**
- * Resolve the context user on the PostgreSQL path. UserCache (mssql-only Refresh) is
- * not populated on PG, so this surfaces the missing PG-aware user bootstrap as a clear,
- * actionable error (the Phase-0 prerequisite) instead of fabricating a user.
- */
-function resolvePostgresContextUser(email?: string): UserInfo {
-    const users = UserCache.Instance.Users ?? [];
-    if (users.length === 0) {
-        throw new Error(
-            'PostgreSQL integration bootstrap: no context user is available. UserCache.Refresh is ' +
-            'mssql-only, so PG needs a PG-aware user-cache bootstrap before the integration suites can ' +
-            'run against it (tracked Phase-0 prerequisite — plan §10 Step 6). The provider was configured ' +
-            'successfully; only user resolution is blocked.'
-        );
-    }
-    return resolveContextUser(email);
 }
 
 /**
@@ -131,12 +114,10 @@ async function setupSqlServerProvider(
  * dependency) is dynamically imported so it stays out of the default dependency graph
  * for SQL-Server-only consumers (CLAUDE.md rule #8 category 2; declared in optionalDependencies).
  *
- * NOTE (Phase-0 prerequisite, see plan §10 Step 6): there is no PG-aware user-cache
- * bootstrap yet — `UserCache.Refresh` is mssql-only (raw `sql.Request`), and a fresh
- * provider has no users loaded to seed a RunView-based load. This helper sets up the
- * real provider, then resolves the context user from whatever is already cached; if
- * nothing is, it throws a clear, actionable error rather than fabricating a user. The
- * PG parity CI lane is therefore non-blocking until that framework gap is closed.
+ * The user cache is fed through {@link feedUserCacheFromPG} on the provider's own pg pool,
+ * so the PG path resolves its context user exactly the way the SQL Server path does — the
+ * only difference being the dialect each feeder speaks. Both funnel into
+ * `UserCache.RefreshFromRows`, and both fail loudly on an empty user table.
  */
 async function setupPostgreSQLProvider(
     db: DbConfig, storage: InstrumentedLocalStorageProvider, opts: BootstrapServerOptions
@@ -149,14 +130,14 @@ async function setupPostgreSQLProvider(
         1 // checkRefreshIntervalSeconds > 0 → load metadata on Config
     );
     await provider.Config(pgConfig);
-    SetProvider(provider as unknown as IMetadataProvider);
+    SetProvider(provider);
 
-    const user = resolvePostgresContextUser(opts.ContextUserEmail);
+    // The specific provider, not Metadata.Provider — it is in scope here, so there is no reason
+    // to route through the global.
+    await feedUserCacheFromPG(provider.DatabaseConnection, db.Schema, provider);
+    const user = resolveContextUser(opts.ContextUserEmail);
     return {
         Pool: undefined, User: user, Storage: storage, Provider: Metadata.Provider, Db: db, // global-provider-ok: this dedicated-process bootstrap just installed the one global provider (SetProvider above) — it IS the single provider for this run (D1)
-        ClosePool: async () => {
-            const pgPool = (provider as unknown as { DatabaseConnection?: { end?: () => Promise<void> } }).DatabaseConnection;
-            await pgPool?.end?.();
-        }
+        ClosePool: async () => { await provider.DatabaseConnection.end(); }
     };
 }

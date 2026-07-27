@@ -23,7 +23,7 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 
 | Bundle | Checks | IT record | Transport | Tier notes |
 |---|---|---|---|---|
-| `metadata-consistency` | 7 (MC1–MC6, MC8) | IT24 - Metadata/DB Consistency Audit | server (documented exception — `sys.*` has no client surface) | deterministic; skips-as-pass on PostgreSQL (no mssql pool) |
+| `metadata-consistency` | 7 (MC1–MC6, MC8) | IT24 - Metadata/DB Consistency Audit | server (documented exception — `sys.*` has no client surface) | deterministic; declares `Platforms: ['sqlserver']`, so PostgreSQL reports an honest `Skipped` |
 | `codegen-determinism` | 6 (CD1–CD6) | IT50 - CodeGen Artifact Consistency | client | deterministic; CD6 source legs skip outside the repo tree |
 | `metadata-sync` | 9 (MS1–MS9) | IT49 - MetadataSync Parsing Contracts | server | deterministic; zero DB writes |
 | `class-resolution` | 5 (CR1–CR5) | IT48 - ClassFactory Resolution Contracts | server | deterministic; read-only |
@@ -49,7 +49,9 @@ Every bundle in this family belongs to the **"Integration Tests — Deterministi
 
 **Machinery under test.** The agreement between MJ's entity-metadata cache and the *physical* SQL Server catalog: generated base views and CRUD procedures in `sys.objects`, CHECK-constraint value lists vs `EntityFieldValue` rows, CodeGen's `IDX_AUTO_MJ_FKEY_{Table}_{Column}` FK indexes, field `Sequence` integrity vs base-view column order, `MS_Description` extended properties, and `MJ: Schema Info` coverage/casing. This is the highest value-per-effort audit in the catalog (Domain 1) because CodeGen is *supposed* to keep all of it in lockstep — every red here means a migration was applied without CodeGen, or CodeGen itself misfired (which it demonstrably has: see B24/B26 below).
 
-**Transport.** Server, by documented exception: `sys.objects` / `sys.check_constraints` / `sys.indexes` / `sys.columns` / `sys.extended_properties` have no GraphQL surface. The file header records the exception explicitly and notes the eventual Remote-Operation escape hatch was deliberately not built here. On PostgreSQL (or any transport without `ctx.Pool`) every check **skips-as-pass with a logged note** via `poolOrSkip()` — never a silent pass on SQL Server.
+**Transport.** Server, by documented exception: `sys.objects` / `sys.check_constraints` / `sys.indexes` / `sys.columns` / `sys.extended_properties` have no GraphQL surface. The file header records the exception explicitly and notes the eventual Remote-Operation escape hatch was deliberately not built here.
+
+**Platform.** SQL-Server-only, and now *declared* as such: the bundle registers `Platforms: ['sqlserver']`, so on PostgreSQL the driver reports the whole test as `Skipped` without invoking a single check body. Before #3257 it relied on `poolOrSkip()` returning null when `ctx.Pool` was undefined — which, it turns out, meant these checks **never executed in CI on either platform**: `ctx.Pool` comes from the active bootstrap context, and the `mj test` CLI did not publish one, so the pool was undefined on SQL Server too and every check skipped-as-pass. The CLI now publishes that context, so MC1–MC8 genuinely run on SQL Server for the first time.
 
 **Fixtures/lifecycle.** None. Zero fixtures, zero mutation, no lifecycle registered — every check is a pure SELECT plus the in-memory metadata cache. Each check sweeps *all* entities, aggregates offenders, and reports a count plus a bounded sample of 8.
 

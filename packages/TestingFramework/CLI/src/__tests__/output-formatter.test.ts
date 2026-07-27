@@ -61,6 +61,7 @@ type TestSuiteRunResult = {
   totalTests: number;
   passedTests: number;
   failedTests: number;
+  skippedTests: number;
   durationMs: number;
   totalCost: number;
   testResults: TestRunResult[];
@@ -132,9 +133,37 @@ describe('OutputFormatter', () => {
       totalTests: 2,
       passedTests: 1,
       failedTests: 1,
+      skippedTests: 0,
       durationMs: 8000,
       totalCost: 0.0823,
       testResults: [mockTestResult, mockFailedResult],
+    };
+
+    /** A test the driver did not execute — a platform-excluded bundle carries a 'gate' oracle. */
+    const mockSkippedResult: TestRunResult = {
+      testName: 'IT24 Metadata Consistency',
+      status: 'Skipped',
+      score: 0,
+      durationMs: 1,
+      totalCost: 0,
+      oracleResults: [
+        { passed: true, oracleType: 'gate', message: 'Skipped: bundle(s) metadata-consistency do not run on postgresql (declared platform restriction)', score: 0 },
+      ],
+      targetType: 'Integration Check Bundle',
+      targetLogId: 'log-003',
+      passedChecks: 0,
+      totalChecks: 0,
+    };
+
+    const suiteWithSkip: TestSuiteRunResult = {
+      suiteName: 'PG Suite',
+      totalTests: 2,
+      passedTests: 1,
+      failedTests: 0,
+      skippedTests: 1,
+      durationMs: 8000,
+      totalCost: 0.0523,
+      testResults: [mockTestResult, mockSkippedResult],
     };
 
     it('should format suite result as JSON', () => {
@@ -154,7 +183,46 @@ describe('OutputFormatter', () => {
     it('should format suite result for console', () => {
       const output = OutputFormatter.formatSuiteResult(suiteResult as never, 'console');
       expect(output).toContain('Auth Suite');
-      expect(output).toContain('1/2 passed');
+      expect(output).toContain('1/2 executed tests passed');
+    });
+
+    it('should render a skipped test as SKIP rather than FAIL, with its reason', () => {
+      const output = OutputFormatter.formatSuiteResult(suiteWithSkip as never, 'console');
+      expect(output).toContain('SKIPPED');
+      expect(output).toContain('do not run on postgresql');
+      // A skip must never be reported as a failure — that is what made a correctly-configured
+      // PostgreSQL run look broken.
+      expect(output).not.toContain('[FAILURES]');
+      expect(output).toContain('[SKIPPED] 1 test(s) did not execute');
+    });
+
+    it('should compute the pass rate over EXECUTED tests, so skips do not depress it', () => {
+      const output = OutputFormatter.formatSuiteResult(suiteWithSkip as never, 'console');
+      // 1 passed of 1 executed = 100%, not 1 of 2 = 50%.
+      expect(output).toContain('1/1 executed tests passed (100.0%)');
+    });
+
+    it('should list skipped tests and their reasons in markdown', () => {
+      const output = OutputFormatter.formatSuiteResult(suiteWithSkip as never, 'markdown');
+      expect(output).toContain('**Skipped:** 1');
+      expect(output).toContain('## Skipped');
+      expect(output).toContain('do not run on postgresql');
+      expect(output).toContain('⊘ SKIP');
+      // The Failures section must not claim a skip as a failure.
+      expect(output).not.toContain('## Failures');
+    });
+  });
+
+  describe('isTestFailure', () => {
+    it('should treat only genuine failures as failures', () => {
+      expect(OutputFormatter.isTestFailure('Failed')).toBe(true);
+      expect(OutputFormatter.isTestFailure('Error')).toBe(true);
+      expect(OutputFormatter.isTestFailure('Timeout')).toBe(true);
+    });
+
+    it('should treat a skip as neither a pass nor a failure', () => {
+      expect(OutputFormatter.isTestFailure('Skipped')).toBe(false);
+      expect(OutputFormatter.isTestFailure('Passed')).toBe(false);
     });
   });
 

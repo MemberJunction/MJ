@@ -33,6 +33,8 @@ vi.mock('mssql', () => ({}));
 // ---------------------------------------------------------------------------
 import { UserCache } from '../UserCache';
 import { UserInfo } from '@memberjunction/core';
+// Type-only — erased at compile time, so it never resolves through the vi.mock factory above.
+import type { IMetadataProvider } from '@memberjunction/core';
 
 // ---------------------------------------------------------------------------
 // Helper to reset singleton state between tests
@@ -150,9 +152,12 @@ describe('UserCache', () => {
             expect(instance.Users).toHaveLength(2);
         });
 
-        it('should return undefined when _users has not been set', () => {
+        it('should return an empty array before any refresh has run', () => {
+            // Callers dereference .Users without guarding (e.g. config.ts's
+            // `UserCache.Instance.Users.find(...)`), so the array postcondition must
+            // hold even before — and after a failed — refresh.
             const instance = UserCache.Instance;
-            expect(instance.Users).toBeUndefined();
+            expect(instance.Users).toEqual([]);
         });
     });
 
@@ -166,6 +171,104 @@ describe('UserCache', () => {
             (instance as unknown as Record<string, unknown>)._users = users;
 
             expect(UserCache.Users).toBe(users);
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // RefreshFromRows — the platform-neutral data-in path shared by the
+    // mssql Refresh(pool) feeder and the PostgreSQL feeders.
+    // -----------------------------------------------------------------
+    describe('RefreshFromRows', () => {
+        const provider = { ConfigData: { MJCoreSchemaName: '__mj' } } as unknown as IMetadataProvider;
+
+        it('should populate the cache from user rows', () => {
+            const instance = UserCache.Instance;
+            instance.RefreshFromRows(
+                [{ ID: 'id1', Name: 'Alice' }, { ID: 'id2', Name: 'Bob' }],
+                [],
+                provider
+            );
+
+            expect(instance.Users).toHaveLength(2);
+            expect(instance.Users[0].Name).toBe('Alice');
+            expect(instance.Users[1].Name).toBe('Bob');
+        });
+
+        it('should attach only the roles belonging to each user', () => {
+            const instance = UserCache.Instance;
+            instance.RefreshFromRows(
+                [{ ID: 'aaaaaaaa-1111-2222-3333-444444444444', Name: 'Alice' },
+                 { ID: 'bbbbbbbb-1111-2222-3333-444444444444', Name: 'Bob' }],
+                [{ UserID: 'aaaaaaaa-1111-2222-3333-444444444444', Role: 'Developer' },
+                 { UserID: 'bbbbbbbb-1111-2222-3333-444444444444', Role: 'UI' },
+                 { UserID: 'aaaaaaaa-1111-2222-3333-444444444444', Role: 'Integration' }],
+                provider
+            );
+
+            const [alice, bob] = instance.Users;
+            expect(alice.UserRoles.map(r => r.Role)).toEqual(['Developer', 'Integration']);
+            expect(bob.UserRoles.map(r => r.Role)).toEqual(['UI']);
+        });
+
+        it('should match roles to users case-insensitively (UUID comparison)', () => {
+            const instance = UserCache.Instance;
+            instance.RefreshFromRows(
+                [{ ID: 'AAAAAAAA-1111-2222-3333-444444444444', Name: 'Alice' }],
+                [{ UserID: 'aaaaaaaa-1111-2222-3333-444444444444', Role: 'Developer' }],
+                provider
+            );
+
+            expect(instance.Users[0].UserRoles.map(r => r.Role)).toEqual(['Developer']);
+        });
+
+        it('should accept an empty role set — a user with no roles is legal', () => {
+            const instance = UserCache.Instance;
+            instance.RefreshFromRows([{ ID: 'id1', Name: 'Alice' }], [], provider);
+
+            expect(instance.Users).toHaveLength(1);
+            expect(instance.Users[0].UserRoles).toEqual([]);
+        });
+
+        it('should throw with context when the user set is empty', () => {
+            const instance = UserCache.Instance;
+            expect(() => instance.RefreshFromRows([], [], provider)).toThrow(/zero users/i);
+        });
+
+        it('should throw with context when the user set is missing', () => {
+            const instance = UserCache.Instance;
+            expect(() =>
+                instance.RefreshFromRows(
+                    undefined as unknown as Record<string, unknown>[],
+                    [],
+                    provider
+                )
+            ).toThrow(/RefreshFromRows/);
+        });
+
+        it('should throw when no metadata provider is supplied', () => {
+            const instance = UserCache.Instance;
+            expect(() =>
+                instance.RefreshFromRows(
+                    [{ ID: 'id1', Name: 'Alice' }],
+                    [],
+                    undefined as unknown as IMetadataProvider
+                )
+            ).toThrow(/provider/i);
+        });
+
+        it('should leave Users as an array after a throw, never undefined', () => {
+            const instance = UserCache.Instance;
+            expect(() => instance.RefreshFromRows([], [], provider)).toThrow();
+            expect(instance.Users).toEqual([]);
+        });
+
+        it('should not clobber a previously loaded cache when a later refresh throws', () => {
+            const instance = UserCache.Instance;
+            instance.RefreshFromRows([{ ID: 'id1', Name: 'Alice' }], [], provider);
+            expect(() => instance.RefreshFromRows([], [], provider)).toThrow();
+
+            expect(instance.Users).toHaveLength(1);
+            expect(instance.Users[0].Name).toBe('Alice');
         });
     });
 

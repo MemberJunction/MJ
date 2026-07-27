@@ -13,7 +13,6 @@ import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseProviderBase, Metadata, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
 import { minimatch } from 'minimatch';
 
 /** Global mssql ConnectionPool (SQL Server path only) */
@@ -171,26 +170,17 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
 /**
  * Populates UserCache from PG vwUsers/vwUserRoles. Mirrors MJServer's PG bootstrap path
  * so CLI commands have the same System user lookup semantics as the server.
+ *
+ * Only the query dialect lives here — the role join and UserInfo construction belong to
+ * `UserCache.RefreshFromRows`, which every backend shares. Note this now throws when the
+ * database has no users, where it previously left the cache silently empty and let the
+ * failure surface later as a confusing "System user not found in cache".
  */
 async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: string): Promise<void> {
   const uResult = await pgPool.query(`SELECT * FROM "${coreSchema}"."vwUsers"`);
   const rResult = await pgPool.query(`SELECT * FROM "${coreSchema}"."vwUserRoles"`);
-  const users = uResult.rows;
-  const roles = rResult.rows;
 
-  if (users && globalProvider) {
-    const userInfos = users.map((user: Record<string, unknown>) => {
-      const userWithRoles = {
-        ...user,
-        UserRoles: roles.filter((role: Record<string, unknown>) =>
-          UUIDsEqual(role.UserID as string, user.ID as string)
-        ),
-      };
-      return new UserInfo(Metadata.Provider, userWithRoles);  // global-provider-ok: MetadataSync CLI bootstrap — runs against the global default provider
-    });
-    const cache = UserCache.Instance;
-    (cache as unknown as Record<string, unknown>)['_users'] = userInfos;
-  }
+  UserCache.Instance.RefreshFromRows(uResult.rows, rResult.rows, Metadata.Provider); // global-provider-ok: MetadataSync CLI bootstrap — runs against the global default provider
 }
 
 /**

@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 interface FakeServerBootstrap {
     Provider: { ProviderType: string };
     Pool: undefined;
-    Db: { Schema: string };
+    Db: { Schema: string; Platform?: 'sqlserver' | 'postgresql' };
 }
 const { mockServerClaimed, mockActiveBootstrap } = vi.hoisted(() => ({
     mockServerClaimed: vi.fn(() => false),
@@ -29,7 +29,8 @@ import { IntegrationTestDriver } from '../IntegrationTestDriver';
 import { IntegrationCheckRegistry } from '../check-registry';
 import type { DriverExecutionContext, IOracle } from '@memberjunction/testing-engine';
 import type { MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
-import type { UserInfo } from '@memberjunction/core';
+import { Metadata, SetProvider } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 /** Build a minimal DriverExecutionContext for the fields the driver actually reads. */
 function makeContext(config: object | null, maxExecutionTimeMs: number | null = null): DriverExecutionContext {
@@ -50,6 +51,9 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         delete process.env.RUN_AGENT_TESTS;
         mockServerClaimed.mockReturnValue(false);
         mockActiveBootstrap.mockReturnValue(null);
+        // The #3251 guard inspects the process-global provider, which SetProvider mutates
+        // globally — reset it so one test's rebind cannot leak into the next.
+        SetProvider(undefined as unknown as IMetadataProvider);
         const reg = IntegrationCheckRegistry.Instance;
         // A unique bundle prefix per concern keeps these isolated from the real bundles.
         reg.Register({ Id: 'unitpass.A', Name: 'A', Fn: async () => { /* pass */ } });
@@ -96,12 +100,12 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitmut.M']);
     });
 
-    it("a live-model Test with RUN_AGENT_TESTS=0 skip-passes with a single 'gate' oracle (explicit opt-out)", async () => {
+    it("a live-model Test with RUN_AGENT_TESTS=0 reports Skipped with a single 'gate' oracle (explicit opt-out)", async () => {
         process.env.RUN_AGENT_TESTS = '0';
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ tier: 'live-model', checks: [{ type: 'unitpass' }] }));
-        expect(result.status).toBe('Passed');
-        expect(result.totalChecks).toBe(1);
+        expect(result.status).toBe('Skipped');
+        expect(result.totalChecks).toBe(0);
         expect(result.oracleResults[0].oracleType).toBe('gate');
         expect(result.oracleResults[0].message).toContain('RUN_AGENT_TESTS');
     });
@@ -113,10 +117,10 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitpass.A', 'unitpass.B']);
     });
 
-    it("a mutation-tier Test without RUN_MUTATION_TESTS skip-passes with a 'gate' oracle", async () => {
+    it("a mutation-tier Test without RUN_MUTATION_TESTS reports Skipped with a 'gate' oracle", async () => {
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ tier: 'mutation', checks: [{ type: 'unitpass' }] }));
-        expect(result.status).toBe('Passed');
+        expect(result.status).toBe('Skipped');
         expect(result.oracleResults[0].oracleType).toBe('gate');
         expect(result.oracleResults[0].message).toContain('RUN_MUTATION_TESTS');
     });
@@ -172,6 +176,23 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitpass.A', 'unitpass.B']);
     });
 
+    it('server transport aborts when the PROCESS-GLOBAL provider was rebound, even though the bootstrap context still holds a Database provider (#3251)', async () => {
+        // This is the shape that actually occurs now that the CLI publishes a bootstrap context:
+        // the context captured a Database provider at publish time, so a guard that inspects only
+        // the RESOLVED provider goes permanently blind. The invariant is about the global — a check
+        // calling `new Metadata()` would transparently get GraphQL while ctx.Provider still says SQL,
+        // which is a split-brain, not a safe fallback.
+        mockActiveBootstrap.mockReturnValue({ Provider: { ProviderType: 'Database' }, Pool: undefined, Db: { Schema: '__mj' } });
+        SetProvider({ ProviderType: 'Network' } as unknown as IMetadataProvider);
+
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ transport: 'server', checks: [{ type: 'unitpass' }] }));
+
+        expect(result.status).toBe('Error');
+        expect(result.oracleResults[0].message).toMatch(/rebound|issue #3251/i);
+        expect(result.oracleResults.map(o => o.oracleType)).not.toContain('unitpass.A');
+    });
+
     it('empty checks → Passed, score 0, totalChecks 0', async () => {
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ checks: [] }));
@@ -180,13 +201,81 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.score).toBe(0);
     });
 
-    it('env gate unmet → Passed skip with a single "gate" oracle, never throws', async () => {
+    it('env gate unmet → Skipped with a single "gate" oracle and zero checks, never throws', async () => {
         delete process.env.UNIT_GATE;
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ checks: [{ type: 'unitpass' }], requiresEnv: 'UNIT_GATE' }));
-        expect(result.status).toBe('Passed');
+        // Reported as Skipped, not Passed: nothing ran, and a skip that counts as a pass is
+        // indistinguishable from a real pass in every downstream count and report.
+        expect(result.status).toBe('Skipped');
         expect(result.oracleResults).toHaveLength(1);
         expect(result.oracleResults[0].oracleType).toBe('gate');
+        expect(result.totalChecks).toBe(0);
+        expect(result.passedChecks).toBe(0);
+        expect(result.score).toBe(0);
+    });
+
+    describe('bundle platform declaration', () => {
+        // Dedicated bundles: the registry is a process singleton with no unregister, so declaring
+        // a platform on a shared bundle would leak into every later test in this file.
+        beforeEach(() => {
+            const reg = IntegrationCheckRegistry.Instance;
+            reg.Register({ Id: 'unitplat.A', Name: 'platA', Fn: async () => { /* pass */ } });
+            reg.Register({ Id: 'unitanyplat.A', Name: 'anyPlatA', Fn: async () => { /* pass */ } });
+            reg.RegisterBundlePlatforms('unitplat', ['sqlserver']);
+        });
+
+        /** A bootstrap context is what tells the driver which platform is active. */
+        function onPlatform(platform: 'sqlserver' | 'postgresql'): void {
+            mockActiveBootstrap.mockReturnValue({
+                Provider: { ProviderType: 'Database' }, Pool: undefined, Db: { Schema: '__mj', Platform: platform }
+            });
+        }
+
+        it('runs a bundle declared for the active platform', async () => {
+            onPlatform('sqlserver');
+            const driver = new IntegrationTestDriver();
+            const result = await driver.Execute(makeContext({ checks: [{ type: 'unitplat' }] }));
+            expect(result.status).toBe('Passed');
+            expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitplat.A']);
+        });
+
+        it('reports Skipped — not Passed — for a bundle excluded from the active platform, without running any check', async () => {
+            onPlatform('postgresql');
+            const driver = new IntegrationTestDriver();
+            const result = await driver.Execute(makeContext({ checks: [{ type: 'unitplat' }] }));
+            expect(result.status).toBe('Skipped');
+            expect(result.oracleResults.map(o => o.oracleType)).not.toContain('unitplat.A');
+            expect(result.oracleResults[0].message).toMatch(/postgresql/);
+        });
+
+        it('runs an undeclared bundle on every platform', async () => {
+            onPlatform('postgresql');
+            const driver = new IntegrationTestDriver();
+            const result = await driver.Execute(makeContext({ checks: [{ type: 'unitanyplat' }] }));
+            expect(result.status).toBe('Passed');
+        });
+
+        it('still runs a mixed selection where only SOME bundles are excluded, so a declaration can never silently drop coverage', async () => {
+            onPlatform('postgresql');
+            const driver = new IntegrationTestDriver();
+            const result = await driver.Execute(makeContext({ checks: [{ type: 'unitplat' }, { type: 'unitanyplat' }] }));
+            expect(result.status).not.toBe('Skipped');
+            expect(result.oracleResults.map(o => o.oracleType)).toContain('unitanyplat.A');
+        });
+
+        it('runs everything when no bootstrap context reveals the platform (fail-open)', async () => {
+            mockActiveBootstrap.mockReturnValue(null);
+            const driver = new IntegrationTestDriver();
+            const result = await driver.Execute(makeContext({ checks: [{ type: 'unitplat' }] }));
+            // Wrongly skipping is the failure mode that hides bugs, so an unknown platform runs.
+            expect(result.status).toBe('Passed');
+        });
+
+        it('refuses a declaration that would let a bundle run nowhere', () => {
+            expect(() => IntegrationCheckRegistry.Instance.RegisterBundlePlatforms('unitplat', []))
+                .toThrow(/at least one platform/i);
+        });
     });
 
     it('missing Configuration → Error result, never re-throws', async () => {

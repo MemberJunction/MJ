@@ -14,10 +14,20 @@
  * suggests eventually exposing this as a typed Remote Operation so it becomes wire-testable and
  * agent-invocable; that is a separate decision and is deliberately NOT built here.
  *
- * ── PLATFORM ────────────────────────────────────────────────────────────────────────────────
- * The catalog queries are SQL Server dialect. The bundle uses `ctx.Pool` (mssql), which the
- * PostgreSQL bootstrap leaves undefined — on PG every check skips-as-pass with a logged note
- * rather than failing on a dialect it cannot speak.
+ * ── PLATFORM: SQL SERVER ONLY (declared) ────────────────────────────────────────────────────
+ * The catalog queries are SQL Server dialect — `sys.objects`, `sys.check_constraints`,
+ * `sys.indexes`, `sys.columns` — which have no PostgreSQL equivalent this bundle could run.
+ * That makes it dialect-IMPOSSIBLE on PG, not merely failing, so the bundle declares
+ * `['sqlserver']` at registration and the driver reports the whole test as Skipped on
+ * PostgreSQL without invoking any check body.
+ *
+ * This declaration is narrowly justified and must not become a habit: a bundle that CAN run on
+ * both platforms and fails on one has found a parity bug — exactly what the PostgreSQL lane
+ * exists to surface — and belongs red, not declared away.
+ *
+ * Historical note: these checks never actually executed in CI on EITHER platform. `ctx.Pool`
+ * comes from the active bootstrap context, and until the `mj test` CLI began publishing one,
+ * that context was null on the CLI path — so `poolOrSkip` skipped-as-pass on SQL Server too.
  *
  * ── CHECKS ──────────────────────────────────────────────────────────────────────────────────
  *   MC1 every non-virtual entity with BaseViewGenerated=1 has its BaseView in sys.objects
@@ -608,3 +618,7 @@ export const MetadataConsistencyChecks: NamedCheck[] = [MC1, MC2, MC3, MC4, MC5,
 for (const check of MetadataConsistencyChecks) {
     IntegrationCheckRegistry.Instance.Register(check);
 }
+
+// Dialect-impossible on PostgreSQL — see the PLATFORM note in the file header. Declared so the
+// driver reports an honest Skipped on PG instead of running check bodies that would skip-as-pass.
+IntegrationCheckRegistry.Instance.RegisterBundlePlatforms('metadata-consistency', ['sqlserver']);

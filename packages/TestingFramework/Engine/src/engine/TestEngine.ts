@@ -383,8 +383,13 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // Calculate suite-level metrics
             const passedTests = testResults.filter(r => r.status === 'Passed').length;
             const failedTests = testResults.filter(r => r.status === 'Failed').length;
-            const totalScore = testResults.reduce((sum, r) => sum + r.score, 0);
-            const avgScore = testResults.length > 0 ? totalScore / testResults.length : 0;
+            const skippedTests = testResults.filter(r => r.status === 'Skipped').length;
+            // A skipped test has no score to contribute. Averaging it in as 0 would understate
+            // the tests that actually ran; as 1 it would manufacture a pass. Exclude it from
+            // both sides of the ratio instead.
+            const scoredResults = testResults.filter(r => r.status !== 'Skipped');
+            const totalScore = scoredResults.reduce((sum, r) => sum + r.score, 0);
+            const avgScore = scoredResults.length > 0 ? totalScore / scoredResults.length : 0;
 
             const result: TestSuiteRunResult = {
                 suiteRunId: suiteRun.ID,
@@ -393,6 +398,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 status: suiteRun.Status as 'Completed' | 'Failed' | 'Cancelled' | 'Pending' | 'Running',
                 passedTests,
                 failedTests,
+                skippedTests,
                 totalTests: testResults.length,
                 averageScore: avgScore,
                 testResults,
@@ -1045,11 +1051,19 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         startTime: number
     ): Promise<void> {
         const passedTests = testResults.filter(r => r.status === 'Passed').length;
+        const skippedTests = testResults.filter(r => r.status === 'Skipped').length;
         const totalTests = testResults.length;
+        // A skipped test is neither a pass nor a failure. The former `totalTests - passedTests`
+        // counted it as a failure, which would mark an entire suite run Failed because one
+        // bundle legitimately does not apply to the active database platform.
+        //
+        // NOTE: MJTestSuiteRun has no SkippedTests column, so the skip count is not persisted —
+        // it survives only on the in-memory TestSuiteRunResult that the CLI reports from.
+        const failedTests = totalTests - passedTests - skippedTests;
 
-        suiteRun.Status = passedTests === totalTests ? 'Completed' : 'Failed';
+        suiteRun.Status = failedTests === 0 ? 'Completed' : 'Failed';
         suiteRun.PassedTests = passedTests;
-        suiteRun.FailedTests = totalTests - passedTests;
+        suiteRun.FailedTests = failedTests;
         suiteRun.TotalTests = totalTests;
         suiteRun.TotalCostUSD = testResults.reduce((sum, r) => sum + r.totalCost, 0);
         suiteRun.TotalDurationSeconds = (Date.now() - startTime) / 1000;

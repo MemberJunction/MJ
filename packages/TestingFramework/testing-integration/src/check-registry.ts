@@ -10,10 +10,12 @@
  */
 import { BaseSingleton } from '@memberjunction/global';
 import { NamedCheck, BundleLifecycle } from './check';
+import type { IntegrationDbPlatform } from './config';
 
 export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegistry> {
     private checks = new Map<string, NamedCheck>();
     private lifecycles = new Map<string, BundleLifecycle>();
+    private bundlePlatforms = new Map<string, readonly IntegrationDbPlatform[]>();
 
     protected constructor() {
         super();
@@ -66,5 +68,34 @@ export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegi
     /** The lifecycle for a bundle, or undefined when the bundle needs no shared fixture. */
     public GetLifecycle(bundle: string): BundleLifecycle | undefined {
         return this.lifecycles.get(bundle);
+    }
+
+    /**
+     * Restrict a bundle to specific database platforms. Undeclared bundles run everywhere —
+     * that is the default and should stay the default.
+     *
+     * This exists ONLY for bundles that are **dialect-impossible** on a platform: their checks
+     * issue raw platform-specific SQL that has no meaning on the other backend. It is NOT a
+     * quarantine list. A bundle that runs on both platforms and *fails* on one has found a
+     * parity bug — the very thing the PostgreSQL lane exists to surface — and must stay red
+     * rather than being declared away.
+     */
+    public RegisterBundlePlatforms(bundle: string, platforms: readonly IntegrationDbPlatform[]): void {
+        if (!platforms || platforms.length === 0) {
+            throw new Error(
+                `RegisterBundlePlatforms('${bundle}'): at least one platform is required. ` +
+                `A bundle that runs nowhere would silently vanish from every lane — omit the ` +
+                `declaration entirely if the bundle should run on all platforms.`
+            );
+        }
+        this.bundlePlatforms.set(bundle, platforms);
+    }
+
+    /**
+     * Whether a bundle can run on the given platform. Undeclared bundles always can.
+     */
+    public BundleRunsOnPlatform(bundle: string, platform: IntegrationDbPlatform): boolean {
+        const declared = this.bundlePlatforms.get(bundle);
+        return declared === undefined || declared.includes(platform);
     }
 }

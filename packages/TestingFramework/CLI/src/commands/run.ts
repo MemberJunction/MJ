@@ -197,7 +197,9 @@ export class RunCommand {
                     const output = OutputFormatter.formatTestResult(iterationResult, format);
                     console.log(output);
 
-                    if (iterationResult.status !== 'Passed') {
+                    // A skipped iteration did not execute, so it cannot fail the command —
+                    // same reasoning as the single-result exit code below.
+                    if (OutputFormatter.isTestFailure(iterationResult.status)) {
                         allPassed = false;
                     }
                 }
@@ -223,8 +225,10 @@ export class RunCommand {
                 // Clean up resources
                 await closeMJProvider();
 
-                // Exit with appropriate code
-                process.exit(result.status === 'Passed' ? 0 : 1);
+                // Exit with appropriate code. A 'Skipped' run did not execute — a closed tier
+                // gate or a bundle that cannot apply to this database platform — which is not a
+                // failure and must not fail the command. The reason is printed above.
+                process.exit(OutputFormatter.isTestFailure(result.status) ? 1 : 0);
             }
 
         } catch (error) {

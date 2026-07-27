@@ -41,7 +41,13 @@ module.exports = {
   },
 
   dbHost: process.env.DB_HOST || 'localhost',
-  dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
+  dbPlatform: process.env.DB_PLATFORM || 'sqlserver',
+  // Platform-aware default: this value overrides any fallback a consuming CLI would apply,
+  // so hardcoding 1433 here silently pointed a DB_PLATFORM=postgresql run at the SQL Server
+  // port whenever DB_PORT was unset.
+  dbPort: process.env.DB_PORT
+    ? parseInt(process.env.DB_PORT)
+    : (process.env.DB_PLATFORM === 'postgresql' ? 5432 : 1433),
   dbDatabase: process.env.DB_DATABASE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,

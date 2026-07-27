@@ -797,6 +797,17 @@
           "primaryKey": {
             "ID": "3EB937A9-1C1F-4DB4-AD95-5698FD27F705"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT68 - PostgreSQL Runtime Parity",
+            "Sequence": 32,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AF8829F9-26E0-442E-8A88-7C8FB4046470"
+          }
         }
       ]
     },

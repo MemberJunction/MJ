@@ -96,7 +96,7 @@ Before anything else, confirm the `next` branch is healthy:
 - [ ] **"Build all packages for testing"** (`build.yml`) — passes on `next`
 - [ ] **"Test migrations"** (`migrations.yml`) — passes if migrations were changed
 - [ ] **"Unit Tests"** (`test.yml`) — passes on any open PR, and on the **push-to-`next`** run (that unfiltered backstop is the one that actually proves integration-bundle ↔ `MJ: Tests` metadata sibling parity; a metadata-only PR never triggers `test.yml` at all)
-- [ ] **"Integration Tier"** (`integration.yml`) — passes on `next`. Runs the deterministic suite against a fresh SQL Server on PRs into `next` plus an unfiltered push-to-`next` backstop. It is **not** a substitute for Step 4: CI runs no MJAPI (so client-transport bundles skip) and no live-model tier.
+- [ ] **"Integration Tier"** (`integration.yml`) — passes on `next`. Runs the deterministic suite **twice, once per backend** (`integration-sqlserver` and `integration-postgresql`, both blocking) on PRs into `next` plus an unfiltered push-to-`next` backstop. Both must be green. It is **not** a substitute for Step 4: CI runs no MJAPI (so client-transport bundles skip) and no live-model tier.
 
 > **Don't idle here.** These runs take ~15 minutes. **Step 3 (fresh database + migrate + metadata push) is independent of them** — it works on a local scratch database and reads nothing from CI. Start Step 3 while Step 1 runs and check back. The only ordering that matters is that Step 3's results are committed before the release PR.
 >
@@ -241,7 +241,7 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 
 > ⚠️ Do **not** run `mj test suite "Integration Tests"`. That is the empty parent container (zero members); it exits **1** with `No tests found in suite: <id>`. A hyphen typed instead of the em dash also exits 1, with `Test suite not found: <arg>`.
 
-> 🐘 **Run this step against SQL Server — that is the supported path, and it is all this step requires.** Do not try to point Step 4 at a PostgreSQL database: the testing CLI builds an `mssql` pool (`packages/TestingFramework/CLI/src/lib/mj-provider.ts` → `setupSQLServerClient`, no platform branch), so `DB_PLATFORM=postgresql` is never consulted and the run would fail on connection before testing anything. **This is a limitation of the test harness only — it does not affect the release.** PostgreSQL still ships fully: its migrations are converted, verified, and committed in Step 8. See "What PG parity does and does NOT cover today" there.
+> 🐘 **Run this step against SQL Server — that is all this step requires.** PostgreSQL runtime parity is covered separately and automatically by the blocking `integration-postgresql` CI lane (see "What PG parity covers" in Step 8), so you do not need to run Step 4 twice by hand. You *can* now, if you want to reproduce a PG lane failure locally: set `DB_PLATFORM=postgresql` and `DB_PORT=5432` and point `.env` at a migrated PostgreSQL database — as of #3257 the testing CLI has a real platform branch and a PG driver. Expect exactly one skipped test there (IT24, whose `sys.*` catalog queries are dialect-impossible on PG).
 
 #### 4.1 Prerequisites (all required — miss one and the suite reports **green without testing**)
 
@@ -575,31 +575,47 @@ git log --oneline <deleting-commit>..HEAD -- migrations/v5/<MigrationName>.sql  
 
 > **Invariant:** committed `migrations-pg/v5/*.pg.sql` / `*.pg-only.sql` are a deployed historical ledger — byte-for-byte immutable. This step only ever produces PG counterparts for the **new** SS migrations in this release.
 
-#### What PG parity does and does NOT cover today
+#### What PG parity covers
 
-This step proves **schema parity** — that every new migration lands correctly on PostgreSQL. It does **not** prove **runtime behavior parity**, and it is worth being precise about the gap, because the two are easy to conflate.
+This step proves **schema parity** — that every new migration lands correctly on PostgreSQL. As of
+the #3257 wave, **runtime behavior parity is also covered**, by a second blocking CI lane that runs
+the same deterministic integration suite against PostgreSQL.
 
 | Parity | Covered? | By what |
 |---|---|---|
 | Migrations apply on PG | ✅ Yes | This step + `pg-migrations.yml` (a `postgres:17` service running `mj migrate` with `DB_PLATFORM: postgresql`) |
 | CodeGen / External-Data-Source PG paths | ✅ Partly | `pg-migrations.yml`, `eds-integration.yml` |
-| **Integration suite on PG** (runtime behavior: RunView/RunQuery SQL generation, provider code paths, UUID casing, identifier quoting) | ❌ **No** | Nothing. Zero PG bundles exist |
+| **Integration suite on PG** (runtime behavior: RunView/RunQuery SQL generation, provider code paths, UUID casing, identifier quoting) | ✅ Yes | `integration.yml` job `integration-postgresql` — blocking, plus the `pg-parity` bundle (IT68) which runs on **both** backends |
 
-> ✅ **Scope check — this does NOT block the release.** Ship as normal. The SQL Server integration tier (Step 4) runs and gates exactly as documented; PG migrations are converted, verified against a fresh PG database, and committed in this step; the rest of the release (Steps 5–12) is unaffected. The only thing missing is an *additional* PG run of the test suite, which has never existed. Do not treat any of the following as a reason to halt a build.
+> 🚦 **This step is now gated on both backends.** `integration.yml` runs two blocking jobs —
+> `integration-sqlserver` and `integration-postgresql` — so a PostgreSQL runtime regression fails the
+> PR the same way a SQL Server one does. Both lanes set `RUN_MUTATION_TESTS=1`, which also activates
+> the 52 mutation-tier checks that no workflow had previously enabled.
 
-**The stated intent is to run the integration suite twice per build — once per backend — for SS/PG parity. That is a roadmap item, not yet a release step.** It cannot be done today by configuration or by provisioning a database — three blockers, all in code:
+**How to read the result.** Both lanes report a **Skipped** count alongside passed/failed, and a skip
+is neither. Expect exactly one skipped test on the PostgreSQL lane:
 
-1. **The testing CLI is SQL-Server-hardcoded, and has no PG driver to switch to.** `packages/TestingFramework/CLI/src/lib/mj-provider.ts` imports `mssql` + `setupSQLServerClient` and builds an mssql pool with no platform branch; `commands/suite.ts` calls it unconditionally, so `DB_PLATFORM` is never read on the `mj test` path. Its `package.json` declares `mssql` and `@memberjunction/sqlserver-dataprovider` and **no PostgreSQL driver at all** — so this is a dependency change as well as a code change. Point `.env` at Postgres and the run dies at `mj-provider.ts` `connectionPool.connect()` — a TDS handshake against a PG server — before a single check executes.
-2. **The PG bootstrap that does exist throws by design.** `testing-integration/src/bootstrap.ts` dispatches to `setupPostgreSQLProvider` when `DB_PLATFORM=postgresql`, but `resolvePostgresContextUser` raises: *"UserCache.Refresh is mssql-only, so PG needs a PG-aware user-cache bootstrap before the integration suites can run against it (tracked Phase-0 prerequisite)."* Its own comment concludes: *"The PG parity CI lane is therefore non-blocking until that framework gap is closed."*
+- **IT24 — Metadata/DB Consistency Audit.** The `metadata-consistency` bundle declares
+  `Platforms: ['sqlserver']` because its `sys.objects` / `sys.check_constraints` / `sys.indexes`
+  catalog queries have no PostgreSQL equivalent. That is *dialect-impossible*, the only justification
+  for a platform declaration.
 
-   > **"Couldn't a freshly-migrated PG database with users in it fix this?" No — and it's worth knowing why, because it's the obvious first idea.** The cache is empty on PG for a *code* reason, not a *data* reason: `UserCache.Refresh` (`packages/SQLServerDataProvider/src/UserCache.ts:36`) takes an **`sql.ConnectionPool`** (an mssql type) and runs **T-SQL** — `new sql.Request(pool)` against `` SELECT * FROM [schema].vwUsers ``. On PostgreSQL there is no mssql pool to hand it, and the bracket syntax isn't valid PG anyway; it also swallows its own errors (`catch { LogError(err) }`), so the cache stays silently empty no matter how many users the database holds. Provisioning a database cannot change any of that.
-3. **Even if it ran, it would report false greens.** Bundles whose catalog queries are T-SQL key off the mssql pool, which the PG bootstrap leaves undefined — `metadata-consistency` documents that *"on PG every check skips-as-pass with a logged note."* A green PG run would mean "didn't execute," not "passed."
+Any **other** skip on the PG lane, or any failure, is a real finding. A bundle that *can* run on both
+platforms and fails on one has found a parity bug — which is the entire point of the lane — and must
+be fixed or tracked, never declared away with a platform restriction. The pass rate is computed over
+*executed* tests, so a skip neither pads nor depresses it.
 
-Enabling it is a **code change, not configuration**: a platform branch (and a PG driver dependency) in `mj-provider.ts`, plus a PG-aware user-cache bootstrap — then a `pg-parity` bundle (Domain 8, catalogued but never built) and a CI lane. Until then, `integration.yml` provisions SQL Server 2022 only and there is no platform matrix.
-
-> **For whoever picks this up: the hard part is already solved elsewhere.** `PostgreSQLCodeGenProvider.SetupDataSource()` (`packages/CodeGenLib/src/Database/providers/postgresql/PostgreSQLCodeGenProvider.ts`) already performs a working PG-native user load — it hand-queries `SELECT * FROM "schema"."vwUsers"` / `"vwUserRoles"` and builds real `UserInfo[]` with the same audit-user semantics (Owner, else first user). Its own comment names the exact gap and the intended fix: *"SQL Server uses `UserCache.Instance.Refresh(pool)` which is hard-typed to `mssql.ConnectionPool`… Refactoring it to be cross-platform would touch that package's public API; until then PG hand-queries `vwUsers`/`vwUserRoles` here. Tracked for follow-up: unify behind a platform-agnostic cache."* So the Phase-0 prerequisite is a known, scoped refactor with a working reference implementation — not open-ended research.
-
-> Track it as a release-readiness gap rather than silently skipping it: PostgreSQL deployments of a release currently ship with migration parity verified and **runtime parity unverified**.
+> **Why the suite can now run on PostgreSQL at all.** Three code blockers were removed in #3257:
+> the testing CLI gained a platform branch and a PG driver (`mj-provider.ts` +
+> `optionalDependencies`); `UserCache` gained a platform-neutral `RefreshFromRows(users, roles, provider)`
+> that both backends feed (replacing the mssql-only `Refresh(pool)` monopoly, and the two production
+> sites that had been smashing the private `_users` field to work around it); and the driver gained a
+> real `'Skipped'` status, so a gated or platform-excluded test no longer reports as `Passed`.
+>
+> That last one also uncovered two things CI had never actually been running: `metadata-consistency`
+> (MC1–MC8) had **never executed on either platform** — `ctx.Pool` comes from the active bootstrap
+> context and the `mj test` CLI did not publish one, so the pool was undefined on SQL Server too and
+> every check skipped-as-pass — and the 52 mutation-tier checks had never run in CI at all. Both now do.
 
 ---
 
@@ -614,7 +630,7 @@ Enabling it is a **code change, not configuration**: a platform branch (and a PG
 3. Wait for the generated PR message to appear
 4. Wait for **all CI checks** to pass:
    - `changes.yml` — validates migration filenames, version patterns, schema placeholder usage. **This is the only workflow that triggers on the release PR itself** (it's the one workflow listening on PRs into `main`).
-   - Everything else you see on the PR is **surfaced from the push-to-`next` run on the same head SHA** — `test.yml` (unit tests), `integration.yml` ("Integration Tier", deterministic suite), `build.yml`, and `migrations.yml` / `pg-migrations.yml` when migrations changed. If any of those are missing rather than green, the `next` tip never got a clean run — go back to Step 1.
+   - Everything else you see on the PR is **surfaced from the push-to-`next` run on the same head SHA** — `test.yml` (unit tests), `integration.yml` ("Integration Tier", deterministic suite — **two jobs, SQL Server and PostgreSQL, both must be green**), `build.yml`, and `migrations.yml` / `pg-migrations.yml` when migrations changed. If any of those are missing rather than green, the `next` tip never got a clean run — go back to Step 1.
 
    > Two traps in this list: the hardcoded-UUID scan for migrations is now an **advisory, non-blocking** step *inside* `changes.yml` (the old `claude.yml` workflow was deleted) — it posts a sticky PR comment plus a `::warning` and **never fails the job**, so you must read it, not just wait for green. And `dependency-check.yml` only triggers on PRs into `next`, so it will not appear on this PR at all.
 
@@ -758,7 +774,7 @@ gh pr view <release-pr-number> --json body --jq .body | pbcopy
 | `docs.yml` | After `publish.yml`, doc pushes to `main`, manual dispatch | Build & deploy docs.memberjunction.org (site + `/api`) |
 | `docs-site-ci.yml` | PR touching a docs source | Fast (~2 min) "does the docs site still build" check |
 | `generate-release-notes.yml` | PR to `main` | Auto-generate PR description |
-| `integration.yml` | PR to `next` + push to `next` | Deterministic integration tier against a fresh SQL Server |
+| `integration.yml` | PR to `next` + push to `next` | Deterministic integration tier, run twice — once against a fresh SQL Server, once against a fresh PostgreSQL (both blocking) |
 
 ### Where release information lives
 

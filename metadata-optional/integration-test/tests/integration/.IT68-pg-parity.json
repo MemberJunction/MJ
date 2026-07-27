@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT68 - PostgreSQL Runtime Parity",
+    "Description": "Domain 8 PostgreSQL parity (server transport, deterministic tier with mutation-gated members). Runs on BOTH backends by design and carries NO platform declaration: every check asserts a platform-INDEPENDENT invariant, so SQL Server is the baseline oracle and a check that passes there but fails on PostgreSQL isolates a genuine provider parity bug. PG1 (MUT): create -> read -> filter -> update -> delete round-trips through RunView, with the delete verified by a follow-up read rather than assumed. PG2 (DET): mixed-case identifiers survive projection, filtering and ORDER BY — PostgreSQL folds unquoted identifiers to lower case, so dropped quoting fails there while SQL Server accepts it either way. PG4 (MUT): UUID, boolean and datetime values round-trip as the right JS types (booleans as real booleans, not 1/0 or 't'/'f'; UUIDs compared with UUIDsEqual because SQL Server returns uppercase and PostgreSQL lowercase; datetimes as Date, not ISO strings), plus a boolean-valued filter which is a separate SQL path. PG5 (DET): OFFSET pagination and AfterKey keyset walks each cover the set exactly once, no duplicates and no gaps, with the keyset loop bounded so a provider that ignores AfterKey fails instead of looping forever. Mutating checks are self-cleaning via try/finally; no shared fixture and no BundleLifecycle. PG3 (composite-PK CRUD, #3112) is deliberately NOT implemented — no multi-column primary key exists in the v5 schema, so it would have no target, and its anchored defect is a CodeGen-time bug this lane cannot reach; recorded as a documented catalog gap.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "CRUD round-trips, mixed-case identifier quoting, UUID/boolean/datetime type fidelity, and OFFSET + keyset pagination coverage all behave identically on SQL Server and PostgreSQL — verified against a live database on each backend, with SQL Server acting as the baseline oracle."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "pg-parity"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "CEA1272C-835D-47FA-99FD-3DE0C5EA33C6"
+  }
+}

@@ -261,6 +261,7 @@ export function generateSummaryStatistics(results: TestRunResult[]): {
     totalTests: number;
     passedTests: number;
     failedTests: number;
+    skippedTests: number;
     passRate: number;
     averageScore: number;
     totalDuration: number;
@@ -270,11 +271,17 @@ export function generateSummaryStatistics(results: TestRunResult[]): {
 } {
     const totalTests = results.length;
     const passedTests = results.filter(r => r.status === 'Passed').length;
-    const failedTests = totalTests - passedTests;
-    const passRate = totalTests > 0 ? passedTests / totalTests : 0;
+    // A skipped test never executed, so it is neither a pass nor a failure. Folding it into
+    // failedTests (the old `totalTests - passedTests`) counted a platform-inapplicable bundle
+    // as a defect and depressed the pass rate for a run that was entirely healthy.
+    const skippedTests = results.filter(r => r.status === 'Skipped').length;
+    const failedTests = totalTests - passedTests - skippedTests;
+    const executedTests = totalTests - skippedTests;
+    const passRate = executedTests > 0 ? passedTests / executedTests : 0;
 
-    const totalScore = results.reduce((sum, r) => sum + r.score, 0);
-    const averageScore = totalTests > 0 ? totalScore / totalTests : 0;
+    const scoredResults = results.filter(r => r.status !== 'Skipped');
+    const totalScore = scoredResults.reduce((sum, r) => sum + r.score, 0);
+    const averageScore = scoredResults.length > 0 ? totalScore / scoredResults.length : 0;
 
     const totalDuration = results.reduce((sum, r) => sum + r.durationMs, 0);
     const totalCost = results.reduce((sum, r) => sum + r.totalCost, 0);
@@ -286,6 +293,7 @@ export function generateSummaryStatistics(results: TestRunResult[]): {
         totalTests,
         passedTests,
         failedTests,
+        skippedTests,
         passRate,
         averageScore,
         totalDuration,

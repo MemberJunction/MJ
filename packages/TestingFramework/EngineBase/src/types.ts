@@ -349,6 +349,16 @@ export interface TestSuiteRunResult {
   failedTests: number;
 
   /**
+   * Tests that did not execute — a gated tier whose env var is unset, or a bundle that
+   * cannot apply to the active database platform.
+   *
+   * Reported separately rather than folded into either counter: a non-zero, explainable skip
+   * count is honest, whereas adding skips to `passedTests` pads the result and adding them to
+   * `failedTests` fails a suite for tests that were never meant to run on this platform.
+   */
+  skippedTests: number;
+
+  /**
    * Total tests
    */
   totalTests: number;

@@ -8,7 +8,9 @@ Companion to the expansion plan at **[plans/integration-test-expansion/README.md
 
 ---
 
-> **2026-07-21 completion wave.** The remaining buildable catalog items landed: record-process AP1/AP9/AP10/AP11 · entity-server-invariants ES2/ES3/ES4/ES5/ES9 · Domain 11 V6/V7/V8 + the NEW `view-security` bundle (V14/V15/V16 + RV17, two-identity, IT64) · runquery-features RQ-F1/F2/F5/F6/F7/F13 · CT3/CT5 (TP7/TP8/CM5) · NEW `ai-providers` (AI7/AI13/AI15, IT65) · NEW `app-behavioral` (S4/S6/S8, IT66) · the live extended-agents family incl. `agent-wire-callback` (IT53–63). **Closed by disposition** (documented in the owning bundle headers): MC7 + AI8/AI9 (env-indistinguishable or covered live by AL6/AL7), ES6/ES7 (needs connector infra / target class absent), V5/V17 + S3-new-user-leg (UI/auth-layer), CT4 + MT8 + MT9 + AP13 + AP15 (dedicated unit suites already pin the pure logic), S5/O2/O3 (need real OpenApp installs — open-app-teardown surface), RV23–25 (feature dead, B54 DECIDE), Domain 8 PG parity (deferred by decision). Product findings this wave: **B63** (no ownership gate on private views), **B64** (ProcessedMessage HTML fallback dead code — FIXED), **B65** (CohereLLM driver doesn't exist; 2 Active models dead).
+> **2026-07-21 completion wave.** The remaining buildable catalog items landed: record-process AP1/AP9/AP10/AP11 · entity-server-invariants ES2/ES3/ES4/ES5/ES9 · Domain 11 V6/V7/V8 + the NEW `view-security` bundle (V14/V15/V16 + RV17, two-identity, IT64) · runquery-features RQ-F1/F2/F5/F6/F7/F13 · CT3/CT5 (TP7/TP8/CM5) · NEW `ai-providers` (AI7/AI13/AI15, IT65) · NEW `app-behavioral` (S4/S6/S8, IT66) · the live extended-agents family incl. `agent-wire-callback` (IT53–63). **Closed by disposition** (documented in the owning bundle headers): MC7 + AI8/AI9 (env-indistinguishable or covered live by AL6/AL7), ES6/ES7 (needs connector infra / target class absent), V5/V17 + S3-new-user-leg (UI/auth-layer), CT4 + MT8 + MT9 + AP13 + AP15 (dedicated unit suites already pin the pure logic), S5/O2/O3 (need real OpenApp installs — open-app-teardown surface), RV23–25 (feature dead, B54 DECIDE).
+> **Domain 8 PG parity is no longer deferred** — the `pg-parity` bundle (PG1/PG2/PG4/PG5, IT68) and a
+> blocking PostgreSQL CI lane landed in the #3257 wave; PG3 alone remains a documented gap. Product findings this wave: **B63** (no ownership gate on private views), **B64** (ProcessedMessage HTML fallback dead code — FIXED), **B65** (CohereLLM driver doesn't exist; 2 Active models dead).
 
 ## Domain 0 — Exhaustive RunView + RunQuery feature coverage  *(new bundles: `runview-matrix`, `runview-features`, `runquery-catalog`, `runquery-features`)*
 
@@ -220,15 +222,29 @@ The untested majority (~30 of ~40 server subclasses). Mostly DET (pure validator
 | CT6 | Template render injection: `<script>`/`{{7*7}}` in contextData neutralized (autoescape); param-validation on/off | MUT | P2 | TemplateEngine.ts:92,205 |
 | CT7 | mergeDefaultValues precedence + JSON-type parse fallback | DET | P3 | TemplateEngine.ts:345 |
 
-## Domain 8 — PostgreSQL Parity  *(new bundle: `pg-parity` — needs PG in harness matrix)*
+## Domain 8 — PostgreSQL Parity  *(bundle: `pg-parity` — **BUILT**, IT68)*
+
+Built in the #3257 wave. The bundle carries **no platform declaration** and therefore runs on
+**both** backends: every check asserts a platform-independent invariant, so SQL Server is the
+baseline oracle and a check that passes there while failing on PostgreSQL isolates a genuine
+provider parity bug. PG1/PG4 are mutation-tier (self-cleaning via `try/finally`), so the CI lanes
+set `RUN_MUTATION_TESTS=1` on both platforms — otherwise the bundle would register, dispatch and
+skip every write check, which is a green that proves nothing.
 
 | ID | Check | Tier | Pri | Anchor |
 |---|---|---|---|---|
-| PG1 | Core CRUD + RunView round-trip parity vs SQL Server | PG/MUT | P3 | PostgreSQLDataProvider |
-| PG2 | PascalCase identifier quoting (unquoted-fold-to-lowercase trap) | PG/MUT | P3 | 811065e6bc |
-| PG3 | Multi-word composite-PK param naming (#3112 regression) | PG/MUT | P3 | f4dce92cd4 |
-| PG4 | UUID/bool/datetimeoffset value round-trip identical to SS | PG/MUT | P3 | queryParameterProcessor |
-| PG5 | AfterKey keyset + StartRow parity | PG/MUT | P3 | PostgreSQLDataProvider |
+| PG1 | Core CRUD + RunView round-trip parity vs SQL Server | MUT | P3 | PostgreSQLDataProvider |
+| PG2 | PascalCase identifier quoting (unquoted-fold-to-lowercase trap) | DET | P3 | 811065e6bc |
+| PG3 | Multi-word composite-PK param naming (#3112 regression) | — | — | **GAP, not built** |
+| PG4 | UUID/bool/datetimeoffset value round-trip identical to SS | MUT | P3 | queryParameterProcessor |
+| PG5 | AfterKey keyset + StartRow parity | DET | P3 | PostgreSQLDataProvider |
+
+> **PG3 is a documented gap, not an oversight.** No multi-column primary key exists anywhere in
+> the v5 schema — every generated entity has a single-`ID` `Load` signature — so the check has no
+> target and would degrade to exactly the skip-as-pass it exists to eliminate. Its anchored defect
+> (#3112) is a **CodeGen-time** bug in generated PostgreSQL CRUD bodies, unreachable by a lane that
+> provisions from committed migrations and runs no `mj codegen`; three unit regressions already pin
+> it in `PostgreSQLCodeGenProvider.test.ts`. Revisit if composite-PK entities ever ship.
 
 ## Domain 9 — Metadata Tooling & Lifecycle  *(new bundle: `metadata-sync`, `codegen-determinism`, `open-app-lifecycle`)*
 

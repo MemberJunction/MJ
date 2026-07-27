@@ -190,9 +190,17 @@ export interface DriverExecutionResult {
   targetLogId: string;
 
   /**
-   * Execution status
+   * Execution status.
+   *
+   * `'Skipped'` means the test did not execute — a gated tier whose env var is unset, or a
+   * bundle that cannot apply to the active database platform. It is deliberately distinct
+   * from `'Passed'`: a skip that reports as a pass is indistinguishable from a real pass in
+   * every downstream count and report, which turns "never ran" into "verified".
+   *
+   * Skips are excluded from pass/fail ratios and from `averageScore` rather than counted on
+   * either side — see TestEngine's suite aggregation.
    */
-  status: 'Passed' | 'Failed' | 'Error' | 'Timeout';
+  status: 'Passed' | 'Failed' | 'Error' | 'Timeout' | 'Skipped';
 
   /**
    * Overall score

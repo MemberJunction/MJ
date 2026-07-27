@@ -58,6 +58,22 @@ const RLS_BUNDLES = new Set(['rls-isolation', 'rls-isolation-client']);
 /** Key under SuiteFixtureContext.Data where the discovered RLS fixture is stashed. */
 const RLS_FIXTURE_KEY = 'rlsFixture';
 
+/**
+ * The first non-Database provider type among the candidates, or undefined when all are safe
+ * to run a server-transport bundle against. A provider with no `ProviderType` (an unset global
+ * or a `new Metadata()` facade, as in unit tests) counts as safe — this guard only fires on a
+ * provider that positively identifies as something other than Database. See the #3251 comment
+ * at its call site for why more than one candidate has to be inspected.
+ */
+function findReboundProviderType(...candidates: (IMetadataProvider | undefined)[]): ProviderType | undefined {
+    for (const candidate of candidates) {
+        if (candidate?.ProviderType && candidate.ProviderType !== ProviderType.Database) {
+            return candidate.ProviderType;
+        }
+    }
+    return undefined;
+}
+
 @RegisterClass(BaseTestDriver, 'IntegrationTestDriver')
 export class IntegrationTestDriver extends BaseTestDriver {
     /** The driver arms its own timeout and breaks the check loop when it fires. */
@@ -125,7 +141,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
 
         // 2) Whole-test tier gate (gated-tier / local-dev safety net). The tier decides the
         //    env var via TIER_ENV_GATE; an explicit `requiresEnv` overrides it. When the gate
-        //    is unmet, skip-as-Passed with a gate note — the driver result enum has no 'Skipped'.
+        //    is unmet the run reports 'Skipped' — honestly "did not execute", not a pass.
         const tier: IntegrationTier = config.tier ?? 'deterministic';
         const explicitGate = config.requiresEnv;
         const gated = explicitGate ? process.env[explicitGate] !== '1' : !IsTierEnabled(tier);
@@ -139,6 +155,29 @@ export class IntegrationTestDriver extends BaseTestDriver {
         const selectors = Array.isArray(config.checks) ? config.checks : [];
         const transport: 'server' | 'client' =
             config.transport ?? (selectors.some(s => this.bundleTransport(s.type) === 'client') ? 'client' : 'server');
+
+        // 2a) Platform gate. A bundle may declare the database platforms it can run on (see
+        //     IntegrationCheckRegistry.RegisterBundlePlatforms — for dialect-impossible bundles
+        //     only, never as a quarantine list). Skip the whole test only when EVERY selected
+        //     bundle is excluded; a mixed selection still runs, so a declaration can never
+        //     silently drop coverage that would otherwise have executed.
+        //
+        //     The platform comes from the active bootstrap context, which both the in-process
+        //     bootstrap and the `mj test` CLI publish. When no context exists we cannot know the
+        //     platform, so nothing is skipped — fail-open, because wrongly skipping is the
+        //     failure mode that hides bugs.
+        const platform = getActiveIntegrationBootstrap()?.Db.Platform;
+        if (platform && selectors.length > 0) {
+            const registry = IntegrationCheckRegistry.Instance;
+            const excluded = selectors.filter(s => !registry.BundleRunsOnPlatform(s.type, platform));
+            if (excluded.length === selectors.length) {
+                const note =
+                    `Skipped: bundle(s) ${excluded.map(s => s.type).join(', ')} do not run on ${platform} ` +
+                    `(declared platform restriction)`;
+                this.logToTestRun(context, 'warn', note);
+                return this.buildSkipResult(context, startTime, note);
+            }
+        }
 
         // 2b) D1 host check. These suites must own their process — install the instrumented
         //     cache as the FIRST caller of LocalCacheManager.Initialize. Inside a live MJAPI
@@ -404,16 +443,24 @@ export class IntegrationTestDriver extends BaseTestDriver {
             schema = ic.Db.Schema;
             provider = ic.Provider;
         }
-        // #3251: a server-transport bundle MUST resolve a DATABASE provider. If the process-global
-        // provider was rebound to a client (GraphQL/Network) provider — because a client-transport
-        // bundle ran earlier in this same process (setupGraphQLClient calls SetProvider) — then a
-        // server bundle would silently execute over the wire and its checks would fail in
-        // product-shaped ways. Fail loudly instead of degrading silently. The throw is caught by
-        // Execute's bootstrap try/catch → an 'Error' result, never a wedged 'Running' run. Guarded on
-        // ProviderType being present so a facade/unset global provider (e.g. in unit tests) is a no-op.
-        if (provider?.ProviderType && provider.ProviderType !== ProviderType.Database) {
+        // #3251: a server-transport bundle MUST run against a DATABASE provider. If the
+        // process-global provider was rebound to a client (GraphQL/Network) provider — because a
+        // client-transport bundle ran earlier in this same process (setupGraphQLClient calls
+        // SetProvider) — then a server bundle would silently execute over the wire and its checks
+        // would fail in product-shaped ways. Fail loudly instead of degrading silently. The throw is
+        // caught by Execute's bootstrap try/catch → an 'Error' result, never a wedged 'Running' run.
+        //
+        // BOTH the resolved provider and the global are checked, because they can disagree. A
+        // bootstrap context captures its provider at publish time and is therefore always a Database
+        // provider, so checking `provider` alone goes blind the moment any context exists — which,
+        // since the CLI began publishing one, is every `mj test` run. The global is what a check
+        // reaching for `new Metadata()` actually gets, so a rebound global with a captured SQL
+        // ctx.Provider is a split-brain, not a safe fallback. Each check is guarded on ProviderType
+        // being present so a facade/unset provider (e.g. in unit tests) is a no-op.
+        const reboundType = findReboundProviderType(provider, Metadata.Provider); // global-provider-ok: inspecting the process-global provider IS this guard's purpose
+        if (reboundType) {
             throw new Error(
-                `transport 'server' resolved a '${provider.ProviderType}' provider — the process-global ` +
+                `transport 'server' resolved a '${reboundType}' provider — the process-global ` +
                 `provider was rebound (a client-transport bundle ran earlier in this process). ` +
                 `Server-transport bundles must be sequenced BEFORE all client-transport bundles in a ` +
                 `suite, or run in their own process. (issue #3251)`);
@@ -458,17 +505,26 @@ export class IntegrationTestDriver extends BaseTestDriver {
         return result;
     }
 
-    /** Gated/skipped run: one passing 'gate' OracleResult, never 'Running', never thrown. */
+    /**
+     * Skipped run: nothing executed. One 'gate' OracleResult carries the reason; never
+     * 'Running', never thrown.
+     *
+     * Reports status 'Skipped' with zero checks and score 0. It previously reported
+     * 'Passed' with `passedChecks: 1, score: 1` because the driver's result enum had no
+     * 'Skipped' — which made "the gate was closed" and "one check passed" indistinguishable
+     * in every count, report and exit code downstream. The counts are zero because zero
+     * checks ran; the score is excluded from suite averages rather than averaged as 0.
+     */
     private buildSkipResult(context: DriverExecutionContext, startTime: number, note: string): DriverExecutionResult {
         return {
             targetType: TARGET_TYPE,
             targetLogId: context.testRun.ID,
-            status: 'Passed',
-            score: 1,
-            oracleResults: [{ oracleType: 'gate', passed: true, score: 1, message: note, details: { DurationMs: 0 } }],
-            passedChecks: 1,
+            status: 'Skipped',
+            score: 0,
+            oracleResults: [{ oracleType: 'gate', passed: true, score: 0, message: note, details: { DurationMs: 0 } }],
+            passedChecks: 0,
             failedChecks: 0,
-            totalChecks: 1,
+            totalChecks: 0,
             durationMs: Date.now() - startTime
         };
     }

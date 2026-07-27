@@ -44,6 +44,10 @@ on:
       - 'package-lock.json'
       - 'packages/**'
       - 'migrations/**'
+      # PostgreSQL migrations provision the PG lane below. Without this entry the PR class most
+      # likely to break that lane — a PG-migration PR — would never trigger it, leaving only the
+      # post-merge push-to-next backstop to catch it.
+      - 'migrations-pg/**'
       # All integration test/suite/type metadata AND the RLS fixtures now live under this one
       # optional sibling root (kept out of the default-pushed metadata/ tree — R2).
       - 'metadata-optional/**'
@@ -187,4 +191,139 @@ jobs:
       # come from the local .env, which CI does not have. PS_INTEGRATION stays unset. No
       # MJAPI is up, so client-transport members skip on the MJAPI preflight.
       - name: Run integration tier (mj test)
+        env:
+          # Activates the 52 mutation-tier checks across 12 bundles. They are self-cleaning
+          # (each creates and deletes its own fixture) and the release procedure has always run
+          # them locally — but until now no workflow set this, so CI was gating on a strictly
+          # weaker suite than the documented release check. Set on BOTH lanes so the two stay
+          # symmetric: the PostgreSQL lane needs it for pg-parity's CRUD legs, and SQL Server is
+          # only a useful baseline oracle if it runs the same set.
+          RUN_MUTATION_TESTS: '1'
+        run: npm run test:integration
+
+  # ─────────────────────────────────────────────────────────────────────────────────────────
+  # PostgreSQL lane. Same suite, same check code, second backend — this is what turns "SS/PG
+  # parity" from an assumption into a verified property. BLOCKING by design: a non-gating lane
+  # would let PG runtime regressions merge, which is the exact situation this lane was created
+  # to end (issue #3257).
+  #
+  # It differs from the SQL Server lane in provisioning only: a postgres:17 service container,
+  # the cdp_* roles the migration GRANTs reference, and `migrations-pg/v5`. Everything from
+  # `mj sync push` onward is byte-identical work against a different database.
+  #
+  # EXPECTED SKIP: `metadata-consistency` (IT24) declares Platforms: ['sqlserver'] because its
+  # `sys.*` catalog queries have no PostgreSQL equivalent, so this lane reports exactly one
+  # skipped test. Any OTHER skip, or any failure, is a real parity finding — the platform
+  # declaration is for dialect-impossible bundles only, never a quarantine list.
+  # ─────────────────────────────────────────────────────────────────────────────────────────
+  integration-postgresql:
+    name: Integration (PostgreSQL, deterministic)
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    # GitHub Actions `env:` is per-job, so none of the SQL Server lane's block carries over.
+    # THREE credential families are needed and they are not interchangeable:
+    #   * DB_*          — read by MetadataSync's config layer (`mj sync push`) and by the
+    #                     testing CLI's provider setup (`mj test`).
+    #   * CODEGEN_DB_*  — the ONLY credentials MJCLI reads for `mj migrate`; its config schema
+    #                     marks them required, so with DB_* alone it aborts before starting.
+    #   * PG*           — libpq's own variables, for the raw `psql` role-bootstrap and
+    #                     fixture-verification steps.
+    # DB_PORT is explicit because the committed mj.config.cjs resolves the port itself; the
+    # platform-aware default there already handles this, and setting it here is belt-and-braces.
+    env:
+      DB_PLATFORM: postgresql
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_DATABASE: mj_pg_ci
+      DB_USERNAME: postgres
+      DB_PASSWORD: testpass
+      CODEGEN_DB_USERNAME: postgres
+      CODEGEN_DB_PASSWORD: testpass
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: testpass
+      PGDATABASE: mj_pg_ci
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          # The service container creates the database, so this lane needs no "create database"
+          # step (unlike the SQL Server lane, whose image starts with no user database).
+          POSTGRES_DB: mj_pg_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Same filters as the SQL Server lane PLUS the PostgreSQL provider: the testing CLI
+      # dynamic-imports it (an optional dependency), so it must exist as a built artifact or
+      # the provider setup fails at runtime with a module-resolution error rather than at build.
+      - name: Build integration graph + CLI
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=@memberjunction/postgresql-dataprovider
+
+      # 129 files under migrations-pg/v5 carry GRANT statements against these roles. A blank
+      # container has none of them, so the very first GRANT aborts the migrate with
+      # `role "cdp_UI" does not exist`. Copied from pg-migrations.yml, which hit exactly this.
+      - name: Bootstrap PostgreSQL roles
+        run: |
+          psql <<'SQL'
+          DO $$ BEGIN CREATE ROLE "cdp_UI" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE "cdp_Developer" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE "cdp_Integration" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          GRANT USAGE ON SCHEMA public TO "cdp_UI", "cdp_Developer", "cdp_Integration";
+          SQL
+
+      - name: Migrate — apply committed PG migrations to the fresh DB
+        run: npx mj migrate --dir=migrations-pg/v5 -v
+
+      # ⚠ First time `mj sync push` runs against PostgreSQL in CI. It was fixed for PG in #3253
+      # but has never been exercised by a workflow, so this is the most likely first breakage
+      # point in this lane. A failure here is a sync-on-PG bug, not a test failure.
+      - name: Sync push — reconcile committed metadata (mj sync push --ci)
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+
+      - name: Sync push — seed the optional integration metadata + RLS fixtures
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
+
+      # Same fail-loud fixture assertion as the SQL Server lane: without the 3 @integration.test
+      # principals the RLS8/9/10 checks skip and the tier's strongest coverage stops running
+      # while the gate stays green.
+      - name: Verify RLS integration fixtures were seeded
+        run: |
+          COUNT=$(psql -tA -c "SELECT COUNT(*) FROM __mj.\"User\" WHERE \"Email\" LIKE '%@integration.test';")
+          COUNT=$(echo "$COUNT" | tr -d '[:space:]')
+          echo "Seeded @integration.test fixture users: ${COUNT}/3"
+          if [ "${COUNT:-0}" -lt 3 ]; then
+            echo "::error::RLS integration fixtures were not seeded (found ${COUNT}/3 @integration.test users) on PostgreSQL. The fixtures sync push may have exited 0 without seeding — the deterministic RLS8/9/10 checks would silently skip. Re-run: mj sync push --dir=metadata-optional/integration-test" >&2
+            exit 1
+          fi
+
+      - name: Run integration tier (mj test)
+        env:
+          RUN_MUTATION_TESTS: '1'   # see the SQL Server lane's note — the lanes must stay symmetric
         run: npm run test:integration

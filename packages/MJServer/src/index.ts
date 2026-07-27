@@ -6,7 +6,7 @@ import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ResolveStartupMode } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
-import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
+import { MJGlobal, MJEventType, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { registerIntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
@@ -1730,27 +1730,22 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
 
 /**
  * Refreshes the UserCache using PostgreSQL queries instead of MSSQL.
- * This mirrors the logic in UserCache.Refresh() but uses pg.Pool.
+ *
+ * Only the query dialect lives here — the role join and UserInfo construction belong to
+ * `UserCache.RefreshFromRows`, which every backend shares. Note this now throws when the
+ * database has no users, rather than leaving the cache silently empty and letting startup
+ * proceed without a system user.
+ *
+ * NOTE: the schema is interpolated UNQUOTED here, so PostgreSQL folds it to lowercase —
+ * harmless for the default `__mj`, but divergent from every other MJ PG path (MetadataSync
+ * and testing-integration both double-quote it). Left as-is deliberately: quoting a schema
+ * that was created folded would break an existing deployment. Tracked as a follow-up.
  */
 async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: string): Promise<void> {
-  const { UserInfo } = await import('@memberjunction/core');
   const uResult = await pgPool.query(`SELECT * FROM ${coreSchema}."vwUsers"`);
   const rResult = await pgPool.query(`SELECT * FROM ${coreSchema}."vwUserRoles"`);
-  const users = uResult.rows;
-  const roles = rResult.rows;
 
-  if (users) {
-    const userInfos = users.map((user: Record<string, unknown>) => {
-      const userWithRoles = {
-        ...user,
-        UserRoles: roles.filter((role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string)),
-      };
-      return new UserInfo(Metadata.Provider, userWithRoles); // global-provider-ok: bootstrap (UserCache initialization)
-    });
-    // Access the UserCache internals to set users
-    const cache = UserCache.Instance;
-    (cache as unknown as Record<string, unknown>)['_users'] = userInfos;
-  }
+  UserCache.Instance.RefreshFromRows(uResult.rows, rResult.rows, Metadata.Provider); // global-provider-ok: bootstrap (UserCache initialization)
 }
 
 /**
