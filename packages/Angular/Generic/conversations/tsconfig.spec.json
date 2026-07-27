@@ -34,7 +34,9 @@
     "src/lib/components/tasks/tasks-dropdown.component.ts",
     "src/lib/components/tasks/tasks-dropdown.component.dom.test.ts",
     "src/lib/components/collection/collection-artifact-card.component.ts",
-    "src/lib/components/collection/collection-artifact-card.component.dom.test.ts"
+    "src/lib/components/collection/collection-artifact-card.component.dom.test.ts",
+    "src/lib/components/message/message-item.component.ts",
+    "src/lib/components/message/message-item-gear-affordance.dom.test.ts"
   ],
   "exclude": [
     "node_modules",

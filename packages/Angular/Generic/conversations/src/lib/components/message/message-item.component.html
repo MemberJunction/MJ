@@ -61,8 +61,11 @@
         </span>
       }
 
-      <!-- Agent run icon (clickable to expand details) - always rightmost when present -->
-      @if (hasAgentRun) {
+      <!-- Agent run icon (clickable to expand details) - always rightmost when present.
+           Rendered only when its panel would actually have content, so it never
+           appears as a dead control opening an empty popup (e.g. a white-label
+           surface with showAgentRunDetails=false and no message actions). -->
+      @if (hasAgentRun && hasAgentDetailsPanelContent) {
         <span
           class="agent-run-icon"
           (click)="toggleAgentDetails()"
@@ -229,7 +232,7 @@
       @if (isAgentDetailsExpanded && hasAgentRun) {
         <!-- Agent Run Details Panel -->
         <div class="agent-details-panel">
-          @if (agentRun) {
+          @if (agentRun && showAgentRunDetails) {
             <div class="agent-details-content">
               <div class="agent-details-header">
                 <i class="fas fa-chart-line"></i>
@@ -242,51 +245,51 @@
               </div>
 
               <!-- Run-detail grid (run ID, step/token counts, $ cost, status) — developer/
-                   observability data; gated so a white-labeled end-user surface can hide it
-                   while keeping the panel shell (which also hosts delete/pin/rating below). -->
-              @if (showAgentRunDetails) {
-                <div class="agent-details-grid">
+                   observability data. The whole run-details section (this grid AND its
+                   header above) is gated on showAgentRunDetails at the panel root, so a
+                   white-labeled surface hides all of it; the delete/pin/rating overflow
+                   below is a sibling block (outside this @if) and still renders. -->
+              <div class="agent-details-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Run ID:</span>
+                  <span class="detail-value">
+                    <a class="run-id-link" (click)="openAgentRunRecord()" title="Open agent run details">
+                      {{ agentRun.ID }}
+                      <i class="fas fa-external-link-alt"></i>
+                    </a>
+                  </span>
+                </div>
+
+                @if (agentRunStepCount > 0) {
                   <div class="detail-row">
-                    <span class="detail-label">Run ID:</span>
-                    <span class="detail-value">
-                      <a class="run-id-link" (click)="openAgentRunRecord()" title="Open agent run details">
-                        {{ agentRun.ID }}
-                        <i class="fas fa-external-link-alt"></i>
-                      </a>
+                    <span class="detail-label">Steps:</span>
+                    <span class="detail-value">{{ agentRunStepCount }}</span>
+                  </div>
+                }
+
+                @if (agentRunTotalTokens > 0) {
+                  <div class="detail-row">
+                    <span class="detail-label">Tokens:</span>
+                    <span class="detail-value">{{ formatNumber(agentRunTotalTokens) }}</span>
+                  </div>
+                }
+
+                @if (agentRunTotalCost > 0) {
+                  <div class="detail-row">
+                    <span class="detail-label">Cost:</span>
+                    <span class="detail-value">\${{ agentRunTotalCost.toFixed(4) }}</span>
+                  </div>
+                }
+
+                @if (agentRun.Status) {
+                  <div class="detail-row">
+                    <span class="detail-label">Status:</span>
+                    <span class="detail-value status-badge" [class]="'status-' + agentRun.Status.toLowerCase()">
+                      {{ agentRun.Status }}
                     </span>
                   </div>
-
-                  @if (agentRunStepCount > 0) {
-                    <div class="detail-row">
-                      <span class="detail-label">Steps:</span>
-                      <span class="detail-value">{{ agentRunStepCount }}</span>
-                    </div>
-                  }
-
-                  @if (agentRunTotalTokens > 0) {
-                    <div class="detail-row">
-                      <span class="detail-label">Tokens:</span>
-                      <span class="detail-value">{{ formatNumber(agentRunTotalTokens) }}</span>
-                    </div>
-                  }
-
-                  @if (agentRunTotalCost > 0) {
-                    <div class="detail-row">
-                      <span class="detail-label">Cost:</span>
-                      <span class="detail-value">\${{ agentRunTotalCost.toFixed(4) }}</span>
-                    </div>
-                  }
-
-                  @if (agentRun.Status) {
-                    <div class="detail-row">
-                      <span class="detail-label">Status:</span>
-                      <span class="detail-value status-badge" [class]="'status-' + agentRun.Status.toLowerCase()">
-                        {{ agentRun.Status }}
-                      </span>
-                    </div>
-                  }
-                </div>
-              }
+                }
+              </div>
             </div>
           }
 
