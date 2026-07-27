@@ -1,4 +1,4 @@
-import { BaseEntity, EntityDeleteOptions, IMetadataProvider, LogError } from "@memberjunction/core";
+import { BaseEntity, EntityDeleteOptions, IMetadataProvider, LogError, LogStatus } from "@memberjunction/core";
 import { RegisterClass, ValidationErrorInfo, ValidationResult } from "@memberjunction/global";
 import { MJDashboardEntity } from "../generated/entity_subclasses";
 import { DashboardEngine } from "../engines/dashboards";
@@ -60,7 +60,26 @@ export class MJDashboardEntityExtended extends MJDashboardEntity  {
         if (this.IsSaved) {
             const permissions = DashboardEngine.Instance.GetDashboardPermissions(this.ID, currentUser.ID);
 
-            if (!permissions.CanEdit) {
+            // 'unevaluated' means DashboardEngine was never configured in this process, so the
+            // sharing model could not be consulted — NOT that this user was refused. Blocking here
+            // would deny every writer in any process that does not pre-warm engines, which is what
+            // made `mj sync push` fail on every dashboard with a permissions message describing a
+            // problem that did not exist.
+            //
+            // Skipping is not a hole in the sharing model: every multi-user surface loads this
+            // engine (MJAPI pre-warms it via StartupManager 'full'; Explorer configures it before
+            // rendering a dashboard), so the gate stays enforced exactly where untrusted callers
+            // reach it. The processes that land here — the CLI and metadata sync — run as the
+            // System user against declarative metadata, where per-user dashboard sharing is not
+            // the security boundary. Logged rather than silent so this can never be mistaken for
+            // an enforced check.
+            if (permissions.PermissionSource === 'unevaluated') {
+                LogStatus(
+                    `MJDashboardEntityExtended.Validate: dashboard sharing permissions not enforced for '${this.ID}' — ` +
+                    `DashboardEngine is not configured in this process (expected for CLI/metadata-sync; ` +
+                    `NOT expected inside MJAPI or Explorer).`
+                );
+            } else if (!permissions.CanEdit) {
                 result.Success = false;
                 result.Errors.push(new ValidationErrorInfo(
                     'Permission',
@@ -86,10 +105,18 @@ export class MJDashboardEntityExtended extends MJDashboardEntity  {
             return false;
         }
 
-        // Check delete permission
+        // Check delete permission. Same 'unevaluated' distinction as Validate() — see the long
+        // comment there for why an unconfigured engine must not be read as a refusal. Without
+        // this, a CLI-context delete is rejected with a message blaming the user's permissions.
         const permissions = DashboardEngine.Instance.GetDashboardPermissions(this.ID, currentUser.ID);
 
-        if (!permissions.CanDelete) {
+        if (permissions.PermissionSource === 'unevaluated') {
+            LogStatus(
+                `MJDashboardEntityExtended.Delete: dashboard sharing permissions not enforced for '${this.ID}' — ` +
+                `DashboardEngine is not configured in this process (expected for CLI/metadata-sync; ` +
+                `NOT expected inside MJAPI or Explorer).`
+            );
+        } else if (!permissions.CanDelete) {
             LogError(`User ${currentUser.ID} does not have permission to delete dashboard ${this.ID}`);
             return false;
         }

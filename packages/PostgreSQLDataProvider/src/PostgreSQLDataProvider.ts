@@ -1405,9 +1405,12 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
     // PascalCase columns/views that codegen creates. We auto-quote those
     // identifiers at runtime so existing SQL works on both dialects.
     //
-    // The tokenizer mirrors PostgreSQLCodeGenProvider.quoteSQLForExecution
-    // so codegen-time and runtime apply the same rules. If the codegen
-    // tokenizer changes, this should change too (or be refactored to share).
+    // The tokenizer is the runtime counterpart of
+    // PostgreSQLCodeGenProvider.quoteSQLForExecution, but the two keyword sets have DIVERGED and
+    // are not interchangeable: codegen's set carries no TYPE/DATA/NAME and has no all-caps-only
+    // tier, so it quotes those unconditionally, while this one keeps the all-caps DDL forms bare
+    // (see _SQL_KEYWORDS_UPPERCASE_ONLY). Treat them as related-but-separate until someone
+    // refactors them to share a single source; changing one does NOT automatically fix the other.
 
     private static readonly _SQL_KEYWORDS = new Set([
         // DML/DDL keywords
@@ -1458,7 +1461,7 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
         // hand-written SQL across the codebase. Without these in the keyword
         // set the tokenizer emits "INTEGER" / "DOUBLE" / "BYTEA" as quoted
         // identifiers and PG rejects them as unknown user-defined types.
-        'INTEGER', 'DOUBLE', 'PRECISION', 'BYTEA', 'OID', 'REGCLASS', 'REGPROC', 'NAME',
+        'INTEGER', 'DOUBLE', 'PRECISION', 'BYTEA', 'OID', 'REGCLASS', 'REGPROC',
         'GEN_RANDOM_UUID', 'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TO_NUMBER',
         'STRING_AGG', 'ARRAY_AGG', 'UNNEST', 'LATERAL', 'ILIKE',
         'LANGUAGE', 'PLPGSQL', 'VOLATILE', 'STABLE', 'IMMUTABLE', 'SETOF', 'RECORD',
@@ -1488,6 +1491,11 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
      */
     private static readonly _SQL_KEYWORDS_UPPERCASE_ONLY = new Set([
         'TYPE', 'DATA',
+        // `NAME` — PostgreSQL's `name` type; but `Name` is the single most common column in the
+        // MJ schema. Case-insensitive matching left every hand-written `Name` reference bare, so
+        // PG folded it to `name` and rejected the statement with `column "name" does not exist`.
+        // Exactly the TYPE/DATA collision above, on the column it hurts most.
+        'NAME',
     ]);
 
     /**

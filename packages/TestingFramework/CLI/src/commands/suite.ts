@@ -183,7 +183,10 @@ export class SuiteCommand {
             // Clean up resources
             await closeMJProvider();
 
-            // Exit with appropriate code (non-zero if any test failed)
+            // Exit non-zero if any test failed to pass. `failedTests` is failure-closed
+            // (summarizeSuiteResults: total − passed − skipped), so Error and Timeout gate the
+            // build here too — counting only status === 'Failed' let a suite that errored on
+            // every test exit 0. Skips are excluded deliberately; they are reported separately.
             process.exit(result.failedTests === 0 ? 0 : 1);
 
         } catch (error) {

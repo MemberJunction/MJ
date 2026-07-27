@@ -27,7 +27,8 @@
  *
  * Historical note: these checks never actually executed in CI on EITHER platform. `ctx.Pool`
  * comes from the active bootstrap context, and until the `mj test` CLI began publishing one,
- * that context was null on the CLI path — so `poolOrSkip` skipped-as-pass on SQL Server too.
+ * that context was null on the CLI path — so the pool helper skipped-as-pass on SQL Server too.
+ * It now FAILS instead of skipping (see `requirePool`), so that regression cannot recur silently.
  *
  * ── CHECKS ──────────────────────────────────────────────────────────────────────────────────
  *   MC1 every non-virtual entity with BaseViewGenerated=1 has its BaseView in sys.objects
@@ -106,15 +107,26 @@ const SAMPLE_SIZE = 8;
 // ── small shared helpers ────────────────────────────────────────────────────────────────────
 
 /**
- * Resolve the mssql pool, or null when this run is on a transport that has none (PostgreSQL).
- * Callers treat null as skip-as-pass — never as a silent success on SQL Server.
+ * Resolve the mssql pool, or FAIL LOUDLY when it is absent.
+ *
+ * This used to return null and let callers pass — which is exactly how all seven of these audits
+ * silently never executed for the bundle's entire existence: the `mj test` CLI published no
+ * bootstrap context, so `ctx.Pool` was undefined on SQL Server too and every check "passed"
+ * without touching the database.
+ *
+ * The PostgreSQL case that once justified the soft return is gone: the bundle now declares
+ * `Platforms: ['sqlserver']`, so on PostgreSQL the driver reports the whole test as Skipped at
+ * the platform gate and no check body runs at all. The only way to reach a missing pool now is a
+ * SQL Server bootstrap that failed to publish one — the original regression — and that must be a
+ * hard failure, not a green tick.
  */
-function poolOrSkip(ctx: IntegrationCheckContext, checkId: string): sql.ConnectionPool | null {
-    if (!ctx.Pool) {
-        console.log(`      → ${checkId} skipped: no mssql pool on this transport (PostgreSQL / client bootstrap)`);
-        return null;
-    }
-    return ctx.Pool;
+function requirePool(ctx: IntegrationCheckContext, checkId: string): sql.ConnectionPool {
+    Assert(!!ctx.Pool,
+        `${checkId}: no mssql pool on the check context. These audits run raw catalog queries and ` +
+        `cannot execute without one. On PostgreSQL this bundle is skipped at the platform gate and ` +
+        `should never reach here, so this means the SQL Server bootstrap did not publish its pool — ` +
+        `passing silently here is what hid this entire bundle from CI before #3257.`);
+    return ctx.Pool!;
 }
 
 /** Run a typed catalog query against the pool. */
@@ -375,10 +387,7 @@ const MC1: NamedCheck = {
     Id: 'metadata-consistency.MC1',
     Name: 'MC1: every generated BaseView exists in sys.objects',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC1');
-        if (!pool) {
-            return;
-        }
+        const pool = requirePool(ctx, 'MC1');
         const views = await fetchViewNames(pool);
         const candidates = ctx.Provider.Entities.filter(e => !e.VirtualEntity && e.BaseViewGenerated && !!e.BaseView && !!e.SchemaName);
         const offenders = candidates
@@ -392,10 +401,7 @@ const MC2: NamedCheck = {
     Id: 'metadata-consistency.MC2',
     Name: 'MC2: every generated spCreate/spUpdate/spDelete exists in sys.objects',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC2');
-        if (!pool) {
-            return;
-        }
+        const pool = requirePool(ctx, 'MC2');
         const procs = await fetchProcedureNames(pool);
         const offenders: string[] = [];
         let scanned = 0;
@@ -415,10 +421,7 @@ const MC3: NamedCheck = {
     Id: 'metadata-consistency.MC3',
     Name: 'MC3: CHECK-constraint value lists match their EntityFieldValue rows',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC3');
-        if (!pool) {
-            return;
-        }
+        const pool = requirePool(ctx, 'MC3');
         const constraints = await fetchColumnCheckConstraints(pool);
         const byTable = new Map<string, EntityInfo>();
         for (const e of physicalEntities(ctx.Provider)) {
@@ -455,10 +458,7 @@ const MC4: NamedCheck = {
     Id: 'metadata-consistency.MC4',
     Name: 'MC4: every FK column has its IDX_AUTO_MJ_FKEY index',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC4');
-        if (!pool) {
-            return;
-        }
+        const pool = requirePool(ctx, 'MC4');
         const indexes = await fetchIndexNames(pool);
         const offenders: string[] = [];
         let scanned = 0;
@@ -479,10 +479,7 @@ const MC5: NamedCheck = {
     Id: 'metadata-consistency.MC5',
     Name: 'MC5: field sequences are gapless from 1 and match base-view column order',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC5');
-        if (!pool) {
-            return;
-        }
+        const pool = requirePool(ctx, 'MC5');
         const viewColumns = await fetchViewColumnOrder(pool);
         const offenders: string[] = [];
         let scanned = 0;
@@ -509,10 +506,7 @@ const MC6: NamedCheck = {
     Id: 'metadata-consistency.MC6',
     Name: 'MC6: every core-schema physical field carries an MS_Description',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC6');
-        if (!pool) {
-            return;
-        }
+        const pool = requirePool(ctx, 'MC6');
         // Scoped to the CORE schema: MJ owns those migrations and mandates sp_addextendedproperty
         // for every new column, so this is a green-able gate. Non-core (customer/app) schemas are
         // reported as coverage information, never gated on — MJ does not author their migrations.
@@ -556,10 +550,7 @@ const MC8: NamedCheck = {
     Id: 'metadata-consistency.MC8',
     Name: 'MC8: SchemaInfo covers every entity schema with casing-correct names',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC8');
-        if (!pool) {
-            return;
-        }
+        const pool = requirePool(ctx, 'MC8');
         const physical = await fetchPhysicalSchemas(pool);
         const registered = await loadSchemaInfo(ctx.User);
         const offenders: string[] = [];

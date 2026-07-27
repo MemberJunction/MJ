@@ -18,7 +18,9 @@ import sql from 'mssql';
 import dotenv from 'dotenv';
 import path from 'path';
 import { loadMJConfig } from '../utils/config-loader';
-import type { MJConfig, MJDbPlatform } from '../utils/config-loader';
+import type { MJConfig } from '../utils/config-loader';
+// Imported from the package that OWNS the union, not re-exported through config-loader.
+import type { IntegrationDbPlatform } from '@memberjunction/testing-integration';
 
 // Load environment variables from .env file
 // Note: config-loader.ts also loads dotenv with override:true, but we include it here
@@ -32,7 +34,7 @@ let closePostgresPool: (() => Promise<void>) | null = null;
 
 /** Database settings for this run, after config values, env fallbacks and validation. */
 interface ResolvedDbSettings {
-  Platform: MJDbPlatform;
+  Platform: IntegrationDbPlatform;
   Host: string;
   Port: number;
   Database: string;
@@ -90,6 +92,21 @@ interface DatabaseConnectionError {
   address?: string;
   port?: number;
   userName?: string;
+}
+
+/** Default SQL request timeout for the harness pool, in ms. See the sqlConfig comment. */
+const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
+
+/**
+ * Per-request SQL timeout, overridable via `MJ_TEST_REQUEST_TIMEOUT` for a run that needs to
+ * hunt genuinely slow queries with a tighter bound. Falls back to the default on anything
+ * unparseable or non-positive rather than silently passing NaN to the driver.
+ */
+function resolveRequestTimeoutMs(): number {
+  const raw = process.env.MJ_TEST_REQUEST_TIMEOUT;
+  if (!raw) return DEFAULT_REQUEST_TIMEOUT_MS;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_REQUEST_TIMEOUT_MS;
 }
 
 function asConnectionError(error: unknown): DatabaseConnectionError {
@@ -175,6 +192,13 @@ async function setupSqlServerProvider(db: ResolvedDbSettings): Promise<void> {
       trustServerCertificate: true,
       enableArithAbort: true,
     },
+    // mssql defaults requestTimeout to 15s. The integration suite runs catalog-wide sweeps
+    // (count probes over MJ: Entities, the metadata-consistency audits) on shared 2-core CI
+    // runners that are simultaneously doing local model embedding, and 15s is not enough
+    // headroom there — a contention spike surfaces as a bogus "query failed" rather than as
+    // the slow-query finding it actually is. Every other DB step in the integration workflow
+    // is already given 120s; this aligns the harness with them.
+    requestTimeout: resolveRequestTimeoutMs(),
     pool: {
       max: 10,
       min: 2,
@@ -209,11 +233,22 @@ async function setupPostgreSQLProvider(db: ResolvedDbSettings): Promise<void> {
   const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
 
   const provider = new PostgreSQLDataProvider();
-  await provider.Config(new PostgreSQLProviderConfigData(
+  const configured = await provider.Config(new PostgreSQLProviderConfigData(
     { Host: db.Host, Port: db.Port, Database: db.Database, User: db.User, Password: db.Password },
     db.Schema,
     1 // must be > 0 to trigger the initial metadata load (the AllowRefresh gate in the provider)
   ));
+  // Config CATCHES AND RETURNS FALSE — unlike SQLServerDataProvider.Config, it never throws. This
+  // is the CI PG lane's bootstrap, so ignoring the boolean means a half-provisioned database
+  // installs a metadata-less provider and every check fails with "<entity> is not present in
+  // metadata", which reads as a parity bug rather than a provisioning failure.
+  if (!configured) {
+    throw new Error(
+      `PostgreSQLDataProvider.Config returned false for database '${db.Database}' (schema '${db.Schema}') — ` +
+      `metadata could not be loaded. Verify the database is migrated (migrations-pg/v5) and that ` +
+      `'${db.User}' can read the ${db.Schema} metadata tables. The provider logged the underlying error above.`
+    );
+  }
   SetProvider(provider);
   closePostgresPool = () => provider.DatabaseConnection.end();
 

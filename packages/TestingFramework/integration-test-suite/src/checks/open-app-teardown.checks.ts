@@ -46,7 +46,9 @@ function sqlHelpers(ctx: IntegrationCheckContext) {
         const rows = await exec(`SELECT COUNT(*) AS n FROM ${T(table)} WHERE ${where}`);
         return rows && rows[0] ? Number(rows[0].n) : 0;
     };
-    return { db, T, lit, exec, count };
+    /** Portable "now" — `GETUTCDATE()` on SQL Server, `(NOW() AT TIME ZONE 'UTC')` on PostgreSQL. */
+    const now = d.CurrentTimestampUTC();
+    return { db, T, lit, exec, count, now };
 }
 
 export const OpenAppTeardownChecks: NamedCheck[] = [
@@ -108,7 +110,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('open-app-teardown', {
             RecordChangeID: randomUUID(),
             ApplicationID: randomUUID(), // link-less nav Application — fixed for the PK-collision re-create test
         };
-        const { T, lit, exec } = sqlHelpers(ctx);
+        const { T, lit, exec, now } = sqlHelpers(ctx);
         const user = ctx.User;
 
         // Publish the handle (all IDs are pre-generated above) BEFORE the first INSERT, so a
@@ -131,7 +133,12 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('open-app-teardown', {
         // The dependent the old hardcoded list MISSES — a NOT-NULL FK RecordChange.EntityID -> Entity.
         await exec(
             `INSERT INTO ${T('RecordChange')} (ID, EntityID, RecordID, UserID, Type, Source, ChangedAt, ChangesJSON, ChangesDescription, FullRecordJSON, Status, CreatedAt, UpdatedAt) ` +
-            `VALUES (${lit(fixture.RecordChangeID)}, ${lit(fixture.EntityID)}, 'widget-1', ${lit(user.ID)}, 'Create', 'Internal', SYSDATETIMEOFFSET(), '{}', 'teardown IT', '{}', 'Complete', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())`,
+            // `now` not SYSDATETIMEOFFSET(): that function is SQL-Server-only and is a reserved
+            // keyword to PostgreSQL's identifier auto-quoter, so it passes through bare and PG
+            // fails with `function sysdatetimeoffset() does not exist`. This INSERT runs in the
+            // bundle's lifecycle Setup, so on the PG lane it would error the whole test before a
+            // single check body ran.
+            `VALUES (${lit(fixture.RecordChangeID)}, ${lit(fixture.EntityID)}, 'widget-1', ${lit(user.ID)}, 'Create', 'Internal', ${now}, '{}', 'teardown IT', '{}', 'Complete', ${now}, ${now})`,
         );
         await exec(
             `INSERT INTO ${T('Application')} (ID, Name, Path) ` +

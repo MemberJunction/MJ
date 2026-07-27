@@ -47,6 +47,7 @@ import {
     getMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
+import { summarizeSuiteResults } from './suite-tally';
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -380,16 +381,12 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 await this.updateSuiteRun(suiteRun, testResults, startTime);
             }
 
-            // Calculate suite-level metrics
-            const passedTests = testResults.filter(r => r.status === 'Passed').length;
-            const failedTests = testResults.filter(r => r.status === 'Failed').length;
-            const skippedTests = testResults.filter(r => r.status === 'Skipped').length;
-            // A skipped test has no score to contribute. Averaging it in as 0 would understate
-            // the tests that actually ran; as 1 it would manufacture a pass. Exclude it from
-            // both sides of the ratio instead.
-            const scoredResults = testResults.filter(r => r.status !== 'Skipped');
-            const totalScore = scoredResults.reduce((sum, r) => sum + r.score, 0);
-            const avgScore = scoredResults.length > 0 ? totalScore / scoredResults.length : 0;
+            // Calculate suite-level metrics. Shared with updateSuiteRun so the reported counts
+            // and the persisted counts can never disagree — they previously defined "failed"
+            // two different ways, and the reported one (which drives the CI exit code) was the
+            // weaker of the two.
+            const { passedTests, failedTests, skippedTests, averageScore: avgScore } =
+                summarizeSuiteResults(testResults);
 
             const result: TestSuiteRunResult = {
                 suiteRunId: suiteRun.ID,
@@ -1050,20 +1047,29 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         testResults: TestRunResult[],
         startTime: number
     ): Promise<void> {
-        const passedTests = testResults.filter(r => r.status === 'Passed').length;
-        const skippedTests = testResults.filter(r => r.status === 'Skipped').length;
-        const totalTests = testResults.length;
-        // A skipped test is neither a pass nor a failure. The former `totalTests - passedTests`
-        // counted it as a failure, which would mark an entire suite run Failed because one
-        // bundle legitimately does not apply to the active database platform.
-        //
-        // NOTE: MJTestSuiteRun has no SkippedTests column, so the skip count is not persisted —
-        // it survives only on the in-memory TestSuiteRunResult that the CLI reports from.
-        const failedTests = totalTests - passedTests - skippedTests;
+        // Same tally the reported result uses — see summarizeSuiteResults for why a skip is
+        // neither a pass nor a failure, and why everything else counts as a failure.
+        const { totalTests, passedTests, failedTests, assertionFailures, errorTests, skippedTests } =
+            summarizeSuiteResults(testResults);
 
+        // Status stays inside the column's value list ('Cancelled'|'Completed'|'Failed'|'Pending'
+        // |'Running') — there is no 'Skipped' member, so an all-skipped run still persists as
+        // 'Completed'. The counts below are what make such a run legible: TotalTests === N with
+        // SkippedTests === N and PassedTests === 0 says plainly that nothing ran. Widening the
+        // value list would need a migration + CodeGen; see the note in the suite-run docs.
         suiteRun.Status = failedTests === 0 ? 'Completed' : 'Failed';
         suiteRun.PassedTests = passedTests;
-        suiteRun.FailedTests = failedTests;
+        // The PERSISTED columns must partition the run — the suite-run form renders them as five
+        // sibling tiles (Passed | Failed | Errors | Skipped | Total). So FailedTests gets the
+        // disjoint assertion-failure bucket, NOT the overlapping gate value: writing the gate
+        // value here while also writing ErrorTests would count every error twice and make the
+        // tile row sum past Total. The gate value lives on the in-memory result, where it decides
+        // the exit code and nothing else.
+        suiteRun.FailedTests = assertionFailures;
+        suiteRun.ErrorTests = errorTests;
+        // Neither of these columns had ever been written; SkippedTests being NULL is what made
+        // Passed + Failed fail to reconcile against Total in the first place.
+        suiteRun.SkippedTests = skippedTests;
         suiteRun.TotalTests = totalTests;
         suiteRun.TotalCostUSD = testResults.reduce((sum, r) => sum + r.totalCost, 0);
         suiteRun.TotalDurationSeconds = (Date.now() - startTime) / 1000;

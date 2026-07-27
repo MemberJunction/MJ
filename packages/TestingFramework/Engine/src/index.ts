@@ -7,6 +7,7 @@
 
 // Main engine
 export * from './engine/TestEngine';
+export * from './engine/suite-tally';
 
 // Base classes
 export * from './drivers/BaseTestDriver';

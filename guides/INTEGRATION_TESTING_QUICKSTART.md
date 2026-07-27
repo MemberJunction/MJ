@@ -240,7 +240,7 @@ MJ: Tests ───────▶ IT01…IT66            Configuration selects 
       │                                  metadata-optional/integration-test/tests/integration/.IT*.json
       ▼
 MJ: Test Suites ─▶ "Integration Tests"  (parent — 0 members; running it errors, exit 1)
-                   ├─ "Integration Tests — Deterministic"   IT01–IT15, IT20–IT52, IT64–IT66  (52 members, the blocking tier)
+                   ├─ "Integration Tests — Deterministic"   IT01–IT15, IT20–IT52, IT64–IT68  (54 members, the blocking tier)
                    └─ "Integration Tests — Live Model"      IT16–IT19, IT53–IT63  (15 members)
                                          metadata-optional/integration-test/test-suites/.integration-suite.json
       ▼
@@ -814,7 +814,7 @@ sidecar-dependent scripts (`cross-server-invalidation-tests.ts`, `agent-memory-t
 | [`packages/TestingFramework/testing-integration/`](../packages/TestingFramework/testing-integration/) | The **framework** (published): driver, registry, check contracts, bootstraps, tiers, instrumented cache |
 | [`packages/TestingFramework/integration-test-suite/`](../packages/TestingFramework/integration-test-suite/) | The **content** (private, never published): all 30 check bundles, their unit tests, and the standalone rigs |
 | [`metadata/test-types/.integration-test-type.json`](../metadata/test-types/.integration-test-type.json) | The `Integration Test` TestType — an inert type definition, kept in the normal `metadata/` tree |
-| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT66 Tests (67 records), the suite hierarchy, the seeded RLS test users/role/permission, AND the synthetic AI stack the live tier drives (14 `IT: *` agents, 14 prompts, 42 model bindings, a skill, a search scope). One push seeds 242 records. Kept out of the default-pushed `metadata/` tree so these test-only records never reach production. **Must be seeded once per environment** |
+| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT68 Tests (69 records), the suite hierarchy, the seeded RLS test users/role/permission, AND the synthetic AI stack the live tier drives (14 `IT: *` agents, 14 prompts, 42 model bindings, a skill, a search scope). One push seeds 246 records. Kept out of the default-pushed `metadata/` tree so these test-only records never reach production. **Must be seeded once per environment** |
 | `mj.config.cjs` → `testing.checkModules` | The runtime seam that loads the private suite package (or a consumer's own check packages) into `mj test` |
 | [`packages/TestingFramework/Engine/`](../packages/TestingFramework/Engine/) | `TestEngine`, `BaseTestDriver`, suite fixture lifecycle |
 | [`packages/TestingFramework/CLI/`](../packages/TestingFramework/CLI/) | `mj test run` / `suite` / `list` / `validate` / `history` |

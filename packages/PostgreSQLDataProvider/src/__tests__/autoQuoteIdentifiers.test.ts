@@ -277,4 +277,34 @@ SELECT * FROM save_result`;
                 .toBe('SELECT rc."Type" FROM __mj."vwRecordChanges" rc');
         });
     });
+
+    // `NAME` is a PostgreSQL type, so it sat in the case-INSENSITIVE keyword set — which meant
+    // the PascalCase column `Name` was treated as a keyword and left bare. `Name` is the single
+    // most common column in MJ, so every hand-written statement touching it folded to `name` and
+    // failed with `column "name" does not exist`. Same collision TYPE and DATA were already
+    // rescued from, and the same remedy: match the keyword form all-caps only.
+    describe('Name — PostgreSQL type keyword vs. the most common MJ column', () => {
+        it('quotes the PascalCase Name column in an INSERT column list', () => {
+            expect(quote('INSERT INTO __mj."Entity" (ID, Name, SchemaName) VALUES (1,2,3)'))
+                .toBe('INSERT INTO __mj."Entity" ("ID", "Name", "SchemaName") VALUES (1,2,3)');
+        });
+
+        it('quotes Name in a WHERE predicate', () => {
+            expect(quote(`SELECT COUNT(*) AS Cnt FROM __mj.vwEntities WHERE Name = 'x'`))
+                .toBe(`SELECT COUNT(*) AS "Cnt" FROM __mj."vwEntities" WHERE "Name" = 'x'`);
+        });
+
+        it('quotes Name in a projection and an ORDER BY', () => {
+            expect(quote('SELECT Name FROM __mj.vwEntities ORDER BY Name'))
+                .toBe('SELECT "Name" FROM __mj."vwEntities" ORDER BY "Name"');
+        });
+
+        it('leaves the all-caps NAME type keyword bare in DDL', () => {
+            expect(quote('CREATE TABLE t (col NAME)')).toBe('CREATE TABLE t (col NAME)');
+        });
+
+        it('leaves an all-lowercase name bare', () => {
+            expect(quote('select name from sometable')).toBe('select name from sometable');
+        });
+    });
 });

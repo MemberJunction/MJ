@@ -57,7 +57,7 @@ const dashboardEngineState = {
         CanDelete: boolean;
         CanShare: boolean;
         IsOwner: boolean;
-        PermissionSource: 'owner' | 'direct' | 'category' | 'none';
+        PermissionSource: DashboardUserPermissions['PermissionSource'];
     }>(),
 };
 
@@ -92,6 +92,8 @@ vi.mock('../../engines/dashboards', () => {
 
 import { DashboardPermissionProvider } from '../../custom/PermissionProviders/DashboardPermissionProvider';
 import type { UserInfo } from '@memberjunction/core';
+// Derived, never hand-copied — the union gained 'unevaluated' and a frozen copy would drift.
+import type { DashboardUserPermissions } from '../../engines/dashboards';
 
 const USER_A = { ID: 'AAA', Name: 'User A', UserRoles: [] } as unknown as UserInfo;
 const USER_B = { ID: 'BBB', Name: 'User B', UserRoles: [] } as unknown as UserInfo;

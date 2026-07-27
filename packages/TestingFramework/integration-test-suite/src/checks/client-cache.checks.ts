@@ -328,6 +328,15 @@ export const ClientCacheChecks: NamedCheck[] = [
             // was cached first. Warm with [A,B], read with [B,A], assert the second caller's order.
             const rv = new RunView();
             const A: AggregateExpression = { expression: 'COUNT(*)', alias: 'Cnt' };
+            // KNOWN PG GAP (deliberately not fixed here): this expression is spliced into the
+            // generated SQL verbatim, and PostgreSQL's auto-quoter skips `__mj_*` (isMJInternal)
+            // while the PG baseline creates the column mixed-case — so on a PG-backed server this
+            // would fail with `column "__mj_updatedat" does not exist`. The server-transport
+            // sibling (aggregates-cache) is fixed via `maxUpdatedAtExpr`, but the same fix cannot
+            // be applied here: this is CLIENT transport, so the provider is a GraphQL provider
+            // with no `Dialect`, and the SQL is generated server-side. Harmless today — the bundle
+            // needs a live MJAPI and so runs on neither CI lane — and it belongs to whatever change
+            // stands MJAPI up in CI.
             const B: AggregateExpression = { expression: 'MAX(__mj_UpdatedAt)', alias: 'MaxUpd' };
             const filter = UniqueFilter('Name', 'c13');
 

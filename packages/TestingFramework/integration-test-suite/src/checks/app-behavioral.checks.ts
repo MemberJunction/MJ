@@ -23,6 +23,7 @@
  * teardown (user-app rows first, then apps).
  */
 import { RunView } from '@memberjunction/core';
+import type { DatabaseProviderBase } from '@memberjunction/core';
 import type { MJApplicationEntity, MJUserApplicationEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -61,9 +62,13 @@ async function userAppRows(ctx: IntegrationCheckContext, appId: string): Promise
 }
 
 async function activeUserCount(ctx: IntegrationCheckContext): Promise<number> {
+    // `ExtraFilter` is raw SQL, so a hardcoded `IsActive=1` is a SQL-Server-only literal:
+    // `MJUserEntity.IsActive` is a real boolean, and PostgreSQL rejects `boolean = integer`.
+    // `Dialect.BooleanLiteral` emits `1` on SQL Server and `TRUE` on PostgreSQL.
+    const db = ctx.Provider as unknown as DatabaseProviderBase;
     const r = await new RunView().RunView<{ ID: string }>({
         EntityName: 'MJ: Users',
-        ExtraFilter: `IsActive=1`,
+        ExtraFilter: `IsActive=${db.Dialect.BooleanLiteral(true)}`,
         Fields: ['ID'],
         ResultType: 'simple',
         BypassCache: true,

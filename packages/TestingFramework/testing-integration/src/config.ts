@@ -105,15 +105,37 @@ export interface ClientConfig {
 }
 
 /**
+ * The environment simply cannot host this transport — no MJAPI is running, or the
+ * credentials that reach one were never configured. This is an ENVIRONMENT GAP, not a
+ * product defect, and the driver reports it as `Skipped` rather than `Error`.
+ *
+ * It is a named type rather than a message the driver regex-matches because there are
+ * two distinct throw sites (missing API key, unreachable server) that mean the same
+ * thing, and a third would otherwise be one forgotten regex away from being misreported
+ * as a real failure. Anything NOT of this type is a genuine defect and stays an error.
+ */
+export class IntegrationEnvironmentUnavailableError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'IntegrationEnvironmentUnavailableError';
+    }
+}
+
+/**
  * Resolves the MJAPI GraphQL endpoint and system API key from env:
  *  - MJAPI_URL overrides everything; otherwise http://localhost:{GRAPHQL_PORT}{GRAPHQL_ROOT_PATH}
  *  - MJAPI_WS_URL overrides the subscription endpoint; otherwise derived from Url (http→ws, https→wss)
  *  - MJ_API_KEY is the system API key MJServer accepts via the x-mj-api-key header
+ *
+ * @throws {IntegrationEnvironmentUnavailableError} when MJ_API_KEY is absent — an
+ *   unconfigured environment, indistinguishable in practice from an absent MJAPI.
  */
 export function LoadClientConfig(): ClientConfig {
     const apiKey = process.env.MJ_API_KEY;
     if (!apiKey) {
-        throw new Error('MJ_API_KEY is not set in the environment — required for client-side tests.');
+        throw new IntegrationEnvironmentUnavailableError(
+            'MJ_API_KEY is not set in the environment — required for client-side tests.'
+        );
     }
     const port = process.env.GRAPHQL_PORT ?? '4000';
     const rootPath = process.env.GRAPHQL_ROOT_PATH ?? '/';

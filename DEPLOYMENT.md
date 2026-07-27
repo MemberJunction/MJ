@@ -167,7 +167,7 @@ Check if there are any pending metadata changes (new/updated records in `metadat
    > This push includes the inert **"Integration Test" TestType** (it lives in the normal
    > `metadata/test-types/` tree) — that's fine, it's just a type definition. But **do NOT push
    > `metadata-optional/integration-test/` here.** That optional sibling root holds the actual
-   > test-only records — the **IT01–IT66 Tests (67 records: 52 in the Deterministic suite, 15 in
+   > test-only records — the **IT01–IT68 Tests (69 records: 54 in the Deterministic suite, 15 in
    > the Live Model suite)**, the three-suite hierarchy, the RLS principals (three synthetic
    > `it-*@integration.test` users + the "Integration Test: RLS Scoped Reader" role + its grants),
    > **and the synthetic AI stack the live tier drives** (14 `IT: *` AI Agents — 12 of them
@@ -234,14 +234,14 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 
 | Suite | Members | Gate |
 |---|---|---|
-| `Integration Tests — Deterministic` | 52 | **Required — must be 52/52.** Deterministic: any shortfall blocks the release |
+| `Integration Tests — Deterministic` | 54 | **Required — must be 54/54.** Deterministic: any shortfall blocks the release |
 | `Integration Tests — Live Model` | 15 | **Required to run and be triaged — but *not* required to be 15/15.** Real LLM calls; see 4.4 |
 
-> **The two tiers have different pass criteria, and conflating them will either block a good release or wave through a bad one.** The deterministic tier is exactly that — 52/52 or stop. The live tier drives real models, and `agents-suite.md` documents run-to-run variance as a known characteristic "surfaced honestly rather than hidden": checks that need the model to take a specific action use a two-phase bounded retry (≤3 attempts) and then fail **loudly** with `model-noncompliance:`. So a live shortfall is not automatically a blocker — every failing live test must be **triaged individually** (see 4.6): `model-noncompliance:` is variance and may be accepted; anything else is a real defect and blocks.
+> **The two tiers have different pass criteria, and conflating them will either block a good release or wave through a bad one.** The deterministic tier is exactly that — 54/54 or stop (skips are reported separately and are not passes; see 4.3). The live tier drives real models, and `agents-suite.md` documents run-to-run variance as a known characteristic "surfaced honestly rather than hidden": checks that need the model to take a specific action use a two-phase bounded retry (≤3 attempts) and then fail **loudly** with `model-noncompliance:`. So a live shortfall is not automatically a blocker — every failing live test must be **triaged individually** (see 4.6): `model-noncompliance:` is variance and may be accepted; anything else is a real defect and blocks.
 
 > ⚠️ Do **not** run `mj test suite "Integration Tests"`. That is the empty parent container (zero members); it exits **1** with `No tests found in suite: <id>`. A hyphen typed instead of the em dash also exits 1, with `Test suite not found: <arg>`.
 
-> 🐘 **Run this step against SQL Server — that is all this step requires.** PostgreSQL runtime parity is covered separately and automatically by the blocking `integration-postgresql` CI lane (see "What PG parity covers" in Step 8), so you do not need to run Step 4 twice by hand. You *can* now, if you want to reproduce a PG lane failure locally: set `DB_PLATFORM=postgresql` and `DB_PORT=5432` and point `.env` at a migrated PostgreSQL database — as of #3257 the testing CLI has a real platform branch and a PG driver. Expect exactly one skipped test there (IT24, whose `sys.*` catalog queries are dialect-impossible on PG).
+> 🐘 **Run this step against SQL Server — that is all this step requires.** PostgreSQL runtime parity is covered separately and automatically by the blocking `integration-postgresql` CI lane (see "What PG parity covers" in Step 8), so you do not need to run Step 4 twice by hand. You *can* now, if you want to reproduce a PG lane failure locally: set `DB_PLATFORM=postgresql` and `DB_PORT=5432` and point `.env` at a migrated PostgreSQL database — as of #3257 the testing CLI has a real platform branch and a PG driver. Expect 20 skipped tests there — IT24 (whose `sys.*` catalog queries are dialect-impossible on PG) plus the 19 client-transport members if you have no MJAPI running.
 
 #### 4.1 Prerequisites (all required — miss one and the suite reports **green without testing**)
 
@@ -271,7 +271,7 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 npx mj sync push --dir ./metadata-optional/integration-test --ci
 ```
 
-This seeds **242 records**: the **67 IT Test records** (IT01–IT66), the 3 suite rows and their 52 + 15 memberships, the RLS principals (3 synthetic `it-*@integration.test` users + the `Integration Test: RLS Scoped Reader` role + 2 entity-permission grants), and the synthetic AI stack the live tier drives (14 `IT: *` AI Agents — 12 root-level — 14 IT AI Prompts with 42 multi-vendor model bindings + templates, `IT: Probe Skill`, `IT: Integration Test Scope`, and the IT categories). Expect `Created 242 / Errors 0` in the push summary.
+This seeds **246 records**: the **69 IT Test records** (IT01–IT68), the 3 suite rows and their 54 + 15 memberships, the RLS principals (3 synthetic `it-*@integration.test` users + their 2 user-role rows + the `Integration Test: RLS Scoped Reader` role + 2 entity-permission grants), and the synthetic AI stack the live tier drives (14 `IT: *` AI Agents — 12 root-level — 14 IT AI Prompts with 42 multi-vendor model bindings + templates, `IT: Probe Skill`, `IT: Integration Test Scope`, and the IT categories). Expect `Created 246 / Errors 0` in the push summary.
 
 Verify it actually landed — the push can exit 0 without seeding, which silently degrades the RLS checks to skip-as-pass (this is the same assertion `integration.yml` makes in CI):
 
@@ -283,21 +283,16 @@ SELECT COUNT(*) FROM __mj.[User] WHERE Email LIKE '%@integration.test';   -- mus
 
 > This push emits **no** SQL log, so it cannot contaminate the Step-3 `Metadata_Sync.sql` migration. It **does** rewrite `sync.lastModified`/`checksum` into the `metadata-optional/**` JSON files — **discard that churn.** Unlike the Step-3 `metadata/**` writeback (Step 3.8), it does not belong in the release commit.
 
-**One more precondition a virgin database does not satisfy.** `IT29 - Cache Gauntlet` enforces an explicit *anti-vacuity floor*: CG1/CG4/CG5 assert that `MJ: User Settings` already holds **≥ 2 rows** before they create their own, because "a `MaxRows:1` slot returned ≤ 1 row" would be trivially true against an empty table. A Step-3 database is brand new, so that table is empty and those three checks fail with `need >= 2 existing rows … (found 0)` — **51/52, and not a product regression.** Seed a baseline once, before running:
+> **No longer required: the `MJ: User Settings` baseline seed.** `IT29 - Cache Gauntlet`'s CG1/CG4/CG5
+> enforce an anti-vacuity floor (a `MaxRows:1` slot proves nothing against an empty table), and they
+> used to *assume* the rows already existed — so a virgin Step-3 database failed them with
+> `need >= 2 existing rows … (found 0)` and needed a manual `INSERT` first. As of #3257 each check
+> **seeds its own floor** inside its existing `try/finally`, so all 8 cache-gauntlet checks pass on a
+> brand-new database with no manual step. If you still have that seed SQL in your runbook, drop it.
 
-```sql
-DECLARE @u UNIQUEIDENTIFIER = (SELECT TOP 1 ID FROM __mj.[User] ORDER BY __mj_CreatedAt);
-INSERT INTO __mj.UserSetting (ID, UserID, Setting, Value) VALUES
-  (NEWID(), @u, 'mj.baselineFloor.a', '1'),
-  (NEWID(), @u, 'mj.baselineFloor.b', '2'),
-  (NEWID(), @u, 'mj.baselineFloor.c', '3');
-```
+#### 4.3 Start MJAPI (REQUIRED — 19 of the 54 deterministic tests need it)
 
-With those rows present all 7 cache-gauntlet checks pass and the tier reaches 52/52.
-
-#### 4.3 Start MJAPI (REQUIRED — 19 of the 52 deterministic tests need it)
-
-19 of the 52 deterministic members are **client-transport** and exercise the real GraphQL wire (IT03, IT15, IT23, IT25–IT28, IT31–IT34, IT37, IT40, IT43–IT45, IT47, IT50, IT52). Start MJAPI against the Step-3 database before running:
+19 of the 54 deterministic members are **client-transport** and exercise the real GraphQL wire (IT03, IT15, IT23, IT25–IT28, IT31–IT34, IT37, IT40, IT43–IT45, IT47, IT50, IT52). Start MJAPI against the Step-3 database before running:
 
 ```bash
 # In a separate shell, pointed at the Step-3 database
@@ -319,12 +314,18 @@ cd packages/MJAPI && npm run start
   ```
 - If MJAPI has been up a long time, restart it fresh — a resource-degraded server produces spurious timeouts.
 
-The two failure modes are **asymmetric, and neither shows up in the exit code**:
+Both failure modes are now **visible in the counts and in the exit code** — as of #3257 they no
+longer masquerade as a pass:
 
 | Condition | Result |
 |---|---|
-| MJAPI not reachable | 19 tests **skip-as-PASS** (`SKIPPED (environment gap)`) — a green 52/52 that really ran 33 tests |
-| `MJ_API_KEY` unset or rejected | 19 tests return status `Error` — which **also** exits 0 |
+| MJAPI not reachable | 19 tests report **`Skipped`** (`SKIPPED (environment gap)`) — counted separately, excluded from the pass rate, and NOT a pass. Exit code 0, because a skip is not a failure |
+| `MJ_API_KEY` unset or rejected | 19 tests report **`Skipped`** too — the missing key is the same environment gap, raised as `IntegrationEnvironmentUnavailableError` from `LoadClientConfig` before the preflight |
+| MJAPI reachable but rejects the key | status `Error` — a real failure, and it now **exits non-zero** (`failedTests` is failure-closed) |
+
+Before #3257 the first row silently reported `Passed` and the second reported `Error` while the
+suite still exited 0 — so 19 of 54 tests never ran and the tier reported green either way. If you
+see 19 skips here, that is the honest number, not a regression.
 
 #### 4.4 Run the two suites
 
@@ -590,20 +591,40 @@ the same deterministic integration suite against PostgreSQL.
 > 🚦 **This step is now gated on both backends.** `integration.yml` runs two blocking jobs —
 > `integration-sqlserver` and `integration-postgresql` — so a PostgreSQL runtime regression fails the
 > PR the same way a SQL Server one does. Both lanes set `RUN_MUTATION_TESTS=1`, which also activates
-> the 52 mutation-tier checks that no workflow had previously enabled.
+> the 47 pre-existing mutation-tier checks that no workflow had previously enabled (49 across 13 bundles now, counting this PR's two pg-parity CRUD legs).
 
 **How to read the result.** Both lanes report a **Skipped** count alongside passed/failed, and a skip
-is neither. Expect exactly one skipped test on the PostgreSQL lane:
+is neither. Expect **20** skipped tests on the PostgreSQL lane and **19** on SQL Server:
 
-- **IT24 — Metadata/DB Consistency Audit.** The `metadata-consistency` bundle declares
-  `Platforms: ['sqlserver']` because its `sys.objects` / `sys.check_constraints` / `sys.indexes`
-  catalog queries have no PostgreSQL equivalent. That is *dialect-impossible*, the only justification
-  for a platform declaration.
+- **The 19 client-transport members** (both lanes) — every deterministic-suite record whose
+  Configuration sets `transport: "client"`. CI runs no MJAPI and sets no `MJ_API_KEY`, so these
+  cannot execute on either platform. They are an *environment* gap, not a platform one: run MJAPI
+  locally and they execute normally. Before #3257 they reported `Error`, and the suite exit code
+  counted only `Failed` — so 19 of 54 tests silently never ran and the lane still went green. That
+  is the single largest coverage gap this change exposes.
+- **IT24 — Metadata/DB Consistency Audit** (PostgreSQL lane only). The `metadata-consistency` bundle
+  declares `Platforms: ['sqlserver']` because its `sys.objects` / `sys.check_constraints` /
+  `sys.indexes` catalog queries have no PostgreSQL equivalent. That is *dialect-impossible*, the only
+  justification for a platform declaration.
 
-Any **other** skip on the PG lane, or any failure, is a real finding. A bundle that *can* run on both
-platforms and fails on one has found a parity bug — which is the entire point of the lane — and must
-be fixed or tracked, never declared away with a platform restriction. The pass rate is computed over
-*executed* tests, so a skip neither pads nor depresses it.
+Bringing those 19 back into coverage means standing an MJAPI up in CI with an `MJ_API_KEY`. That is
+deliberately **not** in scope here — this change makes the gap visible and countable first.
+
+Any **other** skip is a real finding, never to be declared away with a platform restriction. The pass
+rate is computed over *executed* tests, so a skip neither pads nor depresses it. `Error` and `Timeout`
+are **not** skips: they gate the build exactly like `Failed`.
+
+**Triaging a PostgreSQL-lane failure — in this order.** Not every red is a parity bug:
+
+1. **Is the check's own SQL dialect-specific?** `ExtraFilter` and any `ExecuteSQL` string is raw SQL
+   handed to the database. A bare `IsActive=1` fails on PostgreSQL (`boolean = integer`),
+   `[bracket]` quoting reaches PostgreSQL verbatim as a syntax error, and an unquoted mixed-case
+   view folds to lowercase and disappears. Fix with `provider.Dialect.BooleanLiteral` /
+   `QuoteSchema` / `QuoteIdentifier` — **not** with a platform declaration.
+2. **Is it a provisioning failure?** `PostgreSQLDataProvider.Config` returns `false` rather than
+   throwing; the bootstrap converts that into a loud error naming the database and schema.
+3. **Only once 1 and 2 are excluded** is it a genuine SS/PG parity bug — which is what the lane
+   exists to surface, and it belongs red until fixed or tracked.
 
 > **Why the suite can now run on PostgreSQL at all.** Three code blockers were removed in #3257:
 > the testing CLI gained a platform branch and a PG driver (`mj-provider.ts` +
@@ -613,9 +634,9 @@ be fixed or tracked, never declared away with a platform restriction. The pass r
 > real `'Skipped'` status, so a gated or platform-excluded test no longer reports as `Passed`.
 >
 > That last one also uncovered two things CI had never actually been running: `metadata-consistency`
-> (MC1–MC8) had **never executed on either platform** — `ctx.Pool` comes from the active bootstrap
+> (MC1–MC6 and MC8 — MC7 is deliberately unimplemented) had **never executed on either platform** — `ctx.Pool` comes from the active bootstrap
 > context and the `mj test` CLI did not publish one, so the pool was undefined on SQL Server too and
-> every check skipped-as-pass — and the 52 mutation-tier checks had never run in CI at all. Both now do.
+> every check skipped-as-pass — and the 47 pre-existing mutation-tier checks had never run in CI at all. Both now do.
 
 ---
 
@@ -821,7 +842,7 @@ mj migrate
 # Push metadata to database
 mj sync push --dir ./metadata
 
-# Seed the integration metadata — REQUIRED before Step 4 (IT01-IT66 Tests, the two tier suites,
+# Seed the integration metadata — REQUIRED before Step 4 (IT01-IT68 Tests, the two tier suites,
 # the RLS principals, and the IT agent/prompt/skill/search fixtures; the TestType itself lives in
 # normal metadata/) — TEST/CI databases ONLY, never production (kept out of ./metadata on purpose)
 npx mj sync push --dir ./metadata-optional/integration-test --ci

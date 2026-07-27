@@ -10,11 +10,15 @@ interface FakeServerBootstrap {
     Pool: undefined;
     Db: { Schema: string; Platform?: 'sqlserver' | 'postgresql' };
 }
-const { mockServerClaimed, mockActiveBootstrap } = vi.hoisted(() => ({
+const { mockServerClaimed, mockActiveBootstrap, mockClientBootstrap } = vi.hoisted(() => ({
     mockServerClaimed: vi.fn(() => false),
     // Default null keeps the server branch resolving Metadata.Provider (unset in unit env), exactly
     // as before; tests that need a typed provider override this to inject one (#3251 guard).
     mockActiveBootstrap: vi.fn<() => FakeServerBootstrap | null>(() => null),
+    // Controllable so the client-transport environment-gap classification can be exercised:
+    // the driver must distinguish "this environment cannot run client transport" (skip) from
+    // "the client bootstrap genuinely broke" (error).
+    mockClientBootstrap: vi.fn(async (): Promise<never> => { throw new Error('unit test must not self-bootstrap'); }),
 }));
 vi.mock('../bootstrap', () => ({
     getActiveIntegrationStorage: () => ({ SetCount: (_category: string) => 0, ResetCounts: () => { /* no-op */ } }),
@@ -25,8 +29,15 @@ vi.mock('../bootstrap', () => ({
     serverProcessAlreadyClaimed: () => mockServerClaimed()
 }));
 
+// The driver imports bootstrapIntegrationClient from './bootstrap-client' directly, so the
+// '../bootstrap' mock above never intercepted it — this is the module that must be stubbed.
+vi.mock('../bootstrap-client', () => ({
+    bootstrapIntegrationClient: async () => mockClientBootstrap(),
+}));
+
 import { IntegrationTestDriver } from '../IntegrationTestDriver';
 import { IntegrationCheckRegistry } from '../check-registry';
+import { IntegrationEnvironmentUnavailableError } from '../config';
 import type { DriverExecutionContext, IOracle } from '@memberjunction/testing-engine';
 import type { MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { Metadata, SetProvider } from '@memberjunction/core';
@@ -51,6 +62,7 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         delete process.env.RUN_AGENT_TESTS;
         mockServerClaimed.mockReturnValue(false);
         mockActiveBootstrap.mockReturnValue(null);
+        mockClientBootstrap.mockImplementation(async () => { throw new Error('unit test must not self-bootstrap'); });
         // The #3251 guard inspects the process-global provider, which SetProvider mutates
         // globally — reset it so one test's rebind cannot leak into the next.
         SetProvider(undefined as unknown as IMetadataProvider);
@@ -193,12 +205,27 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults.map(o => o.oracleType)).not.toContain('unitpass.A');
     });
 
-    it('empty checks → Passed, score 0, totalChecks 0', async () => {
+    // A run that executed NOTHING is not a pass. This previously reported 'Passed' with
+    // totalChecks 0 — so a config typo, or a bundle whose every check is mutation-gated in a
+    // lane that does not opt in, contributed a green tick having verified nothing.
+    it('zero executed checks → Skipped, not Passed', async () => {
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ checks: [] }));
-        expect(result.status).toBe('Passed');
+        expect(result.status).toBe('Skipped');
         expect(result.totalChecks).toBe(0);
         expect(result.score).toBe(0);
+    });
+
+    it('reports Skipped when every check in the bundle is mutation-gated and the gate is unmet', async () => {
+        // IT29 Cache Gauntlet is exactly this shape locally: all 8 checks are RequiresMutation,
+        // so `npm run test:integration` without RUN_MUTATION_TESTS ran nothing and said Passed.
+        IntegrationCheckRegistry.Instance.Register({
+            Id: 'unitallmut.A', Name: 'allMutA', RequiresMutation: true, Fn: async () => { /* pass */ }
+        });
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ checks: [{ type: 'unitallmut' }] }));
+        expect(result.status).toBe('Skipped');
+        expect(result.totalChecks).toBe(0);
     });
 
     it('env gate unmet → Skipped with a single "gate" oracle and zero checks, never throws', async () => {
@@ -223,6 +250,10 @@ describe('IntegrationTestDriver bundle dispatch', () => {
             reg.Register({ Id: 'unitplat.A', Name: 'platA', Fn: async () => { /* pass */ } });
             reg.Register({ Id: 'unitanyplat.A', Name: 'anyPlatA', Fn: async () => { /* pass */ } });
             reg.RegisterBundlePlatforms('unitplat', ['sqlserver']);
+            // A dialect-impossible bundle does not merely fail on the wrong platform — its raw
+            // sys.* SQL throws. Modelled here so "the excluded bundle still ran" is detectable.
+            reg.Register({ Id: 'unitdialect.A', Name: 'dialectA', Fn: async () => { throw new Error('sys.objects does not exist on postgresql'); } });
+            reg.RegisterBundlePlatforms('unitdialect', ['sqlserver']);
         });
 
         /** A bootstrap context is what tells the driver which platform is active. */
@@ -264,6 +295,43 @@ describe('IntegrationTestDriver bundle dispatch', () => {
             expect(result.oracleResults.map(o => o.oracleType)).toContain('unitanyplat.A');
         });
 
+        it('does NOT run the excluded bundle in a mixed selection — a dialect-impossible bundle must never execute', async () => {
+            onPlatform('postgresql');
+            const driver = new IntegrationTestDriver();
+            const result = await driver.Execute(makeContext({ checks: [{ type: 'unitdialect' }, { type: 'unitanyplat' }] }));
+            // The runnable half still runs...
+            expect(result.oracleResults.map(o => o.oracleType)).toContain('unitanyplat.A');
+            // ...and the excluded half neither runs nor fails the test. Executing it would produce
+            // a false RED that reads as a parity bug but is really the declaration being ignored.
+            expect(result.oracleResults.map(o => o.oracleType)).not.toContain('unitdialect.A');
+            expect(result.status).toBe('Passed');
+        });
+
+        it('does not let the platform gate oracle pad the score or the check counts', async () => {
+            // The gate oracle records why coverage shrank; it is not a check that passed. Counting
+            // it as one inflates score and passedChecks on a run that partially executed — the
+            // exact padding this PR exists to remove, reintroduced one level down.
+            IntegrationCheckRegistry.Instance.Register({
+                Id: 'unitanyplat.F', Name: 'anyPlatF', Fn: async () => { throw new Error('real failure'); }
+            });
+            onPlatform('postgresql');
+            const driver = new IntegrationTestDriver();
+            const result = await driver.Execute(makeContext({ checks: [{ type: 'unitdialect' }, { type: 'unitanyplat' }] }));
+            // One real check passed (A), one real check failed (F). The gate must not be counted.
+            expect(result.totalChecks).toBe(2);
+            expect(result.passedChecks).toBe(1);
+            expect(result.score).toBe(0.5);
+        });
+
+        it('records WHICH bundles were dropped from a mixed selection, so the omission is never silent', async () => {
+            onPlatform('postgresql');
+            const driver = new IntegrationTestDriver();
+            const result = await driver.Execute(makeContext({ checks: [{ type: 'unitdialect' }, { type: 'unitanyplat' }] }));
+            const gate = result.oracleResults.find(o => o.oracleType === 'gate');
+            expect(gate?.message).toMatch(/unitdialect/);
+            expect(gate?.message).toMatch(/postgresql/);
+        });
+
         it('runs everything when no bootstrap context reveals the platform (fail-open)', async () => {
             mockActiveBootstrap.mockReturnValue(null);
             const driver = new IntegrationTestDriver();
@@ -275,6 +343,31 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         it('refuses a declaration that would let a bundle run nowhere', () => {
             expect(() => IntegrationCheckRegistry.Instance.RegisterBundlePlatforms('unitplat', []))
                 .toThrow(/at least one platform/i);
+        });
+    });
+
+    // The environment-gap contract for client transport. CI runs no MJAPI and sets no
+    // MJ_API_KEY, so BOTH of these conditions are hit on every CI run. Classifying either
+    // one as Error (rather than Skipped) is only invisible while the exit code ignores
+    // Error — which is exactly the false green this suite exists to prevent.
+    describe('client transport environment gap', () => {
+        it('reports Skipped — not Error — when the environment cannot run client transport at all (no MJ_API_KEY)', async () => {
+            mockClientBootstrap.mockImplementation(async () => {
+                throw new IntegrationEnvironmentUnavailableError(
+                    'MJ_API_KEY is not set in the environment — required for client-side tests.'
+                );
+            });
+            const driver = new IntegrationTestDriver();
+            const result = await driver.Execute(makeContext({ transport: 'client', checks: [{ type: 'unitpass' }] }));
+            expect(result.status).toBe('Skipped');
+            expect(result.oracleResults[0].message).toMatch(/environment gap/i);
+        });
+
+        it('still reports Error when the client bootstrap fails for a genuine defect', async () => {
+            mockClientBootstrap.mockImplementation(async () => { throw new Error('cache already claimed by a live host'); });
+            const driver = new IntegrationTestDriver();
+            const result = await driver.Execute(makeContext({ transport: 'client', checks: [{ type: 'unitpass' }] }));
+            expect(result.status).toBe('Error');
         });
     });
 

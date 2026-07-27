@@ -15,7 +15,7 @@
  * imports replace the original in-function `await import(...)` (MJ rule: no dynamic import).
  */
 import { RunView, RunQuery, Metadata, UserInfo } from '@memberjunction/core';
-import type { IRunQueryProvider, RunQueryResult } from '@memberjunction/core';
+import type { IRunQueryProvider, RunQueryResult, DatabaseProviderBase } from '@memberjunction/core';
 import { QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryCategoryEntity, MJQueryEntity, MJQueryEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -116,7 +116,14 @@ export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     }
     fixtures.Category = category;
 
-    const countSQL = `SELECT COUNT(*) AS SettingCount FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
+    // Dialect-quoted throughout. These SQL strings are PERSISTED on MJ: Queries rows and executed
+    // verbatim, so anything SQL-Server-shaped here breaks the PostgreSQL lane: `vwUserSettings`
+    // unquoted folds to `vwusersettings` on PG, `[Alias]` brackets are a syntax error, and
+    // `__mj_UpdatedAt` folds to `__mj_updatedat`. QuoteSchema/QuoteIdentifier emit the SQL Server
+    // form unchanged and the correct double-quoted form on PostgreSQL.
+    const dialect = (ctx.Provider as unknown as DatabaseProviderBase).Dialect;
+    const settingsView = dialect.QuoteSchema(schema, 'vwUserSettings');
+    const countSQL = `SELECT COUNT(*) AS ${dialect.QuoteIdentifier('SettingCount')} FROM ${settingsView} WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
 
     const ttlQuery = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
     ttlQuery.Name = `CacheTest TTL ${Date.now()}`;
@@ -134,7 +141,9 @@ export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     validatedQuery.SQL = countSQL;
     validatedQuery.Status = 'Approved';
     validatedQuery.CacheValidationSQL =
-        `SELECT MAX(__mj_UpdatedAt) AS [MaxUpdatedAt], COUNT(*) AS [RowCount] FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
+        `SELECT MAX(${dialect.QuoteIdentifier('__mj_UpdatedAt')}) AS ${dialect.QuoteIdentifier('MaxUpdatedAt')}, ` +
+        `COUNT(*) AS ${dialect.QuoteIdentifier('RowCount')} FROM ${settingsView} ` +
+        `WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
     if (!await validatedQuery.Save()) {
         throw new Error(`Validated fixture query save failed: ${validatedQuery.LatestResult?.CompleteMessage}`);
     }

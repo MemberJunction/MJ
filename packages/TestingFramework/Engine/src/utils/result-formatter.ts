@@ -4,6 +4,7 @@
  */
 
 import { TestRunResult, TestSuiteRunResult, OracleResult } from '../types';
+import { summarizeSuiteResults } from '../engine/suite-tally';
 import { formatCost } from './cost-calculator';
 
 /**
@@ -46,7 +47,7 @@ export function formatSuiteRunResult(result: TestSuiteRunResult): string {
     lines.push('='.repeat(80));
     lines.push(`Test Suite: ${result.suiteName}`);
     lines.push(`Status: ${result.status}`);
-    lines.push(`Tests: ${result.passedTests}/${result.totalTests} passed`);
+    lines.push(`Tests: ${formatTestTally(result)}`);
     lines.push(`Average Score: ${(result.averageScore * 100).toFixed(1)}%`);
     lines.push(`Duration: ${formatDuration(result.durationMs)}`);
     lines.push(`Cost: ${formatCost(result.totalCost)}`);
@@ -90,8 +91,31 @@ export function formatOracleResult(result: OracleResult, indent: string = ''): s
  * @param indent - Indentation prefix
  * @returns Formatted text output
  */
+/**
+ * "X/Y passed" over EXECUTED tests, with the skip count called out separately when non-zero.
+ * Using totalTests as the denominator reports a suite that skipped half its members as though
+ * it had failed them.
+ */
+function formatTestTally(result: TestSuiteRunResult): string {
+    const skipped = result.skippedTests;
+    const executed = result.totalTests - skipped;
+    const base = `${result.passedTests}/${executed} passed`;
+    return skipped > 0 ? `${base} (${skipped} skipped, ${result.totalTests} total)` : base;
+}
+
+/**
+ * Glyph for a test status. Three-way, not two-way: a skipped test never executed, so rendering
+ * it as ✗ reports a bundle that correctly declined to run (wrong platform, unmet tier gate,
+ * absent MJAPI) as a product defect. Centralised so a status added to the union has exactly one
+ * place to be handled rather than four.
+ */
+function statusGlyph(status: TestRunResult['status'], skip: string, pass: string, fail: string): string {
+    if (status === 'Skipped') return skip;
+    return status === 'Passed' ? pass : fail;
+}
+
 export function formatTestSummary(result: TestRunResult, indent: string = ''): string {
-    const status = result.status === 'Passed' ? '✓' : '✗';
+    const status = statusGlyph(result.status, '⊘', '✓', '✗');
     return `${indent}${status} ${result.testName}: ${(result.score * 100).toFixed(1)}% (${result.passedChecks}/${result.totalChecks})`;
 }
 
@@ -133,7 +157,7 @@ export function formatTestRunResultAsMarkdown(result: TestRunResult): string {
     const lines: string[] = [];
 
     lines.push(`# Test: ${result.testName}\n`);
-    lines.push(`**Status:** ${result.status === 'Passed' ? '✅ Passed' : '❌ Failed'}`);
+    lines.push(`**Status:** ${statusGlyph(result.status, '⊘ Skipped', '✅ Passed', `❌ ${result.status}`)}`);
     lines.push(`**Score:** ${(result.score * 100).toFixed(1)}%`);
     lines.push(`**Checks:** ${result.passedChecks}/${result.totalChecks} passed`);
     lines.push(`**Duration:** ${formatDuration(result.durationMs)}`);
@@ -165,7 +189,7 @@ export function formatSuiteRunResultAsMarkdown(result: TestSuiteRunResult): stri
 
     lines.push(`# Test Suite: ${result.suiteName}\n`);
     lines.push(`**Status:** ${result.status === 'Completed' ? '✅ Completed' : `❌ ${result.status}`}`);
-    lines.push(`**Tests:** ${result.passedTests}/${result.totalTests} passed`);
+    lines.push(`**Tests:** ${formatTestTally(result)}`);
     lines.push(`**Average Score:** ${(result.averageScore * 100).toFixed(1)}%`);
     lines.push(`**Duration:** ${formatDuration(result.durationMs)}`);
     lines.push(`**Cost:** ${formatCost(result.totalCost)}\n`);
@@ -176,7 +200,7 @@ export function formatSuiteRunResultAsMarkdown(result: TestSuiteRunResult): stri
         lines.push('|------|--------|-------|--------|');
 
         for (const test of result.testResults) {
-            const status = test.status === 'Passed' ? '✅' : '❌';
+            const status = statusGlyph(test.status, '⊘', '✅', '❌');
             const score = `${(test.score * 100).toFixed(1)}%`;
             const checks = `${test.passedChecks}/${test.totalChecks}`;
             lines.push(`| ${test.testName} | ${status} | ${score} | ${checks} |`);
@@ -269,19 +293,14 @@ export function generateSummaryStatistics(results: TestRunResult[]): {
     avgDuration: number;
     avgCost: number;
 } {
-    const totalTests = results.length;
-    const passedTests = results.filter(r => r.status === 'Passed').length;
-    // A skipped test never executed, so it is neither a pass nor a failure. Folding it into
-    // failedTests (the old `totalTests - passedTests`) counted a platform-inapplicable bundle
-    // as a defect and depressed the pass rate for a run that was entirely healthy.
-    const skippedTests = results.filter(r => r.status === 'Skipped').length;
-    const failedTests = totalTests - passedTests - skippedTests;
-    const executedTests = totalTests - skippedTests;
+    // Delegated, NOT reimplemented. This function previously carried its own copy of the
+    // pass/fail/skip bucketing and the skip-excluded average — a second definition of "failed"
+    // living one module away from the engine's. That is exactly the divergence this release
+    // fixes between RunSuite and updateSuiteRun; duplicating it here would reintroduce it the
+    // next time a status is added to the union or a bucket is split.
+    const { totalTests, passedTests, failedTests, skippedTests, executedTests, averageScore } =
+        summarizeSuiteResults(results);
     const passRate = executedTests > 0 ? passedTests / executedTests : 0;
-
-    const scoredResults = results.filter(r => r.status !== 'Skipped');
-    const totalScore = scoredResults.reduce((sum, r) => sum + r.score, 0);
-    const averageScore = scoredResults.length > 0 ? totalScore / scoredResults.length : 0;
 
     const totalDuration = results.reduce((sum, r) => sum + r.durationMs, 0);
     const totalCost = results.reduce((sum, r) => sum + r.totalCost, 0);

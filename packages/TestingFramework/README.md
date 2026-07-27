@@ -31,6 +31,12 @@ DB_DATABASE=mj_pg_local
 DB_USERNAME=postgres
 DB_PASSWORD=...
 
+# `mj migrate` reads ONLY these two for credentials — not DB_USERNAME/DB_PASSWORD. Omitting
+# them fails before the first migration runs, with
+# "Database credentials are missing or empty - codeGenLogin (env: CODEGEN_DB_USERNAME)".
+CODEGEN_DB_USERNAME=postgres
+CODEGEN_DB_PASSWORD=...
+
 npm run test:integration
 ```
 
@@ -59,14 +65,27 @@ platform — its checks issue platform-specific SQL that has no equivalent there
 one has found a parity bug — which is the entire reason the PostgreSQL lane exists — and belongs
 red until it is fixed or tracked. Declaring it away converts a finding into a silent gap.
 
-When a bundle is excluded, the driver reports the whole test as `Skipped` **without invoking any
-check body**, and only when *every* selected bundle is excluded — a mixed selection still runs, so a
-declaration can never silently drop coverage that would otherwise have executed.
+An excluded bundle **never runs**, whether it was selected alone or alongside runnable ones — its
+SQL is impossible on that dialect, so executing it would either throw (a false red that reads as a
+parity bug) or self-skip internally (a false green). When *every* selected bundle is excluded the
+whole test reports `Skipped` without invoking a single check body. Otherwise the rest of the
+selection runs and the dropped bundles are named in a `gate` oracle, so the reduced coverage is
+recorded rather than silent. Gate oracles are excluded from the score and check counts — they are
+run metadata, not checks that passed.
 
 ### `Skipped` is a real status
 
-`DriverExecutionResult.status` includes `'Skipped'`, distinct from `'Passed'`. A test is skipped when
-a tier gate is closed (`RUN_MUTATION_TESTS` / `RUN_AGENT_TESTS`) or a bundle is platform-excluded.
+`DriverExecutionResult.status` includes `'Skipped'`, distinct from `'Passed'`. A test is skipped for
+exactly four reasons — check them in this order when triaging one:
+
+1. **Environment gap** — a client-transport bundle where no MJAPI is reachable or `MJ_API_KEY` is
+   unset (`IntegrationEnvironmentUnavailableError`). This is by far the most common: it accounts for
+   19 of the 20 skips on the PostgreSQL CI lane and all 19 on SQL Server.
+2. **Tier gate closed** — `RUN_MUTATION_TESTS` / `RUN_AGENT_TESTS` unset for a gated tier.
+3. **Platform exclusion** — every selected bundle is declared for a different platform.
+4. **Zero executed checks** — the selection resolved to no runnable check at all (e.g. a bundle whose
+   checks are *all* mutation-tier, run without `RUN_MUTATION_TESTS`). Locally that is IT29 and IT67;
+   both CI lanes set the flag, so neither skips there.
 
 This used to report as `Passed` with `score: 1` because the driver's enum had no `'Skipped'` — which
 made "never ran" indistinguishable from "verified" in every count, report and exit code. Skips are now
@@ -76,7 +95,7 @@ its reason. A skipped test does not fail `mj test run` or `mj test suite`.
 
 ### The mutation axis
 
-Both CI lanes set `RUN_MUTATION_TESTS=1`. Before #3257 no workflow set it, so the 52 mutation-tier
+Both CI lanes set `RUN_MUTATION_TESTS=1`. Before #3257 no workflow set it, so the 47 mutation-tier
 checks across 12 bundles never ran in CI even though the release procedure ran them locally — CI was
 gating on a strictly weaker suite than the documented release check. `pg-parity`'s CRUD legs are
 mutation-tier, so without this the bundle would register, dispatch and skip every write check.

@@ -42,6 +42,7 @@ import {
     serverProcessAlreadyClaimed
 } from './bootstrap';
 import { bootstrapIntegrationClient } from './bootstrap-client';
+import { IntegrationEnvironmentUnavailableError } from './config';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import type { IntegrationCheckContext, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
@@ -152,30 +153,50 @@ export class IntegrationTestDriver extends BaseTestDriver {
             return this.buildSkipResult(context, startTime, note);
         }
 
-        const selectors = Array.isArray(config.checks) ? config.checks : [];
-        const transport: 'server' | 'client' =
+        let selectors = Array.isArray(config.checks) ? config.checks : [];
+        /** Infer from whatever will ACTUALLY run — see the recompute after the platform filter. */
+        const inferTransport = (): 'server' | 'client' =>
             config.transport ?? (selectors.some(s => this.bundleTransport(s.type) === 'client') ? 'client' : 'server');
+        let transport: 'server' | 'client' = inferTransport();
 
         // 2a) Platform gate. A bundle may declare the database platforms it can run on (see
         //     IntegrationCheckRegistry.RegisterBundlePlatforms — for dialect-impossible bundles
-        //     only, never as a quarantine list). Skip the whole test only when EVERY selected
-        //     bundle is excluded; a mixed selection still runs, so a declaration can never
-        //     silently drop coverage that would otherwise have executed.
+        //     only, never as a quarantine list).
+        //
+        //     A declared bundle is EXCLUDED from the run on a platform it does not support, and
+        //     that exclusion holds whether it was selected alone or alongside others. Running it
+        //     anyway in a mixed selection would defeat the declaration's only purpose: its SQL
+        //     is impossible on this dialect, so it would either throw (a false RED that reads as
+        //     a parity bug) or self-skip internally (skip-as-pass — the original defect).
+        //
+        //     When EVERY selected bundle is excluded there is nothing left to run and the whole
+        //     test reports Skipped. Otherwise the remainder runs and the dropped bundles are
+        //     named in a gate oracle, so a declaration can never silently remove coverage.
         //
         //     The platform comes from the active bootstrap context, which both the in-process
         //     bootstrap and the `mj test` CLI publish. When no context exists we cannot know the
         //     platform, so nothing is skipped — fail-open, because wrongly skipping is the
         //     failure mode that hides bugs.
+        let platformNote: string | undefined;
         const platform = getActiveIntegrationBootstrap()?.Db.Platform;
         if (platform && selectors.length > 0) {
             const registry = IntegrationCheckRegistry.Instance;
             const excluded = selectors.filter(s => !registry.BundleRunsOnPlatform(s.type, platform));
-            if (excluded.length === selectors.length) {
+            if (excluded.length > 0) {
                 const note =
                     `Skipped: bundle(s) ${excluded.map(s => s.type).join(', ')} do not run on ${platform} ` +
                     `(declared platform restriction)`;
                 this.logToTestRun(context, 'warn', note);
-                return this.buildSkipResult(context, startTime, note);
+                if (excluded.length === selectors.length) {
+                    return this.buildSkipResult(context, startTime, note);
+                }
+                selectors = selectors.filter(s => registry.BundleRunsOnPlatform(s.type, platform));
+                platformNote = note;
+                // Re-infer: transport was derived from the PRE-filter selection. If the excluded
+                // bundle was the only client-transport one, leaving `transport` at 'client' would
+                // send the surviving SERVER bundles down the client branch — no pool, a facade
+                // provider, and the #3251 rebound-provider guard (server branch only) skipped.
+                transport = inferTransport();
             }
         }
 
@@ -203,6 +224,11 @@ export class IntegrationTestDriver extends BaseTestDriver {
         const timer = setTimeout(() => { timedOut = true; }, effectiveTimeout);
 
         const oracleResults: OracleResult[] = [];
+        // A partial platform exclusion is recorded as a passing gate oracle so the run states
+        // plainly which bundles it did NOT execute. Silent truncation reads as full coverage.
+        if (platformNote) {
+            oracleResults.push({ oracleType: 'gate', passed: true, score: 1, message: platformNote, details: { DurationMs: 0 } });
+        }
         const outcomes: TestOutcome[] = []; // parallel array for the EMIT_OUTCOMES sidecar
         try {
             const checkCtx = await this.buildCheckContext(context, transport);
@@ -217,12 +243,18 @@ export class IntegrationTestDriver extends BaseTestDriver {
         } catch (bootErr) {
             clearTimeout(timer);
             const msg = (bootErr as Error).message ?? String(bootErr);
-            // ENVIRONMENT GAP, not a product defect: client-transport bundles need a live MJAPI.
-            // When the preflight says the server is simply absent (CI runs no MJAPI), skip-as-pass
-            // loudly — the same contract the old per-bundle tsx dispatchers honored with exit 0.
-            // Any OTHER bootstrap failure (bad credentials, cache ownership, config) stays a
-            // hard error.
-            if (transport === 'client' && /MJAPI is not reachable/i.test(msg)) {
+            // ENVIRONMENT GAP, not a product defect: client-transport bundles need a live MJAPI
+            // AND the credentials to reach one. When either is simply absent (CI runs no MJAPI and
+            // sets no MJ_API_KEY), report Skipped — the same contract the old per-bundle tsx
+            // dispatchers honored with exit 0. Any OTHER bootstrap failure (bad credentials against
+            // a live server, cache ownership, config) stays a hard error.
+            //
+            // Matched on the error TYPE, not its message: the unconfigured-credentials case throws
+            // from LoadClientConfig well before the preflight is reached, so a message regex keyed
+            // to the preflight text classified it as a real failure. That mattered more than it
+            // looks — every client-transport member of the deterministic suite hits it on every CI
+            // run, and it was invisible only because the suite exit code ignored 'Error'.
+            if (transport === 'client' && bootErr instanceof IntegrationEnvironmentUnavailableError) {
                 return this.buildSkipResult(context, startTime,
                     `SKIPPED (environment gap): ${msg} Client-transport checks need a live MJAPI; start it and re-run for full coverage.`);
             }
@@ -481,11 +513,22 @@ export class IntegrationTestDriver extends BaseTestDriver {
         oracleResults: OracleResult[],
         timedOut: boolean
     ): DriverExecutionResult {
-        const passedChecks = oracleResults.filter(r => r.passed).length;
-        const totalChecks = oracleResults.length;
+        // 'gate' oracles are RUN METADATA (why a tier or platform reduced coverage), not checks.
+        // Counting one as a passed check pads both passedChecks and score on a partially-executed
+        // run — buildSkipResult already treats a gate as zero checks, and this keeps the partial
+        // case consistent with it.
+        const checkResults = oracleResults.filter(r => r.oracleType !== 'gate');
+        const passedChecks = checkResults.filter(r => r.passed).length;
+        const totalChecks = checkResults.length;
         const failedChecks = totalChecks - passedChecks;
+        // Zero EXECUTED checks is a skip, not a pass. A bundle whose checks were all filtered out
+        // (every one mutation-gated in a lane that did not opt in) or a Configuration whose
+        // `checks` list is empty verified nothing, and calling that 'Passed' contributes a green
+        // tick backed by no assertion — the same false green the Skipped status exists to remove.
         const status: DriverExecutionResult['status'] =
-            timedOut ? 'Timeout' : (failedChecks === 0 ? 'Passed' : 'Failed');
+            timedOut ? 'Timeout'
+                : failedChecks > 0 ? 'Failed'
+                    : totalChecks === 0 ? 'Skipped' : 'Passed';
 
         const result: DriverExecutionResult = {
             targetType: TARGET_TYPE,

@@ -18,6 +18,7 @@ import { LocalCacheManager, InMemoryLocalStorageProvider } from '@memberjunction
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import type { DbConfig, ClientConfig } from './config';
+import { IntegrationEnvironmentUnavailableError } from './config';
 
 /** Everything a server-side check/driver needs about the owned process. */
 export interface IntegrationBootstrapContext {
@@ -104,7 +105,7 @@ export async function preflightMJAPI(url: string, apiKey: string): Promise<void>
             signal: AbortSignal.timeout(5000)
         });
     } catch (error) {
-        throw new Error(
+        throw new IntegrationEnvironmentUnavailableError(
             `MJAPI is not reachable at ${url} (${error instanceof Error ? error.message : String(error)}). ` +
             `Start it first: cd packages/MJAPI && npm run start`
         );

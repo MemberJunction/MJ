@@ -17,7 +17,7 @@
     "fields": {
       "Name": "Integration Tests — Deterministic",
       "ParentID": "@lookup:MJ: Test Suites.Name=Integration Tests",
-      "Description": "The blocking, credential-free integration tier. Members run with no LLM credentials against a live DB/transport. Mutation-class checks (S17/S23/S24, C10) are ordinary members gated at runtime by RUN_MUTATION_TESTS — they appear here but only fire when the driver sees the env gate. IT03 (client/GraphQL) is seeded Skip until MJAPI is provisioned in CI (Phase 5). ORDERING INVARIANT: client-transport members are sequenced LAST — bootstrapIntegrationClient rebinds the process's global provider to GraphQL, so no server-transport member may run after the first client one.",
+      "Description": "The blocking, credential-free integration tier. Members run with no LLM credentials against a live DB/transport. Mutation-class checks (S17/S23/S24, C10) are ordinary members gated at runtime by RUN_MUTATION_TESTS — they appear here but only fire when the driver sees the env gate. Every client-transport member is Active metadata but skips at RUNTIME in CI, because no MJAPI is provisioned and no MJ_API_KEY is set — the driver reports that as an environment gap (19 of the 54 members). Nothing here is seeded Skip. ORDERING INVARIANT: client-transport members are sequenced LAST — bootstrapIntegrationClient rebinds the process's global provider to GraphQL, so no server-transport member may run after the first client one.",
       "Status": "Active"
     },
     "relatedEntities": {

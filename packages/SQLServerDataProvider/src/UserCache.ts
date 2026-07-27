@@ -93,33 +93,39 @@ export class UserCache extends BaseSingleton<UserCache> {
      *
      * Retains catch-and-log rather than adopting RefreshFromRows' fail-loud contract, because
      * SQL Server callers have always treated a refresh failure as non-fatal; tightening that
-     * is tracked separately. One behavior does shift as a result of delegating: an empty
-     * `vwUsers` result used to assign `[]` silently and keep the auto-refresh timer alive, and
-     * now logs the RefreshFromRows error and — like every other refresh failure — does not
-     * re-arm the timer.
+     * is tracked separately.
+     *
+     * The auto-refresh timer re-arms whenever the two QUERIES succeeded — not whenever the
+     * refresh as a whole succeeded. That distinction is load-bearing: an empty `vwUsers` is a
+     * recoverable condition (a login that momentarily cannot read the view, a replica mid-
+     * reload), and this timer is the cache's only self-healing path. Dropping the re-arm there
+     * would freeze the cache for the entire life of the process. A failed query is different —
+     * the pool belongs to the caller — and still stops the loop, as it always has.
      *
      * @param pool - the connection pool to use to refresh the cache
      * @param autoRefreshIntervalMS - optional, if provided, the cache will be refreshed every interval as specified - denominated in milliseconds
      */
     public async Refresh(pool: sql.ConnectionPool, autoRefreshIntervalMS?: number): Promise<void> {
+      let databaseReachable = false;
       try {
         const coreSchema = Metadata.Provider.ConfigData.MJCoreSchemaName; // global-provider-ok: data provider implementation, owns its provider context
         const request = new sql.Request(pool);
         const uResult = await request.query(`SELECT * FROM [${coreSchema}].vwUsers`);
         const rRequest = new sql.Request(pool);
         const rResult = await rRequest.query(`SELECT * FROM [${coreSchema}].vwUserRoles`);
+        databaseReachable = true;
 
         this.RefreshFromRows(uResult.recordset, rResult.recordset, Metadata.Provider); // global-provider-ok: data provider implementation, owns its provider context
-
-        // refresh this every interval noted above to ensure we have the latest data
-        if (autoRefreshIntervalMS && autoRefreshIntervalMS > 0)
-          setTimeout(() => {
-            this.Refresh(pool, autoRefreshIntervalMS);
-          }, autoRefreshIntervalMS);
       }
       catch (err) {
         LogError(err);
       }
+
+      // refresh this every interval noted above to ensure we have the latest data
+      if (databaseReachable && autoRefreshIntervalMS && autoRefreshIntervalMS > 0)
+        setTimeout(() => {
+          this.Refresh(pool, autoRefreshIntervalMS);
+        }, autoRefreshIntervalMS);
     }
 
     public static get Instance(): UserCache {

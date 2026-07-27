@@ -16,18 +16,17 @@ import type { IntegrationDbPlatform } from '@memberjunction/testing-integration'
 dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true, quiet: true });
 
 /**
- * The database backend `mj test` targets.
- *
- * Aliased from testing-integration's union rather than restated, because the two MUST agree:
- * the CLI resolves the platform for provider setup and publishes it on the bootstrap context,
- * and the driver reads it back off that context to decide which bundles can run. A hand-copied
- * union would drift silently the moment a third backend appears. `import type` is erased at
- * compile time, so this adds no runtime import.
+ * NOTE ON THE PLATFORM TYPE: this file uses `IntegrationDbPlatform` from
+ * `@memberjunction/testing-integration` directly and deliberately does NOT re-export it under a
+ * local alias — re-exporting another package's type is a project-rule violation, and it also
+ * obscures which package actually owns the union. Consumers inside this package import it from
+ * the source package too. The two MUST agree: the CLI resolves the platform for provider setup
+ * and publishes it on the bootstrap context, and the driver reads it back off that context to
+ * decide which bundles can run.
  */
-export type MJDbPlatform = IntegrationDbPlatform;
 
 /** Well-known default port per backend, used only when neither config nor env supplies one. */
-export function defaultPortForPlatform(platform: MJDbPlatform): number {
+export function defaultPortForPlatform(platform: IntegrationDbPlatform): number {
     return platform === 'postgresql' ? 5432 : 1433;
 }
 
@@ -40,7 +39,7 @@ export function defaultPortForPlatform(platform: MJDbPlatform): number {
  * lane against SQL Server and report a green that proves nothing, which is precisely the
  * class of false confidence this lane exists to remove.
  */
-export function resolveDbPlatform(configured?: string): MJDbPlatform {
+export function resolveDbPlatform(configured?: string): IntegrationDbPlatform {
     const raw = configured ?? process.env.DB_PLATFORM;
     if (raw === undefined || raw.trim() === '') {
         return 'sqlserver';
@@ -67,7 +66,7 @@ export interface MJConfig {
      * Which backend to connect to. Populated by {@link loadMJConfig} even when the
      * config file omits it, so downstream code can branch on it unconditionally.
      */
-    dbPlatform?: MJDbPlatform;
+    dbPlatform?: IntegrationDbPlatform;
 
     // Testing CLI specific settings
     testing?: {

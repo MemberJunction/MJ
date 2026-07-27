@@ -20,7 +20,7 @@
  * check's finally block, so the bundle needs no shared lifecycle.
  */
 import { BaseEntity, Metadata, ProviderType, RunView } from '@memberjunction/core';
-import type { UserInfo } from '@memberjunction/core';
+import type { UserInfo, DatabaseProviderBase } from '@memberjunction/core';
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentChannelSchema,
@@ -141,7 +141,9 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 {
                     EntityName: 'MJ: AI Models',
                     Fields: ['ID', 'Name'],
-                    ExtraFilter: `AIModelTypeID='${realtimeTypeID}' AND IsActive=1`,
+                    // Dialect-quoted boolean: `IsActive` is a real boolean column, so a literal
+                    // `1` is SQL-Server-only and PostgreSQL rejects `boolean = integer`.
+                    ExtraFilter: `AIModelTypeID='${realtimeTypeID}' AND IsActive=${(ctx.Provider as unknown as DatabaseProviderBase).Dialect.BooleanLiteral(true)}`,
                     ResultType: 'simple'
                 }, ctx.User,
             );

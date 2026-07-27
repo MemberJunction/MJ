@@ -7,7 +7,11 @@
  * into `failedTests` reds a healthy run, folding them into `passedTests` pads it.
  */
 import { describe, it, expect } from 'vitest';
-import { generateSummaryStatistics } from '../utils/result-formatter';
+import {
+    generateSummaryStatistics,
+    formatTestSummary,
+    formatTestRunResultAsMarkdown,
+} from '../utils/result-formatter';
 import type { TestRunResult } from '@memberjunction/testing-engine-base';
 
 function result(status: TestRunResult['status'], score: number): TestRunResult {
@@ -82,5 +86,39 @@ describe('generateSummaryStatistics — skip handling', () => {
         expect(stats.totalTests).toBe(0);
         expect(stats.skippedTests).toBe(0);
         expect(stats.passRate).toBe(0);
+    });
+});
+
+/**
+ * These renderers are exported from the published @memberjunction/testing-engine package, so
+ * they are what a non-CLI consumer sees. Painting a skip as ✗ / "❌ Failed" is a false RED —
+ * it reports a bundle that correctly declined to run as a product defect.
+ */
+describe('result renderers — a skip is neither a pass nor a failure', () => {
+    function runResult(status: TestRunResult['status']): TestRunResult {
+        return {
+            status, score: 0, testName: 'IT24 - Metadata Consistency', passedChecks: 0,
+            totalChecks: 0, durationMs: 0, totalCost: 0, oracleResults: [], logs: [],
+        } as Partial<TestRunResult> as TestRunResult;
+    }
+
+    it('marks a skipped test with its own glyph in the one-line summary, not the failure glyph', () => {
+        const skipped = formatTestSummary(runResult('Skipped'));
+        expect(skipped).not.toContain('✗');
+        expect(skipped).toContain('⊘');
+    });
+
+    it('still marks a genuine failure with the failure glyph', () => {
+        expect(formatTestSummary(runResult('Failed'))).toContain('✗');
+    });
+
+    it('does not label a skipped run "Failed" in the markdown report', () => {
+        const md = formatTestRunResultAsMarkdown(runResult('Skipped'));
+        expect(md).not.toContain('❌ Failed');
+        expect(md).toContain('Skipped');
+    });
+
+    it('still labels an errored run as a failure in the markdown report', () => {
+        expect(formatTestRunResultAsMarkdown(runResult('Error'))).toContain('❌');
     });
 });

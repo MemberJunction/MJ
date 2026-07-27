@@ -17,7 +17,7 @@
  * so both this module and the client bootstrap publish/read the same install.
  */
 import sql from 'mssql';
-import { LocalCacheManager, InMemoryLocalStorageProvider, Metadata, SetProvider } from '@memberjunction/core';
+import { LocalCacheManager, InMemoryLocalStorageProvider, SetProvider, StartupManager, LogError } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { InstrumentedLocalStorageProvider } from './instrumented-cache';
@@ -95,17 +95,31 @@ async function setupSqlServerProvider(
         user: db.User,
         password: db.Password,
         database: db.Database,
-        options: { encrypt: false, trustServerCertificate: true }
+        options: { encrypt: false, trustServerCertificate: true },
+        // Match the CLI harness pool rather than mssql's 15s default — the suite runs
+        // catalog-wide sweeps on contended CI runners, where 15s turns a slow query into a
+        // spurious "query failed". See mj-provider.ts's resolveRequestTimeoutMs.
+        requestTimeout: 120_000
     }).connect();
 
-    await setupSQLServerClient(new SQLServerProviderConfigData(pool, db.Schema));
-    await UserCache.Instance.Refresh(pool);
+    // Same ownership boundary as the PostgreSQL path: once the pool is connected, any failure
+    // below must close it. `resolveContextUser` in particular THROWS on an empty cache, and that
+    // is reachable — Refresh catches-and-logs a RefreshFromRows rejection, so an unreadable
+    // vwUsers leaves the cache empty and lands here.
+    try {
+        const provider = await setupSQLServerClient(new SQLServerProviderConfigData(pool, db.Schema));
+        await UserCache.Instance.Refresh(pool);
 
-    const user = resolveContextUser(opts.ContextUserEmail);
-    return {
-        Pool: pool, User: user, Storage: storage, Provider: Metadata.Provider, Db: db, // global-provider-ok: this dedicated-process bootstrap just installed the one global provider (setupSQLServerClient) — it IS the single provider for this run (D1)
-        ClosePool: async () => { await pool.close(); }
-    };
+        const user = resolveContextUser(opts.ContextUserEmail);
+        return {
+            Pool: pool, User: user, Storage: storage, Provider: provider, Db: db,
+            ClosePool: async () => { await pool.close(); }
+        };
+    } catch (err) {
+        await pool.close().catch(closeErr =>
+            LogError(`SQL Server bootstrap failed, and closing its pool also failed: ${closeErr instanceof Error ? closeErr.message : String(closeErr)}`));
+        throw err;
+    }
 }
 
 /**
@@ -118,6 +132,12 @@ async function setupSqlServerProvider(
  * so the PG path resolves its context user exactly the way the SQL Server path does — the
  * only difference being the dialect each feeder speaks. Both funnel into
  * `UserCache.RefreshFromRows`, and both fail loudly on an empty user table.
+ *
+ * `StartupManager.Startup` is invoked explicitly because the SQL Server path gets it for free
+ * inside `setupSQLServerClient` and `PostgreSQLDataProvider.Config` has no equivalent. Omitting
+ * it would run the PG lane through a different engine-initialization sequence than SQL Server,
+ * so any engine-dependent PG-only failure would be triaged as a genuine parity bug when it is
+ * really a harness gap — the precise confusion this lane exists to remove.
  */
 async function setupPostgreSQLProvider(
     db: DbConfig, storage: InstrumentedLocalStorageProvider, opts: BootstrapServerOptions
@@ -129,15 +149,45 @@ async function setupPostgreSQLProvider(
         db.Schema,
         1 // checkRefreshIntervalSeconds > 0 → load metadata on Config
     );
-    await provider.Config(pgConfig);
-    SetProvider(provider);
+    // PostgreSQLDataProvider.Config catches everything and returns FALSE — it does not throw the
+    // way SQLServerDataProvider.Config does. Ignoring that boolean lets a half-provisioned
+    // database (partly-applied migrations, a role that cannot read __mj) install a metadata-less
+    // provider globally and the bootstrap "succeed": every check then dies on
+    // "<entity> is not present in metadata" and gets triaged as a PostgreSQL parity bug.
+    //
+    // This closes the THROWING half only. ProviderBase.Config logs "GetAllMetadata() returned
+    // undefined" and still returns true, so a non-throwing metadata fetch failure remains
+    // reachable — a narrower gap, tracked separately rather than papered over here.
+    const configured = await provider.Config(pgConfig);
+    if (!configured) {
+        throw new Error(
+            `PostgreSQLDataProvider.Config returned false for database '${db.Database}' (schema '${db.Schema}') — ` +
+            `metadata could not be loaded. Verify the database is migrated (migrations-pg/v5) and that ` +
+            `'${db.User}' can read the ${db.Schema} metadata tables. The provider logged the underlying error above.`
+        );
+    }
 
-    // The specific provider, not Metadata.Provider — it is in scope here, so there is no reason
-    // to route through the global.
-    await feedUserCacheFromPG(provider.DatabaseConnection, db.Schema, provider);
-    const user = resolveContextUser(opts.ContextUserEmail);
-    return {
-        Pool: undefined, User: user, Storage: storage, Provider: Metadata.Provider, Db: db, // global-provider-ok: this dedicated-process bootstrap just installed the one global provider (SetProvider above) — it IS the single provider for this run (D1)
-        ClosePool: async () => { await provider.DatabaseConnection.end(); }
-    };
+    // Everything past Config() owns a live pg pool. A throw here (empty user table, unreadable
+    // vwUsers, wrong schema — all fail-loud) would otherwise leave that pool open and unreachable,
+    // and its open sockets keep the event loop alive.
+    try {
+        SetProvider(provider);
+        // The specific provider, not Metadata.Provider — it is in scope here, so there is no reason
+        // to route through the global.
+        await feedUserCacheFromPG(provider.DatabaseConnection, db.Schema, provider);
+
+        const sysUser = UserCache.Instance.GetSystemUser();
+        const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+        await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider);
+
+        const user = resolveContextUser(opts.ContextUserEmail);
+        return {
+            Pool: undefined, User: user, Storage: storage, Provider: provider, Db: db,
+            ClosePool: async () => { await provider.DatabaseConnection.end(); }
+        };
+    } catch (err) {
+        await provider.DatabaseConnection.end().catch(closeErr =>
+            LogError(`PostgreSQL bootstrap failed, and closing its pool also failed: ${closeErr instanceof Error ? closeErr.message : String(closeErr)}`));
+        throw err;
+    }
 }

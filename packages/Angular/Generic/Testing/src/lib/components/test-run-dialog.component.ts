@@ -1888,9 +1888,11 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     }
     const detail = this.result?.result;
     if (detail) {
-      // Suite path: result is a TestSuiteRunResult with per-test entries. Count anything
-      // that isn't a pass/skip — the engine's `failedTests` counts only 'Failed', not
-      // 'Error'/'Timeout', so we derive the count from the per-test statuses directly.
+      // Suite path: result is a TestSuiteRunResult with per-test entries. Count anything that
+      // isn't a pass/skip, derived from the per-test statuses. As of #3257 the engine's
+      // `failedTests` uses the same definition (it counts by subtraction, so Error/Timeout are
+      // included), so this agrees with it — but deriving locally keeps the dialog correct
+      // against older payloads and independent of which failure convention the engine sends.
       const tests: Array<{ testName?: string; status?: string; errorMessage?: string }> =
         Array.isArray(detail.testResults) ? detail.testResults : [];
       if (tests.length > 0) {

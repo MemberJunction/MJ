@@ -28,7 +28,13 @@ export interface DashboardUserPermissions {
     /** Whether the user is the owner of the dashboard */
     IsOwner: boolean;
     /** Source of the permission: 'owner', 'direct', 'category', or 'none' */
-    PermissionSource: 'owner' | 'direct' | 'category' | 'none';
+    /**
+     * How the decision was reached. `'unevaluated'` means the engine was never configured, so the
+     * question could not be answered at all — distinct from `'none'`, which is a real denial.
+     * Callers that enforce a gate MUST treat the two differently: denying on `'unevaluated'`
+     * blocks legitimate operations in every process that does not pre-warm this engine.
+     */
+    PermissionSource: 'owner' | 'direct' | 'category' | 'none' | 'unevaluated';
 }
 
 /**
@@ -174,8 +180,6 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
      * @returns The effective permissions for the user on this dashboard
      */
     public GetDashboardPermissions(dashboardId: string, userId: string): DashboardUserPermissions {
-        const dashboard = this._dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
-
         // Default: no permissions
         const noPermissions: DashboardUserPermissions = {
             DashboardID: dashboardId,
@@ -187,6 +191,17 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
             PermissionSource: 'none'
         };
 
+        // This engine answers from an in-memory cache. If it was never configured the cache is
+        // empty, and EVERY dashboard would look like "not found" — reported as a denial that is
+        // really "I was never asked to load". Report that state distinctly so a caller enforcing
+        // a gate can tell the difference; grants stay false either way, so this is not an
+        // escalation. (`mj sync push` runs StartupManager in 'task' mode, which pre-warms no
+        // engines, so this path is reached on every metadata push that touches a dashboard.)
+        if (!this.Loaded) {
+            return { ...noPermissions, PermissionSource: 'unevaluated' };
+        }
+
+        const dashboard = this._dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
         if (!dashboard) {
             return noPermissions;
         }

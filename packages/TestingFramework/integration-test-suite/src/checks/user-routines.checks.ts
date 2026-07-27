@@ -289,8 +289,12 @@ export const UserRoutinesChecks: NamedCheck[] = [
             // Seed candidate: Active hourly routine whose NextRunAt we null via direct SQL
             // (bypassing the entity server) to emulate a legacy/externally-created row.
             f.RoutineSeed = await makeRoutine(ctx, 'Seed Candidate', (x) => { x.Status = 'Active'; });
+            // Dialect-quoted, not bracket-quoted. PostgreSQL's identifier auto-quoter skips
+            // bracketed spans verbatim, so `[__mj].[UserRoutine]` reaches PG as literal brackets
+            // and fails with `syntax error at or near "["`. QuoteSchema emits `[__mj].[UserRoutine]`
+            // on SQL Server and `"__mj"."UserRoutine"` on PostgreSQL.
             await provider.ExecuteSQL(
-                `UPDATE [${provider.MJCoreSchemaName}].[UserRoutine] SET NextRunAt = NULL WHERE ID = '${f.RoutineSeed.ID}'`,
+                `UPDATE ${provider.Dialect.QuoteSchema(provider.MJCoreSchemaName, 'UserRoutine')} SET NextRunAt = NULL WHERE ID = '${f.RoutineSeed.ID}'`,
                 [],
                 { isMutation: true, description: 'user-routines: null NextRunAt for the seeding fixture' },
                 user
@@ -515,7 +519,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('user-routines', {
         for (const runId of f.OrphanedRunIds) {
             try {
                 await provider.ExecuteSQL(
-                    `DELETE FROM [${provider.MJCoreSchemaName}].[UserNotification] WHERE ResourceConfiguration LIKE '%${runId}%'`,
+                    `DELETE FROM ${provider.Dialect.QuoteSchema(provider.MJCoreSchemaName, 'UserNotification')} WHERE ResourceConfiguration LIKE '%${runId}%'`,
                     [],
                     { isMutation: true, description: 'user-routines: cleanup notifications for cascade-deleted runs' },
                     user
@@ -539,7 +543,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('user-routines', {
                     // direct SQL (scoped to the exact run IDs this suite created).
                     try {
                         await provider.ExecuteSQL(
-                            `DELETE FROM [${provider.MJCoreSchemaName}].[UserNotification] WHERE ResourceConfiguration LIKE '%${run.ID}%'`,
+                            `DELETE FROM ${provider.Dialect.QuoteSchema(provider.MJCoreSchemaName, 'UserNotification')} WHERE ResourceConfiguration LIKE '%${run.ID}%'`,
                             [],
                             { isMutation: true, description: 'user-routines: cleanup in-app notifications' },
                             user

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 
 // ---------------------------------------------------------------------------
@@ -25,8 +25,20 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 });
 
-// Mock mssql to prevent real database imports
-vi.mock('mssql', () => ({}));
+// Mock mssql to prevent real database imports. `Request` is a working stub so Refresh(pool)
+// — the mssql feeder, including its auto-refresh timer — can be exercised through its real
+// public API rather than only through RefreshFromRows.
+const { mockQuery } = vi.hoisted(() => ({
+    mockQuery: vi.fn(async (_sqlText: string) => ({ recordset: [] as Record<string, unknown>[] })),
+}));
+vi.mock('mssql', () => ({
+    default: {
+        Request: class {
+            constructor(_pool: unknown) { /* pool is unused by the stub */ }
+            query(sqlText: string) { return mockQuery(sqlText); }
+        },
+    },
+}));
 
 // ---------------------------------------------------------------------------
 // Import after mocks
@@ -340,6 +352,74 @@ describe('UserCache', () => {
         it('should return undefined for empty string search', () => {
             const result = instance.UserByName('');
             expect(result).toBeUndefined();
+        });
+    });
+
+    // Refresh(pool) is the mssql feeder. Its auto-refresh timer is the cache's ONLY
+    // self-healing mechanism: MJAPI arms it once at boot, and if a tick fails to re-arm,
+    // the cache is frozen for the entire life of the process.
+    describe('Refresh — auto-refresh timer', () => {
+        let instance: UserCache;
+
+        beforeEach(() => {
+            resetSingleton();
+            instance = UserCache.Instance;
+            vi.useFakeTimers();
+            mockQuery.mockReset();
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        /** Both queries succeed; `users` drives the vwUsers recordset, roles are always empty. */
+        function respondWith(users: Record<string, unknown>[]): void {
+            mockQuery.mockImplementation(async (sqlText: string) =>
+                ({ recordset: sqlText.includes('vwUserRoles') ? [] : users }));
+        }
+
+        it('re-arms after a successful refresh', async () => {
+            respondWith([{ ID: 'id1', Name: 'Alice' }]);
+            await instance.Refresh({} as never, 1000);
+            expect(mockQuery).toHaveBeenCalledTimes(2);
+
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(mockQuery).toHaveBeenCalledTimes(4);
+        });
+
+        it('re-arms after an EMPTY user set, so a transient empty read cannot freeze the cache forever', async () => {
+            // A login that briefly cannot read vwUsers, or a replica mid-reload, returns zero
+            // rows. That is not a permanent condition, and the pre-existing behaviour was to
+            // keep ticking. Losing the re-arm here means the cache never recovers without a
+            // process restart — a far worse outcome than the empty read itself.
+            respondWith([]);
+            await instance.Refresh({} as never, 1000);
+            expect(mockQuery).toHaveBeenCalledTimes(2);
+
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(mockQuery).toHaveBeenCalledTimes(4);
+        });
+
+        it('recovers on a later tick once users become readable again', async () => {
+            respondWith([]);
+            await instance.Refresh({} as never, 1000);
+            expect(instance.Users).toEqual([]);
+
+            respondWith([{ ID: 'id1', Name: 'Alice' }]);
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(instance.Users).toHaveLength(1);
+        });
+
+        it('does NOT re-arm when the database itself is unreachable', async () => {
+            // A failed query is a different condition from an empty result: the pool is the
+            // caller's to manage, and the pre-existing contract was to stop. Pinned so the
+            // empty-set fix above does not silently turn into "retry forever on any error".
+            mockQuery.mockImplementation(async () => { throw new Error('connection closed'); });
+            await instance.Refresh({} as never, 1000);
+            const callsAfterFailure = mockQuery.mock.calls.length;
+
+            await vi.advanceTimersByTimeAsync(5000);
+            expect(mockQuery).toHaveBeenCalledTimes(callsAfterFailure);
         });
     });
 });

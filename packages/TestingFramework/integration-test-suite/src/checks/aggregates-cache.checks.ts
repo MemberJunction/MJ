@@ -16,7 +16,7 @@
  * config `entityName`.
  */
 import { RunView, LocalCacheManager } from '@memberjunction/core';
-import type { RunViewParams, AggregateExpression, IMetadataProvider } from '@memberjunction/core';
+import type { RunViewParams, AggregateExpression, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -39,13 +39,27 @@ function coldFilter(tag: string): string {
     return `'${tag}' <> 'zzz-cache-test-marker'`;
 }
 
+/**
+ * `MAX(__mj_UpdatedAt)` with the column dialect-quoted.
+ *
+ * `AggregateExpression.expression` is embedded VERBATIM into the generated SQL, and PostgreSQL's
+ * identifier auto-quoter deliberately skips `__mj_`-prefixed words (`isMJInternal`) — while the
+ * PG baseline creates the column as `"__mj_UpdatedAt"`. So a bare reference folds to
+ * `__mj_updatedat` and PG rejects it as a missing column. Shared by AGG1 and AGG3 so the
+ * fingerprint AGG1 computes stays identical to the expression AGG3 actually executes.
+ */
+function maxUpdatedAtExpr(provider: IMetadataProvider): string {
+    const dialect = (provider as unknown as DatabaseProviderBase).Dialect;
+    return `MAX(${dialect.QuoteIdentifier('__mj_UpdatedAt')})`;
+}
+
 /** AGG1: two views identical except for Aggregates[] must NOT collide on a cache slot. */
 export async function CheckAgg1_FingerprintIncludesAggregates(ctx: IntegrationCheckContext): Promise<void> {
     const entityName = aggEntity(ctx);
     const connStr = connStrOf(ctx.Provider);
     const base: RunViewParams = { EntityName: entityName, ResultType: 'simple' };
     const withSum: RunViewParams = { ...base, Aggregates: [{ expression: 'COUNT(*)', alias: 'Cnt' }] };
-    const withMax: RunViewParams = { ...base, Aggregates: [{ expression: 'MAX(__mj_UpdatedAt)', alias: 'MaxUpd' }] };
+    const withMax: RunViewParams = { ...base, Aggregates: [{ expression: maxUpdatedAtExpr(ctx.Provider), alias: 'MaxUpd' }] };
 
     const fpNone = LocalCacheManager.Instance.GenerateRunViewFingerprint(base, connStr);
     const fpSum = LocalCacheManager.Instance.GenerateRunViewFingerprint(withSum, connStr);
@@ -87,7 +101,7 @@ export async function CheckAgg3_ResultOrderSurvivesCache(ctx: IntegrationCheckCo
     const entityName = aggEntity(ctx);
     const rv = new RunView();
     const A: AggregateExpression = { expression: 'COUNT(*)', alias: 'Cnt' };
-    const B: AggregateExpression = { expression: 'MAX(__mj_UpdatedAt)', alias: 'MaxUpd' };
+    const B: AggregateExpression = { expression: maxUpdatedAtExpr(ctx.Provider), alias: 'MaxUpd' };
     const filter = coldFilter('agg3');
 
     // Warm the slot with [A, B].

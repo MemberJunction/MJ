@@ -41,13 +41,17 @@ module.exports = {
   },
 
   dbHost: process.env.DB_HOST || 'localhost',
-  dbPlatform: process.env.DB_PLATFORM || 'sqlserver',
+  // Normalized here because every consumer of this value normalizes (each does
+  // .trim().toLowerCase() on it). Leaving the raw spelling in place made DB_PLATFORM=PostgreSQL
+  // select the PostgreSQL provider — which normalizes — while the port default below did an
+  // exact === 'postgresql' comparison and handed it 1433. The two disagreed on the same input.
+  dbPlatform: (process.env.DB_PLATFORM || 'sqlserver').trim().toLowerCase(),
   // Platform-aware default: this value overrides any fallback a consuming CLI would apply,
   // so hardcoding 1433 here silently pointed a DB_PLATFORM=postgresql run at the SQL Server
   // port whenever DB_PORT was unset.
   dbPort: process.env.DB_PORT
     ? parseInt(process.env.DB_PORT)
-    : (process.env.DB_PLATFORM === 'postgresql' ? 5432 : 1433),
+    : ((process.env.DB_PLATFORM || '').trim().toLowerCase() === 'postgresql' ? 5432 : 1433),
   dbDatabase: process.env.DB_DATABASE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,

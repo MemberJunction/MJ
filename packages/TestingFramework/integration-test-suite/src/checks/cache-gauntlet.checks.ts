@@ -62,6 +62,7 @@
  * removes that ambiguity.
  */
 import { RunView, Metadata, CacheCategory } from '@memberjunction/core';
+import type { DatabaseProviderBase } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJUserSettingEntity, MJUserViewEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
@@ -108,11 +109,17 @@ export const CacheGauntletChecks: NamedCheck[] = [
             const rv = new RunView();
             const created: MJUserSettingEntity[] = [];
             try {
-                // Anti-vacuity floor: the entity must already hold more rows than the limit, or
+                // Anti-vacuity floor: the entity must hold more rows than the limit, or
                 // "returned <= 1 row" would be trivially true regardless of cache behavior.
+                // SEED the floor rather than assuming it — a fresh CI database has zero user
+                // settings, so depending on ambient data made this check pass only on a
+                // developer machine (it had never run in CI before RUN_MUTATION_TESTS was set).
+                for (let i = 1; i <= 2; i++) { created.push(await makeSetting(ctx, `cg1-seed-${i}`)); }
+                await settle();
+
                 const all = await rv.RunView({ EntityName: ENTITY, Fields: ['ID'], ResultType: 'simple' }, ctx.User);
                 Assert(all.Success, `baseline read failed: ${all.ErrorMessage}`);
-                Assert(all.Results.length >= 2, `need >= 2 existing rows to make MaxRows:1 meaningful (found ${all.Results.length})`);
+                Assert(all.Results.length >= 2, `expected >= 2 rows after seeding (found ${all.Results.length})`);
 
                 // Warm the subset slot.
                 const warm = await rv.RunView(subsetParams(1), ctx.User);
@@ -226,12 +233,14 @@ export const CacheGauntletChecks: NamedCheck[] = [
             const rv = new RunView();
             const created: MJUserSettingEntity[] = [];
             try {
-                for (let i = 1; i <= 3; i++) { created.push(await makeSetting(ctx, `cg4-${i}`)); }
+                // Seed the FULL floor (4, not 3). Creating 3 and asserting >= 4 silently relied on
+                // one pre-existing row, which a fresh CI database does not have.
+                for (let i = 1; i <= 4; i++) { created.push(await makeSetting(ctx, `cg4-${i}`)); }
                 await settle();
 
                 const all = await rv.RunView({ EntityName: ENTITY, Fields: ['ID'], ResultType: 'simple' }, ctx.User);
                 Assert(all.Success, `baseline failed: ${all.ErrorMessage}`);
-                Assert(all.Results.length >= 4, `need >= 4 rows for a meaningful offset window (found ${all.Results.length})`);
+                Assert(all.Results.length >= 4, `expected >= 4 rows after seeding (found ${all.Results.length})`);
 
                 const page = () => ({ EntityName: ENTITY, Fields: ['ID', 'Setting'], ResultType: 'simple' as const, MaxRows: 2, StartRow: 1 });
                 const warm = await rv.RunView(page(), ctx.User);
@@ -259,6 +268,12 @@ export const CacheGauntletChecks: NamedCheck[] = [
             const rv = new RunView();
             const created: MJUserSettingEntity[] = [];
             try {
+                // Seed before the warm read: the assertions below need a DB total that both
+                // exceeds zero AND exceeds the truncated slot size, which an empty CI database
+                // cannot supply on its own.
+                for (let i = 1; i <= 2; i++) { created.push(await makeSetting(ctx, `cg5-seed-${i}`)); }
+                await settle();
+
                 const warm = await rv.RunView(subsetParams(1), ctx.User);
                 Assert(warm.Success, `subset warm failed: ${warm.ErrorMessage}`);
                 const before = warm.TotalRowCount ?? -1;
@@ -352,7 +367,11 @@ export const CacheGauntletChecks: NamedCheck[] = [
                 view.Name = `${tag} (mj-integration-test — safe to delete)`;
                 view.EntityID = entityInfo!.ID;
                 view.UserID = ctx.User.ID;
-                view.WhereClause = `[Value] = '${tag}-IN'`;
+                // Dialect-quoted, not bracket-quoted. A saved view's WhereClause is folded into the
+                // generated SQL verbatim, and PostgreSQL's identifier auto-quoter passes bracketed
+                // spans through untouched — so `[Value]` reaches PG as a syntax error.
+                const dialect = (ctx.Provider as unknown as DatabaseProviderBase).Dialect;
+                view.WhereClause = `${dialect.QuoteIdentifier('Value')} = '${tag}-IN'`;
                 Assert(await view.Save(), `creating view failed: ${view.LatestResult?.CompleteMessage}`);
                 await settle();
 
