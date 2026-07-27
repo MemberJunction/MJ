@@ -49,6 +49,10 @@ describe('conversation-list inline styles — design tokens only', () => {
     expect(styles).toContain('--conv-list-bg: var(--mj-conversations-list-bg, var(--mj-brand-secondary))');
     expect(styles).toContain('--conv-list-ink: var(--mj-conversations-list-ink, var(--mj-brand-on-secondary))');
     expect(styles).toContain('--conv-list-active-ink: var(--mj-conversations-list-active-ink, var(--mj-brand-on-secondary))');
+    // …the accent trio (action color) with its stock fallbacks…
+    expect(styles).toContain('--conv-list-accent: var(--mj-conversations-list-accent, var(--mj-brand-primary))');
+    expect(styles).toContain('--conv-list-accent-ink: var(--mj-conversations-list-accent-ink, var(--mj-text-inverse))');
+    expect(styles).toContain('--conv-list-accent-hover: var(--mj-conversations-list-accent-hover, var(--mj-brand-primary-hover))');
     // …and no rule may bypass the indirection by using the raw brand tokens for
     // panel background/ink. Exactly ONE deliberate on-secondary use survives:
     // the bulk-delete button's ink sits on the error-red button, not the panel
@@ -56,6 +60,25 @@ describe('conversation-list inline styles — design tokens only', () => {
     const bodyAfterHost = styles.slice(styles.indexOf('}'));
     expect(bodyAfterHost).not.toContain('var(--mj-brand-secondary)');
     expect(bodyAfterHost.match(/var\(--mj-brand-on-secondary\)/g) ?? []).toHaveLength(1);
+  });
+
+  it('routes the panel action surfaces through the accent token, not raw brand-primary', () => {
+    // The New Conversation button and drag-over highlights read the accent token
+    // so a host can retint actions independently of the active row.
+    expect(styles).toContain('.btn-new-conversation:hover { background: var(--conv-list-accent-hover); }');
+    expect(styles).toContain('background: var(--conv-list-accent);'); // btn-new-conversation bg
+    expect(styles).toContain('color: var(--conv-list-accent-ink);'); // btn-new-conversation label
+    expect(styles).toContain('accent-color: var(--conv-list-accent);'); // bulk-select checkbox
+    // The only raw brand-primary left in the body is the multi-hue message-drag
+    // glow (deliberately kept) — never a flat action surface.
+    const bodyAfterHost = styles.slice(styles.indexOf('}'));
+    for (const m of bodyAfterHost.match(/var\(--mj-brand-primary\)/g) ?? []) {
+      expect(m).toBe('var(--mj-brand-primary)'); // sanity; count is asserted below
+    }
+    // brand-primary survives only inside color-mix drag-glow gradients, never as a
+    // bare `background:`/`border-color:` on an action element.
+    expect(bodyAfterHost).not.toMatch(/background:\s*var\(--mj-brand-primary\)/);
+    expect(bodyAfterHost).not.toMatch(/border-color:\s*var\(--mj-brand-primary\)/);
   });
 
   it('active-row child rules derive from the ACTIVE ink, not the panel ink', () => {

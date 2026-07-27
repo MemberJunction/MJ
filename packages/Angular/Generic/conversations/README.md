@@ -174,6 +174,9 @@ The list panel renders on brand tokens by default (a `--mj-brand-secondary` pane
 | `--mj-conversations-list-active-bg` | `var(--mj-brand-primary)` | The active conversation row's background |
 | `--mj-conversations-list-active-ink` | `var(--mj-brand-on-secondary)` | ALL text on the active row (title, preview, badges, icons) — remap alongside `active-bg` to keep the row legible |
 | `--mj-conversations-list-active-hover-bg` | `var(--mj-brand-primary-hover)` | Hovered controls (the ⋯ button) on the active row |
+| `--mj-conversations-list-accent` | `var(--mj-brand-primary)` | The panel's ACTION color — New Conversation button, search-focus ring, checkbox tick, and drag-over highlights — independent of the active-row pair |
+| `--mj-conversations-list-accent-ink` | `var(--mj-text-inverse)` | Text/icon on the accent (the New Conversation button label) |
+| `--mj-conversations-list-accent-hover` | `var(--mj-brand-primary-hover)` | Hover state of the accent (the New Conversation button) |
 
 ```css
 /* e.g. match the list to the chat area's light surface */
@@ -183,7 +186,7 @@ The list panel renders on brand tokens by default (a `--mj-brand-secondary` pane
 }
 ```
 
-Action-colored elements (the New Conversation button, focus rings, drag-over highlights) stay on the global `--mj-brand-primary` deliberately — they're "action color", not "panel color" — and the bulk-delete button's ink stays on `--mj-brand-on-secondary` (it sits on the error-red button, not the panel). The routines section at the bottom of the sidebar already renders on surface tokens; remapping the list onto surface tokens makes the two consistent. Note the rename-flash animation and these defaults resolve through MJ's semantic tokens — a host that doesn't load MJ's token stylesheet should define the four list tokens (and the brand/status tokens) explicitly.
+Between the panel pair (`bg`/`ink`), the active-row pair (`active-bg`/`active-ink`/`active-hover-bg`), and the accent trio (`accent`/`accent-ink`/`accent-hover`), every colored surface of the list is host-overridable; hover, border, divider, preview, badge, and placeholder tints all derive from `ink` (or `active-ink` on the active row) via `color-mix`, so they follow their pair automatically. The one deliberate hold-out is the bulk-delete button's ink, which stays on `--mj-brand-on-secondary` (it sits on the error-red button, not the panel), and the message-being-dragged glow, which keeps its multi-hue brand/accent/success gradient. The routines section at the bottom of the sidebar already renders on surface tokens. Note the rename-flash animation and these defaults resolve through MJ's semantic tokens — a host that doesn't load MJ's token stylesheet should define the list tokens (and the brand/status tokens) explicitly.
 
 ### Chat Overlay
 

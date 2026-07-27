@@ -363,12 +363,19 @@ interface FolderNode {
          so the two-name indirection is required, not stylistic.) Defaults
          preserve the stock look exactly: a brand-secondary panel with
          on-secondary ink. Hover/border/divider states derive from the ink via
-         color-mix, so they follow automatically when the ink is remapped. */
+         color-mix, so they follow automatically when the ink is remapped.
+         The accent trio drives the panel's ACTION surfaces (New Conversation
+         button, search-focus ring, checkbox tick, drag-over highlights) —
+         independent of the active-row pair so a host can tint actions on their
+         own; defaults to the brand-primary action color, unchanged. */
       --conv-list-bg: var(--mj-conversations-list-bg, var(--mj-brand-secondary));
       --conv-list-ink: var(--mj-conversations-list-ink, var(--mj-brand-on-secondary));
       --conv-list-active-bg: var(--mj-conversations-list-active-bg, var(--mj-brand-primary));
       --conv-list-active-ink: var(--mj-conversations-list-active-ink, var(--mj-brand-on-secondary));
       --conv-list-active-hover-bg: var(--mj-conversations-list-active-hover-bg, var(--mj-brand-primary-hover));
+      --conv-list-accent: var(--mj-conversations-list-accent, var(--mj-brand-primary));
+      --conv-list-accent-ink: var(--mj-conversations-list-accent-ink, var(--mj-text-inverse));
+      --conv-list-accent-hover: var(--mj-conversations-list-accent-hover, var(--mj-brand-primary-hover));
     }
     .conversation-list { display: flex; flex-direction: column; height: 100%; background: var(--conv-list-bg); }
     .list-header { padding: 8px; border-bottom: 1px solid color-mix(in srgb, var(--conv-list-ink) 10%, transparent); }
@@ -383,13 +390,13 @@ interface FolderNode {
       transition: all 0.2s;
     }
     .search-input::placeholder { color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent); }
-    .search-input:focus { outline: none; background: color-mix(in srgb, var(--conv-list-ink) 15%, transparent); border-color: var(--mj-brand-primary); }
+    .search-input:focus { outline: none; background: color-mix(in srgb, var(--conv-list-ink) 15%, transparent); border-color: var(--conv-list-accent); }
     .btn-new-conversation {
       width: calc(100% - 16px);
       margin: 8px;
       padding: 10px;
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
+      background: var(--conv-list-accent);
+      color: var(--conv-list-accent-ink);
       border: none;
       border-radius: 6px;
       cursor: pointer;
@@ -402,7 +409,7 @@ interface FolderNode {
       transition: background 0.2s;
       flex-shrink: 0;
     }
-    .btn-new-conversation:hover { background: var(--mj-brand-primary-hover); }
+    .btn-new-conversation:hover { background: var(--conv-list-accent-hover); }
     .btn-new-conversation i { font-size: 14px; }
     .list-content { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0; }
 
@@ -785,7 +792,7 @@ interface FolderNode {
       width: 18px;
       height: 18px;
       cursor: pointer;
-      accent-color: var(--mj-brand-primary);
+      accent-color: var(--conv-list-accent);
     }
 
     .selection-action-bar {
@@ -920,13 +927,13 @@ interface FolderNode {
     }
     .folder-row:hover { background: color-mix(in srgb, var(--conv-list-ink) 8%, transparent); }
     .folder-row.drag-over {
-      background: color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
-      box-shadow: inset 0 0 0 1px var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--conv-list-accent) 25%, transparent);
+      box-shadow: inset 0 0 0 1px var(--conv-list-accent);
     }
     .folder-row.dragging { opacity: 0.4; }
     .section-header.drag-over {
-      background: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
-      box-shadow: inset 0 0 0 1px var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--conv-list-accent) 18%, transparent);
+      box-shadow: inset 0 0 0 1px var(--conv-list-accent);
       border-radius: 6px;
     }
     .folder-chevron {
@@ -999,8 +1006,8 @@ interface FolderNode {
       color: color-mix(in srgb, var(--conv-list-ink) 45%, transparent);
     }
     .ungrouped-section.drag-over {
-      background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
-      box-shadow: inset 0 0 0 1px var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--conv-list-accent) 12%, transparent);
+      box-shadow: inset 0 0 0 1px var(--conv-list-accent);
       border-radius: 6px;
     }
 
@@ -1011,7 +1018,7 @@ interface FolderNode {
     /* Move-to-folder submenu */
     .menu-item.back { font-weight: 600; }
     .menu-item .submenu-arrow { margin-left: auto; font-size: 10px; }
-    .menu-item.current { background: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+    .menu-item.current { background: color-mix(in srgb, var(--conv-list-accent) 18%, transparent); }
     .move-folder-list { max-height: 240px; overflow-y: auto; }
   `]
 })
