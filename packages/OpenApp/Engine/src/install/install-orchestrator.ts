@@ -1482,7 +1482,12 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
   }
 
   context.Callbacks?.OnProgress?.('Schema', `Checking schema '${manifest.schema.name}'...`);
-  const exists = await SchemaExists(manifest.schema.name, context.DatabaseProvider);
+  // Check for the CANONICAL name — the form CreateAppSchema actually creates (PostgreSQL folds
+  // unquoted DDL identifiers to lowercase). Checking the raw manifest casing on PG returns false
+  // for a schema that exists as its lowercase twin, sending a reinstall down the create path and
+  // into an "already exists" dead end.
+  const canonicalSchemaName = context.DatabaseProvider.Dialect.CanonicalSchemaName(manifest.schema.name);
+  const exists = await SchemaExists(canonicalSchemaName, context.DatabaseProvider);
 
   if (exists) {
     if (isReinstall || manifest.schema.createIfNotExists !== false) {
@@ -2034,8 +2039,9 @@ export async function RemoveAppEntityMetadata(
         await entity.Delete();
       }
 
-      // Queue SchemaInfo last.
-      await queueDeleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+      // Queue SchemaInfo last. Case-insensitive for the same reason as the Entity query above —
+      // on PG the stored SchemaName may be the lowercase-folded twin of the manifest casing.
+      await queueDeleteByFilterOrThrow('MJ: Schema Info', `LOWER(SchemaName) = LOWER('${escaped}')`);
 
       // Commit everything atomically — all-or-nothing (PG3).
       if (!(await tg.Submit())) {
