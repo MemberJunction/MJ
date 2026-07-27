@@ -1,0 +1,406 @@
+# Agent Context Optimization — Specification & Implementation Plan
+
+**Status:** Proposal
+**Author:** drafted for review
+**Related:** [Anthropic — *The new rules of context engineering for Claude 5 generation models*](https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models) (July 24, 2026)
+
+---
+
+## Summary
+
+MJ ships ~250k tokens of hand-authored prompt text across 103 templates. A quarter of it
+is worked examples that frontier models no longer need — and that measurably *narrow* their
+exploration space. Meanwhile 23 of 26 agents receive every optional prompt section regardless
+of whether they can use it, and the model that will actually run a prompt is chosen *after*
+the prompt is rendered, so the prompt can't adapt to it.
+
+This proposal does two things at once:
+
+1. **Subtract** — remove redundant examples, deduplicate instructions into the interfaces that
+   already describe them, and push rarely-needed content behind progressive disclosure.
+2. **Condition** — resolve the model *before* rendering so templates can include or exclude
+   content based on the capability tier of the model actually running.
+
+These are complementary. Subtraction sets the floor (what every model gets); conditioning sets
+the ceiling (what weaker models additionally need). Doing only the first risks regressions on
+mid-tier models; doing only the second leaves the redundancy in place for everyone.
+
+---
+
+## Part 1: Current State
+
+### 1.1 Measured baseline
+
+| Measure | Value |
+|---|---|
+| Authored prompt templates | 103 files, 927 KB ≈ **250k tokens** |
+| Share inside fenced code blocks (mostly examples) | **25% — 228 KB ≈ 62k tokens** |
+| Loop system prompt template | 33.4 KB ≈ 9k tokens, **37% fenced**, 16 JSON example blocks |
+| …plus `{@include}`d generated type docs | +10 KB → **~12k tokens before agent-specific content** |
+| Agents defined in metadata | 26 |
+| Agents that trim anything via `AgentTypePromptParams` | **3** (Sage, Demo Loop, Demo Minimal Loop) |
+| Guardrail markers (`NEVER`/`MUST`/`CRITICAL`/`🚨`/`⚠️`/`❌`) | **861** |
+| Agent Eval tests in metadata | **2** |
+| `MJ: Test Rubrics` records seeded | **0** |
+| Distinct models in catalog | 167 |
+
+Worst offenders by fenced-block share:
+
+| Template | Size | % fenced |
+|---|---|---|
+| `research-agent/research-report-writer.md` | 51.6 KB | **52%** (incl. a ~580-line literal HTML template, lines 336–918) |
+| `agent-manager/architect-agent.template.md` | 23.0 KB | **53%** |
+| `system/sql-query-param-extraction.template.md` | 20.6 KB | **56%** |
+| `agents/codesmith.template.md` | 20.4 KB | **48%** |
+| `system/loop-agent-type-system-prompt.template.md` | 33.4 KB | **37%** |
+| `agents/actionsmith.template.md` | 40.1 KB | 32% (8 numbered "Turn type" examples, lines 377–582) |
+| `agent-manager/planning-designer-agent.template.md` | 76.3 KB | 27% (138 guardrail markers) |
+
+### 1.2 What MJ already does right
+
+This is a trim, not a rewrite. Four of the post's six shifts are partly or wholly shipped:
+
+- **Interfaces over examples (partial).** `packages/AI/CorePlus/scripts/generate-prompt-types.mjs`
+  compiles TS interfaces into `generated-for-prompt/*.md`, pulled into the Loop template via
+  `{@include}`. The `AgentScratchpad` output is exactly the target shape: typed interface,
+  inline field comments, two sentences of usage note, zero examples. **The machinery exists;
+  it just isn't the default authoring habit.**
+- **Progressive disclosure for skills (done).** `BaseAgent.formatSkillsCatalog()`
+  (`base-agent.ts:7167`) emits name + description only; `Instructions` load on activation, with
+  the agent's `reason` recorded in the audit trail.
+- **Auto-memory (done).** `memoryWrites` + Memory Manager replaces manual memory curation.
+- **Prompt-cache discipline (done, and good).** The comment at
+  `loop-agent-type-system-prompt.template.md:715` documents deliberately placing volatile blocks
+  last to preserve a byte-stable cacheable prefix; `ContextCrush`'s `PartitionStablePrefix`
+  supports the same goal.
+
+### 1.3 Where the old tax is being paid
+
+**Redundant examples.** The `LoopAgentResponse` interface is self-describing, then 6.5 KB across
+16 JSON blocks re-demonstrate it. Specific redundancies:
+
+| Block | Lines | Why it's redundant |
+|---|---|---|
+| Message Expansion example | `:157-166` | Interface already documents `messageIndex?: number` with a `when type='Retry'` comment |
+| Skill activation example | `:576-586` | Interface documents `skills?: Array<{name, reason?}>`; prose above already explains activation |
+| Client-tool navigation example | `:636-646` | Interface documents `clientTools?: Array<{Name, Params}>` |
+| ForEach ❌/✅ contrast | `:379-401` | Teaches a frontier model that one call beats ten |
+| Response Forms example | `:417-438` | `response-forms.ts.generated-for-prompt.md` is **already included** — this duplicates it |
+| Commands example | `:446-473` | `ui-commands.ts.generated-for-prompt.md` is **already included** — this duplicates it |
+
+**Instruction repetition.** The `⚠️ CRITICAL - Loop Results Are Temporary` warning appears three
+times (`:208`, `:233`, `:352-353`), each restating the same fact.
+
+**Instructions in the wrong place.** `loop-agent-type-system-prompt.template.md:617-625`
+string-matches the *rendered action catalog* to conditionally inject workflow prose into the
+system prompt:
+
+```njk
+{% if actionDetails and 'Create Document' in actionDetails %}
+### Document Creation Workflow
+... You must ALWAYS call Finalize Document after adding content ...
+```
+
+That is a property of three Actions, not of the agent type. `formatActionDetails()`
+(`base-agent.ts:7212`) already renders Description, typed Input/Output params, and Result Codes —
+the interface exists, it's just underused as the place to say things. Same pattern with the
+"Choosing between Actions and Client Tools" block (`:648-651`).
+
+**No progressive disclosure for Actions.** `maxActionsInPrompt` is blunt truncation (first N, no
+search). There is no `ToolSearch` analogue, so an agent with a large action set pays for the full
+catalog on every turn.
+
+**Everything defaults to on.** `DEFAULT_LOOP_AGENT_PROMPT_PARAMS`
+(`loop-agent-prompt-params.ts:325-342`) sets every inclusion flag to `true`. The Duplicate
+Resolution Agent, Infographic Agent, and Memory Manager all carry ForEach docs, While docs,
+response-form docs, command docs, message-expansion docs, and pipeline docs whether or not they
+can ever use them.
+
+### 1.4 The model is chosen after the prompt is rendered
+
+`AIPromptRunner.executePrompt` has two branches with **opposite ordering**:
+
+| Branch | Model selection | Template render |
+|---|---|---|
+| Hierarchical (`:774`) | `selectModel()` at **`:784`** | `:796-798` — **after** |
+| Regular template (`:803`) | `selectModel()` at **`:843`** | `:821` — **before** |
+
+`selectModel()` (`:1674`) takes `(prompt, explicitModelId, contextUser, configurationId, vendorId,
+params)` and **never reads the rendered text**. There is no data dependency preventing the
+regular branch from matching the hierarchical one.
+
+Corroborating evidence this is the intended direction: `_MODEL_ID` and `_VENDOR_ID` **already
+exist** as system placeholders (`prompt.system-placeholders.ts:243-257`) but resolve to
+`params.override?.modelId || ''` — **empty on every normal run**, precisely because rendering
+precedes selection. This is an existing latent gap, not just a missing feature.
+
+The extension point is clean: `renderPromptTemplate()` merges
+`SystemPlaceholderManager.resolveAllPlaceholders(params)` into the Nunjucks data context
+(`:3009-3016`), and the manager exposes a public `registerPlaceholder` API.
+
+### 1.5 Catalog data is not ready for tier-conditional prompts
+
+**PowerRank is an ordinal within model type, not a normalized cross-type scale.** Measured
+across all 167 distinct models:
+
+```
+Rerankers:  80, 90, 100, 110
+LLMs:       0 … 26   (plus one outlier at 30)
+```
+
+A template writing `{% if _MODEL_POWER_RANK > 20 %}` is correct for LLMs and meaningless for a
+reranker.
+
+**Within LLMs, the ranks contain errors:**
+
+```
+P=30  DeepSeek V4 Flash     ← outranks every frontier model
+P=26  Gemini 3.1 Pro
+P=26  Claude Fable 5
+P=25  Grok 4.5
+P=24  Claude Opus 4.8
+P=19  Claude Sonnet 5
+```
+
+**Claude Opus 5 is absent from the catalog entirely** — the Anthropic entries stop at Opus 4.8,
+though Fable 5 and Sonnet 5 are both present.
+
+This matters more than it looks. **Today a wrong PowerRank costs a suboptimal model choice —
+visible and recoverable. Once prompt *content* keys off it, a wrong PowerRank silently ships the
+wrong instructions, and the failure surfaces as degraded output with no obvious cause.** Rank
+accuracy becomes load-bearing.
+
+### 1.6 One render, many models
+
+Two paths break the "one model per render" assumption that tier-conditional content requires:
+
+- **Parallel execution.** `executePromptInParallel(prompt, renderedPromptText, ...)` takes a
+  *single* rendered string and fans it across N tasks. `ExecutionPlanner.ts:424-446` selects
+  candidates by `PowerRank >= MinPowerRank` sorted by `PowerPreference`, so those N models can
+  span a wide power range sharing one prompt. (It already short-circuits to a single task when
+  `existingSelection?.model` is set — pre-selection *simplifies* this path.)
+- **Failover.** `FailoverStrategy` includes a literal `'PowerRank'` mode that walks to a
+  different-power model *after* rendering.
+
+---
+
+## Part 2: Goals & Non-Goals
+
+### Goals
+
+1. Reduce rendered system-prompt size for the top agents by a measured, non-trivial margin
+   with **no regression** on agent evals.
+2. Make "interface, not example" the default authoring mode, enforced rather than encouraged.
+3. Give templates the ability to adapt content to the capability tier of the model actually running.
+4. Establish the eval baseline that makes claims 1–3 verifiable rather than asserted.
+
+### Non-Goals
+
+- Rewriting agent-specific business logic or changing any agent's behavior contract.
+- Removing safety-critical rules. **Guardrails whose violation is unrecoverable stay**
+  (JSON-only response, `taskComplete` semantics, the plan-mode gate). Judgment replaces
+  *stylistic* rules, not *safety* rules.
+- Normalizing PowerRank across model types (documenting it as per-type is sufficient and lower risk).
+- Changing model *selection* logic. This proposal changes selection *timing* only.
+
+---
+
+## Part 3: Implementation Plan
+
+Phases are ordered by dependency. Phase 0 gates everything; Phases 1–3 are independent of
+Phases 4–5 and can run in parallel.
+
+### Phase 0 — Prerequisites (gating)
+
+> **Scoping note.** The review scoped this proposal to build items 1–6. Phase 0 is included
+> anyway because items 1–6 are unverifiable without it: with 2 agent-eval tests, "no measurable
+> loss" is unmeasurable by construction. It is deliberately minimal and can be cut, but cutting
+> it means accepting the subtraction work on faith.
+
+**0a. Eval baseline.** Grow `metadata/tests/` from 2 Agent Eval tests to ~5–8 per high-traffic
+agent (Sage, Agent Manager, Research Agent, ActionSmith, Query Builder). Weight toward the
+**deterministic** oracles — `schema-validate` and `trace-validate-sub-agents` — because they catch
+the specific failure mode this work risks: *the model stopped emitting valid JSON because we
+deleted the example*. `llm-judge` covers quality; the deterministic oracles cover the regression.
+Reuse the existing pattern in
+`metadata/tests/research-agent/.research-agent-mixed-db-and-web-question.json`.
+
+**0b. Token-budget reporting.** Add per-agent rendered system-prompt size to the eval run output,
+tracked over time. `ContextCrush` already provides the measurement primitives. This turns "we cut
+40%" into a measured claim.
+
+**0c. Model catalog correction.** Add Claude Opus 5. Correct the DeepSeek V4 Flash outlier.
+Document PowerRank explicitly as **per-model-type ordinal** in
+`metadata/ai-models/` guidance. *Gates Phase 4 only.*
+
+**Definition of done:** eval suite runs green on current `next`, producing a per-agent token
+baseline table.
+
+---
+
+### Phase 1 — Configure what already exists (build item 1)
+
+Set `AgentTypePromptParams` deliberately on the 23 agents that currently take defaults. Sage's
+config is the reference model:
+
+```json
+{
+  "includeForEachDocs": false,
+  "includeWhileDocs": false,
+  "includeVariableRefsDocs": false,
+  "includeScratchpadDocs": true,
+  "includeMessageExpansionDocs": false
+}
+```
+
+Per-agent audit: does this agent ever iterate collections? poll? collect user input? trigger UI
+commands? expand compacted messages? compose pipelines? Turn off what it cannot use.
+
+- **Files:** `metadata/agents/*.json` only.
+- **Risk:** Low — pure config, trivially revertable per agent.
+- **Payoff:** Several thousand tokens per turn for most agents, immediately.
+
+---
+
+### Phase 2 — Subtract from the Loop system prompt (build items 2 & 3)
+
+**2a. Delete redundant example blocks.** Remove the six blocks catalogued in §1.3. Target: 16
+JSON blocks → ~4 or fewer. The two duplicating already-included generated interfaces
+(Response Forms, Commands) are unambiguous deletions.
+
+**2b. Deduplicate the repeated warning.** Collapse the three "Loop Results Are Temporary"
+statements (`:208`, `:233`, `:352-353`) into one, stated once as a property of the mechanism.
+
+**2c. Relocate tool-specific instructions.** Move the Document Creation Workflow block
+(`:617-625`) into the `Create Document` / `Add Document Content` / `Finalize Document` Action
+descriptions and Result Codes. Move "Choosing between Actions and Client Tools" (`:648-651`) into
+per-tool descriptions. Delete the `{% if actionDetails and 'Create Document' in actionDetails %}`
+string-match entirely.
+
+- **Files:** `metadata/prompts/templates/system/loop-agent-type-system-prompt.template.md`,
+  `metadata/actions/*.json`.
+- **Risk:** Medium — this is the shared system prompt for all 26 agents. Gated on Phase 0a.
+- **Note:** Requires `mj sync push` to take effect; `@file:` references resolve at push time.
+
+---
+
+### Phase 3 — Make the pattern stick (build items 4 & 5)
+
+**3a. Extend `generate-prompt-types.mjs` coverage** so every shape an agent must emit has a
+generated interface, not a hand-written example.
+
+**3b. Add an authoring rule.** In `metadata/CLAUDE.md` (and/or `.claude/rules/`): *no hand-written
+JSON example for a type that has a generated interface.* Consider a `npm run check:prompts` CI
+gate that fails when a template's fenced-block share exceeds a threshold, mirroring the existing
+`check:ui` / `check:esm` / `check:claude-md` gates.
+
+**3c. Externalize the large inline examples as references.** Per the post, references are good —
+inlining them into every turn's system prompt is not:
+
+- `research-report-writer.md` lines 336–918 (~580-line HTML template) → an artifact or skill file
+  loaded when the agent is actually writing the report.
+- `actionsmith.template.md` lines 377–582 (8 "Turn type" examples) → delete or reduce to a skill.
+
+- **Risk:** Low-medium. 3c is per-agent and independently revertable.
+
+---
+
+### Phase 4 — Model-tier-aware rendering (the conditioning half)
+
+**4a. Reorder selection before render.** In `AIPromptRunner.executePrompt`, move the regular-branch
+`selectModel()` call (`:843`) above the render (`:821`), matching the hierarchical branch. Thread
+the resulting `ModelSelectionResult` into `renderPromptTemplate()`.
+
+Independently fixes `_MODEL_ID` / `_VENDOR_ID` resolving to empty on normal runs.
+
+**4b. Add resolved system placeholders.** Via `SystemPlaceholderManager.registerPlaceholder`:
+
+| Placeholder | Value |
+|---|---|
+| `_MODEL_TIER` | `'frontier' \| 'standard' \| 'light'` — computed once from `(AIModelTypeID, PowerRank)` |
+| `_MODEL_POWER_RANK` | raw `PowerRank` — escape hatch |
+| `_MODEL_SPEED_RANK` | raw `SpeedRank` — escape hatch |
+| `_MODEL_NAME` | for diagnostics and prompt-run traceability |
+
+**Design decision: templates key off `_MODEL_TIER`, not raw ranks.** Sprinkling
+`{% if _MODEL_POWER_RANK >= 22 %}` across 103 templates means every catalog update silently
+changes prompts estate-wide, and every threshold is a magic number someone must re-derive. One
+coarse enum, resolved centrally, handles the reranker-scale problem in one place:
+
+```njk
+{% if _MODEL_TIER != 'frontier' %}
+### ForEach: Process Collections Efficiently
+...worked example...
+{% endif %}
+```
+
+Tier boundaries live in **metadata** (a field or config on the model type), not code, so they're
+adjustable without a release.
+
+**4c. Guard the multi-model paths.** Either re-render per model, or — recommended for v1 — mark
+prompts as tier-conditional and refuse to fan those across mixed-power pools in
+`executePromptInParallel` / `PowerRank` failover. The guard is a one-line check; threading
+re-render through the failover loop is not. Start with the guard.
+
+- **Risk:** Medium-high — touches the core execution path for every prompt in the system.
+  Reordering is behavior-preserving by inspection (no data dependency), but warrants the full
+  integration tier, not just unit tests.
+
+**Composition note:** this does not conflict with Phase 1. `AgentTypePromptParams` expresses *what
+this agent needs*; `_MODEL_TIER` expresses *what this model needs told*. Different axes, both
+multiplying into the same render.
+
+**Caching note:** this does not degrade the prompt-cache design. The model is fixed for a run's
+duration, so the rendered prefix stays byte-stable across turns exactly as intended at
+`loop-agent-type-system-prompt.template.md:715` — there is simply a different stable prefix per tier.
+
+---
+
+### Phase 5 — Action-catalog progressive disclosure (build item 6)
+
+Add a two-tier action catalog mirroring the Skills pattern: agents see `name — one-line
+description` for their full action set, and request full param schemas for the ones they intend to
+use (results arriving next turn, like `artifactToolCalls`). Replaces `maxActionsInPrompt`'s blunt
+truncation with actual search.
+
+- **Risk:** Highest — new round-trip semantics in the agent loop.
+- **Sequencing:** Last. Largest structural win, most design surface. Should not block Phases 1–4.
+
+---
+
+## Part 4: Risks
+
+| Risk | Mitigation |
+|---|---|
+| Deleting examples breaks JSON-format adherence on some model | Phase 0a deterministic oracles (`schema-validate`) catch exactly this; Phase 4 lets weaker tiers keep the examples |
+| Guardrails deleted for Opus-class models bite mid-tier / non-Anthropic models | Tier-gate the cuts rather than applying globally; MJ agents run a configurable model set, not one model |
+| Bad PowerRank data silently selects the wrong prompt variant | Phase 0c gates Phase 4; coarse tiers are far more error-tolerant than numeric thresholds |
+| Tier-conditional blocks multiply the test matrix | Every tier-conditional block needs coverage at each tier, or a `light`-tier prompt ships untested. Budget for this in Phase 0a |
+| Parallel/failover renders one prompt for mixed-power models | Phase 4c guard |
+| Loop-template changes affect all 26 agents at once | Phase 2 gated on Phase 0a; changes land per-block, not as one commit |
+
+---
+
+## Part 5: Success Metrics
+
+1. **Token reduction** — rendered system-prompt size per agent, before vs after, from the Phase 0b
+   report. Target: ≥30% on the top five agents.
+2. **No eval regression** — Phase 0a suite scores within noise of baseline; deterministic oracles
+   at 100%.
+3. **Authoring durability** — fenced-block share across `metadata/prompts/templates/` trending
+   down, enforced by the Phase 3b gate rather than vigilance.
+4. **Tier coverage** — every tier-conditional block has an eval at each tier it branches on.
+
+---
+
+## Appendix: Mapping to the post's six shifts
+
+| Post's shift | MJ status | Addressed by |
+|---|---|---|
+| Rules → judgment | 861 guardrail markers; repetition in Loop template | Phase 2b (safety rules explicitly retained) |
+| Examples → interfaces | Generator exists, habit doesn't | Phases 2a, 3a, 3b |
+| Upfront → progressive disclosure | Done for Skills; absent for Actions; 23/26 agents untrimmed | Phases 1, 3c, 5 |
+| Repeat yourself → tool descriptions | Workflow prose in system prompt via string-match | Phase 2c |
+| CLAUDE.md memory → auto-memory | **Already done** (`memoryWrites` + Memory Manager) | — |
+| Simple specs → rich references | `TestRubric` entity exists, 0 records seeded | Phase 0a (rubrics are the natural follow-on) |
+| *(MJ-specific)* model-adaptive context | Not possible — model resolved after render | Phase 4 |
