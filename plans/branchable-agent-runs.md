@@ -22,7 +22,7 @@ Pi components referenced below and the MJ analog we build:
 | `/fork` and `/clone` (new session file, `parentSession` header) | Lineage across session files | **Already have**: MJ runs are already separate records, so fork collapses into branch; clone is branching at the final step |
 | Branch summaries (`branchWithSummary`) | LLM summary of the abandoned path, preserved as a tree node | **Out of scope / rejected**: MJ branches are full-fidelity sibling runs; nothing is abandoned or lossy, so there is nothing to summarize |
 | `model_change` / `thinking_level_change` entries | Config changes are first-class tree nodes | **Already have**: `AIAgentRun.OverrideModelID`/`EffortLevel` plus per-`AIPromptRun` model params record this today |
-| `/export` HTML (`core/export-html/`: embeds the full tree, client-side branch navigation, inlined theme vars) | Self-contained portable replay artifact | **Adapt as reference** for the phase 6 export artifact, with MJ access control and scrubbing layered on (Section 8.4) |
+| `/export` HTML (`core/export-html/`: embeds the full tree, client-side branch navigation, inlined theme vars) | Self-contained portable replay artifact | **Adapt as reference** for the export artifact, with MJ access control and scrubbing layered on (Section 8.4) |
 | `/share` (secret gist + viewer URL) | Zero-auth sharing | **Reject the transport**: secret-gist obscurity has no access control, no expiry, no revocation, no scrubbing; MJ uses `MJ: Public Links` + scoped RLS instead (Section 8.2) |
 
 ---
@@ -87,7 +87,7 @@ What Pi does that MJ must consciously replicate or reject:
 
 - **Branch summaries: rejected.** They exist because Pi's context window loses the abandoned branch. MJ branches are complete sibling runs; nothing is lost, and a replay viewer can open either branch at full fidelity.
 - **Model-change-as-tree-node: already covered.** MJ records the effective model on `AIAgentRun.OverrideModelID` and on every `AIPromptRun`; a branch's config delta is first-class data, not an inferred event.
-- **Single-file portability: adapted.** Pi's `/export` HTML is the reference for what a good replay artifact contains (the full tree, client-side branch navigation, inlined styling, per-entry detail). MJ's version is generated server-side so RLS and scrubbing apply (Section 8.4), and is deferred to the final phase.
+- **Single-file portability: adapted.** Pi's `/export` HTML is the reference for what a good replay artifact contains (the full tree, client-side branch navigation, inlined styling, per-entry detail). MJ's version is generated server-side so RLS and scrubbing apply (Section 8.4).
 
 ---
 
@@ -183,14 +183,14 @@ Drop `CK_PublicLink_ResourceType` and re-add it with `'Agent Run'` included, in 
 - Drop + re-add `CK_PublicLink_ResourceType`.
 - `sp_addextendedproperty` for every new column, grouped at the bottom of the file.
 - Do **not** add `__mj_CreatedAt`/`__mj_UpdatedAt` or FK indexes (CodeGen owns those). No other indexes unless requested.
-- Hand off to CodeGen (Section 10, phase 2); append the CodeGen output to the same migration file per the separator convention; produce the `.pg.sql` sibling via `pg-migrate-v2`.
+- Hand off to CodeGen (Section 10.1); append the CodeGen output to the same migration file per the separator convention; produce the `.pg.sql` sibling via `pg-migrate-v2`.
 
 ### 4.5 Metadata changes (not in the migration, per `metadata/CLAUDE.md`)
 
 - New `AI Agent Runs` row in `metadata/resource-types/.resource-types.json` (enables the `ResourcePermission` sharing stack, Section 8.1).
 - Widened RLS FilterTexts for the three `UI: Own AI Agent *` filters (Section 8.1).
 - New `metadata/audit-log-types/.agent-run-branching-audit-types.json` (Section 9).
-- A `Replay Guest` role + scoped entity permissions for phase 6 (Section 8.2).
+- A `Replay Guest` role + scoped entity permissions for external replay links (Section 8.2).
 
 ---
 
@@ -316,15 +316,15 @@ Rejected alternatives: a standalone dashboard (`scaffold-mj-dashboard`) would du
 
 ## 8. Shareable replay
 
-Phased: authenticated in-app sharing first (pure reuse), tokenized external links second (the one justified net-new server surface), static HTML export last.
+Three complementary pieces, all delivered together: authenticated in-app sharing (pure reuse), tokenized external links (the one justified net-new server surface), and static HTML export.
 
-### 8.1 Phase A: in-app sharing (authenticated viewers)
+### 8.1 In-app sharing (authenticated viewers)
 
 - Add the `AI Agent Runs` resource type (metadata) and an `AgentRunShareAdapter` implementing the existing `ResourceShareAdapter` contract; drop `mj-resource-share-dialog` into the run form header actions. Grants land in `MJ: Resource Permissions` (time-bounded sharing and `SharedByUserID` attribution come free, as does Record Changes history).
 - **RLS integration (required)**: per-record grants do not punch through the injected RLS WHERE clause, so the three seeded FilterTexts are widened (metadata change) from `UserID = '{{UserID}}'` to also admit runs shared to the user through `ResourcePermission` (and the Steps/Prompt Runs filters follow through `AgentRunID`). This keeps enforcement in the one place it already lives instead of adding a parallel permission check.
 - The fail-open sharp edge is documented for reviewers: any role with a NULL `ReadRLSFilterID` on these entities (Developer, Integration) bypasses all filters by design (`entityInfo.ts:2231`). Sharing changes nothing for such users; it only widens what UI-role users can see.
 
-### 8.2 Phase B: external replay links
+### 8.2 External replay links
 
 - Mint `MJ: Public Links` rows (the token, password hash, expiry, and view-cap columns finally get used) from a share dialog option on the run form.
 - Net-new and justified (nothing exists): a `MJServer` resolution path that validates `Token`/`PasswordHash`/`ExpiresAt`/`MaxViews`, increments `CurrentViews`, and establishes a **Magic Link scoped session**: a new `Replay Guest` role (Widget Guest precedent) whose `MJ: AI Agent Runs` filter is `ID = '{{ScopeResourceID}}'` and whose Steps/Prompt Runs filters scope through `AgentRunID`, fail-closed when the scope is absent.
@@ -339,9 +339,9 @@ Scrubbing happens at **projection time** (a redacted view-model built server-sid
 - Always, at both levels: fields flagged by `EntityInfo.EncryptedFields` are redacted (same source of truth the request-log redactor uses), and the `StripFields` archive catalog (`Result`, `FinalPayload`, `StartingPayload`, `Data`, `Message`, `ErrorMessage`, `AgentState`) is treated as the sensitive-field checklist the projection must explicitly decide about rather than pass through by default.
 - Stated plainly: **no automatic PII detection in v1.** The levels control exposure surface; they do not inspect content.
 
-### 8.4 Static HTML export (last phase)
+### 8.4 Static HTML export
 
-Pi's `/export` artifact is the content reference: self-contained HTML, the full branch tree embedded as data, client-side navigation between branches, per-step detail, inlined styling. `MJExportEngine` supports only `excel`/`csv`/`json` today, so an HTML replay exporter is net-new; it is deferred to the final phase and generated server-side from the **scrubbed projection** (never from raw rows), so an exported file is no more revealing than the share level that produced it.
+Pi's `/export` artifact is the content reference: self-contained HTML, the full branch tree embedded as data, client-side navigation between branches, per-step detail, inlined styling. `MJExportEngine` supports only `excel`/`csv`/`json` today, so an HTML replay exporter is net-new; it is generated server-side from the **scrubbed projection** (never from raw rows), so an exported file is no more revealing than the share level that produced it.
 
 ---
 
@@ -353,22 +353,23 @@ Pi's `/export` artifact is the content reference: self-contained HTML, the full 
 
 ---
 
-## 10. Phasing
+## 10. Implementation (single effort)
 
-| Phase | Deliverable | Gating |
-|---|---|---|
-| **P1** | The migration (Section 4): lineage columns, `Action.ReplayPolicy`, `PublicLink` CHECK widen, extended properties | Review of this plan |
-| **P2** | Apply migration + run CodeGen locally; append CodeGen output to the same migration per the separator convention; commit generated entities (`MJAIAgentRunEntity.BranchedFromRunID`/`BranchedFromStepID`, `MJActionEntity.ReplayPolicy`, widened `MJPublicLinkEntity.ResourceType` union); produce the `.pg.sql` sibling via `pg-migrate-v2` | P1 |
-| **P3** | Replay engine: `ExecuteAgentParams` fields, `initializeAgentRun` branch seeding + validation, context reconstruction, `ReplayPolicy` enforcement in `executeActionsStep`, `AgentRunner`/`RunAIAgentResolver` passthrough. Vitest coverage in `@memberjunction/ai-agents` + a deterministic integration bundle (branch from a fixture run, assert seeded payload, lineage stamps, policy enforcement) | P2 |
-| **P4** | Explorer: branch composer, Branches tab, compare pane (Sections 7.1 to 7.3). DOM specs per the existing `*.dom.test.ts` pattern in the directory | P2 (P3 for live launch) |
-| **P5** | In-app sharing: resource-type metadata, `AgentRunShareAdapter`, share dialog wiring, widened RLS FilterTexts, audit types | P2 |
-| **P6** | External links + HTML export: `PublicLink` minting/resolution, `Replay Guest` scoped role, scrubbed projection, HTML exporter | P3, P5 |
+Everything in this plan ships together as one implementation effort. The full deliverable set:
 
-Each phase lands with both test tiers green per the Definition of Done (package unit tests plus the deterministic integration suite), run after migrations + CodeGen are applied.
+| Area | Deliverable |
+|---|---|
+| **Migration** | Section 4: lineage columns, `Action.ReplayPolicy`, `PublicLink` CHECK widen, extended properties; CodeGen output appended per the separator convention; `.pg.sql` sibling via `pg-migrate-v2` |
+| **Generated entities** | `MJAIAgentRunEntity.BranchedFromRunID`/`BranchedFromStepID`, `MJActionEntity.ReplayPolicy`, widened `MJPublicLinkEntity.ResourceType` union (CodeGen output, committed as generated) |
+| **Replay engine** | `ExecuteAgentParams` fields, `initializeAgentRun` branch seeding + validation, context reconstruction, `ReplayPolicy` enforcement in `executeActionsStep`, `AgentRunner`/`RunAIAgentResolver` passthrough |
+| **Explorer** | Branch composer, Branches tab, compare pane (Sections 7.1 to 7.3) |
+| **Sharing** | Resource-type metadata, `AgentRunShareAdapter`, share dialog wiring, widened RLS FilterTexts, `PublicLink` minting/resolution, `Replay Guest` scoped role, scrubbed projection, HTML exporter, audit types |
 
-### 10.1 Handoff: CodeGen must run before any code is written
+Testing per the Definition of Done, all green before merge: vitest coverage in `@memberjunction/ai-agents` (branch seeding precedence, lineage stamping, `ReplayPolicy` enforcement), DOM specs per the existing `*.dom.test.ts` pattern in the run-form directory, and a deterministic integration bundle (branch from a fixture run; assert seeded payload, lineage stamps, policy enforcement, share-scoped visibility), run after the migration + CodeGen are applied.
 
-Phase 2 is the hard gate, identical to the compaction plan's: the migration must be applied to a local database and CodeGen run (regenerating `entity_subclasses.ts`, resolvers, and forms) **before** any P3+ TypeScript references the new fields. Never reference the new columns via `.Get()`/`.Set()` or before the typed properties exist.
+### 10.1 Build-order constraint: CodeGen must run before any typed code is written
+
+This is not a rollout phase; it is the one hard sequencing rule inside the single effort, identical to the compaction plan's: the migration must be applied to a local database and CodeGen run (regenerating `entity_subclasses.ts`, resolvers, and forms) **before** any TypeScript references the new fields. Never reference the new columns via `.Get()`/`.Set()` or before the typed properties exist.
 
 ---
 
@@ -381,7 +382,6 @@ Phase 2 is the hard gate, identical to the compaction plan's: the migration must
 5. **Share enforcement**: widening the three `UI: Own AI Agent *` RLS FilterTexts (proposed, keeps one enforcement point) vs standing up a dedicated agent-run permission domain/provider.
 6. **Redaction defaults**: `Structure` as the default share level, and whether `Full` (raw `AIPromptRun.Messages`) should ever be permitted on external `PublicLink` shares.
 7. **FYI**: `AIPromptRun.AgentRunID` exists in SQL but not in the generated entity on `next` (removed by `V202607241645__v5.50.x__Break_CodeGen_Cycle_Remove_PromptRun_AgentRunID.sql`); this design intentionally depends only on `AIAgentRunStep.TargetLogID` for step-to-prompt-run linkage.
-8. **HTML export scope**: keep phase 6's static HTML exporter in this effort, or split it into a follow-up plan once in-app sharing proves out.
 
 ---
 
