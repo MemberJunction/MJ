@@ -17,24 +17,30 @@ const read = (rel: string) =>
 describe('per-type mention gating — forwarding contract', () => {
   it('chat-area declares the three allow* inputs, all defaulting true', () => {
     const ts = read('lib/components/conversation/conversation-chat-area.component.ts');
-    expect(ts).toMatch(/@Input\(\)\s+allowAgentMentions\s*=\s*true;/);
-    expect(ts).toMatch(/@Input\(\)\s+allowEntityMentions\s*=\s*true;/);
-    expect(ts).toMatch(/@Input\(\)\s+allowSkillCommands\s*=\s*true;/);
+    // Tolerate an explicit `: boolean` — the assertion is about the default, not the
+    // annotation style.
+    for (const name of ['allowAgentMentions', 'allowEntityMentions', 'allowSkillCommands']) {
+      expect(ts).toMatch(new RegExp(`@Input\\(\\)\\s+${name}(\\s*:\\s*boolean)?\\s*=\\s*true;`));
+    }
   });
 
   it('chat-area forwards the flags to EVERY composer consumer (empty-state + both message-inputs)', () => {
     const html = read('lib/components/conversation/conversation-chat-area.component.html');
-    // 3 consumer sites, each gets all three bindings → 3 occurrences apiece.
-    expect(html.match(/\[enableAgentMentions\]="allowAgentMentions"/g) ?? []).toHaveLength(3);
-    expect(html.match(/\[enableEntityMentions\]="allowEntityMentions"/g) ?? []).toHaveLength(3);
-    expect(html.match(/\[enableSkillCommands\]="allowSkillCommands"/g) ?? []).toHaveLength(3);
+    // Count the MASTER binding's sites rather than hardcoding "3": every consumer that
+    // gets [enableMentions] must also get all three per-type flags, and a legitimately
+    // added 4th consumer should widen this expectation instead of failing the suite.
+    const consumerSites = (html.match(/\[enableMentions\]="allowMentions"/g) ?? []).length;
+    expect(consumerSites).toBeGreaterThanOrEqual(3); // empty-state + both message-inputs
+    expect(html.match(/\[enableAgentMentions\]="allowAgentMentions"/g) ?? []).toHaveLength(consumerSites);
+    expect(html.match(/\[enableEntityMentions\]="allowEntityMentions"/g) ?? []).toHaveLength(consumerSites);
+    expect(html.match(/\[enableSkillCommands\]="allowSkillCommands"/g) ?? []).toHaveLength(consumerSites);
   });
 
   it('empty-state accepts and forwards the flags to its inner message-input', () => {
     const ts = read('lib/components/conversation/conversation-empty-state.component.ts');
     const html = read('lib/components/conversation/conversation-empty-state.component.html');
     for (const name of ['enableAgentMentions', 'enableEntityMentions', 'enableSkillCommands']) {
-      expect(ts).toContain(`@Input() ${name}: boolean = true;`);
+      expect(ts).toMatch(new RegExp(`@Input\\(\\)\\s+${name}(\\s*:\\s*boolean)?\\s*=\\s*true;`));
       expect(html).toContain(`[${name}]="${name}"`);
     }
   });
@@ -42,9 +48,9 @@ describe('per-type mention gating — forwarding contract', () => {
   it('message-input accepts the flags and binds the composer PascalCase Enable* inputs', () => {
     const ts = read('lib/components/message/message-input.component.ts');
     const html = read('lib/components/message/message-input.component.html');
-    expect(ts).toContain('@Input() enableAgentMentions: boolean = true;');
-    expect(ts).toContain('@Input() enableEntityMentions: boolean = true;');
-    expect(ts).toContain('@Input() enableSkillCommands: boolean = true;');
+    for (const name of ['enableAgentMentions', 'enableEntityMentions', 'enableSkillCommands']) {
+      expect(ts).toMatch(new RegExp(`@Input\\(\\)\\s+${name}(\\s*:\\s*boolean)?\\s*=\\s*true;`));
+    }
     expect(html).toContain('[EnableAgentMentions]="enableAgentMentions"');
     expect(html).toContain('[EnableEntityMentions]="enableEntityMentions"');
     expect(html).toContain('[EnableSkillCommands]="enableSkillCommands"');
