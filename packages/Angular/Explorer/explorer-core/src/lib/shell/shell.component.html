@@ -34,7 +34,8 @@
         [activeApp]="activeApp"
         [isViewingSystemTab]="isViewingSystemTab"
         [loadingAppId]="loadingAppId"
-        [switcherStyle]="AppSwitcherStyle"
+        [SwitcherStyle]="AppSwitcherStyle"
+        [Provider]="Provider"
         (appSelected)="onAppSwitch($event)">
       </mj-app-switcher>
     }
@@ -44,7 +45,7 @@
       <mj-app-nav
         class="desktop-nav"
         [app]="activeApp"
-        [overflowEnabled]="true"
+        [OverflowEnabled]="true"
         (navItemClick)="onNavItemClick($event)"
         (navItemDismiss)="onNavItemDismiss($event)">
       </mj-app-nav>
@@ -282,7 +283,7 @@
         <div class="mobile-nav-section-title">{{ activeApp.Name }}</div>
         <mj-app-nav
           [app]="activeApp"
-          [overflowEnabled]="false"
+          [OverflowEnabled]="false"
           (navItemClick)="onNavItemClick($event)"
           (navItemDismiss)="onNavItemDismiss($event)">
         </mj-app-nav>

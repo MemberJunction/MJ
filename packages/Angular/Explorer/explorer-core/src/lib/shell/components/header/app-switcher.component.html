@@ -24,7 +24,7 @@
          every app stacking context — chat FAB, toasts), background is inert
          (real focus trap), and focus restores to the trigger on close. The
          backdrop is ::backdrop; clicks on it arrive as clicks on the dialog
-         element itself (onDialogClick). -->
+         element itself (OnDialogClick). -->
     <dialog class="launcher-panel"
       #panel
       role="dialog"
@@ -34,9 +34,9 @@
       [style.--anchor-top]="AnchorTop + 'px'"
       [attr.aria-label]="ConfigMode ? null : 'Application launcher'"
       [attr.aria-labelledby]="ConfigMode ? 'mj-launcher-config-title' : null"
-      (click)="onDialogClick($event)"
-      (cancel)="onDialogCancel($event)"
-      (keydown)="onPanelKeydown($event)">
+      (click)="OnDialogClick($event)"
+      (cancel)="OnDialogCancel($event)"
+      (keydown)="OnPanelKeydown($event)">
 
       @if (ConfigMode) {
         <!-- Configuration view: same panel, body swapped -->
@@ -59,6 +59,7 @@
         }
         <mj-user-app-config-content
           class="launcher-config-body"
+          [Provider]="Provider"
           (Saved)="ExitConfigMode()"
           (Cancelled)="RequestExitConfigMode()">
         </mj-user-app-config-content>
@@ -73,8 +74,8 @@
             placeholder="Find an app…"
             aria-label="Find an app"
             [value]="FilterText"
-            (input)="onFilterInput($event)"
-            (keydown)="onFilterKeydown($event)"
+            (input)="OnFilterInput($event)"
+            (keydown)="OnFilterKeydown($event)"
             autocomplete="off"
             spellcheck="false" />
         </div>
@@ -159,7 +160,7 @@
     [class.loading]="IsLoadingApp(app)"
     [style.--app-color]="app.GetColor()"
     (click)="selectApp(app)"
-    (keydown)="onCardKeydown(idx, $event)">
+    (keydown)="OnCardKeydown(idx, $event)">
     <div class="app-card-glyph">
       @if (IsLoadingApp(app)) {
         <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>

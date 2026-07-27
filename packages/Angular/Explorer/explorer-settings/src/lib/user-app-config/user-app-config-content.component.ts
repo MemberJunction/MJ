@@ -49,19 +49,30 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
   /** Emitted when the user cancels (or saves with nothing to save) */
   @Output() Cancelled = new EventEmitter<void>();
 
+  /** Every system app the user is authorized for, joined with their per-user config */
   AllApps: AppConfigItem[] = [];
+  /** Apps the user has enabled, in their configured Sequence order */
   ActiveApps: AppConfigItem[] = [];
+  /** Apps not yet enabled, alphabetical */
   AvailableApps: AppConfigItem[] = [];
 
+  /** True while the initial configuration load is in flight */
   IsLoading = false;
+  /** True while the batch save is in flight (disables the footer buttons) */
   IsSaving = false;
+  /** User-facing load/save failure message; empty when healthy */
   ErrorMessage = '';
 
+  /** Collapse state for the Available-apps panel (mobile accordion) */
   AvailablePanelCollapsed = false;
+  /** Collapse state for the Selected-apps panel (mobile accordion) */
   SelectedPanelCollapsed = false;
 
+  /** Item currently being dragged for reorder, null when idle */
   DraggedItem: AppConfigItem | null = null;
+  /** Source index of the in-flight drag within ActiveApps */
   DraggedIndex = -1;
+  /** Index the drag is currently hovering (drop indicator position) */
   DropTargetIndex = -1;
 
   async ngOnInit(): Promise<void> {
@@ -215,6 +226,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
   //  Drag-and-drop handlers (desktop only)
   // ---------------------------------------------------------------------------
 
+  /** Begin an HTML5 drag of an active-app row */
   OnDragStart(event: DragEvent, item: AppConfigItem, index: number): void {
     this.DraggedItem = item;
     this.DraggedIndex = index;
@@ -225,6 +237,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** Allow dropping while a row drag passes over the list */
   OnDragOver(event: DragEvent): void {
     event.preventDefault();
     if (event.dataTransfer) {
@@ -232,17 +245,20 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** Track the row index the drag is hovering (drop indicator) */
   OnDragEnter(event: DragEvent, index: number): void {
     event.preventDefault();
     this.DropTargetIndex = index;
   }
 
+  /** Clear all drag state (fires on drop or drag cancel) */
   OnDragEnd(): void {
     this.DraggedItem = null;
     this.DraggedIndex = -1;
     this.DropTargetIndex = -1;
   }
 
+  /** Reorder ActiveApps to the hovered position and renumber sequences */
   OnDrop(event: DragEvent): void {
     event.preventDefault();
 
@@ -260,8 +276,11 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
   //  Touch drag-and-drop handlers (mobile)
   // ---------------------------------------------------------------------------
 
+  /** Source index of the in-flight touch drag (-1 when idle) */
   TouchDragIndex = -1;
+  /** Row index the touch drag would drop at */
   TouchDropIndex = -1;
+  /** True while a touch drag is in progress */
   TouchDragActive = false;
 
   private touchStartY = 0;
@@ -270,6 +289,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
   private touchDragElement: HTMLElement | null = null;
   private touchScrollContainer: HTMLElement | null = null;
 
+  /** Begin a touch drag of a mobile app row (long-press handle) */
   OnTouchDragStart(event: TouchEvent, index: number): void {
     const touch = event.touches[0];
     const row = (event.target as HTMLElement).closest('.mobile-app-row') as HTMLElement | null;
@@ -288,6 +308,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
     row.classList.add('touch-dragging');
   }
 
+  /** Follow the finger: translate the row, track drop target, auto-scroll near edges */
   OnTouchDragMove(event: TouchEvent): void {
     if (!this.TouchDragActive || !this.touchDragElement) return;
 
@@ -303,6 +324,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
     this.autoScrollIfNeeded();
   }
 
+  /** Commit the touch reorder (if moved) and reset touch-drag state */
   OnTouchDragEnd(): void {
     if (!this.TouchDragActive) return;
 
@@ -363,9 +385,13 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
       // need to re-query the DB on every open. EnsureLoaded is idempotent
       // and instant when the engine is already loaded (the typical case here,
       // since UserInfoEngine fires at startup).
-      await UserInfoEngine.Instance.EnsureLoaded();
+      const provider = this.ProviderToUse;
+      const engine = provider
+        ? UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine
+        : UserInfoEngine.Instance;
+      await engine.EnsureLoaded();
       const systemApps = this.appManager.GetAuthorizedSystemApps();
-      const userApps = UserInfoEngine.Instance.UserApplications;
+      const userApps = engine.UserApplications;
       this.AllApps = this.buildAppConfigItems(systemApps, userApps);
       this.refreshAppLists();
 
@@ -409,7 +435,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
 
 
   private async updateUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
-    const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
+    const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', md.CurrentUser);
     await userApp.Load(item.userAppId!);
 
     userApp.Sequence = item.sequence;
@@ -425,7 +451,7 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
   }
 
   private async createUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
-    const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
+    const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', md.CurrentUser);
     userApp.NewRecord();
 
     userApp.UserID = md.CurrentUser.ID;

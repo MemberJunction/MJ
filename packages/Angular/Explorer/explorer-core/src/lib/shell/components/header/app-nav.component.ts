@@ -87,13 +87,13 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
    * where items stack vertically and can never overflow horizontally.
    */
   @Input()
-  set overflowEnabled(value: boolean) {
+  set OverflowEnabled(value: boolean) {
     this._overflowEnabled = value;
     if (!value) {
       this.VisibleCount = Number.MAX_SAFE_INTEGER;
     }
   }
-  get overflowEnabled(): boolean {
+  get OverflowEnabled(): boolean {
     return this._overflowEnabled;
   }
 
@@ -211,19 +211,7 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
     this.VisibleCount = Number.MAX_SAFE_INTEGER;
     this.MoreOpen = false;
     this.Tight = false;
-    this.cdr.markForCheck();
-
-    // In Angular 21 zoneless mode, markForCheck() alone is unreliable when the trigger
-    // is an RxJS subscription (workspaceManager.Configuration here) not tracked by the
-    // zoneless scheduler — the dirty flag is set but no follow-up tick is scheduled.
-    // detectChanges() runs CD synchronously on this view, rendering the new data
-    // immediately. Wrapped because detectChanges throws if invoked re-entrantly during
-    // another in-flight CD pass — harmless if so.
-    try {
-      this.cdr.detectChanges();
-    } catch {
-      // Re-entrant CD — harmless, the in-flight pass picks up our markForCheck.
-    }
+    this.syncChangeDetection();
 
     if (this._overflowEnabled) {
       requestAnimationFrame(() => {
@@ -269,66 +257,89 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
     if (hostWidth === 0) {
       return; // Hidden (mobile breakpoint) — leave state alone
     }
-    // Self-heal: if the width cache is stale or missing (the measurement
-    // frame can race the first render after a reload/app switch), expand to
-    // the full item set, re-measure, and retry next frame until it converges.
-    if (this.itemWidths.length !== this._cachedNavItems.length) {
-      if (this.VisibleCount < this._cachedNavItems.length || this.Tight) {
-        this.VisibleCount = Number.MAX_SAFE_INTEGER;
-        this.Tight = false; // Never measure with tight-mode shrink applied
-        this.cdr.markForCheck();
-        try {
-          this.cdr.detectChanges();
-        } catch {
-          // Re-entrant CD — harmless.
-        }
-      }
-      this.measureItemWidths();
-      if (this.itemWidths.length !== this._cachedNavItems.length) {
-        requestAnimationFrame(() => this.recomputeFit());
-        return;
-      }
+    if (!this.ensureFreshWidthCache()) {
+      return; // Cache still stale — a retry frame is already scheduled
     }
     if (this.moreBtnRef?.nativeElement) {
       this.moreBtnWidth = this.moreBtnRef.nativeElement.offsetWidth || this.moreBtnWidth;
     }
+    const fit = this.computeFitCount(hostWidth);
+    this.applyFit(fit.count, fit.tight);
+  }
 
+  /**
+   * Self-heal for the item-width cache: if it's stale or missing (the
+   * measurement frame can race the first render after a reload/app switch),
+   * expand to the full item set, re-measure, and retry next frame until it
+   * converges. Returns true when the cache matches the current item set.
+   */
+  private ensureFreshWidthCache(): boolean {
+    if (this.itemWidths.length === this._cachedNavItems.length) {
+      return true;
+    }
+    if (this.VisibleCount < this._cachedNavItems.length || this.Tight) {
+      this.VisibleCount = Number.MAX_SAFE_INTEGER;
+      this.Tight = false; // Never measure with tight-mode shrink applied
+      this.syncChangeDetection();
+    }
+    this.measureItemWidths();
+    if (this.itemWidths.length !== this._cachedNavItems.length) {
+      requestAnimationFrame(() => this.recomputeFit());
+      return false;
+    }
+    return true;
+  }
+
+  /** Pure fit arithmetic: how many leading items fit beside the More button */
+  private computeFitCount(hostWidth: number): { count: number; tight: boolean } {
     const gap = this.itemGap;
     const n = this.itemWidths.length;
     const totalAll = this.itemWidths.reduce((a, b) => a + b, 0) + gap * (n - 1);
-
-    let newCount: number;
-    let tight = false;
     if (totalAll <= hostWidth) {
-      newCount = Number.MAX_SAFE_INTEGER; // Everything fits
-    } else {
-      // Reserve room for the More button, then fit as many leading items as possible
-      let used = this.moreBtnWidth;
-      let fit = 0;
-      for (let i = 0; i < n; i++) {
-        const next = used + gap + this.itemWidths[i];
-        if (next > hostWidth) {
-          break;
-        }
-        used = next;
-        fit++;
-      }
-      newCount = Math.max(1, fit); // Never collapse below one visible item
-      tight = fit === 0; // Even one item + More overflows — shrink the lone pill
+      return { count: Number.MAX_SAFE_INTEGER, tight: false }; // Everything fits
     }
+    // Reserve room for the More button, then fit as many leading items as possible
+    let used = this.moreBtnWidth;
+    let fit = 0;
+    for (let i = 0; i < n; i++) {
+      const next = used + gap + this.itemWidths[i];
+      if (next > hostWidth) {
+        break;
+      }
+      used = next;
+      fit++;
+    }
+    // Never collapse below one visible item; tight = even the lone item + More overflows
+    return { count: Math.max(1, fit), tight: fit === 0 };
+  }
 
-    if (newCount !== this.VisibleCount || tight !== this.Tight) {
-      this.VisibleCount = newCount;
-      this.Tight = tight;
-      if (this.OverflowItems.length === 0) {
-        this.MoreOpen = false;
-      }
-      this.cdr.markForCheck();
-      try {
-        this.cdr.detectChanges();
-      } catch {
-        // Re-entrant CD — harmless.
-      }
+  /** Commit a fit result, closing More if nothing overflows; CD only on change */
+  private applyFit(count: number, tight: boolean): void {
+    if (count === this.VisibleCount && tight === this.Tight) {
+      return;
+    }
+    this.VisibleCount = count;
+    this.Tight = tight;
+    if (this.OverflowItems.length === 0) {
+      this.MoreOpen = false;
+    }
+    this.syncChangeDetection();
+  }
+
+  /**
+   * markForCheck + synchronous detectChanges. In Angular 21 zoneless mode,
+   * markForCheck() alone is unreliable when the trigger is an RxJS
+   * subscription or rAF callback not tracked by the zoneless scheduler — the
+   * dirty flag is set but no follow-up tick is scheduled. detectChanges()
+   * throws if invoked re-entrantly during an in-flight CD pass; that's
+   * harmless (the in-flight pass picks up our markForCheck), hence the catch.
+   */
+  private syncChangeDetection(): void {
+    this.cdr.markForCheck();
+    try {
+      this.cdr.detectChanges();
+    } catch {
+      // Re-entrant CD — harmless.
     }
   }
 
@@ -349,6 +360,7 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.OverflowItems.some(item => this.isActive(item));
   }
 
+  /** Open/close the More dropdown, anchoring it under the More button and clamping it inside the host */
   ToggleMore(event: MouseEvent): void {
     event.stopPropagation();
     this.MoreOpen = !this.MoreOpen;
@@ -382,6 +394,7 @@ export class AppNavComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  /** Close the More dropdown on Escape */
   @HostListener('document:keydown.escape')
   onEscape(): void {
     if (this.MoreOpen) {

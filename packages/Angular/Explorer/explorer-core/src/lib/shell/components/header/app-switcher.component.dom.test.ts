@@ -5,6 +5,8 @@ import { renderComponentFixture, query, queryAll, attr, capture } from '@memberj
 import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import type { IMetadataProvider } from '@memberjunction/core';
+import { BehaviorSubject } from 'rxjs';
 import { AppSwitcherComponent } from './app-switcher.component';
 
 /**
@@ -19,7 +21,7 @@ import { AppSwitcherComponent } from './app-switcher.component';
 // Lightweight stand-in for the heavy config content child.
 @Component({ standalone: true, selector: 'mj-user-app-config-content', template: '<div class="config-stub"></div>' })
 class UserAppConfigContentStub {
-  @Input() Provider: unknown = null;
+  @Input() Provider: IMetadataProvider | null = null;
   @Output() Saved = new EventEmitter<void>();
   @Output() Cancelled = new EventEmitter<void>();
 }
@@ -33,14 +35,14 @@ const APPS = [
   makeApp('a3', 'Lists', 'User-defined collections of records')
 ];
 
-function render(inputs: Record<string, unknown> = {}) {
+function render(inputs: Record<string, unknown> = {}, manager?: Record<string, unknown>) {
   return renderComponentFixture(AppSwitcherComponent, {
     imports: [CommonModule, MJClickableDirective, UserAppConfigContentStub],
     declarations: [AppSwitcherComponent],
-    providers: [{ provide: ApplicationManager, useValue: { GetAppSwitcherApps: () => APPS } }],
+    providers: [{ provide: ApplicationManager, useValue: manager ?? { GetAppSwitcherApps: () => APPS } }],
     // Pin the launcher presentation: with only 3 stub apps, 'auto' would
     // resolve to compact mode. Compact-specific tests override this.
-    inputs: { switcherStyle: 'launcher', ...inputs },
+    inputs: { SwitcherStyle: 'launcher', ...inputs },
   });
 }
 
@@ -280,7 +282,7 @@ describe('AppSwitcherComponent (DOM)', () => {
   });
 
   it("style 'auto' with few apps opens the compact anchored panel (no filter, no sections)", () => {
-    const fixture = render({ switcherStyle: 'auto' }); // 3 apps < threshold
+    const fixture = render({ SwitcherStyle: 'auto' }); // 3 apps < threshold
     openLauncher(fixture);
     const panel = query(fixture, '.launcher-panel');
     expect(panel?.classList.contains('launcher-panel--compact')).toBe(true);
@@ -290,13 +292,32 @@ describe('AppSwitcherComponent (DOM)', () => {
   });
 
   it("style 'compact' forces the compact panel", () => {
-    const compact = render({ switcherStyle: 'compact' });
+    const compact = render({ SwitcherStyle: 'compact' });
     openLauncher(compact);
     expect(query(compact, '.launcher-panel')?.classList.contains('launcher-panel--compact')).toBe(true);
   });
 
+  it('re-resolves compact vs launcher while OPEN when the app count crosses the auto threshold', () => {
+    // Start above the threshold (10 apps → launcher), then shrink to 3 and
+    // emit on the Applications stream — the presentation must flip to compact
+    // without closing/reopening (regression: mode was resolved only at open).
+    let currentApps = Array.from({ length: 10 }, (_, i) => makeApp(`id${i}`, `App ${i}`));
+    const apps$ = new BehaviorSubject<ReturnType<typeof makeApp>[]>(currentApps);
+    const fixture = render(
+      { SwitcherStyle: 'auto' },
+      { GetAppSwitcherApps: () => currentApps, Applications: apps$.asObservable() },
+    );
+    openLauncher(fixture);
+    expect(query(fixture, '.launcher-panel')?.classList.contains('launcher-panel--compact')).toBe(false);
+
+    currentApps = currentApps.slice(0, 3);
+    apps$.next(currentApps);
+    fixture.detectChanges();
+    expect(query(fixture, '.launcher-panel')?.classList.contains('launcher-panel--compact')).toBe(true);
+  });
+
   it('entering the Configure view promotes a compact panel back to the full command surface', () => {
-    const fixture = render({ switcherStyle: 'compact' });
+    const fixture = render({ SwitcherStyle: 'compact' });
     openLauncher(fixture);
     (query(fixture, '.launcher-configure') as HTMLElement).click();
     fixture.detectChanges();

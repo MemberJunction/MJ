@@ -1,8 +1,10 @@
-import { Component, Input, Output, EventEmitter, ViewChild, ElementRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserAppConfigContentComponent } from '@memberjunction/ng-explorer-settings';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { Subject, takeUntil } from 'rxjs';
 
 /** UserInfoEngine setting key holding the recently-switched-to apps */
 const RECENT_APPS_KEY = 'mj.shell.recentApps.v1';
@@ -58,13 +60,14 @@ interface RecentAppEntry {
   templateUrl: './app-switcher.component.html',
   styleUrls: ['./app-switcher.component.css']
 })
-export class AppSwitcherComponent {
+export class AppSwitcherComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+  private destroy$ = new Subject<void>();
   @Input() activeApp: BaseApplication | null = null;
   @Input() isViewingSystemTab = false;
   /** ID of the app currently being loaded (shows loading indicator) */
   @Input() loadingAppId: string | null = null;
   /** Presentation style (from Shell.AppSwitcher.Style instance config) */
-  @Input() switcherStyle: AppSwitcherStyle = 'auto';
+  @Input() SwitcherStyle: AppSwitcherStyle = 'auto';
   @Output() appSelected = new EventEmitter<string>();
 
   @ViewChild('filterInput') private filterInputRef?: ElementRef<HTMLInputElement>;
@@ -91,12 +94,86 @@ export class AppSwitcherComponent {
 
   private recentEntries: RecentAppEntry[] = [];
 
-  constructor(private appManager: ApplicationManager) {}
+  constructor(private appManager: ApplicationManager, private cdr: ChangeDetectorRef) {
+    super();
+  }
+
+  /**
+   * UserInfoEngine scoped to this component's provider (multi-provider rule:
+   * never reach for the global singleton in per-provider code paths). For the
+   * default single-provider shell this resolves to the already-loaded engine
+   * registered under the default connection. When no provider is available at
+   * all (test environments), fall back to the global singleton rather than
+   * letting GetProviderInstance construct a fresh unloaded engine.
+   */
+  private get userInfoEngine(): UserInfoEngine {
+    const provider = this.ProviderToUse;
+    return provider
+      ? UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine
+      : UserInfoEngine.Instance;
+  }
+
+  ngOnInit(): void {
+    // The launcher's presentation (compact vs full, filter visibility) is
+    // resolved from the app COUNT — which can change while the panel is open
+    // (the user saves config changes that cross the auto threshold). React to
+    // the same stream the app list uses so the presentation can't go stale.
+    // Optional-chained: lightweight test stubs may not provide the observable.
+    this.appManager.Applications?.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      if (this.showDropdown) {
+        this.RefreshPresentation();
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  /**
+   * Re-resolve the presentation for the CURRENT app count. No-op while the
+   * config view is open (the panel is promoted to full size there anyway);
+   * called when the app stream emits and when the config view exits.
+   */
+  RefreshPresentation(): void {
+    if (this.ConfigMode) {
+      return;
+    }
+    const wasCompact = this.CompactMode;
+    this.CompactMode = this.resolveCompactMode();
+    if (this.CompactMode && !wasCompact) {
+      this.computeCompactAnchor();
+    }
+    // Mode flips can add/remove the filter input — if the focused element got
+    // torn out of the DOM, focus would drop into the inert background. Re-home
+    // it after the view settles.
+    // Zoneless: an RxJS-driven mutation needs an explicit CD kick (same
+    // pattern as AppNavComponent's workspace subscription).
+    this.cdr.markForCheck();
+    try {
+      this.cdr.detectChanges();
+    } catch {
+      // Re-entrant CD — harmless.
+    }
+    if (wasCompact !== this.CompactMode) {
+      requestAnimationFrame(() => {
+        const panel = this.panelRef?.nativeElement;
+        if (panel && !panel.contains(document.activeElement)) {
+          if (this.ShowFilter) {
+            this.filterInputRef?.nativeElement?.focus();
+          } else {
+            panel.querySelector<HTMLElement>('.app-card')?.focus();
+          }
+        }
+      });
+    }
+  }
 
   /** Template handler for the filter input's input event */
-  onFilterInput(event: Event): void {
+  OnFilterInput(event: Event): void {
     this.FilterText = (event.target as HTMLInputElement).value;
-    this.onFilterChange();
+    this.OnFilterChange();
   }
 
   /**
@@ -207,6 +284,7 @@ export class AppSwitcherComponent {
     return `mj-launcher-opt-${index}`;
   }
 
+  /** Trigger handler: open the launcher panel, or close it if already open */
   ToggleLauncher(): void {
     if (this.showDropdown) {
       this.closeLauncher();
@@ -219,7 +297,7 @@ export class AppSwitcherComponent {
   ToggleSortMode(): void {
     this.SortMode = this.SortMode === 'alpha' ? 'custom' : 'alpha';
     try {
-      UserInfoEngine.Instance.SetSettingDebounced(LAUNCHER_SORT_KEY, this.SortMode);
+      this.userInfoEngine.SetSettingDebounced(LAUNCHER_SORT_KEY, this.SortMode);
     } catch {
       // Preference persistence must never break the launcher
     }
@@ -227,7 +305,7 @@ export class AppSwitcherComponent {
 
   private loadSortMode(): void {
     try {
-      this.SortMode = UserInfoEngine.Instance.GetSetting(LAUNCHER_SORT_KEY) === 'alpha' ? 'alpha' : 'custom';
+      this.SortMode = this.userInfoEngine.GetSetting(LAUNCHER_SORT_KEY) === 'alpha' ? 'alpha' : 'custom';
     } catch {
       this.SortMode = 'custom';
     }
@@ -266,10 +344,10 @@ export class AppSwitcherComponent {
 
   /** Resolve the presentation for this open (auto = compact under the threshold) */
   private resolveCompactMode(): boolean {
-    if (this.switcherStyle === 'compact') {
+    if (this.SwitcherStyle === 'compact') {
       return true;
     }
-    if (this.switcherStyle === 'launcher') {
+    if (this.SwitcherStyle === 'launcher') {
       return false;
     }
     return this.apps.length < COMPACT_AUTO_THRESHOLD;
@@ -314,7 +392,7 @@ export class AppSwitcherComponent {
   }
 
   /** Backdrop clicks arrive as clicks on the <dialog> element itself */
-  onDialogClick(event: MouseEvent): void {
+  OnDialogClick(event: MouseEvent): void {
     if (event.target === this.panelRef?.nativeElement) {
       this.CloseLauncher();
     }
@@ -322,7 +400,7 @@ export class AppSwitcherComponent {
 
   /** Native cancel (Esc while the browser owns the dialog) — route through
    *  our layered Escape handling instead of closing unconditionally. */
-  onDialogCancel(event: Event): void {
+  OnDialogCancel(event: Event): void {
     event.preventDefault();
     this.handleEscape();
   }
@@ -343,13 +421,13 @@ export class AppSwitcherComponent {
     this.PendingDiscard = null;
   }
 
-  onFilterChange(): void {
+  OnFilterChange(): void {
     // Filtering re-renders the card set; nothing else to sync — focus stays
     // in the input and Tab/arrows reach the new result set naturally.
   }
 
   /** Keyboard model on the filter input */
-  onFilterKeydown(event: KeyboardEvent): void {
+  OnFilterKeydown(event: KeyboardEvent): void {
     const visible = this.VisibleApps;
     switch (event.key) {
       case 'ArrowDown':
@@ -378,7 +456,7 @@ export class AppSwitcherComponent {
   }
 
   /** Arrow-key navigation between focused cards */
-  onCardKeydown(index: number, event: KeyboardEvent): void {
+  OnCardKeydown(index: number, event: KeyboardEvent): void {
     switch (event.key) {
       case 'ArrowDown':
       case 'ArrowRight':
@@ -415,7 +493,10 @@ export class AppSwitcherComponent {
     const el = document.getElementById(this.OptionId(clamped));
     if (el) {
       el.focus();
-      el.scrollIntoView({ block: 'nearest' });
+      // jsdom (unit tests) doesn't implement scrollIntoView — guard it.
+      if (typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'nearest' });
+      }
     }
   }
 
@@ -423,7 +504,7 @@ export class AppSwitcherComponent {
   /** Escape layering: discard bar → config view (guarded) → filter → close.
    *  Tab is NOT manually trapped — showModal() makes the background inert,
    *  which is a real trap (no leak when focus sits on a non-focusable). */
-  onPanelKeydown(event: KeyboardEvent): void {
+  OnPanelKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
@@ -470,7 +551,7 @@ export class AppSwitcherComponent {
 
   private loadRecents(): void {
     try {
-      const raw = UserInfoEngine.Instance.GetSetting(RECENT_APPS_KEY);
+      const raw = this.userInfoEngine.GetSetting(RECENT_APPS_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
       this.recentEntries = Array.isArray(parsed)
         ? parsed.filter((e: RecentAppEntry) => e && typeof e.id === 'string' && typeof e.ts === 'number')
@@ -487,7 +568,7 @@ export class AppSwitcherComponent {
       ...this.recentEntries.filter(e => NormalizeUUID(e.id) !== id)
     ].slice(0, RECENT_STORE_MAX);
     try {
-      UserInfoEngine.Instance.SetSettingDebounced(RECENT_APPS_KEY, JSON.stringify(this.recentEntries));
+      this.userInfoEngine.SetSettingDebounced(RECENT_APPS_KEY, JSON.stringify(this.recentEntries));
     } catch {
       // Settings persistence must never block app switching (e.g. engine not
       // configured in tests or permission-constrained sessions).
@@ -529,6 +610,17 @@ export class AppSwitcherComponent {
    */
   ExitConfigMode(): void {
     this.ConfigMode = false;
-    requestAnimationFrame(() => this.filterInputRef?.nativeElement?.focus());
+    // The config session may have changed the app count across the compact
+    // threshold — re-resolve the presentation for the view we're returning to.
+    // (The Applications stream also triggers this when the post-save engine
+    // refresh lands, whichever comes last wins with the freshest count.)
+    this.RefreshPresentation();
+    requestAnimationFrame(() => {
+      if (this.ShowFilter) {
+        this.filterInputRef?.nativeElement?.focus();
+      } else {
+        this.panelRef?.nativeElement?.querySelector<HTMLElement>('.app-card')?.focus();
+      }
+    });
   }
 }
