@@ -183,7 +183,11 @@ export class ExportService {
     const logoUrl = options.branding?.logoUrl?.trim();
     return {
       rootBlock,
-      logoDataUri: logoUrl ? await this.inlineLogo(logoUrl) : null,
+      // Logo (and the whole branded treatment) belongs to the STYLED document —
+      // gate it on includeCSS so a CSS-less export never carries a full-size,
+      // unstyled logo (the modal enforces this; the public BuildExportContent
+      // seam must too).
+      logoDataUri: options.includeCSS && logoUrl ? await this.inlineLogo(logoUrl) : null,
       title: options.branding?.title?.trim() || null
     };
   }
@@ -227,13 +231,29 @@ export class ExportService {
   }
 
   /**
+   * CSS functions permitted inside an exported token value. This is an ALLOWLIST
+   * (not a blocklist) so no network-capable function can slip through: blocking
+   * only `url(`/`expression(` let `image-set()`, `-webkit-image-set()`,
+   * `cross-fade()`, `image()`, and `src()` fetch a beacon URL without ever
+   * writing the literal `url(`. Anything not on this list drops the whole entry.
+   * The set is the safe value/color-math functions the export could legitimately
+   * carry; extend it only with functions that CANNOT load an external resource.
+   */
+  private static readonly SAFE_CSS_FUNCTIONS = new Set([
+    'var', 'calc', 'min', 'max', 'clamp',
+    'rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch',
+    'color', 'color-mix',
+  ]);
+
+  /**
    * Emit the sanitized `:root{}` style block. Keys must be custom-property names.
-   * Values are REJECTED (the entry is dropped), not stripped, when they carry
-   * anything that could escape the declaration or reach the network from a
-   * style value: `<>{}` (tag/rule breakout), `;` (declaration breakout — e.g. a
-   * value appending `; background: url(beacon)` onto :root), `\` (CSS escapes),
-   * `@` (at-rules), or `url(`/`expression(` calls. Plain colors, `var()`, and
-   * `color-mix()` values pass untouched.
+   * A value is REJECTED (the entry is dropped, not stripped) when it carries any
+   * declaration/tag-escape or network-reach vector: `<>{}` (tag/rule breakout),
+   * `;` (declaration breakout — e.g. `; background: url(beacon)`), `\` (CSS
+   * escapes), `@` (at-rules), OR any CSS function not in
+   * {@link SAFE_CSS_FUNCTIONS} (which excludes every resource-loading function —
+   * url/image-set/cross-fade/image/src/expression/…). Plain colors, `var()`, and
+   * `color-mix()` pass untouched.
    */
   private buildRootBlock(tokens: Record<string, string>): string {
     const rules: string[] = [];
@@ -242,7 +262,7 @@ export class ExportService {
         continue;
       }
       const value = String(rawValue).trim();
-      if (!value || /[<>{};@\\]/.test(value) || /(?:url|expression)\s*\(/i.test(value)) {
+      if (!value || /[<>{};@\\]/.test(value) || this.hasUnsafeCssFunction(value)) {
         continue;
       }
       rules.push(`${key}: ${value};`);
@@ -251,11 +271,27 @@ export class ExportService {
   <style>:root { ${rules.join(' ')} }</style>` : '';
   }
 
-  /** Fetch → data URI so the export stays self-contained; raw URL on any failure. */
+  /** True if the value calls any CSS function outside {@link SAFE_CSS_FUNCTIONS}. */
+  private hasUnsafeCssFunction(value: string): boolean {
+    // Every `name(` occurrence — the identifier immediately before a '('.
+    const calls = value.match(/([a-zA-Z][a-zA-Z-]*)\s*\(/g) ?? [];
+    return calls.some((c) => {
+      const name = c.replace(/\s*\($/, '').toLowerCase();
+      return !ExportService.SAFE_CSS_FUNCTIONS.has(name);
+    });
+  }
+
+  /** Fetch → data URI so the export stays self-contained; raw URL on any failure
+   *  (or when the response isn't actually an image — don't inline HTML/other as
+   *  a bogus `data:` image). */
   private async inlineLogo(url: string): Promise<string> {
     try {
       const response = await fetch(url);
       if (!response.ok) {
+        return url;
+      }
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!/^image\//i.test(contentType)) {
         return url;
       }
       const blob = await response.blob();
@@ -362,7 +398,10 @@ export class ExportService {
     options: ResolvedExportOptions
   ): string {
     const logoUrl = options.branding?.logoUrl?.trim();
-    const title = this.resolveTitle(data, options);
+    // Unbranded markdown must stay byte-identical to before (`# <Name>`), so DON'T
+    // route through resolveTitle's 'Conversation' fallback here — only a supplied
+    // branding title overrides the raw conversation name.
+    const title = options.branding?.title?.trim() || data.conversation.Name;
     let md = '';
     if (logoUrl) {
       md += `![${title}](${logoUrl})\n\n`;
@@ -465,7 +504,7 @@ export class ExportService {
       }
     }
 
-    if (trademark) {
+    if (options.includeCSS && trademark) {
       html += `
   <footer class="brand-trademark">${this.escapeHtml(trademark)}</footer>`;
     }

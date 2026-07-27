@@ -63,20 +63,26 @@ describe('ExportService — BuildExportContent branding', () => {
           '--mj-evil-url': 'url(https://evil.example/x.png)', // network call from a style value — dropped
           '--mj-evil-escape': '\\75 rl(x)', // CSS-escape smuggling — dropped
           '--mj-evil-atrule': '@import "x"', // at-rule — dropped
+          '--mj-evil-imageset': 'image-set("https://evil.example/beacon.png" 1x)', // network fetch WITHOUT url( — dropped by the allowlist
+          '--mj-evil-webkitimageset': '-webkit-image-set(url("https://evil.example/b.png") 1x)', // vendor variant — dropped
+          '--mj-evil-image': 'image("https://evil.example/i.png")', // image() fetch — dropped
+          '--mj-evil-crossfade': 'cross-fade(url("https://evil.example/c.png"), 50%)', // cross-fade fetch — dropped
         },
       },
     });
     expect(content).toContain(':root { ');
     expect(content).toContain('--mj-brand-primary: #ff0000;');
-    expect(content).toContain('--mj-bg-surface-card: color-mix(in srgb, #ff0000 10%, white);');
+    expect(content).toContain('--mj-bg-surface-card: color-mix(in srgb, #ff0000 10%, white);'); // color-mix is on the safe allowlist
     // Rejection means the ENTRY vanishes — no stripped residue of any kind.
     expect(content).not.toContain('background:url(x)');
     expect(content).not.toContain('--mj-evil-markup');
     expect(content).not.toContain('--mj-evil-decl');
-    expect(content).not.toContain('evil.example');
+    expect(content).not.toContain('evil.example'); // covers EVERY network vector above, url() and non-url() alike
     expect(content).not.toContain('--mj-evil-url');
     expect(content).not.toContain('--mj-evil-escape');
     expect(content).not.toContain('--mj-evil-atrule');
+    expect(content).not.toContain('image-set'); // the non-url network functions are gone, not merely their URLs
+    expect(content).not.toContain('cross-fade');
   });
 
   it('includeTheme auto-snapshots the live document tokens', async () => {
@@ -104,13 +110,33 @@ describe('ExportService — BuildExportContent branding', () => {
   it('inlines the logo as a data URI', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ ok: true, blob: async () => new Blob(['png-bytes'], { type: 'image/png' }) }))
+      vi.fn(async () => ({
+        ok: true,
+        headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'image/png' : null) },
+        blob: async () => new Blob(['png-bytes'], { type: 'image/png' }),
+      }))
     );
     const { content } = await svc.BuildExportContent(data, 'html', {
       branding: { logoUrl: 'https://example.org/logo.png' },
     });
     expect(content).toContain('<img class="brand-logo" src="data:image/png;base64,');
     expect(content).toContain('.brand-logo {');
+  });
+
+  it('falls back to the raw logo URL when the response is not an image', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        headers: { get: (h: string) => (h.toLowerCase() === 'content-type' ? 'text/html' : null) },
+        blob: async () => new Blob(['<html>'], { type: 'text/html' }),
+      }))
+    );
+    const { content } = await svc.BuildExportContent(data, 'html', {
+      branding: { logoUrl: 'https://example.org/not-an-image' },
+    });
+    expect(content).toContain('<img class="brand-logo" src="https://example.org/not-an-image"');
+    expect(content).not.toContain('data:text/html');
   });
 
   it('falls back to the raw logo URL when the fetch fails', async () => {
@@ -178,5 +204,21 @@ describe('ExportService — BuildExportContent branding', () => {
       const stillPlain = await svc.BuildExportContent(data, format, { includeTheme: true });
       expect(stillPlain.content).toBe(plain.content);
     }
+  });
+
+  it('unbranded markdown keeps the raw conversation name — no "Conversation" default injected', async () => {
+    // Empty name: the heading must be exactly `# ` (prior bytes), not `# Conversation`.
+    const emptyName = { ...conversation, Name: '', Description: '' } as unknown as MJConversationEntity;
+    const md = (await svc.BuildExportContent({ conversation: emptyName, details }, 'markdown')).content;
+    expect(md.startsWith('# \n')).toBe(true);
+    expect(md).not.toContain('# Conversation');
+  });
+
+  it('HTML omits the logo + trademark footer when CSS is disabled (no unstyled leak via the public seam)', async () => {
+    const branding = { logoUrl: 'https://x/logo.png', trademark: '© Acme' };
+    const { content } = await svc.BuildExportContent(data, 'html', { includeCSS: false, branding });
+    expect(content).not.toContain('<img');            // logo not inlined/emitted without the stylesheet
+    expect(content).not.toContain('brand-trademark');  // trademark footer suppressed too
+    expect(content).not.toContain('<style');           // and no stylesheet at all
   });
 });
