@@ -1,0 +1,9 @@
+# Certification authority (LTS process doc §8, plans/lts-process.md):
+# release-line status transitions and certification scorecards merge only with
+# the certification owner's approval. Enforced when branch protection enables
+# "Require review from Code Owners" on next/main.
+
+/release-lines.json @cadam11
+/ci/release-lines.schema.json @cadam11
+/ci/validate-release-lines.mjs @cadam11
+/certifications/ @cadam11

@@ -150,8 +150,28 @@ jobs:
       - name: Build packages
         run: npm run build
 
+      # LTS process (plans/lts-process.md §4.2): no publish ever omits its explicit
+      # --tag. The channel is derived from the version grammar itself — an -edge.N
+      # prerelease goes to the `edge` dist-tag; a normal version goes to `latest`.
+      # This is inert for classic 5.x versions (they resolve to `latest`, today's
+      # behavior) and activates automatically when the 6.x Edge era opens.
+      - name: Determine release channel from version grammar
+        id: channel
+        run: |
+          VERSION=$(jq -r .version packages/MJServer/package.json)
+          if [[ "$VERSION" == *-edge.* ]]; then
+            NPM_TAG=edge
+            PRERELEASE=true
+          else
+            NPM_TAG=latest
+            PRERELEASE=false
+          fi
+          echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "PRERELEASE=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "::notice::Publishing $VERSION to npm dist-tag $NPM_TAG (prerelease: $PRERELEASE)"
+
       - name: Publish to npm
-        run: npm run change publish
+        run: npm run change publish -- --tag ${{ steps.channel.outputs.NPM_TAG }}
         env:
           NPM_TOKEN: ''
 
@@ -170,6 +190,22 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: npm run commitpush
+
+      # LTS process §4.3: routine releases never claim the repo's "latest release"
+      # flag — certification marks the certified build as latest afterward
+      # (gh release edit vX.Y.Z --latest), so "newest GH release" surfaces always
+      # point at certified bits. Edge prereleases are additionally flagged as such.
+      - name: Create GitHub Release (never latest; certification promotes)
+        if: ${{ env.BRANCH == 'main' }}
+        env:
+          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          EXTRA_FLAGS=""
+          if [ "${{ steps.channel.outputs.PRERELEASE }}" = "true" ]; then
+            EXTRA_FLAGS="--prerelease"
+          fi
+          gh release create "$VERSION" --title "$VERSION" --generate-notes --latest=false $EXTRA_FLAGS --repo "${{ github.repository }}"
 
       - name: Merge main into next and update package-lock
         if: ${{ env.BRANCH == 'main' }}
