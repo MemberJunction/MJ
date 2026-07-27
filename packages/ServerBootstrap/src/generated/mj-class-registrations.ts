@@ -199,7 +199,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (409 classes)
+// @memberjunction/core-entities (410 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -498,6 +498,7 @@ import {
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -1781,6 +1782,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -2425,7 +2427,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 991;
+export const CLASS_REGISTRATIONS_COUNT = 992;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -9,7 +9,8 @@
  * In-memory concurrency mutex (one operation at a time).
  */
 import { BaseSingleton } from '@memberjunction/global';
-import { LogError, Metadata, type DatabaseProviderBase } from '@memberjunction/core';
+import { LogError, Metadata, RunView, type DatabaseProviderBase, type UserInfo } from '@memberjunction/core';
+import type { MJRSUPendingWorkEntity } from '@memberjunction/core-entities';
 import { Octokit } from '@octokit/rest';
 import { RSUMetrics } from './RSUMetrics.js';
 import { GetDialect } from './DDLGenerator.js';
@@ -84,9 +85,6 @@ class RSUConfig {
   get IsAuditLogEnabled(): boolean {
     return process.env.RSU_AUDIT_LOG_ENABLED !== '0';
   }
-  get PendingWorkPath(): string {
-    return process.env.RSU_PENDING_WORK_PATH || '.rsu_pending';
-  }
   get ProtectedSchemas(): string[] {
     const envSchemas = process.env.RSU_PROTECTED_SCHEMAS;
     return envSchemas ? envSchemas.split(',').map((s) => s.trim()) : [];
@@ -138,6 +136,20 @@ export interface RSUPipelineInput {
    * restart. The caller is responsible for reading them on the other side.
    */
   PostRestartFiles?: Array<{ Path: string; Content: string }>;
+
+  /**
+   * Post-restart work to register durably in the database (`MJ: RSU Pending Works`).
+   * Rows are inserted ONLY for migrations that succeeded, before the restart, and are
+   * marked Completed only after the post-restart consumer finishes them successfully —
+   * so a crash mid-consumption leaves the row visible and re-processable rather than
+   * silently lost (which is what the old delete-on-read `.rsu_pending` files did).
+   */
+  PendingWork?: RSUPendingWork[];
+
+  /**
+   * User context used for the durable PendingWork writes. Required when PendingWork is set.
+   */
+  ContextUser?: UserInfo;
 }
 
 /**
@@ -171,6 +183,12 @@ export interface RSUPipelineResult {
   Steps: RSUPipelineStep[];
   ErrorMessage?: string;
   ErrorStep?: string;
+  /**
+   * IDs of the `MJ: RSU Pending Works` rows registered for this input (one per
+   * RSUPipelineInput.PendingWork entry). Callers that consume the work inline
+   * (SkipRestart) must mark these Completed via {@link RuntimeSchemaManager.CompletePendingWork}.
+   */
+  PendingWorkIDs?: string[];
 }
 
 /**
@@ -211,13 +229,16 @@ interface PostMigrationResult {
    * failed, so this flows into each per-caller result's Success.
    */
   CodeGenSucceeded?: boolean;
+  /** Durable `MJ: RSU Pending Works` row IDs registered per input (successful migrations only). */
+  PendingWorkIDs?: Map<RSUPipelineInput, string[]>;
   /** The RunCodeGen failure message, surfaced when CodeGenSucceeded is false. */
   CodeGenError?: string;
 }
 
 /**
- * @deprecated Use RSUPipelineInput.PostRestartFiles instead. This type is
- * retained temporarily for backward compatibility with existing callers.
+ * The payload contract for durable post-restart work. Serialized into
+ * `MJ: RSU Pending Works`.PayloadJSON by {@link RuntimeSchemaManager.WritePendingWork}
+ * and read back by the post-restart consumer via {@link RuntimeSchemaManager.ReadPendingWork}.
  */
 export interface RSUPendingWork {
   CompanyIntegrationID: string;
@@ -421,40 +442,135 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
   // ─── Pending Work (post-restart tasks) ─────────────────────────
 
-  /** Write pending work to disk so it can be processed after restart. */
-  public async WritePendingWork(data: RSUPendingWork): Promise<string> {
-    const { writeFileSync, mkdirSync } = await import('node:fs');
-    const { join } = await import('node:path');
-    const dir = join(rsuConfig.WorkDir, rsuConfig.PendingWorkPath);
-    mkdirSync(dir, { recursive: true });
-    const filePath = join(dir, `${Date.now()}.json`);
-    writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-    this.rsuLog(`Wrote pending work to ${filePath}`);
-    return filePath;
+  /**
+   * Register pending work durably in `MJ: RSU Pending Works` so it survives the
+   * post-migration restart. Returns the new row's ID.
+   *
+   * Unlike the `.rsu_pending` files this replaces, the row is NOT consumed on read —
+   * it stays Pending until the consumer explicitly calls {@link CompletePendingWork}
+   * or {@link FailPendingWork}, so a crash mid-consumption leaves visible, resumable work.
+   */
+  public async WritePendingWork(data: RSUPendingWork, contextUser: UserInfo): Promise<string> {
+    const md = new Metadata();
+    const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
+    row.NewRecord();
+    row.CompanyIntegrationID = data.CompanyIntegrationID;
+    row.PayloadJSON = JSON.stringify(data);
+    row.Status = 'Pending';
+    if (!(await row.Save())) {
+      throw new Error(`Failed to register RSU pending work: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
+    this.rsuLog(`Registered pending work ${row.ID} for company integration ${data.CompanyIntegrationID}`);
+    return row.ID;
   }
 
-  /** Read all pending work files, return them, and delete them. */
-  public async ReadAndClearPendingWork(): Promise<RSUPendingWork[]> {
-    const { readdirSync, readFileSync, unlinkSync, existsSync } = await import('node:fs');
-    const { join } = await import('node:path');
-    const dir = join(rsuConfig.WorkDir, rsuConfig.PendingWorkPath);
-    if (!existsSync(dir)) return [];
-    const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
-    const results: RSUPendingWork[] = [];
-    for (const file of files) {
-      const filePath = join(dir, file);
+  /**
+   * Read every still-Pending work row. Never deletes or mutates — the caller marks each
+   * row Completed/Failed once it has actually finished processing it. Rows whose payload
+   * fails to parse are reported as Failed so they stop being retried forever.
+   *
+   * @param staleAfterMinutes when set, rows created more than this many minutes ago are
+   *        logged as stale so an operator can see work that a previous process abandoned.
+   */
+  public async ReadPendingWork(
+    contextUser: UserInfo,
+    staleAfterMinutes?: number,
+  ): Promise<Array<{ ID: string; Work: RSUPendingWork; CreatedAt: Date }>> {
+    const rv = new RunView();
+    const result = await rv.RunView<MJRSUPendingWorkEntity>(
+      {
+        EntityName: 'MJ: RSU Pending Works',
+        ExtraFilter: `Status = 'Pending'`,
+        OrderBy: '__mj_CreatedAt ASC',
+        ResultType: 'entity_object',
+        BypassCache: true,
+      },
+      contextUser,
+    );
+    if (!result.Success) {
+      LogError(`[RSU] Failed to read pending work: ${result.ErrorMessage}`);
+      return [];
+    }
+
+    const items: Array<{ ID: string; Work: RSUPendingWork; CreatedAt: Date }> = [];
+    for (const row of result.Results) {
+      const createdAt = row.__mj_CreatedAt ?? new Date();
       try {
-        const data = JSON.parse(readFileSync(filePath, 'utf-8')) as RSUPendingWork;
-        results.push(data);
-        unlinkSync(filePath);
-      } catch {
-        /* skip corrupt files */
+        items.push({ ID: row.ID, Work: JSON.parse(row.PayloadJSON) as RSUPendingWork, CreatedAt: createdAt });
+      } catch (err) {
+        await this.FailPendingWork(row.ID, `Corrupt PayloadJSON: ${err instanceof Error ? err.message : String(err)}`, contextUser);
       }
     }
-    if (results.length > 0) {
-      this.rsuLog(`Found ${results.length} pending work item(s)`);
+
+    if (staleAfterMinutes !== undefined) {
+      const cutoff = Date.now() - staleAfterMinutes * 60_000;
+      const stale = items.filter((i) => i.CreatedAt.getTime() < cutoff);
+      if (stale.length > 0) {
+        LogError(
+          `[RSU] ${stale.length} pending work item(s) older than ${staleAfterMinutes} minute(s) are still unprocessed: ${stale.map((s) => s.ID).join(', ')}`,
+        );
+      }
     }
-    return results;
+
+    if (items.length > 0) this.rsuLog(`Found ${items.length} pending work item(s)`);
+    return items;
+  }
+
+  /** Mark a pending work row Completed. Call ONLY after the work actually succeeded. */
+  public async CompletePendingWork(id: string, contextUser: UserInfo): Promise<boolean> {
+    return this.setPendingWorkTerminalStatus(id, 'Completed', undefined, contextUser);
+  }
+
+  /** Mark a pending work row Failed, recording why. */
+  public async FailPendingWork(id: string, errorMessage: string, contextUser: UserInfo): Promise<boolean> {
+    return this.setPendingWorkTerminalStatus(id, 'Failed', errorMessage, contextUser);
+  }
+
+  private async setPendingWorkTerminalStatus(
+    id: string,
+    status: 'Completed' | 'Failed',
+    errorMessage: string | undefined,
+    contextUser: UserInfo,
+  ): Promise<boolean> {
+    const md = new Metadata();
+    const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
+    if (!(await row.Load(id))) {
+      LogError(`[RSU] Pending work ${id} not found when marking ${status}`);
+      return false;
+    }
+    row.Status = status;
+    row.ErrorMessage = errorMessage ?? null;
+    row.ProcessedAt = new Date();
+    if (!(await row.Save())) {
+      LogError(`[RSU] Failed to mark pending work ${id} as ${status}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Register every input's PendingWork rows. Called for successful migrations only,
+   * before the restart. Returns row IDs keyed by the input's index within `inputs`.
+   */
+  private async registerPendingWork(inputs: RSUPipelineInput[]): Promise<Map<RSUPipelineInput, string[]>> {
+    const registered = new Map<RSUPipelineInput, string[]>();
+    for (const input of inputs) {
+      if (!input.PendingWork?.length) continue;
+      if (!input.ContextUser) {
+        LogError(`[RSU] PendingWork supplied without ContextUser for "${input.Description}" — skipping registration`);
+        continue;
+      }
+      const ids: string[] = [];
+      for (const work of input.PendingWork) {
+        try {
+          ids.push(await this.WritePendingWork(work, input.ContextUser));
+        } catch (err) {
+          LogError(`[RSU] ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      registered.set(input, ids);
+    }
+    return registered;
   }
 
   // ─── Generic Post-Restart File Injection ──────────────────────
@@ -733,6 +849,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const successfulInputs = successfulItems.map(r => r.Input);
     await this.writePostRestartFiles(successfulInputs);
 
+    // Register durable pending work for successful migrations. Rows stay Pending
+    // until the post-restart consumer completes them, so a crash between here and
+    // consumption leaves the work visible instead of losing it.
+    result.PendingWorkIDs = await this.registerPendingWork(successfulInputs);
+
     // Restart LAST — PM2 restart kills this process, nothing runs after this
     if (!inputs.every((i) => i.SkipRestart)) {
       const restartOk = await this.runStep('RestartMJAPI', () => this.restartMJAPI(), sharedSteps);
@@ -773,6 +894,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
           : item.Error
             ? item.Steps.find((s) => s.Status === 'failed')?.Name
             : undefined,
+        PendingWorkIDs: postResult.PendingWorkIDs?.get(item.Input),
       };
 
       this.writeAuditLog(item.Input, result).catch((err) => LogError(`[RSU] Audit log failed: ${err instanceof Error ? err.message : String(err)}`));
@@ -892,7 +1014,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * Verify ALL filesystem paths RSU may write to are actually writable.
    * Paths checked:
    *  - MigrationsPath     (migration SQL files)
-   *  - PendingWorkPath    (post-restart task JSONs)
    *  - AdditionalSchemaInfoPath parent dir (soft FK / soft PK config)
    *  - CodeGenDir         (temp codegen script)
    *  - WorkDir            (pipeline log file)
@@ -904,7 +1025,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     const directoriesToCheck = [
       nodePath.join(workDir, rsuConfig.MigrationsPath),
-      nodePath.join(workDir, rsuConfig.PendingWorkPath),
       dirname(nodePath.join(workDir, this.additionalSchemaInfoPath)),
       rsuConfig.CodeGenDir,
       workDir, // pipeline log
@@ -1279,8 +1399,9 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     // When running inside the MJAPI process that PM2 manages, `pm2 restart`
     // sends SIGINT to THIS process. We will die before execAsync resolves.
-    // That's fine — the pending-work file (.rsu_pending/) was already written
-    // before this step, and the newly restarted process picks it up on boot.
+    // That's fine — the pending-work rows were already committed to
+    // `MJ: RSU Pending Works` before this step, and the newly restarted process
+    // picks them up on boot.
     //
     // Strategy: fire the restart command, catch the inevitable rejection
     // (our process gets killed mid-flight), and return true. If the process

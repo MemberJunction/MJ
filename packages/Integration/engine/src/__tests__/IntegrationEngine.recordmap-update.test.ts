@@ -160,6 +160,11 @@ function createMockBookkeepingEntity(overrides: Record<string, unknown> = {}) {
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+    // Durable runs (PR 1): every sync claims/heartbeats/fences its run row through the
+    // provider, so the mock provider must answer those statements.
+    const { createOwnershipProviderSurface } = await vi.importActual<
+        typeof import('./helpers/ownershipProviderSurface.js')
+    >('./helpers/ownershipProviderSurface.js');
 
     // Entity-info the engine reads via EntityByName. Includes Fields + PrimaryKeys so
     // the real PK-extraction / content-hash-introspection paths don't throw. Defined
@@ -185,7 +190,7 @@ vi.mock('@memberjunction/core', async () => {
             Entities: typeof CONTACTS_ENTITY_INFO[];
             EntityByName: (name: string) => typeof CONTACTS_ENTITY_INFO | undefined;
             GetEntityObject: (...args: unknown[]) => Promise<unknown>;
-        };
+        } & ReturnType<typeof createOwnershipProviderSurface>;
         get Entities() { return [CONTACTS_ENTITY_INFO]; }
         EntityByName(name: string) {
             return name === 'Contacts' ? CONTACTS_ENTITY_INFO : undefined;
@@ -195,6 +200,7 @@ vi.mock('@memberjunction/core', async () => {
         }
     }
     MockMetadata.Provider = {
+        ...createOwnershipProviderSurface(),
         BeginTransaction: vi.fn().mockResolvedValue(undefined),
         CommitTransaction: vi.fn().mockResolvedValue(undefined),
         RollbackTransaction: vi.fn().mockResolvedValue(undefined),

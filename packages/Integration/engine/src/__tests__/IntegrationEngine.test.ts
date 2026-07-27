@@ -68,6 +68,11 @@ function createMockEntity(overrides: Record<string, unknown> = {}) {
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+    // Durable runs (PR 1): every sync claims/heartbeats/fences its run row through the
+    // provider, so the mock provider must answer those statements.
+    const { createOwnershipProviderSurface } = await vi.importActual<
+        typeof import('./helpers/ownershipProviderSurface.js')
+    >('./helpers/ownershipProviderSurface.js');
     return {
         ...actual,
         RunView: class MockRunView {
@@ -92,7 +97,7 @@ vi.mock('@memberjunction/core', async () => {
                     Entities: { Name: string; FirstPrimaryKey: { Name: string } }[];
                     EntityByName: (name: string) => { Name: string; FirstPrimaryKey: { Name: string } } | undefined;
                     GetEntityObject: (...args: unknown[]) => Promise<unknown>;
-                };
+                } & ReturnType<typeof createOwnershipProviderSurface>;
                 get Entities() {
                     return [{
                         Name: 'Contacts',
@@ -109,6 +114,7 @@ vi.mock('@memberjunction/core', async () => {
                 }
             }
             MockMetadata.Provider = {
+                ...createOwnershipProviderSurface(),
                 BeginTransaction: vi.fn().mockResolvedValue(undefined),
                 CommitTransaction: vi.fn().mockResolvedValue(undefined),
                 RollbackTransaction: vi.fn().mockResolvedValue(undefined),

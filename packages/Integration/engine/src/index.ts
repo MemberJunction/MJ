@@ -111,6 +111,8 @@ export type { IntegrationActionVerb, GenerateIntegrationActionResult } from './I
 // Integration Engine (server-side, wraps IntegrationEngineBase via composition)
 // NOTE: For IntegrationEngineBase (client-safe metadata), import from @memberjunction/integration-engine-base
 export { IntegrationEngine } from './IntegrationEngine.js';
+export { RunOwnershipService, RunOwnershipLostError } from './RunOwnershipService.js';
+export type { RenewResult, BoundaryCheckResult, HeartbeatOptions } from './RunOwnershipService.js';
 
 // Schema persistence — upserts dynamically discovered objects/fields to IntegrationObject/Field tables
 export { IntegrationSchemaSync } from './IntegrationSchemaSync.js';

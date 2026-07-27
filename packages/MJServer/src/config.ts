@@ -131,6 +131,23 @@ const scheduledJobsSchema = z.object({
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
 });
 
+/**
+ * Integration sync worker (PR 1 item 8). When enabled, this process polls
+ * `CompanyIntegrationRun` for `Status='Queued'` rows, atomically claims them, executes
+ * the sync, and releases. The claim sproc is the mutual exclusion, so any number of
+ * processes may run a worker against the same database.
+ */
+const integrationSyncWorkerSchema = z.object({
+  /** Master switch — off by default so existing deployments keep running syncs inline. */
+  enabled: z.boolean().optional().default(false),
+  /** Email of the user the worker executes syncs as. */
+  systemUserEmail: z.string().optional().default('system@memberjunction.org'),
+  /** How often to poll the queue, in ms. */
+  pollingIntervalMs: z.number().optional().default(15000),
+  /** Maximum runs this worker executes concurrently. */
+  maxConcurrentRuns: z.number().optional().default(3),
+});
+
 const queryDialectSchema = z.object({
   /** When true, saving a Query entity auto-generates QuerySQL entries for configured target dialects */
   autoConvertOnSave: zodBooleanWithTransforms().default(false),
@@ -501,6 +518,7 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
@@ -559,6 +577,7 @@ export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
+export type IntegrationSyncWorkerConfig = z.infer<typeof integrationSyncWorkerSchema>;
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
@@ -669,6 +688,14 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     maxConcurrentJobs: 5,
     defaultLockTimeout: 600000,
     staleLockCleanupInterval: 300000
+  },
+
+  // Integration sync worker defaults (off — syncs run inline unless a worker is enabled)
+  integrationSyncWorker: {
+    enabled: false,
+    systemUserEmail: 'not.set@nowhere.com',
+    pollingIntervalMs: 15000,
+    maxConcurrentRuns: 3
   },
 
   // Telemetry defaults

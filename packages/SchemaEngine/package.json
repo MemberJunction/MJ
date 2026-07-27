@@ -16,6 +16,7 @@
   "dependencies": {
     "@memberjunction/global": "5.49.0",
     "@memberjunction/core": "5.49.0",
+    "@memberjunction/core-entities": "5.49.0",
     "@memberjunction/sql-dialect": "5.49.0",
     "@memberjunction/queue": "5.49.0",
     "@octokit/rest": "^21.1.1"
