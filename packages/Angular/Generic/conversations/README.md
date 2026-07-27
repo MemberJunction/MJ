@@ -186,6 +186,13 @@ Branding applies to **every** export format. HTML gets the full treatment (theme
 
 Color theming (`brandTokens`) is HTML-only — it has no meaning in the data/plain-text formats, and those formats never serialize the tokens. Without branding the exported file is unchanged from previous releases: the HTML stylesheet reads `var(--mj-…, legacyHex)` so every color resolves to the exact prior value when no `:root` block is emitted, and JSON/markdown/text are byte-identical to before. Programmatic consumers can build export content without a download via `ExportService.BuildExportContent(...)` and snapshot the live theme via `ExportService.SnapshotBrandTokens()`.
 
+Two gating rules are worth knowing:
+
+- **`includeCSS` is an HTML-only concern.** In HTML the logo and the trademark footer each need their stylesheet rule, so both are suppressed when `includeCSS` is false — an unstyled full-size logo is worse than none. The `title` override has no stylesheet dependency and always applies. Markdown/text/JSON ignore `includeCSS` entirely.
+- **`includeTheme` gates only the token AUTO-SNAPSHOT.** An explicitly supplied `brandTokens` map, plus `logoUrl` / `title` / `trademark`, apply whenever `branding` is present. In the modal, "Include branding" is the single user-facing switch for all of it, and it sits with the general options because it affects every format — not just HTML.
+
+`trademark` and `title` are **not** markdown-escaped; a value containing `_`, `]`, `)`, or a newline can break the surrounding markdown. Supply plain text (the HTML and JSON paths are escaped).
+
 ### Chat Overlay
 
 A floating chat panel (bottom-right corner) that wraps the chat area for persistent agent access across the application. Collapses to a bubble icon, expands to a full chat panel.

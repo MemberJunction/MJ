@@ -25,7 +25,7 @@ without forking.
 │            OR React/Vue/Node consumer driving ConversationsRuntime directly
 ├─ Layer 3   @memberjunction/ng-conversations                            (Angular widget)
 │            chat-area / message-list / message-item / overlay /
-│            realtime overlay / 6 slots + ChatSlotDirective /
+│            realtime overlay / 7 slots + ChatSlotDirective /
 │            ConversationsRuntimeBootstrap (registers adapters into runtime)
 ├─ Layer 2   @memberjunction/conversations-runtime  ★ pure TS, zero UX deps
 │            ConversationsRuntime singleton (BaseEngine + @RegisterForStartup)
@@ -170,13 +170,14 @@ conversation): the widget's per-conversation agent picker writes to
 
 ## 6. The slot system (extension surface)
 
-The chat-area exposes 6 named template slots. Project a template via the
+The chat-area exposes 7 named template slots. Project a template via the
 `mjChatSlot` directive to replace or augment the default rendering. Every
 slot is **opt-in** — existing embeds see no UI change.
 
 | Slot | What it covers | Activation |
 |---|---|---|
 | `header` | Replaces the entire `.chat-header` chrome (title, badges, export/share buttons) | Consumer projects `mjChatSlot="header"` |
+| `headerActions` | **Additive** host buttons appended to the DEFAULT header's action strip, after the stock buttons. Suppressed when `header` is projected (that slot owns the whole header, actions included) | Consumer projects `mjChatSlot="headerActions"` |
 | `agentPresence` | Sticky-top character/voice-state presence bar | `[showAgentCharacter]="true"` AND optional slot |
 | `emptyState` | Replaces the welcome block on a fresh conversation | Consumer projects `mjChatSlot="emptyState"` |
 | `messageRenderer` | Per-message renderer (full bubble replacement) | Consumer projects `mjChatSlot="messageRenderer"` |

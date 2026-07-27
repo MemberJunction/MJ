@@ -27,18 +27,29 @@ export interface ExportBranding {
   brandTokens?: Record<string, string>;
   /**
    * Logo URL. In HTML it is fetched and inlined as a data URI (so the file stays
-   * self-contained; falls back to the raw URL if the fetch fails) and rendered
-   * above the title; in markdown it is referenced by URL. JSON carries it as a
-   * string; plain text omits it.
+   * self-contained) and rendered above the title — requires
+   * `ExportOptions.includeCSS`, since it needs its stylesheet rule. In markdown it is
+   * referenced by URL. JSON carries it as a string; plain text omits it.
+   *
+   * If the fetch fails, or the response isn't `content-type: image/*`, the raw URL is
+   * emitted instead — so the exported file will reach out to that URL when opened.
+   * There is no size or timeout guard on the fetch: a very large logo inflates the
+   * export.
    */
   logoUrl?: string;
   /** Overrides the exported document's title (defaults to the conversation name). */
   title?: string;
   /**
    * A short trademark / attribution line (e.g. `© 2026 Acme Association ·
-   * Powered by Betty`) rendered at the FOOT of the exported document in every
-   * format — a styled HTML footer, a markdown/text trailer, and a field in the
-   * JSON `branding` block.
+   * Powered by Betty`) rendered at the FOOT of the exported document: a styled HTML
+   * footer, a markdown/text trailer, and a field in the JSON `branding` block.
+   *
+   * In HTML it needs its stylesheet rule, so — like the logo — it is emitted only when
+   * `ExportOptions.includeCSS` is true. The markdown/text/JSON trailers have no such
+   * dependency and always emit.
+   *
+   * NOT escaped for markdown: a value containing `_`, `]`, `)`, or a newline can break
+   * the surrounding markdown. Supply plain text (HTML and JSON are escaped).
    */
   trademark?: string;
 }
@@ -75,6 +86,7 @@ export const DEFAULT_EXPORT_THEME_TOKENS: readonly string[] = [
   '--mj-text-primary',
   '--mj-text-secondary',
   '--mj-text-disabled',
+  '--mj-border-default',
   '--mj-brand-primary',
   '--mj-bg-surface-card',
   '--mj-status-info-bg',
@@ -183,11 +195,13 @@ export class ExportService {
     const logoUrl = options.branding?.logoUrl?.trim();
     return {
       rootBlock,
-      // Logo (and the whole branded treatment) belongs to the STYLED document —
-      // gate it on includeCSS so a CSS-less export never carries a full-size,
-      // unstyled logo (the modal enforces this; the public BuildExportContent
-      // seam must too).
+      // The logo needs its `.brand-logo` rule (as the trademark footer needs its own),
+      // so both are gated on includeCSS — a CSS-less export must never carry a
+      // full-size unstyled logo. The modal enforces this too, but the public
+      // BuildExportContent seam has to hold the line on its own.
       logoDataUri: options.includeCSS && logoUrl ? await this.inlineLogo(logoUrl) : null,
+      // The title is deliberately NOT includeCSS-gated: it lands in <title>/<h1>, needs
+      // no stylesheet, and is the one branding field every format carries unconditionally.
       title: options.branding?.title?.trim() || null
     };
   }
@@ -463,7 +477,7 @@ export class ExportService {
     .content { white-space: pre-wrap; }
     .timestamp { color: var(--mj-text-disabled, #999); font-size: 12px; margin-top: 10px; }${theme.logoDataUri ? `
     .brand-logo { display: block; max-height: 48px; margin-bottom: 12px; }` : ''}${trademark ? `
-    .brand-trademark { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--mj-text-disabled, #ddd); color: var(--mj-text-secondary, #666); font-size: 12px; text-align: center; }` : ''}
+    .brand-trademark { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--mj-border-default, #ddd); color: var(--mj-text-secondary, #666); font-size: 12px; text-align: center; }` : ''}
   </style>${theme.rootBlock}` : '';
 
     const title = theme.title ?? (data.conversation.Name || 'Conversation');

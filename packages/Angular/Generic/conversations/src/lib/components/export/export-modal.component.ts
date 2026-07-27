@@ -65,6 +65,20 @@ import { ToastService } from '../../services/toast.service';
                 <span>Include metadata</span>
                 <small>Add creation date, IDs, and other metadata</small>
               </label>
+              <!-- Branding applies to EVERY format (HTML gets theme colors + logo +
+                   footer; markdown/text/JSON get the title and attribution), so it
+                   belongs here rather than under HTML Options. Shown for HTML even with
+                   no host branding, because it still snapshots the app's theme. -->
+              @if (selectedFormat === 'html' || branding) {
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="exportOptions.includeTheme"
+                    [disabled]="isExporting || (selectedFormat === 'html' && !exportOptions.includeCSS)">
+                  <span>Include branding</span>
+                  <small>{{ brandingHint }}</small>
+                </label>
+              }
             </div>
             @if (selectedFormat === 'json') {
               <div class="format-specific-options">
@@ -85,19 +99,10 @@ import { ToastService } from '../../services/toast.service';
                 <label class="checkbox-label">
                   <input
                     type="checkbox"
-                    [ngModel]="exportOptions.includeCSS"
-                    (ngModelChange)="onIncludeCSSChanged($event)"
+                    [(ngModel)]="exportOptions.includeCSS"
                     [disabled]="isExporting">
                   <span>Include CSS styling</span>
                   <small>Embed styles for better presentation</small>
-                </label>
-                <label class="checkbox-label">
-                  <input
-                    type="checkbox"
-                    [(ngModel)]="exportOptions.includeTheme"
-                    [disabled]="isExporting || !exportOptions.includeCSS">
-                  <span>Include branding</span>
-                  <small>Embed the app's theme colors{{ branding?.logoUrl ? ' and logo' : '' }} in the exported file</small>
                 </label>
               </div>
             }
@@ -350,18 +355,37 @@ export class ExportModalComponent {
     includeTheme: false
   };
 
-  /**
-   * "Include CSS styling" changed. Turning it OFF also turns "Include branding"
-   * off — branding is meaningless without the stylesheet, and leaving it
-   * stale-true would leak an unstyled logo + title override into a CSS-less
-   * export (the checkbox is disabled while CSS is off, so the user couldn't
-   * even see or undo it).
-   */
-  onIncludeCSSChanged(value: boolean): void {
-    this.exportOptions.includeCSS = value;
-    if (!value) {
-      this.exportOptions.includeTheme = false;
+  /** Format-aware hint under the "Include branding" checkbox. */
+  get brandingHint(): string {
+    if (this.selectedFormat === 'html') {
+      if (!this.exportOptions.includeCSS) {
+        return 'Requires "Include CSS styling"';
+      }
+      return `Embed the app's theme colors${this.branding?.logoUrl ? ', logo,' : ''} and attribution line`;
     }
+    const logo = this.branding?.logoUrl && this.selectedFormat === 'markdown' ? ', logo,' : '';
+    return `Add the title${logo} and attribution line`;
+  }
+
+  /**
+   * The options actually handed to the service. `includeTheme` is the user's INTENT;
+   * this resolves it against the selected format:
+   *
+   * - HTML with the stylesheet off cannot carry branding (a full-size unstyled logo and
+   *   an unstyled footer would leak), so it drops.
+   * - `includeCSS` is an HTML-only concern and must NOT decide anything for
+   *   markdown / text / JSON — resolving here rather than mutating `includeTheme` is
+   *   what keeps an HTML-format toggle from silently following the user into another
+   *   format.
+   */
+  private resolveExportOptions(): ExportOptions {
+    const unstyledHtml = this.selectedFormat === 'html' && !this.exportOptions.includeCSS;
+    const brandingOn = !!this.exportOptions.includeTheme && !unstyledHtml;
+    return {
+      ...this.exportOptions,
+      includeTheme: brandingOn,
+      branding: brandingOn ? (this.branding ?? undefined) : undefined
+    };
   }
 
   get exportTitle(): string {
@@ -431,11 +455,7 @@ export class ExportModalComponent {
         this.conversation.ID,
         this.selectedFormat!,
         this.currentUser,
-        {
-          ...this.exportOptions,
-          // Host branding rides along only when the user left "Include branding" on.
-          branding: this.exportOptions.includeTheme ? (this.branding ?? undefined) : undefined
-        }
+        this.resolveExportOptions()
       );
 
       this.toastService.success('Conversation exported successfully');
