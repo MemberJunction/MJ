@@ -1,4 +1,4 @@
-import { IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
 import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from './entity-types.js';
 import type { MappedRecord, ConflictResolution } from './types.js';
 import { serializeKeyValue } from './KeySerialization.js';
@@ -44,7 +44,22 @@ function normalizeExternalID(id: string): string {
     return id.replace(/\s+$/, '').toLowerCase();
 }
 
-/** Batch-resolved identity/key lookups. See {@link MatchEngine.PrefetchKeyMatches}. */
+/**
+ * One criteria-shape group of the identity/key prefetch: the read to issue, plus everything
+ * needed to attribute its rows back locally. See {@link MatchEngine.buildKeyMatchGroups}.
+ */
+interface KeyMatchGroup {
+    /** PK fields of the group's entity, in `PrimaryKeys` order — the shape of the returned ID. */
+    PKFields: Array<{ Name: string }>;
+    /** The fields every criteria in this group matches on (identical by construction). */
+    LookupFields: string[];
+    /** Distinct criteria sets, keyed by {@link MatchEngine.CriteriaKey}. */
+    Clauses: Map<string, MatchCriteria>;
+    /** The read for this group, issued as one leg of a batched {@link RunView.RunViews} call. */
+    Params: RunViewParams;
+}
+
+/** Batch-resolved identity/key lookups. See {@link MatchEngine.buildKeyMatchGroups}. */
 interface KeyMatchIndex {
     /** Criteria key → the matched row's PK values, '|'-joined. */
     Matched: Map<string, string>;
@@ -86,14 +101,18 @@ export class MatchEngine {
         const keyFields = fieldMaps.filter(fm => fm.IsKeyField && fm.Status === 'Active');
         const conflictResolution = entityMap.ConflictResolution as ConflictResolution;
 
-        // One query for the batch's record-map lookups instead of one per record
-        // (tasks.md PR 2 item 5). Every record consults the map — on the deleted path directly,
-        // on the live path as the fallback when identity/key matching finds nothing — so on a
+        // Resolve the batch's lookups up front instead of one query per record (tasks.md PR 2
+        // item 5). Every record consults the record map — on the deleted path directly, on the
+        // live path as the fallback when identity/key matching finds nothing — so on a
         // 500-record batch this replaces up to 500 single-row reads with a single `IN` read.
-        const [mapIndex, keyIndex] = await Promise.all([
-            this.PrefetchRecordMapEntries(records, entityMap, contextUser),
-            this.PrefetchKeyMatches(records, keyFields, contextUser),
-        ]);
+        //
+        // All of it goes out as ONE batched RunViews: the record-map read plus one read per
+        // criteria-shape group. These are independent queries with no data dependency between
+        // them, which is exactly what RunViews is for — issuing them separately (or as a
+        // Promise.all of RunView calls) pays a round trip per leg for no reason.
+        const { MapIndex: mapIndex, KeyIndex: keyIndex } = await this.PrefetchBatchLookups(
+            records, entityMap, keyFields, contextUser
+        );
 
         const results: MappedRecord[] = [];
         for (const record of records) {
@@ -112,32 +131,63 @@ export class MatchEngine {
     }
 
     /**
-     * Reads the record-map rows for an entire batch of external IDs in one query.
+     * Issues every lookup this batch needs as ONE batched read, and builds both indexes from it.
      *
-     * Returns an index containing only the IDs that HAVE a mapping; a miss is therefore
-     * represented by absence, which is exactly what the per-record lookup needed to distinguish.
-     * Returns null if the read fails, which makes callers fall back to their original per-record
-     * query rather than silently treating every record as unmapped — that mistake would turn an
-     * incremental sync into a batch of duplicate creates.
+     * The legs are independent — the record-map read and each criteria-shape group's read share
+     * no data dependency — so they go out together via {@link RunView.RunViews} rather than as
+     * separate awaits. Result order matches param order, which is how each leg is attributed back.
      *
-     * The index carries a second, normalized view of the same rows. The `IN (…)` read is evaluated
-     * by the database under its own collation, so a row stored as `abc` comes back for a requested
-     * `ABC`; pairing the result up in JavaScript with `===` would then miss it. See
-     * {@link normalizeExternalID}.
+     * A `null` index means "the read failed, fall back to the per-record query" and is NOT the
+     * same as an empty index, which means "asked, and there is nothing". Conflating them would
+     * treat every record as unmapped and turn an incremental sync into a batch of duplicate
+     * creates, so the two are kept distinct all the way down.
      */
-    private async PrefetchRecordMapEntries(
+    private async PrefetchBatchLookups(
         records: MappedRecord[],
         entityMap: ICompanyIntegrationEntityMap,
+        keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
-    ): Promise<RecordMapIndex | null> {
+    ): Promise<{ MapIndex: RecordMapIndex | null; KeyIndex: KeyMatchIndex | null }> {
+        const mapParams = this.buildRecordMapViewParams(records, entityMap);
+        const keyGroups = this.buildKeyMatchGroups(records, keyFields);
+
+        const emptyMapIndex: RecordMapIndex = { Exact: new Map(), Normalized: new Map(), Ambiguous: new Set() };
+        const emptyKeyIndex: KeyMatchIndex = { Matched: new Map(), Unmatched: new Set() };
+        if (!mapParams && keyGroups.length === 0) return { MapIndex: emptyMapIndex, KeyIndex: emptyKeyIndex };
+
+        const params: RunViewParams[] = [];
+        if (mapParams) params.push(mapParams);
+        for (const group of keyGroups) params.push(group.Params);
+
+        const rv = new RunView();
+        const results = await rv.RunViews(params, contextUser);
+
+        let next = 0;
+        const mapIndex = mapParams
+            ? this.buildRecordMapIndexFromResult(results[next++])
+            : emptyMapIndex;
+
+        return {
+            MapIndex: mapIndex,
+            KeyIndex: this.buildKeyMatchIndex(keyGroups, results.slice(next)),
+        };
+    }
+
+    /**
+     * The read that resolves an entire batch of external IDs against the record map, or null when
+     * the batch carries no usable external ID (nothing to ask, so no query is issued).
+     */
+    private buildRecordMapViewParams(
+        records: MappedRecord[],
+        entityMap: ICompanyIntegrationEntityMap
+    ): RunViewParams | null {
         const externalIDs = Array.from(new Set(
             records.map(r => r.ExternalRecord.ExternalID).filter(id => id != null && id !== '')
         ));
-        if (externalIDs.length === 0) return { Exact: new Map(), Normalized: new Map(), Ambiguous: new Set() };
+        if (externalIDs.length === 0) return null;
 
         const inList = externalIDs.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
-        const rv = new RunView();
-        const result = await rv.RunView<{ ExternalSystemRecordID: string; EntityRecordID: string }>({
+        return {
             EntityName: 'MJ: Company Integration Record Maps',
             ExtraFilter:
                 `CompanyIntegrationID='${entityMap.CompanyIntegrationID}' ` +
@@ -149,10 +199,27 @@ export class MatchEngine {
             // Same reason the per-record lookup bypasses the cache: this decides CREATE vs UPDATE,
             // and a stale miss re-creates a record that already exists.
             BypassCache: true,
-        }, contextUser);
+        };
+    }
 
-        if (!result.Success) return null;
-        return this.buildRecordMapIndex(result.Results);
+    /**
+     * Builds the record-map index from its leg of the batched read.
+     *
+     * Returns an index containing only the IDs that HAVE a mapping, so a miss is represented by
+     * absence — exactly what the per-record lookup needed to distinguish. Returns null if the read
+     * failed, which makes callers fall back to their original per-record query rather than
+     * silently treating every record as unmapped.
+     *
+     * The index carries a second, normalized view of the same rows. The `IN (…)` read is evaluated
+     * by the database under its own collation, so a row stored as `abc` comes back for a requested
+     * `ABC`; pairing the result up in JavaScript with `===` would then miss it. See
+     * {@link normalizeExternalID}.
+     */
+    private buildRecordMapIndexFromResult(result: RunViewResult | undefined): RecordMapIndex | null {
+        if (!result?.Success) return null;
+        return this.buildRecordMapIndex(
+            result.Results as Array<{ ExternalSystemRecordID: string; EntityRecordID: string }>
+        );
     }
 
     /** Builds the exact + normalized views of a record-map read, separating out ambiguous folds. */
@@ -455,29 +522,28 @@ export class MatchEngine {
      * in neither set and falls back to its own query. A false "unmatched" would create a
      * duplicate, so it is never inferred.
      *
-     * Returns null if any group read fails — callers then use the original per-record path.
+     * This half is pure: it builds the reads without issuing them, so every group goes out as one
+     * leg of the batch's single {@link RunView.RunViews} call. {@link MatchEngine.buildKeyMatchIndex}
+     * attributes the results back.
      */
-    private async PrefetchKeyMatches(
+    private buildKeyMatchGroups(
         records: MappedRecord[],
-        keyFields: ICompanyIntegrationFieldMap[],
-        contextUser: UserInfo
-    ): Promise<KeyMatchIndex | null> {
-        const groups = new Map<string, { EntityName: string; Criteria: MatchCriteria[] }>();
+        keyFields: ICompanyIntegrationFieldMap[]
+    ): KeyMatchGroup[] {
+        const bySignature = new Map<string, { EntityName: string; Criteria: MatchCriteria[] }>();
         for (const record of records) {
             if (record.ExternalRecord.IsDeleted) continue;
             if (keyFields.length === 0 && !this.hasCompleteMappedPrimaryKey(record)) continue;
             const criteria = this.BuildMatchCriteria(record, keyFields);
             if (!criteria) continue;
-            const signature = `${record.MJEntityName}${[...criteria.Fields].sort().join(',')}`;
-            const group = groups.get(signature) ?? { EntityName: record.MJEntityName, Criteria: [] };
+            const signature = `${record.MJEntityName}${[...criteria.Fields].sort().join(',')}`;
+            const group = bySignature.get(signature) ?? { EntityName: record.MJEntityName, Criteria: [] };
             group.Criteria.push(criteria);
-            if (!groups.has(signature)) groups.set(signature, group);
+            if (!bySignature.has(signature)) bySignature.set(signature, group);
         }
 
-        const index: KeyMatchIndex = { Matched: new Map(), Unmatched: new Set() };
-        if (groups.size === 0) return index;
-
-        for (const group of groups.values()) {
+        const groups: KeyMatchGroup[] = [];
+        for (const group of bySignature.values()) {
             const pkFields = this.primaryKeyFieldsFor(group.EntityName);
             if (pkFields.length === 0) continue;
 
@@ -485,38 +551,56 @@ export class MatchEngine {
             const clauses = new Map<string, MatchCriteria>();
             for (const c of group.Criteria) clauses.set(this.CriteriaKey(c.Fields, c.Values), c);
 
-            const filter = Array.from(clauses.values())
-                .map(c => `(${this.CriteriaToSQL(c)})`)
-                .join(' OR ');
             const lookupFields = group.Criteria[0].Fields;
-            const fields = Array.from(new Set([...pkFields.map(f => f.Name), ...lookupFields]));
+            groups.push({
+                PKFields: pkFields,
+                LookupFields: lookupFields,
+                Clauses: clauses,
+                Params: {
+                    EntityName: group.EntityName,
+                    ExtraFilter: Array.from(clauses.values())
+                        .map(c => `(${this.CriteriaToSQL(c)})`)
+                        .join(' OR '),
+                    Fields: Array.from(new Set([...pkFields.map(f => f.Name), ...lookupFields])),
+                    IgnoreMaxRows: true, // a batch's matches can exceed the entity's default row cap
+                    ResultType: 'simple',
+                },
+            });
+        }
 
-            const rv = new RunView();
-            const result = await rv.RunView<Record<string, unknown>>({
-                EntityName: group.EntityName,
-                ExtraFilter: filter,
-                Fields: fields,
-                IgnoreMaxRows: true, // a batch's matches can exceed the entity's default row cap
-                ResultType: 'simple',
-            }, contextUser);
+        return groups;
+    }
 
-            if (!result.Success) return null;
+    /**
+     * Attributes the batched group reads back to their criteria, positionally, in the order
+     * {@link MatchEngine.buildKeyMatchGroups} emitted them.
+     *
+     * Returns null if any group read failed — callers then use the original per-record path.
+     */
+    private buildKeyMatchIndex(groups: KeyMatchGroup[], results: RunViewResult[]): KeyMatchIndex | null {
+        const index: KeyMatchIndex = { Matched: new Map(), Unmatched: new Set() };
 
-            for (const row of result.Results) {
+        for (let i = 0; i < groups.length; i++) {
+            const group = groups[i];
+            const result = results[i];
+            if (!result?.Success) return null;
+
+            const rows = result.Results as Array<Record<string, unknown>>;
+            for (const row of rows) {
                 const rowKey = this.CriteriaKey(
-                    lookupFields,
-                    lookupFields.map(f => serializeKeyValue(row[f]))
+                    group.LookupFields,
+                    group.LookupFields.map(f => serializeKeyValue(row[f]))
                 );
                 if (index.Matched.has(rowKey)) continue; // first row wins, as MaxRows:1 did
                 index.Matched.set(
                     rowKey,
-                    pkFields.map(f => (row[f.Name] as string | null) ?? '').join('|')
+                    group.PKFields.map(f => (row[f.Name] as string | null) ?? '').join('|')
                 );
             }
 
             // Only a completely empty read proves absence for the whole group (see doc above).
-            if (result.Results.length === 0) {
-                for (const key of clauses.keys()) index.Unmatched.add(key);
+            if (rows.length === 0) {
+                for (const key of group.Clauses.keys()) index.Unmatched.add(key);
             }
         }
 

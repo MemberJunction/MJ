@@ -40,6 +40,14 @@ import { IntegrationEngine } from '../IntegrationEngine.js';
 
 // ---- Mock state (reset per test) ----
 let mockRunViewsFn: ReturnType<typeof vi.fn>;
+
+/**
+ * Default batched-read behaviour: fan a `RunViews` call out to the per-params `RunView` mock, so
+ * the entity-aware routers each test installs answer batched legs too. A test that pins a specific
+ * batched read with `mockResolvedValueOnce` still overrides this.
+ */
+const fanOutToRunView = async (params: Array<Record<string, unknown>>, contextUser?: unknown) =>
+    Promise.all(params.map(p => mockRunViewFn(p, contextUser)));
 let mockRunViewFn: ReturnType<typeof vi.fn>;
 
 // Every record-map row that SaveRecordMap actually persists, captured at Save().
@@ -271,7 +279,7 @@ describe('IntegrationEngine — RecordMap on UPDATE (1:1, no drift)', () => {
     beforeEach(() => {
         orchestrator = new IntegrationEngine();
         mockRunViewFn = vi.fn();
-        mockRunViewsFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
         savedRecordMapRows = [];
         targetSaveCount = 0;
         (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();

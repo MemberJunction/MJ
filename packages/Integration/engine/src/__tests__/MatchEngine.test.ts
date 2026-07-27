@@ -15,6 +15,12 @@ vi.mock('@memberjunction/core', async () => {
             RunView(...args: unknown[]) {
                 return mockRunViewFn(...args);
             }
+            // The engine batches its prefetches into one RunViews call. Fanning out to the same
+            // per-params mock keeps the filter-aware assertions below meaningful — they still see
+            // one call per read, with the read's own params.
+            RunViews(params: Array<Record<string, unknown>>, contextUser?: unknown) {
+                return Promise.all(params.map(p => mockRunViewFn(p, contextUser)));
+            }
         },
         Metadata: class MockMetadata {
             // Multi-provider migration: MatchEngine uses this.ProviderToUse which falls back
