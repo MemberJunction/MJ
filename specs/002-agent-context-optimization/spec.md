@@ -170,6 +170,25 @@ visible and recoverable. Once prompt *content* keys off it, a wrong PowerRank si
 wrong instructions, and the failure surfaces as degraded output with no obvious cause.** Rank
 accuracy becomes load-bearing.
 
+**Root cause — the authoring guidance bakes in inflation.** `.claude/commands/add-ai-model.md:57-72`
+instructs: *"PowerRank (1-21+): … 21+: State-of-the-art frontier models"*. An open-ended top band,
+filled by estimation with no external anchor, guarantees compression at the ceiling as new models
+arrive. The three rank fields also have no stated direction; the semantics are inferable only from
+data (higher power = better, higher speed = faster, **higher cost = more expensive**, i.e. cost is
+inverted relative to the other two).
+
+**The rebase is cheap right now and gets more expensive.** Across 96 prompts:
+
+| Setting | Count |
+|---|---|
+| `SelectionStrategy: 'Specific'` | 64 |
+| `SelectionStrategy` unset / `Default` | 32 |
+| `MinPowerRank` set | **0** |
+
+No prompt anywhere pins an absolute rank threshold. `PowerPreference` (Highest/Balanced/Lowest) is
+rank-*order* relative and therefore invariant under rescaling. **A rebase today has effectively
+zero migration blast radius** — that stops being true the moment anyone sets `MinPowerRank`.
+
 ### 1.6 One render, many models
 
 Two paths break the "one model per render" assumption that tier-conditional content requires.
@@ -202,8 +221,11 @@ that phase for the cost analysis.
 - Removing safety-critical rules. **Guardrails whose violation is unrecoverable stay**
   (JSON-only response, `taskComplete` semantics, the plan-mode gate). Judgment replaces
   *stylistic* rules, not *safety* rules.
-- Normalizing PowerRank across model types (documenting it as per-type is sufficient and lower risk).
-- Changing model *selection* logic. This proposal changes selection *timing* only.
+- Changing model *selection* logic. This proposal changes selection *timing* only (Phase 4a) and
+  rebases the values selection reads (Phase 0.5) without altering how it reads them.
+- Renormalizing `SpeedRank` / `CostRank`. Neither drives any runtime logic today — the only
+  non-generated consumers are display and filtering in `model-management.component.ts`. Normalize
+  them when something consumes them, not before.
 
 ---
 
@@ -231,12 +253,112 @@ Reuse the existing pattern in
 tracked over time. `ContextCrush` already provides the measurement primitives. This turns "we cut
 40%" into a measured claim.
 
-**0c. Model catalog correction.** Add Claude Opus 5. Correct the DeepSeek V4 Flash outlier.
-Document PowerRank explicitly as **per-model-type ordinal** in
-`metadata/ai-models/` guidance. *Gates Phase 4 only.*
+**0c. PowerRank rebase — absolute, anchored, locked.** See Part 3.5 below. *Gates Phase 4 only.*
 
 **Definition of done:** eval suite runs green on current `next`, producing a per-agent token
 baseline table.
+
+---
+
+### Phase 0.5 — PowerRank rebase: absolute, anchored, locked
+
+This is the design detail behind Phase 0c. It gates Phase 4 only; Phases 1–3 and 5 do not depend
+on it.
+
+#### The model
+
+**PowerRank is an absolute, permanent, monotonically-growing measure of model capability.** Not a
+percentile, not a within-catalog ordinal.
+
+Capability is a property of the model, not of its standing among peers. A model does not become
+less capable when better models ship. Two consequences follow, and both are the point:
+
+- **Ranks are locked once assigned.** Adding a new model can never change an existing model's
+  rank, therefore can never change an existing model's prompt content. Prompt behavior for a given
+  model is stable unless a human deliberately edits a threshold.
+- **A capability threshold never rots.** `>= 500` asserts *"this much capability suffices for terse,
+  example-free prompts."* That claim stays true as the ceiling rises; more models simply qualify
+  over time, which is the desired behavior.
+
+A relative/percentile scheme was considered and **rejected** for three reasons:
+
+1. `AIPromptRun.ModelPowerRank` is persisted on every run (`AIPromptRunner.ts:2839-2840`). A
+   percentile makes that historical column time-dependent and non-comparable across runs,
+   destroying longitudinal analysis of quality and cost against capability.
+2. Adding a model to the catalog would silently re-tier *existing* models and change prompt content
+   estate-wide with no code or config change — the exact silent-failure class this spec exists to
+   avoid.
+3. It would demote still-capable older models and start feeding them verbose prompts they do not
+   need. Wrong behavior, applied automatically.
+
+#### The scale
+
+- **Range: 1–1000 for today's catalog**, with current frontier models landing around the **500s**.
+  This deliberately reserves roughly half the range as headroom. The column is `int`, so the scale
+  can extend past 1000 if the arc demands it — 1000 is a working convention, not a ceiling.
+- **Scoped per `AIModelTypeID`.** Each model type is rebased onto its own anchored scale, and every
+  threshold comparison is type-scoped. A specialized, narrow-capability model class (rerankers,
+  embeddings) must **not** carry high power values — today's rerankers at 80–110 would trip an
+  LLM-oriented `>= 500` check the moment thresholds go live if left unscoped.
+- **Resolution.** 136 LLMs over a 1–1000 range gives room to express real differences instead of
+  the current clustering (19 models share PowerRank 8 today).
+
+#### Direction and semantics (document explicitly)
+
+| Field | Higher means | Higher is | Treatment |
+|---|---|---|---|
+| `PowerRank` | more capable | better | **Absolute, anchored, locked** |
+| `SpeedRank` | faster | better | **Relative**, may be renormalized over time |
+| `CostRank` | more expensive | **worse** | Relative; inverted vs. the other two |
+
+Speed is treated relatively on purpose, and the asymmetry is principled rather than inconsistent:
+speed has no absolute external anchor (throughput varies by vendor, region, and load) and "fast" is
+inherently relative to current expectations. Capability has an anchor; speed does not.
+
+Any future composite or `Balanced` scoring must account for **cost being inverted**. Measured
+correlations across 136 LLMs show the three axes are near-independent — Power↔Speed `r = -0.220`,
+Power↔Cost `r = +0.137` — so none is a usable proxy for another.
+
+#### Authority and external sources
+
+**MJ's ranks are authoritative.** External evaluations (Artificial Analysis blended intelligence
+index, and other independent benchmarks) are *inputs used to place new models on our scale* — they
+are never the scale itself, and MJ ranks are never re-derived when an external provider rebases its
+methodology.
+
+Per model, record: **source, index version, and as-of date**. Derive once at entry; never
+re-derive. This is what preserves the lock.
+
+#### Lock policy
+
+"Locked" means **locked by default, not immutable.** Entry errors happen — DeepSeek V4 Flash at
+PowerRank 30 outranking every frontier model is one sitting in the catalog today. Literal
+immutability would enshrine it permanently.
+
+- Ranks do not drift silently and are never changed as a side effect of adding another model.
+- Corrections are a deliberate, rare, explicitly logged event. MJ's Record Changes provides the
+  audit trail.
+- The guarantee is *"ranks don't drift silently,"* not *"ranks never change."*
+
+#### Work items
+
+1. **Rebase every model type** onto its own 1–1000 anchored scale, with existing models placed by
+   reference to independent evals rather than re-estimated by band. Correct the DeepSeek V4 Flash
+   outlier in the same pass. Add **Claude Opus 5**, which is absent from the catalog entirely
+   (Anthropic entries stop at Opus 4.8, though Fable 5 and Sonnet 5 are present).
+2. **Rewrite the rank guidance in `add-ai-model`** — the weekly model-update routine. Currently
+   `.claude/commands/add-ai-model.md:57-72` prescribes estimation into an open-ended `21+` band.
+   Replace with: consult independent evaluations (Artificial Analysis blended intelligence index and
+   peers), place the new model **relative to already-ranked models on our scale** rather than
+   guessing a number, record source + version + as-of date, and never modify an existing model's
+   rank as part of adding a new one. Update all three copies: `.claude/commands/`,
+   `templates/claude-pack/commands/`, `templates/claude-pack/dist/v5/.claude/commands/`.
+3. **Document direction, scale, and lock policy** in the column descriptions and in
+   `metadata/ai-models/` guidance, so the semantics stop being inferable-only-from-data.
+4. **Validate entry against evals.** When a model is added, confirm its measured performance on the
+   Phase 0a suite is consistent with the rank the external index implies — then lock it. Validate
+   once, at the moment of maximum doubt. This is a better fit than continuous re-ranking and gives a
+   defensible answer to "why is this model ranked here?"
 
 ---
 
@@ -324,10 +446,10 @@ Independently fixes `_MODEL_ID` / `_VENDOR_ID` resolving to empty on normal runs
 | `_MODEL_SPEED_RANK` | raw `SpeedRank` — escape hatch |
 | `_MODEL_NAME` | for diagnostics and prompt-run traceability |
 
-**Design decision: templates key off `_MODEL_TIER`, not raw ranks.** Sprinkling
-`{% if _MODEL_POWER_RANK >= 22 %}` across 103 templates means every catalog update silently
-changes prompts estate-wide, and every threshold is a magic number someone must re-derive. One
-coarse enum, resolved centrally, handles the reranker-scale problem in one place:
+**Design decision: templates key off `_MODEL_TIER`, not raw ranks.** With ranks rebased and locked
+(Phase 0.5), a raw threshold is stable — but it is still a bare integer that must be
+**type-scoped** to be correct, and repeating it across 103 templates means 103 places to audit when
+a threshold moves. Resolve it once, centrally, from `(AIModelTypeID, PowerRank)`:
 
 ```njk
 {% if _MODEL_TIER != 'frontier' %}
@@ -337,7 +459,18 @@ coarse enum, resolved centrally, handles the reranker-scale problem in one place
 ```
 
 Tier boundaries live in **metadata** (a field or config on the model type), not code, so they're
-adjustable without a release.
+adjustable without a release — and because they are type-scoped, an LLM boundary can never
+accidentally catch a reranker.
+
+**Tier keys on power only.** Speed and cost inform model *selection*; they must never influence
+prompt *content*. The measured Power↔Speed correlation is `r = -0.220` — near-independent — and
+four models are simultaneously fast and frontier-class (Gemini 3.6 / 3.5 / 3 Flash,
+MiniMax-M2.5-highspeed). Deriving tier from speed would hand those models a reduced-capability
+prompt.
+
+**Each boundary is a capability claim tied to evidence.** `>= 500` asserts "this much capability
+suffices for terse, example-free prompts," and should reference the Phase 0a eval that established
+it — so anyone proposing to move it knows what evidence to produce.
 
 **4c. Re-render per model on the multi-model paths.** Existing selection logic stays exactly as
 it is — whatever the developer configured at runtime (parallel pools, `PowerRank` failover,
@@ -397,7 +530,11 @@ truncation with actual search.
 |---|---|
 | Deleting examples breaks JSON-format adherence on some model | Phase 0a deterministic oracles (`schema-validate`) catch exactly this; Phase 4 lets weaker tiers keep the examples |
 | Guardrails deleted for Opus-class models bite mid-tier / non-Anthropic models | Tier-gate the cuts rather than applying globally; MJ agents run a configurable model set, not one model |
-| Bad PowerRank data silently selects the wrong prompt variant | Phase 0c gates Phase 4; coarse tiers are far more error-tolerant than numeric thresholds |
+| Bad PowerRank data silently selects the wrong prompt variant | Phase 0.5 gates Phase 4: rebase against independent evals, validate at entry, lock |
+| Rebasing PowerRank changes the meaning of existing configuration | Measured: 0 prompts set `MinPowerRank`; `PowerPreference` is rank-order relative and invariant under rescaling. Blast radius is nil **today** and grows once anyone pins an absolute threshold |
+| An entry error becomes permanent under a lock policy | Lock is "no silent drift," not immutability — corrections are deliberate, rare, and logged via Record Changes |
+| External index rebases its methodology, breaking comparability | MJ ranks are authoritative and derived **once** at entry; source + version + as-of date recorded per model; never re-derived |
+| A specialized model type (reranker, embedding) trips an LLM threshold | All thresholds and the tier resolver are scoped by `AIModelTypeID`; each type is rebased onto its own scale |
 | Tier-conditional blocks multiply the test matrix | Every tier-conditional block needs coverage at each tier, or a `light`-tier prompt ships untested. Budget for this in Phase 0a |
 | Parallel/failover renders one prompt for mixed-power models | Phase 4c re-renders per model; selection logic is left untouched |
 | Loop-template changes affect all 26 agents at once | Phase 2 gated on Phase 0a; changes land per-block, not as one commit |
@@ -413,6 +550,9 @@ truncation with actual search.
 3. **Authoring durability** — fenced-block share across `metadata/prompts/templates/` trending
    down, enforced by the Phase 3b gate rather than vigilance.
 4. **Tier coverage** — every tier-conditional block has an eval at each tier it branches on.
+5. **Rank integrity** — every active model carries a rebased PowerRank on its type's 1–1000 scale
+   with a recorded source, index version, and as-of date; no rank changes as a side effect of
+   adding another model.
 
 ---
 
@@ -427,3 +567,4 @@ truncation with actual search.
 | CLAUDE.md memory → auto-memory | **Already done** (`memoryWrites` + Memory Manager) | — |
 | Simple specs → rich references | `TestRubric` entity exists, 0 records seeded | Phase 0a (rubrics are the natural follow-on) |
 | *(MJ-specific)* model-adaptive context | Not possible — model resolved after render | Phase 4 |
+| *(MJ-specific)* capability measurement | PowerRank inflating on an open-ended `21+` band, per-type scales colliding | Phase 0.5 |
