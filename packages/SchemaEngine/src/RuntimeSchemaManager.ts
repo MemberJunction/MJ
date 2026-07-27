@@ -9,7 +9,14 @@
  * In-memory concurrency mutex (one operation at a time).
  */
 import { BaseSingleton } from '@memberjunction/global';
-import { LogError, Metadata, RunView, type DatabaseProviderBase, type UserInfo } from '@memberjunction/core';
+import {
+  LogError,
+  Metadata,
+  RunView,
+  type DatabaseProviderBase,
+  type IMetadataProvider,
+  type UserInfo,
+} from '@memberjunction/core';
 import type { MJRSUPendingWorkEntity } from '@memberjunction/core-entities';
 import { Octokit } from '@octokit/rest';
 import { RSUMetrics } from './RSUMetrics.js';
@@ -450,8 +457,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * it stays Pending until the consumer explicitly calls {@link CompletePendingWork}
    * or {@link FailPendingWork}, so a crash mid-consumption leaves visible, resumable work.
    */
-  public async WritePendingWork(data: RSUPendingWork, contextUser: UserInfo): Promise<string> {
-    const md = new Metadata();
+  public async WritePendingWork(
+    data: RSUPendingWork,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<string> {
+    const md = provider ?? new Metadata();
     const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
     row.NewRecord();
     row.CompanyIntegrationID = data.CompanyIntegrationID;
@@ -475,6 +486,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   public async ReadPendingWork(
     contextUser: UserInfo,
     staleAfterMinutes?: number,
+    provider?: IMetadataProvider,
   ): Promise<Array<{ ID: string; Work: RSUPendingWork; CreatedAt: Date }>> {
     const rv = new RunView();
     const result = await rv.RunView<MJRSUPendingWorkEntity>(
@@ -498,7 +510,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       try {
         items.push({ ID: row.ID, Work: JSON.parse(row.PayloadJSON) as RSUPendingWork, CreatedAt: createdAt });
       } catch (err) {
-        await this.FailPendingWork(row.ID, `Corrupt PayloadJSON: ${err instanceof Error ? err.message : String(err)}`, contextUser);
+        await this.FailPendingWork(
+          row.ID,
+          `Corrupt PayloadJSON: ${err instanceof Error ? err.message : String(err)}`,
+          contextUser,
+          provider,
+        );
       }
     }
 
@@ -517,13 +534,22 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /** Mark a pending work row Completed. Call ONLY after the work actually succeeded. */
-  public async CompletePendingWork(id: string, contextUser: UserInfo): Promise<boolean> {
-    return this.setPendingWorkTerminalStatus(id, 'Completed', undefined, contextUser);
+  public async CompletePendingWork(
+    id: string,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<boolean> {
+    return this.setPendingWorkTerminalStatus(id, 'Completed', undefined, contextUser, provider);
   }
 
   /** Mark a pending work row Failed, recording why. */
-  public async FailPendingWork(id: string, errorMessage: string, contextUser: UserInfo): Promise<boolean> {
-    return this.setPendingWorkTerminalStatus(id, 'Failed', errorMessage, contextUser);
+  public async FailPendingWork(
+    id: string,
+    errorMessage: string,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<boolean> {
+    return this.setPendingWorkTerminalStatus(id, 'Failed', errorMessage, contextUser, provider);
   }
 
   private async setPendingWorkTerminalStatus(
@@ -531,8 +557,9 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     status: 'Completed' | 'Failed',
     errorMessage: string | undefined,
     contextUser: UserInfo,
+    provider?: IMetadataProvider,
   ): Promise<boolean> {
-    const md = new Metadata();
+    const md = provider ?? new Metadata();
     const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
     if (!(await row.Load(id))) {
       LogError(`[RSU] Pending work ${id} not found when marking ${status}`);
