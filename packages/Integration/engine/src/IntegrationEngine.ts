@@ -4174,6 +4174,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 Fields: ['StartedAt'],
                 MaxRows: keep,
                 ResultType: 'simple',
+                // This read is exactly the "how many exist beyond this capped page?" case
+                // ReturnTotalRowCount exists for. Without it TotalRowCount reports the rows
+                // returned, which is exactly `keep` whenever there IS something to prune — so the
+                // guard below would read `keep <= keep`, return early every time, and the audit
+                // tables would grow forever while appearing bounded.
+                ReturnTotalRowCount: true,
             }, contextUser);
             if (!recent.Success || (recent.TotalRowCount ?? 0) <= keep) return;
             const cutoffRaw = recent.Results?.[recent.Results.length - 1]?.StartedAt;

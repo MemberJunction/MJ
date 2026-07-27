@@ -770,13 +770,16 @@ export class IntegrationDataService {
     if (!entityInfo) return 0;
 
     const rv = this.createRunView(provider);
-    const result = await rv.RunView<{ TotalCount: number }>({
+    // A count, so ask for a count. Reading primary-key rows and falling back to `Results.length`
+    // relied on `TotalRowCount` being the true total, which it now only is when the caller
+    // paginates, opts in with ReturnTotalRowCount, or uses count_only — and it capped the answer
+    // at the entity's UserViewMaxRows (1000) besides. count_only returns no rows at all.
+    const result = await rv.RunView({
       EntityName: entityInfo.Name,
       ExtraFilter: '',
-      Fields: [entityInfo.FirstPrimaryKey?.Name ?? 'ID'],
-      ResultType: 'simple'
+      ResultType: 'count_only'
     });
-    return result.TotalRowCount ?? result.Results.length;
+    return result.TotalRowCount ?? 0;
   }
 
   /** Get the most recent run that touched a given entity */

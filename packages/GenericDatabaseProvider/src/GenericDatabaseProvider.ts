@@ -1704,7 +1704,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
-            // NOTE (tasks.md PR 2 item 6 — the phantom COUNT(*)): there used to be a fallback
+            // NOTE (the phantom COUNT(*)): there used to be a fallback
             // here that fired an EXTRA, SERIAL `SELECT COUNT(*)` over the whole base view
             // whenever a non-paginated read happened to fill its page
             // (`retData.length === maxRowsUsed`). Because `maxRowsUsed` falls back to

@@ -1,7 +1,7 @@
 /**
  * COUNT(*)-on-every-read coverage for GenericDatabaseProvider.InternalRunView.
  *
- * Why this file exists (tasks.md PR 2 item 6):
+ * Why this file exists:
  *
  * A non-paginated RunView used to fire a second `SELECT COUNT(*)` whenever the result happened
  * to come back exactly at the row cap — a guess at "there may be more", paid for by every caller
