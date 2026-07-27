@@ -33,7 +33,7 @@ MemberJunction already persists what Pi has to reconstruct at render time. Every
 
 This plan adds a deliberately small delta:
 
-- **Two lineage columns** on `AIAgentRun` (`BranchedFromRunID`, `BranchedFromStepID`) plus one `Action.ReplayPolicy` column and a widened `PublicLink.ResourceType` CHECK. One migration.
+- **Two lineage columns** on `AIAgentRun` (`BranchedFromRunID`, `BranchedFromStepID`) plus a widened `PublicLink.ResourceType` CHECK. One migration.
 - **A branch mode on the existing run machinery**: branching reuses the same "spawn a new run seeded from a prior run" path that HITL resume (`lastRunId` + `autoPopulateLastRunPayload`) already uses, except it seeds from a mid-run step snapshot instead of `FinalPayload`.
 - **A compare view** built on the existing `DeepDiffer` engine and `mj-deep-diff` component (no new diff engine).
 - **A Branches tab and branch composer** extending the existing `MJAIAgentRunFormComponentExtended` run form (no parallel UI).
@@ -163,28 +163,19 @@ Why new columns instead of reuse:
 
 Naming follows the shipped precedent `AIPromptRun.RerunFromPromptRunID` in spirit; Section 11 item 2 records the literal `RerunFrom*` alternative for review. Branch labels reuse the existing unused `AIAgentRun.RunName`. No backfill is needed (new nullable columns; existing rows are correctly "not branches").
 
-### 4.2 `Action`: replay policy
-
-| Column | Type | Notes |
-|---|---|---|
-| `ReplayPolicy` | `NVARCHAR(20) NULL`, `CHECK (ReplayPolicy IN ('Re-Execute', 'Reuse Recorded', 'Block'))` | How this action behaves when executed inside a branched (replay) run. NULL means `Re-Execute`. |
-
-Per `migrations/CLAUDE.md`, the CHECK is written without an `OR ... IS NULL` clause. This is a justified net-new column: we searched for an existing side-effect/idempotency marker on `Action` and none exists. Semantics are defined in Section 5.5.
-
-### 4.3 `PublicLink`: widen the resource-type CHECK
+### 4.2 `PublicLink`: widen the resource-type CHECK
 
 Drop `CK_PublicLink_ResourceType` and re-add it with `'Agent Run'` included, in the same migration (value lists and the generated TS union derive from the CHECK constraint; `EntityFieldValue` rows are never touched by hand).
 
-### 4.4 Migration checklist (single file, `migrations/v5/`)
+### 4.3 Migration checklist (single file, `migrations/v5/`)
 
 - Single consolidated `ALTER TABLE ${flyway:defaultSchema}.AIAgentRun ADD BranchedFromRunID ..., BranchedFromStepID ...` with named inline FK constraints.
-- `ALTER TABLE ${flyway:defaultSchema}.Action ADD ReplayPolicy ...` with the CHECK.
 - Drop + re-add `CK_PublicLink_ResourceType`.
 - `sp_addextendedproperty` for every new column, grouped at the bottom of the file.
 - Do **not** add `__mj_CreatedAt`/`__mj_UpdatedAt` or FK indexes (CodeGen owns those). No other indexes unless requested.
 - Hand off to CodeGen (Section 10.1); append the CodeGen output to the same migration file per the separator convention; produce the `.pg.sql` sibling via `pg-migrate-v2`.
 
-### 4.5 Metadata changes (not in the migration, per `metadata/CLAUDE.md`)
+### 4.4 Metadata changes (not in the migration, per `metadata/CLAUDE.md`)
 
 - New `AI Agent Runs` row in `metadata/resource-types/.resource-types.json` (enables the `ResourcePermission` sharing stack, Section 8.1).
 - Widened RLS FilterTexts for the three `UI: Own AI Agent *` filters (Section 8.1).
@@ -234,27 +225,17 @@ Upstream steps are **fixtures**: they are never re-executed. Their recorded outp
 Where it breaks, honestly stated:
 
 - **LLM stochasticity.** Same model + same input does not guarantee same output. `AIPromptRun` records `Seed` where the provider supports it, and the diff view (Section 6) treats prompt outputs as expected divergence, not noise to hide.
-- **Non-idempotent actions.** A branch that reaches a "send email" or "write record" action re-executes it for real. This is the one place replay needs a guardrail; see 5.5.
+- **Non-idempotent actions.** A branch that reaches a "send email" or "write record" action re-executes it for real. This is not prevented mechanically; the branch composer surfaces every downstream action step before launch and requires explicit confirmation (Section 7.1). A per-action replay policy was considered and cut for now (Section 12).
 - **External world state.** An action or query re-executed later can legitimately return different data. Recorded, visible in the diff, not prevented.
 - **Time-dependent prompts.** Templates that interpolate current time/data diverge by nature; the `Data` column captures what was interpolated.
 
-### 5.5 Action replay policy
-
-Enforced in `executeActionsStep` only when the current run has `BranchedFromRunID` set (normal runs are untouched):
-
-- **`Re-Execute`** (default, `NULL`): run the action normally. Correct for reads and idempotent operations.
-- **`Reuse Recorded`**: look up the source run's `ActionExecutionLog` for the same `ActionID` by ordinal occurrence (first call to action X in the branch maps to first recorded call to action X at-or-after the branch point, and so on) and return its recorded `Message`/`ResultCode` as the action result without executing. When no recorded match exists (the branch diverged into new action calls), degrade to `Block` for that call: silent live execution of an action the author marked as replay-unsafe is worse than a loud stop.
-- **`Block`**: fail the step with an explicit "blocked by ReplayPolicy during replay" error.
-
-The branch composer (Section 7.1) lists the side-effectful actions downstream of the chosen branch point with their policies before launch, so nobody discovers a `Block` mid-run.
-
-### 5.6 Coexistence with HITL and the watchdog
+### 5.5 Coexistence with HITL and the watchdog
 
 - A branched run **never** stamps `AIAgentRequest.ResumingAgentRunID`; branching from a run that has an open `MJ: AI Agent Requests` row leaves that request untouched and answerable on the original chain.
 - A branched run may itself later pause (`AwaitingFeedback`) and be resumed: `LastRunID` and `BranchedFromRunID` coexist without ambiguity.
 - No new run `Status` values, no adoption of `'Paused'`, no watchdog changes.
 
-### 5.7 Entry points
+### 5.6 Entry points
 
 `AgentRunner` passes the two new params through; `RunAIAgentResolver` (`packages/MJServer/src/resolvers/RunAIAgentResolver.ts`) gains the matching mutation args. No new resolver.
 
@@ -283,8 +264,8 @@ Everything extends the existing run form; nothing new is routed. Host: `MJAIAgen
   - Payload editor: `mj-code-editor` (JSON, CodeMirror) prefilled with the step's `PayloadAtStart`; edits become the `params.payload` mutation.
   - Prompt override textarea, shown only when the branch point is a `Prompt` step (feeds `systemPromptOverride`).
   - `RunName` input for the branch label.
-  - A downstream-actions summary listing `Reuse Recorded`/`Block` policies and side-effectful `Re-Execute` actions past the branch point.
-- `MJConfirmService` confirmation when downstream actions will `Block` or re-execute side effects; primary button on the LEFT per the MJ dialog convention; on launch, `SharedService.Instance.OpenEntityRecord` navigates to the new run.
+  - A downstream-actions summary listing every action step past the branch point, with a plain warning that these actions will re-execute for real.
+- `MJConfirmService` confirmation whenever action steps exist downstream of the branch point; primary button on the LEFT per the MJ dialog convention; on launch, `SharedService.Instance.OpenEntityRecord` navigates to the new run.
 
 ### 7.2 Branches tab
 
@@ -349,13 +330,13 @@ Everything in this plan ships together as one implementation effort. The full de
 
 | Area | Deliverable |
 |---|---|
-| **Migration** | Section 4: lineage columns, `Action.ReplayPolicy`, `PublicLink` CHECK widen, extended properties; CodeGen output appended per the separator convention; `.pg.sql` sibling via `pg-migrate-v2` |
-| **Generated entities** | `MJAIAgentRunEntity.BranchedFromRunID`/`BranchedFromStepID`, `MJActionEntity.ReplayPolicy`, widened `MJPublicLinkEntity.ResourceType` union (CodeGen output, committed as generated) |
-| **Replay engine** | `ExecuteAgentParams` fields, `initializeAgentRun` branch seeding + validation, context reconstruction, `ReplayPolicy` enforcement in `executeActionsStep`, `AgentRunner`/`RunAIAgentResolver` passthrough |
+| **Migration** | Section 4: lineage columns, `PublicLink` CHECK widen, extended properties; CodeGen output appended per the separator convention; `.pg.sql` sibling via `pg-migrate-v2` |
+| **Generated entities** | `MJAIAgentRunEntity.BranchedFromRunID`/`BranchedFromStepID`, widened `MJPublicLinkEntity.ResourceType` union (CodeGen output, committed as generated) |
+| **Replay engine** | `ExecuteAgentParams` fields, `initializeAgentRun` branch seeding + validation, context reconstruction, `AgentRunner`/`RunAIAgentResolver` passthrough |
 | **Explorer** | Branch composer, Branches tab, compare pane (Sections 7.1 to 7.3) |
 | **Sharing** | Resource-type metadata, `AgentRunShareAdapter`, share dialog wiring, widened RLS FilterTexts, `PublicLink` minting/resolution, `Replay Guest` scoped role, share projection, HTML exporter, audit types |
 
-Testing per the Definition of Done, all green before merge: vitest coverage in `@memberjunction/ai-agents` (branch seeding precedence, lineage stamping, `ReplayPolicy` enforcement), DOM specs per the existing `*.dom.test.ts` pattern in the run-form directory, and a deterministic integration bundle (branch from a fixture run; assert seeded payload, lineage stamps, policy enforcement, share-scoped visibility), run after the migration + CodeGen are applied.
+Testing per the Definition of Done, all green before merge: vitest coverage in `@memberjunction/ai-agents` (branch seeding precedence, lineage stamping, settled-run validation), DOM specs per the existing `*.dom.test.ts` pattern in the run-form directory, and a deterministic integration bundle (branch from a fixture run; assert seeded payload, lineage stamps, share-scoped visibility), run after the migration + CodeGen are applied.
 
 ### 10.1 Build-order constraint: CodeGen must run before any typed code is written
 
@@ -367,9 +348,8 @@ This is not a rollout phase; it is the one hard sequencing rule inside the singl
 
 1. **ParentRunID verdict.** Confirmed present and documented for sub-agent nesting ("Reference to the parent agent run if this is a sub-agent execution"); there is also `LastRunID` ("Links to the previous run in a chain. Different from ParentRunID"). Recommendation: touch neither; add `BranchedFromRunID` + `BranchedFromStepID`. The considered-and-rejected alternative (overloading `LastRunID`, which is schema-DAG-capable) is written up in Section 4.1. Confirm the three-field separation.
 2. **Naming.** `BranchedFromRunID`/`BranchedFromStepID` vs `RerunFromRunID`/`RerunFromStepID` (the literal precedent is `AIPromptRun.RerunFromPromptRunID` + `RootRerunFromPromptRunID`).
-3. **`Action.ReplayPolicy`** as a persisted column (proposed) vs a runtime-only parameter on the branch request. The column makes the guarantee author-owned and uniform; the param would be per-branch ad hoc.
-4. **Share enforcement**: widening the three `UI: Own AI Agent *` RLS FilterTexts (proposed, keeps one enforcement point) vs standing up a dedicated agent-run permission domain/provider.
-5. **FYI**: `AIPromptRun.AgentRunID` exists in SQL but not in the generated entity on `next` (removed by `V202607241645__v5.50.x__Break_CodeGen_Cycle_Remove_PromptRun_AgentRunID.sql`); this design intentionally depends only on `AIAgentRunStep.TargetLogID` for step-to-prompt-run linkage.
+3. **Share enforcement**: widening the three `UI: Own AI Agent *` RLS FilterTexts (proposed, keeps one enforcement point) vs standing up a dedicated agent-run permission domain/provider.
+4. **FYI**: `AIPromptRun.AgentRunID` exists in SQL but not in the generated entity on `next` (removed by `V202607241645__v5.50.x__Break_CodeGen_Cycle_Remove_PromptRun_AgentRunID.sql`); this design intentionally depends only on `AIAgentRunStep.TargetLogID` for step-to-prompt-run linkage.
 
 ---
 
@@ -381,6 +361,7 @@ This is not a rollout phase; it is the one hard sequencing rule inside the singl
 - **Any new hook/plugin system on `BaseAgent`.** House pattern is subclassing with granular overridable methods; `serializePayloadAtStart`/`serializePayloadAtEnd` are the sanctioned override points this plan touches.
 - **Cross-provider context serialization.** Separate future plan.
 - **Secret/PII scrubbing of shared run content.** Deferred to its own dedicated feature plan; shares in this effort are access-controlled but expose recorded run content as-is.
+- **A per-action replay policy (`Action.ReplayPolicy`).** Considered (a column declaring re-execute / reuse-recorded / block behavior during replay) and deferred; in this effort every downstream action re-executes for real, guarded by the branch composer's explicit downstream-actions warning and confirmation (Sections 5.4 and 7.1).
 - **Pi-style branch summaries.** MJ branches lose nothing, so there is nothing to summarize.
 - **A `Branch`/lineage table.** Two columns on `AIAgentRun` express the tree.
 - **Adopting `AIAgentRun.AgentState`.** Dead schema (never written); branch seeding uses recorded step snapshots and prompt-run messages instead.
