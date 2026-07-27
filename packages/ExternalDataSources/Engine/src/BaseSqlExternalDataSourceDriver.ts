@@ -229,8 +229,9 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
    * qualification never reaches a non-SQL driver (e.g. MongoDB), which treats the name as literal.
    */
   public override ResolveObjectName(entity: EntityInfo): string {
-    // Reuse the base fallback chain (ExternalObjectName ?? BaseTable ?? Name) so SQL and non-SQL drivers
-    // can never diverge on how the bare name is derived — this override only ADDS schema qualification.
+    // Reuse the base fallback chain (ExternalObjectName || BaseTable || Name — `||` so an empty-string
+    // ExternalObjectName falls through; see the base method) so SQL and non-SQL drivers can never diverge
+    // on how the bare name is derived — this override only ADDS schema qualification.
     const objectName = super.ResolveObjectName(entity);
     if (objectName.includes('.') || !entity.SchemaName) {
       return objectName;

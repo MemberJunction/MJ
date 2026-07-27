@@ -82,8 +82,10 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
   /**
    * Resolve the remote object identifier for an external entity into the `objectName` string this
    * driver's read methods ({@link RunView} / {@link LoadSingle}) expect. Base implementation returns
-   * the name verbatim — `ExternalObjectName ?? BaseTable ?? Name` — which is correct for stores where
-   * the object name is a LITERAL identifier (e.g. a MongoDB collection). SQL drivers OVERRIDE this to
+   * the name verbatim — `ExternalObjectName || BaseTable || Name` — which is correct for stores where
+   * the object name is a LITERAL identifier (e.g. a MongoDB collection). NOTE: `||` (not `??`) is
+   * intentional — an EMPTY-string `ExternalObjectName` must fall through to `BaseTable`/`Name`, which
+   * `??` (nullish only) would not do. Do not "simplify" this to `??`. SQL drivers OVERRIDE this to
    * schema-qualify a bare name (see `BaseSqlExternalDataSourceDriver.ResolveObjectName`). Keeping this
    * per-driver is what lets the read router stay dialect-agnostic — it never string-munges the name
    * itself, so a non-SQL driver never receives a schema-qualified name it would treat as literal.
