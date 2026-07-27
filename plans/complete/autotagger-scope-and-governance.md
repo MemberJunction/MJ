@@ -86,7 +86,7 @@ The autotagger is more mature than a casual reading suggests. Verified in this i
 - **AI Agent Notes scoping precedent**: `PrimaryScopeEntityID` + `PrimaryScopeRecordID` + `SecondaryScopes`. Scope filter assembly lives in [packages/AI/Agents/src/agent-context-injector.ts:282-401](../../packages/AI/Agents/src/agent-context-injector.ts#L282-L401). Tightly coupled to notes today; we will pattern, not extract, in this phase.
 - **Embedding storage precedent**: `MJAIAgentNoteEntity.EmbeddingVector` is `nvarchar(MAX)` JSON-encoded array + `EmbeddingModelID` FK, refreshed in a `Save()` hook at [packages/MJCoreEntitiesServer/src/custom/MJAIAgentNoteEntityServer.server.ts:25-59](../../packages/MJCoreEntitiesServer/src/custom/MJAIAgentNoteEntityServer.server.ts#L25-L59). We mirror this for `MJ:Tags` exactly.
 - **Strong-typed JSON config**: `IContentSourceConfiguration` lives at [metadata/entities/JSONType-interfaces/IContentSourceConfiguration.ts](../../metadata/entities/JSONType-interfaces/IContentSourceConfiguration.ts). CodeGen reads this and emits a typed getter on `MJContentSourceEntity` named `_IContentSourceConfiguration`. Net-new autotagger knobs go here, not into new SQL columns.
-- **Migration conventions**: see [migrations/CLAUDE.md](migrations/CLAUDE.md). Latest pre-existing migration: `V202604292210__v5.31.x__Create_UDT_Schema.sql`.
+- **Migration conventions**: see [migrations/CLAUDE.md](../../migrations/CLAUDE.md). Latest pre-existing migration: `V202604292210__v5.31.x__Create_UDT_Schema.sql`.
 
 **Implication:** What looked like "implement" is mostly "extend." The schema add is small and additive; the engine work is hooking governance + scope filtering + persisted embeddings into existing infrastructure.
 
