@@ -1,8 +1,15 @@
-# Agent Context Optimization — Specification & Implementation Plan
+# Agent Context Optimization — Prompt Subtraction + Capability-Aware Rendering
 
-**Status:** Proposal
-**Author:** drafted for review
-**Related:** [Anthropic — *The new rules of context engineering for Claude 5 generation models*](https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models) (July 24, 2026)
+**Status:** Proposed
+**Owner:** AI / Agents
+**Branch:** `claude/mj-agent-context-optimization-eptdee`
+**Last updated:** 2026-07-27
+**Source:** [Anthropic — *The new rules of context engineering for Claude 5 generation models*](https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models) (July 24, 2026)
+
+> **Related plan:** [`agent-token-optimization.md`](agent-token-optimization.md) covers *runtime*
+> token reduction — structural JSON compression, cache-aligned prefixes, AST-aware code reduction.
+> This plan covers *authoring-time* reduction: what we write into prompts in the first place. The
+> two are complementary and share no work items.
 
 ---
 
@@ -19,7 +26,7 @@ This proposal does two things at once:
 1. **Subtract** — remove redundant examples, deduplicate instructions into the interfaces that
    already describe them, and push rarely-needed content behind progressive disclosure.
 2. **Condition** — resolve the model *before* rendering so templates can include or exclude
-   content based on the capability tier of the model actually running.
+   content based on the measured capability of the model actually running.
 
 These are complementary. Subtraction sets the floor (what every model gets); conditioning sets
 the ceiling (what weaker models additionally need). Doing only the first risks regressions on
@@ -138,7 +145,7 @@ The extension point is clean: `renderPromptTemplate()` merges
 `SystemPlaceholderManager.resolveAllPlaceholders(params)` into the Nunjucks data context
 (`:3009-3016`), and the manager exposes a public `registerPlaceholder` API.
 
-### 1.5 Catalog data is not ready for tier-conditional prompts
+### 1.5 Catalog data is not ready for capability-conditional prompts
 
 **PowerRank is an ordinal within model type, not a normalized cross-type scale.** Measured
 across all 167 distinct models:
@@ -191,7 +198,7 @@ zero migration blast radius** — that stops being true the moment anyone sets `
 
 ### 1.6 One render, many models
 
-Two paths break the "one model per render" assumption that tier-conditional content requires.
+Two paths break the "one model per render" assumption that capability-conditional content requires.
 **Both are resolved by re-rendering per model (Phase 4c), not by constraining selection** — see
 that phase for the cost analysis.
 
@@ -212,7 +219,7 @@ that phase for the cost analysis.
 1. Reduce rendered system-prompt size for the top agents by a measured, non-trivial margin
    with **no regression** on agent evals.
 2. Make "interface, not example" the default authoring mode, enforced rather than encouraged.
-3. Give templates the ability to adapt content to the capability tier of the model actually running.
+3. Give templates the ability to adapt content to the measured capability of the model actually running.
 4. Establish the eval baseline that makes claims 1–3 verifiable rather than asserted.
 
 ### Non-Goals
@@ -429,7 +436,7 @@ inlining them into every turn's system prompt is not:
 
 ---
 
-### Phase 4 — Model-tier-aware rendering (the conditioning half)
+### Phase 4 — Capability-aware rendering (the conditioning half)
 
 **4a. Reorder selection before render.** In `AIPromptRunner.executePrompt`, move the regular-branch
 `selectModel()` call (`:843`) above the render (`:821`), matching the hierarchical branch. Thread
@@ -441,36 +448,54 @@ Independently fixes `_MODEL_ID` / `_VENDOR_ID` resolving to empty on normal runs
 
 | Placeholder | Value |
 |---|---|
-| `_MODEL_TIER` | `'frontier' \| 'standard' \| 'light'` — computed once from `(AIModelTypeID, PowerRank)` |
-| `_MODEL_POWER_RANK` | raw `PowerRank` — escape hatch |
-| `_MODEL_SPEED_RANK` | raw `SpeedRank` — escape hatch |
+| `_MODEL_POWER_RANK` | raw `PowerRank` of the selected model |
+| `_MODEL_TYPE` | the model's type name, so a threshold can be guarded to its scale |
+| `_MODEL_SPEED_RANK` | raw `SpeedRank` — available, but see the power-only rule below |
 | `_MODEL_NAME` | for diagnostics and prompt-run traceability |
 
-**Design decision: templates key off `_MODEL_TIER`, not raw ranks.** With ranks rebased and locked
-(Phase 0.5), a raw threshold is stable — but it is still a bare integer that must be
-**type-scoped** to be correct, and repeating it across 103 templates means 103 places to audit when
-a threshold moves. Resolve it once, centrally, from `(AIModelTypeID, PowerRank)`:
+**Design decision: templates compare raw PowerRank against absolute thresholds. There is no tier
+abstraction.**
 
 ```njk
-{% if _MODEL_TIER != 'frontier' %}
+{% if _MODEL_POWER_RANK < 100 %}
 ### ForEach: Process Collections Efficiently
 ...worked example...
 {% endif %}
 ```
 
-Tier boundaries live in **metadata** (a field or config on the model type), not code, so they're
-adjustable without a release — and because they are type-scoped, an LLM boundary can never
-accidentally catch a reranker.
+A named-tier layer (`frontier` / `standard` / `light`) was designed and **rejected**. Those labels
+are definitionally market-relative, so they reintroduce exactly the time-dependence that Phase 0.5
+eliminates from the rank itself — one level up, where it is harder to see. The failure mode is
+concrete: a maintainer reads "frontier," observes that the boundary value is now mid-pack, and
+raises it — silently changing prompt content for every model in between, none of whose capability
+changed.
 
-**Tier keys on power only.** Speed and cost inform model *selection*; they must never influence
-prompt *content*. The measured Power↔Speed correlation is `r = -0.220` — near-independent — and
-four models are simultaneously fast and frontier-class (Gemini 3.6 / 3.5 / 3 Flash,
-MiniMax-M2.5-highspeed). Deriving tier from speed would hand those models a reduced-capability
-prompt.
+The question a template asks is capability-absolute — *"can this model follow the response protocol
+without a worked example?"* — not *"is this model near the top of the current market?"* After the
+rebase, PowerRank answers the first question directly and permanently. A tier enum answers the
+second while appearing to answer the first.
 
-**Each boundary is a capability claim tied to evidence.** `>= 500` asserts "this much capability
-suffices for terse, example-free prompts," and should reference the Phase 0a eval that established
-it — so anyone proposing to move it knows what evidence to produce.
+**A threshold is a capability claim, and it does not move.** `>= 100` asserts "this much capability
+suffices for terse, example-free prompts." That claim stays true as the ceiling rises; more models
+simply qualify over time, which is the intent. A threshold changes only when the claim is shown to
+be wrong — rare, deliberate, and backed by the Phase 0a eval that establishes it. Each conditional
+block should carry a short comment naming the claim and the eval behind the number, so a future
+reader knows what evidence would justify changing it.
+
+**Thresholds are power-only.** Speed and cost inform model *selection*; they must never gate prompt
+*content*. Measured Power↔Speed correlation is `r = -0.220` — near-independent — and four models are
+simultaneously fast and frontier-class (Gemini 3.6 / 3.5 / 3 Flash, MiniMax-M2.5-highspeed).
+Deriving prompt content from speed would hand exactly those models a reduced-capability prompt.
+
+**Thresholds are only meaningful within a model type.** Each type is rebased onto its own scale
+(Phase 0.5), so a bare `>= 100` would pass for a specialized model ranked 110 on a different scale.
+Agent prompts run on LLMs in practice, making this largely theoretical today — but `_MODEL_TYPE` is
+exposed so a conditional can guard itself where it matters, and the authoring guidance states the
+rule explicitly.
+
+**If a third distinct threshold appears, revisit.** Two or three raw comparisons are honest and
+self-contained. A larger set would justify naming the capability claims — but that is a decision to
+make against real usage, not to pre-build.
 
 **4c. Re-render per model on the multi-model paths.** Existing selection logic stays exactly as
 it is — whatever the developer configured at runtime (parallel pools, `PowerRank` failover,
@@ -492,7 +517,7 @@ execution time, and no reason to constrain selection to avoid it.
 The actual work: `executePromptInParallel` currently accepts a single `renderedPromptText`
 (`AIPromptRunner.ts:1077`) and shares it across all N tasks. Change it to render per task from the
 task's own selected model, so each model in a mixed-power pool receives prompt content matched to
-its tier. Same for the failover loop — re-render against the model actually being retried.
+its capability. Same for the failover loop — re-render against the model actually being retried.
 
 This is strictly better behavior than the alternative, not merely equivalent: failover to a
 lower-power model currently inherits a prompt written for the original model, and per-model
@@ -503,12 +528,13 @@ rendering fixes that automatically.
   integration tier, not just unit tests.
 
 **Composition note:** this does not conflict with Phase 1. `AgentTypePromptParams` expresses *what
-this agent needs*; `_MODEL_TIER` expresses *what this model needs told*. Different axes, both
+this agent needs*; `_MODEL_POWER_RANK` expresses *what this model needs told*. Different axes, both
 multiplying into the same render.
 
 **Caching note:** this does not degrade the prompt-cache design. The model is fixed for a run's
 duration, so the rendered prefix stays byte-stable across turns exactly as intended at
-`loop-agent-type-system-prompt.template.md:715` — there is simply a different stable prefix per tier.
+`loop-agent-type-system-prompt.template.md:715` — there is simply a different stable prefix per
+capability threshold.
 
 ---
 
@@ -528,14 +554,14 @@ truncation with actual search.
 
 | Risk | Mitigation |
 |---|---|
-| Deleting examples breaks JSON-format adherence on some model | Phase 0a deterministic oracles (`schema-validate`) catch exactly this; Phase 4 lets weaker tiers keep the examples |
-| Guardrails deleted for Opus-class models bite mid-tier / non-Anthropic models | Tier-gate the cuts rather than applying globally; MJ agents run a configurable model set, not one model |
+| Deleting examples breaks JSON-format adherence on some model | Phase 0a deterministic oracles (`schema-validate`) catch exactly this; Phase 4 lets lower-ranked models keep the examples |
+| Guardrails deleted for Opus-class models bite lower-ranked / non-Anthropic models | Gate the cuts on an absolute PowerRank threshold rather than applying globally; MJ agents run a configurable model set, not one model |
 | Bad PowerRank data silently selects the wrong prompt variant | Phase 0.5 gates Phase 4: rebase against independent evals, validate at entry, lock |
 | Rebasing PowerRank changes the meaning of existing configuration | Measured: 0 prompts set `MinPowerRank`; `PowerPreference` is rank-order relative and invariant under rescaling. Blast radius is nil **today** and grows once anyone pins an absolute threshold |
 | An entry error becomes permanent under a lock policy | Lock is "no silent drift," not immutability — corrections are deliberate, rare, and logged via Record Changes |
 | External index rebases its methodology, breaking comparability | MJ ranks are authoritative and derived **once** at entry; source + version + as-of date recorded per model; never re-derived |
-| A specialized model type (reranker, embedding) trips an LLM threshold | All thresholds and the tier resolver are scoped by `AIModelTypeID`; each type is rebased onto its own scale |
-| Tier-conditional blocks multiply the test matrix | Every tier-conditional block needs coverage at each tier, or a `light`-tier prompt ships untested. Budget for this in Phase 0a |
+| A specialized model type (reranker, embedding) trips an LLM threshold | Each type is rebased onto its own scale; `_MODEL_TYPE` is exposed so a conditional can guard itself, and the authoring guidance states the rule |
+| Capability-conditional blocks multiply the test matrix | Every conditional block needs coverage on both sides of its threshold, or the below-threshold variant ships untested. Budget for this in Phase 0a |
 | Parallel/failover renders one prompt for mixed-power models | Phase 4c re-renders per model; selection logic is left untouched |
 | Loop-template changes affect all 26 agents at once | Phase 2 gated on Phase 0a; changes land per-block, not as one commit |
 
@@ -549,7 +575,8 @@ truncation with actual search.
    at 100%.
 3. **Authoring durability** — fenced-block share across `metadata/prompts/templates/` trending
    down, enforced by the Phase 3b gate rather than vigilance.
-4. **Tier coverage** — every tier-conditional block has an eval at each tier it branches on.
+4. **Threshold coverage** — every capability-conditional block has an eval on both sides of its
+   threshold.
 5. **Rank integrity** — every active model carries a rebased PowerRank on its type's 1–1000 scale
    with a recorded source, index version, and as-of date; no rank changes as a side effect of
    adding another model.
