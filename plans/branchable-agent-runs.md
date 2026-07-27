@@ -22,8 +22,8 @@ Pi components referenced below and the MJ analog we build:
 | `/fork` and `/clone` (new session file, `parentSession` header) | Lineage across session files | **Already have**: MJ runs are already separate records, so fork collapses into branch; clone is branching at the final step |
 | Branch summaries (`branchWithSummary`) | LLM summary of the abandoned path, preserved as a tree node | **Out of scope / rejected**: MJ branches are full-fidelity sibling runs; nothing is abandoned or lossy, so there is nothing to summarize |
 | `model_change` / `thinking_level_change` entries | Config changes are first-class tree nodes | **Already have**: `AIAgentRun.OverrideModelID`/`EffortLevel` plus per-`AIPromptRun` model params record this today |
-| `/export` HTML (`core/export-html/`: embeds the full tree, client-side branch navigation, inlined theme vars) | Self-contained portable replay artifact | **Adapt as reference** for the export artifact, with MJ access control and scrubbing layered on (Section 8.4) |
-| `/share` (secret gist + viewer URL) | Zero-auth sharing | **Reject the transport**: secret-gist obscurity has no access control, no expiry, no revocation, no scrubbing; MJ uses `MJ: Public Links` + scoped RLS instead (Section 8.2) |
+| `/export` HTML (`core/export-html/`: embeds the full tree, client-side branch navigation, inlined theme vars) | Self-contained portable replay artifact | **Adapt as reference** for the export artifact, with MJ access control layered on (Section 8.3) |
+| `/share` (secret gist + viewer URL) | Zero-auth sharing | **Reject the transport**: secret-gist obscurity has no access control, no expiry, no revocation; MJ uses `MJ: Public Links` + scoped RLS instead (Section 8.2) |
 
 ---
 
@@ -37,7 +37,7 @@ This plan adds a deliberately small delta:
 - **A branch mode on the existing run machinery**: branching reuses the same "spawn a new run seeded from a prior run" path that HITL resume (`lastRunId` + `autoPopulateLastRunPayload`) already uses, except it seeds from a mid-run step snapshot instead of `FinalPayload`.
 - **A compare view** built on the existing `DeepDiffer` engine and `mj-deep-diff` component (no new diff engine).
 - **A Branches tab and branch composer** extending the existing `MJAIAgentRunFormComponentExtended` run form (no parallel UI).
-- **Sharing** built on the existing `ResourcePermission` domain, the shipped-but-unwired `PublicLink` table, and the Magic Link scoped-RLS pattern, with projection-time scrubbing defined here because none exists today.
+- **Sharing** built on the existing `ResourcePermission` domain, the shipped-but-unwired `PublicLink` table, and the Magic Link scoped-RLS pattern.
 
 We are **not** building a greenfield system, a lineage table, a new execution engine, or a third execution-tree UI component. Section 3 inventories what exists; every net-new surface is justified inline where it appears.
 
@@ -81,13 +81,13 @@ Pi's model cannot do:
 - **Deterministic re-execution.** A Pi "replay" is a render of recorded text. It cannot re-run from a node with the model, prompt, or state changed and produce a comparable second outcome.
 - **Structured payload diffing.** Pi state is chat messages; there is no typed payload to diff. MJ's per-step `PayloadAtStart`/`PayloadAtEnd` snapshots make step-granular structural diffs a query away.
 - **Cost and step-path comparison.** Pi records per-message `Usage` but has no compare surface. MJ has denormalized token/cost columns per run and per prompt run.
-- **Access control on shares.** `/share` runs `gh gist create --public=false` and wraps the gist id in a viewer URL. Anyone with the URL sees everything, forever, unscrubbed.
+- **Access control on shares.** `/share` runs `gh gist create --public=false` and wraps the gist id in a viewer URL. Anyone with the URL sees everything, forever.
 
 What Pi does that MJ must consciously replicate or reject:
 
 - **Branch summaries: rejected.** They exist because Pi's context window loses the abandoned branch. MJ branches are complete sibling runs; nothing is lost, and a replay viewer can open either branch at full fidelity.
 - **Model-change-as-tree-node: already covered.** MJ records the effective model on `AIAgentRun.OverrideModelID` and on every `AIPromptRun`; a branch's config delta is first-class data, not an inferred event.
-- **Single-file portability: adapted.** Pi's `/export` HTML is the reference for what a good replay artifact contains (the full tree, client-side branch navigation, inlined styling, per-entry detail). MJ's version is generated server-side so RLS and scrubbing apply (Section 8.4).
+- **Single-file portability: adapted.** Pi's `/export` HTML is the reference for what a good replay artifact contains (the full tree, client-side branch navigation, inlined styling, per-entry detail). MJ's version is generated server-side so RLS applies (Section 8.3).
 
 ---
 
@@ -134,13 +134,12 @@ All in `packages/Angular/Explorer/core-entity-forms/src/lib/custom/ai-agent-run/
 - **Data access**: `AIAgentRunDataHelper.loadStepsAndSubRuns()` uses `RunView`/`RunViews` only (steps by `AgentRunID`, sub-runs by `ParentRunID`, `MJ: Action Execution Logs` and `MJ: AI Prompt Runs` by collected `TargetLogID`s). Live updates ride the `MJGlobal` `BaseEntity` event stream while `Status === 'Running'`.
 - One consolidation note: `mj-agent-execution-monitor` in `packages/Angular/Generic/ai-test-harness/` is a second, independent execution tree. This plan adds **no third one** (Section 12).
 
-### 3.5 Sharing, security, and scrubbing primitives
+### 3.5 Sharing and security primitives
 
 - **RLS today**: three seeded filters scope the UI role to its own runs (`UI: Own AI Agent Runs` `E1AF0001-0000-4000-B000-000000000001` with `UserID = '{{UserID}}'`, plus the matching Steps `E1AF0002...` and Prompt Runs `E1AF0003...` filters); Developer and Integration roles carry NULL `ReadRLSFilterID` and see everything. Sharp edge: `EntityInfo.UserExemptFromRowLevelSecurity` (`packages/MJCore/src/generic/entityInfo.ts:2231`) exempts a user if **any** of their roles has a NULL filter, i.e. RLS composes fail-open across roles.
 - **`MJ: Resource Permissions`** (`__mj.ResourcePermission`): polymorphic per-user/per-role grants with `StartSharingAt`/`EndSharingAt`, `PermissionLevel`, `SharedByUserID`, served by `ResourcePermissionEngine` and the reusable `mj-resource-share-dialog` + `ResourceShareAdapter` contract (`packages/Angular/Generic/resource-permissions/`). Agent runs are not yet a `MJ: Resource Types` row.
 - **`MJ: Public Links`** (`__mj.PublicLink`): `ResourceType` CHECK (`'Artifact','Collection','Conversation'`), polymorphic `ResourceID`, unique `Token`, `PasswordHash`, `ExpiresAt`, `MaxViews`/`CurrentViews`, `IsActive`. **Shipped but unwired**: no server-side minting, resolution, view counting, or password verification exists. This is the highest-leverage unused asset in the repo for this feature.
 - **Magic Link scoped RLS**: `UserInfo.MagicLinkScope` feeds `{{ScopeResourceID}}`/`{{ScopeResourceType}}` into RLS filter text (`RowLevelSecurityFilterInfo.MarkupFilterText`, `packages/MJCore/src/generic/securityInfo.ts:463`), fail-closed when the scope is absent. The Widget Guest role is the shipped precedent for a restricted role whose entire visibility is one scoped resource.
-- **Scrubbing**: no scrubbing of persisted run data exists anywhere. The only redaction subsystem is GraphQL request logging (`packages/MJServer/src/logging/secretRedactor.ts`, driven by `EntityInfo.EncryptedFields` and `@NoLog`). The archiving `StripFields` driver config registered against `AIAgentRun` (strips `Result`, `FinalPayload`, `StartingPayload`, `Data`, `Message`, `ErrorMessage`, `AgentState`) is MJ's own catalog of which run fields are sensitive/bulky, and Section 8.3 reuses that list.
 - **Telemetry**: `MJ: Audit Logs` + hierarchical `MJ: Audit Log Types`, registered declaratively under `metadata/audit-log-types/` (the `.list-sharing-audit-types.json` file is the exact template for a sharing feature), written via the `ListSharing.emitAuditLog` pattern (`packages/Lists/server/src/ListSharing.ts:558`).
 
 ---
@@ -330,18 +329,9 @@ Three complementary pieces, all delivered together: authenticated in-app sharing
 - Net-new and justified (nothing exists): a `MJServer` resolution path that validates `Token`/`PasswordHash`/`ExpiresAt`/`MaxViews`, increments `CurrentViews`, and establishes a **Magic Link scoped session**: a new `Replay Guest` role (Widget Guest precedent) whose `MJ: AI Agent Runs` filter is `ID = '{{ScopeResourceID}}'` and whose Steps/Prompt Runs filters scope through `AgentRunID`, fail-closed when the scope is absent.
 - The viewer renders the existing run form surfaces in a read-only shell; no separate replay renderer.
 
-### 8.3 Scrubbing rules (defined here because none exist)
+### 8.3 Static HTML export
 
-Scrubbing happens at **projection time** (a redacted view-model built server-side for share rendering); persisted data is never modified. The sharer picks the level:
-
-- **`Structure`** (default): steps, step types/names, timings, token/cost figures, status outcomes, and payload diffs. Withheld: `AIPromptRun.Messages` and `Result` (the fully rendered prompt is the single biggest leak surface: it embeds the system prompt and every tool result), `ActionExecutionLog.Params` and `Message` (cleartext action inputs/outputs), `ErrorMessage` bodies.
-- **`Full`**: adds prompt and action I/O. Intended for trusted in-app viewers; Section 11 item 6 asks whether `Full` should be allowed on external links at all.
-- Always, at both levels: fields flagged by `EntityInfo.EncryptedFields` are redacted (same source of truth the request-log redactor uses), and the `StripFields` archive catalog (`Result`, `FinalPayload`, `StartingPayload`, `Data`, `Message`, `ErrorMessage`, `AgentState`) is treated as the sensitive-field checklist the projection must explicitly decide about rather than pass through by default.
-- Stated plainly: **no automatic PII detection in v1.** The levels control exposure surface; they do not inspect content.
-
-### 8.4 Static HTML export
-
-Pi's `/export` artifact is the content reference: self-contained HTML, the full branch tree embedded as data, client-side navigation between branches, per-step detail, inlined styling. `MJExportEngine` supports only `excel`/`csv`/`json` today, so an HTML replay exporter is net-new; it is generated server-side from the **scrubbed projection** (never from raw rows), so an exported file is no more revealing than the share level that produced it.
+Pi's `/export` artifact is the content reference: self-contained HTML, the full branch tree embedded as data, client-side navigation between branches, per-step detail, inlined styling. `MJExportEngine` supports only `excel`/`csv`/`json` today, so an HTML replay exporter is net-new; it is generated server-side from the same share projection (never from raw rows), so an exported file contains exactly what the share would render.
 
 ---
 
@@ -363,7 +353,7 @@ Everything in this plan ships together as one implementation effort. The full de
 | **Generated entities** | `MJAIAgentRunEntity.BranchedFromRunID`/`BranchedFromStepID`, `MJActionEntity.ReplayPolicy`, widened `MJPublicLinkEntity.ResourceType` union (CodeGen output, committed as generated) |
 | **Replay engine** | `ExecuteAgentParams` fields, `initializeAgentRun` branch seeding + validation, context reconstruction, `ReplayPolicy` enforcement in `executeActionsStep`, `AgentRunner`/`RunAIAgentResolver` passthrough |
 | **Explorer** | Branch composer, Branches tab, compare pane (Sections 7.1 to 7.3) |
-| **Sharing** | Resource-type metadata, `AgentRunShareAdapter`, share dialog wiring, widened RLS FilterTexts, `PublicLink` minting/resolution, `Replay Guest` scoped role, scrubbed projection, HTML exporter, audit types |
+| **Sharing** | Resource-type metadata, `AgentRunShareAdapter`, share dialog wiring, widened RLS FilterTexts, `PublicLink` minting/resolution, `Replay Guest` scoped role, share projection, HTML exporter, audit types |
 
 Testing per the Definition of Done, all green before merge: vitest coverage in `@memberjunction/ai-agents` (branch seeding precedence, lineage stamping, `ReplayPolicy` enforcement), DOM specs per the existing `*.dom.test.ts` pattern in the run-form directory, and a deterministic integration bundle (branch from a fixture run; assert seeded payload, lineage stamps, policy enforcement, share-scoped visibility), run after the migration + CodeGen are applied.
 
@@ -377,11 +367,9 @@ This is not a rollout phase; it is the one hard sequencing rule inside the singl
 
 1. **ParentRunID verdict.** Confirmed present and documented for sub-agent nesting ("Reference to the parent agent run if this is a sub-agent execution"); there is also `LastRunID` ("Links to the previous run in a chain. Different from ParentRunID"). Recommendation: touch neither; add `BranchedFromRunID` + `BranchedFromStepID`. The considered-and-rejected alternative (overloading `LastRunID`, which is schema-DAG-capable) is written up in Section 4.1. Confirm the three-field separation.
 2. **Naming.** `BranchedFromRunID`/`BranchedFromStepID` vs `RerunFromRunID`/`RerunFromStepID` (the literal precedent is `AIPromptRun.RerunFromPromptRunID` + `RootRerunFromPromptRunID`).
-3. **Root column.** Should `vwAIAgentRuns` gain `RootBranchedFromRunID` alongside `RootParentRunID`/`RootLastRunID` as the branch-family grouping key, and are those root columns CodeGen-maintained or hand-maintained in the view?
-4. **`Action.ReplayPolicy`** as a persisted column (proposed) vs a runtime-only parameter on the branch request. The column makes the guarantee author-owned and uniform; the param would be per-branch ad hoc.
-5. **Share enforcement**: widening the three `UI: Own AI Agent *` RLS FilterTexts (proposed, keeps one enforcement point) vs standing up a dedicated agent-run permission domain/provider.
-6. **Redaction defaults**: `Structure` as the default share level, and whether `Full` (raw `AIPromptRun.Messages`) should ever be permitted on external `PublicLink` shares.
-7. **FYI**: `AIPromptRun.AgentRunID` exists in SQL but not in the generated entity on `next` (removed by `V202607241645__v5.50.x__Break_CodeGen_Cycle_Remove_PromptRun_AgentRunID.sql`); this design intentionally depends only on `AIAgentRunStep.TargetLogID` for step-to-prompt-run linkage.
+3. **`Action.ReplayPolicy`** as a persisted column (proposed) vs a runtime-only parameter on the branch request. The column makes the guarantee author-owned and uniform; the param would be per-branch ad hoc.
+4. **Share enforcement**: widening the three `UI: Own AI Agent *` RLS FilterTexts (proposed, keeps one enforcement point) vs standing up a dedicated agent-run permission domain/provider.
+5. **FYI**: `AIPromptRun.AgentRunID` exists in SQL but not in the generated entity on `next` (removed by `V202607241645__v5.50.x__Break_CodeGen_Cycle_Remove_PromptRun_AgentRunID.sql`); this design intentionally depends only on `AIAgentRunStep.TargetLogID` for step-to-prompt-run linkage.
 
 ---
 
@@ -392,6 +380,7 @@ This is not a rollout phase; it is the one hard sequencing rule inside the singl
 - **Slash commands.** Covered by AI Agent Skills.
 - **Any new hook/plugin system on `BaseAgent`.** House pattern is subclassing with granular overridable methods; `serializePayloadAtStart`/`serializePayloadAtEnd` are the sanctioned override points this plan touches.
 - **Cross-provider context serialization.** Separate future plan.
+- **Secret/PII scrubbing of shared run content.** Deferred to its own dedicated feature plan; shares in this effort are access-controlled but expose recorded run content as-is.
 - **Pi-style branch summaries.** MJ branches lose nothing, so there is nothing to summarize.
 - **A `Branch`/lineage table.** Two columns on `AIAgentRun` express the tree.
 - **Adopting `AIAgentRun.AgentState`.** Dead schema (never written); branch seeding uses recorded step snapshots and prompt-run messages instead.
