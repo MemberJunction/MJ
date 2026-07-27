@@ -1,5 +1,5 @@
 import { Directive, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, LogError } from '@memberjunction/core';
 import { MJDashboardEntityExtended, ResourceData } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from './base-resource-component';
 
@@ -48,9 +48,12 @@ export abstract class BaseDashboard extends BaseResourceComponent implements OnI
 
   async ngOnInit() {
     super.ngOnInit();
-    this.initDashboard();
-    await this.loadData();
-    this.NotifyLoadComplete();
+    // initDashboard() runs before loadData() and can throw too, so BOTH are inside the guard — a
+    // failure in either still reaches NotifyLoadComplete() (see runGuardedLoad).
+    await this.runGuardedLoad(async () => {
+      this.initDashboard();
+      await this.loadData();
+    });
   }
 
   ngOnDestroy(): void {
@@ -61,8 +64,27 @@ export abstract class BaseDashboard extends BaseResourceComponent implements OnI
    * This method will result in the dashboard being reloaded.
    */
   public async Refresh(): Promise<void> {
-    await this.loadData();
-    this.NotifyLoadComplete();
+    await this.runGuardedLoad(() => this.loadData());
+  }
+
+  /**
+   * Runs a load phase (initial mount or Refresh) with the GUARANTEE that {@link NotifyLoadComplete}
+   * always fires — even if the work throws. The Explorer shell's loading screen blocks on that
+   * signal, so without this guard one dashboard's uncaught `initDashboard()`/`loadData()` error
+   * (e.g. an in-flight query rejecting while MJAPI restarts) would hang the entire shell forever on
+   * a direct/deep-link load. On error we log it and emit the {@link Error} output so the subclass or
+   * container can render its own error state; the loading screen still clears either way.
+   */
+  private async runGuardedLoad(work: () => void | Promise<void>): Promise<void> {
+    try {
+      await work();
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      LogError(error);
+      this.Error.emit(error);
+    } finally {
+      this.NotifyLoadComplete();
+    }
   }
 
   private _visible: boolean = false;
