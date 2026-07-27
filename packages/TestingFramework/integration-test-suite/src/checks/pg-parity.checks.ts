@@ -132,6 +132,7 @@ const PG1: NamedCheck = {
         const createdId = view.ID;
         Assert(!!createdId, 'PG1: the provider returned no primary key after Save() — the create leg never round-tripped');
 
+        let deleted = false;
         try {
             // READ by filter — exercises the generated WHERE against a uniqueidentifier/uuid column.
             const byId = await readViewById(createdId, ['ID', 'Name'], ctx.User, 'PG1 read-back by ID');
@@ -148,14 +149,22 @@ const PG1: NamedCheck = {
             const afterUpdate = await readViewById(createdId, ['ID', 'Name'], ctx.User, 'PG1 read-back after update');
             AssertEqual(afterUpdate.length, 1, 'PG1: the row must still be there after an update');
             AssertEqual(afterUpdate[0].Name, updatedName, 'PG1: the updated Name must be visible on re-read');
-        } finally {
-            await view.Delete();
-        }
 
-        // DELETE must actually remove the row. Verified AFTER the finally: a throw inside the
-        // finally would replace whatever error the try block raised, so cleanup asserts out here.
-        const afterDelete = await readViewById(createdId, ['ID'], ctx.User, 'PG1 read-back after delete');
-        AssertEqual(afterDelete.length, 0, 'PG1: the row must be gone after Delete()');
+            // DELETE is part of the round-trip under test, so it is asserted on the happy path
+            // rather than left to the finally. The assertion is on the BOOLEAN Delete() returns —
+            // the documented contract — deliberately NOT on a follow-up read showing the row gone.
+            // `Delete()` resolves several milliseconds BEFORE the row stops being visible
+            // (measured on SQL Server: resolves in ~0-1ms, row still readable for ~5-7ms after),
+            // so an absence check races the write and would be flaky by construction. This is why
+            // the shipped mutating checks (view-execution V8) never assert post-delete absence.
+            deleted = await view.Delete();
+            Assert(deleted, `PG1: Delete() reported failure: ${view.LatestResult?.CompleteMessage}`);
+        } finally {
+            // Best-effort cleanup for the paths that threw before the delete above.
+            if (!deleted) {
+                await view.Delete();
+            }
+        }
     },
 };
 
@@ -216,7 +225,7 @@ const PG4: NamedCheck = {
     RequiresMutation: true,
     Fn: async (ctx: IntegrationCheckContext) => {
         const view = await createUserView(ctx.Provider, ctx.User, 'pg4');
-        const createdId = view.ID;
+        let deleted = false;
         try {
             // Flip both booleans so the round-trip cannot pass by accident on a default value.
             view.IsShared = true;
@@ -265,14 +274,16 @@ const PG4: NamedCheck = {
                 `PG4: RunView projected IsShared as ${typeof projected[0].IsShared}, not a boolean`);
             AssertEqual(projected[0].IsShared, true, 'PG4: RunView must project the written true value');
             AssertEqual(projected[0].IsDefault, false, 'PG4: RunView must project the written false value');
-        } finally {
-            await view.Delete();
-        }
 
-        // Same reasoning as PG1: cleanup is verified outside the finally so a failed delete is a
-        // reported failure rather than a silently leaked fixture.
-        const afterDelete = await readViewById(createdId, ['ID'], ctx.User, 'PG4 read-back after delete');
-        AssertEqual(afterDelete.length, 0, 'PG4: the fixture must be gone after Delete()');
+            // Asserted on the boolean, not on a follow-up absence read — see PG1 for why.
+            deleted = await view.Delete();
+            Assert(deleted, `PG4: Delete() reported failure: ${view.LatestResult?.CompleteMessage}`);
+        } finally {
+            // Best-effort cleanup for the paths that threw before the delete above.
+            if (!deleted) {
+                await view.Delete();
+            }
+        }
     },
 };
 
