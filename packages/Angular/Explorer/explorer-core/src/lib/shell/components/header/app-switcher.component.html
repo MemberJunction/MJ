@@ -103,7 +103,16 @@
               }
             </div>
           }
-          <div class="launcher-sect">All apps</div>
+          <div class="launcher-sect launcher-sect--row">
+            <span>All apps</span>
+            <button class="launcher-sort-toggle" type="button"
+              [attr.aria-pressed]="SortMode === 'alpha'"
+              [attr.aria-label]="SortMode === 'alpha' ? 'Sorted alphabetically — switch to your custom order' : 'Sorted by your custom order — switch to alphabetical'"
+              [title]="SortMode === 'alpha' ? 'Sorted A–Z — click for your custom order' : 'Custom order — click for A–Z'"
+              (click)="ToggleSortMode()">
+              <i [class]="SortMode === 'alpha' ? 'fa-solid fa-arrow-down-a-z' : 'fa-solid fa-bars-staggered'" aria-hidden="true"></i>
+            </button>
+          </div>
           <div class="launcher-grid" role="group" aria-label="All applications">
             @for (app of OtherApps; track app.ID; let i = $index) {
               <ng-container *ngTemplateOutlet="appCard; context: { $implicit: app, idx: i + RecentApps.length }"></ng-container>

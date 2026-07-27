@@ -311,6 +311,39 @@
   color: var(--mj-text-muted);
   padding: var(--mj-space-3) var(--mj-space-1-5) var(--mj-space-1-5);
 }
+.launcher-sect--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: var(--mj-space-1);
+}
+/* All-apps sort toggle: quiet icon button, brand-tinted when non-default */
+.launcher-sort-toggle {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-xs);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--mj-transition-fast), color var(--mj-transition-fast);
+}
+.launcher-sort-toggle:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.launcher-sort-toggle:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
+}
+.launcher-sort-toggle[aria-pressed="true"] {
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
 .launcher-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -265,6 +265,20 @@ describe('AppSwitcherComponent (DOM)', () => {
     expect(queryAll(fixture, '.app-card')).toHaveLength(3);
   });
 
+  it('the All-apps sort toggle switches between custom order and A-Z', () => {
+    const fixture = render();
+    openLauncher(fixture);
+    const names = () => queryAll(fixture, '.app-card .app-card-name-label').map((e) => e.textContent?.trim());
+    expect(names()).toEqual(['Sales', 'Marketing', 'Lists']); // Custom (configured) order
+    (query(fixture, '.launcher-sort-toggle') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(names()).toEqual(['Lists', 'Marketing', 'Sales']); // A-Z
+    expect(attr(fixture, '.launcher-sort-toggle', 'aria-pressed')).toBe('true');
+    (query(fixture, '.launcher-sort-toggle') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(names()).toEqual(['Sales', 'Marketing', 'Lists']); // Back to custom
+  });
+
   it("style 'auto' with few apps opens the compact anchored panel (no filter, no sections)", () => {
     const fixture = render({ switcherStyle: 'auto' }); // 3 apps < threshold
     openLauncher(fixture);

@@ -6,6 +6,8 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 
 /** UserInfoEngine setting key holding the recently-switched-to apps */
 const RECENT_APPS_KEY = 'mj.shell.recentApps.v1';
+/** UserInfoEngine setting key for the launcher's All-apps sort preference */
+const LAUNCHER_SORT_KEY = 'mj.shell.launcherSort.v1';
 /** How many recent entries to persist (display shows fewer) */
 const RECENT_STORE_MAX = 8;
 /** How many recent cards to display */
@@ -77,6 +79,9 @@ export class AppSwitcherComponent {
   public PendingDiscard: 'exit' | 'close' | null = null;
   /** True when the panel renders as the compact anchored dropdown (few apps) */
   public CompactMode = false;
+  /** All-apps sort: the user's configured order ('custom') or A–Z ('alpha').
+   *  Per-user preference, persisted via UserInfoEngine. */
+  public SortMode: 'custom' | 'alpha' = 'custom';
   /** Anchor position for the compact panel (px, from the trigger's rect) */
   public AnchorLeft = 0;
   public AnchorTop = 0;
@@ -144,10 +149,15 @@ export class AppSwitcherComponent {
     return this.applyFilter(result);
   }
 
-  /** Every switcher app not already shown in the Recent section */
+  /** Every switcher app not already shown in the Recent section, in the
+   *  user's chosen sort (custom Sequence order or A–Z) */
   get OtherApps(): BaseApplication[] {
     const recentIds = new Set(this.RecentAppsUnfiltered.map(a => NormalizeUUID(a.ID)));
-    return this.applyFilter(this.apps.filter(a => !recentIds.has(NormalizeUUID(a.ID))));
+    let list = this.apps.filter(a => !recentIds.has(NormalizeUUID(a.ID)));
+    if (this.SortMode === 'alpha') {
+      list = [...list].sort((a, b) => a.Name.localeCompare(b.Name));
+    }
+    return this.applyFilter(list);
   }
 
   /** Flat visible list (Recent then All) — the keyboard-navigation order */
@@ -205,8 +215,27 @@ export class AppSwitcherComponent {
     }
   }
 
+  /** Flip the All-apps sort and persist it (fail-silent, like recents) */
+  ToggleSortMode(): void {
+    this.SortMode = this.SortMode === 'alpha' ? 'custom' : 'alpha';
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(LAUNCHER_SORT_KEY, this.SortMode);
+    } catch {
+      // Preference persistence must never break the launcher
+    }
+  }
+
+  private loadSortMode(): void {
+    try {
+      this.SortMode = UserInfoEngine.Instance.GetSetting(LAUNCHER_SORT_KEY) === 'alpha' ? 'alpha' : 'custom';
+    } catch {
+      this.SortMode = 'custom';
+    }
+  }
+
   private openLauncher(): void {
     this.loadRecents();
+    this.loadSortMode();
     this.FilterText = '';
     this.ConfigMode = false;
     this.PendingDiscard = null;
