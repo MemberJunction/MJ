@@ -237,8 +237,19 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     ContentSourceTypes: [],
     ContentFileTypes: [],
     VectorIndexes: mockVectorIndexes,
-    GetVectorIndexById: vi.fn().mockImplementation((id: string) =>
+    GetVectorIndexByID: vi.fn().mockImplementation((id: string) =>
       mockVectorIndexes.find(v => v.ID === id)
+    ),
+    // Mirror the real KnowledgeHubMetadataEngine O(1) by-id helpers (which the engine now calls
+    // instead of `.find` at the call sites). Read the live arrays so tests that push after setup work.
+    GetContentSourceByID: vi.fn().mockImplementation((id: string) =>
+      mockKHInstance.ContentSources.find((s: { ID: string }) => s.ID === id)
+    ),
+    GetContentTypeByID: vi.fn().mockImplementation((id: string) =>
+      mockKHInstance.ContentTypes.find((t: { ID: string }) => t.ID === id)
+    ),
+    GetContentSourceTypeByID: vi.fn().mockImplementation((id: string) =>
+      mockKHInstance.ContentSourceTypes.find((t: { ID: string }) => t.ID === id)
     ),
   };
   return {
