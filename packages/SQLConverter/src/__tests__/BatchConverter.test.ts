@@ -519,4 +519,25 @@ describe('convertFile (BatchConverter)', () => {
     expect(result.OutputSQL).toContain('SKIPPED');
     expect(result.OutputSQL).not.toMatch(/^\s*p_\w+ :=/m);
   });
+
+  it('should skip when only SOME of the declared variables parsed', () => {
+    // The dangerous case is partial, not total: `@A_aa INT` parses and
+    // `@B_aa dbo.MyType` does not, so the block still has a DECLARE section and any
+    // "were there zero declared vars?" check waves it through. The emitted block then
+    // declares p_A_aa, assigns p_B_aa, and passes it to the sproc — PL/pgSQL that
+    // fails at apply time. The invariant is per-variable: every p_ name the block
+    // uses must be one the block declared.
+    const sql = [
+      'DECLARE @A_aa INT,',
+      '@B_aa dbo.MyType',
+      'SET',
+      '  @A_aa = 1',
+      'SET',
+      "  @B_aa = N'hello'",
+      'EXEC [__mj].[spCreateThing] @ID = @A_aa, @Name = @B_aa;',
+    ].join('\n');
+    const result = convertFile(makeConfig(sql));
+    expect(result.OutputSQL).toContain('SKIPPED');
+    expect(result.OutputSQL).not.toMatch(/^\s*p_B_aa :=/m);
+  });
 });

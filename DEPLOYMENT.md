@@ -515,8 +515,20 @@ MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migra
 
 This is not hypothetical. It has happened in both directions:
 
-- **v5.45** shipped `Metadata_Sync.pg.sql` as a **126-byte marker** — 12,041 lines of SQL Server metadata DML reduced to two comment lines. PostgreSQL deployments migrating through v5.45 silently received none of that release's curated metadata (issue #3253). The v5.46 PG baseline was dumped from a gapped database, so **fresh installs from that baseline were gapped too**. Healed forward in v5.50 by the idempotent reseed [`V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql`](migrations-pg/v5/V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql) (derivation: [`scripts/generate-v545-metadata-reseed.mjs`](scripts/generate-v545-metadata-reseed.mjs); decision record: [`plans/adr/0001-forward-dated-reseed-for-ledger-gaps.md`](plans/adr/0001-forward-dated-reseed-for-ledger-gaps.md)) — no `mj sync push` required.
+- **v5.45** shipped `Metadata_Sync.pg.sql` as a **126-byte marker** — 12,041 lines of SQL Server metadata DML reduced to two comment lines. PostgreSQL deployments migrating through v5.45 silently received none of that release's curated metadata (issue #3253). The v5.46 PG baseline was dumped from a gapped database, so **fresh installs from that baseline were gapped too**. Healed forward in v5.50 by the idempotent reseed [`V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql`](migrations-pg/v5/V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql) (derivation: [`scripts/generate-v545-metadata-reseed.mjs`](scripts/generate-v545-metadata-reseed.mjs); rationale below) — no `mj sync push` required.
 - In a later build the converter emitted **three** header-only stubs and one file containing six bare `;` statements where six `CREATE INDEX` statements belonged — while reporting `unhandled stmts: 0` and exiting successfully (issue #3252).
+
+##### How to heal a ledger gap (and why the obvious repairs are wrong)
+
+If you find a gap like v5.45's, **do not repair history.** Committed `.pg.sql` files and baselines are an immutable ledger: deployed databases hold their Flyway checksums, so editing one breaks validation for everyone who already ran it. Three repairs look attractive and are all wrong:
+
+- **Rewriting the bad file in place** breaks checksum validation on every deployment that already executed it, and does nothing for databases already past that version.
+- **Regenerating the gapped baseline** has the same checksum problem for every install created from it, and again does nothing for migrate-through deployments. (Future baselines self-heal on their own: any database they are dumped from will have run the reseed.)
+- **Producing a delta with `mj sync push` against a gapped database** emits current-JSON state, which entangles unreleased metadata with the fix and is not reproducible from the repo alone.
+
+What works is a **forward-dated, idempotent reseed**, derived by replaying the original source through the converter and post-processing it — with the derivation script committed next to the artifact so the 7,000-line output is reviewable. Three properties make it safe to run on every database, gapped or whole: each create is guarded by an `IF EXISTS (… WHERE "ID" = …) THEN RETURN` on its primary key; updates that a later release already re-applied full-row are excluded (computed from the ledger, with a field-superset assertion, so replaying older values cannot revert newer state); and the delete is `IF EXISTS`-guarded. The gapped file and baseline stay in the ledger permanently — the content gate grandfathers them.
+
+**Heal any future gap of this class the same way**, and stamp the reseed *after* every migration whose counterpart is still pending: Flyway runs with `outOfOrder: false`, so a counterpart generated later but stamped earlier cannot be applied to a database that already ran the reseed.
 
 **Always diff output size against source before committing:**
 
@@ -537,7 +549,7 @@ node scripts/check-pg-migration-content.mjs
 # → PG content OK — … Delete parity OK — 10 pair(s) with deletions, 10 grandfathered, 0 mismatched.
 ```
 
-The 10 historical gaps are grandfathered in `DELETE_PARITY_GRANDFATHERED` because committed `.pg.sql` files are Flyway-checksummed and immutable. **A new release must have parity** — do not add an entry to silence a failure; a new gap means the converter dropped a statement. If a deletion genuinely doesn't apply to PostgreSQL, hand-port it as a guarded `DO` block (`IF EXISTS (SELECT 1 FROM __mj."<Table>" WHERE "ID" = '…') THEN PERFORM __mj."spDelete<Table>"(p_ID := '…'); END IF;` — see the synthesized delete in [`V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql`](migrations-pg/v5/V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql) for the exact shape) and say why in the migration.
+The 10 historical gaps are grandfathered in `DELETE_PARITY_GRANDFATHERED` because committed `.pg.sql` files are Flyway-checksummed and immutable. **A new release must have parity** — do not add an entry to silence a failure; a new gap means the converter dropped a statement. If a deletion genuinely doesn't apply to PostgreSQL, hand-port it as a guarded `DO` block (`IF EXISTS (SELECT 1 FROM __mj."<Table>" WHERE "ID" = '…') THEN PERFORM __mj."spDelete<Table>"(p_ID := '…'); END IF;` — see the synthesized delete in [`V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql`](migrations-pg/v5/V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql) for the exact shape) and say why in the migration.
 
 **An empty counterpart is sometimes correct** — do not blindly treat every hit as a defect. Two legitimate cases:
 

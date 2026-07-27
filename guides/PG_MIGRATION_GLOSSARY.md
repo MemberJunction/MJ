@@ -1,4 +1,4 @@
-# MemberJunction Release Engineering — PG Migration Ledger
+# PG Migration Glossary
 
 The language of MemberJunction's dual-platform (SQL Server → PostgreSQL) migration release process: how schema and metadata reach deployed databases, and what can go missing on the way.
 

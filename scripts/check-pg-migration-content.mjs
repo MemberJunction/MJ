@@ -92,8 +92,8 @@ const GRANDFATHERED = new Map([
   ['V202607071019__v5.45.x__Metadata_Sync',
    'NOT correct — a real, shipped gap (issue #3253). The converter emitted a 126-byte ' +
    'reseed marker for 12,041 lines of metadata DML. Immutable now; healed forward by ' +
-   'V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql (see ' +
-   'plans/adr/0001-forward-dated-reseed-for-ledger-gaps.md).'],
+   'V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql (see ' +
+   'DEPLOYMENT.md ("How to heal a ledger gap")).'],
 
   ['V202607202000__v5.49.x__SS_Materialize_Catalog_Views_spUpdateExistingEntityFields',
    'Correctly empty — same proc/TypeScript split as the v5.38 entry above. Committed ' +
@@ -114,7 +114,7 @@ const GRANDFATHERED = new Map([
  * PostgreSQL (196 deletions, v5.9 through v5.45; issue #3253). Every one is a committed,
  * Flyway-checksummed `.pg.sql` and therefore immutable — the gap is healed forward, not
  * by editing history. v5.45's ComponentRegistry row is removed by
- * V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql; the other 195 targets were
+ * V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql; the other 195 targets were
  * verified absent from the fresh-install path.
  *
  * The converter now converts all 196 (StatementClassifier's bare-EXEC carve-out plus
@@ -204,13 +204,64 @@ export function classify(ssSql, pgSql) {
  * separates a data deletion from everything else named spDelete: CodeGen's maintenance
  * procs (spDeleteUnneededEntityFields) take no ID, and CREATE/DROP FUNCTION statements
  * define the sproc rather than call it. None of those are counted.
+ *
+ * DELIBERATELY NOT END-ANCHORED, unlike the sibling pattern in StatementClassifier that
+ * decides whether the converter handles a batch. That one requires the argument to be the
+ * end of the batch, so a trailing comment or a second parameter makes the converter fall
+ * back to skipping the statement silently. This one still counts those, which is what
+ * turns a silent drop into a failed build. Aligning the two regexes would feel tidier and
+ * would delete the safety net: the gate must be able to see deletions the converter cannot.
  */
 const SS_SYNC_DELETE = /EXEC\s+\[?[\w${}:]+\]?\s*\.\s*\[?spDelete\w+\]?\s+@ID\s*=\s*N?'[0-9a-fA-F-]{36}'/gi;
 const PG_SYNC_DELETE = /PERFORM\s+[\w"]+\s*\.\s*"spDelete\w+"\s*\(\s*p_ID\s*:=\s*'[0-9a-fA-F-]{36}'/gi;
 
-/** Strip line and block comments so a commented-out call never counts as one. */
-function stripComments(sql) {
-  return sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--.*$/gm, '');
+/**
+ * Character ranges occupied by comments, skipping over string literals.
+ *
+ * Being literal-aware is load-bearing rather than fastidious. Metadata syncs carry prompt
+ * and component source inside string literals, and 7 of the 49 have unbalanced `/*` vs
+ * `*​/` counts because of it. A regex strip pairs a `/*` living inside a literal with a
+ * `*​/` from a real comment further down and removes everything between. Since the SS and
+ * PG texts differ, that can drop a deletion from one side only (a false failure) or from
+ * both (silently hiding a real gap, which is the exact thing this gate exists to catch).
+ * Scanning is the only way to tell a comment from text that merely looks like one.
+ *
+ * Returns ranges instead of stripped text on purpose: the caller only needs to know
+ * whether a match landed in a comment, and building a cleaned copy of every migration
+ * costs several seconds across the repo for a string nothing reads.
+ */
+function commentRanges(sql) {
+  const ranges = [];
+  let i = 0;
+  const n = sql.length;
+  while (i < n) {
+    const ch = sql[i];
+    if (ch === "'") {
+      i++;
+      while (i < n) {
+        if (sql[i] === "'" && sql[i + 1] === "'") { i += 2; continue; }   // doubled-quote escape
+        if (sql[i] === "'") { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    if (ch === '-' && sql[i + 1] === '-') {
+      const start = i;
+      while (i < n && sql[i] !== '\n') i++;
+      ranges.push([start, i]);
+      continue;
+    }
+    if (ch === '/' && sql[i + 1] === '*') {
+      const start = i;
+      i += 2;
+      while (i < n && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
+      i = Math.min(i + 2, n);                                            // unterminated runs to EOF
+      ranges.push([start, i]);
+      continue;
+    }
+    i++;
+  }
+  return ranges;
 }
 
 /**
@@ -226,9 +277,26 @@ function stripComments(sql) {
  * @returns {{ss:number, pg:number, matched:boolean}}
  */
 export function deleteParity(ssSql, pgSql) {
-  const ss = (stripComments(ssSql).match(SS_SYNC_DELETE) ?? []).length;
-  const pg = (stripComments(pgSql).match(PG_SYNC_DELETE) ?? []).length;
+  const ss = countSyncDeletes(ssSql, SS_SYNC_DELETE);
+  const pg = countSyncDeletes(pgSql, PG_SYNC_DELETE);
   return { ss, pg, matched: ss === pg };
+}
+
+/**
+ * Count deletions that are real code rather than commented-out text.
+ *
+ * The `spDelete` pre-test skips the character scan for migrations that mention no sproc
+ * deletion at all, which is most of them. It cannot change a result: a file with no
+ * `spDelete` token has nothing for the pattern to match, comments or not.
+ */
+function countSyncDeletes(sql, pattern) {
+  if (!/spDelete/i.test(sql)) return 0;
+  const ranges = commentRanges(sql);
+  let count = 0;
+  for (const m of sql.matchAll(pattern)) {
+    if (!ranges.some(([start, end]) => m.index >= start && m.index < end)) count++;
+  }
+  return count;
 }
 
 /**
@@ -245,6 +313,37 @@ export function deleteParity(ssSql, pgSql) {
 export function deleteParityGaps(entries, grandfatheredStems) {
   const shielded = new Set(grandfatheredStems);
   return entries.filter((e) => e.ss !== e.pg && !shielded.has(e.stem));
+}
+
+/**
+ * Same ratchet-hygiene job as `staleGrandfatherWarnings`, for the delete-parity map.
+ *
+ * The two stale cases need different advice and must not be collapsed. "The gap is gone,
+ * remove the entry" is wrong when the truth is that the pair was never checked, because
+ * no `.pg.sql` counterpart exists for it yet — that entry is still doing its job, or is a
+ * typo, and either way the fix is not deletion.
+ *
+ * @param {Iterable<string>} grandfatheredStems
+ * @param {Map<string,{ss:number, pg:number}>} parityByStem every checked pair
+ * @returns {string[]} one warning per stale entry
+ */
+export function staleDeleteGrandfatherWarnings(grandfatheredStems, parityByStem) {
+  const warnings = [];
+  for (const stem of grandfatheredStems) {
+    const parity = parityByStem.get(stem);
+    if (parity === undefined) {
+      warnings.push(
+        `stale DELETE_PARITY_GRANDFATHERED entry "${stem}" — no committed counterpart pair ` +
+        `matches it (file renamed/removed, or a typo in the entry). Remove or correct the entry.`,
+      );
+    } else if (parity.ss === parity.pg) {
+      warnings.push(
+        `stale DELETE_PARITY_GRANDFATHERED entry "${stem}" — it no longer has a deletion gap ` +
+        `(source ${parity.ss}, counterpart ${parity.pg}), so the entry shields nothing. Remove it.`,
+      );
+    }
+  }
+  return warnings;
 }
 
 /**
@@ -285,7 +384,10 @@ function runCheck() {
 
   const suspects = [];
   const verdictByStem = new Map();
-  const deleteCounts = [];
+  // Every checked pair, not only those with deletions: a grandfathered entry whose gap
+  // closed and one whose counterpart does not exist yet are different situations needing
+  // different advice, and recording only the gapped pairs makes them indistinguishable.
+  const parityByStem = new Map();
   let checked = 0;
   let documented = 0;
   let grandfathered = 0;
@@ -300,7 +402,7 @@ function runCheck() {
     const pgSql = readFileSync(pgPath, 'utf8');
     const { verdict, ssStmts, pgStmts } = classify(ssSql, pgSql);
     const { ss, pg } = deleteParity(ssSql, pgSql);
-    if (ss > 0 || pg > 0) deleteCounts.push({ stem, ss, pg });
+    parityByStem.set(stem, { ss, pg });
     verdictByStem.set(stem, verdict);
     if (verdict === 'documented') {
       documented++;
@@ -320,15 +422,12 @@ function runCheck() {
     if (process.env.GITHUB_ACTIONS) console.log(`::warning::${w}`);
   }
 
+  const deleteCounts = [...parityByStem].map(([stem, p]) => ({ stem, ...p }));
+  const withDeletions = deleteCounts.filter((e) => e.ss > 0 || e.pg > 0).length;
   const deleteGaps = deleteParityGaps(deleteCounts, DELETE_PARITY_GRANDFATHERED.keys());
-  for (const stem of DELETE_PARITY_GRANDFATHERED.keys()) {
-    const entry = deleteCounts.find((e) => e.stem === stem);
-    if (!entry || entry.ss === entry.pg) {
-      const w = `stale DELETE_PARITY_GRANDFATHERED entry "${stem}" — it no longer has a ` +
-        `deletion gap, so the entry shields nothing. Remove it.`;
-      console.warn(`WARNING: ${w}`);
-      if (process.env.GITHUB_ACTIONS) console.log(`::warning::${w}`);
-    }
+  for (const w of staleDeleteGrandfatherWarnings(DELETE_PARITY_GRANDFATHERED.keys(), parityByStem)) {
+    console.warn(`WARNING: ${w}`);
+    if (process.env.GITHUB_ACTIONS) console.log(`::warning::${w}`);
   }
 
   if (deleteGaps.length > 0) {
@@ -358,7 +457,7 @@ by hand as a guarded block and say why in the migration:
     console.log(
       `PG content OK — ${checked} counterpart(s) checked, ` +
       `${documented} documented no-op(s), ${grandfathered} grandfathered, 0 suspect. ` +
-      `Delete parity OK — ${deleteCounts.length} pair(s) with deletions, ` +
+      `Delete parity OK — ${withDeletions} pair(s) with deletions, ` +
       `${DELETE_PARITY_GRANDFATHERED.size} grandfathered, 0 mismatched.`,
     );
     return 0;

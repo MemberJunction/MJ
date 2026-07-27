@@ -1,5 +1,5 @@
 -- =============================================================================
--- V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql
+-- V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql
 -- =============================================================================
 --
 -- WHY THIS MIGRATION EXISTS (issue #3253):
@@ -10,7 +10,7 @@
 --   curated metadata (AI Skills, API Scopes, External Data Source Types,
 --   Entity Permissions, …). The marker and baseline are an immutable deployed
 --   ledger, so this forward-dated migration re-seeds the missing rows instead
---   of rewriting history. See plans/adr/0001-forward-dated-reseed-for-ledger-gaps.md.
+--   of rewriting history. See DEPLOYMENT.md ("How to heal a ledger gap").
 --
 -- IDEMPOTENCY (this file runs on EVERY database, gapped or whole):
 --   * every CREATE is guarded by an IF EXISTS check on its primary key;

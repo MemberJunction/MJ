@@ -202,6 +202,14 @@ export function classifyBatch(batch: string): StatementType {
   // start with spUpdate/spDelete (spUpdateEntityFieldRelatedEntityNameFieldMap,
   // spDeleteUnneededEntityFields) and must keep skipping — so the match requires
   // mj-sync's full delete signature: a single `@ID = '<uuid literal>'` argument.
+  //
+  // Anchoring to end-of-batch keeps that signature tight, at the cost of falling back to
+  // a silent skip for near-miss shapes mj-sync does not currently emit (a trailing
+  // comment, a second parameter, a composite key). That is covered rather than ignored:
+  // the delete-parity gate in scripts/check-pg-migration-content.mjs counts SS deletions
+  // with a pattern that is NOT end-anchored, so anything this classifier declines to
+  // convert still fails the build instead of vanishing. Loosening this regex without
+  // checking that gate would trade a caught failure for a silent one.
   if (/^EXEC\s+\[?\w+\]?\s*\.\s*\[?sp(?:Create|Update|Delete)\w*\]?\s+@ID\s*=\s*N?'[0-9A-F-]{36}'\s*;?\s*$/i.test(upper)) {
     return 'EXEC_BLOCK';
   }

@@ -125,18 +125,31 @@ export class ExecBlockRule implements IConversionRule {
     const assignments = this.parseSets(setSection);
     const exec = this.parseExec(execSection);
 
-    // A block with no DECLARE section is convertible only when it needs no variables
-    // at all — mj-sync emits deletes that way (`EXEC schema.spDeleteX @ID = '<uuid>'`,
-    // issue #3253). Anything that would reference a p_ variable without a matching
-    // declaration is broken input and must stay a VISIBLE skip: emitting it produces
-    // PL/pgSQL that fails at apply time with `"p_x" is not a known variable`, which is
-    // strictly worse than a skip a reader can see. Two ways that arises, both barred —
-    // a SET assignment (a DECLARE the parser could not read, e.g. a dotted user type)
-    // and a var-referencing EXEC argument.
-    const needsUndeclaredVar =
-      declareVars.length === 0 &&
-      (assignments.length > 0 || (exec?.params.some(p => /^p_\w+$/.test(p.valueExpr.trim())) ?? false));
-    if (!exec || needsUndeclaredVar) {
+    // Every p_ variable the block USES must be one the block DECLARED. Emitting a
+    // reference to an undeclared variable produces PL/pgSQL that fails at apply time
+    // with `"p_x" is not a known variable` — strictly worse than a skip a reader can
+    // see, which is what this returns instead.
+    //
+    // The check is per-variable rather than a count, because the dangerous case is a
+    // PARTIAL parse: in `DECLARE @A INT, @B dbo.MyType` the first var parses and the
+    // second does not, so the block still has a DECLARE section and any "were there
+    // zero declared vars?" test waves it through while p_B goes undeclared. Counting
+    // also mis-handles the shape this rule exists to support — mj-sync emits deletes
+    // as a bare `EXEC schema.spDeleteX @ID = '<uuid>'` with no DECLARE and no
+    // variables at all (issue #3253), which is convertible precisely because it
+    // references none.
+    const declaredNames = new Set(declareVars.map(v => v.name));
+    // An EXEC argument is a variable reference only when the whole expression is one
+    // (`parseExecParams` rewrites `@Var` to `p_Var` and leaves anything else alone),
+    // so match the full string. A substring match would also fire on `p_` text living
+    // inside a string literal and skip a perfectly good block.
+    const usesUndeclaredVar =
+      assignments.some(a => !declaredNames.has(a.varName)) ||
+      (exec?.params.some(p => {
+        const v = p.valueExpr.trim();
+        return /^p_\w+$/.test(v) && !declaredNames.has(v);
+      }) ?? false);
+    if (!exec || usesUndeclaredVar) {
       return `-- SKIPPED: EXEC block (auto-conversion not supported)\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
     }
 

@@ -11,9 +11,9 @@ PG baseline was dumped from a database that had itself migrated through the mark
 inherited the hole — **0 of 161** v5.45-created rows are present in it, against 261/261 for
 v5.44. **Fresh installs are affected too**, not just migrate-through deployments.
 
-`V202607241200__v5.50.x__Reseed_v545_Metadata.pg-only.sql` heals both populations forward.
+`V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql` heals both populations forward.
 Committed `.pg.sql` files are Flyway-checksummed and immutable, so the marker and the baseline
-are never rewritten (`plans/adr/0001-forward-dated-reseed-for-ledger-gaps.md` records the
+are never rewritten (`DEPLOYMENT.md ("How to heal a ledger gap")` records the
 decision and the three rejected alternatives). The migration runs on every database, gapped or
 whole: 161 creates each guarded by an `IF EXISTS` primary-key check, 13 updates replayed
 unconditionally (idempotent by value), and 1 `IF EXISTS`-guarded delete.

@@ -8,6 +8,7 @@ import {
     classify,
     deleteParity,
     deleteParityGaps,
+    staleDeleteGrandfatherWarnings,
     staleGrandfatherWarnings,
     SOURCE_STATEMENT_FLOOR,
     PG_EMPTY_CEILING,
@@ -171,6 +172,27 @@ describe('deleteParity — mj-sync record deletions must survive conversion', ()
         expect(deleteParity(ss, pg)).toEqual({ ss: 0, pg: 0, matched: true });
     });
 
+    it('does not let a block-comment marker inside a string literal swallow a deletion', () => {
+        // Metadata syncs carry prompt and component source in string literals, and 7 of
+        // the 49 have unbalanced `/*` vs `*/` counts for exactly that reason. A naive
+        // comment strip pairs a `/*` that lives INSIDE a literal with a `*/` from a real
+        // comment further down and deletes everything between, which can silently drop a
+        // deletion from one side of the pair. That is the failure this gate exists to
+        // catch, so the gate must not be able to cause it.
+        const ss = [
+            'DECLARE @Code_aa NVARCHAR(MAX)',
+            "SET @Code_aa = N'const re = /\\d+/*2; // opener with no closer in this literal'",
+            "EXEC [__mj].[spDeleteThing] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';",
+            '/* an actual block comment, whose closer is the one that pairs up */',
+        ].join('\n');
+        expect(deleteParity(ss, HEADER).ss).toBe(1);
+    });
+
+    it('still ignores a deletion that is genuinely commented out', () => {
+        const ss = "-- EXEC [__mj].[spDeleteThing] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';";
+        expect(deleteParity(ss, HEADER).ss).toBe(0);
+    });
+
     it('reports a new gap but lets the immutable historical ones through', () => {
         const entries = [
             { stem: 'V202603081507__v5.9.x__Metadata_Sync', ss: 1, pg: 0 },   // shipped, immutable
@@ -185,6 +207,29 @@ describe('deleteParity — mj-sync record deletions must survive conversion', ()
         // Parity is an equality, not a floor — an EXTRA deletion on the PG side would
         // remove a row SQL Server keeps, silently diverging the two platforms.
         expect(deleteParityGaps([{ stem: 'V1__x', ss: 0, pg: 1 }], [])).toHaveLength(1);
+    });
+});
+
+describe('staleDeleteGrandfatherWarnings', () => {
+    const parity = (entries) => new Map(entries);
+
+    it('stays silent while an entry still shields a real gap', () => {
+        expect(staleDeleteGrandfatherWarnings(['V1__x'], parity([['V1__x', { ss: 4, pg: 0 }]]))).toEqual([]);
+    });
+
+    it('distinguishes a missing counterpart from a closed gap', () => {
+        // These need different advice. "Remove it, the gap is gone" is wrong and actively
+        // misleading when the truth is that the pair was never checked at all, because no
+        // `.pg.sql` exists for it yet. The sibling staleGrandfatherWarnings already draws
+        // this distinction; collapsing it here would be a duplicated decision made two
+        // different ways.
+        const missing = staleDeleteGrandfatherWarnings(['V1__never_converted'], parity([]));
+        expect(missing).toHaveLength(1);
+        expect(missing[0]).toMatch(/no committed counterpart/i);
+
+        const closed = staleDeleteGrandfatherWarnings(['V1__x'], parity([['V1__x', { ss: 2, pg: 2 }]]));
+        expect(closed).toHaveLength(1);
+        expect(closed[0]).toMatch(/no longer has a deletion gap/i);
     });
 });
 
