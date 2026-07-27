@@ -165,7 +165,7 @@ The same white-label pattern extends to `mj-conversation-list` (and passes throu
 
 #### Theming tokens
 
-The list panel renders on brand tokens by default (a `--mj-brand-secondary` panel with `--mj-brand-on-secondary` ink — the stock navy sidebar). White-label hosts can remap it onto surface tokens so the list matches the chat area, via four component-scoped custom properties (settable at `:root` or on any ancestor):
+The list panel renders on brand tokens by default (a `--mj-brand-secondary` panel with `--mj-brand-on-secondary` ink — the stock navy sidebar). White-label hosts can remap it onto surface tokens so the list matches the chat area, via nine component-scoped custom properties (settable at `:root` or on any ancestor):
 
 | Token | Default | Governs |
 |---|---|---|
@@ -177,7 +177,7 @@ The list panel renders on brand tokens by default (a `--mj-brand-secondary` pane
 | `--mj-chat-list-accent` | `var(--mj-brand-primary)` | The panel's ACTION color — New Conversation button, search-focus ring, checkbox tick, and drag-over highlights — independent of the active-row pair |
 | `--mj-chat-list-accent-ink` | `var(--mj-text-inverse)` | Text/icon on the accent (the New Conversation button label) |
 | `--mj-chat-list-accent-hover` | `var(--mj-brand-primary-hover)` | Hover state of the accent (the New Conversation button) |
-| `--mj-chat-list-hover-bg` | `color-mix(… var(--conv-list-ink) 8% …)` | Row-hover wash. Defaults to the ink-derived neutral tint; point it at a brand tint (e.g. `color-mix(in srgb, var(--mj-brand-primary) 12%, transparent)`) to make hover a brand cue while the panel stays on a neutral surface |
+| `--mj-chat-list-hover-bg` | `color-mix(… var(--mj-chat-list-ink) 8% …)` | Row-hover wash. Defaults to the ink-derived neutral tint; point it at a brand tint (e.g. `color-mix(in srgb, var(--mj-brand-primary) 12%, transparent)`) to make hover a brand cue while the panel stays on a neutral surface |
 
 ```css
 /* e.g. match the list to the chat area's light surface */
