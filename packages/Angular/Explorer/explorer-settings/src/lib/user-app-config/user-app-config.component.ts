@@ -11,7 +11,8 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
  *
  * The content component loads its data in ngOnInit — because it is created
  * fresh under this template's `@if (ShowDialog)`, every `Open()` gets a fresh
- * load, preserving the historical behavior.
+ * load with no stale-list flash (the concern bug F1's resetLists() addressed
+ * in the pre-split monolith is solved structurally here).
  */
 @Component({
   standalone: false,
@@ -26,6 +27,11 @@ export class UserAppConfigComponent extends BaseAngularComponent {
   set ShowDialog(value: boolean) {
     if (value !== this._showDialog) {
       this._showDialog = value;
+      // Emit on EVERY change so the parent's `[(ShowDialog)]` two-way binding round-trips (bug F1).
+      // Previously the setter never emitted, so when child and parent state diverged the dialog got
+      // stuck in a state only a full browser refresh could clear. This is the single emit path —
+      // Open()/Close() route through this setter rather than emitting themselves.
+      this.ShowDialogChange.emit(value);
     }
   }
   get ShowDialog(): boolean {
@@ -36,19 +42,19 @@ export class UserAppConfigComponent extends BaseAngularComponent {
   @Output() ConfigSaved = new EventEmitter<void>();
 
   /**
-   * Opens the dialog (the embedded content component loads on creation)
+   * Opens the dialog (the embedded content component loads on creation).
+   * Routes through the setter — the single ShowDialogChange emit path.
    */
   Open(): void {
-    this._showDialog = true;
-    this.ShowDialogChange.emit(true);
+    this.ShowDialog = true;
   }
 
   /**
-   * Closes the dialog without saving
+   * Closes the dialog without saving. Routes through the setter — the single
+   * ShowDialogChange emit path.
    */
   Close(): void {
-    this._showDialog = false;
-    this.ShowDialogChange.emit(false);
+    this.ShowDialog = false;
   }
 
   /** Content saved successfully — surface it and close */

@@ -5,8 +5,9 @@
  * when a conversation's assembled context window crosses the effective trigger budget,
  * a single summary prompt folds the prior running summary plus the raw message delta
  * into a new summary, persisted on the boundary row's
- * `ConversationDetail.SummaryOfEarlierConversation` (with `SummaryPromptRunID` linking
- * the producing `AIPromptRun` for cost/model audit). Subsequent runs assemble
+ * `ConversationDetail.SummaryOfEarlierConversation` (with the producing `AIPromptRun`
+ * linked via a `ConversationCompactionRun` audit record for cost/model audit).
+ * Subsequent runs assemble
  * `[summary, boundary row, ...tail]` via `ConversationEngine.AssembleContextWindow`
  * over rows from the single-sourced `ConversationEngine.LoadWindowRowsFresh` loader.
  *
@@ -24,6 +25,7 @@ import {
     ConversationEngine,
     MJAIAgentTypeEntity,
     MJAIPromptRunEntity,
+    MJConversationCompactionRunEntity,
     MJConversationDetailEntity
 } from '@memberjunction/core-entities';
 import { AIPromptParams, ExtractPromptResultText, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -78,11 +80,6 @@ export interface CompactIfNeededInput {
      * summary write's Load→Save (generated spUpdate writes all columns) could clobber it.
      */
     ExcludeDetailIds?: string[];
-    /**
-     * The executing agent run's ID — stamped onto the summary AIPromptRun (AgentRunID)
-     * so per-run cost rollups include the summary sub-call this feature generates.
-     */
-    AgentRunId?: string;
 }
 
 /** Result of a {@link ConversationCompactionManager.CompactIfNeeded} call. */
@@ -95,7 +92,7 @@ export interface CompactionOutcome {
     BoundarySequence?: number;
     /** The summary prompt used */
     PromptId?: string;
-    /** The AIPromptRun that produced the summary (also written to ConversationDetail.SummaryPromptRunID) */
+    /** The AIPromptRun that produced the summary (also written to ConversationCompactionRun audit table) */
     PromptRunId?: string;
     /** Estimated window tokens before compaction */
     TokensBefore: number;
@@ -450,11 +447,6 @@ export class ConversationCompactionManager {
             deltaMessages: delta.map(m => this.renderDeltaMessage(m)).join('\n')
         };
         promptParams.contextUser = input.ContextUser;
-        if (input.AgentRunId) {
-            // Links the summary AIPromptRun to the agent run (AgentRunID) so per-run
-            // cost rollups include the recursive summary sub-call.
-            promptParams.agentRunId = input.AgentRunId;
-        }
         if (input.OnPromptRunCreated) {
             promptParams.onPromptRunCreated = input.OnPromptRunCreated;
         }
@@ -495,10 +487,11 @@ export class ConversationCompactionManager {
     }
 
     /**
-     * Persists the summary on the boundary row. Written through a plain entity Save (the
-     * same external-save path everything else uses) so ConversationEngine's entity-event
-     * handler merges it into any warm cache in place — never through engine mutation
-     * helpers, whose self-mutation guard would skip the merge.
+     * Persists the summary on the boundary row and creates the compaction audit record.
+     * Written through plain entity Saves (the same external-save path everything else
+     * uses) so ConversationEngine's entity-event handler merges the detail update into
+     * any warm cache in place — never through engine mutation helpers, whose
+     * self-mutation guard would skip the merge.
      */
     private static async writeBoundaryRow(
         input: CompactIfNeededInput,
@@ -506,16 +499,48 @@ export class ConversationCompactionManager {
         summaryText: string,
         promptRunId: string | undefined
     ): Promise<void> {
-        // Favor the caller-supplied provider; the global is the explicit last resort
         const provider = input.Provider || Metadata.Provider; // global-provider-ok: caller-supplied provider preferred; global is the documented last-resort fallback
-        const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', input.ContextUser);
+
+        await this.persistBoundarySummary(provider, input.ContextUser, boundaryDetailId, summaryText);
+
+        if (promptRunId) {
+            await this.persistCompactionAuditRecord(provider, input.ContextUser, boundaryDetailId, promptRunId);
+        }
+    }
+
+    /** Updates the boundary conversation detail row with the compaction summary text. */
+    private static async persistBoundarySummary(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        boundaryDetailId: string,
+        summaryText: string
+    ): Promise<void> {
+        const detail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
         if (!(await detail.Load(boundaryDetailId))) {
             throw new Error(`Failed to load boundary ConversationDetail ${boundaryDetailId}`);
         }
         detail.SummaryOfEarlierConversation = summaryText;
-        detail.SummaryPromptRunID = promptRunId || null;
         if (!(await detail.Save())) {
             throw new Error(`Boundary-row save failed: ${detail.LatestResult?.CompleteMessage || 'unknown error'}`);
+        }
+    }
+
+    /**
+     * Creates a ConversationCompactionRun audit record linking the boundary detail row
+     * to the AIPromptRun that produced the summary (model, tokens, cost, prompt version).
+     */
+    private static async persistCompactionAuditRecord(
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+        boundaryDetailId: string,
+        promptRunId: string
+    ): Promise<void> {
+        const record = await provider.GetEntityObject<MJConversationCompactionRunEntity>('MJ: Conversation Compaction Runs', contextUser);
+        record.NewRecord();
+        record.ConversationDetailID = boundaryDetailId;
+        record.PromptRunID = promptRunId;
+        if (!(await record.Save())) {
+            throw new Error(`ConversationCompactionRun save failed: ${record.LatestResult?.CompleteMessage || 'unknown error'}`);
         }
     }
 

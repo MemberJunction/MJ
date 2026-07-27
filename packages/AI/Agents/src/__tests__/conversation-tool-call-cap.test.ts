@@ -98,7 +98,7 @@ describe('BaseAgent.startPostTurnCompaction — settled-status gate + input thre
         return a;
     }
 
-    it('fires for AwaitingFeedback runs (the chat-turn ending) and threads ExcludeDetailIds + AgentRunId', async () => {
+    it('fires for AwaitingFeedback runs (the chat-turn ending) and threads ExcludeDetailIds', async () => {
         const spy = vi.spyOn(ConversationCompactionManager, 'CompactIfNeeded').mockResolvedValue({
             Fired: false, SkippedReason: 'test', TokensBefore: 0, Warnings: [],
         } as CompactionOutcome);
@@ -108,7 +108,6 @@ describe('BaseAgent.startPostTurnCompaction — settled-status gate + input thre
             expect(spy).toHaveBeenCalledOnce();
             const input = spy.mock.calls[0][0];
             expect(input.ExcludeDetailIds).toEqual(['PLACEHOLDER-DETAIL-1']);
-            expect(input.AgentRunId).toBe('RUN-1');
         } finally {
             spy.mockRestore();
         }

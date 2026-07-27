@@ -79,8 +79,10 @@ jobs:
         run: npm run build
         working-directory: docs-site
         env:
-          DOCS_BASE: /MJ
-          DOCS_SITE: https://memberjunction.github.io
+          # Custom domain (docs.memberjunction.org) serves the site at the
+          # domain ROOT — no /MJ/ repo prefix. github.io/MJ/ 301s here.
+          DOCS_BASE: /
+          DOCS_SITE: https://docs.memberjunction.org
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Attach API reference under /api

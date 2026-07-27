@@ -236,14 +236,37 @@ If you're building an Angular component that gets **dynamically loaded into anot
 
 ## Angular Component & Module Strategy
 
-See the root [CLAUDE.md](../../CLAUDE.md) rule #4 for the full policy. Summary:
+MemberJunction supports both standalone and NgModule-declared components. Choose the right
+approach for each situation — this file is the full policy.
 
-- **Standalone components are allowed and preferred for new leaf components** (dialogs, panels, widgets, lazy-loaded routes)
-- **NgModules are still used for feature modules** grouping many related components
-- **Follow the existing pattern** in whichever package you're working in
-- **Use `standalone: false` explicitly** for NgModule-declared components (Angular 21 defaults to standalone)
-- **Use `@if`/`@for`/`@switch`** block syntax for all new templates (not `*ngIf`/`*ngFor`)
-- **Use `inject()` function** for DI in new components (not constructor injection)
+### When to Use Standalone Components (Preferred for New Components)
+- **New leaf components** (dialogs, panels, small widgets) that don't need to share a module
+- **Lazy-loaded route components** — standalone enables direct `loadComponent()` without wrapper modules
+- **Simple, self-contained components** with clear dependency lists
+- Benefits: better tree-shaking with ESBuild, less boilerplate, explicit dependency graph
+
+### When to Use NgModules
+- **Feature modules** grouping many related components (e.g. dashboards, explorer modules)
+- **Shared modules** providing common functionality to multiple consumers
+- **Existing module-declared components** — don't migrate just for the sake of it
+- When a group of components share the same set of imports
+
+### Rules for Both Approaches
+- **Standalone components**: declare all dependencies in the component's `imports` array
+- **NgModule components**: must use `standalone: false` explicitly (Angular 21 defaults to standalone)
+- **Never mix within a single component** — a component is either standalone or module-declared
+- When adding to an existing package, **follow the pattern already used in that package**
+
+### Modern Template Syntax (Required for New Code)
+- **Use `@if`/`@for`/`@switch`** block syntax instead of `*ngIf`/`*ngFor`/`*ngSwitch`
+  - `@for` has 90% better runtime performance than `*ngFor`
+  - `*ngIf`/`*ngFor` are heading toward deprecation
+  - Works identically with both standalone and NgModule components
+  - After migrating templates, the `CommonModule` import can be removed if no other directives are used
+- **Use `inject()` function** instead of constructor injection for new components
+  - Angular officially recommends `inject()` over constructor DI
+  - Better inheritance (no `super()` chains), better types, works with standard decorators
+  - Existing constructor injection doesn't need to be migrated unless refactoring
 
 ## 🚨 Dialog Button Placement (MJ Convention) 🚨
 
@@ -804,3 +827,101 @@ Before a lazy chunk loads, the ClassFactory has **no registration** for classes 
 | Same explicit priority | Last registered + console warning |
 | No registration found | `CreateInstance` falls back to instantiating the base class directly |
 | Lazy module not yet loaded | `GetRegistration` returns `null` → triggers lazy load → retry succeeds |
+
+---
+
+## MJ UI Components (`@memberjunction/ng-ui-components`)
+
+- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material. **Never hand-roll a feature-specific equivalent of anything this package already provides** — check the catalog before building any control, layout region, overlay, or pattern.
+- **Canonical catalog with full APIs and usage examples: `packages/Angular/Generic/ui-components/README.md`**
+- Component overview:
+  - **Controls**: `button[mjButton]`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `[mjClickable]`
+  - **Layout & chrome**: `mj-page-layout`, `mj-page-header`, `mj-page-body` (+ `-interior` variants for left-nav shells), `mj-left-nav(-content)`, `mj-tab-nav`, `mj-page-search`, `mj-slide-panel`
+  - **Overlays**: `mj-dialog` + `MJDialogService`, `mj-confirm-dialog` + `MJConfirmService` (Promise-based `Confirm`/`ConfirmDelete`), `mj-window`, `mj-filter-popover`
+  - **Patterns**: `mj-empty-state`, `mj-stat-badge`, `mj-alert`, `mj-progress-bar`, `mj-view-toggle`, `mj-refresh-button`, `mj-filter-chip`, `mj-filter-field`, `mj-filter-panel`, `mj-applied-filters`, `mj-accordion-panel` (with `mjAccordionTitle`/`mjAccordionActions` and lazy `mjAccordionBody`)
+- Splitters: Use `angular-split` (`as-split` + `as-split-area`)
+- Grids: Use AG Grid (`ag-grid-angular`)
+- CSS classes: `.mj-input`, `.mj-textarea`, `.mj-checkbox` for styled native form elements
+- All components are standalone with `inject()` DI, PascalCase inputs/outputs, and `--mj-*` design tokens
+- Import from: `import { MJButtonDirective, MJDialogComponent, ... } from '@memberjunction/ng-ui-components'`
+
+## Loading Indicators
+
+- **ALWAYS** use the `<mj-loading>` component from `@memberjunction/ng-shared-generic` for all loading states
+- **NEVER** create custom spinners or loading indicators — use the standard MJ loading component
+- Import `SharedGenericModule` in your module to access `mj-loading`
+
+```html
+<!-- Basic usage -->
+<mj-loading></mj-loading>
+
+<!-- With custom text -->
+<mj-loading text="Loading records..."></mj-loading>
+
+<!-- With size preset -->
+<mj-loading text="Please wait..." size="medium"></mj-loading>
+
+<!-- No text, just the animated logo -->
+<mj-loading [showText]="false"></mj-loading>
+```
+
+Size presets: `'small'` (40x22px), `'medium'` (80x45px), `'large'` (120x67px), `'auto'` (fills container). The component displays the animated MJ logo with optional text below.
+
+## 🚨 CRITICAL: BaseResourceComponent Subclasses MUST Call NotifyLoadComplete() 🚨
+
+Every class that extends `BaseResourceComponent` (including `BaseDashboard` subclasses) **MUST** call `this.NotifyLoadComplete()` when its initial load is finished. Without this call, the app loading screen will hang indefinitely when navigating directly to a URL that targets that resource.
+
+- **`BaseDashboard` subclasses**: Handled automatically — `BaseDashboard.ngOnInit()` calls `NotifyLoadComplete()` after `loadData()` completes
+- **Direct `BaseResourceComponent` subclasses**: You MUST call `this.NotifyLoadComplete()` yourself, typically at the end of `ngOnInit()` or `ngAfterViewInit()`
+
+```typescript
+// ✅ CORRECT — NotifyLoadComplete called after initialization
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        this.NotifyLoadComplete(); // REQUIRED — signals the loading screen to clear
+    }
+}
+
+// ❌ WRONG — missing NotifyLoadComplete causes permanent loading screen
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        // Loading screen will hang forever on direct URL navigation!
+    }
+}
+```
+
+**Why this matters**: The shell's loading screen waits for the first resource component to signal completion via `LoadCompleteEvent`, which is wired to `NotifyLoadComplete()`. If the component never calls it, the loading animation plays indefinitely.
+
+## Change Detection and `ExpressionChangedAfterItHasBeenCheckedError`
+
+When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular components:
+
+- Add `ChangeDetectorRef` to the component constructor
+- Use `cdr.detectChanges()` after programmatic changes that affect the view
+- Replace `setTimeout` with `Promise.resolve().then()` for microtask timing
+- Common scenarios: clearing inputs, focus management, dynamic content updates
+
+## GraphQL Parameter Types
+
+Pay attention to GraphQL scalar types — match the schema exactly to avoid type mismatch errors:
+
+- Use `Int` for integer parameters (`topK`, `seed`)
+- Use `Float` for decimal parameters (`temperature`, `topP`)
+
+## Null Checking Patterns
+
+- Use `!= null` (not `!== null`) to check for both null and undefined
+- This is especially important for optional parameters that could be either
+- Example: `if (temperature != null)` handles both null and undefined
+
+## Component Organization
+
+- Group related components in dedicated directories
+- Export shared components (like dialogs) for reuse
+- Maintain clear separation between container and presentational components
+
+## Design tokens
+
+CSS/SCSS design-token rules (no hardcoded colors, the semantic token catalog, `color-mix()`, the CI gates) live in the path-scoped rule [`.claude/rules/design-tokens.md`](../../.claude/rules/design-tokens.md), which loads automatically when you open any `.scss` or `.css` file.

@@ -182,10 +182,20 @@ export class UserAppConfigContentComponent extends BaseAngularComponent implemen
 
       this.sharedService.CreateSimpleNotification('App configuration saved successfully!', 'success', 3000);
       this.Saved.emit();
+      // Backstop for a dropped/coalesced debounced engine event: force a reconcile from the source
+      // of truth so the app switcher can't be left "one save behind". DEFERRED past the current CD
+      // cycle — a synchronous reload here previously triggered NG0100 (commits e2059e6114 /
+      // 7bf8be7dc6). No-op cost when the event chain already delivered. (Ported from bug F1's fix
+      // to the pre-split monolith, PR #3289.)
+      Promise.resolve().then(() => this.appManager.ReloadUserApplications());
 
     } catch (error) {
       this.ErrorMessage = 'Failed to save configuration. Please try again.';
       LogError('Error saving app configuration:', undefined, error instanceof Error ? error.message : String(error));
+      // A partial-save failure can leave in-memory state half-committed (some items saved+clean,
+      // others still dirty) and divergent from the DB. Reconcile from the source of truth so
+      // recovery doesn't require a browser refresh — deferred, for the same NG0100 reason.
+      Promise.resolve().then(() => this.appManager.ReloadUserApplications());
     } finally {
       this.ngZone.run(() => {
         this.IsSaving = false;

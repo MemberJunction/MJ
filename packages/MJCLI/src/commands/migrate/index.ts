@@ -221,7 +221,7 @@ export default class Migrate extends Command {
           this.logToStderr(`    Version: ${detail.Migration.Version ?? '(repeatable)'}`);
           this.logToStderr(`    Description: ${detail.Migration.Description}`);
           if (detail.Error) {
-            this.logToStderr(`    Error: ${detail.Error.message}`);
+            this.printMigrationError(detail.Error);
           }
         }
       } else {
@@ -231,6 +231,64 @@ export default class Migrate extends Command {
       }
 
       this.error('Migrations failed');
+    }
+  }
+
+  /**
+   * Print everything Skyway captured about a failed migration.
+   *
+   * Skyway builds a `MigrationExecutionError` carrying the batch number, its line range in the
+   * script, and the lines within that batch which mention the identifiers named in the error — and
+   * we were printing only `Error.message`, discarding all of it. That is the difference between
+   * "a migration failed somewhere in 60,000 lines" and a file:line to open.
+   *
+   * Everything here is defensive: `BatchInfo` is optional on the error type, and a reporting path
+   * must never throw while reporting a failure.
+   */
+  private printMigrationError(error: Error): void {
+    this.logToStderr(`    Error: ${error.message}`);
+
+    const batch = (error as { BatchInfo?: {
+      BatchNumber?: number;
+      TotalBatches?: number;
+      StartLine?: number;
+      EndLine?: number;
+      SucceededBatches?: number;
+      ContextLines?: Array<{ LineNumber: number; Text: string }>;
+      BatchSQL?: string;
+    } }).BatchInfo;
+    if (!batch) {
+      return;
+    }
+
+    if (batch.BatchNumber != null && batch.TotalBatches != null) {
+      const range = batch.StartLine != null && batch.EndLine != null ? ` (lines ${batch.StartLine}-${batch.EndLine})` : '';
+      this.logToStderr(`    Batch: ${batch.BatchNumber} of ${batch.TotalBatches}${range}`);
+    }
+    if (batch.SucceededBatches != null) {
+      this.logToStderr(`    Batches applied before the failure: ${batch.SucceededBatches}`);
+    }
+
+    // The lines Skyway matched to identifiers in the error message. These carry FILE line numbers,
+    // so they paste straight into an editor.
+    if (batch.ContextLines?.length) {
+      this.logToStderr('    Related lines:');
+      for (const line of batch.ContextLines) {
+        this.logToStderr(`      ${line.LineNumber}: ${line.Text.trim()}`);
+      }
+    }
+
+    // When nothing could be matched, the batch SQL itself is the next best thing — without it the
+    // reader has a line range and no way to see what is in it.
+    else if (batch.BatchSQL) {
+      const preview = batch.BatchSQL.split('\n').slice(0, 10);
+      this.logToStderr('    Failing batch:');
+      for (const line of preview) {
+        this.logToStderr(`      ${line}`);
+      }
+      if (batch.BatchSQL.split('\n').length > preview.length) {
+        this.logToStderr('      ...');
+      }
     }
   }
 
@@ -247,7 +305,7 @@ export default class Migrate extends Command {
         this.logToStderr(`    Version: ${detail.Migration.Version ?? '(repeatable)'}`);
         this.logToStderr(`    Description: ${detail.Migration.Description}`);
         if (detail.Error) {
-          this.logToStderr(`    Error: ${detail.Error.message}`);
+          this.printMigrationError(detail.Error);
         }
       }
     } else if (lastMigrationStarted) {

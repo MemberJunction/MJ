@@ -87,7 +87,6 @@ export interface ExecutionBound {
  * sub-templates, creating sophisticated prompts through hierarchical template inheritance.
  * 
  * ## Agent Integration
- * - Links executions to agent runs via `agentRunId` parameter
  * - Supports agent decision-making workflows with structured JSON responses
  * - Enables hierarchical template patterns in AI agents
  * 
@@ -1146,7 +1145,7 @@ export class AIPromptRunner {
     }
 
     // Execute tasks in parallel
-    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
+    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken);
 
     if (!parallelResult.success) {
       throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
@@ -2879,11 +2878,6 @@ export class AIPromptRunner {
       promptRun.ConfigurationID = params.configurationId;
       promptRun.RunAt = startTime;
       
-      // Set AgentRunID if provided for agent-prompt execution tracking
-      if (params.agentRunId) {
-        promptRun.AgentRunID = params.agentRunId;
-      }
-
       // Resolve and save the effort level used (same precedence as ChatParams resolution)
       if (params.effortLevel !== undefined && params.effortLevel !== null) {
         promptRun.EffortLevel = params.effortLevel;
@@ -5181,7 +5175,6 @@ export class AIPromptRunner {
         // Run the repair prompt
         const repairResult = await this.ExecutePrompt({
           parentPromptRunId: currentPromptRun.ID,
-          agentRunId: currentPromptRun.AgentRunID,
           contextUser: params.contextUser,
           prompt: repairPrompt,
           data: {

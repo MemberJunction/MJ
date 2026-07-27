@@ -2110,7 +2110,6 @@ export class BaseAgent {
             promptRun.ModelID = modelResolution.modelID;
             promptRun.VendorID = modelResolution.vendorID || null;
             promptRun.AgentID = params.agent.ID;
-            promptRun.AgentRunID = this._agentRun?.ID ?? null;
             promptRun.Status = 'Running';
             promptRun.RunAt = new Date();
             promptRun.StreamingEnabled = true;
@@ -3527,7 +3526,6 @@ export class BaseAgent {
         }
         
         promptParams.data = promptTemplateData;
-        promptParams.agentRunId = this.AgentRun?.ID;
         promptParams.contextUser = params.contextUser;
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.verbose = params.verbose; // Pass through verbose flag
@@ -3642,7 +3640,6 @@ export class BaseAgent {
                 conversationMessages: params.conversationMessages,
                 templateMessageRole: 'user',
                 verbose: params.verbose,
-                agentRunId: this.AgentRun?.ID
             };
 
             // Pass through effortLevel to child prompt (same precedence hierarchy)
@@ -5910,11 +5907,6 @@ The context is now within limits. Please retry your request with the recovered c
                 // Keys are the summarize-range.template.md contract ({{ lens }}, {{ messages }})
                 promptParams.data = { lens, messages: rangeText };
                 promptParams.contextUser = params.contextUser;
-                if (this._agentRun) {
-                    // Link the sub-call's AIPromptRun to this agent run (AgentRunID) so
-                    // per-run cost rollups include the recursive summarization spend.
-                    promptParams.agentRunId = this._agentRun.ID;
-                }
                 const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
                 const text = ExtractPromptResultText(result);
                 if (!result.success || text.length === 0) {
@@ -13664,7 +13656,6 @@ The context is now within limits. Please retry your request with the recovered c
             // the resolver may still be writing its Message — keep it out of the window
             // so the boundary can never land on it.
             ExcludeDetailIds: params.conversationDetailId ? [params.conversationDetailId] : undefined,
-            AgentRunId: this._agentRun.ID
         });
 
         if (outcome.Fired || outcome.ErrorMessage) {
