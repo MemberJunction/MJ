@@ -352,8 +352,13 @@ function AddEntryToDynamicArray(content: string, entry: DynamicPackageEntry, arr
     }
     const arrayIndex = dynMatch.index + arrayRel.index;
 
-    const startupLine = entry.StartupExport ? `\n        StartupExport: '${entry.StartupExport}',` : '';
-    const entryStr = `\n      {\n        PackageName: '${entry.PackageName}',${startupLine}\n        AppName: '${entry.AppName}',\n        Enabled: ${entry.Enabled}\n      },`;
+    // JSON.stringify every manifest-sourced value: it emits a quoted, fully-escaped JS string
+    // literal, so a value containing quotes/backslashes/newlines can never terminate the literal
+    // and inject executable code into mj.config.cjs (which is `require`d — i.e. EXECUTED — by
+    // every mj migrate / codegen / build step). String concatenation of single-quoted values was
+    // an injection vector for any hostile manifest.
+    const startupLine = entry.StartupExport ? `\n        StartupExport: ${JSON.stringify(entry.StartupExport)},` : '';
+    const entryStr = `\n      {\n        PackageName: ${JSON.stringify(entry.PackageName)},${startupLine}\n        AppName: ${JSON.stringify(entry.AppName)},\n        Enabled: ${entry.Enabled}\n      },`;
 
     // Find the closing bracket of the target array
     const arrayStart = arrayIndex + arrayRel[0].length;
@@ -697,11 +702,13 @@ function AddSchemaToExcludeArray(content: string, schemaName: string): string {
         return content;
     }
 
-    // Check if the array has existing entries to determine formatting
+    // Check if the array has existing entries to determine formatting.
+    // JSON.stringify: quoted + escaped literal, so the value can't break out of the string
+    // and inject code into the executed config (see AddEntryToDynamicArray).
     const arrayContent = content.slice(openBracketPos + 1, closingBracket).trim();
     const entry = arrayContent.length > 0
-        ? `, '${schemaName}'`
-        : `'${schemaName}'`;
+        ? `, ${JSON.stringify(schemaName)}`
+        : JSON.stringify(schemaName);
 
     return content.slice(0, closingBracket) + entry + content.slice(closingBracket);
 }
@@ -710,14 +717,16 @@ function AddSchemaToExcludeArray(content: string, schemaName: string): string {
  * Removes a schema name from all excludeSchemas arrays in the config.
  */
 function RemoveSchemaFromExcludeArray(content: string, schemaName: string): string {
-    // Remove the schema entry (with optional leading comma+space or trailing comma+space)
+    // Remove the schema entry (with optional leading comma+space or trailing comma+space).
+    // Both quote styles accepted: AddSchemaToExcludeArray now writes JSON.stringify (double
+    // quotes), while pre-existing configs hold single-quoted entries.
     const patterns = [
         // Entry with leading comma: , 'schemaName'
-        new RegExp(`,\\s*'${EscapeRegex(schemaName)}'`, 'gi'),
+        new RegExp(`,\\s*['"]${EscapeRegex(schemaName)}['"]`, 'gi'),
         // Entry with trailing comma (first in array): 'schemaName',
-        new RegExp(`'${EscapeRegex(schemaName)}'\\s*,\\s*`, 'gi'),
+        new RegExp(`['"]${EscapeRegex(schemaName)}['"]\\s*,\\s*`, 'gi'),
         // Sole entry: 'schemaName'
-        new RegExp(`'${EscapeRegex(schemaName)}'`, 'gi'),
+        new RegExp(`['"]${EscapeRegex(schemaName)}['"]`, 'gi'),
     ];
 
     for (const pattern of patterns) {
@@ -889,7 +898,9 @@ function AddEntityPackageEntry(content: string, schemaName: string, packageName:
     }
 
     const bracePos = content.indexOf('{', recordMatch.index);
-    const entryStr = `\n    '${schemaName}': '${packageName}',`;
+    // JSON.stringify both key and value — quoted + escaped, so neither can break out of its
+    // string literal and inject code into the executed config (see AddEntryToDynamicArray).
+    const entryStr = `\n    ${JSON.stringify(schemaName)}: ${JSON.stringify(packageName)},`;
 
     // Insert right after the opening brace
     return content.slice(0, bracePos + 1) + entryStr + content.slice(bracePos + 1);
