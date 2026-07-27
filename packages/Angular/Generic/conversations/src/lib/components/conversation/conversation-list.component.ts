@@ -367,7 +367,11 @@ interface FolderNode {
          The accent trio drives the panel's ACTION surfaces (New Conversation
          button, search-focus ring, checkbox tick, drag-over highlights) —
          independent of the active-row pair so a host can tint actions on their
-         own; defaults to the brand-primary action color, unchanged. */
+         own; defaults to the brand-primary action color, unchanged.
+         --conv-list-hover-bg is the row-hover wash: it defaults to the same
+         ink-derived tint as before (so a bg/ink remap still gives a neutral
+         hover), but a host can point it at a brand tint to make hover an accent
+         cue while keeping the panel itself on a neutral surface. */
       --conv-list-bg: var(--mj-conversations-list-bg, var(--mj-brand-secondary));
       --conv-list-ink: var(--mj-conversations-list-ink, var(--mj-brand-on-secondary));
       --conv-list-active-bg: var(--mj-conversations-list-active-bg, var(--mj-brand-primary));
@@ -376,6 +380,7 @@ interface FolderNode {
       --conv-list-accent: var(--mj-conversations-list-accent, var(--mj-brand-primary));
       --conv-list-accent-ink: var(--mj-conversations-list-accent-ink, var(--mj-text-inverse));
       --conv-list-accent-hover: var(--mj-conversations-list-accent-hover, var(--mj-brand-primary-hover));
+      --conv-list-hover-bg: var(--mj-conversations-list-hover-bg, color-mix(in srgb, var(--conv-list-ink) 8%, transparent));
     }
     .conversation-list { display: flex; flex-direction: column; height: 100%; background: var(--conv-list-bg); }
     .list-header { padding: 8px; border-bottom: 1px solid color-mix(in srgb, var(--conv-list-ink) 10%, transparent); }
@@ -463,7 +468,7 @@ interface FolderNode {
       font-size: 14px;
       min-height: 45px;
     }
-    .conversation-item:hover { background: color-mix(in srgb, var(--conv-list-ink) 8%, transparent); color: var(--conv-list-ink); }
+    .conversation-item:hover { background: var(--conv-list-hover-bg); color: var(--conv-list-ink); }
     .conversation-item:hover .conversation-actions { opacity: 1; }
     .conversation-item.active { background: var(--conv-list-active-bg); color: var(--conv-list-active-ink); }
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }

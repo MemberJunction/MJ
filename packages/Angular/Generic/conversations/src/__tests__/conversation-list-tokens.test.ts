@@ -53,6 +53,9 @@ describe('conversation-list inline styles — design tokens only', () => {
     expect(styles).toContain('--conv-list-accent: var(--mj-conversations-list-accent, var(--mj-brand-primary))');
     expect(styles).toContain('--conv-list-accent-ink: var(--mj-conversations-list-accent-ink, var(--mj-text-inverse))');
     expect(styles).toContain('--conv-list-accent-hover: var(--mj-conversations-list-accent-hover, var(--mj-brand-primary-hover))');
+    // …and the row-hover wash, defaulting to the prior ink-derived tint.
+    expect(styles).toContain('--conv-list-hover-bg: var(--mj-conversations-list-hover-bg, color-mix(in srgb, var(--conv-list-ink) 8%, transparent))');
+    expect(styles).toContain('.conversation-item:hover { background: var(--conv-list-hover-bg);');
     // …and no rule may bypass the indirection by using the raw brand tokens for
     // panel background/ink. Exactly ONE deliberate on-secondary use survives:
     // the bulk-delete button's ink sits on the error-red button, not the panel
