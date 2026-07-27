@@ -117,7 +117,10 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 
 | Input | Gates |
 |---|---|
-| `allowMentions` | `@`-mention support in the composer |
+| `allowMentions` | MASTER switch for the composer's mention/command triggers (`@` agents, `#` entities, `/` skills). When `false`, all are off regardless of the per-type flags below |
+| `allowAgentMentions` | The `@` agent/user mention trigger (under `allowMentions`). Set `false` on a surface pinned to a default agent that wants `/` skills but not `@` — an `@` overrides the pinned agent in message routing |
+| `allowEntityMentions` | The `#` entity/query mention trigger (under `allowMentions`) |
+| `allowSkillCommands` | The `/` skill-command trigger (under `allowMentions`) |
 | `allowAttachments` | The file-attachment button |
 | `allowPlanMode` | The composer's Plan Mode toggle button |
 | `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
