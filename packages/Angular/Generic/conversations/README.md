@@ -169,21 +169,21 @@ The list panel renders on brand tokens by default (a `--mj-brand-secondary` pane
 
 | Token | Default | Governs |
 |---|---|---|
-| `--mj-conversations-list-bg` | `var(--mj-brand-secondary)` | Panel background (and its dropdown/context menus) |
-| `--mj-conversations-list-ink` | `var(--mj-brand-on-secondary)` | Text — hover, border, divider, and placeholder tints all derive from this via `color-mix`, so they follow automatically |
-| `--mj-conversations-list-active-bg` | `var(--mj-brand-primary)` | The active conversation row's background |
-| `--mj-conversations-list-active-ink` | `var(--mj-brand-on-secondary)` | ALL text on the active row (title, preview, badges, icons) — remap alongside `active-bg` to keep the row legible |
-| `--mj-conversations-list-active-hover-bg` | `var(--mj-brand-primary-hover)` | Hovered controls (the ⋯ button) on the active row |
-| `--mj-conversations-list-accent` | `var(--mj-brand-primary)` | The panel's ACTION color — New Conversation button, search-focus ring, checkbox tick, and drag-over highlights — independent of the active-row pair |
-| `--mj-conversations-list-accent-ink` | `var(--mj-text-inverse)` | Text/icon on the accent (the New Conversation button label) |
-| `--mj-conversations-list-accent-hover` | `var(--mj-brand-primary-hover)` | Hover state of the accent (the New Conversation button) |
-| `--mj-conversations-list-hover-bg` | `color-mix(… var(--conv-list-ink) 8% …)` | Row-hover wash. Defaults to the ink-derived neutral tint; point it at a brand tint (e.g. `color-mix(in srgb, var(--mj-brand-primary) 12%, transparent)`) to make hover a brand cue while the panel stays on a neutral surface |
+| `--mj-chat-list-bg` | `var(--mj-brand-secondary)` | Panel background (and its dropdown/context menus) |
+| `--mj-chat-list-ink` | `var(--mj-brand-on-secondary)` | Text — hover, border, divider, and placeholder tints all derive from this via `color-mix`, so they follow automatically |
+| `--mj-chat-list-active-bg` | `var(--mj-brand-primary)` | The active conversation row's background |
+| `--mj-chat-list-active-ink` | `var(--mj-brand-on-secondary)` | ALL text on the active row (title, preview, badges, icons) — remap alongside `active-bg` to keep the row legible |
+| `--mj-chat-list-active-hover-bg` | `var(--mj-brand-primary-hover)` | Hovered controls (the ⋯ button) on the active row |
+| `--mj-chat-list-accent` | `var(--mj-brand-primary)` | The panel's ACTION color — New Conversation button, search-focus ring, checkbox tick, and drag-over highlights — independent of the active-row pair |
+| `--mj-chat-list-accent-ink` | `var(--mj-text-inverse)` | Text/icon on the accent (the New Conversation button label) |
+| `--mj-chat-list-accent-hover` | `var(--mj-brand-primary-hover)` | Hover state of the accent (the New Conversation button) |
+| `--mj-chat-list-hover-bg` | `color-mix(… var(--conv-list-ink) 8% …)` | Row-hover wash. Defaults to the ink-derived neutral tint; point it at a brand tint (e.g. `color-mix(in srgb, var(--mj-brand-primary) 12%, transparent)`) to make hover a brand cue while the panel stays on a neutral surface |
 
 ```css
 /* e.g. match the list to the chat area's light surface */
 :root {
-  --mj-conversations-list-bg: var(--mj-bg-surface-card);
-  --mj-conversations-list-ink: var(--mj-text-primary);
+  --mj-chat-list-bg: var(--mj-bg-surface-card);
+  --mj-chat-list-ink: var(--mj-text-primary);
 }
 ```
 

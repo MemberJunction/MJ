@@ -327,6 +327,21 @@ tokens, so dark mode "just works" without consumer code. Override at any
     --mj-chat-voice-listening: var(--mj-status-info);
     --mj-chat-voice-thinking:  var(--mj-status-warning);
     --mj-chat-voice-speaking:  var(--mj-brand-primary);
+
+    /* Conversation LIST panel (mj-conversation-list, also via mj-conversation-sidebar).
+       Defaults are the stock navy rail; remap onto surface tokens to match the chat
+       area. Hover / border / divider / preview / badge / placeholder tints all derive
+       from `ink` (or `active-ink` on the active row) via color-mix, so they follow
+       their pair automatically. */
+    --mj-chat-list-bg:              var(--mj-brand-secondary);
+    --mj-chat-list-ink:             var(--mj-brand-on-secondary);
+    --mj-chat-list-hover-bg:        color-mix(in srgb, var(--mj-chat-list-ink) 8%, transparent);
+    --mj-chat-list-active-bg:       var(--mj-brand-primary);
+    --mj-chat-list-active-ink:      var(--mj-brand-on-secondary);
+    --mj-chat-list-active-hover-bg: var(--mj-brand-primary-hover);
+    --mj-chat-list-accent:          var(--mj-brand-primary);   /* action surfaces */
+    --mj-chat-list-accent-ink:      var(--mj-text-inverse);
+    --mj-chat-list-accent-hover:    var(--mj-brand-primary-hover);
 }
 
 /* Theme override — warm tutor surface */
@@ -340,6 +355,18 @@ The tokens are injected at runtime by `ConversationsRuntimeBootstrap` via a
 `<style id="mj-chat-tokens">` element in `<head>`. (Angular's emulated view
 encapsulation rewrites `:root {}` inside `styleUrls`, breaking the global
 selector — runtime injection sidesteps the issue.)
+
+The `--mj-chat-list-*` family is the exception: it resolves in the list component's own
+`:host` block, onto private `--conv-list-*` names. That indirection is required, not
+stylistic — a custom property cannot name itself in its own fallback without forming a
+cycle, so the public name and the name the ~40 rules read have to differ. The practical
+consequence for consumers is nil: set `--mj-chat-list-*` at `:root` (or any ancestor)
+exactly like the rest of the palette. The chrome TOGGLES that go with these tokens
+(`showSearch`, `showNewConversationButton`, `showHeaderMenu`, `showSectionHeaders`) are
+documented in the package README.
+
+A host that doesn't load MJ's token stylesheet at all should define the list tokens (and
+the brand/status tokens they fall back to) explicitly.
 
 ---
 

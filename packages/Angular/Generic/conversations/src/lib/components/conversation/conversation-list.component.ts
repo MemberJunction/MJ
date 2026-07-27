@@ -111,25 +111,25 @@ interface FolderNode {
              ever drag it back out (a one-way door). Flat + headerless is the
              coherent chrome-less rendering. -->
         @if (showSectionHeaders && groupBy === 'project') {
-          <!-- Folders Section -->
+          <!-- Folders Section. NOTE: this whole branch is already gated on
+               showSectionHeaders above, so the header + collapse state here are
+               unconditional — a headerless folder tree never renders. -->
           <div class="sidebar-section folders-section">
-            @if (showSectionHeaders) {
-              <div class="section-header" [class.expanded]="foldersExpanded"
-                   [class.drag-over]="dragOverTargetId === 'folders-root'"
-                   (click)="toggleFolders()"
-                   (dragover)="onFoldersRootDragOver($event)"
-                   (dragleave)="onDragLeave('folders-root')"
-                   (drop)="onFoldersRootDrop($event)">
-                <div class="section-title">
-                  <i class="fas fa-chevron-right"></i>
-                  <span>Folders</span>
-                </div>
-                <button class="section-action-btn" (click)="createFolder(null, $event)" title="New Folder">
-                  <i class="fas fa-folder-plus"></i>
-                </button>
+            <div class="section-header" [class.expanded]="foldersExpanded"
+                 [class.drag-over]="dragOverTargetId === 'folders-root'"
+                 (click)="toggleFolders()"
+                 (dragover)="onFoldersRootDragOver($event)"
+                 (dragleave)="onDragLeave('folders-root')"
+                 (drop)="onFoldersRootDrop($event)">
+              <div class="section-title">
+                <i class="fas fa-chevron-right"></i>
+                <span>Folders</span>
               </div>
-            }
-            <div class="chat-list" [class.expanded]="!showSectionHeaders || foldersExpanded">
+              <button class="section-action-btn" (click)="createFolder(null, $event)" title="New Folder">
+                <i class="fas fa-folder-plus"></i>
+              </button>
+            </div>
+            <div class="chat-list" [class.expanded]="foldersExpanded">
               @for (node of folderTree; track node.project.ID) {
                 @if (!isSearching || node.hasContent) {
                   <ng-container [ngTemplateOutlet]="folderNode" [ngTemplateOutletContext]="{ $implicit: node }"></ng-container>
@@ -147,15 +147,14 @@ interface FolderNode {
                (dragover)="onUngroupedDragOver($event)"
                (dragleave)="onDragLeave('ungrouped')"
                (drop)="onUngroupedDrop($event)">
-            @if (showSectionHeaders) {
-              <div class="section-header" [class.expanded]="ungroupedExpanded" (click)="toggleUngrouped()">
-                <div class="section-title">
-                  <i class="fas fa-chevron-right"></i>
-                  <span>{{ folderTree.length > 0 ? 'Ungrouped' : 'Messages' }}</span>
-                </div>
+            <!-- Same as Folders above: reached only when showSectionHeaders is true. -->
+            <div class="section-header" [class.expanded]="ungroupedExpanded" (click)="toggleUngrouped()">
+              <div class="section-title">
+                <i class="fas fa-chevron-right"></i>
+                <span>{{ folderTree.length > 0 ? 'Ungrouped' : 'Messages' }}</span>
               </div>
-            }
-            <div class="chat-list" [class.expanded]="!showSectionHeaders || ungroupedExpanded">
+            </div>
+            <div class="chat-list" [class.expanded]="ungroupedExpanded">
               @for (conversation of ungroupedConversations; track conversation.ID) {
                 <ng-container [ngTemplateOutlet]="conversationItem" [ngTemplateOutletContext]="{ $implicit: conversation }"></ng-container>
               }
@@ -356,7 +355,7 @@ interface FolderNode {
       display: block;
       height: 100%;
       /* White-label theming tokens for the list panel. The public
-         --mj-conversations-list-* custom properties are host-overridable (set
+         --mj-chat-list-* custom properties are host-overridable (set
          them at :root or on any ancestor); the private --conv-list-* names
          resolve the fallback ONCE here so the 70+ usages below stay simple.
          (A self-referential var() fallback would be a custom-property cycle,
@@ -372,15 +371,15 @@ interface FolderNode {
          ink-derived tint as before (so a bg/ink remap still gives a neutral
          hover), but a host can point it at a brand tint to make hover an accent
          cue while keeping the panel itself on a neutral surface. */
-      --conv-list-bg: var(--mj-conversations-list-bg, var(--mj-brand-secondary));
-      --conv-list-ink: var(--mj-conversations-list-ink, var(--mj-brand-on-secondary));
-      --conv-list-active-bg: var(--mj-conversations-list-active-bg, var(--mj-brand-primary));
-      --conv-list-active-ink: var(--mj-conversations-list-active-ink, var(--mj-brand-on-secondary));
-      --conv-list-active-hover-bg: var(--mj-conversations-list-active-hover-bg, var(--mj-brand-primary-hover));
-      --conv-list-accent: var(--mj-conversations-list-accent, var(--mj-brand-primary));
-      --conv-list-accent-ink: var(--mj-conversations-list-accent-ink, var(--mj-text-inverse));
-      --conv-list-accent-hover: var(--mj-conversations-list-accent-hover, var(--mj-brand-primary-hover));
-      --conv-list-hover-bg: var(--mj-conversations-list-hover-bg, color-mix(in srgb, var(--conv-list-ink) 8%, transparent));
+      --conv-list-bg: var(--mj-chat-list-bg, var(--mj-brand-secondary));
+      --conv-list-ink: var(--mj-chat-list-ink, var(--mj-brand-on-secondary));
+      --conv-list-active-bg: var(--mj-chat-list-active-bg, var(--mj-brand-primary));
+      --conv-list-active-ink: var(--mj-chat-list-active-ink, var(--mj-brand-on-secondary));
+      --conv-list-active-hover-bg: var(--mj-chat-list-active-hover-bg, var(--mj-brand-primary-hover));
+      --conv-list-accent: var(--mj-chat-list-accent, var(--mj-brand-primary));
+      --conv-list-accent-ink: var(--mj-chat-list-accent-ink, var(--mj-text-inverse));
+      --conv-list-accent-hover: var(--mj-chat-list-accent-hover, var(--mj-brand-primary-hover));
+      --conv-list-hover-bg: var(--mj-chat-list-hover-bg, color-mix(in srgb, var(--conv-list-ink) 8%, transparent));
     }
     .conversation-list { display: flex; flex-direction: column; height: 100%; background: var(--conv-list-bg); }
     .list-header { padding: 8px; border-bottom: 1px solid color-mix(in srgb, var(--conv-list-ink) 10%, transparent); }
