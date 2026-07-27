@@ -22,16 +22,20 @@ export class GraphQLServerGeneratorBase {
   public generateGraphQLServerCode(
     entities: EntityInfo[],
     outputDirectory: string,
-    generatedEntitiesImportLibrary: string,
-    excludeRelatedEntitiesExternalToSchema: boolean
+    generatedEntitiesImportLibrary: string
   ): boolean {
     const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase().startsWith('@memberjunction/');
+    // The GraphQL ObjectType class for every entity in THIS call is emitted inline into the single
+    // generated.ts. A reverse-relationship field references a related entity's class by BARE name, so it
+    // only compiles if that class is emitted here — i.e. if the related entity is in this set. This is the
+    // exact, mechanism-based gate for reverse-relationship emission (see reverseRelatedTypeIsAvailable).
+    const generatedEntityNames = new Set(entities.map((e) => e.Name.trim().toLowerCase()));
     let sRet: string = '';
     try {
       sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal);
 
       for (let i: number = 0; i < entities.length; ++i) {
-        sRet += this.generateServerEntityString(entities[i], false, generatedEntitiesImportLibrary, excludeRelatedEntitiesExternalToSchema);
+        sRet += this.generateServerEntityString(entities[i], false, generatedEntitiesImportLibrary, generatedEntityNames);
       }
       makeDir(outputDirectory);
       fs.writeFileSync(path.join(outputDirectory, 'generated.ts'), sRet);
@@ -71,11 +75,35 @@ export class GraphQLServerGeneratorBase {
     return this.getServerGraphQLTypeNameBase(entity) + this.GraphQLTypeSuffix;
   }
 
+  /**
+   * Whether a reverse-relationship (child-array) field for `relatedEntity` may be emitted onto a parent
+   * entity's generated GraphQL type in THIS file — i.e. whether `relatedEntity`'s GraphQL type name is
+   * actually resolvable where the field is emitted. This is the exact compile condition, tied to how the
+   * type is referenced in `generateServerRelationship`:
+   *
+   *   - A related entity's class is emitted INLINE in this same `generated.ts` iff it is in the set of
+   *     entities being generated in this call (`generatedEntityNames`). Its field references it by BARE
+   *     name, so it compiles iff that class was emitted → membership in the set is the signal.
+   *   - The ONE exception: a CORE (`__mj`) related entity in a NON-core file is referenced via the
+   *     `mj_core_schema_server_object_types.*` namespace import at the top of the file, so it is always
+   *     resolvable regardless of the set.
+   *
+   * This replaces the earlier schema-equality / package heuristics: a related entity is emittable exactly
+   * when its type is present here, which the generated set answers directly — correct for every topology
+   * (app-dev, monolith, multi-schema app, and a single run that co-generates several apps into one file).
+   */
+  protected reverseRelatedTypeIsAvailable(relatedEntity: EntityInfo, generatedEntityNames: Set<string>, isInternal: boolean): boolean {
+    if (relatedEntity.SchemaName === mjCoreSchema && !isInternal) {
+      return true; // referenced via the mj_core_schema_server_object_types.* namespace import
+    }
+    return generatedEntityNames.has(relatedEntity.Name.trim().toLowerCase());
+  }
+
   public generateServerEntityString(
     entity: EntityInfo,
     includeFileHeader: boolean,
     generatedEntitiesImportLibrary: string,
-    excludeRelatedEntitiesExternalToSchema: boolean
+    generatedEntityNames: Set<string>,
   ): string {
     const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase() === '@memberjunction/core-entities';
     let sEntityOutput: string = '';
@@ -85,14 +113,8 @@ export class GraphQLServerGeneratorBase {
       const serverGraphQLTypeName: string = this.getServerGraphQLTypeName(entity);
 
       if (includeFileHeader) {
-        const resolvedLib = isInternal
-          ? generatedEntitiesImportLibrary
-          : resolveEntityPackageName(entity.SchemaName);
-        sEntityOutput = this.generateEntitySpecificServerFileHeader(
-          entity,
-          resolvedLib,
-          excludeRelatedEntitiesExternalToSchema
-        );
+        const resolvedLib = isInternal ? generatedEntitiesImportLibrary : resolveEntityPackageName(entity.SchemaName);
+        sEntityOutput = this.generateEntitySpecificServerFileHeader(entity, resolxvedLib, generatedEntityNames);
       }
 
       sEntityOutput += this.generateServerEntityHeader(entity, serverGraphQLTypeName);
@@ -114,9 +136,9 @@ export class GraphQLServerGeneratorBase {
             // Related entity is external (no MJ base view) — its resolver is skipped (see
             // generateServerGraphQLResolver), so skip the paired field declaration too for consistency.
             sEntityOutput += `// Relationship field to ${r.RelatedEntity} not generated: related entity is external (no local base view).\n`;
-          } else if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-            // only include the relationship if either we are NOT excluding related entities external to the schema
-            // or if the related entity is in the same schema as the current entity
+          } else if (this.reverseRelatedTypeIsAvailable(re, generatedEntityNames, isInternal)) {
+            // only emit the reverse relationship if the related entity's GraphQL type is available in this
+            // file (its class is generated here, or it is a core type imported via the namespace import)
             sEntityOutput += this.generateServerRelationship(md, sortedRelatedEntities[j], isInternal);
           }
         } else {
@@ -130,7 +152,7 @@ export class GraphQLServerGeneratorBase {
       sEntityOutput += this.generateServerGraphQLResolver(
         entity,
         serverGraphQLTypeName,
-        excludeRelatedEntitiesExternalToSchema,
+        generatedEntityNames,
         isInternal
       );
     } catch (err) {
@@ -201,7 +223,7 @@ ${this.generateEntityImports(entities, importLibrary, isInternal)}
   public generateEntitySpecificServerFileHeader(
     entity: EntityInfo,
     importLibrary: string,
-    excludeRelatedEntitiesExternalToSchema: boolean
+    generatedEntityNames: Set<string>
   ): string {
     const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     let sRet: string = `/********************************************************************************
@@ -224,9 +246,9 @@ import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
     for (let i: number = 0; i < sortedRelatedEntities.length; ++i) {
       const r = sortedRelatedEntities[i];
       const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
-      if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-        // we only include entities that are in the same schema as the current entity
-        // OR if we are not excluding related entities external to the schema
+      // This per-entity-file header imports each related type from a RELATIVE sibling file, so the type is
+      // available only if the related entity is generated in this run (its sibling file exists).
+      if (generatedEntityNames.has(re.Name.trim().toLowerCase())) {
         const tableName = sortedRelatedEntities[i].RelatedEntityBaseTableCodeName;
         sRet += `\nimport ${tableName} from './${tableName}';`;
       }
@@ -327,7 +349,7 @@ export class ${serverGraphQLTypeName} {`;
   protected generateServerGraphQLResolver(
     entity: EntityInfo,
     serverGraphQLTypeName: string,
-    excludeRelatedEntitiesExternalToSchema: boolean,
+    generatedEntityNames: Set<string>,
     isInternal: boolean
   ): string {
     const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
@@ -474,9 +496,9 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
             // than emit a resolver that fails at runtime (external rows are reachable via that entity's
             // own RunView with a filter on the join column).
             sRet += `// Relationship to ${r.RelatedEntity} not generated: related entity is external (no local base view to query).\n`;
-          } else if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-            // only include the relationship if either we are NOT excluding related entities external to the schema
-            // or if the related entity is in the same schema as the current entity
+          } else if (this.reverseRelatedTypeIsAvailable(re, generatedEntityNames, isInternal)) {
+            // only emit the field resolver if the related entity's GraphQL type is available in this file
+            // (its class is generated here, or it is a core type imported via the namespace import)
             if (r.Type.toLowerCase().trim() == 'many to many') sRet += this.generateManyToManyFieldResolver(entity, r);
             else sRet += this.generateOneToManyFieldResolver(entity, r, isInternal);
           }

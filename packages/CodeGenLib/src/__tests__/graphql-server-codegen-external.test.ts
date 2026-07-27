@@ -58,8 +58,11 @@ import { GraphQLServerGeneratorBase } from '../Misc/graphql_server_codegen';
 
 class TestableGenerator extends GraphQLServerGeneratorBase {
   public resolver(entity: unknown, typeName: string) {
-    // (entity, serverGraphQLTypeName, excludeRelatedEntitiesExternalToSchema, isInternal)
-    return this.generateServerGraphQLResolver(entity as never, typeName, false, true);
+    // (entity, serverGraphQLTypeName, generatedEntityNames, isInternal). Treat every entity in the mocked
+    // metadata as "generated in this file" so non-external related entities are available (the external
+    // ones are still dropped by the ExternalDataSourceID guard, which runs before the availability gate).
+    const generatedNames = new Set((metadataEntities as Array<{ Name: string }>).map((e) => e.Name.trim().toLowerCase()));
+    return this.generateServerGraphQLResolver(entity as never, typeName, generatedNames, true);
   }
 }
 

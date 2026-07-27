@@ -459,9 +459,21 @@ const configInfoSchema = z.object({
     { name: 'auto_index_foreign_keys', value: true },
   ]),
   excludeSchemas: z.string().array().default(['sys', 'staging']),
+  /**
+   * Opt-in POSITIVE scope list. When set (non-empty), CodeGen processes ONLY these schemas — every other
+   * schema present in the database is treated as excluded. It is pure sugar over {@link excludeSchemas}:
+   * it is resolved into `excludeSchemas` at ONE point (ManageMetadataBase.manageMetadata) by appending
+   * every not-included schema, so nothing downstream changes. In-scope ⇔ named in `includeSchemas` AND not
+   * in `excludeSchemas` (include shrinks the addressable space; exclude overlays on top). No hidden
+   * auto-includes — a schema (including the MJ core schema) is in scope ONLY if listed explicitly. Leave
+   * undefined/empty to use the classic exclude-only behavior (unchanged). Primary use: scope an Open App's
+   * CodeGen to just its own schema without hand-maintaining an exclude list of every other app. See PR
+   * "CodeGen includeSchemas for Open Apps".
+   */
+  includeSchemas: z.string().array().optional(),
   excludeTables: tableInfoSchema.array().default([
     { schema: '%', table: 'sys%' },
-    { schema: '%', table: 'flyway_schema_history' }
+    { schema: '%', table: 'flyway_schema_history' },
   ]),
   customSQLScripts: customSQLScriptSchema.array().default([
     // AS OF 5.3.0 we are NOT including this as it wipes out standard views and procs

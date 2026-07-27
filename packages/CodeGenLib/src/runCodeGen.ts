@@ -11,6 +11,7 @@ import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
+import { computeSchemasToExcludeForIncludeList } from './Database/schema-scope';
 import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
@@ -206,6 +207,21 @@ export class RunCodeGenBase {
         }
         return m;
       });
+
+      // Resolve the opt-in positive scope `includeSchemas` into `excludeSchemas` ONCE, here — before the
+      // metadata and file-generation phases both read `configInfo.excludeSchemas` — so the scope is applied
+      // inherently to the whole run (including `--skipdb`, which still generates files). Every schema present
+      // in the loaded metadata that is NOT included is appended to `excludeSchemas`; from here on the rest of
+      // CodeGen sees a single, already-scoped exclude list and needs no include-awareness. Pure sugar over the
+      // existing exclude mechanism (see computeSchemasToExcludeForIncludeList). See PR "CodeGen includeSchemas".
+      if (configInfo.includeSchemas && configInfo.includeSchemas.length > 0) {
+        if (!configInfo.excludeSchemas) {
+          configInfo.excludeSchemas = [];
+        }
+        const allSchemas = Array.from(new Set(md.Entities.map((e) => e.SchemaName)));
+        const toExclude = computeSchemasToExcludeForIncludeList(allSchemas, configInfo.includeSchemas, configInfo.excludeSchemas);
+        configInfo.excludeSchemas.push(...toExclude);
+      }
 
       const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase)!;
       const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase)!;
@@ -508,7 +524,7 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating CORE Entity GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
         const ok = await reporter.phase('generateGraphQLCore', async () =>
-          graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true),
+          graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities'),
         );
         if (!ok) {
           failSpinner('Error generating GraphQL server code');
@@ -524,7 +540,7 @@ export class RunCodeGenBase {
           ? (configInfo.entityPackageName || 'mj_generatedentities')
           : 'mj_generatedentities';
         const ok = await reporter.phase('generateGraphQL', async () =>
-          graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, entityPackageName, false),
+          graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, entityPackageName),
         );
         if (!ok) {
           failSpinner('Error generating GraphQL Resolver code');
