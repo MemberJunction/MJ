@@ -99,7 +99,7 @@ This section is the reuse ledger. Everything below exists on `next` today and wa
 
 `MJAIAgentRunEntity` (`MJ: AI Agent Runs`, `packages/MJCoreEntities/src/generated/entity_subclasses.ts:40971`) already carries:
 
-- **`ParentRunID`** (self-FK): "Reference to the parent agent run if this is a sub-agent execution. NULL for root-level agent runs. Enables hierarchical execution tracking." This is **sub-agent nesting**, stamped from `params.parentRun?.ID` in `initializeAgentRun` (`packages/AI/Agents/src/base-agent.ts:7885`). Per Amith's review note we verified this first: it exists, it means sub-agent parentage, and this plan does **not** overload it.
+- **`ParentRunID`** (self-FK): "Reference to the parent agent run if this is a sub-agent execution. NULL for root-level agent runs. Enables hierarchical execution tracking." This is **sub-agent nesting**, stamped from `params.parentRun?.ID` in `initializeAgentRun` (`packages/AI/Agents/src/base-agent.ts:7885`). This was verified first: the field exists, it means sub-agent parentage, and this plan does **not** overload it.
 - **`LastRunID`** (self-FK): "Links to the previous run in a chain. Different from ParentRunID which is for sub-agent hierarchy." This is the **continuation chain** used by HITL resume. Nothing enforces uniqueness on it, so the schema already tolerates a branching DAG, but its semantics (and `autoPopulateLastRunPayload`, which restores `FinalPayload`) are "continue after the end", not "re-execute from the middle". This plan does not overload it either; Section 11 item 1 records the tradeoff for review.
 - **`StartingPayload`** ("Can be populated from the FinalPayload of the LastRun"), **`FinalPayload`**, **`Result`** (same JSON as `FinalPayload`, written at `base-agent.ts:13183`), **`Data`** (the template/prompt data passed to the agent and all sub-agents: the input fingerprint for diffing).
 - **`ConfigurationID`, `OverrideModelID`, `OverrideVendorID`, `EffortLevel`, `PlanMode`, `Verbose`**: the determinism controls a branch either holds constant or deliberately changes.
@@ -162,7 +162,7 @@ Why new columns instead of reuse:
 - **Not `LastRunID`.** It is DAG-capable in the schema, but its semantics are "continuation after the end": `autoPopulateLastRunPayload` restores `FinalPayload`, HITL resume writes it, and `RootLastRunID` groups conversation-turn chains. A branch restores **mid-run** state and must record **which step**, which `LastRunID` has no slot for. Keeping them separate also lets a branched run later be resumed normally (both fields populated, no ambiguity).
 - **Not a `Branch`/lineage table.** Two nullable columns express the full tree (`id`/`parentId`, exactly Pi's shape); Record Changes provides history for free; a table would be a second place to join for zero additional expressiveness.
 
-Naming follows the shipped precedent `AIPromptRun.RerunFromPromptRunID` in spirit; Section 11 item 2 offers Amith the literal `RerunFrom*` alternative. Branch labels reuse the existing unused `AIAgentRun.RunName`. No backfill is needed (new nullable columns; existing rows are correctly "not branches").
+Naming follows the shipped precedent `AIPromptRun.RerunFromPromptRunID` in spirit; Section 11 item 2 records the literal `RerunFrom*` alternative for review. Branch labels reuse the existing unused `AIAgentRun.RunName`. No backfill is needed (new nullable columns; existing rows are correctly "not branches").
 
 ### 4.2 `Action`: replay policy
 
@@ -301,14 +301,14 @@ A fifth lazy tab `branches` on the existing hand-rolled tab bar (`timeline | vis
 - The step-path diff list with per-step links into each run's timeline.
 - `mj-empty-state` when fewer than two branches are selected.
 
-### 7.4 Conventions followed (reviewable against MattC-BC's system)
+### 7.4 Conventions followed (reviewable against the MJ design system)
 
-The visualization work is Amith's (imperative SVG + RAF); the design system is MattC-BC's `@memberjunction/ng-ui-components` (catalog: `packages/Angular/Generic/ui-components/README.md`). New surfaces here use MattC-BC's shell primitives around the existing data/adapter layer, specifically:
+The existing visualization is imperative SVG + RAF; the design system is `@memberjunction/ng-ui-components` (catalog: `packages/Angular/Generic/ui-components/README.md`). New surfaces here use the design system's shell primitives around the existing data/adapter layer, specifically:
 
 - Components/directives: `mj-slide-panel`, `mj-tab-nav` (if the tab bar is migrated; otherwise the local tab markup is matched), `mj-accordion-panel` (+ `mjAccordionTitle`/`mjAccordionActions`/`mjAccordionBody`), `mj-empty-state`, `mj-alert`, `mj-stat-badge`, `mj-confirm-dialog` via `MJConfirmService`, `mjButton` variants.
 - Code style: `standalone: true` with inline `imports` for new components, `ChangeDetectionStrategy.OnPush`, `MJ`-prefixed PascalCase class names, `mj-` kebab selectors, PascalCase `@Input`/`@Output` with setter-based change detection, modern `@if`/`@for` control flow, TSDoc with an `@example` block.
 - Styling: `--mj-*` design tokens only (`packages/Angular/Generic/shared/src/lib/_tokens.scss`; the CI hex gate enforces this), no `.mj-btn` overrides (button gate), `color-mix()` for translucency, BEM-ish `.mj-x--modifier` classes, flex-first layout (`flex: 1; min-height: 0`).
-- The run form predates the `mj-page-*` chrome trio and hand-rolls its header/tabs; we match its local structure for tab plumbing (consistent with MattC-BC's own practice of migrating such surfaces in dedicated sweeps, e.g. his `mj-empty-state`/accordion/`MJConfirmService` migration commits on this very directory) while using his primitives for all new interior surfaces.
+- The run form predates the `mj-page-*` chrome trio and hand-rolls its header/tabs; we match its local structure for tab plumbing (consistent with the repo's practice of migrating such surfaces in dedicated sweeps, e.g. the `mj-empty-state`/accordion/`MJConfirmService` migration commits on this very directory) while using design-system primitives for all new interior surfaces.
 
 Rejected alternatives: a standalone dashboard (`scaffold-mj-dashboard`) would duplicate the run form's data layer; a new tree/graph component would be the third execution-tree renderer in the repo (`mj-agent-execution-monitor` already duplicates one).
 
@@ -373,7 +373,7 @@ This is not a rollout phase; it is the one hard sequencing rule inside the singl
 
 ---
 
-## 11. Open items to confirm with Amith
+## 11. Open items to confirm during review
 
 1. **ParentRunID verdict.** Confirmed present and documented for sub-agent nesting ("Reference to the parent agent run if this is a sub-agent execution"); there is also `LastRunID` ("Links to the previous run in a chain. Different from ParentRunID"). Recommendation: touch neither; add `BranchedFromRunID` + `BranchedFromStepID`. The considered-and-rejected alternative (overloading `LastRunID`, which is schema-DAG-capable) is written up in Section 4.1. Confirm the three-field separation.
 2. **Naming.** `BranchedFromRunID`/`BranchedFromStepID` vs `RerunFromRunID`/`RerunFromStepID` (the literal precedent is `AIPromptRun.RerunFromPromptRunID` + `RootRerunFromPromptRunID`).
