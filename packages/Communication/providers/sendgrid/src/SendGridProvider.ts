@@ -12,6 +12,7 @@ import {
     GetMessagesResult,
     MessageResult,
     NormalizedNotification,
+    ParseEmailAddressList,
     ParseNotificationResult,
     ProcessedMessage,
     ProviderCredentialsBase,
@@ -472,6 +473,7 @@ export class SendGridProvider extends BaseCommunicationProvider {
 
         const from = fields['from'] ?? '';
         const to = fields['to'] ?? '';
+        const cc = fields['cc'] ?? '';
         const subject = fields['subject'] ?? '';
         const text = fields['text'] ?? '';
         const html = fields['html'] ?? '';
@@ -484,6 +486,8 @@ export class SendGridProvider extends BaseCommunicationProvider {
         const message: GetMessageMessage = {
             From: from,
             To: to,
+            ToRecipients: ParseEmailAddressList(to),
+            CCRecipients: ParseEmailAddressList(cc),
             Subject: subject,
             Body: text || html || '' // INLINE payload — prefer plain text, fall back to HTML
         };

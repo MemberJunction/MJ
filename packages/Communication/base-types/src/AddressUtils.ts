@@ -24,7 +24,7 @@
  * @param headerValue - the raw header value, or null/undefined when the header is absent
  * @returns bare email addresses, in original order
  */
-export function parseEmailAddressList(headerValue: string | null | undefined): string[] {
+export function ParseEmailAddressList(headerValue: string | null | undefined): string[] {
     if (!headerValue || !headerValue.trim()) {
         return [];
     }

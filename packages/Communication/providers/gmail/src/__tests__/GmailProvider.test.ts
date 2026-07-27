@@ -16,7 +16,7 @@ vi.mock('@memberjunction/communication-types', async () => {
   // Typed structurally (not via `typeof import(path)`) so the cross-package source file
   // stays out of this package's TS program — a type-level path import violates rootDir.
   const addressUtils = await vi.importActual<{
-    parseEmailAddressList: (headerValue: string | null | undefined) => string[];
+    ParseEmailAddressList: (headerValue: string | null | undefined) => string[];
   }>('../../../../base-types/src/AddressUtils');
   return {
     ...addressUtils,
