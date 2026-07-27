@@ -44,7 +44,7 @@ import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
-import { buildContentHashPrefetchFilter } from './prefetchFilter.js';
+import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
 import { serializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue, foldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
 import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
@@ -4183,10 +4183,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // The prior always-NewRecord() behavior created a duplicate map row whenever a
         // record fell through to this path again (e.g. matching missed), which then made
         // every by-external-ID lookup ambiguous. Look up an existing mapping first.
+        // Quoted the same way the batched read quotes it — this is `RecordMapBatch`'s fallback path,
+        // so a value the batch would have found here must be found here too, or the fallback
+        // re-creates the very duplicate the upsert exists to prevent.
+        const quotedExternalID = md instanceof DatabaseProviderBase
+            ? quoteTextLiteral(externalID, md.Dialect)
+            : `'${externalID.replace(/'/g, "''")}'`;
         const rv = new RunView();
         const existing = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
-            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID='${externalID.replace(/'/g, "''")}'`,
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID=${quotedExternalID}`,
             Fields: ['ID'],
             MaxRows: 1,
             ResultType: 'simple',

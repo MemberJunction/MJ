@@ -2,6 +2,7 @@ import { DatabaseProviderBase, IMetadataProvider, Metadata, RunView, type RunVie
 import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from './entity-types.js';
 import type { MappedRecord, ConflictResolution } from './types.js';
 import { serializeKeyValue } from './KeySerialization.js';
+import { quoteTextLiteral } from './prefetchFilter.js';
 
 /**
  * The field/value pairs a record is matched on — parallel arrays, so the same criteria can be
@@ -39,6 +40,12 @@ interface RecordMapIndex {
  * case- and whitespace-exact. So a row the database happily matched can miss in the JS map — and
  * a miss on the record map means "no mapping", which turns an UPDATE into a duplicate CREATE.
  * Normalizing gives the batch path a second, laxer attempt that mirrors the database's own rule.
+ *
+ * **Only applied on a platform that actually folds** — see {@link MatchEngine.platformFoldsStringEquality}.
+ * PostgreSQL's `=` on `text`/`varchar` is case-SENSITIVE and NOT blank-insensitive, so applying
+ * this fold there would make the index answer a match the database would never have returned:
+ * the record would be written onto a different row instead of created. On PG the exact map is the
+ * whole answer, and a miss is a real miss.
  */
 function normalizeExternalID(id: string): string {
     // Spaces only, NOT `\s`. SQL Server's trailing-blank insensitivity is ANSI padding on
@@ -232,6 +239,7 @@ export class MatchEngine {
     ): RecordMapIndex {
         const index: RecordMapIndex = { Exact: new Map(), Normalized: new Map(), Ambiguous: new Set() };
         const ambiguous = index.Ambiguous;
+        const folds = this.platformFoldsStringEquality;
 
         for (const row of rows) {
             // A mapping with no external ID cannot be looked up by one. Skipping it keeps a bad
@@ -241,6 +249,10 @@ export class MatchEngine {
 
             index.Exact.set(externalID, row.EntityRecordID);
 
+            // Left empty on an exact-comparison platform, so the folded lookup can never answer
+            // there — the exact map alone is what the database's own `IN (…)` decided.
+            if (!folds) continue;
+
             const norm = normalizeExternalID(externalID);
             const seen = index.Normalized.get(norm);
             if (seen === undefined) index.Normalized.set(norm, row.EntityRecordID);
@@ -249,6 +261,25 @@ export class MatchEngine {
 
         for (const key of ambiguous) index.Normalized.delete(key);
         return index;
+    }
+
+    /**
+     * True when the platform's `=` on string columns is case- and trailing-blank-insensitive, so
+     * the JS-side fold in {@link normalizeExternalID} reproduces what the database already did.
+     *
+     * SQL Server, under the default `SQL_Latin1_General_CP1_CI_AS` collation, is. PostgreSQL is
+     * not: `text`/`varchar` equality there is exact on both counts. Folding on PG would make the
+     * batch index return a mapping the per-record query would never return — the record would be
+     * UPDATED onto someone else's row instead of created, which is the one error direction this
+     * whole index is built to avoid. A provider with no dialect (client-side) gets `false`, the
+     * conservative answer.
+     */
+    private get platformFoldsStringEquality(): boolean {
+        const provider = this.ProviderToUse;
+        // `PlatformKey` rather than `Dialect.PlatformKey`: the provider's `Dialect` getter
+        // memoizes the dialect object, so reading the platform through it answers from whatever
+        // was cached first. The platform is the property being asked about anyway.
+        return provider instanceof DatabaseProviderBase && provider.PlatformKey === 'sqlserver';
     }
 
     /**
@@ -491,14 +522,19 @@ export class MatchEngine {
      *
      * `ExtraFilter` is SQL text, not a parameter list, so literals must be escaped here rather
      * than bound. Where the provider is a database provider this defers to its dialect — the same
-     * rule `RecordMapBatch`'s write path uses, so the read and write paths cannot disagree about
-     * a value. `IMetadataProvider` in general carries no dialect (a client-side provider has
-     * none), so the fallback is ANSI quote-doubling, which is what both supported platforms do.
+     * rule `RecordMapBatch`'s read path uses, so the two cannot disagree about a value.
+     * `IMetadataProvider` in general carries no dialect (a client-side provider has none), so the
+     * fallback is ANSI quote-doubling, which is what both supported platforms do.
+     *
+     * Every value quoted here — external IDs and key-field values alike — is compared against an
+     * nvarchar column, so it goes through {@link quoteTextLiteral} rather than the dialect's bare
+     * `QuoteStringLiteral`: on SQL Server the bare form is a *varchar* literal and silently drops
+     * any character outside the database's collation codepage before the comparison.
      */
     private quoteLiteral(value: string): string {
         const provider = this.ProviderToUse;
         return provider instanceof DatabaseProviderBase
-            ? provider.Dialect.QuoteStringLiteral(value)
+            ? quoteTextLiteral(value, provider.Dialect)
             : `'${value.replace(/'/g, "''")}'`;
     }
 
@@ -563,7 +599,10 @@ export class MatchEngine {
             if (keyFields.length === 0 && !this.hasCompleteMappedPrimaryKey(record)) continue;
             const criteria = this.BuildMatchCriteria(record, keyFields);
             if (!criteria) continue;
-            const signature = `${record.MJEntityName}${[...criteria.Fields].sort().join(',')}`;
+            // `\0`-delimited for the same reason CriteriaKey is: entity `AB` + field `C` and
+            // entity `A` + field `BC` would otherwise share a signature, merging two entities
+            // into one group that then reads whichever entity landed first.
+            const signature = `${record.MJEntityName}\0${[...criteria.Fields].sort().join('\0')}`;
             const group = bySignature.get(signature) ?? { EntityName: record.MJEntityName, Criteria: [] };
             group.Criteria.push(criteria);
             if (!bySignature.has(signature)) bySignature.set(signature, group);

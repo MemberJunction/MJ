@@ -7,8 +7,26 @@ import type { MappedRecord, ExternalRecord } from '../types.js';
 // Track what RunView.RunView returns per test
 let mockRunViewFn: ReturnType<typeof vi.fn>;
 
+/**
+ * The platform the engine's provider reports. The record-map index only folds case/trailing
+ * blanks when the platform's own `=` does — SQL Server does, PostgreSQL does not — so tests that
+ * pin either behaviour set this.
+ */
+let mockPlatform: 'sqlserver' | 'postgresql' = 'sqlserver';
+
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+    // A REAL DatabaseProviderBase instance (prototype-only, no constructor side effects): the
+    // engine narrows with `instanceof` before touching Dialect, so a plain object would silently
+    // take the no-dialect path and the platform-specific behaviour would never be exercised.
+    const provider = Object.create(actual.DatabaseProviderBase.prototype) as Record<string, unknown>;
+    const entities = [{ Name: 'Contacts', FirstPrimaryKey: { Name: 'ID' } }];
+    // defineProperty, not assignment: PlatformKey and Entities are getter-only on the prototype.
+    Object.defineProperty(provider, 'PlatformKey', { get: () => mockPlatform });
+    Object.defineProperty(provider, 'Entities', { get: () => entities });
+    Object.defineProperty(provider, 'EntityByName', {
+        value: (name: string) => entities.find((e) => e.Name === name),
+    });
     return {
         ...actual,
         RunView: class MockRunView {
@@ -26,12 +44,7 @@ vi.mock('@memberjunction/core', async () => {
             // Multi-provider migration: MatchEngine uses this.ProviderToUse which falls back
             // to Metadata.Provider. Expose a static Provider with the methods/properties the
             // engine needs.
-            static Provider = {
-                Entities: [{ Name: 'Contacts', FirstPrimaryKey: { Name: 'ID' } }],
-                EntityByName(name: string) {
-                    return this.Entities.find((e: { Name: string }) => e.Name === name);
-                },
-            };
+            static Provider = provider;
             get Entities() {
                 return [{
                     Name: 'Contacts',
@@ -134,6 +147,7 @@ describe('MatchEngine', () => {
 
     beforeEach(() => {
         mockRunViewFn = vi.fn().mockResolvedValue({ Success: true, Results: [] });
+        mockPlatform = 'sqlserver';
     });
 
     it('should classify new records as Create when no match found', async () => {
@@ -440,6 +454,51 @@ describe('MatchEngine', () => {
             const results = await engine.Resolve(records, createEntityMap(), [], mockContextUser);
 
             expect(results[0].MatchedMJRecordID).toBe('mj-1');
+        });
+
+        it('does NOT fold on PostgreSQL, whose `=` is case-sensitive', async () => {
+            // Same rows and same request as the casing test above, but on a platform that would
+            // never have returned that row. Folding here would UPDATE someone else's record.
+            mockPlatform = 'postgresql';
+            mockRunViewFn.mockImplementation((params: { EntityName: string }) =>
+                Promise.resolve(params.EntityName === RECORD_MAP_ENTITY
+                    ? { Success: true, Results: [{ ExternalSystemRecordID: 'ext-1', EntityRecordID: 'mj-1' }] }
+                    : { Success: true, Results: [] }));
+
+            const records = [createMappedRecord({}, { ExternalID: 'EXT-1' })];
+            const results = await engine.Resolve(records, createEntityMap(), [], mockContextUser);
+
+            expect(results[0].ChangeType).toBe('Create');
+            expect(results[0].MatchedMJRecordID).toBeFalsy();
+        });
+
+        it('does NOT fold trailing blanks on PostgreSQL, which pads nothing', async () => {
+            mockPlatform = 'postgresql';
+            mockRunViewFn.mockImplementation((params: { EntityName: string }) =>
+                Promise.resolve(params.EntityName === RECORD_MAP_ENTITY
+                    ? { Success: true, Results: [{ ExternalSystemRecordID: 'ext-1', EntityRecordID: 'mj-1' }] }
+                    : { Success: true, Results: [] }));
+
+            const records = [createMappedRecord({}, { ExternalID: 'ext-1  ' })];
+            const results = await engine.Resolve(records, createEntityMap(), [], mockContextUser);
+
+            expect(results[0].ChangeType).toBe('Create');
+        });
+
+        it('still answers an exact hit on PostgreSQL from the index, with no extra query', async () => {
+            // The gate must only suppress the FOLDED view; exact equality is what PG's own
+            // `IN (…)` used, so the index still answers it without a per-record round trip.
+            mockPlatform = 'postgresql';
+            mockRunViewFn.mockImplementation((params: { EntityName: string }) =>
+                Promise.resolve(params.EntityName === RECORD_MAP_ENTITY
+                    ? { Success: true, Results: [{ ExternalSystemRecordID: 'ext-1', EntityRecordID: 'mj-1' }] }
+                    : { Success: true, Results: [] }));
+
+            const records = [createMappedRecord({}, { ExternalID: 'ext-1' })];
+            const results = await engine.Resolve(records, createEntityMap(), [], mockContextUser);
+
+            expect(results[0].MatchedMJRecordID).toBe('mj-1');
+            expect(queryCount(RECORD_MAP_ENTITY)).toBe(1); // the batch read, and nothing else
         });
 
         it('does NOT invent a match when the folded ID is genuinely different', async () => {

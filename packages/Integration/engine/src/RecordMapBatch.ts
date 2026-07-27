@@ -1,6 +1,6 @@
 import { DatabaseProviderBase, IMetadataProvider, RunView, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationRecordMapEntity } from '@memberjunction/core-entities';
-import type { SqlQuoter } from './prefetchFilter.js';
+import { quoteTextLiteral, type SqlQuoter } from './prefetchFilter.js';
 
 /** One external↔MJ mapping awaiting write. */
 export interface PendingRecordMap {
@@ -233,7 +233,9 @@ export class RecordMapBatch {
         const q = this.quoter;
         if (!q) return null; // no dialect to quote with — the per-row path resolves each row itself
 
-        const inList = chunk.map(m => q.QuoteStringLiteral(m.ExternalID)).join(',');
+        // The external IDs are the only free-text values here (the other two are UUIDs), and they
+        // are compared against an nvarchar column — see `quoteTextLiteral`.
+        const inList = chunk.map(m => quoteTextLiteral(m.ExternalID, q)).join(',');
         const rv = new RunView();
         const result = await rv.RunView<{ ID: string; ExternalSystemRecordID: string; EntityRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',

@@ -422,7 +422,10 @@ describe('RecordMapBatch', () => {
             expect(params.EntityName).toBe('MJ: Company Integration Record Maps');
             expect(params.ExtraFilter).toContain("'ci-1'");
             expect(params.ExtraFilter).toContain("'entity-1'");
-            expect(params.ExtraFilter).toContain("IN ('a','b')");
+            // N-prefixed: the column is nvarchar, and a bare SQL Server literal is varchar — a
+            // non-ASCII external ID would be codepage-folded before the comparison and match
+            // nothing, so the row would be created a second time. See `quoteTextLiteral`.
+            expect(params.ExtraFilter).toContain("IN (N'a',N'b')");
             // Read-only lookup: plain objects, only the three fields the decision needs.
             expect(params.ResultType).toBe('simple');
             expect(params.Fields).toEqual(['ID', 'ExternalSystemRecordID', 'EntityRecordID']);
@@ -443,6 +446,24 @@ describe('RecordMapBatch', () => {
                 const filter = (mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string }).ExtraFilter;
                 expect(filter).toContain(`${open}CompanyIntegrationID`);
                 expect(filter).toContain(`${open}ExternalSystemRecordID`);
+            }
+        });
+
+        it('N-prefixes the external-ID literals on SQL Server only', async () => {
+            for (const [platform, expected] of [
+                ['sqlserver', "IN (N'ünïcödé-Ω-日本語')"],
+                ['postgresql', "IN ('ünïcödé-Ω-日本語')"],
+            ] as const) {
+                mockRunViewFn = vi.fn();
+                readFindsNothing();
+                const { provider } = createProvider(platform);
+                const batch = new RecordMapBatch(provider, 'ci-1', contextUser, vi.fn());
+
+                batch.Queue(mapping('ünïcödé-Ω-日本語'));
+                await batch.Flush();
+
+                const filter = (mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string }).ExtraFilter;
+                expect(filter).toContain(expected);
             }
         });
 
