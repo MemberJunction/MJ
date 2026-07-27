@@ -10900,6 +10900,14 @@ export class MJAIAgentType_ {
     @Field({nullable: true, description: `Type-level DEFAULT configuration JSON for agents of this type — the base layer of the effective-configuration merge: type DefaultConfiguration <- agent TypeConfiguration <- runtime overrides (later layers win per key, deep-merged). Must itself conform to ConfigSchema when one is published. Null = no type defaults.`}) 
     DefaultConfiguration?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    SystemPrompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    DefaultStorageAccount?: string;
+        
     @Field(() => Int, {nullable: true, description: `Type-level default for the in-turn context-compression message-count threshold. Overridable per agent via AIAgent.ContextCompressionMessageThreshold.`}) 
     ContextCompressionMessageThreshold?: number;
         
@@ -10922,14 +10930,6 @@ export class MJAIAgentType_ {
     @Field({nullable: true, description: `Type-level default prompt used for cross-turn conversation compaction (the durable summary baseline). Distinct from ContextCompressionPromptID, which governs in-turn compression. Overridable per agent via AIAgent.ConversationSummaryPromptID.`}) 
     @MaxLength(36)
     ConversationSummaryPromptID?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    SystemPrompt?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    DefaultStorageAccount?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -11479,19 +11479,6 @@ if this limit is exceeded.`})
     @Field(() => Boolean, {description: `When 1, every root-level run of this agent executes in plan mode regardless of the per-request planMode flag — the agent must present a plan and receive human approval before any Actions or Sub-Agent steps execute. SupportsPlanMode is irrelevant when this is set. Use for high-consequence agents (e.g. ones with outbound-communication capabilities) where human-in-the-loop review is mandatory.`}) 
     RequirePlanMode: boolean;
         
-    @Field(() => Int, {nullable: true, description: `Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.`}) 
-    ContextWindowMaxTokens?: number;
-        
-    @Field(() => Int, {nullable: true, description: `Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.`}) 
-    CompactionTriggerPercent?: number;
-        
-    @Field(() => Int, {nullable: true, description: `Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.`}) 
-    CompactionTargetPercent?: number;
-        
-    @Field({nullable: true, description: `Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.`}) 
-    @MaxLength(36)
-    ConversationSummaryPromptID?: string;
-        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -11537,16 +11524,29 @@ if this limit is exceeded.`})
     DefaultMediaCollection?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(255)
-    ConversationSummaryPrompt?: string;
-        
-    @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
     RootDefaultCoAgentID?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.`}) 
+    ContextWindowMaxTokens?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.`}) 
+    CompactionTriggerPercent?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.`}) 
+    CompactionTargetPercent?: number;
+        
+    @Field({nullable: true, description: `Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.`}) 
+    @MaxLength(36)
+    ConversationSummaryPromptID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ConversationSummaryPrompt?: string;
         
     @Field(() => [MJAIAgentAction_])
     MJAIAgentActions_AgentIDArray: MJAIAgentAction_[]; // Link to MJAIAgentActions
@@ -18221,6 +18221,10 @@ export class MJAIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(50)
@@ -34842,18 +34846,6 @@ export class MJContentItem_ {
     @Field({nullable: true, description: `Timestamp of the most recent successful autotagging run for this content item.`}) 
     LastTaggedAt?: Date;
         
-    @Field({nullable: true, description: `The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`}) 
-    @MaxLength(100)
-    VectorRecordID?: string;
-        
-    @Field({nullable: true, description: `Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.`}) 
-    @MaxLength(36)
-    ParentID?: string;
-        
-    @Field({nullable: true, description: `Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`}) 
-    @MaxLength(2000)
-    DisplayLink?: string;
-        
     @Field({nullable: true}) 
     @MaxLength(255)
     ContentSource?: string;
@@ -34877,6 +34869,18 @@ export class MJContentItem_ {
     @Field({nullable: true}) 
     @MaxLength(50)
     EmbeddingModel?: string;
+        
+    @Field({nullable: true, description: `The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`}) 
+    @MaxLength(100)
+    VectorRecordID?: string;
+        
+    @Field({nullable: true, description: `Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.`}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field({nullable: true, description: `Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`}) 
+    @MaxLength(2000)
+    DisplayLink?: string;
         
     @Field({nullable: true}) 
     @MaxLength(250)
@@ -38710,9 +38714,6 @@ export class MJConversationDetail_ {
     @MaxLength(20)
     MediaType?: string;
         
-    @Field(() => Int, {description: `Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`}) 
-    Sequence: number;
-        
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
@@ -38744,6 +38745,13 @@ export class MJConversationDetail_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {description: `Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`}) 
+    Sequence: number;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    SummaryPromptRun?: string;
         
     @Field(() => [MJReport_])
     MJReports_ConversationDetailIDArray: MJReport_[]; // Link to MJReports
