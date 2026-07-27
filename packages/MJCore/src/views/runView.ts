@@ -286,6 +286,19 @@ export class RunViewParams {
     ResultType?: 'simple' | 'entity_object' | 'count_only';
 
     /**
+     * optional - ask for `TotalRowCount` to reflect ALL matching rows, not just the rows returned.
+     *
+     * This costs a second `COUNT(*)` over the filtered view, so it is opt-in. You do NOT need it
+     * when paginating (`StartRow`/`MaxRows` pagination already computes the total, in the same
+     * round trip) or with `ResultType: 'count_only'` (which is nothing but the count).
+     *
+     * Set it only when you are reading a capped page and need to tell the user how many exist
+     * beyond it — e.g. "showing 1,000 of 4,312". Leave it unset for bulk/background reads:
+     * `TotalRowCount` then simply equals the number of rows returned, and no extra scan is paid.
+     */
+    ReturnTotalRowCount?: boolean;
+
+    /**
      * Internal flag set by BaseEngine when loading entity configurations.
      * When true, telemetry analyzers will skip false-positive warnings about
      * "entity already loaded by engine" since the engine IS the one calling RunView.
@@ -428,6 +441,9 @@ export class RunViewParams {
         if (a.ForceAuditLog !== b.ForceAuditLog) return false;
         if (a.AuditLogDescription !== b.AuditLogDescription) return false;
         if (a.ResultType !== b.ResultType) return false;
+        // Part of the fingerprint: the two runs return different TotalRowCount semantics, so a
+        // cached result from a run that didn't compute the total must not satisfy one that asked.
+        if (a.ReturnTotalRowCount !== b.ReturnTotalRowCount) return false;
         if (a.CacheLocal !== b.CacheLocal) return false;
         if (a.CacheLocalTTL !== b.CacheLocalTTL) return false;
 

@@ -1672,8 +1672,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 queryKeys.push('data');
             }
 
-            const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
-            const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
+            const willNeedCount = countSQL && (
+                usingPagination ||
+                params.ResultType === 'count_only' ||
+                params.ReturnTotalRowCount === true
+            );
             if (willNeedCount) {
                 queries.push(this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
                 queryKeys.push('count');
@@ -1700,10 +1703,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (willNeedCount && resultMap['count']) {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
-            } else if (countSQL && maxRowsUsed && retData.length === maxRowsUsed) {
-                const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
-                if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
+            // NOTE (tasks.md PR 2 item 6 — the phantom COUNT(*)): there used to be a fallback
+            // here that fired an EXTRA, SERIAL `SELECT COUNT(*)` over the whole base view
+            // whenever a non-paginated read happened to fill its page
+            // (`retData.length === maxRowsUsed`). Because `maxRowsUsed` falls back to
+            // `UserViewMaxRows` (1000 by default), that condition is met by every batch of any
+            // bulk read — the sync engine's batches above all — and the resulting number was
+            // then discarded: only pagination-aware UI reads `TotalRowCount`, and those already
+            // set `usingPagination`, so they take the branch above and get the count in the
+            // SAME round trip. The phantom count was a second full scan, after the data query,
+            // paid for on ~every full page product-wide.
+            //
+            // `TotalRowCount` now falls back to `retData.length` for those reads. Callers that
+            // genuinely want "how many are there beyond this page?" without paginating ask for
+            // it explicitly with `ReturnTotalRowCount: true`, which routes into `willNeedCount`
+            // above and is therefore issued in parallel with the data query rather than after it.
 
             // ── Process aggregates ──
             let aggregateResults: AggregateResult[] | undefined;
