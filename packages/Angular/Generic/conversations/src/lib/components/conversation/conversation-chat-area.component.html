@@ -478,11 +478,14 @@
 }
 
 <!-- Export Modal -->
+<!-- [branding] is bound BEFORE [isVisible] deliberately: Angular sets inputs in
+     template order within a change-detection pass, and the modal's isVisible setter
+     reads `branding` to default its "Include branding" checkbox on a fresh open. -->
 <mj-export-modal
+  [branding]="exportBranding"
   [isVisible]="showExportModal"
   [conversation]="conversation || undefined"
   [currentUser]="currentUser"
-  [branding]="exportBranding"
   (cancelled)="onExportModalCancelled()"
   (exported)="onExportModalComplete()">
 </mj-export-modal>

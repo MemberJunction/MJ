@@ -325,6 +325,10 @@ export class ExportModalComponent {
     if (opening) {
       // Fresh open: "Include branding" defaults ON only when the host explicitly
       // configured export branding — plain MJ Explorer keeps today's unthemed file.
+      // NOTE this reads `branding`, so a host binding both in one change-detection
+      // pass must bind [branding] FIRST (Angular sets inputs in template order).
+      // chat-area's template does; a host mounting with isVisible already true and
+      // branding bound after would get the checkbox defaulted off.
       this.exportOptions.includeTheme = !!this.branding;
     }
   }
