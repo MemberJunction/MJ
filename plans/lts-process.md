@@ -1,6 +1,7 @@
 # MemberJunction LTS Release Process
 
-> **Status: PROPOSAL** — v1.3, 2026-07-27. Owner: Craig Adam (certification owner).
+> **Status: PROPOSAL** — v1.3.1, 2026-07-27. Owner: Craig Adam (certification owner).
+> v1.3.1 folds in three review-round items (from Marcelo's feedback): line-pinning guidance (§4.2), the `mjVersionRange`-agreement `mj doctor` check (§3.2, §13.1, §15 item 10), and the Appendix C release-note ask. It also lands the queued consumption-guidance edits: continuous Edge tracking via the dist-tag specifier + the publish-window skew caveat (§4.2, Appendix B), the per-release `dbImpact` ledger on the `edge` block (§4.1, with matching schema/validator support), and the true lockstep package count (294, was 233).
 > v1.3 folds in the alignment items from the Open App local-dev program: mechanism-neutral consumption wording (§3.2), pnpm joins the platform manifest (§4.1), a peer-deps ≡ platform-manifest certification check (gate 1), the no-write-through rule (§13.1), and a local-dev tooling RACI row (§7).
 > v1.2 replaced v1.1's reserved-minor-band design with the **Edge-prerelease version grammar** (§3.1): normal semver versions are certified/candidate builds only; Edge releases are semver prereleases of the next line. Introduced **all at once** at the 6.x era open — no staged transition. The band, and its open band-size question, are gone.
 > Under team review: comments requested from Robert Kihm, John, and Johanna Snider; scan requested from the wider group tagged on the PR. On merge, this document becomes canon.
@@ -74,7 +75,7 @@ Per the **MJ Platform Versioning & Open App Alignment** memo:
 - **The policy is mechanism-neutral.** Apps consume MJ two ways: **registry installs** (the default — packages arrive from npm) and **linked-workspace dev mode** (working against local checkouts, per the local linking spec). The version grammar, major alignment, and manifest rules bind identically in both — the mechanism changes how the bits arrive, never which versions are legal. Where this document uses npm-registry phrasing (`install`, overrides, ranges), read it as applying equally to the linked mode via its own tooling.
 - **Every Open App's major must match the MJ major it runs on.** bizapps-common, -tasks, -accounting, -orders, and everything after them: 5.x apps on MJ 5.x, moving to 6.x in lockstep when MJ does. Minors and patches are each app's own business. Apps do **not** declare infrastructure versions — they declare the `mjVersionRange` they target, and tooling derives the npm `overrides` block from the era's platform manifest.
 - **Apps give up the major for their own breaking changes — consciously.** An app-level breaking change is a minor within the era, and consumers express precise requirements through npm-style dependency ranges in `mj-app.json` (`"mj-bizapps-accounting": { "version": ">=5.3.0 <6.0.0" }`). Under the §3.1 grammar those ranges match certified MJ builds only — exactly the right default; app development against Edge uses exact pins (which `mj bump` produces anyway).
-- **Violations fail fast:** `mj app install` / `mj app link` hard-error on app-major ≠ host-MJ-major (a clear message, not an ERESOLVE or a runtime DI crash); `mj doctor` validates major alignment across the installed app graph, duplicate `@angular/*` in the tree, and drift between the generated overrides block and the platform manifest. (§15 item 10.)
+- **Violations fail fast:** `mj app install` / `mj app link` hard-error on app-major ≠ host-MJ-major (a clear message, not an ERESOLVE or a runtime DI crash); `mj doctor` validates major alignment across the installed app graph, duplicate `@angular/*` in the tree, drift between the generated overrides block and the platform manifest, and agreement between each app package's declared MJ dependency ranges and the app's `mjVersionRange`. (§15 item 10.)
 - **Why this belongs in the LTS doc:** the alignment policy is only livable *because* majors are era-scale. Under the abandoned major-per-cycle model, every Open App would have been dragged through a major bump monthly — impossible. Conversely, alignment strengthens the LTS story: "does app X work with LTS 6.1?" is answered by reading the major. One era split (5→6) does obligate every app to bump majors once (Appendix C) — the deliberate, occasional cost of the contract.
 - The per-app remediation asks from the memo are tracked in **Appendix C** — app-repo work, out of scope for this repo but part of this rollout.
 
@@ -90,7 +91,13 @@ A repo-root file, Node.js-`schedule.json` style. Everything else — CLI, MJC, `
 
 ```jsonc
 {
-  "edge": { "newest": "6.2.0-edge.14" },
+  "edge": {
+    "newest": "6.2.0-edge.14",
+    "releases": {                      // the Edge stream's dbImpact ledger — pruned at each candidate cut
+      "6.2.0-edge.13": { "dbImpact": "schema" },
+      "6.2.0-edge.14": { "dbImpact": "none" }
+    }
+  },
   "eras": {
     "5": {
       "platform": { "angular": "21.1.3", "node": ">=18.0.0", "typescript": "5.9.x", "zone.js": "0.16.x", "pnpm": "10.x" }
@@ -119,7 +126,8 @@ A repo-root file, Node.js-`schedule.json` style. Everything else — CLI, MJC, `
 ```
 
 - **Status transitions happen only via PR**, and the file is CODEOWNERS-gated to the certification owner (§8).
-- Publish workflows may append *mechanical* fields (`newest`, `releases`) via direct push; they never touch `status`/`certifiedBuild`/dates.
+- Publish workflows may append *mechanical* fields (`newest` and per-release `releases` entries, on `edge` and on lines) via direct push; they never touch `status`/`certifiedBuild`/dates.
+- **Edge carries the same per-release `dbImpact` ledger as lines** (`edge.releases`, appended mechanically per publish), so the fast lane's migration signal is machine-readable — `mj versions --channel edge` and upgrade-time warnings, not release-notes archaeology. Pruned at each candidate cut: the candidate is the same commit as the stream's tip, so the accumulated impact is the new line's starting point by construction, and Edge restarts clean at the next tuple.
 - Dates are **extend-only**: windows may lengthen, never shrink.
 - The `eras.*.platform` block **is** the platform manifest (§3.2) — `mj app` tooling generates consuming repos' npm `overrides` from it. It pins **pnpm** alongside the runtime stack because the linked-workspace dev mode runs on pnpm: the workspace tooling and the certification gates must agree on which package-manager behavior they're validating against.
 - The manifest is also the reference for the **peer-dependency agreement check** (gate 1): every published package's declared peer ranges must accept the era's pins. npm's default install lets a drifted declaration ride silently; strict pnpm enforces declared peers at install time, so the same drift is an install failure in a consuming workspace — the gate catches it before a user does.
@@ -130,14 +138,16 @@ From the first certification onward, **every "default" surface resolves to certi
 
 | Tag | Points at | Moved by |
 |---|---|---|
-| `latest` | Newest build of the newest **certified** line | Certification (atomic 233-package move via `ci/dist-tag-all.mjs`), and line publishes when their line is the newest certified |
+| `latest` | Newest build of the newest **certified** line | Certification (atomic 294-package move via `ci/dist-tag-all.mjs`), and line publishes when their line is the newest certified |
 | `edge` | Newest Edge prerelease | `publish.yml` (routine publishes carry `--tag edge`) |
 | `lts-6.1` | Newest build of that line | `publish-lts.yml` on every line release |
 
 Notes:
 
 - **Tag and suffix now agree** (`@edge` installs `…-edge.N`) — self-describing on both axes. The tag remains necessary: a later Edge tuple outranks an older line's patches in raw precedence (`6.2.0-edge.0 > 6.1.3`), so bare installs are governed by `latest`, not by sort order. And `next` was rejected as a tag name because it would collide confusingly with the repo's `next` *branch* (published builds actually come from `main`).
-- **No publish anywhere omits its explicit `--tag`** (routine = `edge`, line = `lts-x.y`). On npm ≤ 10, a bare publish of an older version silently drags `latest` backward across every package published — with 233 packages that is a catastrophic footgun. npm 11 fixed the default; we still never rely on it. Post-publish `dist-tag ls` assertions on a sample; one-time drill against a scratch scope.
+- **Pinning to a line means tilde or exact, not caret.** `^6.1.0` also matches the next certified line's `6.2.0` on a fresh resolve — always certified bits (never Edge), but a migration-bearing line-crossing at a moment nobody chose. `~6.1.0`, or the exact pins `mj bump` writes, keeps an installation on its line until upgrading is a deliberate act.
+- **Tracking Edge continuously = the dist-tag as the version specifier.** No semver range can durably follow a prerelease stream — ranges only match prereleases anchored to their exact tuple, which changes every cycle. The supported patterns: `"@memberjunction/core": "edge"` in `package.json` (npm resolves the tag at install time), Renovate `followTag: "edge"` for teams that want update PRs instead, or — the recommended path — `mj bump --channel edge`, which writes exact, mutually consistent pins. The bare tag specifier resolves per package, so an install landing mid-publish-window can mix `-edge.N` and `-edge.N+1` across the set; exact pins are the fix.
+- **No publish anywhere omits its explicit `--tag`** (routine = `edge`, line = `lts-x.y`). On npm ≤ 10, a bare publish of an older version silently drags `latest` backward across every package published — with 294 packages that is a catastrophic footgun. npm 11 fixed the default; we still never rely on it. Post-publish `dist-tag ls` assertions on a sample; one-time drill against a scratch scope.
 - The `latest` flip is a **one-time comms event** at first certification (Vue and Express precedent — Appendix A.3). Additionally, **anyone tracking Edge via semver ranges stops receiving updates at the era open** (ranges can't see prereleases) — that's intended behavior, but it must be in the era-open comms, not discovered.
 - Edge-case: a brand-new package's first publish under `--tag edge` needs explicit `latest` handling (npm gives a first publish only the tag passed). Pre-publish validation currently blocks first-time packages anyway; §15 item 3 covers it.
 - **EOL:** `npm deprecate @memberjunction/*@"6.1.x" "…EOL — see upgrade guide"`, scripted across the set, plus `eol` status in `release-lines.json`.
@@ -304,7 +314,7 @@ Three tiers, per the PR-thread convergence. **On a line, everything is a patch**
 - **Default = newest certified** via `release-lines.json` (+ the GH latest-release flag for older CLIs). The picker groups by channel with status + dates.
 - **Edge is explicit opt-in:** `--channel edge` per command, or `releaseChannel: 'edge'` in `mj.config.cjs` — deliberately a committed, review-visible file, so a project's opt-out is a team decision, not a forgotten personal flag. Interactive non-LTS selections get one confirm prompt; non-interactive runs simply require the explicit flag.
 - **Status awareness:** `mj versions` prints the support table incl. per-release `dbImpact`; version-touching commands warn on maintenance (gentle) / EOL (loud) lines, on upgrade paths crossing `upgradeImpact: breaking`, and note DB-touching patches ("6.1.3 includes a schema migration — `mj migrate` will apply it"). Never blocking.
-- **Open App guardrails (§3.2):** `mj app install` / `mj app link` hard-error on app-major ≠ host-MJ-major; the overrides block in consuming repos is *generated* from the era's platform manifest; `mj doctor` validates major alignment, duplicate `@angular/*`, and overrides drift.
+- **Open App guardrails (§3.2):** `mj app install` / `mj app link` hard-error on app-major ≠ host-MJ-major; the overrides block in consuming repos is *generated* from the era's platform manifest; `mj doctor` validates major alignment, duplicate `@angular/*`, overrides drift, and app-package range agreement with the declared `mjVersionRange`.
 - **No-write-through rule (linked mode):** no MJ tooling ever writes through `node_modules` into a linked repo. A symlinked package is someone's working tree — installers, CodeGen, and fixers treat anything reached through a link as **read-only**, and either resolve the write to the true source repo explicitly or refuse loudly. Silent writes through a symlink corrupt a repo the tool doesn't own; this rule is a hard guardrail on every tool that touches the dependency tree, enforced in the link tooling and checked by `mj doctor`.
 
 ### 13.2 MJC — LTS-only
@@ -339,14 +349,14 @@ Ordered so that **items 1–3 are enough to label and enforce** the first LTS; t
 |---|---|---|---|
 | 1 | `release-lines.json` (incl. `eras.*.platform` manifests, per-release `dbImpact`) + schema + CODEOWNERS entry + the status-fields CI check (§8) | Before Jul 27 | This branch |
 | 2 | `publish.yml`: `make_latest: false` on routine releases; cert flow sets certified build as GH latest; `--tag edge` on routine npm publishes | Before Jul 27 | This branch |
-| 3 | `ci/dist-tag-all.mjs` — atomic 233-package tag moves + post-move assertions (+ scratch-scope drill; new-package first-publish edge case) | Before the flip | This branch |
+| 3 | `ci/dist-tag-all.mjs` — atomic 294-package tag moves + post-move assertions (+ scratch-scope drill; new-package first-publish edge case) | Before the flip | This branch |
 | 4 | Era-split tooling: expected-version guard (incl. prerelease grammar), changesets major flow, v6 migration baseline (`/create-new-baseline-migration`), docker tags, stale-comment cleanup | 6.x era open | Follow-up PR |
-| 5 | **Edge prerelease versioning** (the biggest tooling bet — **mandatory scratch-scope dry run before era open**): permanent changesets pre-mode wiring at 233-package lockstep scale; the scripted pre-exit/enter candidate-cut dance; `mj bump` + installer + version-compare prerelease awareness; verify pre-mode tuple math matches §3.1 intent (non-compounding bumps → next-line tuple) | Before 6.x era open | Follow-up PR |
+| 5 | **Edge prerelease versioning** (the biggest tooling bet — **mandatory scratch-scope dry run before era open**): permanent changesets pre-mode wiring at 294-package lockstep scale; the scripted pre-exit/enter candidate-cut dance; `mj bump` + installer + version-compare prerelease awareness; verify pre-mode tuple math matches §3.1 intent (non-compounding bumps → next-line tuple) | Before 6.x era open | Follow-up PR |
 | 6 | Line machinery: `publish-lts.yml` · korthout/backport-action + labels · line guard (patch-only + DDL scanner) | Before first post-cert 5.x backport | Follow-up PR |
 | 7 | CLI channels: channel resolution, `mj versions` (+`dbImpact`), maintenance/EOL/breaking warnings, `releaseChannel` config | Aug–Sep (GH-latest flag covers the default meanwhile) | Follow-up PR |
 | 8 | MJC: LTS-only catalog policy (now, operational) · `release-lines.json` auto-ingest (later) | MJC team's schedule | **MJC repo — out of scope here** |
 | 9 | `mj migrate` out-of-order upgrade mode + LTS→Edge upgrade test rig | Before cycle #2 | Follow-up PR |
-| 10 | Open App alignment tooling (§3.2): overrides generation from the era platform manifest · `mj app install`/`link` major-mismatch hard error · `mj doctor` checks (alignment, duplicate `@angular/*`, overrides drift, no-write-through §13.1) · peer-deps ≡ platform-manifest CI check wired into gate 1 (§4.1) · linking cache-clear scripting | Aug–Sep, with the app 6.x alignment | Follow-up PR(s) |
+| 10 | Open App alignment tooling (§3.2): overrides generation from the era platform manifest · `mj app install`/`link` major-mismatch hard error · `mj doctor` checks (alignment, duplicate `@angular/*`, overrides drift, `mjVersionRange` agreement, no-write-through §13.1) · peer-deps ≡ platform-manifest CI check wired into gate 1 (§4.1) · linking cache-clear scripting | Aug–Sep, with the app 6.x alignment | Follow-up PR(s) |
 | 11 | Root `VERSIONING.md` — the human/agent-facing distillation of this doc (incl. the §3.1 grammar and §3.2 platform policy) | After blessing | This branch |
 
 **Delivery mechanics:** this document rides the `lts-process` feature branch. After exec blessing, items 1–3 (+11) land on the same branch so the doc and its enforcement merge together; items 4–7 and 9–10 follow as small focused PRs on the dates above. Item 8 belongs to the MJC team and repo; the per-app version bumps are Appendix C (app repos).
@@ -354,7 +364,7 @@ Ordered so that **items 1–3 are enough to label and enforce** the first LTS; t
 ## 16. Risks
 
 1. **Process lands inside the runway** (top risk, with Amith's explicit slack): mitigations are the §14 flexibility, punch-list ordering (1–3 suffice), and treating this doc as the week's primary deliverable.
-2. **The pre-mode bet (new in v1.2):** permanent changesets prerelease mode at 233-package lockstep scale is the design's biggest tooling assumption — changesets' own docs call pre-mode sharp-edged, and the §3.1 tuple math (non-compounding bumps) must be verified, not assumed. Mitigation: item 5's **mandatory scratch-scope dry run before the era open**, with a thin custom version-calc wrapper as the fallback if pre-mode misbehaves. The grammar is the design; changesets is merely the first-choice implementation.
+2. **The pre-mode bet (new in v1.2):** permanent changesets prerelease mode at 294-package lockstep scale is the design's biggest tooling assumption — changesets' own docs call pre-mode sharp-edged, and the §3.1 tuple math (non-compounding bumps) must be verified, not assumed. Mitigation: item 5's **mandatory scratch-scope dry run before the era open**, with a thin custom version-calc wrapper as the fallback if pre-mode misbehaves. The grammar is the design; changesets is merely the first-choice implementation.
 3. **Label inflation:** one pressured certification and the label means nothing. Blocking authority is CODEOWNERS-mechanical; overrides are recorded escalations; cycle #1 sets the slip-beats-weak precedent.
 4. **AI-suite reliability as a gate:** flaky gates either block spuriously or get ignored. The gate-3 pass criteria + rerun policy are load-bearing and land before cycle #1.
 5. **Backport tax replaces the freeze tax from cycle #2:** cherry-pick volume hits the cert crew while `next` runs hot. Measured in cycles 2–3; primary input to the December review.
@@ -421,7 +431,7 @@ Ordered so that **items 1–3 are enough to label and enforce** the first LTS; t
 | Data-only line migration | Label `metadata-migration` (CI-verified DDL-free; ships as a patch, `dbImpact: metadata`) |
 | DDL on a line — rarest, security-driven | Label `security-exception` (additive-only, next-first, byte-identical; ships as a patch, `dbImpact: schema`) |
 | Considered, not backported | Label `backport-declined` |
-| npm | `latest` = newest certified · `edge` = fast channel · `lts-6.1` = per-line |
+| npm | `latest` = newest certified · `edge` = fast channel · `lts-6.1` = per-line · continuous Edge tracking = the `edge` tag as version specifier or `mj bump --channel edge` exact pins, never a semver range |
 | Docker | `:latest` = certified · `:edge` · `:6.1` |
 | Scorecards | `certifications/<version>.md`, linked from the GitHub Release |
 
@@ -437,4 +447,4 @@ Measured 2026-07-24: three versioning schemes coexist across the four apps (5.x,
 | bizapps-tasks | Bump 1.2.0 → 5.x |
 | MJ core | Publish the per-era platform manifest (§4.1); generate overrides from it; add major-mismatch validation to `mj app install` / `app link` / `doctor` (§15 item 10) |
 
-0.x and 1.x go away — there is no pre-1.0 signalling; the major belongs to the platform. When the 6.x era opens, apps follow to 6.x per §3.2 (one more coordinated bump — the deliberate, occasional cost of the infrastructure contract). The residual local-linking "diamond" case (symlinks bypassing npm dedupe → two physical copies of one version, fatal in the browser) is a resolution-path problem owned by the linking tool + `mj doctor`, covered in the local linking spec — not by this versioning policy. The linking spec also carries the operational side of the **no-write-through rule** (§13.1); this document owns the policy statement.
+0.x and 1.x go away — there is no pre-1.0 signalling; the major belongs to the platform. Each alignment bump ships with a release-note line explaining the jump (platform alignment, not a feature epoch), so external consumers read the change instead of guessing at it. When the 6.x era opens, apps follow to 6.x per §3.2 (one more coordinated bump — the deliberate, occasional cost of the infrastructure contract). The residual local-linking "diamond" case (symlinks bypassing npm dedupe → two physical copies of one version, fatal in the browser) is a resolution-path problem owned by the linking tool + `mj doctor`, covered in the local linking spec — not by this versioning policy. The linking spec also carries the operational side of the **no-write-through rule** (§13.1); this document owns the policy statement.
