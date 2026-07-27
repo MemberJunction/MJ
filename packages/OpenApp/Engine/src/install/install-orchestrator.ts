@@ -1122,6 +1122,15 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
         }
       });
 
+      // Same shared-survival rule for npm deps: any package another installed app still
+      // declares (server/client/shared) must survive this app's removal, or the survivor's
+      // next boot fails on a missing dependency.
+      const retainPackages = [...new Set(otherManifests.flatMap(m => [
+        ...(m.packages?.server ?? []),
+        ...(m.packages?.client ?? []),
+        ...(m.packages?.shared ?? []),
+      ].map(p => p.name)))];
+
       await Promise.all([
         Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName, context.ServerPackagePath)),
         Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name, context.ServerPackagePath) : undefined),
@@ -1138,6 +1147,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
             ClientPackagePath: context.ClientPackagePath,
             PackageManager: context.PackageManager,
             AdditionalTargets: context.AdditionalTargets,
+            RetainPackages: retainPackages,
           }),
         ),
       ]);
