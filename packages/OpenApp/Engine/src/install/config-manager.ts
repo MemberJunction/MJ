@@ -69,7 +69,7 @@ export function AddServerDynamicPackages(
         return { Success: true };
     }
 
-    return ApplyToConfigs(repoRoot, serverPackagePath, (input) => {
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update dynamicPackages.server', (input) => {
         let content = EnsureDynamicPackagesSection(input);
         content = EnsureDynamicArrayPresent(content, 'server');
 
@@ -104,7 +104,7 @@ export function AddClientDynamicPackages(
         return { Success: true };
     }
 
-    return ApplyToConfigs(repoRoot, serverPackagePath, (input) => {
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update dynamicPackages.client', (input) => {
         let content = EnsureDynamicPackagesSection(input);
         content = EnsureDynamicArrayPresent(content, 'client');
 
@@ -129,7 +129,7 @@ export function RemoveServerDynamicPackages(
     appName: string,
     serverPackagePath?: string
 ): ConfigOperationResult {
-    return ApplyToConfigs(repoRoot, serverPackagePath, (content) => RemoveEntriesForApp(content, appName));
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'remove dynamicPackages entries', (content) => RemoveEntriesForApp(content, appName));
 }
 
 /**
@@ -146,7 +146,7 @@ export function ToggleServerDynamicPackages(
     enabled: boolean,
     serverPackagePath?: string
 ): ConfigOperationResult {
-    return ApplyToConfigs(repoRoot, serverPackagePath, (content) => ToggleEntriesForApp(content, appName, enabled));
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'toggle dynamicPackages entries', (content) => ToggleEntriesForApp(content, appName, enabled));
 }
 
 /**
@@ -179,44 +179,86 @@ function resolveConfigPaths(repoRoot: string, serverPackagePath?: string): strin
 }
 
 /**
+ * True when a config has no object literal of its own and simply re-exports another config:
+ *
+ *     module.exports = require('../../mj.config.cjs');
+ *
+ * This is what `packages/MJAPI/mj.config.cjs` ships as — in the monorepo AND in an `mj install`
+ * distribution. There is nothing to inject into it, and nothing SHOULD be: it re-exports the root
+ * config, which is itself a target in {@link resolveConfigPaths} and does get written. Recognising
+ * the shape keeps the expected case a silent no-op instead of a "skipped a config file" warning on
+ * every install, while a genuinely malformed or unsupported config still surfaces as one.
+ *
+ * Note `module.exports = { ...require('../../mj.config.cjs') }` deliberately does NOT match — that
+ * spread form HAS an object literal, so it is editable and inserting into it is correct.
+ */
+function IsDelegatingConfig(content: string): boolean {
+    return /module\.exports\s*=\s*require\s*\(/.test(content);
+}
+
+/**
  * Applies `edit` to every config returned by {@link resolveConfigPaths}.
  *
- * Partial success is deliberate. A config file can be legitimately un-editable by this
- * module's string surgery — most commonly the distribution's re-export shape
- * `module.exports = require('../../mj.config.cjs')`, which has no object literal to insert
- * into (#3270). That file needs no edit anyway: it re-exports the root config, which IS in
- * this list and DOES get written. So a per-file failure is collected as a warning and only
- * becomes an error when NO config could be updated.
+ * Two asymmetries matter here:
+ *
+ * 1. The ROOT config is load-bearing for two of the three consumers — the client bootstrap
+ *    manifest step (which resolves from the CLIENT workspace and so only ever sees root) and any
+ *    container / App Service deploy that ships only the root config. Failing to write root while
+ *    some other target succeeded would report success and silently re-create #3271, so a root
+ *    write failure is FATAL even when another config was updated.
+ * 2. A non-root target may legitimately be un-editable, and is collected as a warning. The only
+ *    such shape in practice is a delegating config, which {@link IsDelegatingConfig} skips
+ *    silently before we ever try to edit it.
+ *
+ * `operation` names the caller's intent so a failure keeps the diagnostic specificity these
+ * messages had before they were funnelled through one helper (e.g. "update excludeSchemas").
  */
 function ApplyToConfigs(
     repoRoot: string,
     serverPackagePath: string | undefined,
+    operation: string,
     edit: (content: string) => string
 ): ConfigOperationResult {
+    const rootConfig = resolve(repoRoot, CONFIG_FILE_NAME);
     const configPaths = resolveConfigPaths(repoRoot, serverPackagePath);
     if (configPaths.length === 0) {
         return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
     }
 
-    const failures: string[] = [];
+    const warnings: string[] = [];
     let updated = 0;
+    let delegated = 0;
 
     for (const configPath of configPaths) {
         try {
             const content = readFileSync(configPath, 'utf-8');
+            // Re-exports another config in this list — correct to leave alone, so stay quiet.
+            if (IsDelegatingConfig(content)) {
+                delegated++;
+                continue;
+            }
             WriteConfigChecked(configPath, edit(content));
             updated++;
         }
         catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
-            failures.push(`${configPath}: ${message}`);
+            if (configPath === rootConfig) {
+                // Fatal: see asymmetry (1) above.
+                return { Success: false, ErrorMessage: `Failed to ${operation} in ${configPath}: ${message}` };
+            }
+            warnings.push(`${configPath}: ${message}`);
         }
     }
 
     if (updated === 0) {
-        return { Success: false, ErrorMessage: `Failed to update config: ${failures.join('; ')}` };
+        const detail = warnings.length > 0
+            ? warnings.join('; ')
+            : delegated > 0
+                ? `every candidate config only re-exports another config, so there was nowhere to write. Expected an object literal in ${rootConfig}.`
+                : 'no candidate config had an injectable config object.';
+        return { Success: false, ErrorMessage: `Failed to ${operation}: ${detail}` };
     }
-    return { Success: true, Warnings: failures.length > 0 ? failures : undefined };
+    return { Success: true, Warnings: warnings.length > 0 ? warnings : undefined };
 }
 
 /**
@@ -614,7 +656,7 @@ export function AddExcludeSchema(
         return { Success: true };
     }
 
-    return ApplyToConfigs(repoRoot, serverPackagePath, (input) =>
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update excludeSchemas', (input) =>
         AddSchemaToExcludeArray(EnsureExcludeSchemasSection(input), schemaName));
 }
 
@@ -635,7 +677,7 @@ export function RemoveExcludeSchema(
         return { Success: true };
     }
 
-    return ApplyToConfigs(repoRoot, serverPackagePath, (content) =>
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'remove schema from excludeSchemas', (content) =>
         RemoveSchemaFromExcludeArray(content, schemaName));
 }
 
@@ -738,7 +780,7 @@ export function AddEntityPackageMapping(
         return { Success: true }; // No entities package found → nothing to map
     }
 
-    return ApplyToConfigs(repoRoot, serverPackagePath, (input) =>
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update entityPackageName', (input) =>
         AddEntityPackageEntry(EnsureEntityPackageNameSection(input), schemaName, entityPkg));
 }
 
@@ -758,7 +800,7 @@ export function RemoveEntityPackageMapping(
         return { Success: true };
     }
 
-    return ApplyToConfigs(repoRoot, serverPackagePath, (content) =>
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'remove entityPackageName mapping', (content) =>
         RemoveEntityPackageEntry(content, schemaName));
 }
 

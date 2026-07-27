@@ -290,10 +290,12 @@ describe('Multi-config targeting (#3271)', () => {
         expect(mockedWriteFileSync).toHaveBeenCalledTimes(1);
     });
 
-    it('succeeds with a warning when one config cannot be edited (#3270 re-export shape)', () => {
-        // The distribution ships apps/MJAPI/mj.config.cjs as a bare re-export, which has no
-        // object literal to insert into. That file needs no edit — it re-exports the root
-        // config, which IS written — so the install must not fail on it.
+    it('silently no-ops a delegating config — no warning (#3270 re-export shape)', () => {
+        // packages/MJAPI/mj.config.cjs is a bare re-export in BOTH the monorepo and an
+        // `mj install` distribution. It has no object literal and needs no edit: it re-exports
+        // the root config, which IS a target and IS written. Skipping it must stay SILENT,
+        // otherwise every monorepo install emits a "skipped a config file" warning that reads
+        // like a failure.
         mockedExistsSync.mockReturnValue(true);
         mockedReadFileSync.mockImplementation((p: unknown) =>
             String(p) === SERVER_CONFIG
@@ -304,19 +306,59 @@ describe('Multi-config targeting (#3271)', () => {
         const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest(), 'packages/MJAPI');
 
         expect(result.Success).toBe(true);
-        expect(result.Warnings?.join(' ')).toMatch(/Could not find a config object/);
+        expect(result.Warnings).toBeUndefined(); // expected shape => no noise
         const targets = mockedWriteFileSync.mock.calls.map((c) => c[0] as string);
-        expect(targets).toEqual([ROOT_CONFIG]); // only the editable one was written
+        expect(targets).toEqual([ROOT_CONFIG]);
     });
 
-    it('fails only when NO config could be updated', () => {
+    it('warns (but succeeds) when a NON-root config is unsupported for another reason', () => {
+        // Not a delegating re-export — genuinely unsupported string surgery. Root still carries
+        // the entry, so the install proceeds, but the skip is surfaced.
+        mockedExistsSync.mockReturnValue(true);
+        mockedReadFileSync.mockImplementation((p: unknown) =>
+            String(p) === SERVER_CONFIG
+                ? 'module.exports = buildConfig();\n'
+                : issueTemplateConfig()
+        );
+
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest(), 'packages/MJAPI');
+
+        expect(result.Success).toBe(true);
+        expect(result.Warnings?.join(' ')).toMatch(/Could not find a config object/);
+        expect(mockedWriteFileSync.mock.calls.map((c) => c[0] as string)).toEqual([ROOT_CONFIG]);
+    });
+
+    it('treats a ROOT-config write failure as FATAL even when the server config succeeded', () => {
+        // Root is load-bearing for the client bootstrap manifest AND container deploys. Degrading
+        // a root failure to a warning would report success while silently re-creating #3271.
+        const exotic = [
+            'module.exports = {',
+            '  weird: /}/,',
+            '  openApps: { token: process.env.X }',
+            '};',
+            '',
+        ].join('\n');
+        mockedExistsSync.mockReturnValue(true);
+        mockedReadFileSync.mockImplementation((p: unknown) =>
+            String(p) === ROOT_CONFIG ? exotic : issueTemplateConfig()
+        );
+
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest(), 'packages/MJAPI');
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain(ROOT_CONFIG);
+        expect(result.Warnings).toBeUndefined();
+    });
+
+    it('fails with an operation-specific message when NO config could be updated', () => {
         mockedExistsSync.mockReturnValue(true);
         mockedReadFileSync.mockReturnValue("module.exports = require('./somewhere-else.cjs');\n");
 
         const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest(), 'packages/MJAPI');
 
         expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toMatch(/Failed to update config/);
+        // Operation-specific, not a generic "Failed to update config" (diagnostic signal kept).
+        expect(result.ErrorMessage).toMatch(/Failed to update dynamicPackages\.server/);
         expect(mockedWriteFileSync).not.toHaveBeenCalled();
     });
 
