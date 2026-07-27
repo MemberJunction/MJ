@@ -28,13 +28,16 @@ import {
   LayoutNode
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager, CachedComponentInfo } from './component-cache-manager';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+
+/** Fallback tab accent when an app has no color (matches pre-existing usage) */
+const DEFAULT_APP_COLOR = '#757575';
 /**
  * Container for Golden Layout tabs with app-colored styling.
  *
@@ -55,6 +58,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export class TabContainerComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('glContainer', { static: false }) glContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('directContentContainer', { static: false }) directContentContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('recordsGlContainer', { static: false }) recordsGlContainer?: ElementRef<HTMLDivElement>;
 
   /**
    * Emitted when the first resource component finishes loading.
@@ -104,6 +108,201 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   contextMenuY = 0;
   contextMenuTabId: string | null = null;
 
+  // ---- RECORDS region (records-style record opens) ----
+  /**
+   * A SEPARATE Golden Layout instance hosting only record tabs. Instantiated
+   * directly (not DI) — GoldenLayoutManager has no constructor dependencies
+   * and the root-provided instance belongs to the MAIN region. Records get
+   * native GL tabs (close/drag-to-split/pin) without ever appearing in the
+   * main workspace's tab bar.
+   */
+  private recordsLayoutManager = new GoldenLayoutManager();
+  private recordsLayoutInitialized = false;
+  /** Last active tab id reported by the records GL (guards focus feedback loops) */
+  private recordsRegionActiveTabId: string | null = null;
+  /**
+   * True while records-GL tabs are being created/restored in a batch. GL
+   * fires an activation event for EVERY tab it creates; letting those write
+   * back into the workspace during init steals focus from the tab the user
+   * actually asked for (and persists junk layouts mid-build). Suppress both
+   * write-backs while set; the batch ends with one explicit focus.
+   */
+  private recordsCreatingTabs = false;
+
+  /** True when the deployment runs the records-style record-open model */
+  public get RecordsStyleActive(): boolean {
+    return IsRecordTabsStyle();
+  }
+
+  /** True while the RECORDS region is the visible surface (active tab is a record) */
+  public ShowRecordsRegion = false;
+
+  /** A tab belongs to the records region (not the main workspace layout) */
+  private isRecordTab(tab: WorkspaceTab): boolean {
+    return this.RecordsStyleActive && IsRecordsTabConfiguration(tab.configuration);
+  }
+
+  /**
+   * Synchronous, exception-safe change-detection flush. Zoneless + OnPush
+   * ancestors make RxJS-driven mutations invisible until SOMETHING runs CD;
+   * detectChanges throws when a pass is already in flight, and an unguarded
+   * throw inside a promise/subscription silently kills the update (the
+   * original "clicked the pill, nothing happened for seconds" bug). markForCheck
+   * first so even the re-entrant case gets picked up by the in-flight pass.
+   */
+  private flushRegionCd(): void {
+    SafeDetectChanges(this.cdr);
+  }
+
+  /**
+   * Keep the RECORDS region in lockstep with the workspace configuration:
+   * resolve region visibility (active tab is a record), lazily initialize the
+   * records layout on first show (restoring the persisted records layout when
+   * it matches the tab set), add/remove record tabs, and focus the active one.
+   */
+  private syncRecordsRegion(config: { tabs: WorkspaceTab[]; activeTabId: string | null }): void {
+    if (!this.RecordsStyleActive) {
+      // Defense in depth: if the style ever resolves to classic AFTER a
+      // records-style pass set the flag (e.g. late instance-config load),
+      // un-hide the main region — otherwise it stays invisible forever.
+      if (this.ShowRecordsRegion) {
+        this.ShowRecordsRegion = false;
+        this.flushRegionCd();
+      }
+      return;
+    }
+    const recordTabs = config.tabs.filter(t => this.isRecordTab(t));
+    const activeTab = config.tabs.find(t => t.id === config.activeTabId);
+    const showing = !!activeTab && this.isRecordTab(activeTab);
+
+    // EAGER init + sync on EVERY emission. The region container always keeps
+    // its full layout box (visibility-hidden, never display:none — see the
+    // component CSS), so the records GL can initialize and reconcile even
+    // while the region isn't the visible surface. This is what keeps the
+    // strip, the pill, and the workspace from ever drifting apart: closed
+    // records leave the strip immediately, new ones appear immediately,
+    // whether or not the user is looking at the region.
+    if (!this.recordsLayoutInitialized && recordTabs.length > 0) {
+      this.ensureRecordsLayoutInitialized(recordTabs);
+    }
+    if (this.recordsLayoutInitialized) {
+      this.syncRecordsTabs(recordTabs);
+    }
+
+    if (showing !== this.ShowRecordsRegion) {
+      this.ShowRecordsRegion = showing;
+      // Flush NOW — the visibility class must land in this pass, not
+      // whenever the next unrelated emission happens to run CD.
+      this.flushRegionCd();
+    }
+
+    if (showing && activeTab && this.recordsLayoutInitialized) {
+      this.focusRecordsTab(activeTab.id);
+    }
+  }
+
+  /** Add/remove/style record tabs in the records GL to match the configuration */
+  private syncRecordsTabs(recordTabs: WorkspaceTab[]): void {
+    if (!this.recordsLayoutInitialized) {
+      return;
+    }
+    const existingIds = this.recordsLayoutManager.GetAllTabIds();
+    const configIds = recordTabs.map(t => t.id);
+    existingIds.forEach(id => {
+      if (!configIds.includes(id)) {
+        this.recordsLayoutManager.RemoveTab(id);
+      }
+    });
+    const toCreate = recordTabs.filter(t => !existingIds.includes(t.id));
+    if (toCreate.length > 0) {
+      this.recordsCreatingTabs = true;
+      try {
+        toCreate.forEach(tab => this.createRecordsRegionTab(tab));
+      } finally {
+        this.recordsCreatingTabs = false;
+      }
+    }
+    recordTabs.forEach(tab => {
+      if (existingIds.includes(tab.id)) {
+        const app = this.appManager.GetAppById(tab.applicationId);
+        this.recordsLayoutManager.UpdateTabStyle(tab.id, {
+          isPinned: tab.isPinned,
+          title: tab.title,
+          appColor: app?.GetColor() || DEFAULT_APP_COLOR
+        });
+      }
+    });
+  }
+
+  /** Focus a records-region tab without feeding back into SetActiveTab loops */
+  private focusRecordsTab(tabId: string): void {
+    if (this.recordsRegionActiveTabId !== tabId) {
+      this.recordsLayoutManager.FocusTab(tabId);
+    }
+  }
+
+  /**
+   * Initialize the records Golden Layout as soon as record tabs exist —
+   * EAGERLY, whether or not the region is visible (its container always has
+   * a full layout box). Restores the persisted records layout when its
+   * component count matches the current record-tab set; otherwise builds
+   * tabs fresh. Creation/restore runs with activation write-backs
+   * suppressed (see recordsCreatingTabs).
+   */
+  private ensureRecordsLayoutInitialized(recordTabs: WorkspaceTab[]): void {
+    if (this.recordsLayoutInitialized) {
+      return;
+    }
+    const container = this.recordsGlContainer?.nativeElement;
+    if (!container) {
+      return; // Template not settled yet — the next sync pass retries
+    }
+    // NEVER initialize GL inside a zero-size (hidden) container — it bakes a
+    // 0x0 internal size into every stack it later creates and the region
+    // renders collapsed forever. Happens when the region flip is reverted
+    // (activation stolen) before this deferred init runs; staying
+    // uninitialized is safe — the next real show retries.
+    if (container.getBoundingClientRect().height === 0) {
+      return;
+    }
+    this.recordsLayoutManager.Initialize(container);
+    this.recordsLayoutInitialized = true;
+
+    this.recordsCreatingTabs = true;
+    try {
+      const config = this.workspaceManager.GetConfiguration();
+      const savedLayout = config?.recordsLayout;
+      if (savedLayout?.root && this.countLayoutComponents(savedLayout.root) === recordTabs.length && recordTabs.length > 0) {
+        if (this.recordsLayoutManager.LoadLayout(savedLayout)) {
+          return;
+        }
+      }
+      // No (or mismatched) saved layout — create record tabs fresh
+      [...recordTabs]
+        .sort((a, b) => a.sequence - b.sequence)
+        .forEach(tab => this.createRecordsRegionTab(tab));
+    } finally {
+      this.recordsCreatingTabs = false;
+    }
+  }
+
+  /** Create a record tab in the RECORDS layout (mirror of createTab for main) */
+  private createRecordsRegionTab(tab: WorkspaceTab): void {
+    const app = this.appManager.GetAppById(tab.applicationId);
+    const state: TabComponentState = {
+      tabId: tab.id,
+      appId: tab.applicationId,
+      appColor: app?.GetColor() || DEFAULT_APP_COLOR,
+      title: tab.title,
+      route: tab.configuration['route'] as string || '',
+      isPinned: tab.isPinned,
+      isLoaded: false
+    };
+    this.recordsLayoutManager.AddTab(state);
+    this.updateTabDisplayName(tab);
+  }
+
+
   constructor(
     private layoutManager: GoldenLayoutManager,
     private workspaceManager: WorkspaceStateManager,
@@ -144,15 +343,30 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       })
     );
 
-    // Subscribe to configuration changes to sync tabs
+    this.wireRecordsLayoutEvents();
+
+
+    // Subscribe to configuration changes to sync tabs.
+    // The callback is exception-guarded: an error thrown from ONE emission
+    // would otherwise unsubscribe the stream permanently — after which the
+    // regions silently stop tracking the workspace (tabs drift, content
+    // stops loading) with no visible failure.
     this.subscriptions.push(
       this.workspaceManager.Configuration.subscribe(config => {
+        try {
         if (config) {
+          // Keep the RECORDS region in sync first — it also resolves whether
+          // the region is the visible surface for this configuration.
+          this.syncRecordsRegion(config);
+
           if (this.useSingleResourceMode) {
             // In single-resource mode, reload content if the tab content changed
             // The same tab ID can have different content (tab gets reused)
             const activeTab = config.tabs.find(t => t.id === config.activeTabId) || config.tabs[0];
-            if (activeTab) {
+            if (activeTab && this.isRecordTab(activeTab)) {
+              // Active tab is a RECORD — the records region owns it. Leave the
+              // main region's content (the last nav page) untouched behind it.
+            } else if (activeTab) {
               const signature = this.getTabContentSignature(activeTab);
               if (signature !== this.currentSingleResourceSignature) {
                 // DO NOT call saveCurrentComponentQueryParams() here — by the time this
@@ -167,11 +381,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
               }
             }
           } else if (this.layoutRestorationComplete && !this.isCreatingInitialTabs) {
-            // In multi-tab mode, sync with Golden Layout
+            // In multi-tab mode, sync with Golden Layout.
+            // Record tabs live in the records region — never in the main layout.
             // IMPORTANT: Only sync AFTER layout restoration is complete to avoid creating duplicate tabs
             // layoutRestorationComplete is set to true only after initializeGoldenLayout finishes
-            this.syncTabsWithConfiguration(config.tabs);
+            this.syncTabsWithConfiguration(config.tabs.filter(t => !this.isRecordTab(t)));
           }
+        }
+        } catch (err) {
+          // Never let one bad emission kill the stream — see comment above.
+          LogError(err);
         }
       })
     );
@@ -180,6 +399,65 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     this.subscriptions.push(
       this.workspaceManager.TabBarVisible.subscribe(tabBarVisible => {
         this.handleTabBarVisibilityChange(tabBarVisible);
+      })
+    );
+  }
+
+
+  /**
+   * RECORDS region event wiring: the separate layout's events route through
+   * the SAME handlers as the main layout — content loading, close, pin, and
+   * context menu are layout-agnostic; only layout persistence targets its
+   * own slot. Activation + persistence write-backs are suppressed during
+   * batch creation/restore (recordsCreatingTabs) so GL's per-tab-created
+   * events can't steal focus or persist half-built layouts.
+   */
+  private wireRecordsLayoutEvents(): void {
+    this.subscriptions.push(
+      this.recordsLayoutManager.TabShown.subscribe(async event => {
+        if (event.isFirstShow) {
+          await this.loadTabContent(event.tabId, event.container);
+          // Mark loaded ONLY when content actually attached to the LIVE
+          // container. During layout restore, GL can re-render item elements
+          // while an async load is in flight — the load appends into a
+          // detached element and the visible pane stays blank. Leaving the
+          // tab unmarked lets the next show retry, which hits the component
+          // cache and reattaches instantly into the live element.
+          const live = this.recordsLayoutManager.GetContainer(event.tabId);
+          if (live?.element && live.element.childElementCount > 0) {
+            this.recordsLayoutManager.MarkTabLoaded(event.tabId);
+          }
+        }
+      }),
+      this.recordsLayoutManager.TabClosed.subscribe(async tabId => {
+        this.cleanupTabComponent(tabId);
+        // Guard: a configuration sync that removed this tab already updated
+        // the workspace — closing again would re-emit an unchanged config
+        // from inside a subscription pass.
+        if (this.workspaceManager.GetTab(tabId)) {
+          this.workspaceManager.CloseTab(tabId);
+        }
+        // Records close OUTRIGHT (no keep-last-tab-alive rule) — if that
+        // emptied the workspace, land the user on the active app's default
+        // tab instead of a blank shell.
+        await this.backfillEmptyWorkspace();
+      }),
+      this.recordsLayoutManager.ActiveTab.subscribe(tabId => {
+        this.recordsRegionActiveTabId = tabId;
+        if (tabId && this.ShowRecordsRegion && !this.recordsCreatingTabs) {
+          this.workspaceManager.SetActiveTab(tabId);
+        }
+      }),
+      this.recordsLayoutManager.LayoutChanged.subscribe(() => {
+        if (this.recordsLayoutInitialized && !this.recordsCreatingTabs) {
+          this.workspaceManager.UpdateRecordsLayout(this.recordsLayoutManager.SaveLayout());
+        }
+      }),
+      this.recordsLayoutManager.TabDoubleClicked.subscribe(tabId => {
+        this.workspaceManager.TogglePin(tabId);
+      }),
+      this.recordsLayoutManager.TabRightClicked.subscribe(event => {
+        this.showContextMenu(event.x, event.y, event.tabId);
       })
     );
   }
@@ -245,8 +523,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Mark layout as initialized
     this.layoutInitialized = true;
 
+    // The MAIN layout hosts only non-record tabs — record tabs live in the
+    // separate records region (no-op filter under classic style).
+    const mainTabs = config.tabs.filter(t => !this.isRecordTab(t));
+
     // Check if config has no tabs
-    if (config.tabs.length === 0) {
+    if (mainTabs.length === 0) {
       // No tabs to load, but mark restoration as complete
       this.layoutRestorationComplete = true;
       return;
@@ -258,8 +540,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (hasSavedLayout && !forceCreateTabs && config.layout) {
       // VALIDATE: Check that layout component count matches tabs array count
       const layoutComponentCount = this.countLayoutComponents(config.layout.root);
-      if (layoutComponentCount !== config.tabs.length) {
-        console.warn(`[TabContainer.initializeGoldenLayout] Layout/tabs mismatch: layout has ${layoutComponentCount} components but tabs array has ${config.tabs.length} tabs. Clearing layout.`);
+      if (layoutComponentCount !== mainTabs.length) {
+        console.warn(`[TabContainer.initializeGoldenLayout] Layout/tabs mismatch: layout has ${layoutComponentCount} components but tabs array has ${mainTabs.length} tabs. Clearing layout.`);
         this.workspaceManager.ClearLayout();
         // Fall through to create fresh tabs
       } else {
@@ -291,8 +573,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }
 
     // CREATE FRESH - no saved layout, forceCreateTabs=true, or layout load failed
-    // Use config.tabs sorted by sequence to build a simple single-stack layout
-    const sortedTabs = [...config.tabs].sort((a, b) => a.sequence - b.sequence);
+    // Use the main (non-record) tabs sorted by sequence for a single-stack layout
+    const sortedTabs = [...mainTabs].sort((a, b) => a.sequence - b.sequence);
 
     this.isCreatingInitialTabs = true;
     try {
@@ -372,10 +654,60 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         }
       }
     }
+
+    // The RECORDS region is a separate layout with the same destroyed-cache
+    // problem — sweep it in BOTH main modes or every record pane stays
+    // permanently blank after a tenant switch (marked loaded, component gone).
+    await this.reloadRecordsRegionTabs();
+  }
+
+  /** Mark all records-region tabs not-loaded and reload the active one (tenant switch) */
+  private async reloadRecordsRegionTabs(): Promise<void> {
+    if (!this.recordsLayoutInitialized) {
+      return;
+    }
+    for (const tabId of this.recordsLayoutManager.GetAllTabIds()) {
+      this.recordsLayoutManager.MarkTabNotLoaded(tabId);
+    }
+    const activeTabId = this.workspaceManager.GetActiveTabId();
+    const activeTab = activeTabId ? this.workspaceManager.GetTab(activeTabId) : undefined;
+    if (activeTab && this.isRecordTab(activeTab)) {
+      const container = this.recordsLayoutManager.GetContainer(activeTab.id);
+      if (container) {
+        await this.loadTabContent(activeTab.id, container);
+        this.recordsLayoutManager.MarkTabLoaded(activeTab.id);
+      }
+    }
+  }
+
+  /**
+   * If the workspace has no tabs left (closing the last record empties it —
+   * records skip the manager's keep-last-tab-alive rule), open the active
+   * app's default tab so the user lands on a meaningful surface.
+   */
+  private async backfillEmptyWorkspace(): Promise<void> {
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config || config.tabs.length > 0) {
+      return;
+    }
+    const app = this.appManager.GetActiveApp();
+    if (!app) {
+      return;
+    }
+    const request = await app.CreateDefaultTab();
+    if (request) {
+      this.workspaceManager.OpenTab(request, app.GetColor());
+    }
   }
 
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub.unsubscribe());
+
+    // Tear down the records region's layout
+    if (this.recordsLayoutInitialized) {
+      this.recordsLayoutManager.Destroy();
+      this.recordsLayoutInitialized = false;
+    }
 
     // Cleanup single-resource mode component if exists
     this.cleanupSingleResourceComponent();
@@ -450,8 +782,11 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           // All OTHER unpinned tabs should be pinned since they represent content
           // the user explicitly kept open
           const updatedTabs = config.tabs.map(tab => {
-            // Pin all tabs except the newly active one (which is the temporary tab)
-            if (tab.id !== config.activeTabId && !tab.isPinned) {
+            // Pin all MAIN-layout tabs except the newly active one (which is
+            // the temporary tab). Record tabs are exempt — their pin state is
+            // user-owned (PreservePinState), and force-pinning them makes the
+            // temp-tab semantics path-dependent.
+            if (tab.id !== config.activeTabId && !tab.isPinned && !this.isRecordTab(tab)) {
               return { ...tab, isPinned: true };
             }
             return tab;
@@ -501,7 +836,20 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }
 
     // Get the active tab (or first tab)
-    const activeTab = config.tabs.find(t => t.id === config.activeTabId) || config.tabs[0];
+    let activeTab = config.tabs.find(t => t.id === config.activeTabId) || config.tabs[0];
+
+    // Records style: record tabs render in the RECORDS region, never here.
+    // When the active tab is a record (e.g. reloading the app while viewing
+    // one), the main region shows the most recently used NAV tab behind it.
+    if (activeTab && this.isRecordTab(activeTab)) {
+      const navTabs = config.tabs.filter(t => !this.isRecordTab(t));
+      activeTab = [...navTabs].sort((a, b) => (b.lastAccessedAt || '').localeCompare(a.lastAccessedAt || ''))[0];
+      if (!activeTab) {
+        // Only record tabs exist — the records region owns first-load
+        return;
+      }
+    }
+
     if (!activeTab) {
       // Config has tabs but none match activeTabId and the array fallback failed.
       // This shouldn't happen, but if it does, unblock the loading screen.
@@ -1119,9 +1467,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.handleResourceCloseRequested(tabId, instance);
       };
 
-      // Wire up display name change notifications
+      // Wire up display name change notifications (routed to whichever
+      // Golden Layout hosts this tab)
       instance.DisplayNameChangedEvent = (newName: string) => {
-        this.layoutManager.UpdateTabStyle(tabId, { title: newName });
+        const t = this.workspaceManager.GetTab(tabId);
+        const manager = t && this.isRecordTab(t) ? this.recordsLayoutManager : this.layoutManager;
+        manager.UpdateTabStyle(tabId, { title: newName });
         this.workspaceManager.UpdateTabTitle(tabId, newName);
       };
 
@@ -1204,8 +1555,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       const displayName = await tempInstance.GetResourceDisplayName(resourceData);
 
       if (displayName && displayName !== tab.title) {
-        // Update the tab title in Golden Layout
-        this.layoutManager.UpdateTabStyle(tab.id, { title: displayName });
+        // Update the tab title in whichever Golden Layout hosts this tab
+        const targetManager = this.isRecordTab(tab) ? this.recordsLayoutManager : this.layoutManager;
+        targetManager.UpdateTabStyle(tab.id, { title: displayName });
 
         // Update the tab title in workspace configuration for persistence
         this.workspaceManager.UpdateTabTitle(tab.id, displayName);
@@ -1516,7 +1868,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.layoutManager.UpdateTabStyle(tab.id, {
           isPinned: tab.isPinned,
           title: tab.title,
-          appColor: app?.GetColor() || '#757575'
+          appColor: app?.GetColor() || DEFAULT_APP_COLOR
         });
       }
     });
@@ -1594,7 +1946,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   onContextClose(): void {
     if (this.contextMenuTabId) {
-      this.layoutManager.RemoveTab(this.contextMenuTabId);
+      const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+      const manager = tab && this.isRecordTab(tab) ? this.recordsLayoutManager : this.layoutManager;
+      manager.RemoveTab(this.contextMenuTabId);
     }
     this.hideContextMenu();
   }

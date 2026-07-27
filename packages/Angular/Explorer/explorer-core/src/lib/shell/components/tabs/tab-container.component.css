@@ -22,6 +22,31 @@
   background: var(--mj-bg-page);
 }
 
+/* Main region (nav pages) and the separate RECORDS region — exactly one is
+   visible at a time. CRITICAL: the hidden region keeps its FULL LAYOUT BOX
+   (visibility, not display:none). Golden Layout instances live in both;
+   display:none would feed GL 0-size resizes and let it initialize/restore
+   against a zero baseline — the root cause of clipped tab headers, stale
+   strips, and the collapsed-sliver layout. */
+.tab-container {
+  position: relative;
+}
+
+.main-region,
+.records-gl-container {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--mj-bg-page);
+}
+
+.region-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* Direct content container for single-resource mode */
 /* Renders components directly without Golden Layout overhead */
 .direct-content-container {

@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -60,6 +60,7 @@ interface ShellChromeFlags {
   appSwitcher: boolean;
   appSwitcherStyle: AppSwitcherStyle;
   appNav: boolean;
+  recordOpenStyle: RecordOpenStyle;
 }
 
 @Component({
@@ -78,6 +79,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   initialized = false;
   private waitingForFirstResource = false;
   tabBarVisible = true; // Controlled by workspace manager
+
+  /**
+   * True when the deployment uses the records-as-tabs record-open style
+   * (`Shell.RecordOpen.Style` != 'classic'): records open as native Golden
+   * Layout tabs in the app the user is standing in, and the Records pill in
+   * the nav is the global entry point (count + resume-last-viewed). The GL
+   * tab header is the tab UI — native close/drag/pin apply to records too.
+   */
+  public get RecordTabsStyle(): boolean {
+    return this.chromeFlags.recordOpenStyle === 'records';
+  }
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
@@ -170,11 +182,36 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // to 'auto' (compact under a handful of apps, launcher otherwise)
           appSwitcherStyle: rawStyle === 'launcher' || rawStyle === 'compact' ? rawStyle : 'auto',
           appNav: engine.GetBoolean('Shell.AppNav.Enabled', true),
+          // Resolved (and pushed to collaborators) in resolveRecordOpenStyle()
+          // during initializeShell — NEVER as a getter side effect; getters
+          // run at change detection's whim and startup correctness must not
+          // depend on when a template happens to be evaluated.
+          recordOpenStyle: this.resolvedRecordOpenStyle,
       };
       if (engine.Loaded) {
           this._chromeFlags = flags;
       }
       return flags;
+  }
+
+  /** The record-open style resolved at startup ('records' until resolved) */
+  private resolvedRecordOpenStyle: RecordOpenStyle = 'records';
+
+  /**
+   * Resolve `Shell.RecordOpen.Style` from instance config and push it to the
+   * two collaborators that partition tabs by it: the ng-shared style module
+   * (NavigationService forks record opens on it) and the workspace manager's
+   * main-layout filter (record tabs must never count toward — or be consumed
+   * by — main-layout semantics). Called ONCE from initializeShell, after the
+   * InstanceConfigEngine load attempt and BEFORE workspace initialization.
+   */
+  private resolveRecordOpenStyle(): void {
+      const raw = InstanceConfigEngine.Instance.Get('Shell.RecordOpen.Style');
+      this.resolvedRecordOpenStyle = raw === 'classic' ? 'classic' : 'records';
+      SetRecordOpenStyle(this.resolvedRecordOpenStyle);
+      this.workspaceManager.MainLayoutTabFilter = this.resolvedRecordOpenStyle === 'records'
+        ? (tab) => tab.configuration?.['resourceType'] !== RECORDS_RESOURCE_TYPE
+        : null;
   }
 
   get ShowSearchBar(): boolean {
@@ -427,6 +464,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     await InstanceConfigEngine.Instance.Config(false).catch(() => {
         LogStatus('InstanceConfigEngine initialization skipped (not critical)');
     });
+
+    // Resolve the record-open style EAGERLY, before workspace initialization.
+    // The first workspace configuration emission fires synchronously inside
+    // Initialize() below, and everything that partitions tabs between the
+    // main layout and the records region reads this style. Resolving it
+    // lazily (e.g. in a getter evaluated by change detection) leaves a
+    // startup window where a 'classic' deployment runs records-style —
+    // wiping saved main layouts on every boot and potentially hiding the
+    // main region permanently. This MUST happen here, awaited, first.
+    this.resolveRecordOpenStyle();
 
     // Get current user
     const md = this.ProviderToUse;
@@ -793,6 +840,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Not a system tab - clear the flag
     this.isViewingSystemTab = false;
     this.cdr.detectChanges();
+
+    // Records style: record tabs are a GLOBAL
+    // surface — viewing one must never flip the user's app context. Without
+    // this guard, resuming a record opened from another app yanked the whole
+    // header to that app (the "clicked Records in AI, landed in Data
+    // Explorer" bug). The Records pill carries the active state; the nav
+    // stays wherever the user is.
+    if (this.RecordTabsStyle && activeTab.configuration?.['resourceType'] === RECORDS_RESOURCE_TYPE) {
+      this.titleService.setContext(this.activeApp?.Name || null, activeTab.title || null);
+      return;
+    }
 
     // Check if active app needs to be updated
     const currentActiveApp = this.appManager.GetActiveApp();

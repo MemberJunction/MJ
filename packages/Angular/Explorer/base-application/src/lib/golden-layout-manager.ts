@@ -8,6 +8,8 @@ import { WorkspaceConfiguration, LayoutConfig as WorkspaceLayoutConfig, LayoutNo
 // These match the Golden Layout 2.6.0 API
 interface GLComponentContainer {
   state: Record<string, unknown>;
+  /** The container's content DOM element (host for the tab's rendered component) */
+  element?: HTMLElement;
   tab?: { element: HTMLElement };
   on(event: string, callback: () => void): void;
   close(): void;

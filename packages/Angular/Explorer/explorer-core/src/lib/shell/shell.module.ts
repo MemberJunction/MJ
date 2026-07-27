@@ -9,6 +9,8 @@ import { AppAccessDialogComponent } from './components/dialogs/app-access-dialog
 import { CommandPaletteComponent } from '../command-palette/command-palette.component';
 import { OmnibarPaletteComponent } from '../omnibar/omnibar-palette.component';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+// Records-style record-open surface (Shell.RecordOpen.Style = 'records')
+import { RecordsHubPillComponent } from './components/record-open/records-hub-pill.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJDropdownComponent, MJClickableDirective, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
@@ -33,7 +35,8 @@ import { SearchModule } from '@memberjunction/ng-search';
     MJEmptyStateComponent,
     ExplorerSettingsModule,
     SharedGenericModule,
-    SearchModule
+    SearchModule,
+    RecordsHubPillComponent
   ],
   providers: [
     CommandPaletteService

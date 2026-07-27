@@ -1,12 +1,25 @@
 <div class="tab-container">
 
-  <!-- Single-Resource Mode: Direct component rendering without Golden Layout -->
-  <!-- This avoids the 20px height issue when GL header is hidden -->
-  @if (useSingleResourceMode) {
-    <div #directContentContainer class="direct-content-container"></div>
-  } @else {
-    <!-- Multi-Tab Mode: Golden Layout Container -->
-    <div #glContainer class="gl-container"></div>
+  <!-- Main region: nav pages (single-resource or main Golden Layout).
+       Hidden (not destroyed) while the RECORDS region is showing, so nav
+       content keeps its state and reappears instantly. -->
+  <div class="main-region" [class.region-hidden]="ShowRecordsRegion">
+    <!-- Single-Resource Mode: Direct component rendering without Golden Layout -->
+    <!-- This avoids the 20px height issue when GL header is hidden -->
+    @if (useSingleResourceMode) {
+      <div #directContentContainer class="direct-content-container"></div>
+    } @else {
+      <!-- Multi-Tab Mode: Golden Layout Container -->
+      <div #glContainer class="gl-container"></div>
+    }
+  </div>
+
+  <!-- RECORDS region: a SEPARATE Golden Layout hosting only record tabs
+       (records-style record opens). Always in the DOM once created so the
+       layout survives visibility flips; shown only while the active tab is
+       a record. Native GL tab bar = record tabs, drag-to-split included. -->
+  @if (RecordsStyleActive) {
+    <div #recordsGlContainer class="records-gl-container" [class.region-hidden]="!ShowRecordsRegion"></div>
   }
 
   <!-- Context Menu (only relevant in multi-tab mode) -->

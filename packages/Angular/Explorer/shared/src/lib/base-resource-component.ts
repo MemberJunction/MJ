@@ -15,7 +15,15 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     private _lastDeliveredParamsKey: string | null = null;
     protected destroy$ = new Subject<void>();
     protected navigationService = inject(NavigationService);
-    private changeDetectorRef = inject(ChangeDetectorRef);
+    /**
+     * Optional: the tab container instantiates LIGHTWEIGHT throwaway instances
+     * of resource components (via runInInjectionContext with an environment
+     * injector) purely to call GetResourceDisplayName for background tab
+     * titles. ChangeDetectorRef only exists in node injectors, so a required
+     * inject() there throws NG0201 and silently kills every background title
+     * resolution — tabs keep raw "Entity - ID|guid" titles until opened.
+     */
+    private changeDetectorRef = inject(ChangeDetectorRef, { optional: true });
 
     /**
      * Tab ID for query param notification scoping. Set by resource wrappers
@@ -293,7 +301,8 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * any LATER async state change that must reach the DOM outside those signals.
      */
     protected RefreshView(): void {
-        this.changeDetectorRef.markForCheck();
+        // Null on lightweight non-view instances (background title resolution)
+        this.changeDetectorRef?.markForCheck();
     }
 
 

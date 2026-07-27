@@ -1,6 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
+import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration } from './record-open-style';
 import { CompositeKey } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
@@ -443,30 +444,61 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
-   * Open an entity record view
-   * Uses Home app if available, otherwise falls back to active app or system app
+   * Open an entity record view. Behavior forks on the deployment's
+   * record-open style (see record-open-style.ts):
+   * - 'records' (default): the record ALWAYS opens as its own tab, assigned
+   *   to the app the user is standing in (no Home reassignment, no nav flip).
+   *   Re-opening a record that's already open focuses its existing tab,
+   *   browser-style. The shell's Records pill + strip are the visible UI.
+   * - 'classic': the original Home-first assignment and tab semantics.
+   * Both styles capture the source-app trail into the tab configuration for
+   * context UI and diagnostics.
    */
   public OpenEntityRecord(
     entityName: string,
     recordPkey: CompositeKey,
     options?: NavigationOptions
   ): string {
-    const appId = this.getDefaultApplicationId();
-    const appColor = this.getDefaultAppColor();
+    const tabsMode = IsRecordTabsStyle();
 
-    let forceNew = this.shouldForceNewTab(options);
+    const activeApp = this.appManager.GetActiveApp();
+    const appId = tabsMode && activeApp ? activeApp.ID : this.getDefaultApplicationId();
+    const appColor = tabsMode && activeApp ? activeApp.GetColor() : this.getDefaultAppColor();
 
     const recordId = recordPkey.ToURLSegment();
+
+    // Browser-style dedup: if this exact record is already open in a tab,
+    // focus that tab instead of opening a second copy
+    if (tabsMode) {
+      const existing = this.findOpenRecordTab(entityName, recordId);
+      if (existing) {
+        // The activation assert applies to RE-opens too — the same-click
+        // stale-stomp that motivated it for fresh opens is equally possible
+        // here, and without it the symptom is maddening: opening a record
+        // works the FIRST time and silently fails every time after.
+        this.workspaceManager.SetActiveTab(existing.id);
+        this.assertRecordActivation(existing.id);
+        return existing.id;
+      }
+    }
+
+    let forceNew = tabsMode || this.shouldForceNewTab(options);
+
     const request: TabRequest = {
       ApplicationId: appId,
       Title: `${entityName} - ${recordId}`,
       Configuration: {
-        resourceType: 'Records',
+        resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
-        recordId: recordId   // Also needed in Configuration for tab-container.component to populate ResourceRecordID
+        recordId: recordId,  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
+        ...this.captureSourceContext()
       },
       ResourceRecordId: recordId,
-      IsPinned: options?.pinTab || false
+      IsPinned: options?.pinTab || false,
+      // Records style: opening a record must not pin the nav tab (see
+      // TabRequest.PreservePinState) — a pinned nav tab forces the main tab
+      // bar visible on every nav page.
+      PreservePinState: tabsMode
     };
 
     // Handle transition from single-resource mode
@@ -479,7 +511,68 @@ export class NavigationService implements OnDestroy {
       tabId = this.workspaceManager.OpenTab(request, appColor);
     }
 
+    if (tabsMode) {
+      this.assertRecordActivation(tabId);
+    }
+
     return tabId;
+  }
+
+  /**
+   * Opening a record means the record WINS the activation race — assert it
+   * after the synchronous open flow settles. Surfaces that both emit a
+   * record-open AND run their own internal navigation in the same click
+   * (e.g. a grid row's select handler updating query params from a config
+   * snapshot captured before the open) can otherwise stomp the activation
+   * with stale state, leaving the tab open but never shown. Skipped when the
+   * tab was closed in the meantime.
+   */
+  private assertRecordActivation(tabId: string): void {
+    setTimeout(() => {
+      const config = this.workspaceManager.GetConfiguration();
+      if (config?.tabs.some(t => t.id === tabId) && config.activeTabId !== tabId) {
+        this.workspaceManager.SetActiveTab(tabId);
+      }
+    }, 0);
+  }
+
+  /** Find an already-open tab showing this exact record (records-style dedup) */
+  private findOpenRecordTab(entityName: string, recordId: string): { id: string } | null {
+    const config = this.workspaceManager.GetConfiguration();
+    const match = config?.tabs.find(t =>
+      t.resourceRecordId === recordId &&
+      t.configuration?.['resourceType'] === RECORDS_RESOURCE_TYPE &&
+      t.configuration?.['Entity'] === entityName
+    );
+    return match ? { id: match.id } : null;
+  }
+
+  /**
+   * Snapshot of where the user was when the record was
+   * opened — the source app and (when the active tab belongs to that app and
+   * isn't itself a record) the nav page they were on. Rendered by the
+   * breadcrumb strip as "App › Page › Record".
+   */
+  private captureSourceContext(): Record<string, string> {
+    const activeApp = this.appManager.GetActiveApp();
+    if (!activeApp) {
+      return {};
+    }
+    const context: Record<string, string> = {
+      sourceAppId: activeApp.ID,
+      sourceAppName: activeApp.Name
+    };
+    const config = this.workspaceManager.GetConfiguration();
+    const activeTab = config?.tabs.find(t => t.id === config.activeTabId);
+    if (
+      activeTab &&
+      UUIDsEqual(activeTab.applicationId, activeApp.ID) &&
+      !IsRecordsTabConfiguration(activeTab.configuration) &&
+      activeTab.title
+    ) {
+      context['sourceNavLabel'] = activeTab.title;
+    }
+    return context;
   }
 
   /**
@@ -716,7 +809,7 @@ export class NavigationService implements OnDestroy {
       ApplicationId: appId,
       Title: `New ${entityName}`,
       Configuration: {
-        resourceType: 'Records',
+        resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
         recordId: '',        // Empty recordId indicates new record
         isNew: true,         // Flag to indicate this is a new record

@@ -228,5 +228,19 @@
     "primaryKey": {
       "ID": "6A7E686F-CE89-4BF5-B27D-25BE4D8432CF"
     }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.RecordOpen.Style",
+      "Value": "records",
+      "ValueType": "string",
+      "Category": "Shell",
+      "DisplayName": "Record Open Style",
+      "Description": "How Explorer treats records opened from within apps: 'records' (default) keeps the user in the current app, opens every record as its own tab, and shows the global Records pill + record tab strip; 'classic' restores the previous behavior (records reassigned to the Home app, Golden Layout tab header as the multi-tab UI).",
+      "DefaultValue": "records"
+    },
+    "primaryKey": {
+      "ID": "A255910E-D36D-4F1D-B25D-6B7FADB82C74"
+    }
   }
 ]
