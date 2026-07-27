@@ -10,6 +10,19 @@ const RECENT_APPS_KEY = 'mj.shell.recentApps.v1';
 const RECENT_STORE_MAX = 8;
 /** How many recent cards to display */
 const RECENT_DISPLAY_MAX = 3;
+/** 'auto' style: below this many apps the compact anchored panel is used */
+const COMPACT_AUTO_THRESHOLD = 8;
+/** Compact mode: the filter input appears only at or above this many apps */
+const COMPACT_FILTER_THRESHOLD = 10;
+
+/**
+ * Presentation style for the app switcher, resolved from the
+ * `Shell.AppSwitcher.Style` instance-config key:
+ * - 'launcher': always the centered card launcher
+ * - 'compact': always the anchored compact panel (dropdown-like)
+ * - 'auto' (default): compact below {@link COMPACT_AUTO_THRESHOLD} apps
+ */
+export type AppSwitcherStyle = 'launcher' | 'compact' | 'auto';
 
 interface RecentAppEntry {
   id: string;
@@ -48,6 +61,8 @@ export class AppSwitcherComponent {
   @Input() isViewingSystemTab = false;
   /** ID of the app currently being loaded (shows loading indicator) */
   @Input() loadingAppId: string | null = null;
+  /** Presentation style (from Shell.AppSwitcher.Style instance config) */
+  @Input() switcherStyle: AppSwitcherStyle = 'auto';
   @Output() appSelected = new EventEmitter<string>();
 
   @ViewChild('filterInput') private filterInputRef?: ElementRef<HTMLInputElement>;
@@ -60,6 +75,11 @@ export class AppSwitcherComponent {
   public ConfigMode = false;
   /** Pending action awaiting the inline unsaved-changes discard bar ('exit' = back to grid, 'close' = close launcher) */
   public PendingDiscard: 'exit' | 'close' | null = null;
+  /** True when the panel renders as the compact anchored dropdown (few apps) */
+  public CompactMode = false;
+  /** Anchor position for the compact panel (px, from the trigger's rect) */
+  public AnchorLeft = 0;
+  public AnchorTop = 0;
 
   /** Live filter text — matches app names AND Description summaries */
   public FilterText = '';
@@ -104,8 +124,12 @@ export class AppSwitcherComponent {
     return this.appManager.GetAppSwitcherApps();
   }
 
-  /** Recently-used apps (persisted per user), newest first, capped for display */
+  /** Recently-used apps (persisted per user), newest first, capped for display.
+   *  Compact mode skips the Recent section — with a handful of apps it's noise. */
   get RecentApps(): BaseApplication[] {
+    if (this.CompactMode) {
+      return [];
+    }
     const byId = new Map(this.apps.map(a => [NormalizeUUID(a.ID), a]));
     const result: BaseApplication[] = [];
     for (const entry of this.recentEntries) {
@@ -136,7 +160,15 @@ export class AppSwitcherComponent {
     return this.FilterText.trim().length > 0;
   }
 
+  /** Compact mode hides the filter under a handful of apps — it's noise there */
+  get ShowFilter(): boolean {
+    return !this.CompactMode || this.apps.length >= COMPACT_FILTER_THRESHOLD;
+  }
+
   private get RecentAppsUnfiltered(): BaseApplication[] {
+    if (this.CompactMode) {
+      return [];
+    }
     const byId = new Map(this.apps.map(a => [NormalizeUUID(a.ID), a]));
     const result: BaseApplication[] = [];
     for (const entry of this.recentEntries) {
@@ -178,10 +210,14 @@ export class AppSwitcherComponent {
     this.FilterText = '';
     this.ConfigMode = false;
     this.PendingDiscard = null;
+    this.CompactMode = this.resolveCompactMode();
+    if (this.CompactMode) {
+      this.computeCompactAnchor();
+    }
     this.showDropdown = true;
     // The dialog element renders under @if next frame: put it in the top
     // layer via showModal() (jsdom fallback: plain open attribute), then
-    // focus the filter.
+    // focus the filter (or the first card when compact mode hides it).
     requestAnimationFrame(() => {
       const dialog = this.panelRef?.nativeElement;
       if (dialog && !dialog.open) {
@@ -191,8 +227,35 @@ export class AppSwitcherComponent {
           dialog.setAttribute('open', '');
         }
       }
-      this.filterInputRef?.nativeElement?.focus();
+      if (this.ShowFilter) {
+        this.filterInputRef?.nativeElement?.focus();
+      } else {
+        dialog?.querySelector<HTMLElement>('.app-card')?.focus();
+      }
     });
+  }
+
+  /** Resolve the presentation for this open (auto = compact under the threshold) */
+  private resolveCompactMode(): boolean {
+    if (this.switcherStyle === 'compact') {
+      return true;
+    }
+    if (this.switcherStyle === 'launcher') {
+      return false;
+    }
+    return this.apps.length < COMPACT_AUTO_THRESHOLD;
+  }
+
+  /** Anchor the compact panel under the trigger, clamped to the viewport */
+  private computeCompactAnchor(): void {
+    const rect = this.triggerRef?.nativeElement?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+    const panelWidth = 320; // Keep in sync with .launcher-panel--compact width
+    const margin = 8;
+    this.AnchorLeft = Math.max(margin, Math.min(rect.left, window.innerWidth - panelWidth - margin));
+    this.AnchorTop = rect.bottom + margin;
   }
 
   private closeLauncher(restoreFocus = true): void {

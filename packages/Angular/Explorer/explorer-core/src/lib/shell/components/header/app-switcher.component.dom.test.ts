@@ -38,7 +38,9 @@ function render(inputs: Record<string, unknown> = {}) {
     imports: [CommonModule, MJClickableDirective, UserAppConfigContentStub],
     declarations: [AppSwitcherComponent],
     providers: [{ provide: ApplicationManager, useValue: { GetAppSwitcherApps: () => APPS } }],
-    inputs,
+    // Pin the launcher presentation: with only 3 stub apps, 'auto' would
+    // resolve to compact mode. Compact-specific tests override this.
+    inputs: { switcherStyle: 'launcher', ...inputs },
   });
 }
 
@@ -261,5 +263,31 @@ describe('AppSwitcherComponent (DOM)', () => {
     expect(query(fixture, '.launcher-panel')).not.toBeNull();
     expect(query(fixture, 'mj-user-app-config-content')).toBeNull();
     expect(queryAll(fixture, '.app-card')).toHaveLength(3);
+  });
+
+  it("style 'auto' with few apps opens the compact anchored panel (no filter, no sections)", () => {
+    const fixture = render({ switcherStyle: 'auto' }); // 3 apps < threshold
+    openLauncher(fixture);
+    const panel = query(fixture, '.launcher-panel');
+    expect(panel?.classList.contains('launcher-panel--compact')).toBe(true);
+    expect(query(fixture, '.launcher-filter')).toBeNull();
+    // All apps still listed as focusable cards
+    expect(queryAll(fixture, '.app-card')).toHaveLength(3);
+  });
+
+  it("style 'compact' forces the compact panel", () => {
+    const compact = render({ switcherStyle: 'compact' });
+    openLauncher(compact);
+    expect(query(compact, '.launcher-panel')?.classList.contains('launcher-panel--compact')).toBe(true);
+  });
+
+  it('entering the Configure view promotes a compact panel back to the full command surface', () => {
+    const fixture = render({ switcherStyle: 'compact' });
+    openLauncher(fixture);
+    (query(fixture, '.launcher-configure') as HTMLElement).click();
+    fixture.detectChanges();
+    const panel = query(fixture, '.launcher-panel');
+    expect(panel?.classList.contains('launcher-panel--compact')).toBe(false);
+    expect(query(fixture, 'mj-user-app-config-content')).not.toBeNull();
   });
 });

@@ -189,7 +189,8 @@
   align-items: center;
   gap: var(--mj-space-3);
   padding: var(--mj-space-3) var(--mj-space-3-5);
-  background: var(--mj-bg-surface);
+  /* surface-card so the rows keep card depth on white panels in light mode */
+  background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-lg);
   transition: border-color var(--mj-transition-fast), background var(--mj-transition-fast);
@@ -222,7 +223,7 @@
   align-items: center;
   justify-content: center;
   color: var(--app-color, var(--mj-text-muted));
-  background: color-mix(in srgb, var(--app-color, var(--mj-text-muted)) 14%, var(--mj-bg-surface));
+  background: color-mix(in srgb, var(--app-color, var(--mj-text-muted)) 14%, var(--mj-bg-surface-card));
   font-size: var(--mj-text-lg);
   flex-shrink: 0;
 }
@@ -323,7 +324,7 @@
   gap: var(--mj-space-3);
   padding: var(--mj-space-3) var(--mj-space-3-5);
   margin-bottom: var(--mj-space-2);
-  background: var(--mj-bg-surface);
+  background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-lg);
   transition: border-color var(--mj-transition-fast), background var(--mj-transition-fast);

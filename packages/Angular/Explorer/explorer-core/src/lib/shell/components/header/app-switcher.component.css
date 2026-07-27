@@ -87,6 +87,69 @@
   animation: launcher-fade-in var(--mj-transition-fast);
 }
 
+/* ---- Compact mode (few apps / Shell.AppSwitcher.Style) ----
+   Anchored under the trigger like a dropdown: no dim, single-column rows,
+   no recents/filter. Entering the Configure view drops this class, promoting
+   the panel back to the centered command surface (the config layout needs
+   the width). Desktop-only — the mobile sheet below overrides regardless. */
+@media (min-width: 769px) {
+  .launcher-panel--compact {
+    left: var(--anchor-left);
+    top: var(--anchor-top);
+    transform: none;
+    width: 320px;
+    max-height: calc(100vh - var(--anchor-top) - var(--mj-space-6));
+    box-shadow: var(--mj-shadow-lg);
+    /* The pop animation animates translateX(-50%), which compact doesn't use */
+    animation: launcher-fade-in var(--mj-transition-fast);
+  }
+  .launcher-panel--compact::backdrop {
+    background: transparent;
+    animation: none;
+  }
+  .launcher-panel--compact .launcher-grid {
+    grid-template-columns: 1fr;
+    gap: var(--mj-space-1);
+  }
+  .launcher-panel--compact .launcher-scroll {
+    padding: var(--mj-space-2);
+  }
+  .launcher-panel--compact .launcher-sect {
+    display: none; /* Single flat list — "All apps" header is noise here */
+  }
+  /* Compact rows are flat menu rows (not card blocks) with an explicit
+     hover fill; active keeps the shared brand tint. */
+  .launcher-panel--compact .app-card {
+    padding: var(--mj-space-2) var(--mj-space-2-5);
+    align-items: center;
+    background: transparent;
+    border-color: transparent;
+  }
+  .launcher-panel--compact .app-card:hover {
+    background: var(--mj-bg-surface-hover);
+    border-color: transparent;
+    transform: none;
+  }
+  .launcher-panel--compact .app-card.active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+    border-color: transparent;
+  }
+  .launcher-panel--compact .app-card:hover {
+    transform: none;
+  }
+  .launcher-panel--compact .app-card-glyph {
+    width: 32px;
+    height: 32px;
+    font-size: var(--mj-text-base);
+  }
+  .launcher-panel--compact .app-card-desc {
+    display: none;
+  }
+  .launcher-panel--compact .launcher-kbd-hints {
+    display: none;
+  }
+}
+
 @keyframes launcher-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -265,7 +328,9 @@
   display: flex;
   align-items: flex-start;
   gap: var(--mj-space-3);
-  background: var(--mj-bg-surface);
+  /* surface-card, NOT surface: on the elevated panel, plain surface is the
+     same white in light mode and the cards visually vanish */
+  background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-lg);
   padding: var(--mj-space-3) var(--mj-space-3-5);
@@ -301,7 +366,7 @@
   justify-content: center;
   font-size: var(--mj-text-lg);
   color: var(--app-color, var(--mj-text-muted));
-  background: color-mix(in srgb, var(--app-color, var(--mj-text-muted)) 14%, var(--mj-bg-surface));
+  background: color-mix(in srgb, var(--app-color, var(--mj-text-muted)) 14%, var(--mj-bg-surface-card));
 }
 .app-card-text {
   min-width: 0;

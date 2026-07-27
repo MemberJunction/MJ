@@ -29,6 +29,9 @@
       #panel
       role="dialog"
       aria-modal="true"
+      [class.launcher-panel--compact]="CompactMode && !ConfigMode"
+      [style.--anchor-left]="AnchorLeft + 'px'"
+      [style.--anchor-top]="AnchorTop + 'px'"
       [attr.aria-label]="ConfigMode ? null : 'Application launcher'"
       [attr.aria-labelledby]="ConfigMode ? 'mj-launcher-config-title' : null"
       (click)="onDialogClick($event)"
@@ -60,6 +63,7 @@
           (Cancelled)="RequestExitConfigMode()">
         </mj-user-app-config-content>
       } @else {
+      @if (ShowFilter) {
       <div class="launcher-head">
         <div class="launcher-filter">
           <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
@@ -78,6 +82,7 @@
           <i class="fa-solid fa-xmark" aria-hidden="true"></i>
         </button>
       </div>
+      }
 
       <div class="launcher-scroll">
         @if (IsFiltering) {
