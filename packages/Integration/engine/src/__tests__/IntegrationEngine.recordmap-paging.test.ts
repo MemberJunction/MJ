@@ -105,6 +105,23 @@ describe('IntegrationEngine.LoadAllRecordMaps', () => {
         }
     });
 
+    it('costs one extra empty read when the total is an exact multiple of the page size', async () => {
+        // The loop cannot tell "a full page and nothing after it" from "a full page and more to
+        // come" without asking again — a short page is the only end signal keyset paging has. So
+        // an exact multiple pays for one empty read, and must still come back Complete:true with
+        // every row. Stopping on the full page instead would be the truncation this loader exists
+        // to prevent, and treating the empty page as a failure would be a false partial.
+        mockRunViewFn
+            .mockResolvedValueOnce({ Success: true, Results: rows(PAGE_SIZE, 0) })
+            .mockResolvedValueOnce({ Success: true, Results: [] });
+
+        const result = await loadAllRecordMaps(engine);
+
+        expect(result.Complete).toBe(true);
+        expect(result.Rows).toHaveLength(PAGE_SIZE);
+        expect(mockRunViewFn).toHaveBeenCalledTimes(2);
+    });
+
     it('stops and reports Complete:false rather than looping forever on full pages', async () => {
         // A provider that ignored AfterKey would return a full page every time. The loop must be
         // bounded, and must NOT claim the map is complete. Shrink the page size so the backstop is

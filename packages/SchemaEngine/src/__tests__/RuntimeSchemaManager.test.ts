@@ -392,6 +392,20 @@ describe('RuntimeSchemaManager', () => {
             expect(run).toHaveBeenCalledTimes(1);
         });
 
+        it('does not retry a failure that names no step — an unknown failure is not a known-safe one', async () => {
+            // A pass can fail without setting ErrorStep (a throw outside a named step). The retry
+            // decision is "is this step on the replayable list", and an absent step cannot be on
+            // it, so the answer has to be no. Defaulting the other way would replay a pass whose
+            // side effects are unknown — the exact thing the applied-migration guard exists to stop.
+            const rsm = RuntimeSchemaManager.Instance;
+            const run = vi.spyOn(rsm, 'RunPipeline')
+                .mockResolvedValue({ Success: false, Steps: [] } as never);
+
+            await rsm.RunPipelineWithRetry(input, 2, 0);
+
+            expect(run).toHaveBeenCalledTimes(1);
+        });
+
         it('stops at maxRetries', async () => {
             const rsm = RuntimeSchemaManager.Instance;
             const run = vi.spyOn(rsm, 'RunPipeline')
@@ -426,6 +440,19 @@ describe('RuntimeSchemaManager', () => {
                 } as never);
 
                 await rsm.RunPipelineBatchWithRetry([input, input], 2, 0);
+
+                expect(run).toHaveBeenCalledTimes(1);
+            });
+
+            it('does not retry a batch whose failed result names no step', async () => {
+                // Same rule on the batch path, where the step is read off the first failed result.
+                const rsm = RuntimeSchemaManager.Instance;
+                const run = vi.spyOn(rsm, 'RunPipelineBatch').mockResolvedValue({
+                    FailureCount: 1, SuccessCount: 0,
+                    Results: [{ Success: false, Steps: [] }],
+                } as never);
+
+                await rsm.RunPipelineBatchWithRetry([input], 2, 0);
 
                 expect(run).toHaveBeenCalledTimes(1);
             });

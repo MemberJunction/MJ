@@ -1,4 +1,4 @@
-import { IMetadataProvider, Metadata, RunView, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, Metadata, RunView, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
 import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from './entity-types.js';
 import type { MappedRecord, ConflictResolution } from './types.js';
 import { serializeKeyValue } from './KeySerialization.js';
@@ -41,7 +41,11 @@ interface RecordMapIndex {
  * Normalizing gives the batch path a second, laxer attempt that mirrors the database's own rule.
  */
 function normalizeExternalID(id: string): string {
-    return id.replace(/\s+$/, '').toLowerCase();
+    // Spaces only, NOT `\s`. SQL Server's trailing-blank insensitivity is ANSI padding on
+    // ASCII 0x20; a trailing tab or newline is significant to it. Folding those too would make
+    // the batch index equate `abc\t` with `abc`, which the database does not — a fold the
+    // per-record query would never confirm, and a wrong mapping is worse than a missed one.
+    return id.replace(/ +$/, '').toLowerCase();
 }
 
 /**
@@ -186,7 +190,7 @@ export class MatchEngine {
         ));
         if (externalIDs.length === 0) return null;
 
-        const inList = externalIDs.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+        const inList = externalIDs.map(id => this.quoteLiteral(id)).join(',');
         return {
             EntityName: 'MJ: Company Integration Record Maps',
             ExtraFilter:
@@ -483,6 +487,22 @@ export class MatchEngine {
     }
 
     /**
+     * Quotes a value as a SQL string literal for a `RunView` `ExtraFilter`.
+     *
+     * `ExtraFilter` is SQL text, not a parameter list, so literals must be escaped here rather
+     * than bound. Where the provider is a database provider this defers to its dialect — the same
+     * rule `RecordMapBatch`'s write path uses, so the read and write paths cannot disagree about
+     * a value. `IMetadataProvider` in general carries no dialect (a client-side provider has
+     * none), so the fallback is ANSI quote-doubling, which is what both supported platforms do.
+     */
+    private quoteLiteral(value: string): string {
+        const provider = this.ProviderToUse;
+        return provider instanceof DatabaseProviderBase
+            ? provider.Dialect.QuoteStringLiteral(value)
+            : `'${value.replace(/'/g, "''")}'`;
+    }
+
+    /**
      * Renders criteria as a filter clause.
      *
      * ANSI double-quoted identifiers — portable across SQL Server (QUOTED_IDENTIFIER ON, the
@@ -492,17 +512,24 @@ export class MatchEngine {
      */
     private CriteriaToSQL(criteria: MatchCriteria): string {
         return criteria.Fields
-            .map((f, i) => `"${f}" = '${criteria.Values[i].replace(/'/g, "''")}'`)
+            .map((f, i) => `"${f}" = ${this.quoteLiteral(criteria.Values[i])}`)
             .join(' AND ');
     }
 
-    /** Order-independent local lookup key for a criteria set (and for a row read back for it). */
+    /**
+     * Order-independent local lookup key for a criteria set (and for a row read back for it).
+     *
+     * `\0` delimits both within and between pairs, because neither a field name nor a value can
+     * contain it and no printable delimiter can make that guarantee. With a space, field `A B`
+     * = `C` and field `A` = `B C` both render `A B C` — and since this key is what decides which
+     * row answers which criteria, a collision attributes a row to the wrong record.
+     */
     private CriteriaKey(fields: string[], values: string[]): string {
         return fields
             .map((f, i) => [f, values[i]] as const)
             .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-            .map(([f, v]) => `${f} ${v}`)
-            .join('');
+            .map(([f, v]) => `${f}\0${v}`)
+            .join('\0');
     }
 
     /**
@@ -637,12 +664,12 @@ export class MatchEngine {
         }
 
         const rv = new RunView();
-        const escapedExternalID = externalID.replace(/'/g, "''");
+        const quotedExternalID = this.quoteLiteral(externalID);
         const result = await rv.RunView<{ EntityRecordID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
             ExtraFilter:
                 `CompanyIntegrationID='${companyIntegrationID}' ` +
-                `AND ExternalSystemRecordID='${escapedExternalID}' ` +
+                `AND ExternalSystemRecordID=${quotedExternalID} ` +
                 `AND EntityID='${entityID}'`,
             Fields: ['EntityRecordID'],
             MaxRows: 1,

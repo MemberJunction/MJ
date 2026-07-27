@@ -120,6 +120,29 @@ describe('RecordMapBatch', () => {
             expect(executed.length).toBe(2); // one UPDATE + one INSERT for the chunk
         });
 
+        it('splits at the chunk boundary — one more mapping than ChunkSize is two writes, not one oversized one', async () => {
+            // The chunk size exists because a single statement carrying every mapping eventually
+            // exceeds what the driver will send. Crossing the boundary by one has to produce a
+            // second chunk, and the extra row has to be in it — not dropped, and not appended to
+            // a chunk that is already at the limit.
+            const { provider, executed } = createProvider();
+            const batch = new RecordMapBatch(provider, 'ci-1', contextUser, vi.fn());
+
+            const all = Array.from({ length: RecordMapBatch.ChunkSize + 1 }, (_, i) => mapping(`e${i}`));
+            mockVerifyAgrees(all);
+            for (const m of all) batch.Queue(m);
+            await batch.Flush();
+
+            expect(executed.length).toBe(4); // 2 chunks × (UPDATE + INSERT)
+            expect(batch.Failures).toEqual([]);
+
+            const lastID = `'e${RecordMapBatch.ChunkSize}'`;
+            expect(executed[1]).toContain("'e0'");
+            expect(executed[1]).not.toContain(lastID); // the overflow row is not in the first chunk
+            expect(executed[3]).toContain(lastID); // it is in the second
+            expect(executed[3]).not.toContain("'e0'");
+        });
+
         it('discards queued mappings when the batch that produced them rolled back', async () => {
             const { provider, executed } = createProvider();
             const batch = new RecordMapBatch(provider, 'ci-1', contextUser, vi.fn());

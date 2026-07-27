@@ -72,8 +72,18 @@ export class RecordMapBatch {
         return raw;
     }
 
-    private pending: PendingRecordMap[] = [];
+    /**
+     * Queued mappings, keyed `EntityID|ExternalID` — the upsert's own key, so the map both
+     * dedups and preserves queue order (JS Maps iterate in insertion order). A Map rather than
+     * an array because dedup on every Queue() would otherwise be a scan of the whole batch.
+     */
+    private pending = new Map<string, PendingRecordMap>();
     private failures: RecordMapFailure[] = [];
+
+    /** The dedup key. EntityID is a UUID, so the separator cannot appear in the left half. */
+    private static pendingKey(entityID: string, externalID: string): string {
+        return `${entityID}|${externalID}`;
+    }
 
     /**
      * @param provider          the provider that owns this sync's connection
@@ -114,7 +124,7 @@ export class RecordMapBatch {
      * nothing. The per-record retry path re-queues whatever actually commits.
      */
     public Discard(): void {
-        this.pending = [];
+        this.pending.clear();
     }
 
     /**
@@ -134,19 +144,15 @@ export class RecordMapBatch {
      * upserts reject outright.
      */
     public Queue(mapping: PendingRecordMap): void {
-        const existingIndex = this.pending.findIndex(
-            p => p.EntityID === mapping.EntityID && p.ExternalID === mapping.ExternalID
-        );
-        if (existingIndex >= 0) this.pending[existingIndex] = mapping;
-        else this.pending.push(mapping);
+        this.pending.set(RecordMapBatch.pendingKey(mapping.EntityID, mapping.ExternalID), mapping);
     }
 
     /** Writes everything queued. Safe to call repeatedly; a no-op when the queue is empty. */
     public async Flush(): Promise<void> {
-        if (this.pending.length === 0) return;
+        if (this.pending.size === 0) return;
 
-        const queued = this.pending;
-        this.pending = [];
+        const queued = Array.from(this.pending.values());
+        this.pending.clear();
 
         // Group by entity: the upsert key includes EntityID, so one statement per entity.
         const byEntity = new Map<string, PendingRecordMap[]>();
@@ -172,7 +178,16 @@ export class RecordMapBatch {
             await this.replayIndividually(entityID, chunk, err);
             return;
         }
-        await this.verifyChunk(entityID, chunk);
+        try {
+            await this.verifyChunk(entityID, chunk);
+        } catch (err) {
+            // A read-back that THROWS (dropped connection, driver error) tells us as little as
+            // one that returns Success:false — and unlike the latter it would otherwise unwind
+            // past every remaining chunk with no failure recorded, so those rows would be
+            // reported as written. Attribute the whole chunk as unverified, same as the
+            // Success:false path, and let the remaining chunks flush.
+            this.markChunkUnverified(entityID, chunk, err instanceof Error ? err.message : String(err));
+        }
     }
 
     /**
@@ -246,16 +261,7 @@ export class RecordMapBatch {
         }, this.contextUser);
 
         if (!written.Success) {
-            // We cannot tell which rows landed, so we cannot claim any of them did.
-            for (const m of chunk) {
-                this.failures.push({
-                    ExternalID: m.ExternalID,
-                    EntityID: entityID,
-                    ErrorMessage:
-                        `Record map write could not be verified: ${written.ErrorMessage ?? 'read-back failed'}. ` +
-                        `The mapping may or may not have been written; the next sync will re-establish it by primary key.`,
-                });
-            }
+            this.markChunkUnverified(entityID, chunk, written.ErrorMessage ?? 'read-back failed');
             return;
         }
 
@@ -275,6 +281,22 @@ export class RecordMapBatch {
                     ErrorMessage: `Record map points at MJ record '${got}' but this sync wrote '${m.EntityRecordID}'.`,
                 });
             }
+        }
+    }
+
+    /**
+     * Reports every mapping in a chunk as unverified. Used whenever the read-back could not
+     * tell us which rows landed — so we never claim any of them did.
+     */
+    private markChunkUnverified(entityID: string, chunk: PendingRecordMap[], reason: string): void {
+        for (const m of chunk) {
+            this.failures.push({
+                ExternalID: m.ExternalID,
+                EntityID: entityID,
+                ErrorMessage:
+                    `Record map write could not be verified: ${reason}. ` +
+                    `The mapping may or may not have been written; the next sync will re-establish it by primary key.`,
+            });
         }
     }
 
