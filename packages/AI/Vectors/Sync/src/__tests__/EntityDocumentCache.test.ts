@@ -19,11 +19,11 @@ vi.mock('@memberjunction/core', () => {
   };
 });
 
-const { mockKHConfig, mockKHEntityDocuments, mockKHGetEntityDocumentById } = vi.hoisted(() => {
+const { mockKHConfig, mockKHEntityDocuments, mockKHGetEntityDocumentByID } = vi.hoisted(() => {
   return {
     mockKHConfig: vi.fn().mockResolvedValue(undefined),
     mockKHEntityDocuments: [] as { ID: string; Name: string; EntityID?: string; Status?: string; TypeID?: string; Entity?: string }[],
-    mockKHGetEntityDocumentById: vi.fn((id: string) => {
+    mockKHGetEntityDocumentByID: vi.fn((id: string) => {
       return mockKHEntityDocuments.find(d => d.ID === id) ?? undefined;
     }),
   };
@@ -36,7 +36,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     Instance: {
       Config: mockKHConfig,
       EntityDocuments: mockKHEntityDocuments,
-      GetEntityDocumentById: mockKHGetEntityDocumentById,
+      GetEntityDocumentByID: mockKHGetEntityDocumentByID,
     },
   },
 }));
