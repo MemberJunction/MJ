@@ -826,13 +826,22 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       await SetAppStep(context.ContextUser, existingApp.ID, 'AngularExcludesUpdated', undefined, manifest.version);
     }
 
-    // Step 9: Update app record first (including Status: Active) so the
-    // bootstrap regen below reads the final status from the DB.
+    // Step 9: Update app record first (including final Status) so the bootstrap regen below
+    // reads the final status from the DB. Mirrors the install path's Step 14: if `npm install`
+    // failed (deps unresolved), finalize 'Disabled' — not 'Active' — and flip the app's
+    // dynamicPackages entries off so the server loader / client bootstrap skip the app until
+    // `mj app enable` after a manual `npm install`. An upgraded app whose new packages never
+    // resolved must not be advertised as healthy.
+    const upgradeFinalStatus = npmInstallWarning ? 'Disabled' : 'Active';
     await UpdateAppRecord(context.ContextUser, existingApp.ID, {
       Version: manifest.version,
       ManifestJSON: JSON.stringify(manifest),
-      Status: 'Active',
+      Status: upgradeFinalStatus,
     });
+    if (upgradeFinalStatus !== 'Active') {
+      // Array-agnostic by AppName — sweeps both the server and client arrays.
+      ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false, context.ServerPackagePath);
+    }
     await SetAppStep(context.ContextUser, existingApp.ID, 'RecordUpdated', undefined, manifest.version);
 
     // Step 11: Execute hooks
@@ -887,11 +896,11 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       Callbacks?.OnWarn?.('Record', `App upgraded, but the history audit entry could not be written: ${histErr instanceof Error ? histErr.message : String(histErr)}`);
     }
 
-    Callbacks?.OnSuccess?.('Upgrade', `Successfully upgraded ${options.AppName} to v${manifest.version}`);
+    Callbacks?.OnSuccess?.('Upgrade', `Successfully upgraded ${options.AppName} to v${manifest.version}${npmInstallWarning ? ' (status: Disabled — dependencies unresolved)' : ''}`);
 
     const baseSummary = `Upgraded from ${previousVersion} to ${manifest.version}. Restart MJAPI and rebuild MJExplorer.`;
     const summary = npmInstallWarning
-      ? `${baseSummary}\n\n⚠ npm install failed — package.json and config files were updated but dependencies were not installed. Log in to npm ('npm login') or configure your .npmrc, then run 'npm install' to complete the setup.`
+      ? `${baseSummary}\n\n⚠ npm install failed — package.json and config files were updated but dependencies were not installed. The app was finalized as Disabled. Log in to npm ('npm login') or configure your .npmrc, then run 'npm install' and 'mj app enable ${options.AppName}' to complete the setup.`
       : baseSummary;
 
     return {
