@@ -5,31 +5,42 @@ import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/
 export type ExportFormat = 'json' | 'markdown' | 'html' | 'text';
 
 /**
- * Branding applied to exported files. Currently consumed by the HTML format only —
- * JSON/markdown/text exports ignore it (they are data formats, not documents).
- * Hosts supply this via `mj-conversation-chat-area`'s `exportBranding` input.
+ * Branding applied to exported files, across EVERY format. HTML gets the full
+ * treatment (theme colors, an inlined logo, the title, and a trademark footer);
+ * JSON/markdown/text carry the title and trademark (markdown also references the
+ * logo). Hosts supply this via `mj-conversation-chat-area`'s `exportBranding`
+ * input. Color theming (`brandTokens`) is HTML-only — it has no meaning in the
+ * data/plain-text formats.
  */
 export interface ExportBranding {
   /**
    * CSS custom-property snapshot emitted as a `:root{}` block in the exported
    * document, so the export's stylesheet (which reads `var(--mj-…, fallback)`)
-   * renders in the app's theme. Keys must be valid custom-property names
-   * (`--like-this`). Entries are DROPPED when the key is invalid or the value
-   * carries declaration-escape / network-call characters (`<>{};@\`, `url(`,
-   * `expression(`) — plain colors, `var()`, and `color-mix()` pass. When
-   * omitted and `ExportOptions.includeTheme` is true, the current theme is
-   * auto-snapshotted from `document.documentElement` (see
+   * renders in the app's theme. HTML export only. Keys must be valid
+   * custom-property names (`--like-this`). Entries are DROPPED when the key is
+   * invalid or the value carries declaration-escape / network-call characters
+   * (`<>{};@\`, `url(`, `expression(`) — plain colors, `var()`, and
+   * `color-mix()` pass. When omitted and `ExportOptions.includeTheme` is true,
+   * the current theme is auto-snapshotted from `document.documentElement` (see
    * {@link DEFAULT_EXPORT_THEME_TOKENS}).
    */
   brandTokens?: Record<string, string>;
   /**
-   * Logo URL, rendered above the document title. Fetched and inlined as a data
-   * URI at export time so the file stays self-contained; falls back to the raw
-   * URL if the fetch fails.
+   * Logo URL. In HTML it is fetched and inlined as a data URI (so the file stays
+   * self-contained; falls back to the raw URL if the fetch fails) and rendered
+   * above the title; in markdown it is referenced by URL. JSON carries it as a
+   * string; plain text omits it.
    */
   logoUrl?: string;
   /** Overrides the exported document's title (defaults to the conversation name). */
   title?: string;
+  /**
+   * A short trademark / attribution line (e.g. `© 2026 Acme Association ·
+   * Powered by Betty`) rendered at the FOOT of the exported document in every
+   * format — a styled HTML footer, a markdown/text trailer, and a field in the
+   * JSON `branding` block.
+   */
+  trademark?: string;
 }
 
 export interface ExportOptions {
@@ -44,10 +55,11 @@ export interface ExportOptions {
    * an unthemed export renders exactly as before (the stylesheet's `var()`
    * fallbacks carry the legacy palette).
    *
-   * Gates only the TOKEN auto-snapshot: a supplied `branding`'s `logoUrl` and
-   * `title` apply whenever `branding` is present. (The export modal passes
-   * `branding` through only while its "Include branding" checkbox is on, so in
-   * the UI flow everything travels together.)
+   * Gates only the TOKEN auto-snapshot: a supplied `branding`'s `logoUrl`,
+   * `title`, and `trademark` apply whenever `branding` is present — in HTML AND
+   * in the JSON/markdown/text formats. (The export modal passes `branding`
+   * through only while its "Include branding" checkbox is on, so in the UI flow
+   * everything travels together.)
    */
   includeTheme?: boolean;
   /** Branding (tokens / logo / title) applied to the export — see {@link ExportBranding}. */
@@ -185,6 +197,35 @@ export class ExportService {
     return options.includeTheme ? this.SnapshotBrandTokens() : null;
   }
 
+  /** Document title used by every format: branding override → conversation name → generic. */
+  private resolveTitle(
+    data: { conversation: MJConversationEntity; details: MJConversationDetailEntity[] },
+    options: ResolvedExportOptions
+  ): string {
+    return options.branding?.title?.trim() || data.conversation.Name || 'Conversation';
+  }
+
+  /**
+   * The JSON `branding` block — the data-format analogue of the HTML header +
+   * trademark footer. Carries the title, trademark, and logo URL the host set;
+   * null when no branding (or none of those fields) is present. Theme color
+   * tokens are HTML-only and never included here.
+   */
+  private buildBrandingBlock(options: ResolvedExportOptions): Record<string, string> | null {
+    const b = options.branding;
+    if (!b) {
+      return null;
+    }
+    const block: Record<string, string> = {};
+    const title = b.title?.trim();
+    const trademark = b.trademark?.trim();
+    const logoUrl = b.logoUrl?.trim();
+    if (title) block.title = title;
+    if (trademark) block.trademark = trademark;
+    if (logoUrl) block.logoUrl = logoUrl;
+    return Object.keys(block).length > 0 ? block : null;
+  }
+
   /**
    * Emit the sanitized `:root{}` style block. Keys must be custom-property names.
    * Values are REJECTED (the entry is dropped), not stripped, when they carry
@@ -284,6 +325,13 @@ export class ExportService {
       };
     }
 
+    // Branding block (title / trademark / logo) when the host supplied branding —
+    // the data-format analogue of the HTML header + trademark footer.
+    const branding = this.buildBrandingBlock(options);
+    if (branding) {
+      exportData.branding = branding;
+    }
+
     // Add messages if requested
     if (options.includeMessages) {
       exportData.messages = data.details.map((detail, index) => {
@@ -313,7 +361,13 @@ export class ExportService {
     },
     options: ResolvedExportOptions
   ): string {
-    let md = `# ${data.conversation.Name}\n\n`;
+    const logoUrl = options.branding?.logoUrl?.trim();
+    const title = this.resolveTitle(data, options);
+    let md = '';
+    if (logoUrl) {
+      md += `![${title}](${logoUrl})\n\n`;
+    }
+    md += `# ${title}\n\n`;
 
     if (data.conversation.Description) {
       md += `${data.conversation.Description}\n\n`;
@@ -338,6 +392,11 @@ export class ExportService {
       }
     }
 
+    const trademark = options.branding?.trademark?.trim();
+    if (trademark) {
+      md += `_${trademark}_\n`;
+    }
+
     return md;
   }
 
@@ -349,6 +408,7 @@ export class ExportService {
     options: ResolvedExportOptions,
     theme: ResolvedExportTheme
   ): string {
+    const trademark = options.branding?.trademark?.trim();
     // Every color reads a theme token with the legacy hex as its fallback, so an
     // unthemed export (no :root block emitted) renders exactly as it always has,
     // while a themed one follows the app's palette.
@@ -363,7 +423,8 @@ export class ExportService {
     .role { font-weight: 600; color: var(--mj-brand-primary, #007bff); margin-bottom: 10px; }
     .content { white-space: pre-wrap; }
     .timestamp { color: var(--mj-text-disabled, #999); font-size: 12px; margin-top: 10px; }${theme.logoDataUri ? `
-    .brand-logo { display: block; max-height: 48px; margin-bottom: 12px; }` : ''}
+    .brand-logo { display: block; max-height: 48px; margin-bottom: 12px; }` : ''}${trademark ? `
+    .brand-trademark { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--mj-text-disabled, #ddd); color: var(--mj-text-secondary, #666); font-size: 12px; text-align: center; }` : ''}
   </style>${theme.rootBlock}` : '';
 
     const title = theme.title ?? (data.conversation.Name || 'Conversation');
@@ -404,6 +465,11 @@ export class ExportService {
       }
     }
 
+    if (trademark) {
+      html += `
+  <footer class="brand-trademark">${this.escapeHtml(trademark)}</footer>`;
+    }
+
     html += `
 </body>
 </html>`;
@@ -418,7 +484,7 @@ export class ExportService {
     },
     options: ResolvedExportOptions
   ): string {
-    const name = data.conversation.Name || 'Conversation';
+    const name = this.resolveTitle(data, options) || 'Conversation';
     let text = `${name}\n`;
     text += '='.repeat(name.length) + '\n\n';
 
@@ -443,6 +509,11 @@ export class ExportService {
 
         text += '\n' + '-'.repeat(80) + '\n\n';
       }
+    }
+
+    const trademark = options.branding?.trademark?.trim();
+    if (trademark) {
+      text += `${trademark}\n`;
     }
 
     return text;

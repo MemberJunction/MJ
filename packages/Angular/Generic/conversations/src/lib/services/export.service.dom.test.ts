@@ -130,12 +130,53 @@ describe('ExportService — BuildExportContent branding', () => {
     expect(content).not.toContain('<h1>My Chat</h1>');
   });
 
-  it('non-HTML formats ignore branding entirely', async () => {
-    const branding = { brandTokens: { '--mj-brand-primary': '#ff0000' }, logoUrl: 'https://x/l.png', title: 'T' };
+  it('branding.trademark renders (escaped) as an HTML footer with its own themed rule', async () => {
+    const { content } = await svc.BuildExportContent(data, 'html', {
+      branding: { trademark: '© 2026 Acme <Assoc>' },
+    });
+    expect(content).toContain('<footer class="brand-trademark">© 2026 Acme &lt;Assoc&gt;</footer>');
+    expect(content).toContain('.brand-trademark {');
+    // themed via tokens already in the snapshot set, so no new token is needed
+    expect(content).toContain('var(--mj-text-secondary, #666)');
+    // absent entirely when no trademark is supplied
+    const plain = await svc.BuildExportContent(data, 'html');
+    expect(plain.content).not.toContain('brand-trademark');
+  });
+
+  it('applies title + trademark to markdown/text and a branding block to JSON', async () => {
+    const branding = {
+      brandTokens: { '--mj-brand-primary': '#ff0000' }, // HTML-only — must NOT leak into data formats
+      logoUrl: 'https://x/logo.png',
+      title: 'Acme Report',
+      trademark: '© 2026 Acme · Powered by Betty',
+    };
+
+    const md = (await svc.BuildExportContent(data, 'markdown', { branding })).content;
+    expect(md).toContain('![Acme Report](https://x/logo.png)');
+    expect(md).toContain('# Acme Report');
+    expect(md).toContain('_© 2026 Acme · Powered by Betty_');
+    expect(md).not.toContain('# My Chat');
+
+    const txt = (await svc.BuildExportContent(data, 'text', { branding })).content;
+    expect(txt.startsWith('Acme Report\n')).toBe(true);
+    expect(txt).toContain('© 2026 Acme · Powered by Betty');
+
+    const json = JSON.parse((await svc.BuildExportContent(data, 'json', { branding })).content);
+    expect(json.branding).toEqual({
+      title: 'Acme Report',
+      trademark: '© 2026 Acme · Powered by Betty',
+      logoUrl: 'https://x/logo.png',
+    });
+    // color tokens are HTML-only — never serialized into the data format
+    expect((await svc.BuildExportContent(data, 'json', { branding })).content).not.toContain('--mj-brand-primary');
+  });
+
+  it('data formats stay byte-identical when no branding is supplied', async () => {
     for (const format of ['json', 'markdown', 'text'] as const) {
       const plain = await svc.BuildExportContent(data, format);
-      const branded = await svc.BuildExportContent(data, format, { includeTheme: true, branding });
-      expect(branded.content).toBe(plain.content);
+      // includeTheme without branding is an HTML-only concern; data formats ignore it
+      const stillPlain = await svc.BuildExportContent(data, format, { includeTheme: true });
+      expect(stillPlain.content).toBe(plain.content);
     }
   });
 });

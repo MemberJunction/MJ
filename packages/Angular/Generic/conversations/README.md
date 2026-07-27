@@ -168,20 +168,23 @@ Beyond the boolean toggles, the header's Export button is re-brandable and the a
 
 #### Branded export
 
-The HTML export can carry the app's theme instead of the stock palette. Supply `exportBranding` on the chat area (forwarded to the export modal, where it defaults the HTML format's "Include branding" checkbox on):
+Branding applies to **every** export format. HTML gets the full treatment (theme colors, an inlined logo, the title, and a trademark footer); JSON/markdown/text carry the title and trademark, markdown also references the logo, and JSON emits a `branding` block. Supply `exportBranding` on the chat area (forwarded to the export modal, where it defaults the "Include branding" checkbox on):
 
 ```typescript
 // ExportBranding (from the export service)
 {
-  brandTokens?: Record<string, string>;  // ':root{}' block baked into the file; when omitted and
-                                         // includeTheme is on, DEFAULT_EXPORT_THEME_TOKENS are
+  brandTokens?: Record<string, string>;  // HTML only: ':root{}' block baked into the file; when omitted
+                                         // and includeTheme is on, DEFAULT_EXPORT_THEME_TOKENS are
                                          // auto-snapshotted from the live document at export time
-  logoUrl?: string;                      // inlined as a data URI above the title (raw URL on fetch failure)
+  logoUrl?: string;                      // HTML: inlined as a data URI above the title (raw URL on fetch
+                                         // failure); markdown: referenced by URL; JSON: carried as a string
   title?: string;                        // overrides the document title (defaults to the conversation name)
+  trademark?: string;                    // short attribution line rendered at the foot of every format
+                                         // (styled HTML footer, markdown/text trailer, JSON branding field)
 }
 ```
 
-Without branding the exported file is unchanged from previous releases — the stylesheet reads `var(--mj-…, legacyHex)` so every color resolves to the exact prior value when no `:root` block is emitted. JSON/markdown/text formats ignore branding (they're data formats, not documents). Programmatic consumers can build export content without a download via `ExportService.BuildExportContent(...)` and snapshot the live theme via `ExportService.SnapshotBrandTokens()`.
+Color theming (`brandTokens`) is HTML-only — it has no meaning in the data/plain-text formats, and those formats never serialize the tokens. Without branding the exported file is unchanged from previous releases: the HTML stylesheet reads `var(--mj-…, legacyHex)` so every color resolves to the exact prior value when no `:root` block is emitted, and JSON/markdown/text are byte-identical to before. Programmatic consumers can build export content without a download via `ExportService.BuildExportContent(...)` and snapshot the live theme via `ExportService.SnapshotBrandTokens()`.
 
 ### Chat Overlay
 
