@@ -865,7 +865,6 @@ export class RealtimeClientSessionService {
         promptRun.RunAt = new Date();
         promptRun.RunType = 'Single';
         promptRun.Status = 'Running';
-        promptRun.AgentRunID = coAgentRunID;
         if (await promptRun.Save()) {
             return promptRun.ID;
         }

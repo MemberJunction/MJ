@@ -33,7 +33,17 @@ import {
     ReplyToMessageParams,
     ReplyToMessageResult,
     resolveCredentialValue,
-    validateRequiredCredentials
+    validateRequiredCredentials,
+    CreateSubscriptionParams,
+    RenewSubscriptionParams,
+    DeleteSubscriptionParams,
+    SubscriptionResult,
+    SubscriptionCapabilities,
+    SubscriptionChangeType,
+    WebhookNotificationInput,
+    ParseNotificationResult,
+    NormalizedNotification,
+    BaseMessageResult
 } from "@memberjunction/communication-types";
 import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
@@ -109,6 +119,27 @@ interface ResolvedMSGraphCredentials {
     clientSecret: string;
     accountEmail: string;
 }
+
+/**
+ * The maximum lifetime, in minutes, that Microsoft Graph allows for a mail-resource
+ * change-notification subscription (~3 days). Requested expirations are clamped to this.
+ */
+const MSGRAPH_MAX_SUBSCRIPTION_MINUTES = 4230;
+
+/** Options carried in {@link CreateSubscriptionParams.ContextData} for MS Graph. */
+type MSGraphSubscriptionContext = {
+    /**
+     * A pre-resolved Graph folder ID to watch. Escape hatch: used verbatim with no
+     * resolution call. Takes precedence over `folderName`.
+     */
+    folderId?: string;
+    /**
+     * A folder name (well-known alias or custom display name) to watch. Defaults to
+     * 'inbox'. Well-known names are passed through with no extra call; custom display
+     * names are resolved to an ID via a Graph lookup.
+     */
+    folderName?: string;
+};
 
 /**
  * Implementation of the MS Graph provider for sending and receiving messages.
@@ -784,8 +815,301 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             'ArchiveMessage',
             'SearchMessages',
             'ListAttachments',
-            'DownloadAttachment'
+            'DownloadAttachment',
+            'CreateSubscription',
+            'RenewSubscription',
+            'DeleteSubscription',
+            'ParseNotification'
         ];
+    }
+
+    // ========================================================================
+    // PUSH-NOTIFICATION SUBSCRIPTIONS
+    // Graph change-notification subscriptions. CRUD rides the existing authenticated
+    // client; ParseNotification is pure (no client, no network). The provider is
+    // stateless - the consumer persists subscription IDs/expirations/secrets.
+    // ========================================================================
+
+    /**
+     * Builds the base URL for Graph subscription resources. Subscriptions live at the
+     * Graph service root (`/v1.0/subscriptions`), NOT under the users-rooted
+     * {@link getApiUri}. Built from `AZURE_GRAPH_ENDPOINT` so sovereign-cloud overrides
+     * are honored.
+     */
+    private getSubscriptionsUri(): string {
+        return `${Config.AZURE_GRAPH_ENDPOINT}/v1.0/subscriptions`;
+    }
+
+    /**
+     * Resolves the Graph `resource` folder segment for a subscription. Returns the
+     * segment to embed in `mailFolders('<segment>')`, or `null` when a custom folder name
+     * could not be resolved to an ID.
+     *
+     * Hot path first: an explicit `folderId` is used verbatim, and a well-known folder
+     * name is passed through - both with zero extra Graph calls. Only a custom display
+     * name incurs a resolution lookup.
+     */
+    private async resolveSubscriptionFolderSegment(
+        client: Client,
+        mailboxId: string,
+        context?: MSGraphSubscriptionContext
+    ): Promise<string | null> {
+        if (context?.folderId) {
+            return context.folderId;
+        }
+        const folderName = context?.folderName || 'inbox';
+        const wellKnown = this.resolveWellKnownFolder(folderName);
+        if (wellKnown) {
+            return wellKnown;
+        }
+        // Custom display name - resolve to an ID rather than subscribing to a guessed path.
+        return await this.findSystemFolder(client, mailboxId, folderName);
+    }
+
+    /**
+     * Creates a Microsoft Graph change-notification subscription for messages in a
+     * mailbox folder. Graph validates the notification endpoint synchronously during
+     * this call (it must echo the validation token), so an unreachable/incorrect endpoint
+     * surfaces here as a Graph error.
+     *
+     * @requires MS Graph Scope: Mail.Read (Application)
+     * @param params - What to watch, where to notify, and the clientState secret
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<SubscriptionResult> - Subscription ID and expiration on success
+     */
+    public override async CreateSubscription(
+        params: CreateSubscriptionParams,
+        credentials?: MSGraphCredentials
+    ): Promise<SubscriptionResult> {
+        // Fail-fast input validation (before any Graph call).
+        if (!params.ClientState) {
+            return { Success: false, ErrorMessage: 'CreateSubscription requires a non-empty ClientState' };
+        }
+        if (params.ClientState.length > 128) {
+            return { Success: false, ErrorMessage: `ClientState exceeds Microsoft Graph's 128-character limit (got ${params.ClientState.length})` };
+        }
+        if (!params.NotificationUrl || !params.NotificationUrl.toLowerCase().startsWith('https://')) {
+            return { Success: false, ErrorMessage: 'NotificationUrl must be an https:// URL' };
+        }
+        if (params.LifecycleNotificationUrl && !params.LifecycleNotificationUrl.toLowerCase().startsWith('https://')) {
+            return { Success: false, ErrorMessage: 'LifecycleNotificationUrl must be an https:// URL' };
+        }
+        if (!params.ChangeTypes || params.ChangeTypes.length === 0) {
+            return { Success: false, ErrorMessage: 'CreateSubscription requires at least one ChangeType' };
+        }
+
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const mailboxId = params.Identifier || creds.accountEmail;
+            const context = params.ContextData as MSGraphSubscriptionContext | undefined;
+
+            const folderSegment = await this.resolveSubscriptionFolderSegment(client, mailboxId, context);
+            if (!folderSegment) {
+                return {
+                    Success: false,
+                    ErrorMessage: `Could not resolve folder '${context?.folderName}' for mailbox '${mailboxId}'`
+                };
+            }
+
+            const body: Record<string, unknown> = {
+                changeType: params.ChangeTypes.join(','),
+                notificationUrl: params.NotificationUrl,
+                resource: `/users/${mailboxId}/mailFolders('${folderSegment}')/messages`,
+                clientState: params.ClientState,
+                expirationDateTime: this.clampExpiration(params.RequestedExpiration)
+            };
+            if (params.LifecycleNotificationUrl) {
+                body.lifecycleNotificationUrl = params.LifecycleNotificationUrl;
+            }
+
+            const resp = await client.api(this.getSubscriptionsUri()).post(body);
+            return {
+                Success: true,
+                SubscriptionID: resp?.id,
+                ExpiresAt: resp?.expirationDateTime ? new Date(resp.expirationDateTime) : undefined,
+                Result: resp
+            };
+        } catch (ex) {
+            LogError('Error creating subscription via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error creating subscription: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Renews an existing Graph subscription before it expires. The caller MUST pass
+     * credentials for the same app registration that created the subscription - Graph
+     * subscriptions are visible only to their creator, so a credential mismatch surfaces
+     * as a 404.
+     *
+     * @requires MS Graph Scope: Mail.Read (Application)
+     * @param params - The subscription ID and requested new expiration
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<SubscriptionResult> - The renewed expiration on success
+     */
+    public override async RenewSubscription(
+        params: RenewSubscriptionParams,
+        credentials?: MSGraphCredentials
+    ): Promise<SubscriptionResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            const resp = await client.api(`${this.getSubscriptionsUri()}/${params.SubscriptionID}`).patch({
+                expirationDateTime: this.clampExpiration(params.RequestedExpiration)
+            });
+            return {
+                Success: true,
+                SubscriptionID: resp?.id ?? params.SubscriptionID,
+                ExpiresAt: resp?.expirationDateTime ? new Date(resp.expirationDateTime) : undefined,
+                Result: resp
+            };
+        } catch (ex) {
+            if (this.getGraphStatusCode(ex) === 404) {
+                LogError(`Subscription '${params.SubscriptionID}' not found during renewal - expired or created under different credentials`);
+                return {
+                    Success: false,
+                    ErrorMessage: 'subscription not found - expired or created under different credentials'
+                };
+            }
+            LogError('Error renewing subscription via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error renewing subscription: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Deletes an existing Graph subscription. Idempotent from the consumer's perspective:
+     * a 404 (already gone) is treated as success. The caller MUST pass credentials for
+     * the same app registration that created the subscription.
+     *
+     * @requires MS Graph Scope: Mail.Read (Application)
+     * @param params - The subscription ID to delete
+     * @param credentials - Optional credentials override for this request
+     * @returns Promise<BaseMessageResult> - Result of the delete operation
+     */
+    public override async DeleteSubscription(
+        params: DeleteSubscriptionParams,
+        credentials?: MSGraphCredentials
+    ): Promise<BaseMessageResult> {
+        try {
+            const creds = this.resolveCredentials(credentials);
+            const client = this.getGraphClient(creds);
+            await client.api(`${this.getSubscriptionsUri()}/${params.SubscriptionID}`).delete();
+            return { Success: true };
+        } catch (ex) {
+            if (this.getGraphStatusCode(ex) === 404) {
+                // Already gone - deletion is idempotent from the consumer's perspective.
+                return { Success: true };
+            }
+            LogError('Error deleting subscription via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: `Error deleting subscription: ${ex instanceof Error ? ex.message : String(ex)}`
+            };
+        }
+    }
+
+    /**
+     * Parses and validates an inbound Graph change notification. Pure: no Graph client,
+     * no network. Safe on hostile/garbage input - never throws; returns `Success: false`
+     * with a 400 suggested status on malformed payloads.
+     *
+     * Graph has no cryptographic signature scheme, so `SignatureValid` is left undefined;
+     * the consumer authenticates each notification by comparing its `ClientState` against
+     * the secret stored alongside the subscription.
+     *
+     * @param input - Transport-neutral capture of the inbound webhook request
+     * @returns Promise<ParseNotificationResult> - Handshake or normalized notifications
+     */
+    public override async ParseNotification(
+        input: WebhookNotificationInput,
+        _credentials?: MSGraphCredentials
+    ): Promise<ParseNotificationResult> {
+        // 1. Endpoint-validation handshake. QueryParams are already framework-decoded per
+        //    the WebhookNotificationInput contract - echo the token verbatim.
+        const validationToken = input?.QueryParams?.['validationToken'];
+        if (validationToken !== undefined) {
+            return {
+                Success: true,
+                Handshake: {
+                    ResponseStatus: 200,
+                    ResponseBody: validationToken,
+                    ResponseContentType: 'text/plain'
+                },
+                Notifications: [],
+                SuggestedResponseStatus: 200
+            };
+        }
+
+        // 2. Parse the notification batch. Never throw on bad input.
+        let payload: unknown;
+        try {
+            payload = JSON.parse(input?.RawBody ?? '');
+        } catch {
+            return {
+                Success: false,
+                ErrorMessage: 'Malformed notification body (invalid JSON)',
+                Notifications: [],
+                SuggestedResponseStatus: 400
+            };
+        }
+
+        const items = (payload as { value?: unknown })?.value;
+        if (!Array.isArray(items)) {
+            return {
+                Success: false,
+                ErrorMessage: 'Notification body missing value[] array',
+                Notifications: [],
+                SuggestedResponseStatus: 400
+            };
+        }
+
+        const notifications: NormalizedNotification[] = items.map((raw): NormalizedNotification => {
+            const item = (raw ?? {}) as Record<string, unknown>;
+            const lifecycleEvent = item['lifecycleEvent'];
+            const resourceData = item['resourceData'] as { id?: unknown } | undefined;
+            const messageId = typeof resourceData?.id === 'string' ? resourceData.id : undefined;
+            return {
+                Kind: lifecycleEvent != null ? 'lifecycle' : 'message',
+                SubscriptionID: typeof item['subscriptionId'] === 'string' ? item['subscriptionId'] : undefined,
+                ClientState: typeof item['clientState'] === 'string' ? item['clientState'] : undefined,
+                Identifier: this.parseIdentifierFromResource(item['resource']),
+                ChangeType: this.mapChangeType(item['changeType']),
+                MessageIDs: messageId ? [messageId] : [],
+                LifecycleEvent: this.mapLifecycleEvent(lifecycleEvent),
+                RawData: raw
+            };
+        });
+
+        return {
+            Success: true,
+            SignatureValid: undefined,
+            Notifications: notifications,
+            SuggestedResponseStatus: 202
+        };
+    }
+
+    /**
+     * Returns MS Graph's subscription capabilities. Graph mail subscriptions last at most
+     * 4230 minutes (~3 days), support all three change types, and require synchronous
+     * endpoint validation at create time.
+     */
+    public override GetSubscriptionCapabilities(): SubscriptionCapabilities {
+        return {
+            MaxLifetimeMinutes: MSGRAPH_MAX_SUBSCRIPTION_MINUTES,
+            SupportedChangeTypes: ['created', 'updated', 'deleted'],
+            RequiresEndpointValidation: true,
+            // Graph is subscription-managed (CreateSubscription/RenewSubscription/DeleteSubscription)
+            // and HINT-mode: notifications carry resourceData IDs, the consumer re-fetches via
+            // GetMessages/GetSingleMessage — the payload is never delivered inline.
+            SupportsSubscriptionManagement: true,
+            DeliversPayloadInline: false
+        };
     }
 
     /**
@@ -1243,20 +1567,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
      */
     private async findSystemFolder(client: Client, emailAddress: string, folderName: string): Promise<string | null> {
         try {
-            // MS Graph well-known folder names
-            const wellKnownNames: Record<string, string> = {
-                'inbox': 'inbox',
-                'sent': 'sentitems',
-                'drafts': 'drafts',
-                'deleteditems': 'deleteditems',
-                'trash': 'deleteditems',
-                'junkemail': 'junkemail',
-                'spam': 'junkemail',
-                'archive': 'archive'
-            };
-
-            const normalizedName = folderName.toLowerCase();
-            const graphFolderName = wellKnownNames[normalizedName] || normalizedName;
+            // MS Graph well-known folder names (shared with the subscription resolver)
+            const graphFolderName = this.resolveWellKnownFolder(folderName) || folderName.toLowerCase();
 
             // Try well-known folder endpoint first - use email address directly
             const folderPath = `${this.getApiUri()}/${encodeURIComponent(emailAddress)}/mailFolders/${graphFolderName}`;
@@ -1325,5 +1637,87 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             'archive': 'archive'
         };
         return mapping[displayName.toLowerCase()] || 'other';
+    }
+
+    /**
+     * Resolves a folder name to its Microsoft Graph well-known name when it is one,
+     * matching case-insensitively against both friendly aliases and the canonical Graph
+     * names. Graph accepts a well-known name directly in a resource path (no ID-resolution
+     * call needed). Returns undefined for a custom display name, which then requires a
+     * lookup. Shared by findSystemFolder and the CreateSubscription resource builder.
+     */
+    private resolveWellKnownFolder(folderName: string): string | undefined {
+        const wellKnownNames: Record<string, string> = {
+            'inbox': 'inbox',
+            'sent': 'sentitems',
+            'sentitems': 'sentitems',
+            'drafts': 'drafts',
+            'deleteditems': 'deleteditems',
+            'trash': 'deleteditems',
+            'junkemail': 'junkemail',
+            'spam': 'junkemail',
+            'archive': 'archive'
+        };
+        return wellKnownNames[folderName.toLowerCase()];
+    }
+
+    /**
+     * Extracts an HTTP status code from a thrown Microsoft Graph client error. The
+     * middleware client throws a GraphError-shaped object carrying a numeric statusCode;
+     * this narrows an untyped catch value to that code (or undefined when absent).
+     */
+    private getGraphStatusCode(ex: unknown): number | undefined {
+        if (ex && typeof ex === 'object' && 'statusCode' in ex) {
+            const sc = (ex as { statusCode?: unknown }).statusCode;
+            return typeof sc === 'number' ? sc : undefined;
+        }
+        return undefined;
+    }
+
+    /**
+     * Parses the mailbox identifier (user ID / email) out of a Graph change-notification
+     * resource string. Tolerant of both Users/{id}/Messages/{msgId} and
+     * users/{id}/mailFolders('...')/messages/{msgId} shapes, case-insensitively. Returns
+     * undefined when no pattern matches - the identifier is a routing convenience only.
+     */
+    private parseIdentifierFromResource(resource: unknown): string | undefined {
+        if (typeof resource !== 'string') {
+            return undefined;
+        }
+        const match = resource.match(/users\/([^/]+)/i);
+        return match ? match[1] : undefined;
+    }
+
+    /**
+     * Maps a raw Graph changeType value onto the normalized SubscriptionChangeType union,
+     * returning undefined for anything unrecognized.
+     */
+    private mapChangeType(raw: unknown): SubscriptionChangeType | undefined {
+        if (raw === 'created' || raw === 'updated' || raw === 'deleted') {
+            return raw;
+        }
+        return undefined;
+    }
+
+    /**
+     * Maps a raw Graph lifecycleEvent value onto the normalized lifecycle-event union,
+     * returning undefined for anything unrecognized.
+     */
+    private mapLifecycleEvent(raw: unknown): NormalizedNotification['LifecycleEvent'] | undefined {
+        if (raw === 'subscriptionRemoved' || raw === 'missed' || raw === 'reauthorizationRequired') {
+            return raw;
+        }
+        return undefined;
+    }
+
+    /**
+     * Clamps a requested subscription expiration to Graph's maximum lifetime, returning an
+     * ISO-8601 UTC string. When no expiration is requested (or it exceeds the max), the
+     * maximum-allowed expiration from now is used.
+     */
+    private clampExpiration(requested?: Date): string {
+        const max = new Date(Date.now() + MSGRAPH_MAX_SUBSCRIPTION_MINUTES * 60 * 1000);
+        const effective = requested && requested.getTime() < max.getTime() ? requested : max;
+        return effective.toISOString();
     }
 }
