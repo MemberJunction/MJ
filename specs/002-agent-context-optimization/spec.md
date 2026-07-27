@@ -172,7 +172,9 @@ accuracy becomes load-bearing.
 
 ### 1.6 One render, many models
 
-Two paths break the "one model per render" assumption that tier-conditional content requires:
+Two paths break the "one model per render" assumption that tier-conditional content requires.
+**Both are resolved by re-rendering per model (Phase 4c), not by constraining selection** — see
+that phase for the cost analysis.
 
 - **Parallel execution.** `executePromptInParallel(prompt, renderedPromptText, ...)` takes a
   *single* rendered string and fans it across N tasks. `ExecutionPlanner.ts:424-446` selects
@@ -337,10 +339,31 @@ coarse enum, resolved centrally, handles the reranker-scale problem in one place
 Tier boundaries live in **metadata** (a field or config on the model type), not code, so they're
 adjustable without a release.
 
-**4c. Guard the multi-model paths.** Either re-render per model, or — recommended for v1 — mark
-prompts as tier-conditional and refuse to fan those across mixed-power pools in
-`executePromptInParallel` / `PowerRank` failover. The guard is a one-line check; threading
-re-render through the failover loop is not. Start with the guard.
+**4c. Re-render per model on the multi-model paths.** Existing selection logic stays exactly as
+it is — whatever the developer configured at runtime (parallel pools, `PowerRank` failover,
+`PowerPreference`) remains authoritative. Rendering adapts to selection, never the reverse.
+
+Rendering is cheap enough to make this the obvious choice rather than a tradeoff:
+
+- All 26 system placeholders are `async` in signature only — no DB, no network, no file IO — and
+  resolve in parallel via `Promise.all` (`prompt.system-placeholders.ts:393-405`).
+- `@include` is a **MetadataSync push-time** construct; resolved content is stored in the DB, so
+  there is no file IO at render time.
+- `TemplateEngineServer.Config()` and `loadTemplate()` run in the *caller*
+  (`AIPromptRunner.ts:812-818`), not inside `renderPromptTemplate()` — a re-render re-runs the
+  render step only, with no template reload.
+
+Net: a re-render is a Nunjucks string pass plus pure-computation placeholders. Near-zero
+execution time, and no reason to constrain selection to avoid it.
+
+The actual work: `executePromptInParallel` currently accepts a single `renderedPromptText`
+(`AIPromptRunner.ts:1077`) and shares it across all N tasks. Change it to render per task from the
+task's own selected model, so each model in a mixed-power pool receives prompt content matched to
+its tier. Same for the failover loop — re-render against the model actually being retried.
+
+This is strictly better behavior than the alternative, not merely equivalent: failover to a
+lower-power model currently inherits a prompt written for the original model, and per-model
+rendering fixes that automatically.
 
 - **Risk:** Medium-high — touches the core execution path for every prompt in the system.
   Reordering is behavior-preserving by inspection (no data dependency), but warrants the full
@@ -376,7 +399,7 @@ truncation with actual search.
 | Guardrails deleted for Opus-class models bite mid-tier / non-Anthropic models | Tier-gate the cuts rather than applying globally; MJ agents run a configurable model set, not one model |
 | Bad PowerRank data silently selects the wrong prompt variant | Phase 0c gates Phase 4; coarse tiers are far more error-tolerant than numeric thresholds |
 | Tier-conditional blocks multiply the test matrix | Every tier-conditional block needs coverage at each tier, or a `light`-tier prompt ships untested. Budget for this in Phase 0a |
-| Parallel/failover renders one prompt for mixed-power models | Phase 4c guard |
+| Parallel/failover renders one prompt for mixed-power models | Phase 4c re-renders per model; selection logic is left untouched |
 | Loop-template changes affect all 26 agents at once | Phase 2 gated on Phase 0a; changes land per-block, not as one commit |
 
 ---
