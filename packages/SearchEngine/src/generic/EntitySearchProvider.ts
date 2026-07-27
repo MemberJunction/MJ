@@ -23,11 +23,26 @@ export class EntitySearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'entity';
 
     /**
-     * Minimum trimmed term length we accept. One- and two-character substrings against
-     * a `LIKE '%term%'` pattern across every searchable entity is essentially a
-     * full-database scan with negligible relevance, so we early-return for those.
+     * Minimum trimmed term length we accept. A single-character substring against a
+     * `LIKE '%term%'` pattern across every searchable entity is essentially a
+     * full-database scan with negligible relevance, so we early-return for those. Set to 2
+     * (was 3) so legitimate short queries — product codes, initials, "US", "AI" — are not
+     * silently dropped (bug C3: users couldn't find records that exist).
      */
-    private static readonly MIN_TERM_LENGTH = 3;
+    private static readonly MIN_TERM_LENGTH = 2;
+
+    /**
+     * How many rows to fetch PER ENTITY as the relevance-ranking candidate pool. This is
+     * DELIBERATELY decoupled from the global `topK` budget (bug C3): previously the per-entity
+     * limit was `topK / entityCount` floored at 3, so with ~150 searchable entities each entity
+     * returned only ~3 arbitrary rows and real matches beyond row 3 were never fetched — and
+     * enabling MORE entities starved each one further. Now each entity contributes up to this
+     * many candidates; the engine still trims the fused, relevance-sorted result set back to
+     * `topK`, so the returned count is unchanged — we only widen the candidate pool per entity.
+     * Public + static so a deployment can tune it at startup (larger entity counts may lower it
+     * to bound the row-materialization cost of the parallel fan-out).
+     */
+    public static PerEntityFetchDepth = 15;
 
     /**
      * Per-entity hard timeout. If one entity's RunView is taking longer than this,
@@ -98,8 +113,14 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 }
             }
 
-            // Calculate per-entity limit: distribute topK across entities
-            const perEntityLimit = Math.max(3, Math.ceil(topK / Math.max(1, scoped.length)));
+            // Per-entity candidate depth — decoupled from the global topK budget so widening the
+            // entity fan-out never starves any single entity (bug C3). Each entity contributes up to
+            // PerEntityFetchDepth candidates (but never more than topK, since the final result set is
+            // capped at topK anyway); the fused set is relevance-sorted and sliced to topK below.
+            const perEntityLimit = Math.min(
+                topK,
+                Math.max(EntitySearchProvider.PerEntityFetchDepth, Math.ceil(topK / Math.max(1, scoped.length)))
+            );
 
             // Search all entities in parallel, threading per-entity ExtraFilter + UserSearchString
             // override; each call is gated by a hard PER_ENTITY_TIMEOUT_MS timeout (next PR #2532)
