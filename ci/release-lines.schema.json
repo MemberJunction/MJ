@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/MemberJunction/MJ/next/ci/release-lines.schema.json",
   "title": "MemberJunction release lines",
-  "description": "One source of truth for release channels, certified lines, and per-era platform manifests. See plans/lts-process.md §4.1. Status transitions merge only via PR (CODEOWNERS-gated); publish workflows may append mechanical fields (edge.newest, lines.*.newest, lines.*.releases) only. ci/validate-release-lines.mjs is the authoritative CI validator; this schema serves editors and external tooling.",
+  "description": "One source of truth for release channels, certified lines, and per-era platform manifests. See plans/lts-process.md §4.1. Status transitions merge only via PR (CODEOWNERS-gated); publish workflows may append mechanical fields (edge.newest, edge.releases, lines.*.newest, lines.*.releases) only. ci/validate-release-lines.mjs is the authoritative CI validator; this schema serves editors and external tooling.",
   "type": "object",
   "required": ["edge", "eras", "lines"],
   "additionalProperties": false,
@@ -19,6 +19,22 @@
             { "type": "null" },
             { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+-edge\\.\\d+$" }
           ]
+        },
+        "releases": {
+          "description": "Per-release dbImpact ledger for the current Edge stream — appended mechanically by publish, pruned at each candidate cut (the candidate is the stream's tip, so the accumulated impact becomes the new line's starting point).",
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^\\d+\\.\\d+\\.\\d+-edge\\.\\d+$": {
+              "type": "object",
+              "required": ["dbImpact"],
+              "additionalProperties": false,
+              "properties": {
+                "dbImpact": { "enum": ["none", "metadata", "schema"] },
+                "labels": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
         }
       }
     },

@@ -48,6 +48,34 @@ test('structural: edge.newest must be an -edge.N version or null', () => {
   assert.deepEqual(validateStructure(doc), []);
 });
 
+test('structural: edge.releases ledger accepts -edge.N entries', () => {
+  const doc = minimal();
+  doc.edge.newest = '6.2.0-edge.14';
+  doc.edge.releases = {
+    '6.2.0-edge.13': { dbImpact: 'schema', labels: ['security-exception'] },
+    '6.2.0-edge.14': { dbImpact: 'none' },
+  };
+  assert.deepEqual(validateStructure(doc), []);
+});
+
+test('structural: edge.releases rejects non-edge keys and bad dbImpact', () => {
+  const doc = minimal();
+  doc.edge.newest = '6.2.0-edge.14';
+  doc.edge.releases = { '6.2.0': { dbImpact: 'none' } };
+  assert.ok(validateStructure(doc).some((e) => e.includes('"6.2.0" is not an X.Y.Z-edge.N version')));
+  doc.edge.releases = { '6.2.0-edge.14': { dbImpact: 'ddl' } };
+  assert.ok(validateStructure(doc).some((e) => e.includes('edge.releases.6.2.0-edge.14.dbImpact')));
+});
+
+test('push freeze: edge ledger appends are mechanical', () => {
+  const base = minimal();
+  base.edge.newest = '6.2.0-edge.14';
+  const head = structuredClone(base);
+  head.edge.newest = '6.2.0-edge.15';
+  head.edge.releases = { '6.2.0-edge.15': { dbImpact: 'metadata' } };
+  assert.deepEqual(checkPushFreeze(base, head), []);
+});
+
 test('structural: missing keys and unknown keys are reported', () => {
   const errors = validateStructure({ extra: true });
   assert.ok(errors.some((e) => e.includes('missing required key "edge"')));

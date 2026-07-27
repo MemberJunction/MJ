@@ -7,7 +7,7 @@
 //   node ci/validate-release-lines.mjs --base REF --mode push   + protected-field freeze vs the file at REF
 //
 // "push" mode enforces §8: on a direct push, only mechanical fields may change
-// (edge.newest, lines.*.newest, lines.*.releases). Status transitions, dates,
+// (edge.newest, edge.releases, lines.*.newest, lines.*.releases). Status transitions, dates,
 // certifiedBuild, platform manifests, and line additions/removals require a PR.
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -59,12 +59,29 @@ function validateEdge(edge) {
   if (typeof edge !== 'object' || edge === null) return ['edge: must be an object'];
   const errors = [];
   for (const key of Object.keys(edge)) {
-    if (key !== 'newest') errors.push(`edge: unknown key "${key}"`);
+    if (key !== 'newest' && key !== 'releases') errors.push(`edge: unknown key "${key}"`);
   }
   if (!('newest' in edge)) {
     errors.push('edge: missing required key "newest"');
   } else if (edge.newest !== null && !RX.edgeVersion.test(edge.newest)) {
     errors.push(`edge.newest: "${edge.newest}" must be null or an X.Y.Z-edge.N version`);
+  }
+  errors.push(...validateEdgeReleases(edge.releases));
+  return errors;
+}
+
+// The Edge stream's dbImpact ledger (doc §4.1) — same entry shape as line releases,
+// keyed by -edge.N versions; pruned at each candidate cut.
+function validateEdgeReleases(releases) {
+  if (releases === undefined) return [];
+  if (typeof releases !== 'object' || releases === null) return ['edge.releases: must be an object'];
+  const errors = [];
+  for (const [version, entry] of Object.entries(releases)) {
+    if (!RX.edgeVersion.test(version)) {
+      errors.push(`edge.releases: "${version}" is not an X.Y.Z-edge.N version`);
+      continue;
+    }
+    errors.push(...validateReleaseEntry(`edge.releases.${version}`, entry));
   }
   return errors;
 }
@@ -153,19 +170,22 @@ function validateLineReleases(key, releases) {
       errors.push(`lines.${key}.releases: "${version}" is not an X.Y.Z version on line ${key}`);
       continue;
     }
-    if (typeof entry !== 'object' || entry === null) {
-      errors.push(`lines.${key}.releases.${version}: must be an object`);
-      continue;
-    }
-    for (const k of Object.keys(entry)) {
-      if (k !== 'dbImpact' && k !== 'labels') errors.push(`lines.${key}.releases.${version}: unknown key "${k}"`);
-    }
-    if (!DB_IMPACTS.includes(entry.dbImpact)) {
-      errors.push(`lines.${key}.releases.${version}.dbImpact: must be one of ${DB_IMPACTS.join(' | ')}`);
-    }
-    if ('labels' in entry && (!Array.isArray(entry.labels) || entry.labels.some((l) => typeof l !== 'string'))) {
-      errors.push(`lines.${key}.releases.${version}.labels: must be an array of strings`);
-    }
+    errors.push(...validateReleaseEntry(`lines.${key}.releases.${version}`, entry));
+  }
+  return errors;
+}
+
+function validateReleaseEntry(path, entry) {
+  if (typeof entry !== 'object' || entry === null) return [`${path}: must be an object`];
+  const errors = [];
+  for (const k of Object.keys(entry)) {
+    if (k !== 'dbImpact' && k !== 'labels') errors.push(`${path}: unknown key "${k}"`);
+  }
+  if (!DB_IMPACTS.includes(entry.dbImpact)) {
+    errors.push(`${path}.dbImpact: must be one of ${DB_IMPACTS.join(' | ')}`);
+  }
+  if ('labels' in entry && (!Array.isArray(entry.labels) || entry.labels.some((l) => typeof l !== 'string'))) {
+    errors.push(`${path}.labels: must be an array of strings`);
   }
   return errors;
 }
