@@ -114,7 +114,7 @@ export class GraphQLServerGeneratorBase {
 
       if (includeFileHeader) {
         const resolvedLib = isInternal ? generatedEntitiesImportLibrary : resolveEntityPackageName(entity.SchemaName);
-        sEntityOutput = this.generateEntitySpecificServerFileHeader(entity, resolxvedLib, generatedEntityNames);
+        sEntityOutput = this.generateEntitySpecificServerFileHeader(entity, resolvedLib, generatedEntityNames);
       }
 
       sEntityOutput += this.generateServerEntityHeader(entity, serverGraphQLTypeName);
