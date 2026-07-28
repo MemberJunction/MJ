@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
-import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration } from './record-open-style';
+import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext } from './record-open-style';
 import { CompositeKey } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
@@ -571,8 +571,40 @@ export class NavigationService implements OnDestroy {
       activeTab.title
     ) {
       context['sourceNavLabel'] = activeTab.title;
+      // The exact tab, not just its label — the origin crumb's return path
+      // prefers reactivating this tab (state intact) over re-resolving the
+      // nav item by label.
+      context['sourceTabId'] = activeTab.id;
     }
     return context;
+  }
+
+  /**
+   * Take the user back to where they were when a record was opened (the
+   * origin crumb's click path). Fidelity ladder:
+   * 1. The exact source tab, if it's still open — reactivate it with all its
+   *    state (query params, scroll, cached component) intact.
+   * 2. Otherwise re-resolve by app + nav label via SwitchToApp, which reuses
+   *    a matching open tab or opens the nav item fresh.
+   * No-ops when the context has no sourceAppId (capture was best-effort).
+   */
+  public async ReturnToRecordSource(origin: RecordSourceContext): Promise<void> {
+    if (!origin.sourceAppId) {
+      return;
+    }
+    if (origin.sourceTabId) {
+      const config = this.workspaceManager.GetConfiguration();
+      const sourceTab = config?.tabs.find(t => t.id === origin.sourceTabId);
+      if (sourceTab) {
+        // Set the app context first so the shell's nav renders the right
+        // app the moment the tab activates (activation alone would also
+        // flip it, but explicit sequencing avoids a visible two-step).
+        await this.appManager.SetActiveApp(sourceTab.applicationId);
+        this.workspaceManager.SetActiveTab(sourceTab.id);
+        return;
+      }
+    }
+    await this.SwitchToApp(origin.sourceAppId, origin.sourceNavLabel);
   }
 
   /**

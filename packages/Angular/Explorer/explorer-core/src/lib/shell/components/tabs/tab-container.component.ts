@@ -28,7 +28,7 @@ import {
   LayoutNode
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, SafeDetectChanges } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, GetRecordSourceContext, RecordSourceContext, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
@@ -137,6 +137,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   /** True while the RECORDS region is the visible surface (active tab is a record) */
   public ShowRecordsRegion = false;
 
+  /**
+   * Origin of the ACTIVE record tab — where the user was when they opened it.
+   * Drives the origin crumb ("← App › Page") at the top of the records
+   * region; clicking it returns to that page. Null when the active tab isn't
+   * a record or its origin wasn't captured. Kept as state (updated in
+   * syncRecordsRegion, not a getter) so zoneless CD flushes exactly when it
+   * changes.
+   */
+  public ActiveRecordOrigin: RecordSourceContext | null = null;
+
   /** A tab belongs to the records region (not the main workspace layout) */
   private isRecordTab(tab: WorkspaceTab): boolean {
     return this.RecordsStyleActive && IsRecordsTabConfiguration(tab.configuration);
@@ -189,7 +199,20 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.syncRecordsTabs(recordTabs);
     }
 
-    if (showing !== this.ShowRecordsRegion) {
+    // Origin crumb tracks the ACTIVE record tab — recompute on every
+    // emission (switching between two record tabs changes the origin while
+    // `showing` stays true, so this can't ride the visibility flip alone).
+    const origin = showing && activeTab ? GetRecordSourceContext(activeTab.configuration) : null;
+    const originChanged =
+      (origin === null) !== (this.ActiveRecordOrigin === null) ||
+      origin?.sourceTabId !== this.ActiveRecordOrigin?.sourceTabId ||
+      origin?.sourceAppId !== this.ActiveRecordOrigin?.sourceAppId ||
+      origin?.sourceNavLabel !== this.ActiveRecordOrigin?.sourceNavLabel;
+    if (originChanged) {
+      this.ActiveRecordOrigin = origin;
+    }
+
+    if (showing !== this.ShowRecordsRegion || originChanged) {
       this.ShowRecordsRegion = showing;
       // Flush NOW — the visibility class must land in this pass, not
       // whenever the next unrelated emission happens to run CD.
@@ -232,6 +255,18 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         });
       }
     });
+  }
+
+  /**
+   * Origin crumb clicked — take the user back to the page they were on when
+   * they opened the active record. NavigationService owns the fidelity
+   * ladder (exact source tab if still open, app + nav label otherwise).
+   */
+  public async OnOriginCrumbClick(): Promise<void> {
+    const origin = this.ActiveRecordOrigin;
+    if (origin) {
+      await this.navigationService.ReturnToRecordSource(origin);
+    }
   }
 
   /** Focus a records-region tab without feeding back into SetActiveTab loops */

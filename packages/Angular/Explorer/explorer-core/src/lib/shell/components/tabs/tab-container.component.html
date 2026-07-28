@@ -19,7 +19,24 @@
        layout survives visibility flips; shown only while the active tab is
        a record. Native GL tab bar = record tabs, drag-to-split included. -->
   @if (RecordsStyleActive) {
-    <div #recordsGlContainer class="records-gl-container" [class.region-hidden]="!ShowRecordsRegion"></div>
+    <div class="records-region" [class.region-hidden]="!ShowRecordsRegion">
+      <!-- Origin crumb: where the ACTIVE record was opened from, one click
+           back to that exact page (source tab reactivated with state intact).
+           Provenance, not ancestry — records have no canonical parent. -->
+      @if (ActiveRecordOrigin; as origin) {
+        <div class="records-origin-bar">
+          <button type="button" class="origin-crumb" (click)="OnOriginCrumbClick()" title="Back to where you opened this record">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span class="origin-app">{{ origin.sourceAppName }}</span>
+            @if (origin.sourceNavLabel) {
+              <span class="origin-sep">›</span>
+              <span class="origin-page">{{ origin.sourceNavLabel }}</span>
+            }
+          </button>
+        </div>
+      }
+      <div #recordsGlContainer class="records-gl-container"></div>
+    </div>
   }
 
   <!-- Context Menu (only relevant in multi-tab mode) -->

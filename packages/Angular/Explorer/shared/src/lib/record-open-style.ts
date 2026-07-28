@@ -34,6 +34,46 @@ export function IsRecordsTabConfiguration(configuration: Record<string, unknown>
   return configuration?.['resourceType'] === RECORDS_RESOURCE_TYPE;
 }
 
+/**
+ * Where the user was standing when a record was opened — captured by
+ * NavigationService.OpenEntityRecord into the record tab's configuration.
+ * Powers the origin crumb in the records region ("← App › Page"), which takes
+ * the user straight back to that page. Origin is PROVENANCE, not location:
+ * records are a global surface with no canonical parent, so this trail is a
+ * convenience affordance ("return to where I came from"), never an ancestry
+ * claim. All fields optional because capture is best-effort (e.g. no active
+ * app at open time, or the source tab has since been closed).
+ */
+export interface RecordSourceContext {
+  sourceAppId?: string;
+  sourceAppName?: string;
+  sourceNavLabel?: string;
+  /** The exact workspace tab the user was on — highest-fidelity return target */
+  sourceTabId?: string;
+}
+
+/**
+ * Extract the source context from a record tab's configuration. Returns null
+ * when there is no usable origin (no sourceAppId), so callers can gate the
+ * crumb UI on a single truthiness check.
+ */
+export function GetRecordSourceContext(configuration: Record<string, unknown> | undefined | null): RecordSourceContext | null {
+  const appId = configuration?.['sourceAppId'];
+  if (typeof appId !== 'string' || appId.length === 0) {
+    return null;
+  }
+  const readString = (key: string): string | undefined => {
+    const value = configuration?.[key];
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  };
+  return {
+    sourceAppId: appId,
+    sourceAppName: readString('sourceAppName'),
+    sourceNavLabel: readString('sourceNavLabel'),
+    sourceTabId: readString('sourceTabId')
+  };
+}
+
 let currentStyle: RecordOpenStyle = 'records';
 
 /** Set by the shell once instance config resolves. Idempotent. */
