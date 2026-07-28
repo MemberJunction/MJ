@@ -10227,7 +10227,7 @@
   {
     "fields": {
       "Name": "Claude Opus 4.1",
-      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. DEPRECATION ANNOUNCED 2026-06-05: claude-opus-4-1-20250805 retires August 5, 2026. Recommended replacement is claude-opus-4-8. Source: https://platform.claude.com/docs/en/about-claude/model-deprecations",
+      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. DEPRECATION ANNOUNCED 2026-06-05: claude-opus-4-1-20250805 retires August 5, 2026 (9 days after this report). RECOMMENDED REPLACEMENT UPDATED 2026-07-24: migrate to claude-opus-5 (this report added it) rather than claude-opus-4-8 — Opus 5 is now the current Opus flagship at the same $5/$25 per-1M pricing as 4.8 and is Anthropic's official post-4.1 migration target. Source: https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-4-8-to-claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/model-deprecations",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 19,
       "IsActive": true,
@@ -20354,6 +20354,160 @@
     "sync": {
       "lastModified": "2026-07-22T13:40:31.546Z",
       "checksum": "db907c9a104072640b8828ce50f8942567e68d76bea8ebeb8dfff8ff0b3f9cfb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Opus 5",
+      "PowerRank": 26,
+      "Description": "Anthropic's fifth-generation Opus flagship, released July 24, 2026 with simultaneous availability on Anthropic API, Amazon Bedrock, Claude Platform on AWS, Google Vertex AI, and Microsoft Foundry. Same headline pricing ($5/$25 per 1M) as Opus 4.8 with a doubling of Frontier-Bench v0.1 performance versus Opus 4.8; comes within 0.5% of Fable 5 on CursorBench 3.2 at half the cost and surpasses Fable 5 on OSWorld 2.0 at one-third the cost. Features 1M-token context, 128K max output (300K via `output-300k-2026-03-24` batch beta), adaptive thinking with `effort` defaulting to `high` on the API and Claude Code, mid-conversation tool changes (beta), automatic safety fallbacks (beta), visual output generation, and stronger agentic self-verification. Fast mode available at ~2.5x speed for 2x cost ($10/$50 per 1M). Knowledge cutoff May 2026. Also available on OpenRouter as `anthropic/claude-opus-5` with `anthropic/claude-opus-5-fast` as the fast-mode variant. Direct successor to Claude Opus 4.8.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Opus 4.8"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "2DA5BA66-F8AB-4171-8A32-65F3131920A3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-opus-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "05CA33F7-91AC-4158-885E-711068C6A2D0"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-opus-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "AE73A973-439C-415A-8D9A-5665076D857B"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-opus-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "24EA8666-844C-4BC2-96C6-12DB225460F6"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-07-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 5 launch pricing on Anthropic direct as of July 24, 2026: $5/$25 per 1M tokens — same as Opus 4.8 at doubled Frontier-Bench performance. Cache hit at $0.50/1M (up to 90% savings). Batch API 50% discount ($2.50/$12.50). Fast mode at $10/$50 per 1M (2.5x throughput / 2x price). Sources: https://www.anthropic.com/news/claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/models/overview ; https://platform.claude.com/docs/en/about-claude/pricing ; https://openrouter.ai/anthropic/claude-opus-5",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "BF1FE2DA-3B0D-479C-B30D-1AFF62970BB5"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-07-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 5 pricing on Amazon Bedrock as of July 24, 2026 simultaneous launch. Vendor-parity with Anthropic direct ($5/$25 per 1M). Model ID: anthropic.claude-opus-5 (also available as global.anthropic.claude-opus-5). Cross-region inference adds ~10%. Sources: https://aws.amazon.com/blogs/machine-learning/introducing-claude-opus-5-on-aws-anthropics-most-capable-opus-model/ ; https://aws.amazon.com/about-aws/whats-new/2026/07/claude-opus-5-aws/ ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5.html",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "EA96EE36-A150-4AD1-8C2F-1DE795692E9D"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-07-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 5 on OpenRouter (passthrough pricing). Also listed as `anthropic/claude-opus-5-fast` for the 2.5x-throughput fast-mode variant at 2x price. Source: https://openrouter.ai/anthropic/claude-opus-5",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "ECF00045-03AE-4BFD-B557-4145A2E6F765"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E977DF7A-5E44-4A55-8DC6-F2D3F9D2ABF2"
     }
   }
 ]
