@@ -28,3 +28,4 @@ export * from './lib/user-management/user-dialog/user-dialog.component';
 export * from './lib/entity-permissions/permission-dialog/permission-dialog.component';
 export * from './lib/application-management/application-dialog/application-dialog.component';
 export * from './lib/user-app-config/user-app-config.component';
+export * from './lib/user-app-config/user-app-config-content.component';

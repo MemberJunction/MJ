@@ -1,0 +1,532 @@
+/* ============================================
+   User App Config Content (chrome-free)
+   Hosted by the full-screen dialog wrapper AND
+   the shell app launcher's in-panel config view.
+   ============================================ */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Main container */
+.app-config-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--mat-sys-surface-container-lowest);
+}
+
+/* Loading state */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+
+/* Config content */
+.config-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 1.5rem;
+  overflow: hidden;
+}
+
+.config-description {
+  margin: 0 0 1.5rem 0;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-large);
+  line-height: 1.5;
+}
+
+/* Panels container */
+.panels-container {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .panels-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow-y: auto;
+  }
+
+  /* Show collapse toggle on mobile */
+  .panel-header .collapse-toggle {
+    display: inline-block !important;
+    color: var(--mat-sys-on-surface-variant) !important;
+  }
+
+  /* Make header clickable on mobile */
+  .panel-header {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .panel-header:hover {
+    background: var(--mat-sys-surface-container);
+  }
+
+  /* Collapsed panel - just show header */
+  .panel.collapsed {
+    flex: 0 0 auto !important;
+  }
+
+  .panel.collapsed .panel-content {
+    display: none !important;
+  }
+
+  .panel.collapsed .panel-header {
+    border-bottom: none;
+  }
+
+  /* Non-collapsed panel takes available space */
+  .panel:not(.collapsed) {
+    flex: 1 1 auto;
+    min-height: 150px;
+  }
+}
+
+/* Panel styles */
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--mat-sys-surface);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-medium);
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 1rem 1.25rem;
+  background: var(--mat-sys-surface-container);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+.panel-header i:first-child {
+  font-size: 1.1rem;
+  color: var(--mat-sys-primary);
+}
+
+.panel-header h3 {
+  margin: 0;
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-on-surface);
+  flex: 1;
+}
+
+.panel-header .badge {
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  padding: 0.125rem 0.625rem;
+  border-radius: var(--mat-sys-corner-full);
+  font: var(--mat-sys-label-medium);
+  font-weight: 500;
+}
+
+/* Collapse toggle - hidden by default, shown on mobile */
+.panel-header .collapse-toggle {
+  display: none;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.9rem;
+  margin-left: 0.5rem;
+}
+
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+}
+
+
+/* Sortable list container */
+.sortable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* App items */
+.app-item {
+  cursor: grab;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.app-item:active {
+  cursor: grabbing;
+}
+
+.app-item.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+}
+
+/* Rows share the launcher's app-card language: surface bg, default border,
+   radius-lg, brand-tinted border + surface-hover on hover. Identity lives in
+   the tinted glyph (no left color bar). No hover lift here — these rows are
+   drag-reorder targets and a transform would fight the drag affordance. */
+.app-item-content {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-3-5);
+  /* surface-card so the rows keep card depth on white panels in light mode */
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  transition: border-color var(--mj-transition-fast), background var(--mj-transition-fast);
+  position: relative; /* Anchor for the hover-reveal action cluster */
+}
+
+.app-item-content:hover,
+.app-item-content:focus-within {
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+  background: var(--mj-bg-surface-hover);
+}
+
+.drag-handle {
+  color: var(--mat-sys-on-surface-variant);
+  cursor: grab;
+  padding: 0.25rem;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Identity glyph — the launcher card treatment: color-tinted tile with the
+   app-colored icon, driven by --app-color from the template. */
+.app-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--mj-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--app-color, var(--mj-text-muted));
+  background: color-mix(in srgb, var(--app-color, var(--mj-text-muted)) 14%, var(--mj-bg-surface-card));
+  font-size: var(--mj-text-lg);
+  flex-shrink: 0;
+}
+
+.app-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.app-name {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-bold);
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-description {
+  font-size: var(--mj-text-xs);
+  line-height: var(--mj-leading-snug);
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hover-reveal actions: out of the flex flow (absolute over the row's right
+   edge) so the title/description get the full row width; revealed on row
+   hover or keyboard focus within the row. The left gradient fades the
+   underlying text out beneath the cluster for legibility. */
+.app-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  position: absolute;
+  right: var(--mj-space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  padding-left: var(--mj-space-6);
+  /* Fades to the row's HOVER background — the cluster is only ever visible
+     while the row is hovered/focused, when that bg is active. */
+  background: linear-gradient(to right, transparent, var(--mj-bg-surface-hover) 1.25rem);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--mj-transition-fast);
+}
+
+.app-item-content:hover .app-actions,
+.app-item-content:focus-within .app-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Touch devices have no hover: keep the actions permanently visible and in
+   the normal flex flow (the hover-reveal overlay would be unreachable, and
+   HTML5 drag reorder doesn't work on touch — buttons are the only reorder
+   path there). */
+@media (hover: none) {
+  .app-actions {
+    position: static;
+    transform: none;
+    padding-left: 0;
+    background: none;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+
+/* Compact icon-square sizing for the row actions. Wrapper-scoped element
+   selector per the mjButton rule (never override .mj-btn classes; the old
+   single-dash .mj-btn-ghost/-sm/-danger selectors here matched nothing the
+   directive emits and were dead). */
+.app-actions > button {
+  width: 1.75rem;
+  height: 1.75rem;
+  min-width: 0;
+  padding: 0;
+  font-size: 0.8rem;
+  justify-content: center;
+}
+
+/* Remove is a quiet flat button that turns danger-tinted on hover — a solid
+   red button appearing on every row hover is too loud for a tertiary action */
+.app-actions > .remove-btn:hover:not(:disabled) {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error);
+}
+
+/* Available app items — same card language as the selected rows */
+.available-app-item {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-3-5);
+  margin-bottom: var(--mj-space-2);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  transition: border-color var(--mj-transition-fast), background var(--mj-transition-fast);
+}
+
+.available-app-item:hover {
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+  background: var(--mj-bg-surface-hover);
+}
+
+.available-app-item .app-info {
+  flex: 1;
+}
+
+/* Footer actions */
+.dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: var(--mat-sys-surface);
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  flex-shrink: 0;
+}
+
+.footer-left,
+.footer-right {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.dialog-footer button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ==============================================
+   Mobile: single list with toggles
+   ============================================== */
+
+/* Hidden by default on desktop */
+.mobile-view {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Swap layouts */
+  .desktop-only {
+    display: none !important;
+  }
+
+  .config-description {
+    display: none;
+  }
+
+  .mobile-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .mobile-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+  }
+
+  /* Section labels */
+  .mobile-section-label {
+    padding: 0.5rem 0.625rem 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--mj-text-secondary);
+  }
+
+  /* App rows */
+  .mobile-app-row {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.625rem;
+    border-radius: var(--mj-radius-md);
+    transition: background-color 0.15s ease;
+  }
+
+  .mobile-app-row.inactive {
+    opacity: 0.7;
+  }
+
+  .mobile-app-row .app-icon {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+  }
+
+  .mobile-app-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--mj-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Drag handle */
+  .mobile-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    flex-shrink: 0;
+    color: var(--mj-text-muted);
+    font-size: 0.875rem;
+    touch-action: none;
+    cursor: grab;
+    padding: 0.5rem 0;
+  }
+
+  .mobile-drag-handle:active {
+    cursor: grabbing;
+    color: var(--mj-text-primary);
+  }
+
+  /* Dragging row */
+  .mobile-app-row.touch-dragging {
+    background: var(--mj-bg-surface-hover);
+    box-shadow: var(--mj-shadow-lg);
+    border-radius: var(--mj-radius-md);
+    position: relative;
+    z-index: 100;
+    opacity: 0.95;
+  }
+
+  /* Ghost placeholder for the original position */
+  .mobile-app-row.touch-ghost {
+    opacity: 0.3;
+  }
+
+  /* Drop indicator line */
+  .mobile-drop-indicator {
+    height: 2px;
+    background: var(--mj-brand-primary);
+    border-radius: 1px;
+    margin: 0 0.625rem;
+  }
+
+  /* Toggle button */
+  .mobile-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    padding: 0.25rem;
+    cursor: pointer;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+    transition: color 0.15s ease;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .mobile-toggle.on {
+    color: var(--mj-brand-primary);
+  }
+
+  .mobile-toggle.off {
+    color: var(--mj-text-muted);
+  }
+
+  /* Content compact */
+  .config-content {
+    padding: 0;
+  }
+
+  /* Footer compact */
+  .dialog-footer {
+    padding: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .footer-left,
+  .footer-right {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+}
+
+/* Accessibility - Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .app-item,
+  .app-item-content,
+  .available-app-item,
+  .app-actions {
+    transition: none;
+  }
+}

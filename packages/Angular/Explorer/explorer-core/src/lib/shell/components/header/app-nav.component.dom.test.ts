@@ -67,10 +67,10 @@ describe('AppNavComponent (DOM)', () => {
     expect(query(fixture, '.nav-item .badge')?.textContent?.trim()).toBe('3');
   });
 
-  it('exposes the app color as a CSS custom property on the nav list', async () => {
+  it('does NOT tint the nav list with the app color (state colors are brand-primary; app color is icon-identity only)', async () => {
     const fixture = await render(fakeApp(NAV_ITEMS));
     const style = (query(fixture, '.nav-list') as HTMLElement).getAttribute('style') ?? '';
-    expect(style).toContain('#123456');
+    expect(style).not.toContain('#123456');
   });
 
   it('emits navItemClick with the clicked item', async () => {
