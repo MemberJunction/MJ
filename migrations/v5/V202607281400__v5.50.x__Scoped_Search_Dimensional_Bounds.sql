@@ -197,29 +197,30 @@ EXEC sp_addextendedproperty
 GO
 
 -- ============================================================================
--- CodeGen output — `mj codegen`, generated against a database with all of the
--- DDL above applied and nothing else outstanding.
+-- CodeGen output — `mj codegen`, generated against a database at the repo's
+-- CURRENT migration head with this migration's DDL applied and nothing else
+-- outstanding.
 --
 -- Generated; do not hand-edit below this line.
 --
 -- Included because that is what the recent schema migrations do — see
--- V202607240220__v5.50.x__ContentItem_VectorRecordID_And_ContentItemChunk.sql,
--- which embeds its own views, procedures and EntityField rows. The rule in
--- migrations/CLAUDE.md about omitting CodeGen-owned objects governs what you
--- hand-write inside a CREATE TABLE, not whether the generated block ships.
+-- V202607240220__v5.50.x__ContentItem_VectorRecordID_And_ContentItemChunk.sql.
+-- The rule in migrations/CLAUDE.md about omitting CodeGen-owned objects governs
+-- what you hand-write inside a CREATE TABLE, not whether this block ships.
 --
--- Scope: exactly the seven entities this migration affects — AI Skill Search
--- Scopes (new), AI Skills, Search Scope Permissions, Search Scope External
--- Indexes, Search Scope Entities, Search Execution Logs, and AI Agents (reached
--- through the new relationship). Nothing unrelated is regenerated.
+-- TWO WAYS THIS BLOCK GOES SILENTLY WRONG, both hit during development:
 --
--- This block MUST include the __mj_CreatedAt / __mj_UpdatedAt ALTERs and the
--- update trigger for the new table. An earlier attempt generated against a
--- database where those columns already existed omitted them, and the migration
--- then failed on a pristine database with "Msg 207 invalid column name" inside
--- trgUpdateAISkillSearchScope — the table had no timestamps for the trigger to
--- touch. Generate this block against a database that does NOT already have the
--- objects, or it will be silently incomplete.
+--  1. Generated against a database that ALREADY has the new objects, it omits
+--     the __mj_CreatedAt / __mj_UpdatedAt ALTERs. It then applies cleanly there
+--     and fails on a clean database with "Msg 207 invalid column name" inside
+--     trgUpdateAISkillSearchScope.
+--  2. Generated against a database BEHIND the repo head, it emits SQL for a
+--     schema shape later migrations changed — here, references to a column
+--     V202607241645 removed, producing "Invalid column name 'SummaryPromptRunID'"
+--     at batch 101 of 102.
+--
+-- So: generate against a database at CURRENT HEAD that does NOT yet have these
+-- objects, and verify by running the whole chain on an empty database.
 -- ============================================================================
 
 /* SQL generated to create new entity MJ: AI Skill Search Scopes */
@@ -248,7 +249,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '690021e4-b558-47ba-beda-49ec303d81ba',
+         'c084b950-88ad-4922-9f59-b8d5c2f36988',
          'MJ: AI Skill Search Scopes',
          'AI Skill Search Scopes',
          'Search Scopes an AI Skill may reach when activated, honoured when AISkill.SearchScopeAccess = ''Assigned''. Mirrors AIAgentSearchScope: Status plus an optional StartAt/EndAt window time-box a grant, and Priority/IsDefault pick among several. An empty table means no skill grants any scope - the pre-migration behaviour.',
@@ -274,22 +275,22 @@ GO
 /* SQL generated to add new entity MJ: AI Skill Search Scopes to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '690021e4-b558-47ba-beda-49ec303d81ba', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'c084b950-88ad-4922-9f59-b8d5c2f36988', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skill Search Scopes for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('690021e4-b558-47ba-beda-49ec303d81ba', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('c084b950-88ad-4922-9f59-b8d5c2f36988', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skill Search Scopes for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('690021e4-b558-47ba-beda-49ec303d81ba', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('c084b950-88ad-4922-9f59-b8d5c2f36988', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Skill Search Scopes for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('690021e4-b558-47ba-beda-49ec303d81ba', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('c084b950-88ad-4922-9f59-b8d5c2f36988', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AISkillSearchScope */
 ALTER TABLE [${flyway:defaultSchema}].[AISkillSearchScope] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -325,7 +326,7 @@ GO
 
 /* SQL text to insert 19 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e1c01fbc-18f1-4cc2-ad05-1cad99b5ac19' OR (EntityID = '530982B5-5556-483A-A4D7-338A19E53548' AND Name = 'AISkillID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '01763e29-5f3a-49b2-9003-eca37b943d4e' OR (EntityID = '530982B5-5556-483A-A4D7-338A19E53548' AND Name = 'AISkillID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -358,7 +359,7 @@ GO
          )
          VALUES
          (
-            'e1c01fbc-18f1-4cc2-ad05-1cad99b5ac19',
+            '01763e29-5f3a-49b2-9003-eca37b943d4e',
             '530982B5-5556-483A-A4D7-338A19E53548', -- Entity: MJ: Search Execution Logs
             100032,
             'AISkillID',
@@ -388,7 +389,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b22a0ea9-a629-486e-a66f-323c2dfd8e29' OR (EntityID = '530982B5-5556-483A-A4D7-338A19E53548' AND Name = 'PrimaryScopeRecordID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '83d237dc-ab22-4d8e-9a8e-d22f1604709b' OR (EntityID = '530982B5-5556-483A-A4D7-338A19E53548' AND Name = 'PrimaryScopeRecordID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -421,7 +422,7 @@ GO
          )
          VALUES
          (
-            'b22a0ea9-a629-486e-a66f-323c2dfd8e29',
+            '83d237dc-ab22-4d8e-9a8e-d22f1604709b',
             '530982B5-5556-483A-A4D7-338A19E53548', -- Entity: MJ: Search Execution Logs
             100033,
             'PrimaryScopeRecordID',
@@ -451,7 +452,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6200b209-60bf-4423-a09c-64acad6d1dfa' OR (EntityID = '530982B5-5556-483A-A4D7-338A19E53548' AND Name = 'ScopeDecisionJSON')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '738adefc-6848-4be4-928e-85a9de477784' OR (EntityID = '530982B5-5556-483A-A4D7-338A19E53548' AND Name = 'ScopeDecisionJSON')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -484,7 +485,7 @@ GO
          )
          VALUES
          (
-            '6200b209-60bf-4423-a09c-64acad6d1dfa',
+            '738adefc-6848-4be4-928e-85a9de477784',
             '530982B5-5556-483A-A4D7-338A19E53548', -- Entity: MJ: Search Execution Logs
             100034,
             'ScopeDecisionJSON',
@@ -514,7 +515,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '70e34378-737f-4ef3-805b-cd6ce24f6449' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '816274c5-1d6e-44f6-a883-d4baf7f85de2' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'SearchScopeAccess')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -547,637 +548,7 @@ GO
          )
          VALUES
          (
-            '70e34378-737f-4ef3-805b-cd6ce24f6449',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9793a721-7d5b-4d23-866f-76106c176095' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = 'SkillID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '9793a721-7d5b-4d23-866f-76106c176095',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100002,
-            'SkillID',
-            'Skill ID',
-            'The skill this grant belongs to.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '173b8da2-5042-4ae4-98f7-928309b9c8a6' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = 'SearchScopeID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '173b8da2-5042-4ae4-98f7-928309b9c8a6',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100003,
-            'SearchScopeID',
-            'Search Scope ID',
-            'The Search Scope this skill may reach.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '3F83C084-859F-49C3-A8A0-4693E0777BE8',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4169682f-aa93-42cc-8c51-88db248c2b68' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = 'Status')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '4169682f-aa93-42cc-8c51-88db248c2b68',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100004,
-            'Status',
-            'Status',
-            'Active or Inactive. Inactive rows are ignored during resolution.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Active',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e79ba270-d629-4bcb-9df3-81de7897d380' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = 'StartAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e79ba270-d629-4bcb-9df3-81de7897d380',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100005,
-            'StartAt',
-            'Start At',
-            'Optional start of the window in which this grant is honoured. NULL = no lower bound. Evaluated against the current time on every resolution, so a window opening or closing needs no cache invalidation.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '718cf1b5-9d66-4169-aafe-6b1792bb6eb1' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = 'EndAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '718cf1b5-9d66-4169-aafe-6b1792bb6eb1',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100006,
-            'EndAt',
-            'End At',
-            'Optional end of the window in which this grant is honoured. NULL = no upper bound.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2ba737f6-2187-4c85-af69-18b55b1e948a' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = 'Priority')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2ba737f6-2187-4c85-af69-18b55b1e948a',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100007,
-            'Priority',
-            'Priority',
-            'Lower numbers win when several granted scopes are candidates and none is marked IsDefault.',
-            'int',
-            4,
-            10,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ccdd888c-d1fa-4b04-b6ef-381c2fcd64e7' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = 'IsDefault')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'ccdd888c-d1fa-4b04-b6ef-381c2fcd64e7',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100008,
-            'IsDefault',
-            'Is Default',
-            'When set, this scope is chosen for the skill ahead of Priority ordering.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '34cc002b-f232-4c29-93f4-92d7c21309c6' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '34cc002b-f232-4c29-93f4-92d7c21309c6',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100009,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'be41b820-6e41-43bd-ad7a-feb3ba6886e8' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'be41b820-6e41-43bd-ad7a-feb3ba6886e8',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100010,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '67703ac4-abd0-46bc-9480-fd43de7925b7' OR (EntityID = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4' AND Name = 'SearchScopeAccess')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '67703ac4-abd0-46bc-9480-fd43de7925b7',
+            '816274c5-1d6e-44f6-a883-d4baf7f85de2',
             '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
             100026,
             'SearchScopeAccess',
@@ -1207,7 +578,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ce140fa5-6b9b-428e-a156-b21242060732' OR (EntityID = '20BCABEC-413F-4985-8F5A-6BC262E75F81' AND Name = 'RequiredMetadataKeys')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eb4ee1b5-83af-4652-b290-8763472e3c81' OR (EntityID = '20BCABEC-413F-4985-8F5A-6BC262E75F81' AND Name = 'RequiredMetadataKeys')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1240,7 +611,7 @@ GO
          )
          VALUES
          (
-            'ce140fa5-6b9b-428e-a156-b21242060732',
+            'eb4ee1b5-83af-4652-b290-8763472e3c81',
             '20BCABEC-413F-4985-8F5A-6BC262E75F81', -- Entity: MJ: Search Scope Entities
             100017,
             'RequiredMetadataKeys',
@@ -1270,7 +641,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c0519247-0f0d-4dd7-81dd-6aec7600816f' OR (EntityID = 'B90FAB4E-0336-407A-B6AE-A49DEA84D083' AND Name = 'StartAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '83cb7d93-bc7d-4f0d-b27c-303cefe97243' OR (EntityID = 'B90FAB4E-0336-407A-B6AE-A49DEA84D083' AND Name = 'StartAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1303,7 +674,7 @@ GO
          )
          VALUES
          (
-            'c0519247-0f0d-4dd7-81dd-6aec7600816f',
+            '83cb7d93-bc7d-4f0d-b27c-303cefe97243',
             'B90FAB4E-0336-407A-B6AE-A49DEA84D083', -- Entity: MJ: Search Scope Permissions
             100018,
             'StartAt',
@@ -1333,7 +704,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4e96df82-b78e-432c-985e-bb25f45b28b7' OR (EntityID = 'B90FAB4E-0336-407A-B6AE-A49DEA84D083' AND Name = 'EndAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '259b26c8-001b-4801-b822-03e799669feb' OR (EntityID = 'B90FAB4E-0336-407A-B6AE-A49DEA84D083' AND Name = 'EndAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1366,7 +737,7 @@ GO
          )
          VALUES
          (
-            '4e96df82-b78e-432c-985e-bb25f45b28b7',
+            '259b26c8-001b-4801-b822-03e799669feb',
             'B90FAB4E-0336-407A-B6AE-A49DEA84D083', -- Entity: MJ: Search Scope Permissions
             100019,
             'EndAt',
@@ -1396,7 +767,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bbabf723-6b36-4fba-8be8-37d7f30d4959' OR (EntityID = 'B90FAB4E-0336-407A-B6AE-A49DEA84D083' AND Name = 'PrimaryScopeRecordID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dd1a55cc-884e-4044-b6e7-09428a943565' OR (EntityID = 'B90FAB4E-0336-407A-B6AE-A49DEA84D083' AND Name = 'PrimaryScopeRecordID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1429,7 +800,7 @@ GO
          )
          VALUES
          (
-            'bbabf723-6b36-4fba-8be8-37d7f30d4959',
+            'dd1a55cc-884e-4044-b6e7-09428a943565',
             'B90FAB4E-0336-407A-B6AE-A49DEA84D083', -- Entity: MJ: Search Scope Permissions
             100020,
             'PrimaryScopeRecordID',
@@ -1459,7 +830,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6fd671ef-45d7-4168-870b-60632ab4e470' OR (EntityID = '3B80A286-D1E1-45C2-9648-C850009E1ADB' AND Name = 'RequiredMetadataKeys')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '85387a57-2787-44df-a2cc-0cf0246cf0c9' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1492,7 +863,637 @@ GO
          )
          VALUES
          (
-            '6fd671ef-45d7-4168-870b-60632ab4e470',
+            '85387a57-2787-44df-a2cc-0cf0246cf0c9',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0e07fe6e-54e8-4282-a207-c69ed11ec095' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = 'SkillID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '0e07fe6e-54e8-4282-a207-c69ed11ec095',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            100002,
+            'SkillID',
+            'Skill ID',
+            'The skill this grant belongs to.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '1D52DE84-DD3F-4E46-8D2B-574B70080BB4',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '99e97675-3efa-4ea7-936c-f836b82ea832' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = 'SearchScopeID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '99e97675-3efa-4ea7-936c-f836b82ea832',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            100003,
+            'SearchScopeID',
+            'Search Scope ID',
+            'The Search Scope this skill may reach.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '3F83C084-859F-49C3-A8A0-4693E0777BE8',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ebc90c1d-a764-487d-a5a2-fc7561b20bc9' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = 'Status')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ebc90c1d-a764-487d-a5a2-fc7561b20bc9',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            100004,
+            'Status',
+            'Status',
+            'Active or Inactive. Inactive rows are ignored during resolution.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Active',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '197ef377-38f4-4253-95e2-89e5026fc49e' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = 'StartAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '197ef377-38f4-4253-95e2-89e5026fc49e',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            100005,
+            'StartAt',
+            'Start At',
+            'Optional start of the window in which this grant is honoured. NULL = no lower bound. Evaluated against the current time on every resolution, so a window opening or closing needs no cache invalidation.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '04c3191b-680e-4f98-b13d-59aeb3b5a6b5' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = 'EndAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '04c3191b-680e-4f98-b13d-59aeb3b5a6b5',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            100006,
+            'EndAt',
+            'End At',
+            'Optional end of the window in which this grant is honoured. NULL = no upper bound.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cc1d24a5-8e10-46db-9b35-0d4471856ae7' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = 'Priority')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'cc1d24a5-8e10-46db-9b35-0d4471856ae7',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            100007,
+            'Priority',
+            'Priority',
+            'Lower numbers win when several granted scopes are candidates and none is marked IsDefault.',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '13aa1aea-c3b9-4f09-b73f-807f0502462e' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = 'IsDefault')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '13aa1aea-c3b9-4f09-b73f-807f0502462e',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            100008,
+            'IsDefault',
+            'Is Default',
+            'When set, this scope is chosen for the skill ahead of Priority ordering.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '24982b26-06dd-43b9-a4ba-6bc12dae17de' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '24982b26-06dd-43b9-a4ba-6bc12dae17de',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            100009,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '94f355b1-d831-4559-92c9-5d8492fb77d0' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '94f355b1-d831-4559-92c9-5d8492fb77d0',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            100010,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7753fc11-4e91-4bc7-ba3d-cbcdf1a06bc0' OR (EntityID = '3B80A286-D1E1-45C2-9648-C850009E1ADB' AND Name = 'RequiredMetadataKeys')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7753fc11-4e91-4bc7-ba3d-cbcdf1a06bc0',
             '3B80A286-D1E1-45C2-9648-C850009E1ADB', -- Entity: MJ: Search Scope External Indexes
             100021,
             'RequiredMetadataKeys',
@@ -1522,69 +1523,69 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID d12e2b18-7a69-4aa2-bf86-8d4b6ecf3db3 */
+/* SQL text to insert entity field value with ID 0cbb84c7-ea7c-4875-b602-5204db1ffa28 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d12e2b18-7a69-4aa2-bf86-8d4b6ecf3db3', '67703AC4-ABD0-46BC-9480-FD43DE7925B7', 1, 'All', 'All', GETUTCDATE(), GETUTCDATE());
+                                       ('0cbb84c7-ea7c-4875-b602-5204db1ffa28', '816274C5-1D6E-44F6-A883-D4BAF7F85DE2', 1, 'All', 'All', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID eb2e3cd4-b762-455e-8cd3-31f8b0735972 */
+/* SQL text to insert entity field value with ID 34f84e26-1ec1-42e5-b363-fb1583da61ed */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('eb2e3cd4-b762-455e-8cd3-31f8b0735972', '67703AC4-ABD0-46BC-9480-FD43DE7925B7', 2, 'Assigned', 'Assigned', GETUTCDATE(), GETUTCDATE());
+                                       ('34f84e26-1ec1-42e5-b363-fb1583da61ed', '816274C5-1D6E-44F6-A883-D4BAF7F85DE2', 2, 'Assigned', 'Assigned', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID d87971f8-d435-40e5-8d9a-5f87175cfde7 */
+/* SQL text to insert entity field value with ID d8619113-9de2-42b1-a4e2-99899e8858f3 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d87971f8-d435-40e5-8d9a-5f87175cfde7', '67703AC4-ABD0-46BC-9480-FD43DE7925B7', 3, 'None', 'None', GETUTCDATE(), GETUTCDATE());
+                                       ('d8619113-9de2-42b1-a4e2-99899e8858f3', '816274C5-1D6E-44F6-A883-D4BAF7F85DE2', 3, 'None', 'None', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 67703AC4-ABD0-46BC-9480-FD43DE7925B7 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='67703AC4-ABD0-46BC-9480-FD43DE7925B7';
+/* SQL text to update ValueListType for entity field ID 816274C5-1D6E-44F6-A883-D4BAF7F85DE2 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='816274C5-1D6E-44F6-A883-D4BAF7F85DE2';
 
-/* SQL text to insert entity field value with ID b4c6640c-8bd8-4e63-b8ef-7bb583ece1c5 */
+/* SQL text to insert entity field value with ID f6ec6980-4da0-4682-960f-b6a8c638aeb2 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('b4c6640c-8bd8-4e63-b8ef-7bb583ece1c5', '4169682F-AA93-42CC-8C51-88DB248C2B68', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('f6ec6980-4da0-4682-960f-b6a8c638aeb2', 'EBC90C1D-A764-487D-A5A2-FC7561B20BC9', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID c6cd0cb7-a008-4de6-91a9-5d79192bb5f3 */
+/* SQL text to insert entity field value with ID 2ef42a8e-117c-4c71-958c-d5b725e66769 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('c6cd0cb7-a008-4de6-91a9-5d79192bb5f3', '4169682F-AA93-42CC-8C51-88DB248C2B68', 2, 'Inactive', 'Inactive', GETUTCDATE(), GETUTCDATE());
+                                       ('2ef42a8e-117c-4c71-958c-d5b725e66769', 'EBC90C1D-A764-487D-A5A2-FC7561B20BC9', 2, 'Inactive', 'Inactive', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 4169682F-AA93-42CC-8C51-88DB248C2B68 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='4169682F-AA93-42CC-8C51-88DB248C2B68';
+/* SQL text to update ValueListType for entity field ID EBC90C1D-A764-487D-A5A2-FC7561B20BC9 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='EBC90C1D-A764-487D-A5A2-FC7561B20BC9';
 
 
 /* Create Entity Relationship: MJ: Search Scopes -> MJ: AI Skill Search Scopes (One To Many via SearchScopeID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'e4227ae4-b39c-4df8-be58-5e5a00473274'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '14bbedba-f0f9-4c77-8829-7cb5105ae620'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('e4227ae4-b39c-4df8-be58-5e5a00473274', '3F83C084-859F-49C3-A8A0-4693E0777BE8', '690021E4-B558-47BA-BEDA-49EC303D81BA', 'SearchScopeID', 'One To Many', 1, 1, 9, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('14bbedba-f0f9-4c77-8829-7cb5105ae620', '3F83C084-859F-49C3-A8A0-4693E0777BE8', 'C084B950-88AD-4922-9F59-B8D5C2F36988', 'SearchScopeID', 'One To Many', 1, 1, 9, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: AI Skills -> MJ: Search Execution Logs (One To Many via AISkillID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '52b18c78-79a3-4dc4-bfdc-cec480cfd28b'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '23e4e8d3-da28-431b-a0b1-b115c25aa69c'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('52b18c78-79a3-4dc4-bfdc-cec480cfd28b', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', '530982B5-5556-483A-A4D7-338A19E53548', 'AISkillID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('23e4e8d3-da28-431b-a0b1-b115c25aa69c', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', '530982B5-5556-483A-A4D7-338A19E53548', 'AISkillID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
    END;
                     
 /* Create Entity Relationship: MJ: AI Skills -> MJ: AI Skill Search Scopes (One To Many via SkillID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'cb5711c5-d938-4b30-986e-0567578e7222'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd9f456ac-c35c-4a01-af40-68b016b4fe8b'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('cb5711c5-d938-4b30-986e-0567578e7222', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', '690021E4-B558-47BA-BEDA-49EC303D81BA', 'SkillID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('d9f456ac-c35c-4a01-af40-68b016b4fe8b', '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', 'C084B950-88AD-4922-9F59-B8D5C2F36988', 'SkillID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for AISkillSearchScope */
@@ -1614,8 +1615,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AISkillSearchScope_SearchScopeID ON [${flyway:defaultSchema}].[AISkillSearchScope] ([SearchScopeID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 9793A721-7D5B-4D23-866F-76106C176095 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='9793A721-7D5B-4D23-866F-76106C176095', @RelatedEntityNameFieldMap='Skill';
+/* SQL text to update entity field related entity name field map for entity field ID 0E07FE6E-54E8-4282-A207-C69ED11EC095 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='0E07FE6E-54E8-4282-A207-C69ED11EC095', @RelatedEntityNameFieldMap='Skill';
 
 /* Index for Foreign Keys for AISkill */
 -----------------------------------------------------------------
@@ -1936,8 +1937,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAISkill] TO [cdp_Developer],
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAISkill] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to update entity field related entity name field map for entity field ID 173B8DA2-5042-4AE4-98F7-928309B9C8A6 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='173B8DA2-5042-4AE4-98F7-928309B9C8A6', @RelatedEntityNameFieldMap='SearchScope';
+/* SQL text to update entity field related entity name field map for entity field ID 99E97675-3EFA-4EA7-936C-F836B82EA832 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='99E97675-3EFA-4EA7-936C-F836B82EA832', @RelatedEntityNameFieldMap='SearchScope';
 
 /* Base View SQL for MJ: AI Skill Search Scopes */
 -----------------------------------------------------------------
@@ -2265,302 +2266,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_SearchExecutionLog_AISkillID ON [${flyway:defaultSchema}].[SearchExecutionLog] ([AISkillID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID E1C01FBC-18F1-4CC2-AD05-1CAD99B5AC19 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='E1C01FBC-18F1-4CC2-AD05-1CAD99B5AC19', @RelatedEntityNameFieldMap='AISkill';
-
-/* Index for Foreign Keys for SearchScopeEntity */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Search Scope Entities
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key SearchScopeID in table SearchScopeEntity
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_SearchScopeEntity_SearchScopeID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[SearchScopeEntity]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_SearchScopeEntity_SearchScopeID ON [${flyway:defaultSchema}].[SearchScopeEntity] ([SearchScopeID]);
-
--- Index for foreign key EntityID in table SearchScopeEntity
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_SearchScopeEntity_EntityID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[SearchScopeEntity]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_SearchScopeEntity_EntityID ON [${flyway:defaultSchema}].[SearchScopeEntity] ([EntityID]);
-
-/* Base View SQL for MJ: Search Scope Entities */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Search Scope Entities
--- Item: vwSearchScopeEntities
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Search Scope Entities
------               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  SearchScopeEntity
------               PRIMARY KEY: ID
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwSearchScopeEntities]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwSearchScopeEntities];
-GO
-
-CREATE VIEW [${flyway:defaultSchema}].[vwSearchScopeEntities]
-AS
-SELECT
-    s.*,
-    MJSearchScope_SearchScopeID.[Name] AS [SearchScope],
-    MJEntity_EntityID.[Name] AS [Entity]
-FROM
-    [${flyway:defaultSchema}].[SearchScopeEntity] AS s
-INNER JOIN
-    [${flyway:defaultSchema}].[SearchScope] AS MJSearchScope_SearchScopeID
-  ON
-    [s].[SearchScopeID] = MJSearchScope_SearchScopeID.[ID]
-INNER JOIN
-    [${flyway:defaultSchema}].[Entity] AS MJEntity_EntityID
-  ON
-    [s].[EntityID] = MJEntity_EntityID.[ID]
-GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwSearchScopeEntities] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* Base View Permissions SQL for MJ: Search Scope Entities */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Search Scope Entities
--- Item: Permissions for vwSearchScopeEntities
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwSearchScopeEntities] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate SQL for MJ: Search Scope Entities */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Search Scope Entities
--- Item: spCreateSearchScopeEntity
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR SearchScopeEntity
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateSearchScopeEntity]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateSearchScopeEntity];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateSearchScopeEntity]
-    @ID uniqueidentifier = NULL,
-    @SearchScopeID uniqueidentifier,
-    @EntityID uniqueidentifier,
-    @ExtraFilter_Clear bit = 0,
-    @ExtraFilter nvarchar(MAX) = NULL,
-    @UserSearchString_Clear bit = 0,
-    @UserSearchString nvarchar(MAX) = NULL,
-    @RequiredMetadataKeys_Clear bit = 0,
-    @RequiredMetadataKeys nvarchar(MAX) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[SearchScopeEntity]
-            (
-                [ID],
-                [SearchScopeID],
-                [EntityID],
-                [ExtraFilter],
-                [UserSearchString],
-                [RequiredMetadataKeys]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @SearchScopeID,
-                @EntityID,
-                CASE WHEN @ExtraFilter_Clear = 1 THEN NULL ELSE ISNULL(@ExtraFilter, NULL) END,
-                CASE WHEN @UserSearchString_Clear = 1 THEN NULL ELSE ISNULL(@UserSearchString, NULL) END,
-                CASE WHEN @RequiredMetadataKeys_Clear = 1 THEN NULL ELSE ISNULL(@RequiredMetadataKeys, NULL) END
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[SearchScopeEntity]
-            (
-                [SearchScopeID],
-                [EntityID],
-                [ExtraFilter],
-                [UserSearchString],
-                [RequiredMetadataKeys]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @SearchScopeID,
-                @EntityID,
-                CASE WHEN @ExtraFilter_Clear = 1 THEN NULL ELSE ISNULL(@ExtraFilter, NULL) END,
-                CASE WHEN @UserSearchString_Clear = 1 THEN NULL ELSE ISNULL(@UserSearchString, NULL) END,
-                CASE WHEN @RequiredMetadataKeys_Clear = 1 THEN NULL ELSE ISNULL(@RequiredMetadataKeys, NULL) END
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwSearchScopeEntities] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateSearchScopeEntity] TO [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: Search Scope Entities */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateSearchScopeEntity] TO [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: Search Scope Entities */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Search Scope Entities
--- Item: spUpdateSearchScopeEntity
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR SearchScopeEntity
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateSearchScopeEntity]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateSearchScopeEntity];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateSearchScopeEntity]
-    @ID uniqueidentifier,
-    @SearchScopeID uniqueidentifier = NULL,
-    @EntityID uniqueidentifier = NULL,
-    @ExtraFilter_Clear bit = 0,
-    @ExtraFilter nvarchar(MAX) = NULL,
-    @UserSearchString_Clear bit = 0,
-    @UserSearchString nvarchar(MAX) = NULL,
-    @RequiredMetadataKeys_Clear bit = 0,
-    @RequiredMetadataKeys nvarchar(MAX) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[SearchScopeEntity]
-    SET
-        [SearchScopeID] = ISNULL(@SearchScopeID, [SearchScopeID]),
-        [EntityID] = ISNULL(@EntityID, [EntityID]),
-        [ExtraFilter] = CASE WHEN @ExtraFilter_Clear = 1 THEN NULL ELSE ISNULL(@ExtraFilter, [ExtraFilter]) END,
-        [UserSearchString] = CASE WHEN @UserSearchString_Clear = 1 THEN NULL ELSE ISNULL(@UserSearchString, [UserSearchString]) END,
-        [RequiredMetadataKeys] = CASE WHEN @RequiredMetadataKeys_Clear = 1 THEN NULL ELSE ISNULL(@RequiredMetadataKeys, [RequiredMetadataKeys]) END
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwSearchScopeEntities] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwSearchScopeEntities]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateSearchScopeEntity] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the SearchScopeEntity table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateSearchScopeEntity]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateSearchScopeEntity];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateSearchScopeEntity
-ON [${flyway:defaultSchema}].[SearchScopeEntity]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[SearchScopeEntity]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[SearchScopeEntity] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: Search Scope Entities */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateSearchScopeEntity] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: Search Scope Entities */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Search Scope Entities
--- Item: spDeleteSearchScopeEntity
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR SearchScopeEntity
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteSearchScopeEntity]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteSearchScopeEntity];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteSearchScopeEntity]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[SearchScopeEntity]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSearchScopeEntity] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Search Scope Entities */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSearchScopeEntity] TO [cdp_Developer], [cdp_Integration];
+/* SQL text to update entity field related entity name field map for entity field ID 01763E29-5F3A-49B2-9003-ECA37B943D4E */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='01763E29-5F3A-49B2-9003-ECA37B943D4E', @RelatedEntityNameFieldMap='AISkill';
 
 /* Base View SQL for MJ: Search Execution Logs */
 -----------------------------------------------------------------
@@ -2916,6 +2623,33 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSearchExecutionLog] TO [cdp_
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSearchExecutionLog] TO [cdp_Integration];
 
+/* Index for Foreign Keys for SearchScopeEntity */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Search Scope Entities
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key SearchScopeID in table SearchScopeEntity
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_SearchScopeEntity_SearchScopeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[SearchScopeEntity]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_SearchScopeEntity_SearchScopeID ON [${flyway:defaultSchema}].[SearchScopeEntity] ([SearchScopeID]);
+
+-- Index for foreign key EntityID in table SearchScopeEntity
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_SearchScopeEntity_EntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[SearchScopeEntity]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_SearchScopeEntity_EntityID ON [${flyway:defaultSchema}].[SearchScopeEntity] ([EntityID]);
+
 /* Index for Foreign Keys for SearchScopeExternalIndex */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2978,6 +2712,231 @@ IF NOT EXISTS (
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[SearchScopePermission]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_SearchScopePermission_RoleID ON [${flyway:defaultSchema}].[SearchScopePermission] ([RoleID]);
+
+/* Base View SQL for MJ: Search Scope Entities */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Search Scope Entities
+-- Item: vwSearchScopeEntities
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Search Scope Entities
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  SearchScopeEntity
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwSearchScopeEntities]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwSearchScopeEntities];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwSearchScopeEntities]
+AS
+SELECT
+    s.*,
+    MJSearchScope_SearchScopeID.[Name] AS [SearchScope],
+    MJEntity_EntityID.[Name] AS [Entity]
+FROM
+    [${flyway:defaultSchema}].[SearchScopeEntity] AS s
+INNER JOIN
+    [${flyway:defaultSchema}].[SearchScope] AS MJSearchScope_SearchScopeID
+  ON
+    [s].[SearchScopeID] = MJSearchScope_SearchScopeID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[Entity] AS MJEntity_EntityID
+  ON
+    [s].[EntityID] = MJEntity_EntityID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwSearchScopeEntities] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: Search Scope Entities */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Search Scope Entities
+-- Item: Permissions for vwSearchScopeEntities
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwSearchScopeEntities] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: Search Scope Entities */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Search Scope Entities
+-- Item: spCreateSearchScopeEntity
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR SearchScopeEntity
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateSearchScopeEntity]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateSearchScopeEntity];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateSearchScopeEntity]
+    @ID uniqueidentifier = NULL,
+    @SearchScopeID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @ExtraFilter_Clear bit = 0,
+    @ExtraFilter nvarchar(MAX) = NULL,
+    @UserSearchString_Clear bit = 0,
+    @UserSearchString nvarchar(MAX) = NULL,
+    @RequiredMetadataKeys_Clear bit = 0,
+    @RequiredMetadataKeys nvarchar(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[SearchScopeEntity]
+            (
+                [ID],
+                [SearchScopeID],
+                [EntityID],
+                [ExtraFilter],
+                [UserSearchString],
+                [RequiredMetadataKeys]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @SearchScopeID,
+                @EntityID,
+                CASE WHEN @ExtraFilter_Clear = 1 THEN NULL ELSE ISNULL(@ExtraFilter, NULL) END,
+                CASE WHEN @UserSearchString_Clear = 1 THEN NULL ELSE ISNULL(@UserSearchString, NULL) END,
+                CASE WHEN @RequiredMetadataKeys_Clear = 1 THEN NULL ELSE ISNULL(@RequiredMetadataKeys, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[SearchScopeEntity]
+            (
+                [SearchScopeID],
+                [EntityID],
+                [ExtraFilter],
+                [UserSearchString],
+                [RequiredMetadataKeys]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @SearchScopeID,
+                @EntityID,
+                CASE WHEN @ExtraFilter_Clear = 1 THEN NULL ELSE ISNULL(@ExtraFilter, NULL) END,
+                CASE WHEN @UserSearchString_Clear = 1 THEN NULL ELSE ISNULL(@UserSearchString, NULL) END,
+                CASE WHEN @RequiredMetadataKeys_Clear = 1 THEN NULL ELSE ISNULL(@RequiredMetadataKeys, NULL) END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwSearchScopeEntities] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateSearchScopeEntity] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: Search Scope Entities */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateSearchScopeEntity] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: Search Scope Entities */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Search Scope Entities
+-- Item: spUpdateSearchScopeEntity
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR SearchScopeEntity
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateSearchScopeEntity]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateSearchScopeEntity];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateSearchScopeEntity]
+    @ID uniqueidentifier,
+    @SearchScopeID uniqueidentifier = NULL,
+    @EntityID uniqueidentifier = NULL,
+    @ExtraFilter_Clear bit = 0,
+    @ExtraFilter nvarchar(MAX) = NULL,
+    @UserSearchString_Clear bit = 0,
+    @UserSearchString nvarchar(MAX) = NULL,
+    @RequiredMetadataKeys_Clear bit = 0,
+    @RequiredMetadataKeys nvarchar(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[SearchScopeEntity]
+    SET
+        [SearchScopeID] = ISNULL(@SearchScopeID, [SearchScopeID]),
+        [EntityID] = ISNULL(@EntityID, [EntityID]),
+        [ExtraFilter] = CASE WHEN @ExtraFilter_Clear = 1 THEN NULL ELSE ISNULL(@ExtraFilter, [ExtraFilter]) END,
+        [UserSearchString] = CASE WHEN @UserSearchString_Clear = 1 THEN NULL ELSE ISNULL(@UserSearchString, [UserSearchString]) END,
+        [RequiredMetadataKeys] = CASE WHEN @RequiredMetadataKeys_Clear = 1 THEN NULL ELSE ISNULL(@RequiredMetadataKeys, [RequiredMetadataKeys]) END
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwSearchScopeEntities] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwSearchScopeEntities]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateSearchScopeEntity] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the SearchScopeEntity table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateSearchScopeEntity]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateSearchScopeEntity];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateSearchScopeEntity
+ON [${flyway:defaultSchema}].[SearchScopeEntity]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[SearchScopeEntity]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[SearchScopeEntity] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: Search Scope Entities */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateSearchScopeEntity] TO [cdp_Developer], [cdp_Integration];
 
 /* Base View SQL for MJ: Search Scope External Indexes */
 -----------------------------------------------------------------
@@ -3469,6 +3428,48 @@ GO
 /* spUpdate Permissions for MJ: Search Scope Permissions */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateSearchScopePermission] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: Search Scope Entities */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Search Scope Entities
+-- Item: spDeleteSearchScopeEntity
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR SearchScopeEntity
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteSearchScopeEntity]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteSearchScopeEntity];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteSearchScopeEntity]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[SearchScopeEntity]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSearchScopeEntity] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: Search Scope Entities */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteSearchScopeEntity] TO [cdp_Developer], [cdp_Integration];
 
 /* spDelete SQL for MJ: Search Scope External Indexes */
 -----------------------------------------------------------------
@@ -4415,7 +4416,6 @@ BEGIN
     DECLARE @MJAIPromptRuns_AgentID_ParentID uniqueidentifier
     DECLARE @MJAIPromptRuns_AgentID_RunType nvarchar(20)
     DECLARE @MJAIPromptRuns_AgentID_ExecutionOrder int
-    DECLARE @MJAIPromptRuns_AgentID_AgentRunID uniqueidentifier
     DECLARE @MJAIPromptRuns_AgentID_Cost decimal(19, 8)
     DECLARE @MJAIPromptRuns_AgentID_CostCurrency nvarchar(10)
     DECLARE @MJAIPromptRuns_AgentID_TokensUsedRollup int
@@ -4483,12 +4483,12 @@ BEGIN
     DECLARE @MJAIPromptRuns_AgentID_TokensCacheReadRollup int
     DECLARE @MJAIPromptRuns_AgentID_TokensCacheWriteRollup int
     DECLARE cascade_update_MJAIPromptRuns_AgentID_cursor CURSOR FOR
-        SELECT [ID], [PromptID], [ModelID], [VendorID], [AgentID], [ConfigurationID], [RunAt], [CompletedAt], [ExecutionTimeMS], [Messages], [Result], [TokensUsed], [TokensPrompt], [TokensCompletion], [TotalCost], [Success], [ErrorMessage], [ParentID], [RunType], [ExecutionOrder], [AgentRunID], [Cost], [CostCurrency], [TokensUsedRollup], [TokensPromptRollup], [TokensCompletionRollup], [Temperature], [TopP], [TopK], [MinP], [FrequencyPenalty], [PresencePenalty], [Seed], [StopSequences], [ResponseFormat], [LogProbs], [TopLogProbs], [DescendantCost], [ValidationAttemptCount], [SuccessfulValidationCount], [FinalValidationPassed], [ValidationBehavior], [RetryStrategy], [MaxRetriesConfigured], [FinalValidationError], [ValidationErrorCount], [CommonValidationError], [FirstAttemptAt], [LastAttemptAt], [TotalRetryDurationMS], [ValidationAttempts], [ValidationSummary], [FailoverAttempts], [FailoverErrors], [FailoverDurations], [OriginalModelID], [OriginalRequestStartTime], [TotalFailoverDuration], [RerunFromPromptRunID], [ModelSelection], [Status], [Cancelled], [CancellationReason], [ModelPowerRank], [SelectionStrategy], [CacheHit], [CacheKey], [JudgeID], [JudgeScore], [WasSelectedResult], [StreamingEnabled], [FirstTokenTime], [ErrorDetails], [ChildPromptID], [QueueTime], [PromptTime], [CompletionTime], [ModelSpecificResponseDetails], [EffortLevel], [RunName], [Comments], [TestRunID], [AssistantPrefill], [TokensCacheRead], [TokensCacheWrite], [TokensCacheReadRollup], [TokensCacheWriteRollup]
+        SELECT [ID], [PromptID], [ModelID], [VendorID], [AgentID], [ConfigurationID], [RunAt], [CompletedAt], [ExecutionTimeMS], [Messages], [Result], [TokensUsed], [TokensPrompt], [TokensCompletion], [TotalCost], [Success], [ErrorMessage], [ParentID], [RunType], [ExecutionOrder], [Cost], [CostCurrency], [TokensUsedRollup], [TokensPromptRollup], [TokensCompletionRollup], [Temperature], [TopP], [TopK], [MinP], [FrequencyPenalty], [PresencePenalty], [Seed], [StopSequences], [ResponseFormat], [LogProbs], [TopLogProbs], [DescendantCost], [ValidationAttemptCount], [SuccessfulValidationCount], [FinalValidationPassed], [ValidationBehavior], [RetryStrategy], [MaxRetriesConfigured], [FinalValidationError], [ValidationErrorCount], [CommonValidationError], [FirstAttemptAt], [LastAttemptAt], [TotalRetryDurationMS], [ValidationAttempts], [ValidationSummary], [FailoverAttempts], [FailoverErrors], [FailoverDurations], [OriginalModelID], [OriginalRequestStartTime], [TotalFailoverDuration], [RerunFromPromptRunID], [ModelSelection], [Status], [Cancelled], [CancellationReason], [ModelPowerRank], [SelectionStrategy], [CacheHit], [CacheKey], [JudgeID], [JudgeScore], [WasSelectedResult], [StreamingEnabled], [FirstTokenTime], [ErrorDetails], [ChildPromptID], [QueueTime], [PromptTime], [CompletionTime], [ModelSpecificResponseDetails], [EffortLevel], [RunName], [Comments], [TestRunID], [AssistantPrefill], [TokensCacheRead], [TokensCacheWrite], [TokensCacheReadRollup], [TokensCacheWriteRollup]
         FROM [${flyway:defaultSchema}].[AIPromptRun]
         WHERE [AgentID] = @ID
 
     OPEN cascade_update_MJAIPromptRuns_AgentID_cursor
-    FETCH NEXT FROM cascade_update_MJAIPromptRuns_AgentID_cursor INTO @MJAIPromptRuns_AgentIDID, @MJAIPromptRuns_AgentID_PromptID, @MJAIPromptRuns_AgentID_ModelID, @MJAIPromptRuns_AgentID_VendorID, @MJAIPromptRuns_AgentID_AgentID, @MJAIPromptRuns_AgentID_ConfigurationID, @MJAIPromptRuns_AgentID_RunAt, @MJAIPromptRuns_AgentID_CompletedAt, @MJAIPromptRuns_AgentID_ExecutionTimeMS, @MJAIPromptRuns_AgentID_Messages, @MJAIPromptRuns_AgentID_Result, @MJAIPromptRuns_AgentID_TokensUsed, @MJAIPromptRuns_AgentID_TokensPrompt, @MJAIPromptRuns_AgentID_TokensCompletion, @MJAIPromptRuns_AgentID_TotalCost, @MJAIPromptRuns_AgentID_Success, @MJAIPromptRuns_AgentID_ErrorMessage, @MJAIPromptRuns_AgentID_ParentID, @MJAIPromptRuns_AgentID_RunType, @MJAIPromptRuns_AgentID_ExecutionOrder, @MJAIPromptRuns_AgentID_AgentRunID, @MJAIPromptRuns_AgentID_Cost, @MJAIPromptRuns_AgentID_CostCurrency, @MJAIPromptRuns_AgentID_TokensUsedRollup, @MJAIPromptRuns_AgentID_TokensPromptRollup, @MJAIPromptRuns_AgentID_TokensCompletionRollup, @MJAIPromptRuns_AgentID_Temperature, @MJAIPromptRuns_AgentID_TopP, @MJAIPromptRuns_AgentID_TopK, @MJAIPromptRuns_AgentID_MinP, @MJAIPromptRuns_AgentID_FrequencyPenalty, @MJAIPromptRuns_AgentID_PresencePenalty, @MJAIPromptRuns_AgentID_Seed, @MJAIPromptRuns_AgentID_StopSequences, @MJAIPromptRuns_AgentID_ResponseFormat, @MJAIPromptRuns_AgentID_LogProbs, @MJAIPromptRuns_AgentID_TopLogProbs, @MJAIPromptRuns_AgentID_DescendantCost, @MJAIPromptRuns_AgentID_ValidationAttemptCount, @MJAIPromptRuns_AgentID_SuccessfulValidationCount, @MJAIPromptRuns_AgentID_FinalValidationPassed, @MJAIPromptRuns_AgentID_ValidationBehavior, @MJAIPromptRuns_AgentID_RetryStrategy, @MJAIPromptRuns_AgentID_MaxRetriesConfigured, @MJAIPromptRuns_AgentID_FinalValidationError, @MJAIPromptRuns_AgentID_ValidationErrorCount, @MJAIPromptRuns_AgentID_CommonValidationError, @MJAIPromptRuns_AgentID_FirstAttemptAt, @MJAIPromptRuns_AgentID_LastAttemptAt, @MJAIPromptRuns_AgentID_TotalRetryDurationMS, @MJAIPromptRuns_AgentID_ValidationAttempts, @MJAIPromptRuns_AgentID_ValidationSummary, @MJAIPromptRuns_AgentID_FailoverAttempts, @MJAIPromptRuns_AgentID_FailoverErrors, @MJAIPromptRuns_AgentID_FailoverDurations, @MJAIPromptRuns_AgentID_OriginalModelID, @MJAIPromptRuns_AgentID_OriginalRequestStartTime, @MJAIPromptRuns_AgentID_TotalFailoverDuration, @MJAIPromptRuns_AgentID_RerunFromPromptRunID, @MJAIPromptRuns_AgentID_ModelSelection, @MJAIPromptRuns_AgentID_Status, @MJAIPromptRuns_AgentID_Cancelled, @MJAIPromptRuns_AgentID_CancellationReason, @MJAIPromptRuns_AgentID_ModelPowerRank, @MJAIPromptRuns_AgentID_SelectionStrategy, @MJAIPromptRuns_AgentID_CacheHit, @MJAIPromptRuns_AgentID_CacheKey, @MJAIPromptRuns_AgentID_JudgeID, @MJAIPromptRuns_AgentID_JudgeScore, @MJAIPromptRuns_AgentID_WasSelectedResult, @MJAIPromptRuns_AgentID_StreamingEnabled, @MJAIPromptRuns_AgentID_FirstTokenTime, @MJAIPromptRuns_AgentID_ErrorDetails, @MJAIPromptRuns_AgentID_ChildPromptID, @MJAIPromptRuns_AgentID_QueueTime, @MJAIPromptRuns_AgentID_PromptTime, @MJAIPromptRuns_AgentID_CompletionTime, @MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, @MJAIPromptRuns_AgentID_EffortLevel, @MJAIPromptRuns_AgentID_RunName, @MJAIPromptRuns_AgentID_Comments, @MJAIPromptRuns_AgentID_TestRunID, @MJAIPromptRuns_AgentID_AssistantPrefill, @MJAIPromptRuns_AgentID_TokensCacheRead, @MJAIPromptRuns_AgentID_TokensCacheWrite, @MJAIPromptRuns_AgentID_TokensCacheReadRollup, @MJAIPromptRuns_AgentID_TokensCacheWriteRollup
+    FETCH NEXT FROM cascade_update_MJAIPromptRuns_AgentID_cursor INTO @MJAIPromptRuns_AgentIDID, @MJAIPromptRuns_AgentID_PromptID, @MJAIPromptRuns_AgentID_ModelID, @MJAIPromptRuns_AgentID_VendorID, @MJAIPromptRuns_AgentID_AgentID, @MJAIPromptRuns_AgentID_ConfigurationID, @MJAIPromptRuns_AgentID_RunAt, @MJAIPromptRuns_AgentID_CompletedAt, @MJAIPromptRuns_AgentID_ExecutionTimeMS, @MJAIPromptRuns_AgentID_Messages, @MJAIPromptRuns_AgentID_Result, @MJAIPromptRuns_AgentID_TokensUsed, @MJAIPromptRuns_AgentID_TokensPrompt, @MJAIPromptRuns_AgentID_TokensCompletion, @MJAIPromptRuns_AgentID_TotalCost, @MJAIPromptRuns_AgentID_Success, @MJAIPromptRuns_AgentID_ErrorMessage, @MJAIPromptRuns_AgentID_ParentID, @MJAIPromptRuns_AgentID_RunType, @MJAIPromptRuns_AgentID_ExecutionOrder, @MJAIPromptRuns_AgentID_Cost, @MJAIPromptRuns_AgentID_CostCurrency, @MJAIPromptRuns_AgentID_TokensUsedRollup, @MJAIPromptRuns_AgentID_TokensPromptRollup, @MJAIPromptRuns_AgentID_TokensCompletionRollup, @MJAIPromptRuns_AgentID_Temperature, @MJAIPromptRuns_AgentID_TopP, @MJAIPromptRuns_AgentID_TopK, @MJAIPromptRuns_AgentID_MinP, @MJAIPromptRuns_AgentID_FrequencyPenalty, @MJAIPromptRuns_AgentID_PresencePenalty, @MJAIPromptRuns_AgentID_Seed, @MJAIPromptRuns_AgentID_StopSequences, @MJAIPromptRuns_AgentID_ResponseFormat, @MJAIPromptRuns_AgentID_LogProbs, @MJAIPromptRuns_AgentID_TopLogProbs, @MJAIPromptRuns_AgentID_DescendantCost, @MJAIPromptRuns_AgentID_ValidationAttemptCount, @MJAIPromptRuns_AgentID_SuccessfulValidationCount, @MJAIPromptRuns_AgentID_FinalValidationPassed, @MJAIPromptRuns_AgentID_ValidationBehavior, @MJAIPromptRuns_AgentID_RetryStrategy, @MJAIPromptRuns_AgentID_MaxRetriesConfigured, @MJAIPromptRuns_AgentID_FinalValidationError, @MJAIPromptRuns_AgentID_ValidationErrorCount, @MJAIPromptRuns_AgentID_CommonValidationError, @MJAIPromptRuns_AgentID_FirstAttemptAt, @MJAIPromptRuns_AgentID_LastAttemptAt, @MJAIPromptRuns_AgentID_TotalRetryDurationMS, @MJAIPromptRuns_AgentID_ValidationAttempts, @MJAIPromptRuns_AgentID_ValidationSummary, @MJAIPromptRuns_AgentID_FailoverAttempts, @MJAIPromptRuns_AgentID_FailoverErrors, @MJAIPromptRuns_AgentID_FailoverDurations, @MJAIPromptRuns_AgentID_OriginalModelID, @MJAIPromptRuns_AgentID_OriginalRequestStartTime, @MJAIPromptRuns_AgentID_TotalFailoverDuration, @MJAIPromptRuns_AgentID_RerunFromPromptRunID, @MJAIPromptRuns_AgentID_ModelSelection, @MJAIPromptRuns_AgentID_Status, @MJAIPromptRuns_AgentID_Cancelled, @MJAIPromptRuns_AgentID_CancellationReason, @MJAIPromptRuns_AgentID_ModelPowerRank, @MJAIPromptRuns_AgentID_SelectionStrategy, @MJAIPromptRuns_AgentID_CacheHit, @MJAIPromptRuns_AgentID_CacheKey, @MJAIPromptRuns_AgentID_JudgeID, @MJAIPromptRuns_AgentID_JudgeScore, @MJAIPromptRuns_AgentID_WasSelectedResult, @MJAIPromptRuns_AgentID_StreamingEnabled, @MJAIPromptRuns_AgentID_FirstTokenTime, @MJAIPromptRuns_AgentID_ErrorDetails, @MJAIPromptRuns_AgentID_ChildPromptID, @MJAIPromptRuns_AgentID_QueueTime, @MJAIPromptRuns_AgentID_PromptTime, @MJAIPromptRuns_AgentID_CompletionTime, @MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, @MJAIPromptRuns_AgentID_EffortLevel, @MJAIPromptRuns_AgentID_RunName, @MJAIPromptRuns_AgentID_Comments, @MJAIPromptRuns_AgentID_TestRunID, @MJAIPromptRuns_AgentID_AssistantPrefill, @MJAIPromptRuns_AgentID_TokensCacheRead, @MJAIPromptRuns_AgentID_TokensCacheWrite, @MJAIPromptRuns_AgentID_TokensCacheReadRollup, @MJAIPromptRuns_AgentID_TokensCacheWriteRollup
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -4496,9 +4496,9 @@ BEGIN
         SET @MJAIPromptRuns_AgentID_AgentID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateAIPromptRun] @ID = @MJAIPromptRuns_AgentIDID, @PromptID = @MJAIPromptRuns_AgentID_PromptID, @ModelID = @MJAIPromptRuns_AgentID_ModelID, @VendorID = @MJAIPromptRuns_AgentID_VendorID, @AgentID_Clear = 1, @AgentID = @MJAIPromptRuns_AgentID_AgentID, @ConfigurationID = @MJAIPromptRuns_AgentID_ConfigurationID, @RunAt = @MJAIPromptRuns_AgentID_RunAt, @CompletedAt = @MJAIPromptRuns_AgentID_CompletedAt, @ExecutionTimeMS = @MJAIPromptRuns_AgentID_ExecutionTimeMS, @Messages = @MJAIPromptRuns_AgentID_Messages, @Result = @MJAIPromptRuns_AgentID_Result, @TokensUsed = @MJAIPromptRuns_AgentID_TokensUsed, @TokensPrompt = @MJAIPromptRuns_AgentID_TokensPrompt, @TokensCompletion = @MJAIPromptRuns_AgentID_TokensCompletion, @TotalCost = @MJAIPromptRuns_AgentID_TotalCost, @Success = @MJAIPromptRuns_AgentID_Success, @ErrorMessage = @MJAIPromptRuns_AgentID_ErrorMessage, @ParentID = @MJAIPromptRuns_AgentID_ParentID, @RunType = @MJAIPromptRuns_AgentID_RunType, @ExecutionOrder = @MJAIPromptRuns_AgentID_ExecutionOrder, @AgentRunID = @MJAIPromptRuns_AgentID_AgentRunID, @Cost = @MJAIPromptRuns_AgentID_Cost, @CostCurrency = @MJAIPromptRuns_AgentID_CostCurrency, @TokensUsedRollup = @MJAIPromptRuns_AgentID_TokensUsedRollup, @TokensPromptRollup = @MJAIPromptRuns_AgentID_TokensPromptRollup, @TokensCompletionRollup = @MJAIPromptRuns_AgentID_TokensCompletionRollup, @Temperature = @MJAIPromptRuns_AgentID_Temperature, @TopP = @MJAIPromptRuns_AgentID_TopP, @TopK = @MJAIPromptRuns_AgentID_TopK, @MinP = @MJAIPromptRuns_AgentID_MinP, @FrequencyPenalty = @MJAIPromptRuns_AgentID_FrequencyPenalty, @PresencePenalty = @MJAIPromptRuns_AgentID_PresencePenalty, @Seed = @MJAIPromptRuns_AgentID_Seed, @StopSequences = @MJAIPromptRuns_AgentID_StopSequences, @ResponseFormat = @MJAIPromptRuns_AgentID_ResponseFormat, @LogProbs = @MJAIPromptRuns_AgentID_LogProbs, @TopLogProbs = @MJAIPromptRuns_AgentID_TopLogProbs, @DescendantCost = @MJAIPromptRuns_AgentID_DescendantCost, @ValidationAttemptCount = @MJAIPromptRuns_AgentID_ValidationAttemptCount, @SuccessfulValidationCount = @MJAIPromptRuns_AgentID_SuccessfulValidationCount, @FinalValidationPassed = @MJAIPromptRuns_AgentID_FinalValidationPassed, @ValidationBehavior = @MJAIPromptRuns_AgentID_ValidationBehavior, @RetryStrategy = @MJAIPromptRuns_AgentID_RetryStrategy, @MaxRetriesConfigured = @MJAIPromptRuns_AgentID_MaxRetriesConfigured, @FinalValidationError = @MJAIPromptRuns_AgentID_FinalValidationError, @ValidationErrorCount = @MJAIPromptRuns_AgentID_ValidationErrorCount, @CommonValidationError = @MJAIPromptRuns_AgentID_CommonValidationError, @FirstAttemptAt = @MJAIPromptRuns_AgentID_FirstAttemptAt, @LastAttemptAt = @MJAIPromptRuns_AgentID_LastAttemptAt, @TotalRetryDurationMS = @MJAIPromptRuns_AgentID_TotalRetryDurationMS, @ValidationAttempts = @MJAIPromptRuns_AgentID_ValidationAttempts, @ValidationSummary = @MJAIPromptRuns_AgentID_ValidationSummary, @FailoverAttempts = @MJAIPromptRuns_AgentID_FailoverAttempts, @FailoverErrors = @MJAIPromptRuns_AgentID_FailoverErrors, @FailoverDurations = @MJAIPromptRuns_AgentID_FailoverDurations, @OriginalModelID = @MJAIPromptRuns_AgentID_OriginalModelID, @OriginalRequestStartTime = @MJAIPromptRuns_AgentID_OriginalRequestStartTime, @TotalFailoverDuration = @MJAIPromptRuns_AgentID_TotalFailoverDuration, @RerunFromPromptRunID = @MJAIPromptRuns_AgentID_RerunFromPromptRunID, @ModelSelection = @MJAIPromptRuns_AgentID_ModelSelection, @Status = @MJAIPromptRuns_AgentID_Status, @Cancelled = @MJAIPromptRuns_AgentID_Cancelled, @CancellationReason = @MJAIPromptRuns_AgentID_CancellationReason, @ModelPowerRank = @MJAIPromptRuns_AgentID_ModelPowerRank, @SelectionStrategy = @MJAIPromptRuns_AgentID_SelectionStrategy, @CacheHit = @MJAIPromptRuns_AgentID_CacheHit, @CacheKey = @MJAIPromptRuns_AgentID_CacheKey, @JudgeID = @MJAIPromptRuns_AgentID_JudgeID, @JudgeScore = @MJAIPromptRuns_AgentID_JudgeScore, @WasSelectedResult = @MJAIPromptRuns_AgentID_WasSelectedResult, @StreamingEnabled = @MJAIPromptRuns_AgentID_StreamingEnabled, @FirstTokenTime = @MJAIPromptRuns_AgentID_FirstTokenTime, @ErrorDetails = @MJAIPromptRuns_AgentID_ErrorDetails, @ChildPromptID = @MJAIPromptRuns_AgentID_ChildPromptID, @QueueTime = @MJAIPromptRuns_AgentID_QueueTime, @PromptTime = @MJAIPromptRuns_AgentID_PromptTime, @CompletionTime = @MJAIPromptRuns_AgentID_CompletionTime, @ModelSpecificResponseDetails = @MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, @EffortLevel = @MJAIPromptRuns_AgentID_EffortLevel, @RunName = @MJAIPromptRuns_AgentID_RunName, @Comments = @MJAIPromptRuns_AgentID_Comments, @TestRunID = @MJAIPromptRuns_AgentID_TestRunID, @AssistantPrefill = @MJAIPromptRuns_AgentID_AssistantPrefill, @TokensCacheRead = @MJAIPromptRuns_AgentID_TokensCacheRead, @TokensCacheWrite = @MJAIPromptRuns_AgentID_TokensCacheWrite, @TokensCacheReadRollup = @MJAIPromptRuns_AgentID_TokensCacheReadRollup, @TokensCacheWriteRollup = @MJAIPromptRuns_AgentID_TokensCacheWriteRollup
+        EXEC [${flyway:defaultSchema}].[spUpdateAIPromptRun] @ID = @MJAIPromptRuns_AgentIDID, @PromptID = @MJAIPromptRuns_AgentID_PromptID, @ModelID = @MJAIPromptRuns_AgentID_ModelID, @VendorID = @MJAIPromptRuns_AgentID_VendorID, @AgentID_Clear = 1, @AgentID = @MJAIPromptRuns_AgentID_AgentID, @ConfigurationID = @MJAIPromptRuns_AgentID_ConfigurationID, @RunAt = @MJAIPromptRuns_AgentID_RunAt, @CompletedAt = @MJAIPromptRuns_AgentID_CompletedAt, @ExecutionTimeMS = @MJAIPromptRuns_AgentID_ExecutionTimeMS, @Messages = @MJAIPromptRuns_AgentID_Messages, @Result = @MJAIPromptRuns_AgentID_Result, @TokensUsed = @MJAIPromptRuns_AgentID_TokensUsed, @TokensPrompt = @MJAIPromptRuns_AgentID_TokensPrompt, @TokensCompletion = @MJAIPromptRuns_AgentID_TokensCompletion, @TotalCost = @MJAIPromptRuns_AgentID_TotalCost, @Success = @MJAIPromptRuns_AgentID_Success, @ErrorMessage = @MJAIPromptRuns_AgentID_ErrorMessage, @ParentID = @MJAIPromptRuns_AgentID_ParentID, @RunType = @MJAIPromptRuns_AgentID_RunType, @ExecutionOrder = @MJAIPromptRuns_AgentID_ExecutionOrder, @Cost = @MJAIPromptRuns_AgentID_Cost, @CostCurrency = @MJAIPromptRuns_AgentID_CostCurrency, @TokensUsedRollup = @MJAIPromptRuns_AgentID_TokensUsedRollup, @TokensPromptRollup = @MJAIPromptRuns_AgentID_TokensPromptRollup, @TokensCompletionRollup = @MJAIPromptRuns_AgentID_TokensCompletionRollup, @Temperature = @MJAIPromptRuns_AgentID_Temperature, @TopP = @MJAIPromptRuns_AgentID_TopP, @TopK = @MJAIPromptRuns_AgentID_TopK, @MinP = @MJAIPromptRuns_AgentID_MinP, @FrequencyPenalty = @MJAIPromptRuns_AgentID_FrequencyPenalty, @PresencePenalty = @MJAIPromptRuns_AgentID_PresencePenalty, @Seed = @MJAIPromptRuns_AgentID_Seed, @StopSequences = @MJAIPromptRuns_AgentID_StopSequences, @ResponseFormat = @MJAIPromptRuns_AgentID_ResponseFormat, @LogProbs = @MJAIPromptRuns_AgentID_LogProbs, @TopLogProbs = @MJAIPromptRuns_AgentID_TopLogProbs, @DescendantCost = @MJAIPromptRuns_AgentID_DescendantCost, @ValidationAttemptCount = @MJAIPromptRuns_AgentID_ValidationAttemptCount, @SuccessfulValidationCount = @MJAIPromptRuns_AgentID_SuccessfulValidationCount, @FinalValidationPassed = @MJAIPromptRuns_AgentID_FinalValidationPassed, @ValidationBehavior = @MJAIPromptRuns_AgentID_ValidationBehavior, @RetryStrategy = @MJAIPromptRuns_AgentID_RetryStrategy, @MaxRetriesConfigured = @MJAIPromptRuns_AgentID_MaxRetriesConfigured, @FinalValidationError = @MJAIPromptRuns_AgentID_FinalValidationError, @ValidationErrorCount = @MJAIPromptRuns_AgentID_ValidationErrorCount, @CommonValidationError = @MJAIPromptRuns_AgentID_CommonValidationError, @FirstAttemptAt = @MJAIPromptRuns_AgentID_FirstAttemptAt, @LastAttemptAt = @MJAIPromptRuns_AgentID_LastAttemptAt, @TotalRetryDurationMS = @MJAIPromptRuns_AgentID_TotalRetryDurationMS, @ValidationAttempts = @MJAIPromptRuns_AgentID_ValidationAttempts, @ValidationSummary = @MJAIPromptRuns_AgentID_ValidationSummary, @FailoverAttempts = @MJAIPromptRuns_AgentID_FailoverAttempts, @FailoverErrors = @MJAIPromptRuns_AgentID_FailoverErrors, @FailoverDurations = @MJAIPromptRuns_AgentID_FailoverDurations, @OriginalModelID = @MJAIPromptRuns_AgentID_OriginalModelID, @OriginalRequestStartTime = @MJAIPromptRuns_AgentID_OriginalRequestStartTime, @TotalFailoverDuration = @MJAIPromptRuns_AgentID_TotalFailoverDuration, @RerunFromPromptRunID = @MJAIPromptRuns_AgentID_RerunFromPromptRunID, @ModelSelection = @MJAIPromptRuns_AgentID_ModelSelection, @Status = @MJAIPromptRuns_AgentID_Status, @Cancelled = @MJAIPromptRuns_AgentID_Cancelled, @CancellationReason = @MJAIPromptRuns_AgentID_CancellationReason, @ModelPowerRank = @MJAIPromptRuns_AgentID_ModelPowerRank, @SelectionStrategy = @MJAIPromptRuns_AgentID_SelectionStrategy, @CacheHit = @MJAIPromptRuns_AgentID_CacheHit, @CacheKey = @MJAIPromptRuns_AgentID_CacheKey, @JudgeID = @MJAIPromptRuns_AgentID_JudgeID, @JudgeScore = @MJAIPromptRuns_AgentID_JudgeScore, @WasSelectedResult = @MJAIPromptRuns_AgentID_WasSelectedResult, @StreamingEnabled = @MJAIPromptRuns_AgentID_StreamingEnabled, @FirstTokenTime = @MJAIPromptRuns_AgentID_FirstTokenTime, @ErrorDetails = @MJAIPromptRuns_AgentID_ErrorDetails, @ChildPromptID = @MJAIPromptRuns_AgentID_ChildPromptID, @QueueTime = @MJAIPromptRuns_AgentID_QueueTime, @PromptTime = @MJAIPromptRuns_AgentID_PromptTime, @CompletionTime = @MJAIPromptRuns_AgentID_CompletionTime, @ModelSpecificResponseDetails = @MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, @EffortLevel = @MJAIPromptRuns_AgentID_EffortLevel, @RunName = @MJAIPromptRuns_AgentID_RunName, @Comments = @MJAIPromptRuns_AgentID_Comments, @TestRunID = @MJAIPromptRuns_AgentID_TestRunID, @AssistantPrefill = @MJAIPromptRuns_AgentID_AssistantPrefill, @TokensCacheRead = @MJAIPromptRuns_AgentID_TokensCacheRead, @TokensCacheWrite = @MJAIPromptRuns_AgentID_TokensCacheWrite, @TokensCacheReadRollup = @MJAIPromptRuns_AgentID_TokensCacheReadRollup, @TokensCacheWriteRollup = @MJAIPromptRuns_AgentID_TokensCacheWriteRollup
 
-        FETCH NEXT FROM cascade_update_MJAIPromptRuns_AgentID_cursor INTO @MJAIPromptRuns_AgentIDID, @MJAIPromptRuns_AgentID_PromptID, @MJAIPromptRuns_AgentID_ModelID, @MJAIPromptRuns_AgentID_VendorID, @MJAIPromptRuns_AgentID_AgentID, @MJAIPromptRuns_AgentID_ConfigurationID, @MJAIPromptRuns_AgentID_RunAt, @MJAIPromptRuns_AgentID_CompletedAt, @MJAIPromptRuns_AgentID_ExecutionTimeMS, @MJAIPromptRuns_AgentID_Messages, @MJAIPromptRuns_AgentID_Result, @MJAIPromptRuns_AgentID_TokensUsed, @MJAIPromptRuns_AgentID_TokensPrompt, @MJAIPromptRuns_AgentID_TokensCompletion, @MJAIPromptRuns_AgentID_TotalCost, @MJAIPromptRuns_AgentID_Success, @MJAIPromptRuns_AgentID_ErrorMessage, @MJAIPromptRuns_AgentID_ParentID, @MJAIPromptRuns_AgentID_RunType, @MJAIPromptRuns_AgentID_ExecutionOrder, @MJAIPromptRuns_AgentID_AgentRunID, @MJAIPromptRuns_AgentID_Cost, @MJAIPromptRuns_AgentID_CostCurrency, @MJAIPromptRuns_AgentID_TokensUsedRollup, @MJAIPromptRuns_AgentID_TokensPromptRollup, @MJAIPromptRuns_AgentID_TokensCompletionRollup, @MJAIPromptRuns_AgentID_Temperature, @MJAIPromptRuns_AgentID_TopP, @MJAIPromptRuns_AgentID_TopK, @MJAIPromptRuns_AgentID_MinP, @MJAIPromptRuns_AgentID_FrequencyPenalty, @MJAIPromptRuns_AgentID_PresencePenalty, @MJAIPromptRuns_AgentID_Seed, @MJAIPromptRuns_AgentID_StopSequences, @MJAIPromptRuns_AgentID_ResponseFormat, @MJAIPromptRuns_AgentID_LogProbs, @MJAIPromptRuns_AgentID_TopLogProbs, @MJAIPromptRuns_AgentID_DescendantCost, @MJAIPromptRuns_AgentID_ValidationAttemptCount, @MJAIPromptRuns_AgentID_SuccessfulValidationCount, @MJAIPromptRuns_AgentID_FinalValidationPassed, @MJAIPromptRuns_AgentID_ValidationBehavior, @MJAIPromptRuns_AgentID_RetryStrategy, @MJAIPromptRuns_AgentID_MaxRetriesConfigured, @MJAIPromptRuns_AgentID_FinalValidationError, @MJAIPromptRuns_AgentID_ValidationErrorCount, @MJAIPromptRuns_AgentID_CommonValidationError, @MJAIPromptRuns_AgentID_FirstAttemptAt, @MJAIPromptRuns_AgentID_LastAttemptAt, @MJAIPromptRuns_AgentID_TotalRetryDurationMS, @MJAIPromptRuns_AgentID_ValidationAttempts, @MJAIPromptRuns_AgentID_ValidationSummary, @MJAIPromptRuns_AgentID_FailoverAttempts, @MJAIPromptRuns_AgentID_FailoverErrors, @MJAIPromptRuns_AgentID_FailoverDurations, @MJAIPromptRuns_AgentID_OriginalModelID, @MJAIPromptRuns_AgentID_OriginalRequestStartTime, @MJAIPromptRuns_AgentID_TotalFailoverDuration, @MJAIPromptRuns_AgentID_RerunFromPromptRunID, @MJAIPromptRuns_AgentID_ModelSelection, @MJAIPromptRuns_AgentID_Status, @MJAIPromptRuns_AgentID_Cancelled, @MJAIPromptRuns_AgentID_CancellationReason, @MJAIPromptRuns_AgentID_ModelPowerRank, @MJAIPromptRuns_AgentID_SelectionStrategy, @MJAIPromptRuns_AgentID_CacheHit, @MJAIPromptRuns_AgentID_CacheKey, @MJAIPromptRuns_AgentID_JudgeID, @MJAIPromptRuns_AgentID_JudgeScore, @MJAIPromptRuns_AgentID_WasSelectedResult, @MJAIPromptRuns_AgentID_StreamingEnabled, @MJAIPromptRuns_AgentID_FirstTokenTime, @MJAIPromptRuns_AgentID_ErrorDetails, @MJAIPromptRuns_AgentID_ChildPromptID, @MJAIPromptRuns_AgentID_QueueTime, @MJAIPromptRuns_AgentID_PromptTime, @MJAIPromptRuns_AgentID_CompletionTime, @MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, @MJAIPromptRuns_AgentID_EffortLevel, @MJAIPromptRuns_AgentID_RunName, @MJAIPromptRuns_AgentID_Comments, @MJAIPromptRuns_AgentID_TestRunID, @MJAIPromptRuns_AgentID_AssistantPrefill, @MJAIPromptRuns_AgentID_TokensCacheRead, @MJAIPromptRuns_AgentID_TokensCacheWrite, @MJAIPromptRuns_AgentID_TokensCacheReadRollup, @MJAIPromptRuns_AgentID_TokensCacheWriteRollup
+        FETCH NEXT FROM cascade_update_MJAIPromptRuns_AgentID_cursor INTO @MJAIPromptRuns_AgentIDID, @MJAIPromptRuns_AgentID_PromptID, @MJAIPromptRuns_AgentID_ModelID, @MJAIPromptRuns_AgentID_VendorID, @MJAIPromptRuns_AgentID_AgentID, @MJAIPromptRuns_AgentID_ConfigurationID, @MJAIPromptRuns_AgentID_RunAt, @MJAIPromptRuns_AgentID_CompletedAt, @MJAIPromptRuns_AgentID_ExecutionTimeMS, @MJAIPromptRuns_AgentID_Messages, @MJAIPromptRuns_AgentID_Result, @MJAIPromptRuns_AgentID_TokensUsed, @MJAIPromptRuns_AgentID_TokensPrompt, @MJAIPromptRuns_AgentID_TokensCompletion, @MJAIPromptRuns_AgentID_TotalCost, @MJAIPromptRuns_AgentID_Success, @MJAIPromptRuns_AgentID_ErrorMessage, @MJAIPromptRuns_AgentID_ParentID, @MJAIPromptRuns_AgentID_RunType, @MJAIPromptRuns_AgentID_ExecutionOrder, @MJAIPromptRuns_AgentID_Cost, @MJAIPromptRuns_AgentID_CostCurrency, @MJAIPromptRuns_AgentID_TokensUsedRollup, @MJAIPromptRuns_AgentID_TokensPromptRollup, @MJAIPromptRuns_AgentID_TokensCompletionRollup, @MJAIPromptRuns_AgentID_Temperature, @MJAIPromptRuns_AgentID_TopP, @MJAIPromptRuns_AgentID_TopK, @MJAIPromptRuns_AgentID_MinP, @MJAIPromptRuns_AgentID_FrequencyPenalty, @MJAIPromptRuns_AgentID_PresencePenalty, @MJAIPromptRuns_AgentID_Seed, @MJAIPromptRuns_AgentID_StopSequences, @MJAIPromptRuns_AgentID_ResponseFormat, @MJAIPromptRuns_AgentID_LogProbs, @MJAIPromptRuns_AgentID_TopLogProbs, @MJAIPromptRuns_AgentID_DescendantCost, @MJAIPromptRuns_AgentID_ValidationAttemptCount, @MJAIPromptRuns_AgentID_SuccessfulValidationCount, @MJAIPromptRuns_AgentID_FinalValidationPassed, @MJAIPromptRuns_AgentID_ValidationBehavior, @MJAIPromptRuns_AgentID_RetryStrategy, @MJAIPromptRuns_AgentID_MaxRetriesConfigured, @MJAIPromptRuns_AgentID_FinalValidationError, @MJAIPromptRuns_AgentID_ValidationErrorCount, @MJAIPromptRuns_AgentID_CommonValidationError, @MJAIPromptRuns_AgentID_FirstAttemptAt, @MJAIPromptRuns_AgentID_LastAttemptAt, @MJAIPromptRuns_AgentID_TotalRetryDurationMS, @MJAIPromptRuns_AgentID_ValidationAttempts, @MJAIPromptRuns_AgentID_ValidationSummary, @MJAIPromptRuns_AgentID_FailoverAttempts, @MJAIPromptRuns_AgentID_FailoverErrors, @MJAIPromptRuns_AgentID_FailoverDurations, @MJAIPromptRuns_AgentID_OriginalModelID, @MJAIPromptRuns_AgentID_OriginalRequestStartTime, @MJAIPromptRuns_AgentID_TotalFailoverDuration, @MJAIPromptRuns_AgentID_RerunFromPromptRunID, @MJAIPromptRuns_AgentID_ModelSelection, @MJAIPromptRuns_AgentID_Status, @MJAIPromptRuns_AgentID_Cancelled, @MJAIPromptRuns_AgentID_CancellationReason, @MJAIPromptRuns_AgentID_ModelPowerRank, @MJAIPromptRuns_AgentID_SelectionStrategy, @MJAIPromptRuns_AgentID_CacheHit, @MJAIPromptRuns_AgentID_CacheKey, @MJAIPromptRuns_AgentID_JudgeID, @MJAIPromptRuns_AgentID_JudgeScore, @MJAIPromptRuns_AgentID_WasSelectedResult, @MJAIPromptRuns_AgentID_StreamingEnabled, @MJAIPromptRuns_AgentID_FirstTokenTime, @MJAIPromptRuns_AgentID_ErrorDetails, @MJAIPromptRuns_AgentID_ChildPromptID, @MJAIPromptRuns_AgentID_QueueTime, @MJAIPromptRuns_AgentID_PromptTime, @MJAIPromptRuns_AgentID_CompletionTime, @MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, @MJAIPromptRuns_AgentID_EffortLevel, @MJAIPromptRuns_AgentID_RunName, @MJAIPromptRuns_AgentID_Comments, @MJAIPromptRuns_AgentID_TestRunID, @MJAIPromptRuns_AgentID_AssistantPrefill, @MJAIPromptRuns_AgentID_TokensCacheRead, @MJAIPromptRuns_AgentID_TokensCacheWrite, @MJAIPromptRuns_AgentID_TokensCacheReadRollup, @MJAIPromptRuns_AgentID_TokensCacheWriteRollup
     END
 
     CLOSE cascade_update_MJAIPromptRuns_AgentID_cursor
@@ -4591,14 +4591,13 @@ BEGIN
     DECLARE @MJConversationDetails_AgentID_UtteranceStartMs int
     DECLARE @MJConversationDetails_AgentID_UtteranceEndMs int
     DECLARE @MJConversationDetails_AgentID_MediaType nvarchar(20)
-    DECLARE @MJConversationDetails_AgentID_SummaryPromptRunID uniqueidentifier
     DECLARE cascade_update_MJConversationDetails_AgentID_cursor CURSOR FOR
-        SELECT [ID], [ConversationID], [ExternalID], [Role], [Message], [Error], [HiddenToUser], [UserRating], [UserFeedback], [ReflectionInsights], [SummaryOfEarlierConversation], [UserID], [ArtifactID], [ArtifactVersionID], [CompletionTime], [IsPinned], [ParentID], [AgentID], [Status], [SuggestedResponses], [TestRunID], [ResponseForm], [ActionableCommands], [AutomaticCommands], [OriginalMessageChanged], [AgentSessionID], [TurnEndedAt], [UtteranceStartMs], [UtteranceEndMs], [MediaType], [SummaryPromptRunID]
+        SELECT [ID], [ConversationID], [ExternalID], [Role], [Message], [Error], [HiddenToUser], [UserRating], [UserFeedback], [ReflectionInsights], [SummaryOfEarlierConversation], [UserID], [ArtifactID], [ArtifactVersionID], [CompletionTime], [IsPinned], [ParentID], [AgentID], [Status], [SuggestedResponses], [TestRunID], [ResponseForm], [ActionableCommands], [AutomaticCommands], [OriginalMessageChanged], [AgentSessionID], [TurnEndedAt], [UtteranceStartMs], [UtteranceEndMs], [MediaType]
         FROM [${flyway:defaultSchema}].[ConversationDetail]
         WHERE [AgentID] = @ID
 
     OPEN cascade_update_MJConversationDetails_AgentID_cursor
-    FETCH NEXT FROM cascade_update_MJConversationDetails_AgentID_cursor INTO @MJConversationDetails_AgentIDID, @MJConversationDetails_AgentID_ConversationID, @MJConversationDetails_AgentID_ExternalID, @MJConversationDetails_AgentID_Role, @MJConversationDetails_AgentID_Message, @MJConversationDetails_AgentID_Error, @MJConversationDetails_AgentID_HiddenToUser, @MJConversationDetails_AgentID_UserRating, @MJConversationDetails_AgentID_UserFeedback, @MJConversationDetails_AgentID_ReflectionInsights, @MJConversationDetails_AgentID_SummaryOfEarlierConversation, @MJConversationDetails_AgentID_UserID, @MJConversationDetails_AgentID_ArtifactID, @MJConversationDetails_AgentID_ArtifactVersionID, @MJConversationDetails_AgentID_CompletionTime, @MJConversationDetails_AgentID_IsPinned, @MJConversationDetails_AgentID_ParentID, @MJConversationDetails_AgentID_AgentID, @MJConversationDetails_AgentID_Status, @MJConversationDetails_AgentID_SuggestedResponses, @MJConversationDetails_AgentID_TestRunID, @MJConversationDetails_AgentID_ResponseForm, @MJConversationDetails_AgentID_ActionableCommands, @MJConversationDetails_AgentID_AutomaticCommands, @MJConversationDetails_AgentID_OriginalMessageChanged, @MJConversationDetails_AgentID_AgentSessionID, @MJConversationDetails_AgentID_TurnEndedAt, @MJConversationDetails_AgentID_UtteranceStartMs, @MJConversationDetails_AgentID_UtteranceEndMs, @MJConversationDetails_AgentID_MediaType, @MJConversationDetails_AgentID_SummaryPromptRunID
+    FETCH NEXT FROM cascade_update_MJConversationDetails_AgentID_cursor INTO @MJConversationDetails_AgentIDID, @MJConversationDetails_AgentID_ConversationID, @MJConversationDetails_AgentID_ExternalID, @MJConversationDetails_AgentID_Role, @MJConversationDetails_AgentID_Message, @MJConversationDetails_AgentID_Error, @MJConversationDetails_AgentID_HiddenToUser, @MJConversationDetails_AgentID_UserRating, @MJConversationDetails_AgentID_UserFeedback, @MJConversationDetails_AgentID_ReflectionInsights, @MJConversationDetails_AgentID_SummaryOfEarlierConversation, @MJConversationDetails_AgentID_UserID, @MJConversationDetails_AgentID_ArtifactID, @MJConversationDetails_AgentID_ArtifactVersionID, @MJConversationDetails_AgentID_CompletionTime, @MJConversationDetails_AgentID_IsPinned, @MJConversationDetails_AgentID_ParentID, @MJConversationDetails_AgentID_AgentID, @MJConversationDetails_AgentID_Status, @MJConversationDetails_AgentID_SuggestedResponses, @MJConversationDetails_AgentID_TestRunID, @MJConversationDetails_AgentID_ResponseForm, @MJConversationDetails_AgentID_ActionableCommands, @MJConversationDetails_AgentID_AutomaticCommands, @MJConversationDetails_AgentID_OriginalMessageChanged, @MJConversationDetails_AgentID_AgentSessionID, @MJConversationDetails_AgentID_TurnEndedAt, @MJConversationDetails_AgentID_UtteranceStartMs, @MJConversationDetails_AgentID_UtteranceEndMs, @MJConversationDetails_AgentID_MediaType
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -4606,9 +4605,9 @@ BEGIN
         SET @MJConversationDetails_AgentID_AgentID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateConversationDetail] @ID = @MJConversationDetails_AgentIDID, @ConversationID = @MJConversationDetails_AgentID_ConversationID, @ExternalID = @MJConversationDetails_AgentID_ExternalID, @Role = @MJConversationDetails_AgentID_Role, @Message = @MJConversationDetails_AgentID_Message, @Error = @MJConversationDetails_AgentID_Error, @HiddenToUser = @MJConversationDetails_AgentID_HiddenToUser, @UserRating = @MJConversationDetails_AgentID_UserRating, @UserFeedback = @MJConversationDetails_AgentID_UserFeedback, @ReflectionInsights = @MJConversationDetails_AgentID_ReflectionInsights, @SummaryOfEarlierConversation = @MJConversationDetails_AgentID_SummaryOfEarlierConversation, @UserID = @MJConversationDetails_AgentID_UserID, @ArtifactID = @MJConversationDetails_AgentID_ArtifactID, @ArtifactVersionID = @MJConversationDetails_AgentID_ArtifactVersionID, @CompletionTime = @MJConversationDetails_AgentID_CompletionTime, @IsPinned = @MJConversationDetails_AgentID_IsPinned, @ParentID = @MJConversationDetails_AgentID_ParentID, @AgentID_Clear = 1, @AgentID = @MJConversationDetails_AgentID_AgentID, @Status = @MJConversationDetails_AgentID_Status, @SuggestedResponses = @MJConversationDetails_AgentID_SuggestedResponses, @TestRunID = @MJConversationDetails_AgentID_TestRunID, @ResponseForm = @MJConversationDetails_AgentID_ResponseForm, @ActionableCommands = @MJConversationDetails_AgentID_ActionableCommands, @AutomaticCommands = @MJConversationDetails_AgentID_AutomaticCommands, @OriginalMessageChanged = @MJConversationDetails_AgentID_OriginalMessageChanged, @AgentSessionID = @MJConversationDetails_AgentID_AgentSessionID, @TurnEndedAt = @MJConversationDetails_AgentID_TurnEndedAt, @UtteranceStartMs = @MJConversationDetails_AgentID_UtteranceStartMs, @UtteranceEndMs = @MJConversationDetails_AgentID_UtteranceEndMs, @MediaType = @MJConversationDetails_AgentID_MediaType, @SummaryPromptRunID = @MJConversationDetails_AgentID_SummaryPromptRunID
+        EXEC [${flyway:defaultSchema}].[spUpdateConversationDetail] @ID = @MJConversationDetails_AgentIDID, @ConversationID = @MJConversationDetails_AgentID_ConversationID, @ExternalID = @MJConversationDetails_AgentID_ExternalID, @Role = @MJConversationDetails_AgentID_Role, @Message = @MJConversationDetails_AgentID_Message, @Error = @MJConversationDetails_AgentID_Error, @HiddenToUser = @MJConversationDetails_AgentID_HiddenToUser, @UserRating = @MJConversationDetails_AgentID_UserRating, @UserFeedback = @MJConversationDetails_AgentID_UserFeedback, @ReflectionInsights = @MJConversationDetails_AgentID_ReflectionInsights, @SummaryOfEarlierConversation = @MJConversationDetails_AgentID_SummaryOfEarlierConversation, @UserID = @MJConversationDetails_AgentID_UserID, @ArtifactID = @MJConversationDetails_AgentID_ArtifactID, @ArtifactVersionID = @MJConversationDetails_AgentID_ArtifactVersionID, @CompletionTime = @MJConversationDetails_AgentID_CompletionTime, @IsPinned = @MJConversationDetails_AgentID_IsPinned, @ParentID = @MJConversationDetails_AgentID_ParentID, @AgentID_Clear = 1, @AgentID = @MJConversationDetails_AgentID_AgentID, @Status = @MJConversationDetails_AgentID_Status, @SuggestedResponses = @MJConversationDetails_AgentID_SuggestedResponses, @TestRunID = @MJConversationDetails_AgentID_TestRunID, @ResponseForm = @MJConversationDetails_AgentID_ResponseForm, @ActionableCommands = @MJConversationDetails_AgentID_ActionableCommands, @AutomaticCommands = @MJConversationDetails_AgentID_AutomaticCommands, @OriginalMessageChanged = @MJConversationDetails_AgentID_OriginalMessageChanged, @AgentSessionID = @MJConversationDetails_AgentID_AgentSessionID, @TurnEndedAt = @MJConversationDetails_AgentID_TurnEndedAt, @UtteranceStartMs = @MJConversationDetails_AgentID_UtteranceStartMs, @UtteranceEndMs = @MJConversationDetails_AgentID_UtteranceEndMs, @MediaType = @MJConversationDetails_AgentID_MediaType
 
-        FETCH NEXT FROM cascade_update_MJConversationDetails_AgentID_cursor INTO @MJConversationDetails_AgentIDID, @MJConversationDetails_AgentID_ConversationID, @MJConversationDetails_AgentID_ExternalID, @MJConversationDetails_AgentID_Role, @MJConversationDetails_AgentID_Message, @MJConversationDetails_AgentID_Error, @MJConversationDetails_AgentID_HiddenToUser, @MJConversationDetails_AgentID_UserRating, @MJConversationDetails_AgentID_UserFeedback, @MJConversationDetails_AgentID_ReflectionInsights, @MJConversationDetails_AgentID_SummaryOfEarlierConversation, @MJConversationDetails_AgentID_UserID, @MJConversationDetails_AgentID_ArtifactID, @MJConversationDetails_AgentID_ArtifactVersionID, @MJConversationDetails_AgentID_CompletionTime, @MJConversationDetails_AgentID_IsPinned, @MJConversationDetails_AgentID_ParentID, @MJConversationDetails_AgentID_AgentID, @MJConversationDetails_AgentID_Status, @MJConversationDetails_AgentID_SuggestedResponses, @MJConversationDetails_AgentID_TestRunID, @MJConversationDetails_AgentID_ResponseForm, @MJConversationDetails_AgentID_ActionableCommands, @MJConversationDetails_AgentID_AutomaticCommands, @MJConversationDetails_AgentID_OriginalMessageChanged, @MJConversationDetails_AgentID_AgentSessionID, @MJConversationDetails_AgentID_TurnEndedAt, @MJConversationDetails_AgentID_UtteranceStartMs, @MJConversationDetails_AgentID_UtteranceEndMs, @MJConversationDetails_AgentID_MediaType, @MJConversationDetails_AgentID_SummaryPromptRunID
+        FETCH NEXT FROM cascade_update_MJConversationDetails_AgentID_cursor INTO @MJConversationDetails_AgentIDID, @MJConversationDetails_AgentID_ConversationID, @MJConversationDetails_AgentID_ExternalID, @MJConversationDetails_AgentID_Role, @MJConversationDetails_AgentID_Message, @MJConversationDetails_AgentID_Error, @MJConversationDetails_AgentID_HiddenToUser, @MJConversationDetails_AgentID_UserRating, @MJConversationDetails_AgentID_UserFeedback, @MJConversationDetails_AgentID_ReflectionInsights, @MJConversationDetails_AgentID_SummaryOfEarlierConversation, @MJConversationDetails_AgentID_UserID, @MJConversationDetails_AgentID_ArtifactID, @MJConversationDetails_AgentID_ArtifactVersionID, @MJConversationDetails_AgentID_CompletionTime, @MJConversationDetails_AgentID_IsPinned, @MJConversationDetails_AgentID_ParentID, @MJConversationDetails_AgentID_AgentID, @MJConversationDetails_AgentID_Status, @MJConversationDetails_AgentID_SuggestedResponses, @MJConversationDetails_AgentID_TestRunID, @MJConversationDetails_AgentID_ResponseForm, @MJConversationDetails_AgentID_ActionableCommands, @MJConversationDetails_AgentID_AutomaticCommands, @MJConversationDetails_AgentID_OriginalMessageChanged, @MJConversationDetails_AgentID_AgentSessionID, @MJConversationDetails_AgentID_TurnEndedAt, @MJConversationDetails_AgentID_UtteranceStartMs, @MJConversationDetails_AgentID_UtteranceEndMs, @MJConversationDetails_AgentID_MediaType
     END
 
     CLOSE cascade_update_MJConversationDetails_AgentID_cursor
@@ -4870,7 +4869,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
 
 /* SQL text to insert 3 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a8ad9a69-6ad0-41ac-89bf-5050003dce70' OR (EntityID = '530982B5-5556-483A-A4D7-338A19E53548' AND Name = 'AISkill')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '12ec3fc5-68de-4bd8-9f0b-98bb07f83f42' OR (EntityID = '530982B5-5556-483A-A4D7-338A19E53548' AND Name = 'AISkill')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4903,9 +4902,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          )
          VALUES
          (
-            'a8ad9a69-6ad0-41ac-89bf-5050003dce70',
+            '12ec3fc5-68de-4bd8-9f0b-98bb07f83f42',
             '530982B5-5556-483A-A4D7-338A19E53548', -- Entity: MJ: Search Execution Logs
-            100041,
+            200055,
             'AISkill',
             'AI Skill',
             NULL,
@@ -4933,7 +4932,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '51a487f3-dc27-4610-842c-380f3c86b8a8' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = 'Skill')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7386e75c-4f2f-4ee5-b6f7-9cc5f82c7370' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = 'Skill')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4966,9 +4965,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          )
          VALUES
          (
-            '51a487f3-dc27-4610-842c-380f3c86b8a8',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100021,
+            '7386e75c-4f2f-4ee5-b6f7-9cc5f82c7370',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            200021,
             'Skill',
             'Skill',
             NULL,
@@ -4996,7 +4995,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7f49e668-da06-4715-85f7-b8750c9b90ff' OR (EntityID = '690021E4-B558-47BA-BEDA-49EC303D81BA' AND Name = 'SearchScope')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'afc34e72-784c-4060-b39e-9c2e7df9c5bd' OR (EntityID = 'C084B950-88AD-4922-9F59-B8D5C2F36988' AND Name = 'SearchScope')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5029,9 +5028,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          )
          VALUES
          (
-            '7f49e668-da06-4715-85f7-b8750c9b90ff',
-            '690021E4-B558-47BA-BEDA-49EC303D81BA', -- Entity: MJ: AI Skill Search Scopes
-            100022,
+            'afc34e72-784c-4060-b39e-9c2e7df9c5bd',
+            'C084B950-88AD-4922-9F59-B8D5C2F36988', -- Entity: MJ: AI Skill Search Scopes
+            200022,
             'SearchScope',
             'Search Scope',
             NULL,
