@@ -299,6 +299,25 @@ Three inputs on chat-area drive the "agent character" UX (default off):
 When `[showAgentCharacter]` is `true`, the `agentPresence` slot renders a sticky
 bar above the header. Per Matt's 06-10 placement design.
 
+### Assistant identity in the message feed
+
+`agentCharacterConfig` covers only the presence strip. Two further inputs extend the
+same identity into every AI **message bubble** — both default `null`, meaning the
+engine-resolved agent identity (today's behavior):
+
+| Input | Overrides |
+|---|---|
+| `assistantDisplayName` | The display name on AI messages (e.g. a per-tenant persona). **Display only** — internal logic such as the conversation-manager check keeps comparing the real agent name, so an override can never change routing or behavior |
+| `assistantAvatarUrl` | The AI message avatar — an image replaces the agent's Font Awesome icon; a broken or whitespace URL degrades back to the icon |
+
+Both propagate to already-rendered messages, so a branding config that resolves after
+first render (or a mid-session persona switch) updates existing bubbles.
+
+**Deliberately NOT covered**: the run-details expander header and its record link (they
+describe the *real* agent's diagnostics), the role tooltip (the agent record's
+`Description`), and realtime session cards. Hide those with `showAgentRunDetails` rather
+than relabeling internal data.
+
 ---
 
 ## 9. Design tokens (`--mj-chat-*`)
