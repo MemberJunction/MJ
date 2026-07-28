@@ -205,6 +205,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** Show the message list's sticky date header + jump-to-date navigation. */
   @Input() showDateNavigation = true;
 
+  // --- Assistant identity overrides (both default null = engine-resolved agent
+  //     identity, today's behavior). White-label hosts brand the AI side of the
+  //     message feed — the persona NAME shown on AI messages and an IMAGE avatar
+  //     replacing the Font Awesome agent icon — through the component contract
+  //     instead of ::ng-deep on .message-sender / .avatar-circle internals.
+  //     Complements agentCharacterConfig, which covers only the presence strip. ---
+  /** Display name for AI messages (e.g. a per-tenant persona). Null = the agent record's name. */
+  @Input() assistantDisplayName: string | null = null;
+  /** Image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
+  @Input() assistantAvatarUrl: string | null = null;
+
   private _isNewConversation: boolean = false;
   @Input()
   set isNewConversation(value: boolean) {
