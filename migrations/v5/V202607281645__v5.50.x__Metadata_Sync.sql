@@ -2393,3 +2393,170 @@ GO
 -- Completed: 2026-07-28T16:46:20.097Z
 -- Duration: 45392ms
 -- Total Statements: 29
+
+-- ============================================================================
+-- Second sync pass (2026-07-28T17:59Z): deactivate retired Google models.
+--
+-- Gemini 2.5 Flash-Lite was shipping as IsActive=1 but Google has retired it —
+-- the API returns 404 NOT_FOUND ("no longer available to new users"), confirmed
+-- against generativelanguage.googleapis.com during this release build, where it
+-- 404'd on every live-tier call. Two already-deprecated models also named it as
+-- their recommended replacement; those descriptions now point at live models.
+-- ============================================================================
+
+
+-- Save MJ: AI Models (core SP call only)
+DECLARE @Name_ddd03d7f NVARCHAR(50),
+@Description_ddd03d7f NVARCHAR(MAX),
+@AIModelTypeID_ddd03d7f UNIQUEIDENTIFIER,
+@PowerRank_ddd03d7f INT,
+@IsActive_ddd03d7f BIT,
+@SpeedRank_ddd03d7f INT,
+@CostRank_ddd03d7f INT,
+@ModelSelectionInsights_ddd03d7f NVARCHAR(MAX),
+@InheritTypeModalities_ddd03d7f BIT,
+@PriorVersionID_ddd03d7f UNIQUEIDENTIFIER,
+@SupportsPrefill_ddd03d7f BIT,
+@PrefillFallbackText_ddd03d7f NVARCHAR(MAX),
+@ID_ddd03d7f UNIQUEIDENTIFIER
+SET
+  @Name_ddd03d7f = N'Gemini 2.0 Flash'
+SET
+  @Description_ddd03d7f = N'DEPRECATED 2026-06-01: Google retired gemini-2.0-flash on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026; since March 6, 2026 the API was restricted to existing customers. Recommended replacement: Gemini 3 Flash for stronger reasoning (gemini-2.5-flash-lite was itself retired 2026-07-28). Original description: Next-gen features and improved capabilities, including superior speed, native tool use, multimodal generation, and a 1M token context window.'
+SET
+  @AIModelTypeID_ddd03d7f = 'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
+SET
+  @PowerRank_ddd03d7f = 8
+SET
+  @IsActive_ddd03d7f = 0
+SET
+  @InheritTypeModalities_ddd03d7f = 1
+SET
+  @ID_ddd03d7f = '5A4DF845-F821-F011-8B3D-000D3A9E3408' EXEC [${flyway:defaultSchema}].spUpdateAIModel @Name = @Name_ddd03d7f,
+  @Description = @Description_ddd03d7f,
+  @AIModelTypeID = @AIModelTypeID_ddd03d7f,
+  @PowerRank = @PowerRank_ddd03d7f,
+  @IsActive = @IsActive_ddd03d7f,
+  @SpeedRank = @SpeedRank_ddd03d7f,
+  @SpeedRank_Clear = 1,
+  @CostRank = @CostRank_ddd03d7f,
+  @CostRank_Clear = 1,
+  @ModelSelectionInsights = @ModelSelectionInsights_ddd03d7f,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_ddd03d7f,
+  @PriorVersionID = @PriorVersionID_ddd03d7f,
+  @PriorVersionID_Clear = 1,
+  @SupportsPrefill = @SupportsPrefill_ddd03d7f,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_ddd03d7f,
+  @PrefillFallbackText_Clear = 1,
+  @ID = @ID_ddd03d7f;
+
+GO
+
+-- Save MJ: AI Models (core SP call only)
+DECLARE @Name_5d1eb240 NVARCHAR(50),
+@Description_5d1eb240 NVARCHAR(MAX),
+@AIModelTypeID_5d1eb240 UNIQUEIDENTIFIER,
+@PowerRank_5d1eb240 INT,
+@IsActive_5d1eb240 BIT,
+@SpeedRank_5d1eb240 INT,
+@CostRank_5d1eb240 INT,
+@ModelSelectionInsights_5d1eb240 NVARCHAR(MAX),
+@InheritTypeModalities_5d1eb240 BIT,
+@PriorVersionID_5d1eb240 UNIQUEIDENTIFIER,
+@SupportsPrefill_5d1eb240 BIT,
+@PrefillFallbackText_5d1eb240 NVARCHAR(MAX),
+@ID_5d1eb240 UNIQUEIDENTIFIER
+SET
+  @Name_5d1eb240 = N'Gemini 2.0 Flash-Lite'
+SET
+  @Description_5d1eb240 = N'DEPRECATED 2026-06-01: Google retired gemini-2.0-flash-lite on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026. Recommended replacement: gemini-3.1-flash-lite (gemini-2.5-flash-lite was itself retired 2026-07-28). Original description: A Gemini 2.0 Flash model optimized for cost efficiency and low latency.'
+SET
+  @AIModelTypeID_5d1eb240 = 'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
+SET
+  @PowerRank_5d1eb240 = 8
+SET
+  @IsActive_5d1eb240 = 0
+SET
+  @InheritTypeModalities_5d1eb240 = 1
+SET
+  @ID_5d1eb240 = '0C93395D-F821-F011-8B3D-000D3A9E3408' EXEC [${flyway:defaultSchema}].spUpdateAIModel @Name = @Name_5d1eb240,
+  @Description = @Description_5d1eb240,
+  @AIModelTypeID = @AIModelTypeID_5d1eb240,
+  @PowerRank = @PowerRank_5d1eb240,
+  @IsActive = @IsActive_5d1eb240,
+  @SpeedRank = @SpeedRank_5d1eb240,
+  @SpeedRank_Clear = 1,
+  @CostRank = @CostRank_5d1eb240,
+  @CostRank_Clear = 1,
+  @ModelSelectionInsights = @ModelSelectionInsights_5d1eb240,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_5d1eb240,
+  @PriorVersionID = @PriorVersionID_5d1eb240,
+  @PriorVersionID_Clear = 1,
+  @SupportsPrefill = @SupportsPrefill_5d1eb240,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_5d1eb240,
+  @PrefillFallbackText_Clear = 1,
+  @ID = @ID_5d1eb240;
+
+GO
+
+-- Save MJ: AI Models (core SP call only)
+DECLARE @Name_8bf0d22b NVARCHAR(50),
+@Description_8bf0d22b NVARCHAR(MAX),
+@AIModelTypeID_8bf0d22b UNIQUEIDENTIFIER,
+@PowerRank_8bf0d22b INT,
+@IsActive_8bf0d22b BIT,
+@SpeedRank_8bf0d22b INT,
+@CostRank_8bf0d22b INT,
+@ModelSelectionInsights_8bf0d22b NVARCHAR(MAX),
+@InheritTypeModalities_8bf0d22b BIT,
+@PriorVersionID_8bf0d22b UNIQUEIDENTIFIER,
+@SupportsPrefill_8bf0d22b BIT,
+@PrefillFallbackText_8bf0d22b NVARCHAR(MAX),
+@ID_8bf0d22b UNIQUEIDENTIFIER
+SET
+  @Name_8bf0d22b = N'Gemini 2.5 Flash-Lite'
+SET
+  @Description_8bf0d22b = N'DEPRECATED 2026-07-28: Google retired gemini-2.5-flash-lite; the API returns 404 NOT_FOUND with "no longer available to new users". Confirmed against generativelanguage.googleapis.com during the v5.50.0 release build, where it 404''d on every call and forced the integration ladder onto its secondary binding. Recommended replacement: Gemini 3 Flash or gemini-3.1-flash-lite. Original description: Google''s smallest and most cost-effective model, built for scale usage. Optimized for speed with 10K token input limit and 400 token output limit.'
+SET
+  @AIModelTypeID_8bf0d22b = 'E8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
+SET
+  @PowerRank_8bf0d22b = 8
+SET
+  @IsActive_8bf0d22b = 0
+SET
+  @SpeedRank_8bf0d22b = 10
+SET
+  @CostRank_8bf0d22b = 2
+SET
+  @InheritTypeModalities_8bf0d22b = 1
+SET
+  @ID_8bf0d22b = '13297942-3AE2-4584-832C-551237847140' EXEC [${flyway:defaultSchema}].spUpdateAIModel @Name = @Name_8bf0d22b,
+  @Description = @Description_8bf0d22b,
+  @AIModelTypeID = @AIModelTypeID_8bf0d22b,
+  @PowerRank = @PowerRank_8bf0d22b,
+  @IsActive = @IsActive_8bf0d22b,
+  @SpeedRank = @SpeedRank_8bf0d22b,
+  @CostRank = @CostRank_8bf0d22b,
+  @ModelSelectionInsights = @ModelSelectionInsights_8bf0d22b,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_8bf0d22b,
+  @PriorVersionID = @PriorVersionID_8bf0d22b,
+  @PriorVersionID_Clear = 1,
+  @SupportsPrefill = @SupportsPrefill_8bf0d22b,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_8bf0d22b,
+  @PrefillFallbackText_Clear = 1,
+  @ID = @ID_8bf0d22b;
+
+GO
+
+
+-- End of SQL Logging Session
+-- Session ID: 76a7252e-f90b-4f91-91a5-c399e69cdd3c
+-- Completed: 2026-07-28T18:00:15.670Z
+-- Duration: 31106ms
+-- Total Statements: 3

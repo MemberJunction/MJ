@@ -8779,7 +8779,7 @@
   {
     "fields": {
       "Name": "Gemini 2.0 Flash",
-      "Description": "DEPRECATED 2026-06-01: Google retired gemini-2.0-flash on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026; since March 6, 2026 the API was restricted to existing customers. Recommended replacement: gemini-2.5-flash-lite or Gemini 3 Flash for stronger reasoning. Original description: Next-gen features and improved capabilities, including superior speed, native tool use, multimodal generation, and a 1M token context window.",
+      "Description": "DEPRECATED 2026-06-01: Google retired gemini-2.0-flash on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026; since March 6, 2026 the API was restricted to existing customers. Recommended replacement: Gemini 3 Flash for stronger reasoning (gemini-2.5-flash-lite was itself retired 2026-07-28). Original description: Next-gen features and improved capabilities, including superior speed, native tool use, multimodal generation, and a 1M token context window.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": false,
@@ -8900,8 +8900,8 @@
       "ID": "5A4DF845-F821-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-06-05T02:25:04.072Z",
-      "checksum": "cd0460402b19593bf8f01fcee43709aaebd45902cd4a2a3da8a6a074ece504bf"
+      "lastModified": "2026-07-28T18:00:08.457Z",
+      "checksum": "44f14d948a679ea86c0d3752f9373c865fd71b6dcc76098b457c2d41f71802e1"
     }
   },
   {
@@ -9165,7 +9165,7 @@
   {
     "fields": {
       "Name": "Gemini 2.0 Flash-Lite",
-      "Description": "DEPRECATED 2026-06-01: Google retired gemini-2.0-flash-lite on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026. Recommended replacement: gemini-2.5-flash-lite or gemini-3.1-flash-lite. Original description: A Gemini 2.0 Flash model optimized for cost efficiency and low latency.",
+      "Description": "DEPRECATED 2026-06-01: Google retired gemini-2.0-flash-lite on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026. Recommended replacement: gemini-3.1-flash-lite (gemini-2.5-flash-lite was itself retired 2026-07-28). Original description: A Gemini 2.0 Flash model optimized for cost efficiency and low latency.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": false,
@@ -9286,8 +9286,8 @@
       "ID": "0C93395D-F821-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-06-05T02:25:04.090Z",
-      "checksum": "711d80c0637fbd508cd0d19ca3f67335011b645593a7d86dfb18f161237ff702"
+      "lastModified": "2026-07-28T18:00:08.475Z",
+      "checksum": "d7ed55665b984a94e8d4d91c8960fb1fcbd8c7a8e6a4ff4136cde21f3bd1cfd0"
     }
   },
   {
@@ -10574,10 +10574,10 @@
   {
     "fields": {
       "Name": "Gemini 2.5 Flash-Lite",
-      "Description": "Google's smallest and most cost-effective model, built for scale usage. Optimized for speed with 10K token input limit and 400 token output limit.",
+      "Description": "DEPRECATED 2026-07-28: Google retired gemini-2.5-flash-lite; the API returns 404 NOT_FOUND with \"no longer available to new users\". Confirmed against generativelanguage.googleapis.com during the v5.50.0 release build, where it 404'd on every call and forced the integration ladder onto its secondary binding. Recommended replacement: Gemini 3 Flash or gemini-3.1-flash-lite. Original description: Google's smallest and most cost-effective model, built for scale usage. Optimized for speed with 10K token input limit and 400 token output limit.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 10,
       "CostRank": 2,
       "InheritTypeModalities": true
@@ -10745,8 +10745,8 @@
       "ID": "13297942-3AE2-4584-832C-551237847140"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:25.412Z",
-      "checksum": "bc5175f0c315289254ddda05042e789568849d221e286c4928db28371d0870a0"
+      "lastModified": "2026-07-28T18:00:08.507Z",
+      "checksum": "541422ac0d9e72108408e378c67d4d8a7d7761857c5344b7151aa4e20c23f211"
     }
   },
   {
