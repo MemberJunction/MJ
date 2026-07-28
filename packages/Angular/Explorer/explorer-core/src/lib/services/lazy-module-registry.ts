@@ -2,7 +2,27 @@ import { Injectable } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
 
 /**
- * Registry that maps compound keys (BaseClassName::Key) to dynamic import() loaders.
+ * One lazy-loadable chunk: a stable identity plus the dynamic import that loads it.
+ *
+ * Many compound keys map to the same chunk, so `chunkId` is what the registry dedupes
+ * loads by — it must uniquely identify the chunk. The generated LAZY_FEATURE_CONFIG
+ * uses the dynamic import specifier (e.g. '@memberjunction/ng-dashboards/ai-dashboards.module').
+ */
+export interface LazyFeatureChunk {
+  /** Stable, unique chunk identity. Also the label dev tools show for the chunk. */
+  readonly chunkId: string;
+  /** Imports the chunk, which runs the `@RegisterClass` decorators inside it. */
+  readonly load: () => Promise<void>;
+}
+
+/** Extracts the subclass-key half of a `"BaseClassName::Key"` compound key. */
+function subclassKeyOf(compoundKey: string): string {
+  const separator = compoundKey.indexOf('::');
+  return separator < 0 ? compoundKey : compoundKey.slice(separator + 2);
+}
+
+/**
+ * Registry that maps compound keys (BaseClassName::Key) to the chunk that provides them.
  *
  * Wired to ClassFactory via `WireToClassFactory()` so that any `GetRegistrationAsync()`
  * or `CreateInstanceAsync()` call that misses synchronously will automatically trigger
@@ -12,25 +32,43 @@ import { MJGlobal } from '@memberjunction/global';
  */
 @Injectable({ providedIn: 'root' })
 export class LazyModuleRegistry {
-  private registry = new Map<string, () => Promise<void>>();
+  private registry = new Map<string, LazyFeatureChunk>();
+  /**
+   * Secondary index: subclass key → the chunks providing it, ignoring the base-class half.
+   *
+   * Needed because the base-class half of a compound key is NOT stable at runtime. ClassFactory
+   * builds the lookup from `baseClass.name`, but the emitted identifier varies by build mode —
+   * for the same `BaseResourceComponent` we have observed `_BaseResourceComponent` (unminified,
+   * Angular's named class expression) and `BaseResourceComponent2` (minified, esbuild's collision
+   * rename) — while the generated LAZY_FEATURE_CONFIG keys use the TypeScript source name. Any
+   * mismatch made the primary lookup miss, so NO chunk was ever imported and every lazily
+   * provided class silently failed to resolve.
+   */
+  private chunksBySubclassKey = new Map<string, Set<LazyFeatureChunk>>();
+  /** chunkIds that have finished loading. */
   private loadedChunks = new Set<string>();
+  /** In-flight loads, keyed by chunkId, so concurrent callers share one import. */
   private pendingLoads = new Map<string, Promise<void>>();
 
   /**
-   * Register a single compound key with its loader function.
+   * Register a single compound key with the chunk that provides it.
    * @param compoundKey Format: "BaseClassName::Key" (e.g., "BaseResourceComponent::HomeDashboard")
-   * @param loader Dynamic import function that loads the chunk containing the class
+   * @param chunk The chunk descriptor (stable id + dynamic import)
    */
-  Register(compoundKey: string, loader: () => Promise<void>): void {
-    this.registry.set(compoundKey, loader);
+  Register(compoundKey: string, chunk: LazyFeatureChunk): void {
+    this.registry.set(compoundKey, chunk);
+    const key = subclassKeyOf(compoundKey);
+    const chunks = this.chunksBySubclassKey.get(key) ?? new Set<LazyFeatureChunk>();
+    chunks.add(chunk);
+    this.chunksBySubclassKey.set(key, chunks);
   }
 
   /**
    * Register multiple compound keys at once (from the generated LAZY_FEATURE_CONFIG).
    */
-  RegisterBulk(mappings: Record<string, () => Promise<void>>): void {
-    for (const [compoundKey, loader] of Object.entries(mappings)) {
-      this.registry.set(compoundKey, loader);
+  RegisterBulk(mappings: Record<string, LazyFeatureChunk>): void {
+    for (const [compoundKey, chunk] of Object.entries(mappings)) {
+      this.Register(compoundKey, chunk);
     }
   }
 
@@ -52,8 +90,8 @@ export class LazyModuleRegistry {
 
   /**
    * Read-only snapshot of the registry state — for diagnostic tools.
-   * Groups compound keys by chunk (the underlying loader function) so
-   * inspectors can show "X chunks, Y loaded" plus the keys covered by each.
+   * Groups compound keys by `chunkId` so inspectors can show "X chunks, Y loaded"
+   * plus the keys covered by each.
    */
   GetSnapshot(): {
     registered: string[];
@@ -62,11 +100,10 @@ export class LazyModuleRegistry {
     chunkCount: number;
   } {
     const byChunk = new Map<string, string[]>();
-    for (const [compoundKey, loader] of this.registry.entries()) {
-      const id = loader.toString();
-      const arr = byChunk.get(id) ?? [];
+    for (const [compoundKey, chunk] of this.registry.entries()) {
+      const arr = byChunk.get(chunk.chunkId) ?? [];
       arr.push(compoundKey);
-      byChunk.set(id, arr);
+      byChunk.set(chunk.chunkId, arr);
     }
 
     const chunks = Array.from(byChunk.entries())
@@ -106,12 +143,34 @@ export class LazyModuleRegistry {
    * @param compoundKey Format: "BaseClassName::Key" (e.g., "BaseResourceComponent::HomeDashboard")
    */
   async Load(compoundKey: string): Promise<boolean> {
-    const loader = this.registry.get(compoundKey);
-    if (!loader) return false;
+    // Primary: exact compound key. Correct and precise when the runtime base-class name
+    // happens to match the generated config.
+    const exact = this.registry.get(compoundKey);
+    if (exact) return this.loadChunk(exact);
 
-    // Use the loader function's string representation as chunk key for deduplication
-    // (multiple compound keys can share the same loader/chunk)
-    const chunkKey = loader.toString();
+    // Fallback: match on the subclass key alone, because the base-class half is not stable
+    // across build modes (see `chunksBySubclassKey`). Subclass keys are unique per chunk in
+    // practice; if several chunks ever claim one, load them all so resolution can't silently
+    // pick wrong — ClassFactory still decides the winner by base class afterwards.
+    const candidates = this.chunksBySubclassKey.get(subclassKeyOf(compoundKey));
+    if (!candidates?.size) return false;
+
+    let loaded = false;
+    for (const chunk of candidates) {
+      if (await this.loadChunk(chunk)) loaded = true;
+    }
+    return loaded;
+  }
+
+  /**
+   * Imports a chunk once, sharing in-flight loads and remembering completed ones.
+   */
+  private async loadChunk(chunk: LazyFeatureChunk): Promise<boolean> {
+    // Dedupe on the chunk's declared id — multiple compound keys share one chunk.
+    // This MUST be a value that differs between chunks; deriving it from the loader
+    // function (e.g. Function.toString()) collapses every chunk into one, so the first
+    // chunk loaded makes all the others look already-loaded and their classes never register.
+    const chunkKey = chunk.chunkId;
 
     if (this.loadedChunks.has(chunkKey)) return true;
 
@@ -122,10 +181,21 @@ export class LazyModuleRegistry {
       return true;
     }
 
-    const loadPromise = loader().then(() => {
-      this.loadedChunks.add(chunkKey);
-      this.pendingLoads.delete(chunkKey);
-    });
+    const loadPromise = chunk.load().then(
+      () => {
+        this.loadedChunks.add(chunkKey);
+        this.pendingLoads.delete(chunkKey);
+      },
+      (error: unknown) => {
+        // Drop the failed attempt so a later navigation retries. Chunk fetches fail
+        // transiently in normal use — a dev-server rebuild renames every lazy chunk, so a
+        // page loaded before the rebuild 404s once. Left in `pendingLoads`, the rejected
+        // promise would be re-awaited (and re-thrown) forever, killing the chunk for the
+        // rest of the page session. The rejection still propagates to this caller.
+        this.pendingLoads.delete(chunkKey);
+        throw error;
+      }
+    );
 
     this.pendingLoads.set(chunkKey, loadPromise);
     await loadPromise;

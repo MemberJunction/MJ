@@ -6,9 +6,9 @@ import { buildLazyModuleStatusAgentContext } from './dev-tools-agent-context';
 import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
 
 interface LazyChunk {
-    /** A friendly label inferred from the underlying loader source. */
+    /** A friendly label derived from the chunk id. */
     label: string;
-    /** The loader function's source-string (used as the unique chunk id internally). */
+    /** The chunk's stable id — its dynamic import specifier. */
     chunkId: string;
     loaded: boolean;
     keys: string[];
@@ -188,17 +188,14 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
     }
 
     /**
-     * Derive a friendly chunk label from the loader function's source. The
-     * generated `LAZY_FEATURE_CONFIG` builds loaders that look like:
-     *   () => importFn().then(() => {})
-     *   where importFn is `() => import('@memberjunction/ng-dashboards/foo.module')`
-     * So the chunk id (loader.toString()) usually contains the dynamic import path.
+     * Derive a friendly chunk label from the chunk id, which is the dynamic import
+     * specifier the generated `LAZY_FEATURE_CONFIG` declared for the chunk
+     * (e.g. '@memberjunction/ng-dashboards/ai-dashboards.module').
      */
     private deriveChunkLabel(chunkId: string, keys: string[]): string {
-        const m = chunkId.match(/import\(["']([^"']+)["']\)/);
-        if (m && m[1]) {
+        if (chunkId) {
             // Strip the @memberjunction/ prefix for brevity
-            return m[1].replace(/^@memberjunction\//, '');
+            return chunkId.replace(/^@memberjunction\//, '');
         }
         // Fallback: derive from a representative key
         if (keys.length > 0) {

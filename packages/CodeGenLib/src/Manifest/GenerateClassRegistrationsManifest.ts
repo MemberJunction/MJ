@@ -1733,28 +1733,32 @@ function generateLazyConfigContent(chunks: LazyChunk[]): string {
         ' * When ClassFactory.GetRegistrationAsync() or CreateInstanceAsync() cannot find a',
         ' * registration synchronously, the registered lazy loader builds the compound key and',
         ' * looks it up here to dynamically import the chunk containing the class.',
+        ' *',
+        ' * Every entry carries an explicit `chunkId` — the dynamic import specifier — because many',
+        ' * compound keys share one chunk and the registry must be able to tell those chunks apart.',
+        ' * Do NOT collapse these into a shared helper that returns a closure: closures built by the',
+        ' * same helper are indistinguishable by identity-adjacent means (e.g. Function.toString()),',
+        ' * which silently merges all chunks into one.',
         ' */',
-        '',
-        '/** Helper to create a loader that all entries in a feature share. */',
-        'function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {',
-        '  return () => importFn().then(() => {});',
-        '}',
         ''
     ];
 
-    // Emit one loader variable per chunk
+    // Emit one chunk descriptor per chunk
     for (const chunk of chunks) {
         lines.push(`// --- ${chunk.packageName} → ${chunk.subpath} (${chunk.entries.length} entries) ---`);
-        lines.push(`const ${chunk.loaderVarName} = featureLoader(() => import('${chunk.importPath}'));`);
+        lines.push(`const ${chunk.loaderVarName} = {`);
+        lines.push(`  chunkId: '${chunk.importPath}',`);
+        lines.push(`  load: () => import('${chunk.importPath}').then(() => {})`);
+        lines.push('};');
         lines.push('');
     }
 
     // Emit the config record with compound keys
     lines.push('/**');
-    lines.push(' * Complete mapping of compound keys (BaseClassName::Key) to lazy-loading functions.');
+    lines.push(' * Complete mapping of compound keys (BaseClassName::Key) to their chunk descriptor.');
     lines.push(' * Covers all @RegisterClass decorated classes in lazy-loaded packages.');
     lines.push(' */');
-    lines.push('export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {');
+    lines.push('export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => Promise<void> }> = {');
 
     for (const chunk of chunks) {
         lines.push(`  // ${chunk.packageName} → ${chunk.subpath}`);
