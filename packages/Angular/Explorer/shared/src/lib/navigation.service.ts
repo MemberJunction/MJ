@@ -472,6 +472,11 @@ export class NavigationService implements OnDestroy {
     if (tabsMode) {
       const existing = this.findOpenRecordTab(entityName, recordId);
       if (existing) {
+        // RE-CAPTURE the origin: re-opening means "I came from somewhere
+        // NEW" — the crumb must point at where the user is standing for
+        // THIS open, not wherever they were when the tab was first created
+        // (possibly days ago, possibly under an older origin schema).
+        this.refreshSourceContext(existing.id, options);
         // The activation assert applies to RE-opens too — the same-click
         // stale-stomp that motivated it for fresh opens is equally possible
         // here, and without it the symptom is maddening: opening a record
@@ -491,7 +496,7 @@ export class NavigationService implements OnDestroy {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
         recordId: recordId,  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
-        ...this.captureSourceContext()
+        ...this.resolveSourceContext(options)
       },
       ResourceRecordId: recordId,
       IsPinned: options?.pinTab || false,
@@ -548,33 +553,106 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * Overwrite a record tab's origin with a freshly-resolved one (the dedup
+   * re-open path). All source keys are explicitly cleared first — a shallow
+   * config merge would otherwise let fields from the OLD origin shape leak
+   * through (e.g. a parent-record origin's sourceRecordEntity surviving a
+   * re-open from a nav page, or pre-schema captures keeping stale labels).
+   */
+  private refreshSourceContext(tabId: string, options?: NavigationOptions): void {
+    this.workspaceManager.UpdateTabConfiguration(tabId, {
+      sourceAppId: undefined,
+      sourceAppName: undefined,
+      sourceNavLabel: undefined,
+      sourceNavItemName: undefined,
+      sourceTabId: undefined,
+      sourceLabel: undefined,
+      sourceQueryParams: undefined,
+      sourceRecordEntity: undefined,
+      sourceRecordId: undefined,
+      ...this.resolveSourceContext(options)
+    });
+  }
+
+  /**
+   * Resolve the source context to stamp into a record tab's configuration.
+   * Callers that are workspace tabs omit options.recordSource and get the
+   * active app/tab snapshot; overlay surfaces pass their own context;
+   * 'none' means no origin (no crumb).
+   */
+  private resolveSourceContext(options?: NavigationOptions): Record<string, unknown> {
+    if (options?.recordSource === 'none') {
+      return {};
+    }
+    if (options?.recordSource) {
+      const src = options.recordSource;
+      const context: Record<string, unknown> = {};
+      if (src.sourceAppId) context['sourceAppId'] = src.sourceAppId;
+      if (src.sourceAppName) context['sourceAppName'] = src.sourceAppName;
+      if (src.sourceNavLabel) context['sourceNavLabel'] = src.sourceNavLabel;
+      if (src.sourceTabId) context['sourceTabId'] = src.sourceTabId;
+      if (src.sourceLabel) context['sourceLabel'] = src.sourceLabel;
+      if (src.sourceQueryParams && Object.keys(src.sourceQueryParams).length > 0) {
+        context['sourceQueryParams'] = src.sourceQueryParams;
+      }
+      return context;
+    }
+    return this.captureSourceContext();
+  }
+
+  /**
    * Snapshot of where the user was when the record was
    * opened — the source app and (when the active tab belongs to that app and
    * isn't itself a record) the nav page they were on. Rendered by the
    * breadcrumb strip as "App › Page › Record".
    */
-  private captureSourceContext(): Record<string, string> {
+  private captureSourceContext(): Record<string, unknown> {
     const activeApp = this.appManager.GetActiveApp();
     if (!activeApp) {
       return {};
     }
-    const context: Record<string, string> = {
+    const context: Record<string, unknown> = {
       sourceAppId: activeApp.ID,
       sourceAppName: activeApp.Name
     };
     const config = this.workspaceManager.GetConfiguration();
     const activeTab = config?.tabs.find(t => t.id === config.activeTabId);
-    if (
-      activeTab &&
-      UUIDsEqual(activeTab.applicationId, activeApp.ID) &&
-      !IsRecordsTabConfiguration(activeTab.configuration) &&
-      activeTab.title
-    ) {
-      context['sourceNavLabel'] = activeTab.title;
-      // The exact tab, not just its label — the origin crumb's return path
-      // prefers reactivating this tab (state intact) over re-resolving the
-      // nav item by label.
-      context['sourceTabId'] = activeTab.id;
+    if (!activeTab || !UUIDsEqual(activeTab.applicationId, activeApp.ID) || !activeTab.title) {
+      return context;
+    }
+    if (IsRecordsTabConfiguration(activeTab.configuration)) {
+      // Opened from INSIDE another record → the crumb points at the PARENT
+      // record (Matt's record→record design call). Identity, not just the
+      // tab id, so the return survives tab closure (re-open via dedup).
+      const parentEntity = activeTab.configuration?.['Entity'];
+      const parentRecordId = activeTab.resourceRecordId || activeTab.configuration?.['recordId'];
+      if (typeof parentEntity === 'string' && typeof parentRecordId === 'string' && parentRecordId) {
+        context['sourceTabId'] = activeTab.id;
+        context['sourceLabel'] = activeTab.title;
+        context['sourceRecordEntity'] = parentEntity;
+        context['sourceRecordId'] = parentRecordId;
+      }
+      return context;
+    }
+    context['sourceNavLabel'] = activeTab.title;
+    // Canonical nav identity alongside the display title: titles mutate
+    // (Data Explorer renames its tab to the drilled entity), so the return
+    // path verifies/resolves by navItemName and shows the label.
+    const navItemName = activeTab.configuration?.['navItemName'];
+    if (typeof navItemName === 'string' && navItemName.length > 0) {
+      context['sourceNavItemName'] = navItemName;
+    }
+    // The exact tab, not just its label — the origin crumb's return path
+    // prefers reactivating this tab (state intact) over re-resolving the
+    // nav item by label.
+    context['sourceTabId'] = activeTab.id;
+    // Snapshot the tab's query params too: dashboards keep their DRILL-IN
+    // state there (e.g. Data Explorer's entity section), and it can drift
+    // or be stomped between open and return. The crumb restores the page
+    // AS IT WAS, not just the tab.
+    const queryParams = activeTab.configuration?.['queryParams'];
+    if (queryParams && typeof queryParams === 'object' && Object.keys(queryParams).length > 0) {
+      context['sourceQueryParams'] = { ...(queryParams as Record<string, string>) };
     }
     return context;
   }
@@ -589,13 +667,64 @@ export class NavigationService implements OnDestroy {
    * No-ops when the context has no sourceAppId (capture was best-effort).
    */
   public async ReturnToRecordSource(origin: RecordSourceContext): Promise<void> {
+    // Parent-RECORD origin (opened from inside another record): activate the
+    // parent's tab while it still shows that record, else RE-OPEN the parent
+    // — OpenEntityRecord's dedup makes the re-open land on (or recreate)
+    // exactly that record. No app flip either way: record tabs live in the
+    // records region regardless of app.
+    if (origin.sourceRecordEntity && origin.sourceRecordId) {
+      const config = this.workspaceManager.GetConfiguration();
+      const sourceTab = origin.sourceTabId ? config?.tabs.find(t => t.id === origin.sourceTabId) : undefined;
+      const stillParent = !!sourceTab &&
+        IsRecordsTabConfiguration(sourceTab.configuration) &&
+        sourceTab.configuration?.['Entity'] === origin.sourceRecordEntity &&
+        sourceTab.resourceRecordId === origin.sourceRecordId;
+      if (sourceTab && stillParent) {
+        this.workspaceManager.SetActiveTab(sourceTab.id);
+        return;
+      }
+      const parentKey = new CompositeKey();
+      parentKey.SimpleLoadFromURLSegment(origin.sourceRecordId);
+      this.OpenEntityRecord(origin.sourceRecordEntity, parentKey);
+      return;
+    }
     if (!origin.sourceAppId) {
       return;
     }
     if (origin.sourceTabId) {
       const config = this.workspaceManager.GetConfiguration();
       const sourceTab = config?.tabs.find(t => t.id === origin.sourceTabId);
-      if (sourceTab) {
+      // Tab ids are NOT stable identities for nav pages: the temp-tab
+      // replacement model (WorkspaceStateManager.OpenTab) reuses the same
+      // tab id when the user navigates elsewhere — the captured id can now
+      // hold a DIFFERENT page in a DIFFERENT app. Trust it only while the
+      // tab still shows the captured page; otherwise fall through to
+      // re-resolving by app + nav item below. Prefer navItemName for the
+      // page check — TITLES MUTATE (Data Explorer renames its tab to the
+      // drilled entity), and a mutated title must not disqualify the tab.
+      const tabNavItemName = sourceTab?.configuration?.['navItemName'];
+      const samePage = origin.sourceNavItemName && typeof tabNavItemName === 'string'
+        ? tabNavItemName === origin.sourceNavItemName
+        : (!origin.sourceNavLabel || sourceTab?.title === origin.sourceNavLabel);
+      const stillSourcePage = !!sourceTab &&
+        (!origin.sourceAppId || UUIDsEqual(sourceTab.applicationId, origin.sourceAppId)) &&
+        samePage;
+      if (sourceTab && stillSourcePage) {
+        // Restore the tab's query params to the capture-time snapshot BEFORE
+        // activating, so a cached resource component reattaches against the
+        // right config (see SwitchToApp's queryParams doc). REPLACE
+        // semantics: null out params the tab has gained since capture, then
+        // lay the snapshot over — "back" means the page as it was, and
+        // drill-in state (e.g. Data Explorer's entity section) lives here.
+        const currentParams = (sourceTab.configuration?.['queryParams'] || {}) as Record<string, string>;
+        const restore: Record<string, string | null> = {};
+        for (const key of Object.keys(currentParams)) {
+          restore[key] = null;
+        }
+        Object.assign(restore, origin.sourceQueryParams ?? {});
+        if (Object.keys(restore).length > 0) {
+          this.applyQueryParamsToTab(sourceTab.id, restore);
+        }
         // Set the app context first so the shell's nav renders the right
         // app the moment the tab activates (activation alone would also
         // flip it, but explicit sequencing avoids a visible two-step).
@@ -604,7 +733,10 @@ export class NavigationService implements OnDestroy {
         return;
       }
     }
-    await this.SwitchToApp(origin.sourceAppId, origin.sourceNavLabel);
+    // Re-resolve by the CANONICAL nav-item name when we have it — the label
+    // is a display title that may have mutated into something SwitchToApp's
+    // nav-item lookup can't match (e.g. a drilled entity name).
+    await this.SwitchToApp(origin.sourceAppId, origin.sourceNavItemName ?? origin.sourceNavLabel, origin.sourceQueryParams);
   }
 
   /**
@@ -978,18 +1110,37 @@ export class NavigationService implements OnDestroy {
       return;
     }
 
-    const appTabs = this.workspaceManager.GetAppTabs(appId);
+    // Records style: record tabs are ASSIGNED to apps but live in their own
+    // region — switching to an app must surface its NAV pages, so records
+    // don't count here. Without this filter, the active record tab (which
+    // belongs to the target app) satisfied the "already on this app's tab"
+    // check and the whole switch silently no-oped — the dead origin-crumb
+    // click when the crumb only knew the app. Classic style keeps records
+    // as ordinary tabs.
+    const appTabs = IsRecordTabsStyle()
+      ? this.workspaceManager.GetAppTabs(appId).filter(t => !IsRecordsTabConfiguration(t.configuration))
+      : this.workspaceManager.GetAppTabs(appId);
 
     // If a specific nav item is requested
     if (navItemName) {
       const navItems = await app.GetNavItems();
       const navItem = navItems.find(item => item.Label === navItemName);
       if (navItem) {
-        // Check if there's already a tab for this nav item
-        const existingTab = appTabs.find(tab =>
-          tab.title === navItem.Label ||
-          (tab.configuration?.['route'] === navItem.Route && navItem.Route)
-        );
+        // Check if there's already a tab for this nav item. Identity check
+        // uses configuration.navItemName when the tab carries it — TITLES
+        // LIE: same-driver nav switches reuse the live tab and can leave a
+        // stale title behind (e.g. Data Explorer's tab titled "Data" while
+        // its content and navItemName say "Dashboards"). Matching that
+        // chimera by title activated the WRONG page instead of reopening
+        // the requested nav item.
+        const existingTab = appTabs.find(tab => {
+          const tabNav = tab.configuration?.['navItemName'];
+          if (typeof tabNav === 'string' && tabNav.length > 0) {
+            return tabNav === navItem.Label;
+          }
+          return tab.title === navItem.Label ||
+            (tab.configuration?.['route'] === navItem.Route && !!navItem.Route);
+        });
 
         if (existingTab) {
           // Switch to existing tab

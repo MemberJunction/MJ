@@ -104,6 +104,13 @@
   font-weight: 500;
 }
 
+/* Provenance-only origin (no return target): plain label, no affordance */
+.origin-static {
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}
+
 /* Defense against visibility punch-through: `visibility: visible` on a
    DESCENDANT defeats an ancestor's visibility:hidden (unlike display:none).
    Real case: explorer-app's global `.visible { visibility: visible

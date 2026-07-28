@@ -47,9 +47,41 @@ export function IsRecordsTabConfiguration(configuration: Record<string, unknown>
 export interface RecordSourceContext {
   sourceAppId?: string;
   sourceAppName?: string;
+  /** Display title of the source tab at capture (what the user saw) */
   sourceNavLabel?: string;
+  /**
+   * Canonical nav-item identity of the source tab (its configuration
+   * `navItemName`). Titles MUTATE — dashboards rename their tab as the user
+   * drills (Data Explorer sets it to the selected entity) — so identity
+   * checks and nav re-resolution use THIS; the label is display-only.
+   * Absent for dynamic nav items, which never get navItemName stamped.
+   */
+  sourceNavItemName?: string;
   /** The exact workspace tab the user was on — highest-fidelity return target */
   sourceTabId?: string;
+  /**
+   * Display label for NON-TAB origins (overlays, dialogs, agent actions —
+   * e.g. 'Conversation', 'Search'). When present, the crumb renders this
+   * label instead of "App › Page". Surfaces that aren't workspace tabs MUST
+   * set this (via NavigationOptions.recordSource) instead of letting
+   * captureSourceContext blame whatever tab sits behind the overlay.
+   */
+  sourceLabel?: string;
+  /** Query params to apply when returning via the app + nav-label fallback */
+  sourceQueryParams?: Record<string, string>;
+  /**
+   * Set when the record was opened from INSIDE another record (Matt's
+   * record→record call, 2026-07-28: the crumb points at the PARENT record).
+   * Identity — not the tab id — is what the return path verifies and, when
+   * the parent's tab has been closed, re-opens.
+   */
+  sourceRecordEntity?: string;
+  sourceRecordId?: string;
+}
+
+/** True when the origin has somewhere to GO back to (crumb is clickable) */
+export function RecordSourceHasReturnTarget(origin: RecordSourceContext | null): boolean {
+  return !!(origin && (origin.sourceTabId || origin.sourceAppId));
 }
 
 /**
@@ -58,20 +90,38 @@ export interface RecordSourceContext {
  * crumb UI on a single truthiness check.
  */
 export function GetRecordSourceContext(configuration: Record<string, unknown> | undefined | null): RecordSourceContext | null {
-  const appId = configuration?.['sourceAppId'];
-  if (typeof appId !== 'string' || appId.length === 0) {
-    return null;
-  }
   const readString = (key: string): string | undefined => {
     const value = configuration?.[key];
     return typeof value === 'string' && value.length > 0 ? value : undefined;
   };
-  return {
+  const appId = readString('sourceAppId');
+  const label = readString('sourceLabel');
+  if (!appId && !label) {
+    return null;
+  }
+  const context: RecordSourceContext = {
     sourceAppId: appId,
     sourceAppName: readString('sourceAppName'),
     sourceNavLabel: readString('sourceNavLabel'),
-    sourceTabId: readString('sourceTabId')
+    sourceNavItemName: readString('sourceNavItemName'),
+    sourceTabId: readString('sourceTabId'),
+    sourceLabel: label,
+    sourceRecordEntity: readString('sourceRecordEntity'),
+    sourceRecordId: readString('sourceRecordId')
   };
+  const rawParams = configuration?.['sourceQueryParams'];
+  if (rawParams && typeof rawParams === 'object' && !Array.isArray(rawParams)) {
+    const params: Record<string, string> = {};
+    for (const [key, value] of Object.entries(rawParams as Record<string, unknown>)) {
+      if (typeof value === 'string') {
+        params[key] = value;
+      }
+    }
+    if (Object.keys(params).length > 0) {
+      context.sourceQueryParams = params;
+    }
+  }
+  return context;
 }
 
 let currentStyle: RecordOpenStyle = 'records';

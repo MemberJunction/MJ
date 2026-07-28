@@ -189,6 +189,19 @@ correctness); all findings remediated in the same commit.
   (brand-tint pill recipe vs refined raised-card vs underline), app color
   (drop / identity dot / keep bar), density (35px vs nav-pill height),
   pinned/temp vocabulary (italic+pin is invisible vocabulary).
+- **Origin-crumb placement (QUEUED — decide with lm_tab redesign, Matt
+  2026-07-28):** v1 ships as a region-wide 32px bar ABOVE the records tab
+  strip showing the ACTIVE tab's origin. Two known design debts: (a)
+  containment semantics read wrong — chrome above a strip implies
+  region-wide scope but the crumb is per-tab; (b) split view breaks it —
+  two visible records, two origins, one bar. Direction agreed in principle:
+  move the crumb INSIDE each record pane. Matt's specific proposal
+  (2026-07-28, parked): push the mj-form-toolbar all the way right and put
+  the crumb in the toolbar row's left side — reuses existing chrome, no new
+  bar; same visual neighborhood as the lm_tab work, so decide as one
+  composition (crumb placement + tab anatomy + tab-tooltip provenance).
+  Wrinkle to check: toolbar lives in `mj-record-form-container` (published
+  API); a pane-level shell wrapper may be the safer host.
 
 ---
 

@@ -28,7 +28,7 @@ import {
   LayoutNode
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, GetRecordSourceContext, RecordSourceContext, SafeDetectChanges } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, GetRecordSourceContext, RecordSourceContext, RecordSourceHasReturnTarget, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
@@ -147,6 +147,11 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   public ActiveRecordOrigin: RecordSourceContext | null = null;
 
+  /** Crumb is a button only when the origin has somewhere to return to */
+  public get OriginClickable(): boolean {
+    return RecordSourceHasReturnTarget(this.ActiveRecordOrigin);
+  }
+
   /** A tab belongs to the records region (not the main workspace layout) */
   private isRecordTab(tab: WorkspaceTab): boolean {
     return this.RecordsStyleActive && IsRecordsTabConfiguration(tab.configuration);
@@ -207,7 +212,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       (origin === null) !== (this.ActiveRecordOrigin === null) ||
       origin?.sourceTabId !== this.ActiveRecordOrigin?.sourceTabId ||
       origin?.sourceAppId !== this.ActiveRecordOrigin?.sourceAppId ||
-      origin?.sourceNavLabel !== this.ActiveRecordOrigin?.sourceNavLabel;
+      origin?.sourceNavLabel !== this.ActiveRecordOrigin?.sourceNavLabel ||
+      origin?.sourceLabel !== this.ActiveRecordOrigin?.sourceLabel;
     if (originChanged) {
       this.ActiveRecordOrigin = origin;
     }

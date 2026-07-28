@@ -72,6 +72,8 @@ interface ShellChromeFlags {
 export class ShellComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
+  /** Newest workspace configuration emission — see the staleness guard in the Configuration subscription */
+  private latestSyncedConfig: WorkspaceConfiguration | null = null;
   private initialNavigationComplete = false; // Track if initial navigation has completed
 
   activeApp: BaseApplication | null = null;
@@ -655,8 +657,20 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.subscriptions.push(
       this.workspaceManager.Configuration.subscribe(async config => {
         if (config && this.initialized) {
+          this.latestSyncedConfig = config;
           // Sync active app with active tab's application
           await this.syncActiveAppWithTab(config);
+          // STALENESS GUARD: rapid multi-step flows (e.g. the origin crumb's
+          // apply-params-then-activate) emit several configurations in one
+          // tick, and each handler suspends at the await above. A handler
+          // resuming with an OLD snapshot must NOT sync the URL: it would
+          // navigate the browser to the previous active tab's URL, and
+          // syncWorkspaceWithUrl would then make that stale URL real by
+          // re-activating its tab (the "crumb click bounces back to the
+          // record" bug). Only the newest emission drives URL and title.
+          if (this.latestSyncedConfig !== config) {
+            return;
+          }
           this.syncUrlWithWorkspace(config);
           // Update browser tab title
           this.updateBrowserTitle(config);
@@ -989,7 +1003,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const recordId = decodeURIComponent(appRecordMatch[3]);
         const compositeKey = new CompositeKey();
         compositeKey.SimpleLoadFromURLSegment(recordId);
-        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+        // Recreating a closed tab from browser history — the user's CURRENT
+        // page is not where this record came from, so don't stamp it as the
+        // origin (recordSource 'none' = no crumb rather than a false one).
+        this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
         return;
       }
 
@@ -1117,7 +1134,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const recordId = decodeURIComponent(legacyRecordMatch[2]);
         const compositeKey = new CompositeKey();
         compositeKey.SimpleLoadFromURLSegment(recordId);
-        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+        // Same as the app-scoped branch above: history recreation has no
+        // truthful origin — suppress the crumb instead of inventing one.
+        this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
         return;
       }
 
@@ -2919,7 +2938,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
       if (!result.EntityName || !result.RecordID) return;
 
-      // Entity records — open via NavigationService
+      // Entity records — open via NavigationService. Search is a TRANSIENT
+      // launcher: it dismisses on selection, so the page behind it is the
+      // truthful origin (default capture) — "back" returns the user there.
+      // Contrast the chat overlay, a persistent surface whose true origin is
+      // the conversation (it passes an explicit recordSource).
       const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
       this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
