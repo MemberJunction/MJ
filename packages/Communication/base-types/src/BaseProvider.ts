@@ -207,6 +207,19 @@ export type GetMessagesParams<T = Record<string, any>> = {
 export type GetMessageMessage = {
     From: string;
     To: string,
+    /**
+     * All To recipients of the message, normalized to bare email addresses.
+     * Unlike `To` — whose meaning is provider-specific for historical reasons
+     * (MS Graph populates it from the first reply-to address; Gmail from the raw
+     * `To:` header) — this is the actual recipient list as received. Optional:
+     * providers that cannot supply it leave it undefined.
+     */
+    ToRecipients?: string[];
+    /**
+     * All CC recipients of the message, normalized to bare email addresses.
+     * Optional: providers that cannot supply it leave it undefined.
+     */
+    CCRecipients?: string[];
     Body: string;
     /**
      * In some providers, such as MS Graph, replies can be sent to multiple other recipients
