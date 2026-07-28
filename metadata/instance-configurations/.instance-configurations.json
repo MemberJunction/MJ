@@ -214,5 +214,19 @@
       "lastModified": "2026-07-22T13:40:31.330Z",
       "checksum": "7a95641b9365efd582a208fcbba7ff51c7f88db00e5df4175f914746500a09b8"
     }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Shell.AppSwitcher.Style",
+      "Value": "auto",
+      "ValueType": "string",
+      "Category": "Shell",
+      "DisplayName": "App Switcher Style",
+      "Description": "Presentation of the header app switcher: 'launcher' always opens the centered card launcher, 'compact' always opens the anchored dropdown-style panel, and 'auto' (default) picks compact when the user has fewer than 8 apps and the launcher otherwise.",
+      "DefaultValue": "auto"
+    },
+    "primaryKey": {
+      "ID": "6A7E686F-CE89-4BF5-B27D-25BE4D8432CF"
+    }
   }
 ]
