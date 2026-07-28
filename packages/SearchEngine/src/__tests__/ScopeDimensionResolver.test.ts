@@ -237,3 +237,24 @@ describe('§5.9 — a boundary defaults to strict, and permissive must be delibe
         expect(byName.Hint.InheritanceMode).toBe('cascading');
     });
 });
+
+describe('a defaultValue must not relabel a discard (regression, pass 5)', () => {
+    // ServerDerived + NOT restricting + a defaultValue: the caller's value is discarded, nothing
+    // derives, and the default fills in. Provenance previously became 'Default', which hides the
+    // attempt from the only filter an auditor would run against ScopeDecisionJSON.
+    it('keeps DiscardedCaller even when a default supplies the value', async () => {
+        const config: ScopeSearchContextConfig = {
+            dimensions: [{
+                name: 'D', trust: 'ServerDerived', valueType: 'uuid',
+                defaultValue: '11111111-1111-4111-8111-111111111111',
+            }],
+        };
+        const result = await resolve(scopeWith(config), {
+            SecondaryScopes: { D: '22222222-2222-4222-8222-222222222222' },
+        });
+        const p = result.Provenance[0];
+        expect(p.Provenance).toBe('DiscardedCaller');
+        expect(p.Value).toBe('11111111-1111-4111-8111-111111111111');   // the default still applied
+        expect(p.Note).toMatch(/discarded/i);
+    });
+});

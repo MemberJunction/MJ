@@ -432,7 +432,16 @@ export class ScopeDimensionResolver {
             );
         }
         diagnostics.push(`applied defaultValue for "${dim.name}"`);
-        return { Value: dim.defaultValue, Provenance: 'Default' };
+        // A discard must not be relabelled. `DiscardedCaller` is the security-relevant event, and a
+        // machine reading SearchExecutionLog.ScopeDecisionJSON finds spoof attempts by filtering on
+        // that exact value — so overwriting it with 'Default' hides the attempt from the only query
+        // anyone would run to look for it. (The Note and Diagnostics did survive, but a label a tool
+        // can filter on is the point.) Same failure this resolver already had once, where an
+        // "unresolved => Absent" fallback erased the discard.
+        return {
+            Value: dim.defaultValue,
+            Provenance: provenance === 'DiscardedCaller' ? 'DiscardedCaller' : 'Default',
+        };
     }
 
     /** Derive a ServerDerived value: an approved `MJ: Queries` row, else nothing. */
