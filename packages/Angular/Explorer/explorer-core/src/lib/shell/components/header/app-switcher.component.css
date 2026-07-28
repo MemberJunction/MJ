@@ -1,183 +1,559 @@
 .app-switcher-container {
   position: relative;
-  margin-left: -2px; /* Fine-tune alignment when no nav-bar icons to the left */
+  margin-left: calc(-1 * var(--mj-space-0-5)); /* Fine-tune alignment when no nav-bar icons to the left */
 }
 
+/* ---- Trigger button (header) ---- */
 .app-switcher-button {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  gap: var(--mj-space-1-5);
+  padding: var(--mj-space-2) var(--mj-space-2-5);
+  border-radius: var(--mj-radius-md);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--mj-transition-fast);
   user-select: none;
   position: relative;
 }
 .app-switcher-button .app-icon {
-  font-size: 20px;
+  font-size: var(--mj-text-xl);
   width: 24px;
   text-align: center;
   position: relative;
 }
-/* Color underline under the icon only, not the caret */
-.app-switcher-button .app-icon::after {
-  content: "";
-  position: absolute;
-  bottom: -6px;
-  left: 2px;
-  right: 2px;
-  height: 3px;
-  border-radius: 2px;
-  background-color: var(--active-color, var(--mj-text-muted));
-}
 .app-switcher-button:hover {
   background: var(--mj-bg-surface-hover);
 }
-.app-switcher-button .dropdown-arrow {
-  font-size: 10px;
-  color: var(--mj-text-disabled);
+.app-switcher-button:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
 }
-
-.app-switcher-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  background: var(--mj-bg-surface-elevated);
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  box-shadow: var(--mj-shadow-lg);
-  min-width: 220px;
-  width: max-content;
+/* Current-app name in the trigger. Capped at 160px: no current catalog name
+   truncates at this width — the ellipsis only guards future/client apps. */
+.app-switcher-button .app-label {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+  max-width: 160px;
   overflow: hidden;
-  z-index: 10000;
-  max-height: calc(100vh - 80px - var(--mj-connectivity-banner-height, 0px));
-  display: flex;
-  flex-direction: column;
-}
-.app-switcher-list {
-  overflow-y: auto;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.app-switcher-dropdown .app-switcher-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  cursor: pointer;
-  transition: all 0.15s;
-  font-weight: 500;
-  color: var(--mj-text-secondary);
-  position: relative;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.app-switcher-dropdown .app-switcher-item::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 2px;
-  background-color: var(--item-color, var(--mj-text-muted));
-  opacity: 0.8;
-  transition: all 0.15s;
+.app-switcher-button .dropdown-arrow {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+  transition: color var(--mj-transition-fast);
 }
-.app-switcher-dropdown .app-switcher-item i {
-  font-size: 18px;
-  color: var(--item-color, var(--mj-text-muted));
-  width: 20px;
-  text-align: center;
-  opacity: 1;
-  transition: all 0.15s;
-}
-.app-switcher-dropdown .app-switcher-item:hover {
-  background: var(--mj-bg-surface-hover);
-}
-.app-switcher-dropdown .app-switcher-item:hover::before {
-  opacity: 1;
-}
-.app-switcher-dropdown .app-switcher-item.active {
-  background: color-mix(in srgb, var(--item-color, var(--mj-brand-primary)) 10%, var(--mj-bg-surface-elevated));
-  color: var(--item-color, var(--mj-brand-primary));
-  font-weight: 600;
-}
-.app-switcher-dropdown .app-switcher-item.active::before {
-  width: 4px;
-  left: 3px;
-  opacity: 1;
-}
-/* Configure option - no color line, neutral gray styling */
-.app-switcher-dropdown .app-switcher-item.configure-item {
+/* text-disabled sat nearly on top of --mj-bg-surface-hover in dark mode —
+   the chevron vanished on hover. Muted at rest, secondary on hover. */
+.app-switcher-button:hover .dropdown-arrow {
   color: var(--mj-text-secondary);
 }
-.app-switcher-dropdown .app-switcher-item.configure-item::before {
-  display: none;
-}
-.app-switcher-dropdown .app-switcher-item.configure-item i {
-  color: var(--mj-text-muted);
-}
-.app-switcher-dropdown .app-switcher-item.configure-item:hover {
-  color: var(--mj-text-primary);
-}
-.app-switcher-dropdown .app-switcher-item.configure-item:hover i {
-  color: var(--mj-text-primary);
-}
-.app-switcher-dropdown .app-switcher-divider {
-  height: 1px;
-  background: var(--mj-border-default);
-  margin: 4px 12px;
-}
-
-/* Loading state for app switcher button */
 .app-switcher-button .loading-spinner {
   color: var(--mj-text-muted);
 }
-.app-switcher-button .loading-spinner::after {
-  /* Hide the underline when showing spinner */
-  display: none;
+
+/* ---- Launcher overlay ----
+   The panel is a native <dialog> opened with showModal(): it renders in the
+   browser TOP LAYER (above every app stacking context, incl. the header's
+   z-index:500 context, the chat FAB, and toasts), the page behind it is
+   inert, and the whole-screen scrim is the dialog's ::backdrop. */
+.launcher-panel {
+  /* Reset dialog UA defaults, then apply the command-surface spec */
+  padding: 0;
+  margin: 0;
+  inset: unset;
+  max-width: none;
+  position: fixed;
+  top: calc(60px + var(--mj-connectivity-banner-height, 0px) + var(--mj-space-6));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(880px, calc(100vw - var(--mj-space-12)));
+  max-height: calc(100vh - 60px - var(--mj-connectivity-banner-height, 0px) - var(--mj-space-12));
+  background: var(--mj-bg-surface-elevated);
+  color: inherit;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-xl);
+  flex-direction: column;
+  overflow: hidden;
+  animation: launcher-pop .13s ease-out;
+}
+.launcher-panel[open] {
+  display: flex;
+}
+.launcher-panel::backdrop {
+  background: var(--mj-bg-overlay);
+  animation: launcher-fade-in var(--mj-transition-fast);
 }
 
-/* Loading state for dropdown items */
-.app-switcher-dropdown .app-switcher-item.loading {
+/* ---- Compact mode (few apps / Shell.AppSwitcher.Style) ----
+   Anchored under the trigger like a dropdown: no dim, single-column rows,
+   no recents/filter. Entering the Configure view drops this class, promoting
+   the panel back to the centered command surface (the config layout needs
+   the width). Desktop-only — the mobile sheet below overrides regardless. */
+@media (min-width: 769px) {
+  .launcher-panel--compact {
+    left: var(--anchor-left);
+    top: var(--anchor-top);
+    transform: none;
+    width: 320px;
+    max-height: calc(100vh - var(--anchor-top) - var(--mj-space-6));
+    box-shadow: var(--mj-shadow-lg);
+    /* The pop animation animates translateX(-50%), which compact doesn't use */
+    animation: launcher-fade-in var(--mj-transition-fast);
+  }
+  .launcher-panel--compact::backdrop {
+    background: transparent;
+    animation: none;
+  }
+  .launcher-panel--compact .launcher-grid {
+    grid-template-columns: 1fr;
+    gap: var(--mj-space-1);
+  }
+  .launcher-panel--compact .launcher-scroll {
+    padding: var(--mj-space-2);
+  }
+  .launcher-panel--compact .launcher-sect {
+    display: none; /* Single flat list — "All apps" header is noise here */
+  }
+  /* Compact rows are flat menu rows (not card blocks) with an explicit
+     hover fill; active keeps the shared brand tint. */
+  .launcher-panel--compact .app-card {
+    padding: var(--mj-space-2) var(--mj-space-2-5);
+    align-items: center;
+    background: transparent;
+    border-color: transparent;
+  }
+  .launcher-panel--compact .app-card:hover {
+    background: var(--mj-bg-surface-hover);
+    border-color: transparent;
+    transform: none;
+  }
+  .launcher-panel--compact .app-card.active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+    border-color: transparent;
+  }
+  .launcher-panel--compact .app-card:hover {
+    transform: none;
+  }
+  .launcher-panel--compact .app-card-glyph {
+    width: 32px;
+    height: 32px;
+    font-size: var(--mj-text-base);
+  }
+  .launcher-panel--compact .app-card-desc {
+    display: none;
+  }
+  .launcher-panel--compact .launcher-kbd-hints {
+    display: none;
+  }
+}
+
+@keyframes launcher-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Desktop pop matches the omnibar's ob-pop exactly. The from-state keeps the
+   layout translateX(-50%); on the mobile sheet (base transform: none) this
+   animation is disabled rather than redefined — redefining keyframes inside
+   the media query is what caused the jump-in bug. */
+@keyframes launcher-pop {
+  from { opacity: 0; transform: translateX(-50%) scale(.985) translateY(-4px); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+/* ---- Head: filter + close ---- */
+.launcher-head {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-4) var(--mj-space-4) var(--mj-space-2);
+  flex-shrink: 0;
+}
+.launcher-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2-5);
+  flex: 1;
+  height: 46px;
+  padding: 0 var(--mj-space-3-5);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  transition: border-color var(--mj-transition-fast);
+}
+.launcher-filter:focus-within {
+  border-color: var(--mj-border-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+.launcher-filter i {
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-sm);
+  flex-shrink: 0;
+}
+.launcher-filter input {
+  border: none;
+  outline: none;
+  background: transparent;
+  width: 100%;
+  font-family: inherit;
+  font-size: var(--mj-text-base);
+  color: var(--mj-text-primary);
+}
+.launcher-filter input::placeholder {
+  color: var(--mj-text-muted);
+}
+.launcher-close {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--mj-radius-md);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-base);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--mj-transition-fast);
+}
+.launcher-close:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.launcher-close:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
+}
+
+/* ---- In-panel configuration view (view swap) ---- */
+.launcher-head--config {
+  align-items: center;
+  gap: var(--mj-space-2-5);
+  padding-bottom: var(--mj-space-2);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+.launcher-back {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--mj-radius-md);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-base);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--mj-transition-fast);
+}
+.launcher-back:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.launcher-back:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
+}
+.launcher-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--mj-text-base);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+.launcher-config-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Inline unsaved-changes bar: lives inside the panel because a body-appended
+   confirm dialog would sit beneath (and inert to) the top layer. */
+.launcher-discard-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2-5);
+  margin: var(--mj-space-2) var(--mj-space-4) 0;
+  padding: var(--mj-space-2) var(--mj-space-3);
+  background: var(--mj-status-warning-bg);
+  border: 1px solid var(--mj-status-warning-border);
+  border-radius: var(--mj-radius-md);
+  flex-shrink: 0;
+}
+.launcher-discard-bar i {
+  color: var(--mj-status-warning);
+}
+.launcher-discard-bar .discard-msg {
+  flex: 1;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-status-warning-text);
+}
+
+/* ---- Scrollable card area ---- */
+.launcher-scroll {
+  overflow-y: auto;
+  padding: 0 var(--mj-space-4) var(--mj-space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Typography matches the omnibar's .ob-group-label */
+.launcher-sect {
+  font-size: 10.5px;
+  font-weight: var(--mj-font-bold);
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+  padding: var(--mj-space-3) var(--mj-space-1-5) var(--mj-space-1-5);
+}
+.launcher-sect--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: var(--mj-space-1);
+}
+/* All-apps sort toggle: quiet icon button, brand-tinted when non-default */
+.launcher-sort-toggle {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-xs);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--mj-transition-fast), color var(--mj-transition-fast);
+}
+.launcher-sort-toggle:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.launcher-sort-toggle:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
+}
+.launcher-sort-toggle[aria-pressed="true"] {
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+.launcher-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--mj-space-2-5);
+}
+.launcher-empty {
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-sm);
+  text-align: center;
+  padding: var(--mj-space-6) var(--mj-space-2);
+}
+
+/* ---- App cards ---- */
+.app-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mj-space-3);
+  /* surface-card, NOT surface: on the elevated panel, plain surface is the
+     same white in light mode and the cards visually vanish */
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  padding: var(--mj-space-3) var(--mj-space-3-5);
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color var(--mj-transition-fast), background var(--mj-transition-fast), transform var(--mj-transition-fast);
+}
+.app-card:hover {
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+  background: var(--mj-bg-surface-hover);
+  transform: translateY(-1px);
+}
+.app-card:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: -1px;
+}
+.app-card.active {
+  /* Shared active-tint recipe */
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, transparent);
+}
+.app-card.loading {
   pointer-events: none;
   opacity: 0.7;
 }
-.app-switcher-dropdown .app-switcher-item.loading i {
-  color: var(--item-color, var(--mj-text-muted));
+.app-card-glyph {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--mj-radius-md);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--mj-text-lg);
+  color: var(--app-color, var(--mj-text-muted));
+  background: color-mix(in srgb, var(--app-color, var(--mj-text-muted)) 14%, var(--mj-bg-surface-card));
+}
+.app-card-text {
+  min-width: 0;
+  flex: 1;
+}
+.app-card-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mj-space-2);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-bold);
+  color: var(--mj-text-primary);
+}
+.app-card-name-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-card.active .app-card-name {
+  color: var(--mj-brand-primary);
+}
+.app-card-desc {
+  margin-top: var(--mj-space-0-5);
+  font-size: var(--mj-text-xs);
+  line-height: var(--mj-leading-snug);
+  color: var(--mj-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-/* Mobile: full-width dropdown with scroll */
-@media (max-width: 600px) {
-  .app-switcher-dropdown {
-    position: fixed;
-    top: calc(60px + var(--mj-connectivity-banner-height, 0px));
+/* ---- Footer ---- */
+/* Footer tone matches the omnibar's .ob-foot */
+.launcher-foot {
+  border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-card);
+  padding: var(--mj-space-2-5) var(--mj-space-4);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+/* Footer options button — shared spec with the omnibar's Settings button:
+   quiet labeled gear, right-aligned. */
+.launcher-configure {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--mj-text-secondary);
+  font-family: inherit;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  padding: var(--mj-space-1-5) var(--mj-space-2);
+  border-radius: var(--mj-radius-md);
+  cursor: pointer;
+  transition: background var(--mj-transition-fast), color var(--mj-transition-fast);
+}
+.launcher-configure:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.launcher-configure:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
+}
+.launcher-kbd-hints {
+  display: flex;
+  gap: var(--mj-space-4);
+  font-size: 11.5px;
+  color: var(--mj-text-muted);
+}
+/* kbd chips: the canonical ob-kbd chrome (10.5px / 5px radius / bottom-heavy
+   border) — same spec the omnibar and the header search button use. */
+.launcher-kbd-hints kbd {
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-muted);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1.5px var(--mj-space-1-5);
+}
+
+/* ---- Screen-reader-only live region ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 900px) {
+  .launcher-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile: full sheet below the header, single-column cards, 48px+ targets.
+   Breakpoint matches the shell's 768px mobile breakpoint. */
+@media (max-width: 768px) {
+  /* Full-screen sheet, matching the omnibar's mobile treatment. The pop
+     animation is disabled (its from-state translateX no longer applies). */
+  .launcher-panel {
+    top: 0;
     left: 0;
     right: 0;
+    bottom: 0;
+    transform: none;
     width: 100%;
-    min-width: unset;
-    height: calc(100vh - 60px - var(--mj-connectivity-banner-height, 0px));
-    overflow-y: auto;
+    max-height: none;
+    height: 100dvh;
     border-radius: 0;
-    border-top: none;
-    padding: 0.25rem 0;
+    border: none;
+    animation: none;
   }
-
-  .app-switcher-dropdown .app-switcher-item {
-    padding: 14px 20px;
-    gap: 14px;
+  .launcher-grid {
+    grid-template-columns: 1fr;
+  }
+  .app-card {
     min-height: 48px;
-    font-size: 0.9375rem;
+    align-items: center;
   }
-
-  .app-switcher-dropdown .app-switcher-item i {
-    font-size: 20px;
-    width: 24px;
+  .launcher-close {
+    width: 46px;
+    height: 46px;
   }
+  .launcher-kbd-hints {
+    display: none; /* No hardware-keyboard hints on touch */
+  }
+  .app-switcher-button .app-label {
+    display: none; /* Icon-only trigger — the 390px header has no room for a name */
+  }
+}
 
-  .app-switcher-list {
-    overflow-y: visible;
-    flex: none;
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .launcher-panel,
+  .launcher-panel::backdrop {
+    animation: none;
+  }
+  .app-card,
+  .app-card:hover {
+    transition: none;
+    transform: none;
   }
 }
