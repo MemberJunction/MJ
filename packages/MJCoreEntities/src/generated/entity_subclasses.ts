@@ -12003,7 +12003,7 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.`),
     Text: z.string().nullable().describe(`
         * * Field Name: Text
-        * * Display Name: Text Content
+        * * Display Name: Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector. NULL for media-only segments (for example an image, or a video window with no transcript), where the embedded payload is the media itself and any readable representation lives in Description/Transcript.`),
     VectorRecordID: z.string().nullable().describe(`
@@ -12100,12 +12100,12 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.`),
     StartMs: z.number().nullable().describe(`
         * * Field Name: StartMs
-        * * Display Name: Start Time (ms)
+        * * Display Name: Start (ms)
         * * SQL Data Type: int
         * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.`),
     EndMs: z.number().nullable().describe(`
         * * Field Name: EndMs
-        * * Display Name: End Time (ms)
+        * * Display Name: End (ms)
         * * SQL Data Type: int
         * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.`),
     PageNumber: z.number().nullable().describe(`
@@ -12130,7 +12130,7 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: The verbatim transcript covering this chunk's time window, for audio and video segments, including speaker labels where the source provides them. Distinct from Description, which is a generated summary: this is what was actually said, and it is what makes a recording findable by lexical search.`),
     SegmenterKey: z.string().nullable().describe(`
         * * Field Name: SegmenterKey
-        * * Display Name: Segmenter Strategy
+        * * Display Name: Segmenter Key
         * * SQL Data Type: nvarchar(100)
         * * Description: Registration key of the segmentation strategy that produced this chunk (for example StructuralText, SemanticText, Transcript, or FixedWindow). Provenance: when a Content Source's configured strategy changes, this identifies which chunks were produced by the previous strategy and therefore need re-chunking.`),
     ParentChunkID: z.string().nullable().describe(`
@@ -12141,7 +12141,7 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
-        * * Display Name: Content Item Name
+        * * Display Name: Content Item
         * * SQL Data Type: nvarchar(250)`),
     RootParentChunkID: z.string().nullable().describe(`
         * * Field Name: RootParentChunkID
@@ -12944,37 +12944,47 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Actions (vwScheduledActions.ID)
         * * Description: Optional link to a MJ Scheduled Action that automatically runs the classification pipeline for this source on a cron schedule.`),
+    SegmenterKey: z.string().nullable().describe(`
+        * * Field Name: SegmenterKey
+        * * Display Name: Segmenter Strategy
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Registration key of the segmentation strategy used to split this source's content into embeddable chunks — for example StructuralText (document headings), AdaptiveBoundary (target size closing on the nearest natural break), SemanticText (LLM-detected topic boundaries), Transcript (audio/video chapters), PagedContent (one segment per page), or FixedWindow (uniform windows). NULL falls back to the Content Type's value, then to a built-in default.`),
+    CleanerKey: z.string().nullable().describe(`
+        * * Field Name: CleanerKey
+        * * Display Name: Cleaner Strategy
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Registration key of the content-cleaning strategy applied to this source before segmentation — for example Html (CSS-selector-driven extraction that drops navigation, sidebars, and advertising) or PlainText (whitespace normalization only). Cleaning is separate from segmentation because the two change for different reasons: a new site template needs new selectors, not a new chunking strategy. NULL falls back to the Content Type's value, then to a default inferred from the content's mime type.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
-        * * Display Name: Content Type
+        * * Display Name: Content Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
-        * * Display Name: Content Source Type
+        * * Display Name: Content Source Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
-        * * Display Name: Content File Type
+        * * Display Name: Content File Type Name
         * * SQL Data Type: nvarchar(255)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
     VectorIndex: z.string().nullable().describe(`
         * * Field Name: VectorIndex
-        * * Display Name: Vector Index
+        * * Display Name: Vector Index Name
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     EntityDocument: z.string().nullable().describe(`
         * * Field Name: EntityDocument
-        * * Display Name: Entity Document
+        * * Display Name: Entity Document Name
         * * SQL Data Type: nvarchar(250)`),
     ScheduledAction: z.string().nullable().describe(`
         * * Field Name: ScheduledAction
-        * * Display Name: Scheduled Action
+        * * Display Name: Scheduled Action Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -13081,6 +13091,16 @@ export const MJContentTypeSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJContentTypeEntity_IContentTypeConfiguration
         * * Description: JSON configuration blob for content-type-level settings. Conforms to the IContentTypeConfiguration interface. Reserved for future type-wide settings such as default tag taxonomy rules and processing options.`),
+    SegmenterKey: z.string().nullable().describe(`
+        * * Field Name: SegmenterKey
+        * * Display Name: Segmenter Strategy
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Default segmentation strategy for content of this type, used when a Content Source does not specify its own SegmenterKey. See ContentSource.SegmenterKey for the available strategies.`),
+    CleanerKey: z.string().nullable().describe(`
+        * * Field Name: CleanerKey
+        * * Display Name: Cleaner Strategy
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Default content-cleaning strategy for content of this type, used when a Content Source does not specify its own CleanerKey. See ContentSource.CleanerKey.`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model Name
@@ -64963,7 +64983,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: Text
-    * * Display Name: Text Content
+    * * Display Name: Text
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector. NULL for media-only segments (for example an image, or a video window with no transcript), where the embedded payload is the media itself and any readable representation lives in Description/Transcript.
     */
@@ -65158,7 +65178,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: StartMs
-    * * Display Name: Start Time (ms)
+    * * Display Name: Start (ms)
     * * SQL Data Type: int
     * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.
     */
@@ -65171,7 +65191,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: EndMs
-    * * Display Name: End Time (ms)
+    * * Display Name: End (ms)
     * * SQL Data Type: int
     * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.
     */
@@ -65236,7 +65256,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: SegmenterKey
-    * * Display Name: Segmenter Strategy
+    * * Display Name: Segmenter Key
     * * SQL Data Type: nvarchar(100)
     * * Description: Registration key of the segmentation strategy that produced this chunk (for example StructuralText, SemanticText, Transcript, or FixedWindow). Provenance: when a Content Source's configured strategy changes, this identifies which chunks were produced by the previous strategy and therefore need re-chunking.
     */
@@ -65263,7 +65283,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: ContentItem
-    * * Display Name: Content Item Name
+    * * Display Name: Content Item
     * * SQL Data Type: nvarchar(250)
     */
     get ContentItem(): string | null {
@@ -67222,6 +67242,21 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
  * The keys match the RequiredFields defined on the parent ContentSourceType's Configuration.
  */
 export interface MJContentSourceEntity_IContentSourceConfiguration {
+    /**
+     * Options passed to the segmentation strategy named by SegmenterKey.
+     *
+     * Sizing note: TargetTokens should be driven by the shape of your QUERIES, not by the
+     * embedding model's context window. The window is an upper bound; a good chunk is about
+     * as much content as a good answer, so that a matching chunk is mostly signal.
+     */
+    SegmentationOptions?: MJContentSourceEntity_IContentSegmentationOptions;
+
+    /**
+     * Options passed to the cleaning strategy named by CleanerKey. Selector rules are
+     * per-source because the right selector is a property of the site's template.
+     */
+    CleaningOptions?: MJContentSourceEntity_IContentCleaningOptions;
+
     /** Tag taxonomy matching mode: constrained (only match within subtree), auto-grow (match or create within subtree), free-flow (match or create anywhere) */
     TagTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
     /** Root Tag ID for constrained/auto-grow modes — limits taxonomy operations to this subtree */
@@ -67420,6 +67455,63 @@ export interface MJContentSourceEntity_IContentSourceWebsiteConfiguration {
      * origin to crawl the whole site).
      */
     RootURL?: string;
+}
+
+/**
+ * Options for the segmentation strategy. All optional; each segmenter ignores options
+ * that don't apply to it.
+ */
+export interface MJContentSourceEntity_IContentSegmentationOptions {
+    /** Hard ceiling on tokens per segment. Segments larger than this are split. */
+    MaxSegmentTokens?: number;
+    /** Overlap tokens applied when an oversized segment must be split. */
+    OverlapTokens?: number;
+    /** Merge adjacent text segments estimating below this many tokens. */
+    MinSegmentTokens?: number;
+    /** AdaptiveBoundary: desired segment size — size this to your queries, not to the model. */
+    TargetTokens?: number;
+    /** AdaptiveBoundary: percent below target at which a paragraph break is accepted. */
+    UndershootPercent?: number;
+    /** AdaptiveBoundary: percent above target to keep looking for a sentence/word break. */
+    OvershootPercent?: number;
+    /** AdaptiveBoundary: if the whole text is within this percent of target, don't split at all. */
+    NoSplitPercent?: number;
+    /** Transcript: maximum wall-clock length of one chapter, in milliseconds. */
+    MaxChapterMs?: number;
+    /** Transcript: a silence gap at least this long starts a new chapter. */
+    BoundaryGapMs?: number;
+    /** Transcript: also emit one child segment per speaker turn within each chapter. */
+    EmitSubChapters?: boolean;
+    /** FixedWindow: window length in milliseconds for audio/video with no transcript. */
+    WindowMs?: number;
+    /** SemanticText: skip the LLM boundary pass for documents below this token count. */
+    MinTokensForLLM?: number;
+}
+
+/**
+ * Options for the content-cleaning strategy that runs before segmentation.
+ *
+ * Garbage that survives cleaning is expensive: it gets embedded, stored, retrieved, and
+ * shown to a user or an agent. Navigation chrome repeated across a thousand pages produces
+ * a thousand near-identical vectors that crowd out real answers.
+ */
+export interface MJContentSourceEntity_IContentCleaningOptions {
+    /**
+     * CSS selectors whose content is the ONLY content to keep. The highest-leverage knob:
+     * naming the element that holds the article (e.g. '.article-body', 'main') discards
+     * navigation, sidebars, and advertising without enumerating what to drop.
+     */
+    IncludeSelectors?: string[];
+    /** CSS selectors to remove, applied after IncludeSelectors (inline ad slots, share widgets). */
+    ExcludeSelectors?: string[];
+    /** Collapse runs of whitespace and blank lines. Default true. */
+    NormalizeWhitespace?: boolean;
+    /** Maximum characters to retain after cleaning. */
+    MaxLength?: number;
+    /** Html cleaner: replace the built-in exclusion list rather than appending to it. */
+    ReplaceDefaultExcludes?: boolean;
+    /** Html cleaner: keep `alt` text from images as content. */
+    IncludeImageAltText?: boolean;
 }
 
 /**
@@ -67655,8 +67747,34 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: SegmenterKey
+    * * Display Name: Segmenter Strategy
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Registration key of the segmentation strategy used to split this source's content into embeddable chunks — for example StructuralText (document headings), AdaptiveBoundary (target size closing on the nearest natural break), SemanticText (LLM-detected topic boundaries), Transcript (audio/video chapters), PagedContent (one segment per page), or FixedWindow (uniform windows). NULL falls back to the Content Type's value, then to a built-in default.
+    */
+    get SegmenterKey(): string | null {
+        return this.Get('SegmenterKey');
+    }
+    set SegmenterKey(value: string | null) {
+        this.Set('SegmenterKey', value);
+    }
+
+    /**
+    * * Field Name: CleanerKey
+    * * Display Name: Cleaner Strategy
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Registration key of the content-cleaning strategy applied to this source before segmentation — for example Html (CSS-selector-driven extraction that drops navigation, sidebars, and advertising) or PlainText (whitespace normalization only). Cleaning is separate from segmentation because the two change for different reasons: a new site template needs new selectors, not a new chunking strategy. NULL falls back to the Content Type's value, then to a default inferred from the content's mime type.
+    */
+    get CleanerKey(): string | null {
+        return this.Get('CleanerKey');
+    }
+    set CleanerKey(value: string | null) {
+        this.Set('CleanerKey', value);
+    }
+
+    /**
     * * Field Name: ContentType
-    * * Display Name: Content Type
+    * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentType(): string {
@@ -67665,7 +67783,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentSourceType
-    * * Display Name: Content Source Type
+    * * Display Name: Content Source Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSourceType(): string {
@@ -67674,7 +67792,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentFileType
-    * * Display Name: Content File Type
+    * * Display Name: Content File Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentFileType(): string {
@@ -67683,7 +67801,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string | null {
@@ -67692,7 +67810,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: VectorIndex
-    * * Display Name: Vector Index
+    * * Display Name: Vector Index Name
     * * SQL Data Type: nvarchar(255)
     */
     get VectorIndex(): string | null {
@@ -67701,7 +67819,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
@@ -67710,7 +67828,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EntityDocument
-    * * Display Name: Entity Document
+    * * Display Name: Entity Document Name
     * * SQL Data Type: nvarchar(250)
     */
     get EntityDocument(): string | null {
@@ -67719,7 +67837,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ScheduledAction
-    * * Display Name: Scheduled Action
+    * * Display Name: Scheduled Action Name
     * * SQL Data Type: nvarchar(255)
     */
     get ScheduledAction(): string | null {
@@ -67852,6 +67970,21 @@ export class MJContentTypeAttributeEntity extends BaseEntity<MJContentTypeAttrib
  * their own {@link IContentSourceConfiguration}.
  */
 export interface MJContentTypeEntity_IContentTypeConfiguration {
+    /**
+     * Options passed to the segmentation strategy named by SegmenterKey.
+     *
+     * Sizing note: TargetTokens should be driven by the shape of your QUERIES, not by the
+     * embedding model's context window. The window is an upper bound; a good chunk is about
+     * as much content as a good answer, so that a matching chunk is mostly signal.
+     */
+    SegmentationOptions?: MJContentTypeEntity_IContentSegmentationOptions;
+
+    /**
+     * Options passed to the cleaning strategy named by CleanerKey. Selector rules are
+     * per-source because the right selector is a property of the site's template.
+     */
+    CleaningOptions?: MJContentTypeEntity_IContentCleaningOptions;
+
     /** Whether to share tag taxonomy with LLM by default for all sources of this type. Can be overridden per source. Default true */
     ShareTaxonomyWithLLM?: boolean;
     /** Default tag taxonomy mode for sources of this type. Can be overridden per source */
@@ -67912,6 +68045,63 @@ export interface MJContentTypeEntity_IContentTypeVectorMetadataFieldConfig {
     TruncationLimit?: number;
     /** How to store this field's value ('string' default, 'number', 'boolean', 'epochSeconds', 'epochMilliseconds'). */
     StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+}
+
+/**
+ * Options for the segmentation strategy. All optional; each segmenter ignores options
+ * that don't apply to it.
+ */
+export interface MJContentTypeEntity_IContentSegmentationOptions {
+    /** Hard ceiling on tokens per segment. Segments larger than this are split. */
+    MaxSegmentTokens?: number;
+    /** Overlap tokens applied when an oversized segment must be split. */
+    OverlapTokens?: number;
+    /** Merge adjacent text segments estimating below this many tokens. */
+    MinSegmentTokens?: number;
+    /** AdaptiveBoundary: desired segment size — size this to your queries, not to the model. */
+    TargetTokens?: number;
+    /** AdaptiveBoundary: percent below target at which a paragraph break is accepted. */
+    UndershootPercent?: number;
+    /** AdaptiveBoundary: percent above target to keep looking for a sentence/word break. */
+    OvershootPercent?: number;
+    /** AdaptiveBoundary: if the whole text is within this percent of target, don't split at all. */
+    NoSplitPercent?: number;
+    /** Transcript: maximum wall-clock length of one chapter, in milliseconds. */
+    MaxChapterMs?: number;
+    /** Transcript: a silence gap at least this long starts a new chapter. */
+    BoundaryGapMs?: number;
+    /** Transcript: also emit one child segment per speaker turn within each chapter. */
+    EmitSubChapters?: boolean;
+    /** FixedWindow: window length in milliseconds for audio/video with no transcript. */
+    WindowMs?: number;
+    /** SemanticText: skip the LLM boundary pass for documents below this token count. */
+    MinTokensForLLM?: number;
+}
+
+/**
+ * Options for the content-cleaning strategy that runs before segmentation.
+ *
+ * Garbage that survives cleaning is expensive: it gets embedded, stored, retrieved, and
+ * shown to a user or an agent. Navigation chrome repeated across a thousand pages produces
+ * a thousand near-identical vectors that crowd out real answers.
+ */
+export interface MJContentTypeEntity_IContentCleaningOptions {
+    /**
+     * CSS selectors whose content is the ONLY content to keep. The highest-leverage knob:
+     * naming the element that holds the article (e.g. '.article-body', 'main') discards
+     * navigation, sidebars, and advertising without enumerating what to drop.
+     */
+    IncludeSelectors?: string[];
+    /** CSS selectors to remove, applied after IncludeSelectors (inline ad slots, share widgets). */
+    ExcludeSelectors?: string[];
+    /** Collapse runs of whitespace and blank lines. Default true. */
+    NormalizeWhitespace?: boolean;
+    /** Maximum characters to retain after cleaning. */
+    MaxLength?: number;
+    /** Html cleaner: replace the built-in exclusion list rather than appending to it. */
+    ReplaceDefaultExcludes?: boolean;
+    /** Html cleaner: keep `alt` text from images as content. */
+    IncludeImageAltText?: boolean;
 }
 
 /**
@@ -68101,6 +68291,32 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
         this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: SegmenterKey
+    * * Display Name: Segmenter Strategy
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Default segmentation strategy for content of this type, used when a Content Source does not specify its own SegmenterKey. See ContentSource.SegmenterKey for the available strategies.
+    */
+    get SegmenterKey(): string | null {
+        return this.Get('SegmenterKey');
+    }
+    set SegmenterKey(value: string | null) {
+        this.Set('SegmenterKey', value);
+    }
+
+    /**
+    * * Field Name: CleanerKey
+    * * Display Name: Cleaner Strategy
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Default content-cleaning strategy for content of this type, used when a Content Source does not specify its own CleanerKey. See ContentSource.CleanerKey.
+    */
+    get CleanerKey(): string | null {
+        return this.Get('CleanerKey');
+    }
+    set CleanerKey(value: string | null) {
+        this.Set('CleanerKey', value);
     }
 
     /**

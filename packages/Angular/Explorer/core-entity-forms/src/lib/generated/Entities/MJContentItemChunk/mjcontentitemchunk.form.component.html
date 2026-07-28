@@ -37,6 +37,30 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="Modality"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SegmentTitle"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SegmenterKey"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="ParentChunkID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -72,14 +96,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="SegmentTitle"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="Description"
             Type="textarea"
             [EditMode]="EditMode"
@@ -105,24 +121,8 @@
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="VectorRecordID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Modality"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="SegmenterKey"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -198,10 +198,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Provenance and Positioning Section -->
+    <!-- Provenance Section -->
     <mj-collapsible-panel
-        SectionKey="provenanceAndPositioning"
-        SectionName="Provenance and Positioning"
+        SectionKey="provenance"
+        SectionName="Provenance"
         Icon="fa fa-map-marked-alt"
         [Form]="this"
         [FormContext]="formContext">

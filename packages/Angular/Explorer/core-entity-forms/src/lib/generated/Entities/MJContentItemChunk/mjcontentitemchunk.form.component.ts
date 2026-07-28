@@ -21,7 +21,7 @@ export class MJContentItemChunkFormComponent extends BaseFormComponent {
             { sectionKey: 'vectorIntegration', sectionName: 'Vector Integration', isExpanded: true },
             { sectionKey: 'lifecycleStatus', sectionName: 'Lifecycle Status', isExpanded: true },
             { sectionKey: 'lifecycleTimestamps', sectionName: 'Lifecycle Timestamps', isExpanded: true },
-            { sectionKey: 'provenanceAndPositioning', sectionName: 'Provenance and Positioning', isExpanded: true },
+            { sectionKey: 'provenance', sectionName: 'Provenance', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentItemChunks', sectionName: 'Content Item Chunks', isExpanded: false }
         ]);

@@ -1,25 +1,4 @@
 /*
-    ⚠️  CODEGEN SECTION IS STALE — RE-RUN REQUIRED BEFORE MERGE  ⚠️
-
-    The generated section at the bottom of this file was produced BEFORE the
-    ContentSource / ContentType strategy columns were added to the hand-written DDL.
-    It currently covers `MJ: Content Item Chunks` only.
-
-    Missing from the generated section (verified — zero occurrences below the separator):
-        ContentSource.SegmenterKey      ContentSource.CleanerKey
-        ContentType.SegmenterKey        ContentType.CleanerKey
-
-    Merging as-is would move the schema ahead of MemberJunction's metadata for those four
-    columns: no EntityField rows, un-regenerated vwContentSources / vwContentTypes, and
-    spCreate/spUpdate procedures that don't know the columns exist.
-
-    To complete: apply this file to a clean database at the v5.50 candidate baseline, run
-    `mj codegen`, then REPLACE the entire generated section (everything below the separator
-    block) with the new CodeGen_Run_*.sql output, delete the standalone CodeGen file, and
-    remove this banner. See the PR discussion for the step-by-step runbook.
-
-    ================================================================================
-
     ContentItemChunk — multimodal segmentation columns
 
     Extends the chunk entity so a chunk can represent a segment of ANY modality, not just a
@@ -331,22 +310,25 @@ GO
  * ==== BELOW THIS LINE: MEMBERJUNCTION CODEGEN OUTPUT — DO NOT HAND-EDIT ====
  * ============================================================================
  *
- * Produced by `mj codegen` from the hand-written DDL above, for MJ: Content Item Chunks:
- * EntityField rows for the 11 new columns, the Modality value-list rows + ValueListType
- * (both derived from that column's CHECK constraint), the self-referencing ParentChunkID
- * EntityRelationship plus CodeGen's derived RootParentChunkID field and its Root ID function,
- * FK auto-indexes, field categories, the regenerated vwContentItemChunks view,
- * spCreate/spUpdate/spDelete, and permission grants.
+ * Produced by `mj codegen` from the hand-written DDL above. Covers:
+ *   - MJ: Content Item Chunks - EntityField rows for the 11 new columns, the Modality
+ *     value-list rows + ValueListType (from that column's CHECK constraint), the self-
+ *     referencing ParentChunkID EntityRelationship plus CodeGen's derived RootParentChunkID
+ *     field and its Root-ID function, FK auto-indexes, field categories, the regenerated
+ *     vwContentItemChunks view, spCreate/spUpdate/spDelete, and permission grants.
+ *   - MJ: Content Sources and MJ: Content Types - EntityField rows for SegmenterKey and
+ *     CleanerKey, regenerated views, and spCreate/spUpdate (now carrying the two new params).
+ *   - MJ: Entity Documents - spDeleteEntityDocument regenerated because its cascade-update on
+ *     Content Sources calls spUpdateContentSource, whose signature gained SegmenterKey/CleanerKey.
  *
- * DO NOT edit by hand. If the hand-written DDL above changes, re-run `mj codegen` and replace
- * this entire section. An unrelated "Generated Validation Functions for MJ: AI Agent Types"
- * regeneration, an artifact of this environment's fresh-install state, was intentionally
- * excluded.
+ * DO NOT edit by hand. If the hand-written DDL above changes, re-run `mj sync push` (so JSONType
+ * definitions are current) then `mj codegen`, and replace this entire section. An unrelated
+ * "Generated Validation Functions for MJ: AI Agent Types" regeneration - an artifact of the
+ * fresh-install baseline used for this run - was intentionally excluded.
  * ============================================================================ */
 
-/* SQL text to insert 11 new entity field(s) */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4f00910f-a59c-4e6f-b09c-efac5435a979' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Modality')) BEGIN
+/* SQL text to insert 15 new entity field(s) */
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '012c715a-4846-4910-9d64-35c7327fa213' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'SegmenterKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -379,7 +361,255 @@ GO
          )
          VALUES
          (
-            '4f00910f-a59c-4e6f-b09c-efac5435a979',
+            '012c715a-4846-4910-9d64-35c7327fa213',
+            'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
+            100039,
+            'SegmenterKey',
+            'Segmenter Key',
+            'Registration key of the segmentation strategy used to split this source''s content into embeddable chunks — for example StructuralText (document headings), AdaptiveBoundary (target size closing on the nearest natural break), SemanticText (LLM-detected topic boundaries), Transcript (audio/video chapters), PagedContent (one segment per page), or FixedWindow (uniform windows). NULL falls back to the Content Type''s value, then to a built-in default.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '22f6a2ee-fe1a-4fe7-a946-9fe7743de677' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'CleanerKey')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '22f6a2ee-fe1a-4fe7-a946-9fe7743de677',
+            'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
+            100040,
+            'CleanerKey',
+            'Cleaner Key',
+            'Registration key of the content-cleaning strategy applied to this source before segmentation — for example Html (CSS-selector-driven extraction that drops navigation, sidebars, and advertising) or PlainText (whitespace normalization only). Cleaning is separate from segmentation because the two change for different reasons: a new site template needs new selectors, not a new chunking strategy. NULL falls back to the Content Type''s value, then to a default inferred from the content''s mime type.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cfc92a3b-c738-4940-8c92-11b032ce7e05' OR (EntityID = 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'SegmenterKey')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'cfc92a3b-c738-4940-8c92-11b032ce7e05',
+            'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Types
+            100028,
+            'SegmenterKey',
+            'Segmenter Key',
+            'Default segmentation strategy for content of this type, used when a Content Source does not specify its own SegmenterKey. See ContentSource.SegmenterKey for the available strategies.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '87551e67-a36d-4de6-adb8-eab1a8450900' OR (EntityID = 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'CleanerKey')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '87551e67-a36d-4de6-adb8-eab1a8450900',
+            'A793AD50-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Types
+            100029,
+            'CleanerKey',
+            'Cleaner Key',
+            'Default content-cleaning strategy for content of this type, used when a Content Source does not specify its own CleanerKey. See ContentSource.CleanerKey.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7ca10d77-d4c3-4844-9ac6-cf684c1027a5' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Modality')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7ca10d77-d4c3-4844-9ac6-cf684c1027a5',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100039,
             'Modality',
@@ -408,8 +638,7 @@ GO
             GETUTCDATE()
          )
       END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '08f64b3f-a7d9-48ca-a72d-58d8fde6a475' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'StartOffset')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f0f04464-9380-4cfe-a012-27e6eda15913' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'StartOffset')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -442,7 +671,7 @@ GO
          )
          VALUES
          (
-            '08f64b3f-a7d9-48ca-a72d-58d8fde6a475',
+            'f0f04464-9380-4cfe-a012-27e6eda15913',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100040,
             'StartOffset',
@@ -471,8 +700,7 @@ GO
             GETUTCDATE()
          )
       END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '69ef8105-9dd4-48ee-ad8c-b9ca72d9effc' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'EndOffset')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c98f7a52-c1dc-4a2f-8733-5a4a49a6cde9' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'EndOffset')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -505,7 +733,7 @@ GO
          )
          VALUES
          (
-            '69ef8105-9dd4-48ee-ad8c-b9ca72d9effc',
+            'c98f7a52-c1dc-4a2f-8733-5a4a49a6cde9',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100041,
             'EndOffset',
@@ -534,8 +762,7 @@ GO
             GETUTCDATE()
          )
       END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f2b962a0-2ae8-4b8f-9d0f-e45946adfa78' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'StartMs')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1e8a8a29-a598-49a4-ac97-c8dd923e506a' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'StartMs')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -568,7 +795,7 @@ GO
          )
          VALUES
          (
-            'f2b962a0-2ae8-4b8f-9d0f-e45946adfa78',
+            '1e8a8a29-a598-49a4-ac97-c8dd923e506a',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100042,
             'StartMs',
@@ -597,8 +824,7 @@ GO
             GETUTCDATE()
          )
       END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a8d97dc7-f2c8-4454-9d46-b458fea56f01' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'EndMs')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4b42c9ed-789e-4417-ad71-44bbb7ebf7d5' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'EndMs')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -631,7 +857,7 @@ GO
          )
          VALUES
          (
-            'a8d97dc7-f2c8-4454-9d46-b458fea56f01',
+            '4b42c9ed-789e-4417-ad71-44bbb7ebf7d5',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100043,
             'EndMs',
@@ -660,8 +886,7 @@ GO
             GETUTCDATE()
          )
       END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'db35fb41-830d-4ecc-82a0-0bff46f93398' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'PageNumber')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd52720e3-05a7-41b2-8c00-c57d8767a930' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'PageNumber')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -694,7 +919,7 @@ GO
          )
          VALUES
          (
-            'db35fb41-830d-4ecc-82a0-0bff46f93398',
+            'd52720e3-05a7-41b2-8c00-c57d8767a930',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100044,
             'PageNumber',
@@ -723,8 +948,7 @@ GO
             GETUTCDATE()
          )
       END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd1779c3a-6e94-4d82-a776-0ef1271b75e7' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'SegmentTitle')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '62ff46f8-8815-462f-9f31-8818d831b2bb' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'SegmentTitle')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -757,7 +981,7 @@ GO
          )
          VALUES
          (
-            'd1779c3a-6e94-4d82-a776-0ef1271b75e7',
+            '62ff46f8-8815-462f-9f31-8818d831b2bb',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100045,
             'SegmentTitle',
@@ -786,8 +1010,7 @@ GO
             GETUTCDATE()
          )
       END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'de94985c-57ef-4480-86c9-79d11331da58' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5cb468a1-7c22-47eb-bf54-f53bc2c45714' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -820,7 +1043,7 @@ GO
          )
          VALUES
          (
-            'de94985c-57ef-4480-86c9-79d11331da58',
+            '5cb468a1-7c22-47eb-bf54-f53bc2c45714',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100046,
             'Description',
@@ -849,8 +1072,7 @@ GO
             GETUTCDATE()
          )
       END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5da90752-15a6-4d43-bba5-daddaf2273e3' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Transcript')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd0b9e206-c912-4baf-9336-a2af8baba492' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Transcript')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -883,7 +1105,7 @@ GO
          )
          VALUES
          (
-            '5da90752-15a6-4d43-bba5-daddaf2273e3',
+            'd0b9e206-c912-4baf-9336-a2af8baba492',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100047,
             'Transcript',
@@ -912,8 +1134,7 @@ GO
             GETUTCDATE()
          )
       END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ff055d0e-5ae2-4563-9b89-4ff91ce6abef' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'SegmenterKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8c51c895-93bf-43d8-9049-6a6ac8484a76' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'SegmenterKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -946,7 +1167,7 @@ GO
          )
          VALUES
          (
-            'ff055d0e-5ae2-4563-9b89-4ff91ce6abef',
+            '8c51c895-93bf-43d8-9049-6a6ac8484a76',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100048,
             'SegmenterKey',
@@ -975,8 +1196,7 @@ GO
             GETUTCDATE()
          )
       END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '566671b6-ac5c-454c-8c91-85b47a19e532' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'ParentChunkID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '96841354-26bf-4919-91a3-b3170ea58f68' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'ParentChunkID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1009,7 +1229,7 @@ GO
          )
          VALUES
          (
-            '566671b6-ac5c-454c-8c91-85b47a19e532',
+            '96841354-26bf-4919-91a3-b3170ea58f68',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100049,
             'ParentChunkID',
@@ -1038,50 +1258,41 @@ GO
             GETUTCDATE()
          )
       END;
-
-/* SQL text to insert entity field value with ID ac10471b-e778-455a-b5b1-da2b240ee6f3 */
+/* SQL text to insert entity field value with ID 17ba00d6-7e25-4f88-96b9-3541f424e3aa */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ac10471b-e778-455a-b5b1-da2b240ee6f3', '4F00910F-A59C-4E6F-B09C-EFAC5435A979', 1, 'audio', 'audio', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 90b2d7fd-1a99-47d3-968f-1f32b905e4d9 */
+                                       ('17ba00d6-7e25-4f88-96b9-3541f424e3aa', '7CA10D77-D4C3-4844-9AC6-CF684C1027A5', 1, 'audio', 'audio', GETUTCDATE(), GETUTCDATE());
+/* SQL text to insert entity field value with ID e5ed9508-72ed-4db0-be53-8876156fb5c9 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('90b2d7fd-1a99-47d3-968f-1f32b905e4d9', '4F00910F-A59C-4E6F-B09C-EFAC5435A979', 2, 'image', 'image', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 2633c8ee-553d-4b7b-8704-0c292b649354 */
+                                       ('e5ed9508-72ed-4db0-be53-8876156fb5c9', '7CA10D77-D4C3-4844-9AC6-CF684C1027A5', 2, 'image', 'image', GETUTCDATE(), GETUTCDATE());
+/* SQL text to insert entity field value with ID 61510446-22f5-41f5-940c-ce906f41ca1d */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2633c8ee-553d-4b7b-8704-0c292b649354', '4F00910F-A59C-4E6F-B09C-EFAC5435A979', 3, 'multimodal', 'multimodal', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 72159e42-7904-46a5-87c2-0d95e417eabf */
+                                       ('61510446-22f5-41f5-940c-ce906f41ca1d', '7CA10D77-D4C3-4844-9AC6-CF684C1027A5', 3, 'multimodal', 'multimodal', GETUTCDATE(), GETUTCDATE());
+/* SQL text to insert entity field value with ID db53b66f-4dc5-4888-9dfe-124fd8f7fb4e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('72159e42-7904-46a5-87c2-0d95e417eabf', '4F00910F-A59C-4E6F-B09C-EFAC5435A979', 4, 'text', 'text', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID c4a3492a-6364-491f-9b3f-198e55b726fa */
+                                       ('db53b66f-4dc5-4888-9dfe-124fd8f7fb4e', '7CA10D77-D4C3-4844-9AC6-CF684C1027A5', 4, 'text', 'text', GETUTCDATE(), GETUTCDATE());
+/* SQL text to insert entity field value with ID ecedff77-b9a9-42b3-abd5-45327c54f821 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('c4a3492a-6364-491f-9b3f-198e55b726fa', '4F00910F-A59C-4E6F-B09C-EFAC5435A979', 5, 'video', 'video', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID 4F00910F-A59C-4E6F-B09C-EFAC5435A979 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='4F00910F-A59C-4E6F-B09C-EFAC5435A979';
-
-
+                                       ('ecedff77-b9a9-42b3-abd5-45327c54f821', '7CA10D77-D4C3-4844-9AC6-CF684C1027A5', 5, 'video', 'video', GETUTCDATE(), GETUTCDATE());
+/* SQL text to update ValueListType for entity field ID 7CA10D77-D4C3-4844-9AC6-CF684C1027A5 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='7CA10D77-D4C3-4844-9AC6-CF684C1027A5';
 /* Create Entity Relationship: MJ: Content Item Chunks -> MJ: Content Item Chunks (One To Many via ParentChunkID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'c117f679-ebfe-4005-9d9c-084a7df64ae9'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '383f6b94-709b-44fc-9d1b-1e09b4e8c174'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('c117f679-ebfe-4005-9d9c-084a7df64ae9', '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', 'ParentChunkID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('383f6b94-709b-44fc-9d1b-1e09b4e8c174', '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', 'ParentChunkID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
-
 /* Index for Foreign Keys for ContentItemChunk */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -1099,7 +1310,6 @@ IF NOT EXISTS (
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentItemChunk]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ContentItemChunk_ContentItemID ON [${flyway:defaultSchema}].[ContentItemChunk] ([ContentItemID]);
-
 -- Index for foreign key ParentChunkID in table ContentItemChunk
 IF NOT EXISTS (
     SELECT 1
@@ -1108,7 +1318,6 @@ IF NOT EXISTS (
     AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentItemChunk]')
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ContentItemChunk_ParentChunkID ON [${flyway:defaultSchema}].[ContentItemChunk] ([ParentChunkID]);
-
 /* Root ID Function SQL for MJ: Content Item Chunks.ParentChunkID */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -1124,7 +1333,6 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_ContentItemChunk_ParentChunkID ON [${flyway:defaul
 IF OBJECT_ID('[${flyway:defaultSchema}].[fnContentItemChunkParentChunkID_GetRootID]', 'IF') IS NOT NULL
     DROP FUNCTION [${flyway:defaultSchema}].[fnContentItemChunkParentChunkID_GetRootID];
 GO
-
 CREATE FUNCTION [${flyway:defaultSchema}].[fnContentItemChunkParentChunkID_GetRootID]
 (
     @RecordID uniqueidentifier,
@@ -1144,9 +1352,7 @@ RETURN
             [${flyway:defaultSchema}].[ContentItemChunk]
         WHERE
             [ID] = COALESCE(@ParentID, @RecordID)
-
         UNION ALL
-
         SELECT
             c.[ID],
             c.[ParentChunkID],
@@ -1169,7 +1375,6 @@ RETURN
         [RootParentID]
 );
 GO
-
 /* Base View SQL for MJ: Content Item Chunks */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -1179,7 +1384,6 @@ GO
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
-
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      MJ: Content Item Chunks
 -----               SCHEMA:      ${flyway:defaultSchema}
@@ -1189,7 +1393,6 @@ GO
 IF OBJECT_ID('[${flyway:defaultSchema}].[vwContentItemChunks]', 'V') IS NOT NULL
     DROP VIEW [${flyway:defaultSchema}].[vwContentItemChunks];
 GO
-
 CREATE VIEW [${flyway:defaultSchema}].[vwContentItemChunks]
 AS
 SELECT
@@ -1206,7 +1409,6 @@ OUTER APPLY
     [${flyway:defaultSchema}].[fnContentItemChunkParentChunkID_GetRootID]([c].[ID], [c].[ParentChunkID]) AS root_ParentChunkID
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwContentItemChunks] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
 /* Base View Permissions SQL for MJ: Content Item Chunks */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -1216,9 +1418,7 @@ GRANT SELECT ON [${flyway:defaultSchema}].[vwContentItemChunks] TO [cdp_UI], [cd
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
-
 GRANT SELECT ON [${flyway:defaultSchema}].[vwContentItemChunks] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
 /* spCreate SQL for MJ: Content Item Chunks */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -1228,14 +1428,12 @@ GRANT SELECT ON [${flyway:defaultSchema}].[vwContentItemChunks] TO [cdp_UI], [cd
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
-
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ContentItemChunk
 ------------------------------------------------------------
 IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateContentItemChunk]', 'P') IS NOT NULL
     DROP PROCEDURE [${flyway:defaultSchema}].[spCreateContentItemChunk];
 GO
-
 CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentItemChunk]
     @ID uniqueidentifier = NULL,
     @ContentItemID uniqueidentifier,
@@ -1279,7 +1477,6 @@ AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
     IF @ID IS NOT NULL
     BEGIN
         -- User provided a value, use it
@@ -1393,11 +1590,8 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentItemChunk] TO [cdp_Developer], [cdp_Integration];
-
 /* spCreate Permissions for MJ: Content Item Chunks */
-
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentItemChunk] TO [cdp_Developer], [cdp_Integration];
-
 /* spUpdate SQL for MJ: Content Item Chunks */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -1407,14 +1601,12 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentItemChunk] TO [cdp_De
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
-
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ContentItemChunk
 ------------------------------------------------------------
 IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateContentItemChunk]', 'P') IS NOT NULL
     DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateContentItemChunk];
 GO
-
 CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentItemChunk]
     @ID uniqueidentifier,
     @ContentItemID uniqueidentifier = NULL,
@@ -1483,7 +1675,6 @@ BEGIN
         [ParentChunkID] = CASE WHEN @ParentChunkID_Clear = 1 THEN NULL ELSE ISNULL(@ParentChunkID, [ParentChunkID]) END
     WHERE
         [ID] = @ID
-
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
@@ -1499,10 +1690,8 @@ BEGIN
                                     
 END
 GO
-
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentItemChunk] TO [cdp_Developer], [cdp_Integration]
 GO
-
 ------------------------------------------------------------
 ----- TRIGGER FOR __mj_UpdatedAt field for the ContentItemChunk table
 ------------------------------------------------------------
@@ -1526,11 +1715,8 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
-
 /* spUpdate Permissions for MJ: Content Item Chunks */
-
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentItemChunk] TO [cdp_Developer], [cdp_Integration];
-
 /* spDelete SQL for MJ: Content Item Chunks */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -1540,26 +1726,21 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentItemChunk] TO [cdp_De
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
-
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ContentItemChunk
 ------------------------------------------------------------
 IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteContentItemChunk]', 'P') IS NOT NULL
     DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteContentItemChunk];
 GO
-
 CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteContentItemChunk]
     @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
-
     DELETE FROM
         [${flyway:defaultSchema}].[ContentItemChunk]
     WHERE
         [ID] = @ID
-
-
     -- Check if the delete was successful
     IF @@ROWCOUNT = 0
         SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
@@ -1568,14 +1749,866 @@ BEGIN
 END
 GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemChunk] TO [cdp_Developer], [cdp_Integration];
-
 /* spDelete Permissions for MJ: Content Item Chunks */
-
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemChunk] TO [cdp_Developer], [cdp_Integration];
-
+/* Index for Foreign Keys for ContentSource */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Sources
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ContentTypeID in table ContentSource
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentSource_ContentTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentSource]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentSource_ContentTypeID ON [${flyway:defaultSchema}].[ContentSource] ([ContentTypeID]);
+-- Index for foreign key ContentSourceTypeID in table ContentSource
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentSource_ContentSourceTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentSource]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentSource_ContentSourceTypeID ON [${flyway:defaultSchema}].[ContentSource] ([ContentSourceTypeID]);
+-- Index for foreign key ContentFileTypeID in table ContentSource
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentSource_ContentFileTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentSource]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentSource_ContentFileTypeID ON [${flyway:defaultSchema}].[ContentSource] ([ContentFileTypeID]);
+-- Index for foreign key EmbeddingModelID in table ContentSource
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentSource_EmbeddingModelID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentSource]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentSource_EmbeddingModelID ON [${flyway:defaultSchema}].[ContentSource] ([EmbeddingModelID]);
+-- Index for foreign key VectorIndexID in table ContentSource
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentSource_VectorIndexID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentSource]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentSource_VectorIndexID ON [${flyway:defaultSchema}].[ContentSource] ([VectorIndexID]);
+-- Index for foreign key EntityID in table ContentSource
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentSource_EntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentSource]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentSource_EntityID ON [${flyway:defaultSchema}].[ContentSource] ([EntityID]);
+-- Index for foreign key EntityDocumentID in table ContentSource
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentSource_EntityDocumentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentSource]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentSource_EntityDocumentID ON [${flyway:defaultSchema}].[ContentSource] ([EntityDocumentID]);
+-- Index for foreign key ScheduledActionID in table ContentSource
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentSource_ScheduledActionID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentSource]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentSource_ScheduledActionID ON [${flyway:defaultSchema}].[ContentSource] ([ScheduledActionID]);
+/* Base View SQL for MJ: Content Sources */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Sources
+-- Item: vwContentSources
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Content Sources
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  ContentSource
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwContentSources]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwContentSources];
+GO
+CREATE VIEW [${flyway:defaultSchema}].[vwContentSources]
+AS
+SELECT
+    c.*,
+    MJContentType_ContentTypeID.[Name] AS [ContentType],
+    MJContentSourceType_ContentSourceTypeID.[Name] AS [ContentSourceType],
+    MJContentFileType_ContentFileTypeID.[Name] AS [ContentFileType],
+    MJAIModel_EmbeddingModelID.[Name] AS [EmbeddingModel],
+    MJVectorIndex_VectorIndexID.[Name] AS [VectorIndex],
+    MJEntity_EntityID.[Name] AS [Entity],
+    MJEntityDocument_EntityDocumentID.[Name] AS [EntityDocument],
+    MJScheduledAction_ScheduledActionID.[Name] AS [ScheduledAction]
+FROM
+    [${flyway:defaultSchema}].[ContentSource] AS c
+INNER JOIN
+    [${flyway:defaultSchema}].[ContentType] AS MJContentType_ContentTypeID
+  ON
+    [c].[ContentTypeID] = MJContentType_ContentTypeID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[ContentSourceType] AS MJContentSourceType_ContentSourceTypeID
+  ON
+    [c].[ContentSourceTypeID] = MJContentSourceType_ContentSourceTypeID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[ContentFileType] AS MJContentFileType_ContentFileTypeID
+  ON
+    [c].[ContentFileTypeID] = MJContentFileType_ContentFileTypeID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIModel] AS MJAIModel_EmbeddingModelID
+  ON
+    [c].[EmbeddingModelID] = MJAIModel_EmbeddingModelID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[VectorIndex] AS MJVectorIndex_VectorIndexID
+  ON
+    [c].[VectorIndexID] = MJVectorIndex_VectorIndexID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Entity] AS MJEntity_EntityID
+  ON
+    [c].[EntityID] = MJEntity_EntityID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[EntityDocument] AS MJEntityDocument_EntityDocumentID
+  ON
+    [c].[EntityDocumentID] = MJEntityDocument_EntityDocumentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[ScheduledAction] AS MJScheduledAction_ScheduledActionID
+  ON
+    [c].[ScheduledActionID] = MJScheduledAction_ScheduledActionID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwContentSources] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+/* Base View Permissions SQL for MJ: Content Sources */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Sources
+-- Item: Permissions for vwContentSources
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+GRANT SELECT ON [${flyway:defaultSchema}].[vwContentSources] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+/* spCreate SQL for MJ: Content Sources */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Sources
+-- Item: spCreateContentSource
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR ContentSource
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateContentSource]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateContentSource];
+GO
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentSource]
+    @ID uniqueidentifier = NULL,
+    @Name_Clear bit = 0,
+    @Name nvarchar(255) = NULL,
+    @ContentTypeID uniqueidentifier,
+    @ContentSourceTypeID uniqueidentifier,
+    @ContentFileTypeID uniqueidentifier,
+    @URL nvarchar(2000),
+    @EmbeddingModelID_Clear bit = 0,
+    @EmbeddingModelID uniqueidentifier = NULL,
+    @VectorIndexID_Clear bit = 0,
+    @VectorIndexID uniqueidentifier = NULL,
+    @Configuration_Clear bit = 0,
+    @Configuration nvarchar(MAX) = NULL,
+    @EntityID_Clear bit = 0,
+    @EntityID uniqueidentifier = NULL,
+    @EntityDocumentID_Clear bit = 0,
+    @EntityDocumentID uniqueidentifier = NULL,
+    @ScheduledActionID_Clear bit = 0,
+    @ScheduledActionID uniqueidentifier = NULL,
+    @SegmenterKey_Clear bit = 0,
+    @SegmenterKey nvarchar(100) = NULL,
+    @CleanerKey_Clear bit = 0,
+    @CleanerKey nvarchar(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[ContentSource]
+            (
+                [ID],
+                [Name],
+                [ContentTypeID],
+                [ContentSourceTypeID],
+                [ContentFileTypeID],
+                [URL],
+                [EmbeddingModelID],
+                [VectorIndexID],
+                [Configuration],
+                [EntityID],
+                [EntityDocumentID],
+                [ScheduledActionID],
+                [SegmenterKey],
+                [CleanerKey]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                CASE WHEN @Name_Clear = 1 THEN NULL ELSE ISNULL(@Name, NULL) END,
+                @ContentTypeID,
+                @ContentSourceTypeID,
+                @ContentFileTypeID,
+                @URL,
+                CASE WHEN @EmbeddingModelID_Clear = 1 THEN NULL ELSE ISNULL(@EmbeddingModelID, NULL) END,
+                CASE WHEN @VectorIndexID_Clear = 1 THEN NULL ELSE ISNULL(@VectorIndexID, NULL) END,
+                CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
+                CASE WHEN @EntityID_Clear = 1 THEN NULL ELSE ISNULL(@EntityID, NULL) END,
+                CASE WHEN @EntityDocumentID_Clear = 1 THEN NULL ELSE ISNULL(@EntityDocumentID, NULL) END,
+                CASE WHEN @ScheduledActionID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledActionID, NULL) END,
+                CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
+                CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[ContentSource]
+            (
+                [Name],
+                [ContentTypeID],
+                [ContentSourceTypeID],
+                [ContentFileTypeID],
+                [URL],
+                [EmbeddingModelID],
+                [VectorIndexID],
+                [Configuration],
+                [EntityID],
+                [EntityDocumentID],
+                [ScheduledActionID],
+                [SegmenterKey],
+                [CleanerKey]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                CASE WHEN @Name_Clear = 1 THEN NULL ELSE ISNULL(@Name, NULL) END,
+                @ContentTypeID,
+                @ContentSourceTypeID,
+                @ContentFileTypeID,
+                @URL,
+                CASE WHEN @EmbeddingModelID_Clear = 1 THEN NULL ELSE ISNULL(@EmbeddingModelID, NULL) END,
+                CASE WHEN @VectorIndexID_Clear = 1 THEN NULL ELSE ISNULL(@VectorIndexID, NULL) END,
+                CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
+                CASE WHEN @EntityID_Clear = 1 THEN NULL ELSE ISNULL(@EntityID, NULL) END,
+                CASE WHEN @EntityDocumentID_Clear = 1 THEN NULL ELSE ISNULL(@EntityDocumentID, NULL) END,
+                CASE WHEN @ScheduledActionID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledActionID, NULL) END,
+                CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
+                CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwContentSources] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentSource] TO [cdp_Developer], [cdp_Integration];
+/* spCreate Permissions for MJ: Content Sources */
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentSource] TO [cdp_Developer], [cdp_Integration];
+/* spUpdate SQL for MJ: Content Sources */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Sources
+-- Item: spUpdateContentSource
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentSource
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateContentSource]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateContentSource];
+GO
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentSource]
+    @ID uniqueidentifier,
+    @Name_Clear bit = 0,
+    @Name nvarchar(255) = NULL,
+    @ContentTypeID uniqueidentifier = NULL,
+    @ContentSourceTypeID uniqueidentifier = NULL,
+    @ContentFileTypeID uniqueidentifier = NULL,
+    @URL nvarchar(2000) = NULL,
+    @EmbeddingModelID_Clear bit = 0,
+    @EmbeddingModelID uniqueidentifier = NULL,
+    @VectorIndexID_Clear bit = 0,
+    @VectorIndexID uniqueidentifier = NULL,
+    @Configuration_Clear bit = 0,
+    @Configuration nvarchar(MAX) = NULL,
+    @EntityID_Clear bit = 0,
+    @EntityID uniqueidentifier = NULL,
+    @EntityDocumentID_Clear bit = 0,
+    @EntityDocumentID uniqueidentifier = NULL,
+    @ScheduledActionID_Clear bit = 0,
+    @ScheduledActionID uniqueidentifier = NULL,
+    @SegmenterKey_Clear bit = 0,
+    @SegmenterKey nvarchar(100) = NULL,
+    @CleanerKey_Clear bit = 0,
+    @CleanerKey nvarchar(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ContentSource]
+    SET
+        [Name] = CASE WHEN @Name_Clear = 1 THEN NULL ELSE ISNULL(@Name, [Name]) END,
+        [ContentTypeID] = ISNULL(@ContentTypeID, [ContentTypeID]),
+        [ContentSourceTypeID] = ISNULL(@ContentSourceTypeID, [ContentSourceTypeID]),
+        [ContentFileTypeID] = ISNULL(@ContentFileTypeID, [ContentFileTypeID]),
+        [URL] = ISNULL(@URL, [URL]),
+        [EmbeddingModelID] = CASE WHEN @EmbeddingModelID_Clear = 1 THEN NULL ELSE ISNULL(@EmbeddingModelID, [EmbeddingModelID]) END,
+        [VectorIndexID] = CASE WHEN @VectorIndexID_Clear = 1 THEN NULL ELSE ISNULL(@VectorIndexID, [VectorIndexID]) END,
+        [Configuration] = CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, [Configuration]) END,
+        [EntityID] = CASE WHEN @EntityID_Clear = 1 THEN NULL ELSE ISNULL(@EntityID, [EntityID]) END,
+        [EntityDocumentID] = CASE WHEN @EntityDocumentID_Clear = 1 THEN NULL ELSE ISNULL(@EntityDocumentID, [EntityDocumentID]) END,
+        [ScheduledActionID] = CASE WHEN @ScheduledActionID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledActionID, [ScheduledActionID]) END,
+        [SegmenterKey] = CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, [SegmenterKey]) END,
+        [CleanerKey] = CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, [CleanerKey]) END
+    WHERE
+        [ID] = @ID
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwContentSources] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwContentSources]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSource] TO [cdp_Developer], [cdp_Integration]
+GO
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentSource table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateContentSource]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateContentSource];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateContentSource
+ON [${flyway:defaultSchema}].[ContentSource]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ContentSource]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[ContentSource] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+/* spUpdate Permissions for MJ: Content Sources */
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSource] TO [cdp_Developer], [cdp_Integration];
+/* spDelete SQL for MJ: Content Sources */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Sources
+-- Item: spDeleteContentSource
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ContentSource
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteContentSource]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteContentSource];
+GO
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteContentSource]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM
+        [${flyway:defaultSchema}].[ContentSource]
+    WHERE
+        [ID] = @ID
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSource] TO [cdp_Developer], [cdp_Integration];
+/* spDelete Permissions for MJ: Content Sources */
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSource] TO [cdp_Developer], [cdp_Integration];
+/* Index for Foreign Keys for ContentType */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Types
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key AIModelID in table ContentType
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentType_AIModelID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentType]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentType_AIModelID ON [${flyway:defaultSchema}].[ContentType] ([AIModelID]);
+-- Index for foreign key EmbeddingModelID in table ContentType
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentType_EmbeddingModelID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentType]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentType_EmbeddingModelID ON [${flyway:defaultSchema}].[ContentType] ([EmbeddingModelID]);
+-- Index for foreign key VectorIndexID in table ContentType
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentType_VectorIndexID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentType]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentType_VectorIndexID ON [${flyway:defaultSchema}].[ContentType] ([VectorIndexID]);
+/* Base View SQL for MJ: Content Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Types
+-- Item: vwContentTypes
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Content Types
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  ContentType
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwContentTypes]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwContentTypes];
+GO
+CREATE VIEW [${flyway:defaultSchema}].[vwContentTypes]
+AS
+SELECT
+    c.*,
+    MJAIModel_AIModelID.[Name] AS [AIModel],
+    MJAIModel_EmbeddingModelID.[Name] AS [EmbeddingModel],
+    MJVectorIndex_VectorIndexID.[Name] AS [VectorIndex]
+FROM
+    [${flyway:defaultSchema}].[ContentType] AS c
+INNER JOIN
+    [${flyway:defaultSchema}].[AIModel] AS MJAIModel_AIModelID
+  ON
+    [c].[AIModelID] = MJAIModel_AIModelID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIModel] AS MJAIModel_EmbeddingModelID
+  ON
+    [c].[EmbeddingModelID] = MJAIModel_EmbeddingModelID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[VectorIndex] AS MJVectorIndex_VectorIndexID
+  ON
+    [c].[VectorIndexID] = MJVectorIndex_VectorIndexID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwContentTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+/* Base View Permissions SQL for MJ: Content Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Types
+-- Item: Permissions for vwContentTypes
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+GRANT SELECT ON [${flyway:defaultSchema}].[vwContentTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+/* spCreate SQL for MJ: Content Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Types
+-- Item: spCreateContentType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR ContentType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateContentType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateContentType];
+GO
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentType]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(255),
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @AIModelID uniqueidentifier,
+    @MinTags int,
+    @MaxTags int,
+    @EmbeddingModelID_Clear bit = 0,
+    @EmbeddingModelID uniqueidentifier = NULL,
+    @VectorIndexID_Clear bit = 0,
+    @VectorIndexID uniqueidentifier = NULL,
+    @Configuration_Clear bit = 0,
+    @Configuration nvarchar(MAX) = NULL,
+    @SegmenterKey_Clear bit = 0,
+    @SegmenterKey nvarchar(100) = NULL,
+    @CleanerKey_Clear bit = 0,
+    @CleanerKey nvarchar(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[ContentType]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [AIModelID],
+                [MinTags],
+                [MaxTags],
+                [EmbeddingModelID],
+                [VectorIndexID],
+                [Configuration],
+                [SegmenterKey],
+                [CleanerKey]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                @AIModelID,
+                @MinTags,
+                @MaxTags,
+                CASE WHEN @EmbeddingModelID_Clear = 1 THEN NULL ELSE ISNULL(@EmbeddingModelID, NULL) END,
+                CASE WHEN @VectorIndexID_Clear = 1 THEN NULL ELSE ISNULL(@VectorIndexID, NULL) END,
+                CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
+                CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
+                CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[ContentType]
+            (
+                [Name],
+                [Description],
+                [AIModelID],
+                [MinTags],
+                [MaxTags],
+                [EmbeddingModelID],
+                [VectorIndexID],
+                [Configuration],
+                [SegmenterKey],
+                [CleanerKey]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                @AIModelID,
+                @MinTags,
+                @MaxTags,
+                CASE WHEN @EmbeddingModelID_Clear = 1 THEN NULL ELSE ISNULL(@EmbeddingModelID, NULL) END,
+                CASE WHEN @VectorIndexID_Clear = 1 THEN NULL ELSE ISNULL(@VectorIndexID, NULL) END,
+                CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
+                CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
+                CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwContentTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentType] TO [cdp_Developer], [cdp_Integration];
+/* spCreate Permissions for MJ: Content Types */
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentType] TO [cdp_Developer], [cdp_Integration];
+/* spUpdate SQL for MJ: Content Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Types
+-- Item: spUpdateContentType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateContentType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateContentType];
+GO
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentType]
+    @ID uniqueidentifier,
+    @Name nvarchar(255) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @AIModelID uniqueidentifier = NULL,
+    @MinTags int = NULL,
+    @MaxTags int = NULL,
+    @EmbeddingModelID_Clear bit = 0,
+    @EmbeddingModelID uniqueidentifier = NULL,
+    @VectorIndexID_Clear bit = 0,
+    @VectorIndexID uniqueidentifier = NULL,
+    @Configuration_Clear bit = 0,
+    @Configuration nvarchar(MAX) = NULL,
+    @SegmenterKey_Clear bit = 0,
+    @SegmenterKey nvarchar(100) = NULL,
+    @CleanerKey_Clear bit = 0,
+    @CleanerKey nvarchar(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ContentType]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [AIModelID] = ISNULL(@AIModelID, [AIModelID]),
+        [MinTags] = ISNULL(@MinTags, [MinTags]),
+        [MaxTags] = ISNULL(@MaxTags, [MaxTags]),
+        [EmbeddingModelID] = CASE WHEN @EmbeddingModelID_Clear = 1 THEN NULL ELSE ISNULL(@EmbeddingModelID, [EmbeddingModelID]) END,
+        [VectorIndexID] = CASE WHEN @VectorIndexID_Clear = 1 THEN NULL ELSE ISNULL(@VectorIndexID, [VectorIndexID]) END,
+        [Configuration] = CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, [Configuration]) END,
+        [SegmenterKey] = CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, [SegmenterKey]) END,
+        [CleanerKey] = CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, [CleanerKey]) END
+    WHERE
+        [ID] = @ID
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwContentTypes] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwContentTypes]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentType] TO [cdp_Developer], [cdp_Integration]
+GO
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentType table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateContentType]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateContentType];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateContentType
+ON [${flyway:defaultSchema}].[ContentType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ContentType]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[ContentType] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+/* spUpdate Permissions for MJ: Content Types */
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentType] TO [cdp_Developer], [cdp_Integration];
+/* spDelete SQL for MJ: Content Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Types
+-- Item: spDeleteContentType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ContentType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteContentType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteContentType];
+GO
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteContentType]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM
+        [${flyway:defaultSchema}].[ContentType]
+    WHERE
+        [ID] = @ID
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentType] TO [cdp_Developer], [cdp_Integration];
+/* spDelete Permissions for MJ: Content Types */
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentType] TO [cdp_Developer], [cdp_Integration];
+/* spDelete SQL for MJ: Entity Documents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Entity Documents
+-- Item: spDeleteEntityDocument
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR EntityDocument
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteEntityDocument]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityDocument];
+GO
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityDocument]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Cascade update on ContentSource using cursor to call spUpdateContentSource
+    DECLARE @MJContentSources_EntityDocumentIDID uniqueidentifier
+    DECLARE @MJContentSources_EntityDocumentID_Name nvarchar(255)
+    DECLARE @MJContentSources_EntityDocumentID_ContentTypeID uniqueidentifier
+    DECLARE @MJContentSources_EntityDocumentID_ContentSourceTypeID uniqueidentifier
+    DECLARE @MJContentSources_EntityDocumentID_ContentFileTypeID uniqueidentifier
+    DECLARE @MJContentSources_EntityDocumentID_URL nvarchar(2000)
+    DECLARE @MJContentSources_EntityDocumentID_EmbeddingModelID uniqueidentifier
+    DECLARE @MJContentSources_EntityDocumentID_VectorIndexID uniqueidentifier
+    DECLARE @MJContentSources_EntityDocumentID_Configuration nvarchar(MAX)
+    DECLARE @MJContentSources_EntityDocumentID_EntityID uniqueidentifier
+    DECLARE @MJContentSources_EntityDocumentID_EntityDocumentID uniqueidentifier
+    DECLARE @MJContentSources_EntityDocumentID_ScheduledActionID uniqueidentifier
+    DECLARE @MJContentSources_EntityDocumentID_SegmenterKey nvarchar(100)
+    DECLARE @MJContentSources_EntityDocumentID_CleanerKey nvarchar(100)
+    DECLARE cascade_update_MJContentSources_EntityDocumentID_cursor CURSOR FOR
+        SELECT [ID], [Name], [ContentTypeID], [ContentSourceTypeID], [ContentFileTypeID], [URL], [EmbeddingModelID], [VectorIndexID], [Configuration], [EntityID], [EntityDocumentID], [ScheduledActionID], [SegmenterKey], [CleanerKey]
+        FROM [${flyway:defaultSchema}].[ContentSource]
+        WHERE [EntityDocumentID] = @ID
+    OPEN cascade_update_MJContentSources_EntityDocumentID_cursor
+    FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_ScheduledActionID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJContentSources_EntityDocumentID_EntityDocumentID = NULL
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateContentSource] @ID = @MJContentSources_EntityDocumentIDID, @Name = @MJContentSources_EntityDocumentID_Name, @ContentTypeID = @MJContentSources_EntityDocumentID_ContentTypeID, @ContentSourceTypeID = @MJContentSources_EntityDocumentID_ContentSourceTypeID, @ContentFileTypeID = @MJContentSources_EntityDocumentID_ContentFileTypeID, @URL = @MJContentSources_EntityDocumentID_URL, @EmbeddingModelID = @MJContentSources_EntityDocumentID_EmbeddingModelID, @VectorIndexID = @MJContentSources_EntityDocumentID_VectorIndexID, @Configuration = @MJContentSources_EntityDocumentID_Configuration, @EntityID = @MJContentSources_EntityDocumentID_EntityID, @EntityDocumentID_Clear = 1, @EntityDocumentID = @MJContentSources_EntityDocumentID_EntityDocumentID, @ScheduledActionID = @MJContentSources_EntityDocumentID_ScheduledActionID, @SegmenterKey = @MJContentSources_EntityDocumentID_SegmenterKey, @CleanerKey = @MJContentSources_EntityDocumentID_CleanerKey
+        FETCH NEXT FROM cascade_update_MJContentSources_EntityDocumentID_cursor INTO @MJContentSources_EntityDocumentIDID, @MJContentSources_EntityDocumentID_Name, @MJContentSources_EntityDocumentID_ContentTypeID, @MJContentSources_EntityDocumentID_ContentSourceTypeID, @MJContentSources_EntityDocumentID_ContentFileTypeID, @MJContentSources_EntityDocumentID_URL, @MJContentSources_EntityDocumentID_EmbeddingModelID, @MJContentSources_EntityDocumentID_VectorIndexID, @MJContentSources_EntityDocumentID_Configuration, @MJContentSources_EntityDocumentID_EntityID, @MJContentSources_EntityDocumentID_EntityDocumentID, @MJContentSources_EntityDocumentID_ScheduledActionID, @MJContentSources_EntityDocumentID_SegmenterKey, @MJContentSources_EntityDocumentID_CleanerKey
+    END
+    CLOSE cascade_update_MJContentSources_EntityDocumentID_cursor
+    DEALLOCATE cascade_update_MJContentSources_EntityDocumentID_cursor
+    
+    -- Cascade delete from EntityDocumentRun using cursor to call spDeleteEntityDocumentRun
+    DECLARE @MJEntityDocumentRuns_EntityDocumentIDID uniqueidentifier
+    DECLARE cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[EntityDocumentRun]
+        WHERE [EntityDocumentID] = @ID
+    
+    OPEN cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor
+    FETCH NEXT FROM cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor INTO @MJEntityDocumentRuns_EntityDocumentIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteEntityDocumentRun] @ID = @MJEntityDocumentRuns_EntityDocumentIDID
+        
+        FETCH NEXT FROM cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor INTO @MJEntityDocumentRuns_EntityDocumentIDID
+    END
+    
+    CLOSE cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor
+    DEALLOCATE cascade_delete_MJEntityDocumentRuns_EntityDocumentID_cursor
+    
+    -- Cascade delete from EntityDocumentSetting using cursor to call spDeleteEntityDocumentSetting
+    DECLARE @MJEntityDocumentSettings_EntityDocumentIDID uniqueidentifier
+    DECLARE cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[EntityDocumentSetting]
+        WHERE [EntityDocumentID] = @ID
+    
+    OPEN cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor
+    FETCH NEXT FROM cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor INTO @MJEntityDocumentSettings_EntityDocumentIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteEntityDocumentSetting] @ID = @MJEntityDocumentSettings_EntityDocumentIDID
+        
+        FETCH NEXT FROM cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor INTO @MJEntityDocumentSettings_EntityDocumentIDID
+    END
+    
+    CLOSE cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor
+    DEALLOCATE cascade_delete_MJEntityDocumentSettings_EntityDocumentID_cursor
+    
+    -- Cascade delete from EntityRecordDocument using cursor to call spDeleteEntityRecordDocument
+    DECLARE @MJEntityRecordDocuments_EntityDocumentIDID uniqueidentifier
+    DECLARE cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[EntityRecordDocument]
+        WHERE [EntityDocumentID] = @ID
+    
+    OPEN cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor
+    FETCH NEXT FROM cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor INTO @MJEntityRecordDocuments_EntityDocumentIDID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        EXEC [${flyway:defaultSchema}].[spDeleteEntityRecordDocument] @ID = @MJEntityRecordDocuments_EntityDocumentIDID
+        
+        FETCH NEXT FROM cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor INTO @MJEntityRecordDocuments_EntityDocumentIDID
+    END
+    
+    CLOSE cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor
+    DEALLOCATE cascade_delete_MJEntityRecordDocuments_EntityDocumentID_cursor
+    
+    DELETE FROM
+        [${flyway:defaultSchema}].[EntityDocument]
+    WHERE
+        [ID] = @ID
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityDocument] TO [cdp_Integration], [cdp_Developer];
+/* spDelete Permissions for MJ: Entity Documents */
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityDocument] TO [cdp_Integration], [cdp_Developer];
 /* SQL text to insert 1 new entity field(s) */
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fd0eede5-a9d7-46b3-a67b-a5be1de3de04' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'RootParentChunkID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3ab39fd0-661f-4722-8d8b-39966220d555' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'RootParentChunkID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1608,7 +2641,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemChunk] TO [cdp_De
          )
          VALUES
          (
-            'fd0eede5-a9d7-46b3-a67b-a5be1de3de04',
+            '3ab39fd0-661f-4722-8d8b-39966220d555',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100051,
             'RootParentChunkID',
@@ -1637,46 +2670,195 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemChunk] TO [cdp_De
             GETUTCDATE()
          )
       END;
-
 /* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 1
-               WHERE ID = 'D1779C3A-6E94-4D82-A776-0EF1271B75E7'
-               AND AutoUpdateIsNameField = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '4F00910F-A59C-4E6F-B09C-EFAC5435A979'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'D1779C3A-6E94-4D82-A776-0EF1271B75E7'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'D1779C3A-6E94-4D82-A776-0EF1271B75E7'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = 'DE94985C-57EF-4480-86C9-79D11331DA58'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '5DA90752-15A6-4D43-BBA5-DADDAF2273E3'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
-
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'D1779C3A-6E94-4D82-A776-0EF1271B75E7'
+               WHERE ID = '49B8433E-F36B-1410-867F-007B559E242F'
                AND AutoUpdateUserSearchPredicate = 1;
-
+            UPDATE [${flyway:defaultSchema}].[Entity]
+            SET AllowUserSearchAPI = 1
+            WHERE ID = 'A793AD50-0E66-EF11-A752-C0A5E8ACCB22'
+            AND AutoUpdateAllowUserSearchAPI = 1;
+/* Set field properties for entity */
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = '62FF46F8-8815-462F-9F31-8818D831B2BB'
+               AND AutoUpdateIsNameField = 1;
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '7CA10D77-D4C3-4844-9AC6-CF684C1027A5'
+               AND AutoUpdateDefaultInView = 1;
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '62FF46F8-8815-462F-9F31-8818D831B2BB'
+               AND AutoUpdateDefaultInView = 1;
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '62FF46F8-8815-462F-9F31-8818D831B2BB'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '5CB468A1-7C22-47EB-BF54-F53BC2C45714'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'D0B9E206-C912-4BAF-9336-A2AF8BABA492'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = '62FF46F8-8815-462F-9F31-8818D831B2BB'
+               AND AutoUpdateUserSearchPredicate = 1;
+/* Set field properties for entity */
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = 'A7B7433E-F36B-1410-867F-007B559E242F'
+               AND AutoUpdateUserSearchPredicate = 1;
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'Exact'
+               WHERE ID = 'FBB09B21-50A3-4CCE-A114-44B0C9835251'
+               AND AutoUpdateUserSearchPredicate = 1;
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'Exact'
+               WHERE ID = '8E282AD9-2695-4F04-AC1F-79A5380D4E4D'
+               AND AutoUpdateUserSearchPredicate = 1;
+            UPDATE [${flyway:defaultSchema}].[Entity]
+            SET AllowUserSearchAPI = 1
+            WHERE ID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'
+            AND AutoUpdateAllowUserSearchAPI = 1;
+/* Set categories for 16 fields */
+-- UPDATE Entity Field Category Info MJ: Content Types.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '43B8433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '67B8433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '6DB8433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '49B8433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4FB8433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.AIModelID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '55B8433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.AIModel 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'ADDF8AC9-BF3A-4ECB-AF21-5C04DA27C396' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.EmbeddingModelID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '0706EBD4-7D99-4F16-99DF-0E398E319AA3' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.EmbeddingModel 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'BAAB3CB5-ACCB-4594-BC69-8031EDBF0AA7' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.VectorIndexID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '93D4F3C4-3110-41CD-85FD-7A6A2C28B2A4' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.VectorIndex 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3C4FEC28-2617-418E-B476-09722B4A0858' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.MinTags 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '5BB8433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.MaxTags 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '61B8433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.Configuration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '399CBC27-D03E-4230-9AE3-547E14651719' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.SegmenterKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Advanced Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Segmenter Strategy',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'CFC92A3B-C738-4940-8C92-11B032CE7E05' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Types.CleanerKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Advanced Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Cleaner Strategy',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '87551E67-A36D-4DE6-ADB8-EAB1A8450900' AND AutoUpdateCategory = 1;
 /* Set categories for 26 fields */
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1685,7 +2867,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = 'C07B5B08-0084-4F59-B638-243F526546E4' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1694,7 +2875,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = '2D402F99-B9A1-4ABB-9D19-A4B204D09BAC' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1703,7 +2883,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = '9E337B81-5B94-46AC-B696-0EFA27C9F85B' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.ContentItemID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1712,7 +2891,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = '073F4C8A-F2AB-4F27-9FE3-743882972F31' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.Sequence 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1721,16 +2899,15 @@ SET
    CodeType = NULL
 WHERE 
    ID = '7618B84A-5040-4C23-9007-71F193E13B8A' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.ContentItem 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Content Item',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '9527FB1B-0C05-4C0E-A709-C8922FAC9C8E' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.ParentChunkID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1740,8 +2917,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '566671B6-AC5C-454C-8C91-85B47A19E532' AND AutoUpdateCategory = 1;
-
+   ID = '96841354-26BF-4919-91A3-B3170EA58F68' AND AutoUpdateCategory = 1;
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.RootParentChunkID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1751,17 +2927,43 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'FD0EEDE5-A9D7-46B3-A67B-A5BE1DE3DE04' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Content Item Chunks.Text 
+   ID = '3AB39FD0-661F-4722-8D8B-39966220D555' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.SegmentTitle 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
+   Category = 'Chunk Details',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
+   ID = '62FF46F8-8815-462F-9F31-8818D831B2BB' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.Modality 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Chunk Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7CA10D77-D4C3-4844-9AC6-CF684C1027A5' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.SegmenterKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Chunk Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8C51C895-93BF-43D8-9049-6A6AC8484A76' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.Text 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Text',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
    ID = '80DC7D33-19F5-4781-BC71-E1E1B882C514' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1770,8 +2972,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'DE94985C-57EF-4480-86C9-79D11331DA58' AND AutoUpdateCategory = 1;
-
+   ID = '5CB468A1-7C22-47EB-BF54-F53BC2C45714' AND AutoUpdateCategory = 1;
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.Transcript 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1780,18 +2981,54 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '5DA90752-15A6-4D43-BBA5-DADDAF2273E3' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Content Item Chunks.SegmentTitle 
+   ID = 'D0B9E206-C912-4BAF-9336-A2AF8BABA492' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.StartOffset 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Chunk Content',
+   Category = 'Provenance',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'D1779C3A-6E94-4D82-A776-0EF1271B75E7' AND AutoUpdateCategory = 1;
-
+   ID = 'F0F04464-9380-4CFE-A012-27E6EDA15913' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.EndOffset 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provenance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C98F7A52-C1DC-4A2F-8733-5A4A49A6CDE9' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.StartMs 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provenance',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Start (ms)',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1E8A8A29-A598-49A4-AC97-C8DD923E506A' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.EndMs 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provenance',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'End (ms)',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4B42C9ED-789E-4417-AD71-44BBB7EBF7D5' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.PageNumber 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provenance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D52720E3-05A7-41B2-8C00-C57D8767A930' AND AutoUpdateCategory = 1;
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.VectorRecordID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1800,28 +3037,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = 'F761D312-981B-47E1-94DC-42FF4550CC13' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Content Item Chunks.Modality 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Vector Integration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4F00910F-A59C-4E6F-B09C-EFAC5435A979' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Content Item Chunks.SegmenterKey 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Vector Integration',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Segmenter Strategy',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'FF055D0E-5AE2-4563-9B89-4FF91CE6ABEF' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.EmbeddingStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1830,7 +3045,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = '06DB407C-561A-4740-8A28-E93DC745435B' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.TaggingStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1839,7 +3053,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.DeleteStatus 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1848,7 +3061,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = 'EDEFD181-AC1E-4533-A7F7-CAD268E1EC07' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.LastEmbeddedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1857,7 +3069,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = '9F645E2C-17FF-4569-B28C-BF8CAEAA0B68' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.LastTaggedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1866,7 +3077,6 @@ SET
    CodeType = NULL
 WHERE 
    ID = '2C847A8B-A352-43F7-BCDF-CA951AD2F9A6' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.LastDeletedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -1875,67 +3085,216 @@ SET
    CodeType = NULL
 WHERE 
    ID = '7EB2AE41-CE4E-45E5-B481-B929099AC6E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Content Item Chunks.StartOffset 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Provenance and Positioning',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '08F64B3F-A7D9-48CA-A72D-58D8FDE6A475' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Content Item Chunks.EndOffset 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Provenance and Positioning',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '69EF8105-9DD4-48EE-AD8C-B9CA72D9EFFC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Content Item Chunks.StartMs 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Provenance and Positioning',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Start Time (ms)',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F2B962A0-2AE8-4B8F-9D0F-E45946ADFA78' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Content Item Chunks.EndMs 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Provenance and Positioning',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'End Time (ms)',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A8D97DC7-F2C8-4454-9D46-B458FEA56F01' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Content Item Chunks.PageNumber 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Provenance and Positioning',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'DB35FB41-830D-4ECC-82A0-0BFF46F93398' AND AutoUpdateCategory = 1;
-
 /* Update FieldCategoryInfo setting for entity */
-
                UPDATE [${flyway:defaultSchema}].[EntitySetting]
-               SET [Value] = '{"Provenance and Positioning":{"icon":"fa fa-map-marked-alt","description":"Spatial and temporal markers defining the chunk''s location in the source material"}}', [__mj_UpdatedAt] = GETUTCDATE()
+               SET [Value] = '{"Provenance":{"icon":"fa fa-map-marked-alt","description":"Source location tracking using offsets, time windows, or page numbers"}}', [__mj_UpdatedAt] = GETUTCDATE()
                WHERE [EntityID] = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND [Name] = 'FieldCategoryInfo';
-
 /* Update FieldCategoryIcons setting (legacy) */
-
                UPDATE [${flyway:defaultSchema}].[EntitySetting]
-               SET [Value] = '{"Provenance and Positioning":"fa fa-map-marked-alt"}', [__mj_UpdatedAt] = GETUTCDATE()
+               SET [Value] = '{"Provenance":"fa fa-map-marked-alt"}', [__mj_UpdatedAt] = GETUTCDATE()
                WHERE [EntityID] = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND [Name] = 'FieldCategoryIcons';
+/* Set categories for 24 fields */
+-- UPDATE Entity Field Category Info MJ: Content Sources.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A1B7433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C5B7433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'CBB7433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A7B7433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.ContentSourceTypeID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B3B7433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.URL 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'URL',
+   CodeType = NULL
+WHERE 
+   ID = 'BFB7433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.ContentSourceType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Content Source Type Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FBB09B21-50A3-4CCE-A114-44B0C9835251' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.ContentTypeID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'ADB7433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.ContentFileTypeID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'B9B7433E-F36B-1410-867F-007B559E242F' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.ContentType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Content Type Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '8E282AD9-2695-4F04-AC1F-79A5380D4E4D' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.ContentFileType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Content File Type Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'ABA84E45-FDE6-4FD0-ACC9-BDA83A8CDE17' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.EmbeddingModelID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '045043FD-61A9-477F-82A7-72A7FC615A3C' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.VectorIndexID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '11091434-73BD-4006-8C65-8639EA9AF1F3' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.EmbeddingModel 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Embedding Model Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '12DE0FA4-7538-42BE-9C11-7638B15B2D78' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.VectorIndex 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Vector Index Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9CA2DC63-66EC-405B-9974-81FD5129B693' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.Configuration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '3402501E-8128-40E0-BCF8-1BC2867C3931' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.EntityID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '3F8AEC67-CBBB-47BE-96C8-70795F10849C' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.EntityDocumentID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7BFD47B8-2B7B-4D5E-AF0F-510B6DA68FAA' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.ScheduledActionID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '08929B56-9F28-4BB0-9F68-D783E68B8B27' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.SegmenterKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Processing & Automation',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Segmenter Strategy',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '012C715A-4846-4910-9D64-35C7327FA213' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.CleanerKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Processing & Automation',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Cleaner Strategy',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '22F6A2EE-FE1A-4FE7-A946-9FE7743DE677' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.Entity 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Entity Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'E446A7B9-8F1C-47A4-8FBA-53FF05049F2C' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.EntityDocument 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Entity Document Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '715BCEB6-0B7D-49CB-AC91-3AF520EF90D9' AND AutoUpdateCategory = 1;
+-- UPDATE Entity Field Category Info MJ: Content Sources.ScheduledAction 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Scheduled Action Name',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '70FCDE3C-BD64-496C-8830-4C4D3786A5D6' AND AutoUpdateCategory = 1;
