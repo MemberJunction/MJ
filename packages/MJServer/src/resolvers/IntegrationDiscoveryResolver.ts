@@ -3433,9 +3433,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 { Path: pendingFilePath, Content: JSON.stringify(pendingPayload, null, 2) }
             ];
 
-            // Step 5: Run pipeline (restart kills process at the end)
+            // Step 5: Run pipeline (restart kills process at the end).
+            // Retrying variant — an install should not die because the migration hit a dropped
+            // connection or a transient lock; it only replays while nothing has been applied.
             const rsm = RuntimeSchemaManager.Instance;
-            const batchResult = await rsm.RunPipelineBatch([rsuInput]);
+            const batchResult = await rsm.RunPipelineBatchWithRetry([rsuInput]);
 
             const migrationSucceeded = batchResult.SuccessCount > 0;
             const pipelineSteps = batchResult.Results[0]?.Steps.map((s: RSUPipelineStep) => ({
@@ -5306,10 +5308,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 };
             }
 
-            // Phase 2: Run all successful RSU inputs through one pipeline batch
+            // Phase 2: Run all successful RSU inputs through one pipeline batch.
+            // Retrying variant — a multi-connector install is the longest-running thing a user
+            // does here, and it should not be lost to one transient step. Replays only while
+            // nothing has been applied, so a partially-committed batch is never re-executed.
             const pipelineInputs = successfulBuilds.map(b => b.rsuInput);
             const rsm = RuntimeSchemaManager.Instance;
-            const batchResult = await rsm.RunPipelineBatch(pipelineInputs);
+            const batchResult = await rsm.RunPipelineBatchWithRetry(pipelineInputs);
 
             // Phase 3: Post-pipeline — create entity maps, field maps, schedules for each success
             for (let i = 0; i < successfulBuilds.length; i++) {

@@ -495,8 +495,10 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
                         [ngClass]="item.type === 'folder' ? 'fa-folder' : item.icon"></i>
                         <span>{{ item.name }}</span>
                         @if (item.isShared) {
-                          <i class="fas fa-users shared-indicator"
-                          title="Shared"></i>
+                          <span class="shared-indicator" title="Shared">
+                            <i class="fas fa-users"></i>
+                            Shared
+                          </span>
                         }
                       </div>
                     </td>
@@ -1155,7 +1157,8 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
       background: var(--mj-brand-primary);
     }
 
-    .grid-icon.folder-icon i {
+    /* Direct child only — the nested .shared-badge icon must keep its own sizing */
+    .grid-icon.folder-icon > i {
       font-size: 36px;
       color: var(--mj-text-inverse);
     }
@@ -1171,21 +1174,22 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 
     .shared-badge {
       position: absolute;
-      top: -4px;
-      right: -4px;
-      width: 20px;
-      height: 20px;
-      background: var(--mj-status-success);
+      top: -6px;
+      right: -6px;
+      width: 22px;
+      height: 22px;
+      background: var(--mj-bg-surface);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 2px solid var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
     }
 
     .shared-badge i {
       font-size: 10px;
-      color: var(--mj-text-inverse);
+      color: var(--mj-brand-primary);
     }
 
     .grid-info {
@@ -1230,6 +1234,10 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
       font-size: 11px;
       color: var(--mj-text-muted);
       margin-top: 2px;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .grid-owner i {
@@ -1386,9 +1394,24 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
     }
 
     .shared-indicator {
-      font-size: 12px;
-      color: var(--mj-status-success);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
       margin-left: auto;
+      padding: 2px 8px;
+      border-radius: var(--mj-radius-full);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+      font-size: 10px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    /* Beat the generic .list-name-cell i sizing for the chip's icon */
+    .list-name-cell .shared-indicator i {
+      font-size: 10px;
+      color: inherit;
+      width: auto;
     }
 
     .col-type {
@@ -1762,6 +1785,8 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   public showSortDropdown: boolean = false;
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
   private itemCountMap: Map<string, number> = new Map();
+  /** Normalized OwnerID → friendly display name (FirstName LastName when available, else Users.Name) */
+  private ownerNameMap: Map<string, string> = new Map();
   public isSelectMode: boolean = false; // Toggle for selection mode
 
   // Pagination state
@@ -1975,7 +2000,8 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         this.collections = result.Results || [];
         await Promise.all([
           this.loadUserPermissions(),
-          this.loadItemCounts(bypassCache)
+          this.loadItemCounts(bypassCache),
+          this.loadOwnerNames()
         ]);
         this.filteredCollections = [...this.collections];
       }
@@ -2032,6 +2058,54 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         this.itemCountMap.set(collId, (this.itemCountMap.get(collId) || 0) + 1);
       }
     }
+  }
+
+  /**
+   * Batch-load friendly display names for the visible collections' owners.
+   * The denormalized Collection.Owner view field is Users.Name, which is often
+   * the raw email — prefer "FirstName LastName" when the user record has them.
+   */
+  private async loadOwnerNames(): Promise<void> {
+    // Clear up front so a failed reload falls back to denormalized names
+    // instead of serving a previous run's stale entries
+    this.ownerNameMap.clear();
+    const ownerIds = [...new Set(
+      this.collections
+        .filter(c => c.OwnerID)
+        .map(c => NormalizeUUID(c.OwnerID as string))
+    )];
+    if (ownerIds.length === 0) return;
+
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<{ ID: string; Name: string; FirstName?: string | null; LastName?: string | null }>(
+        {
+          EntityName: 'MJ: Users',
+          ExtraFilter: `ID IN (${ownerIds.map(id => `'${id}'`).join(',')})`,
+          Fields: ['ID', 'Name', 'FirstName', 'LastName'],
+          ResultType: 'simple'
+        },
+        this.currentUser
+      );
+
+      if (result.Success) {
+        for (const user of result.Results || []) {
+          const friendly = [user.FirstName, user.LastName].filter(Boolean).join(' ').trim();
+          this.ownerNameMap.set(NormalizeUUID(user.ID), friendly || user.Name);
+        }
+      }
+    } catch {
+      // Non-fatal — cards fall back to the denormalized Owner name
+    }
+  }
+
+  /** Friendly owner label for a collection: resolved display name, else the denormalized Owner field. */
+  private getOwnerDisplayName(collection: MJCollectionEntity): string | undefined {
+    if (collection.OwnerID) {
+      const resolved = this.ownerNameMap.get(NormalizeUUID(collection.OwnerID));
+      if (resolved) return resolved;
+    }
+    return collection.Owner || undefined;
   }
 
   private async loadUserPermissions(): Promise<void> {
@@ -2443,8 +2517,15 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     collection: MJCollectionEntity | null,
     requiredPermission: 'edit' | 'delete' | 'share'
   ): Promise<boolean> {
-    // Owner has all permissions (including backwards compatibility for null OwnerID)
-    if (!collection?.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
+    // Owner has all permissions. Null OwnerID (legacy collection) still counts as
+    // owned for edit/delete backwards compatibility, but NOT for share — the
+    // server-side create gate requires a real owner or an explicit Share grant.
+    if (!collection) {
+      return true;
+    }
+    if (collection.OwnerID
+      ? UUIDsEqual(collection.OwnerID, this.currentUser.ID)
+      : requiredPermission !== 'share') {
       return true;
     }
 
@@ -2493,8 +2574,11 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   }
 
   canShare(collection: MJCollectionEntity): boolean {
-    // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
+    // Unlike edit/delete, sharing does NOT get the null-OwnerID backwards-compat
+    // treatment: the server-side create gate requires a real owner or an explicit
+    // Share grant, so offering Share on a legacy null-owner collection would
+    // always be rejected server-side (permit-then-deny UX).
+    if (collection.OwnerID && UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
@@ -2596,7 +2680,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
         description: collection.Description || undefined,
         icon: 'fa-folder',
         itemCount: this.itemCountMap.get(collection.ID) || 0,
-        owner: collection.Owner || undefined,
+        owner: this.getOwnerDisplayName(collection),
         isShared: this.isShared(collection),
         selected: this.selectedItems.has(collection.ID),
         collection: collection

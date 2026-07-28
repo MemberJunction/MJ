@@ -115,6 +115,39 @@ This makes the hand-DDL/generated boundary unmissable when scrolling a 9,000-lin
 
 Reference example: `V202607020230__v5.45.x__AISkill_ActivationMode.sql`.
 
+### 🚨 CodeGen Ordering — run `mj sync push` BEFORE `mj codegen` (REQUIRED)
+
+**CodeGen reads JSONType definitions from the DATABASE, not from `metadata/`.** The TypeScript
+interface behind a JSONType field (e.g. `ContentSource.Configuration`) is stored in
+`EntityField.JSONTypeDefinition` — a database column. The files under
+`metadata/entities/JSONType-interfaces/*.ts` are the *source*, but they only reach the database
+via `mj sync push`.
+
+So a database built from **migrations alone** carries whatever JSONType definitions the baseline
+shipped with. CodeGen faithfully regenerates the TypeScript from those stale definitions and
+**silently deletes** any properties added since — the generated interface simply comes back smaller.
+
+Correct order after any migration touching an entity that has a JSONType field:
+
+```bash
+mj migrate                 # schema
+mj sync push --include=entities   # run from the metadata/ directory
+mj codegen                 # now regenerates from current definitions
+```
+
+**Why this bites:** the failure is silent. It surfaced once only because a downstream package failed
+to compile against the shrunken interface; on an entity nothing imports, the truncated types would
+have been committed unnoticed and shipped as a breaking change to consumers.
+
+Two related points:
+
+- **Revert the `sync` block write-back.** `mj sync push` stamps `lastModified` + `checksum` into the
+  `metadata/**/*.json` files it pushed. Those belong to the release-time consolidated sync (see
+  `metadata/CLAUDE.md` rule 1b) — a feature PR must not carry them. Restore those lines before committing.
+- **Regenerate on a database at the last released version**, not a fresh install, or CodeGen emits
+  unrelated regenerations (validator functions, form fields) from the fresh-install state. Exclude
+  those from the appended section and say so in the header block.
+
 **The MemberJunction CodeGen system automatically handles:**
 - Creating/updating all views based on schema changes
 - Updating EntityField records for new columns
@@ -201,6 +234,39 @@ INSERT INTO ${flyway:defaultSchema}.AIVendor (ID, Name, Description, __mj_Create
 VALUES (@VendorID, 'Vendor Name', 'Description', GETUTCDATE(), GETUTCDATE());
 ```
 
+### 4b. Never Create Foreign Key Indexes — CodeGen Generates Them
+
+**NEVER create indexes for foreign key columns in a migration.** CodeGen creates these automatically with the naming pattern `IDX_AUTO_MJ_FKEY_<table>_<column>`. Manual FK indexes duplicate CodeGen's work and leave two competing indexes on the same column.
+
+Together with rule 4 above, this gives the full list of what **CodeGen handles automatically** and must therefore be **omitted** from `CREATE TABLE` statements:
+
+1. **Timestamp columns** — `__mj_CreatedAt` / `__mj_UpdatedAt` (CodeGen adds these with proper defaults and triggers; including them manually causes conflicts)
+2. **Foreign key indexes** — `IDX_AUTO_MJ_FKEY_<table>_<column>`
+
+```sql
+-- ✅ CORRECT - Only business columns and constraints
+CREATE TABLE ${flyway:defaultSchema}.DashboardPermission (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    DashboardID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NOT NULL,
+    CanRead BIT NOT NULL DEFAULT 1,
+    CanEdit BIT NOT NULL DEFAULT 0,
+    SharedByUserID UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT PK_DashboardPermission PRIMARY KEY (ID),
+    CONSTRAINT FK_DashboardPermission_Dashboard FOREIGN KEY (DashboardID) REFERENCES ${flyway:defaultSchema}.Dashboard(ID),
+    CONSTRAINT FK_DashboardPermission_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.User(ID),
+    CONSTRAINT UQ_DashboardPermission UNIQUE (DashboardID, UserID)
+);
+
+-- ❌ WRONG - Don't include these (CodeGen handles them)
+-- __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
+-- CREATE INDEX IDX_DashboardPermission_DashboardID ON DashboardPermission(DashboardID);
+-- CREATE INDEX IDX_DashboardPermission_UserID ON DashboardPermission(UserID);
+```
+
+Note that **primary keys and foreign keys** are also exempt from the `sp_addextendedproperty` requirement — CodeGen handles their descriptions. Every *other* new column needs one.
+
 ### 5. Use Correct Schema Placeholder
 Always use Flyway's schema placeholder without adding the schema prefix:
 
@@ -251,6 +317,11 @@ When adding AI models and vendors:
 5. **Driver Class Names**: Follow existing conventions
    - Examples: "OpenAILLM", "AnthropicLLM", "GroqLLM"
    - Not: "OpenAIAPIService", "AnthropicService", etc.
+
+6. **Capability flags**: set `SupportsEffortLevel` and `SupportsStreaming` based on what the
+   **inference provider** actually supports, not what the model is theoretically capable of.
+   Check the provider's documentation — a provider's implementation frequently differs from the
+   model's published capabilities (the same reason token limits must come from the provider).
 
 ### 8. Testing Migrations
 

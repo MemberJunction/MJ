@@ -7,7 +7,7 @@
 - `BaseDashboard` subclasses get this automatically (base class calls it after `loadData()`)
 - All other `BaseResourceComponent` subclasses must call it explicitly in `ngOnInit()` or `ngAfterViewInit()`
 
-See the root [CLAUDE.md](../../../CLAUDE.md) for the full pattern and examples.
+See [packages/Angular/CLAUDE.md](../CLAUDE.md) for the full pattern and examples.
 
 ## 🚨 CRITICAL: Routing — NavigationService Only 🚨
 

@@ -30,7 +30,7 @@ import {
     OracleResult,
     SuiteFixtureContext
 } from '@memberjunction/testing-engine';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, ProviderType } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import type sql from 'mssql';
@@ -403,6 +403,20 @@ export class IntegrationTestDriver extends BaseTestDriver {
             pool = ic.Pool;
             schema = ic.Db.Schema;
             provider = ic.Provider;
+        }
+        // #3251: a server-transport bundle MUST resolve a DATABASE provider. If the process-global
+        // provider was rebound to a client (GraphQL/Network) provider — because a client-transport
+        // bundle ran earlier in this same process (setupGraphQLClient calls SetProvider) — then a
+        // server bundle would silently execute over the wire and its checks would fail in
+        // product-shaped ways. Fail loudly instead of degrading silently. The throw is caught by
+        // Execute's bootstrap try/catch → an 'Error' result, never a wedged 'Running' run. Guarded on
+        // ProviderType being present so a facade/unset global provider (e.g. in unit tests) is a no-op.
+        if (provider?.ProviderType && provider.ProviderType !== ProviderType.Database) {
+            throw new Error(
+                `transport 'server' resolved a '${provider.ProviderType}' provider — the process-global ` +
+                `provider was rebound (a client-transport bundle ran earlier in this process). ` +
+                `Server-transport bundles must be sequenced BEFORE all client-transport bundles in a ` +
+                `suite, or run in their own process. (issue #3251)`);
         }
         return {
             User: context.contextUser,

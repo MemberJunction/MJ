@@ -50,6 +50,7 @@
     "@memberjunction/ng-filter-builder": "5.49.0",
     "@memberjunction/ng-list-management": "5.49.0",
     "@memberjunction/ng-map-view": "5.49.0",
+    "@memberjunction/ng-notifications": "5.49.0",
     "@memberjunction/ng-pagination": "5.49.0",
     "@memberjunction/ng-record-changes": "5.49.0",
     "@memberjunction/ng-shared-generic": "5.49.0",

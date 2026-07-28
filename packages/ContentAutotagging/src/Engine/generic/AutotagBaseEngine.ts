@@ -1,5 +1,5 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core'
-import { MJGlobal, UUIDsEqual, NormalizeUUID, RegisterClass } from '@memberjunction/global'
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, Metadata, RunView, UserInfo, LogError, LogStatus, EntityInfo, EntityFieldInfo } from '@memberjunction/core'
+import { MJGlobal, UUIDsEqual, NormalizeUUID, IsValidUUID, RegisterClass, uuidv4 } from '@memberjunction/global'
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
     MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
@@ -7,8 +7,9 @@ import {
     MJContentItemAttributeEntity, MJContentSourceTypeParamEntity,
     MJContentProcessRunEntity_IContentProcessRunConfiguration,
     MJContentItemDuplicateEntity, MJTaggedItemEntity,
-    MJEntityRecordDocumentEntity
+    MJEntityRecordDocumentEntity, MJContentItemChunkEntity, MJVectorIndexEntity
 } from '@memberjunction/core-entities'
+import type { MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities'
 import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
 import { RateLimiter } from './RateLimiter'
 import pdfParse from 'pdf-parse'
@@ -27,6 +28,11 @@ import type { EmbeddingRunResult } from '@memberjunction/ai-prompts'
 import { AIPromptParams } from '@memberjunction/ai-core-plus'
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
 import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
+import {
+    FIXED_WINDOW_SEGMENTER_KEY,
+    FixedWindowSegmentationOptions,
+    ResolveSegmenter,
+} from '@memberjunction/ai-segmentation'
 import { VectorDBBase, VectorRecord, BaseResponse } from '@memberjunction/ai-vectordb'
 import { TagEngine } from '@memberjunction/tag-engine'
 import { TagEngineBase } from '@memberjunction/tag-engine-base'
@@ -36,13 +42,109 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities'
  * Resolved vector infrastructure for a specific (embeddingModel + vectorIndex) pair.
  * Items sharing the same pair are batched together for efficient processing.
  */
-interface ResolvedVectorInfrastructure {
+export interface ResolvedVectorInfrastructure {
     embedding: BaseEmbeddings;
     vectorDB: VectorDBBase;
     indexName: string;
     embeddingModelName: string;
     /** The AI model ID for the embedding model (UUID), used by AIModelRunner for tracking */
     embeddingModelID: string;
+    /**
+     * Reduced embedding dimensions from `MJ: Vector Indexes.Dimensions`, when set. Passed to the
+     * embedding call so models that support it (e.g. text-embedding-3-*) produce shorter vectors.
+     * Undefined means the model's native dimensionality (matches PR #3175's entity-path behavior).
+     */
+    dimensions?: number;
+    /**
+     * Parsed `MJ: Vector Indexes.ProviderConfig` JSON — the opaque, provider-specific blob passed
+     * to the vector DB so drivers can read their own settings (e.g. Pinecone's `namespaceField`).
+     * Undefined when the index has no ProviderConfig or it is not valid JSON.
+     */
+    providerConfig?: Record<string, unknown>;
+}
+
+/**
+ * How a chunk's vector-DB record id is derived — `'recordId'` (the chunk's own PK, purge-safe) or
+ * `'hash'` (deterministic, EntityDocument-parity). Derived from the generated JSONType interface so
+ * it tracks the metadata definition. See {@link AutotagBaseEngine.resolveChunkVectorID}.
+ */
+export type VectorIDStrategy = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorIDStrategy']>;
+/**
+ * Whether an item always embeds as chunk rows (`'alwaysChunk'`) or embeds as a single item-level
+ * vector when it fits in one chunk (`'mixed'`). Derived from the generated JSONType interface.
+ */
+export type ChunkTextStorage = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['ChunkTextStorage']>;
+/** Vector-metadata shaping config (field strategy, per-field rules, curated toggles). Derived from the generated JSONType interface. */
+export type VectorMetadataConfig = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorMetadata']>;
+/** Per-field vector-metadata rule (inclusion, truncation, StoreAs coercion). Derived from {@link VectorMetadataConfig}. */
+export type VectorMetadataFieldConfig = NonNullable<VectorMetadataConfig['Fields']>[string];
+
+/**
+ * Vector-storage behavior resolved for a single content item, derived from its ContentSource
+ * configuration (falling back to its ContentType defaults, then hardcoded defaults). Produced by
+ * {@link AutotagBaseEngine.resolveItemVectorStorageConfig}.
+ */
+export interface ResolvedVectorStorageConfig {
+    vectorIDStrategy: VectorIDStrategy;
+    chunkTextStorage: ChunkTextStorage;
+    /** How vector metadata is shaped (undefined ⇒ the curated default set). */
+    metadata?: VectorMetadataConfig;
+}
+
+/** Column types that cannot be stored in vector metadata at all (binary/rowversion). */
+const UNSTORABLE_METADATA_TYPES = new Set(['varbinary', 'image', 'binary', 'timestamp', 'rowversion']);
+/** SQL column types stored as JS numbers in vector metadata without an explicit StoreAs. */
+const NUMERIC_SQL_TYPES = new Set(['int', 'bigint', 'smallint', 'tinyint', 'float', 'real', 'decimal', 'numeric', 'money', 'smallmoney']);
+/** Default truncation limit (characters) for large string metadata fields. */
+const DEFAULT_METADATA_TRUNCATION = 1000;
+
+/** Default vector-storage behavior when neither the ContentSource nor its ContentType configures it. */
+const DEFAULT_VECTOR_ID_STRATEGY: VectorIDStrategy = 'recordId';
+const DEFAULT_CHUNK_TEXT_STORAGE: ChunkTextStorage = 'alwaysChunk';
+
+/**
+ * One embedding unit produced from a ContentItem: a slice of its text plus the id minted for the
+ * chunk up front. `chunkID` becomes BOTH the ContentItemChunk row's PK and its vector-DB id (under
+ * the 'recordId' strategy), so it is known at metadata-build time — which lets a chunk vector carry
+ * its own identity ({@link buildVectorMetadata}) even though the chunk row is written later.
+ */
+export interface EmbeddingChunk {
+    item: MJContentItemEntity;
+    chunkIndex: number;
+    text: string;
+    chunkID: string;
+}
+
+/**
+ * A chunk whose vector has been upserted and is ready to be written as a ContentItemChunk row.
+ * `chunkID` becomes the row PK; `vectorRecordID` is the id the vector was actually stored under
+ * (equal to chunkID under 'recordId', a hash under 'hash').
+ */
+export interface PersistedChunk {
+    chunkIndex: number;
+    text: string;
+    vectorRecordID: string;
+    chunkID: string;
+}
+
+/** Running tally for a PurgeDeletedChunks pass. */
+export interface ChunkPurgeStats {
+    /** Chunks whose vector was removed from the store and row flipped to 'Deleted'. */
+    purged: number;
+    /** Chunks that could not be purged this run (left 'Pending', retried next run). */
+    failed: number;
+    /** Chunks with no VectorRecordID — nothing to remove remotely, marked 'Deleted' directly. */
+    skipped: number;
+}
+
+/** Running tally for an EmbedPendingChunks pass. */
+export interface ChunkEmbedStats {
+    /** Chunks whose text was embedded, upserted, and row flipped to EmbeddingStatus='Complete'. */
+    embedded: number;
+    /** Chunks that could not be embedded this run (left 'Pending', retried next run). */
+    failed: number;
+    /** Chunks with empty/missing text or a missing parent — nothing to embed, left untouched. */
+    skipped: number;
 }
 
 /**
@@ -60,6 +162,14 @@ export interface VectorizeResult {
 
 /** Default batch size for vectorization processing */
 const DEFAULT_VECTORIZE_BATCH_SIZE = 20;
+/** Default cap on how many soft-deleted chunks a single PurgeDeletedChunks run processes. */
+const DEFAULT_PURGE_BATCH_SIZE = 1000;
+/** Vector-DB delete sub-batch size — bounds how many records hit a 3rd-party store per call. */
+const PURGE_VECTORDB_SUBBATCH = 50;
+/** Default cap on how many pending chunks a single EmbedPendingChunks run processes. */
+const DEFAULT_CHUNK_EMBED_BATCH_SIZE = 1000;
+/** Embed + upsert sub-batch size for pending-chunk embedding — bounds per-call load. */
+const CHUNK_EMBED_SUBBATCH = 50;
 
 /**
  * Core engine for content autotagging. Extends BaseEngine to cache content metadata
@@ -397,6 +507,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             if (status === 'Complete') {
                 item.LastTaggedAt = new Date();
             }
+            // When tagging STARTS, the item is being (re)processed because its content is new or
+            // changed (the provider's checksum comparison already filtered out unchanged items).
+            // Reset its embedding state to 'Pending' so the vectorization phase re-embeds it — the
+            // tagging and embedding "needs work" signals are otherwise independent, and a changed
+            // item that was previously 'Complete' would never get re-embedded.
+            if (status === 'Processing') {
+                item.EmbeddingStatus = 'Pending';
+            }
             await item.Save();
         } catch {
             // Non-critical — don't fail the pipeline for a status update
@@ -698,7 +816,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const hasPreviousResults = Object.keys(previousResults).length > 0;
 
         // Check if this source type requires content type validation in the prompt
-        const sourceType = this.ContentSourceTypes.find(st => UUIDsEqual(st.ID, params.contentSourceTypeID));
+        const sourceType = this.khEngine.GetContentSourceTypeByID(params.contentSourceTypeID);
         const sourceConfig = sourceType?.ConfigurationObject;
         const requiresContentType = sourceConfig?.RequiresContentType !== false;
 
@@ -750,7 +868,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (!contentSourceID) {
             return null;
         }
-        const source = this.khEngine.ContentSources.find(s => UUIDsEqual(s.ID, contentSourceID));
+        const source = this.khEngine.GetContentSourceByID(contentSourceID);
         if (!source) {
             return null;
         }
@@ -768,7 +886,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         const prompt = this.getAutotagPrompt();
         const tokenLimit = this.resolveTokenLimit(params.modelID);
-        const chunks = this.chunkExtractedText(params.text, tokenLimit);
+        const chunks = await this.chunkExtractedText(params.text, tokenLimit);
 
         if (chunks.length === 0 || (chunks.length === 1 && (!chunks[0] || chunks[0].trim().length === 0))) {
             LogError(`[Autotag] No text to process for item ${params.contentItemID}`);
@@ -895,29 +1013,64 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Chunks text using the shared TextChunker utility for token-aware splitting.
-     * Falls back to simple character-based splitting when TextChunker is not available.
+     * Registration key of the segmentation strategy this engine uses.
+     *
+     * Defaults to `FixedWindow`, which reproduces the engine's historical token-window
+     * behavior exactly — routing through the strategy layer is a refactor, not a behavior
+     * change. Override in a subclass (or, once the config field lands, resolve it from the
+     * Content Source / Content Type `Configuration`) to opt into structure-aware
+     * (`StructuralText`), topic-aware (`SemanticText`), or transcript-based (`Transcript`)
+     * segmentation.
+     *
+     * @see [Content Segmentation Guide](../../../../../guides/CONTENT_SEGMENTATION_GUIDE.md)
      */
-    public chunkExtractedText(text: string, tokenLimit: number): string[] {
+    protected resolveSegmenterKey(): string {
+        return FIXED_WINDOW_SEGMENTER_KEY;
+    }
+
+    /**
+     * Run the resolved segmentation strategy over `text` and return its text payloads.
+     *
+     * Returns null when segmentation fails, so callers can apply their own fallback rather
+     * than silently embedding nothing.
+     */
+    protected async segmentTextForChunking(
+        text: string,
+        options: FixedWindowSegmentationOptions
+    ): Promise<string[] | null> {
+        const segmenter = ResolveSegmenter(this.resolveSegmenterKey(), FIXED_WINDOW_SEGMENTER_KEY);
+        const result = await segmenter.Segment({ Text: text, Options: options });
+        if (!result.Success) {
+            LogError(`[Autotag] Segmentation failed (${result.SegmenterKey}): ${result.ErrorMessage ?? 'unknown error'}`);
+            return null;
+        }
+        const texts = result.Segments.map(s => s.Text ?? '').filter(t => t.trim().length > 0);
+        return texts.length > 0 ? texts : null;
+    }
+
+    /**
+     * Chunks text for the LLM tagging pass, sized to the *tagging model's* context window.
+     *
+     * Note the budget here is deliberately independent of the embedding budget
+     * ({@link MAX_EMBEDDING_TOKENS}) — these two chunk sites feed different consumers and
+     * must not be collapsed into one call. Tagging chunks are transient and never persisted.
+     */
+    public async chunkExtractedText(text: string, tokenLimit: number): Promise<string[]> {
         try {
             const maxChunkTokens = Math.ceil(tokenLimit / 1.5);
 
+            // Short-circuit: text that already fits is passed through verbatim, preserving its
+            // original whitespace (a segmenter would return a normalized reflow of the same text).
             if (text.length <= maxChunkTokens * 4) {
                 return [text];
             }
 
-            try {
-                const chunkParams: ChunkTextParams = {
-                    Text: text,
-                    MaxChunkTokens: maxChunkTokens,
-                    OverlapTokens: Math.ceil(maxChunkTokens * 0.1),
-                    Strategy: 'sentence',
-                };
-                const chunks = TextChunker.ChunkText(chunkParams);
-                return chunks.map(c => c.Text);
-            } catch {
-                return this.fallbackChunkText(text, maxChunkTokens);
-            }
+            const segments = await this.segmentTextForChunking(text, {
+                MaxSegmentTokens: maxChunkTokens,
+                OverlapTokens: Math.ceil(maxChunkTokens * 0.1),
+                TextStrategy: 'sentence',
+            });
+            return segments ?? this.fallbackChunkText(text, maxChunkTokens);
         } catch {
             LogError('Could not chunk the text');
             return [text];
@@ -1193,7 +1346,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetContentItemParams(contentTypeID: string): { modelID: string; minTags: number; maxTags: number } {
-        const contentType = this.ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
+        const contentType = this.khEngine.GetContentTypeByID(contentTypeID);
         if (!contentType) {
             throw new Error(`Content Type with ID ${contentTypeID} not found in cached metadata`);
         }
@@ -1205,7 +1358,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetContentSourceTypeName(contentSourceTypeID: string): string {
-        const sourceType = this.ContentSourceTypes.find(st => UUIDsEqual(st.ID, contentSourceTypeID));
+        const sourceType = this.khEngine.GetContentSourceTypeByID(contentSourceTypeID);
         if (!sourceType) {
             throw new Error(`Content Source Type with ID ${contentSourceTypeID} not found in cached metadata`);
         }
@@ -1213,7 +1366,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetContentTypeName(contentTypeID: string): string {
-        const contentType = this.ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
+        const contentType = this.khEngine.GetContentTypeByID(contentTypeID);
         if (!contentType) {
             throw new Error(`Content Type with ID ${contentTypeID} not found in cached metadata`);
         }
@@ -1522,7 +1675,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const batch = items.slice(i, i + batchSize);
 
             // Build chunks for each item — items with long text produce multiple chunks
-            const allChunks = this.buildChunksForBatch(batch);
+            const allChunks = await this.buildChunksForBatch(batch);
 
             const texts = allChunks.map(c => c.text);
             // Rate limit embedding API call
@@ -1535,6 +1688,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 PromptID: embeddingPromptID,
                 ContextUser: contextUser,
                 Description: `Content vectorization batch: ${batch.length} items, ${allChunks.length} chunks`,
+                Dimensions: infra.dimensions,
             });
 
             if (!runResult.Success || runResult.Vectors.length !== allChunks.length) {
@@ -1549,11 +1703,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 promptRunIDs.push(runResult.PromptRunID);
             }
 
-            const records = this.buildVectorRecords(allChunks, runResult.Vectors, tagMap);
+            const records = this.buildVectorRecords(allChunks, runResult.Vectors, tagMap, infra);
 
             const batchSuccess = await this.upsertVectorRecords(records, infra);
             if (batchSuccess) {
                 vectorized += batch.length;
+                // Persist the vector-DB record identifiers back into MJ before the status save,
+                // so single-chunk items carry their VectorRecordID in the same 'Complete' write.
+                await this.persistVectorReferences(batch, allChunks, records, contextUser);
                 await this.updateEmbeddingStatusBatch(batch, 'Complete', contextUser, infra.embeddingModelID);
             } else {
                 await this.updateEmbeddingStatusBatch(batch, 'Failed', contextUser);
@@ -1586,34 +1743,643 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Build text chunks for a batch of content items. Items with long text
      * produce multiple chunks via TextChunker.
      */
-    private buildChunksForBatch(
+    private async buildChunksForBatch(
         batch: MJContentItemEntity[]
-    ): { item: MJContentItemEntity; chunkIndex: number; text: string }[] {
-        const allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string }[] = [];
+    ): Promise<EmbeddingChunk[]> {
+        const allChunks: EmbeddingChunk[] = [];
         for (const item of batch) {
-            const chunks = this.buildEmbeddingChunks(item);
+            const chunks = await this.buildEmbeddingChunks(item);
             for (let ci = 0; ci < chunks.length; ci++) {
-                allChunks.push({ item, chunkIndex: ci, text: chunks[ci] });
+                // Mint a stable per-chunk id up front. This becomes BOTH the ContentItemChunk row's
+                // PK and (under the 'recordId' strategy) its vector-DB id, so a re-chunk produces
+                // NEW rows with NEW ids — old (soft-deleted) and new chunks never collide on a
+                // vector id, which is what makes the purge safe.
+                allChunks.push({ item, chunkIndex: ci, text: chunks[ci], chunkID: uuidv4() });
             }
         }
         return allChunks;
     }
 
     /**
-     * Build VectorRecord objects from embedding chunks and their corresponding vectors.
+     * Build VectorRecord objects from embedding chunks and their corresponding vectors. Resolves
+     * each item's storage config once and shares the item-level-vs-chunk decision between the
+     * vector id and the metadata so the two always agree.
      */
-    private buildVectorRecords(
-        allChunks: { item: MJContentItemEntity; chunkIndex: number; text: string }[],
+    protected buildVectorRecords(
+        allChunks: EmbeddingChunk[],
         vectors: number[][],
-        tagMap: Map<string, string[]>
+        tagMap: Map<string, string[]>,
+        infra: ResolvedVectorInfrastructure
     ): VectorRecord[] {
-        return allChunks.map((chunk, idx) => ({
-            id: chunk.chunkIndex === 0
-                ? this.contentItemVectorId(chunk.item.ID)
-                : this.contentItemVectorId(chunk.item.ID) + `_chunk${chunk.chunkIndex}`,
-            values: vectors[idx],
-            metadata: this.buildVectorMetadata(chunk.item, tagMap.get(chunk.item.ID))
-        }));
+        const countByItem = new Map<string, number>();
+        for (const c of allChunks) {
+            countByItem.set(c.item.ID, (countByItem.get(c.item.ID) ?? 0) + 1);
+        }
+        // The ContentItem entity metadata drives config-selected display fields (types, MaxLength,
+        // eligibility). Resolved once per batch — every chunk shares the same source entity.
+        const contentItemEntity = this.ProviderToUse.EntityByName('MJ: Content Items');
+        return allChunks.map((chunk, idx) =>
+            this.buildVectorRecord(chunk, vectors[idx], countByItem.get(chunk.item.ID) ?? 1, tagMap.get(chunk.item.ID), contentItemEntity, infra)
+        );
+    }
+
+    /**
+     * Build the single {@link VectorRecord} for one embedding chunk. Resolves the item's storage
+     * config, decides item-level-vs-chunk once, and shares that decision between the vector id and
+     * the metadata so the two always agree. `protected` so subclasses can override per-record
+     * shaping (id, metadata, or provider directives) without reimplementing the batch loop in
+     * {@link buildVectorRecords}.
+     *
+     * @param chunk              The embedding unit (item slice + minted chunk id).
+     * @param vector             The embedding produced for `chunk`.
+     * @param chunkCountForItem  Total chunks produced for `chunk.item` this batch — drives the
+     *                           item-level-vs-chunk decision ({@link isItemLevelVector}).
+     * @param tags               Resolved tag names for `chunk.item`, if any.
+     * @param contentItemEntity  The 'MJ: Content Items' entity metadata, for display-field resolution.
+     * @param infra              Resolved vector infrastructure (source of provider directives).
+     */
+    protected buildVectorRecord(
+        chunk: EmbeddingChunk,
+        vector: number[],
+        chunkCountForItem: number,
+        tags: string[] | undefined,
+        contentItemEntity: EntityInfo | undefined,
+        infra: ResolvedVectorInfrastructure
+    ): VectorRecord {
+        const config = this.resolveItemVectorStorageConfig(chunk.item);
+        const itemLevel = this.isItemLevelVector(config, chunkCountForItem);
+        const record: VectorRecord = {
+            id: this.resolveChunkVectorID(chunk, config, itemLevel),
+            values: vector,
+            metadata: this.buildVectorMetadata(chunk, itemLevel, tags, config, contentItemEntity)
+        };
+        const directives = this.buildProviderDirectives(chunk.item, infra);
+        if (directives) {
+            record.providerTemporaryDirectives = directives;
+        }
+        return record;
+    }
+
+    /**
+     * Compute a vector record's per-record provider directives (e.g. Pinecone namespace) from the
+     * source content item and the index's ProviderConfig. Returns undefined when the index has no
+     * ProviderConfig — the common case — so no provider routing is applied and the base
+     * BuildProviderDirectives is not even invoked. The item's full field set (GetAll) is handed to
+     * the driver so it can read whatever field its config names (e.g. `namespaceField: 'OrganizationID'`).
+     * Namespace is resolved from the parent ContentItem (org-level), the same source for a chunk's
+     * vector as for an item-level vector.
+     */
+    protected buildProviderDirectives(
+        item: MJContentItemEntity,
+        infra: ResolvedVectorInfrastructure
+    ): Record<string, unknown> | undefined {
+        if (!infra.providerConfig) {
+            return undefined;
+        }
+        return infra.vectorDB.BuildProviderDirectives(item.GetAll(), infra.providerConfig);
+    }
+
+    /**
+     * Choose the vector-DB record id for one chunk based on the item's resolved config.
+     * - 'recordId' (default): the chunk's own id (chunkID), which is also the ContentItemChunk PK.
+     *   Purge-safe — a re-chunk mints fresh ids, so a superseded chunk and its replacement never
+     *   collide.
+     * - 'hash': deterministic. An item-level single vector uses the bare item hash; every other
+     *   case uses a per-(item, chunkIndex) hash. Deterministic ⇒ unsafe with re-chunk + purge
+     *   (documented on the config), but preserves 5.49 EntityDocument parity when opted into.
+     */
+    protected resolveChunkVectorID(
+        chunk: EmbeddingChunk,
+        config: ResolvedVectorStorageConfig,
+        isItemLevel: boolean
+    ): string {
+        if (config.vectorIDStrategy === 'hash') {
+            return isItemLevel
+                ? this.contentItemVectorID(chunk.item.ID)
+                : this.contentItemChunkVectorID(chunk.item.ID, chunk.chunkIndex);
+        }
+        return chunk.chunkID;
+    }
+
+    /**
+     * Persist the vector-database record identifiers produced during this batch back into MJ.
+     *
+     * Where the id lands is governed by the item's resolved {@link ChunkTextStorage}:
+     * - 'mixed' + single chunk: the item embeds as one vector, so its record id is stored directly
+     *   on ContentItem.VectorRecordID (set in-memory here; persisted by the subsequent 'Complete'
+     *   status Save so no extra write is needed).
+     * - 'alwaysChunk' (any chunk count) or 'mixed' multi-chunk: per-chunk provenance is recorded in
+     *   ContentItemChunk rows (ContentItemID, Sequence, Text, VectorRecordID) and
+     *   ContentItem.VectorRecordID is left null (the chunk table is the source of truth).
+     *
+     * `allChunks` and `records` are parallel arrays (buildVectorRecords maps 1:1), so
+     * records[i].id is the vector-DB id for allChunks[i]. Best-effort: a persistence failure
+     * for one item is logged but does not abort the batch — the vectors are already upserted.
+     */
+    private async persistVectorReferences(
+        batch: MJContentItemEntity[],
+        allChunks: EmbeddingChunk[],
+        records: VectorRecord[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Group the persisted-chunk specs by content item, preserving order.
+        const byItem = new Map<string, PersistedChunk[]>();
+        for (let idx = 0; idx < allChunks.length; idx++) {
+            const c = allChunks[idx];
+            const key = NormalizeUUID(c.item.ID);
+            const list = byItem.get(key) ?? [];
+            list.push({ chunkIndex: c.chunkIndex, text: c.text, vectorRecordID: String(records[idx].id), chunkID: c.chunkID });
+            byItem.set(key, list);
+        }
+
+        for (const item of batch) {
+            const chunks = byItem.get(NormalizeUUID(item.ID));
+            if (!chunks || chunks.length === 0) continue;
+            const config = this.resolveItemVectorStorageConfig(item);
+            try {
+                if (this.isItemLevelVector(config, chunks.length)) {
+                    // 'mixed' + single chunk — the record id lives on the content item itself.
+                    item.VectorRecordID = chunks[0].vectorRecordID;
+                } else {
+                    // 'alwaysChunk', or multiple vectors — record per-chunk provenance in
+                    // ContentItemChunk rows; the item-level id is left null (chunk table is truth).
+                    item.VectorRecordID = null;
+                    await this.replaceContentItemChunks(item.ID, chunks, contextUser);
+                }
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`persistVectorReferences: failed to persist chunk references for item ${item.ID}: ${msg}`);
+            }
+        }
+    }
+
+    /**
+     * Supersede a content item's current (live) chunks with a freshly-embedded set: the live
+     * chunks are SOFT-deleted (DeleteStatus='Pending', rows kept) and the new chunks appended,
+     * atomically. A later PurgeDeletedChunks removes the superseded chunks' vectors from the
+     * 3rd-party store and flips them to 'Deleted'. Either the swap commits or it rolls back;
+     * on failure this throws and the caller (persistVectorReferences) logs it and moves on.
+     *
+     * Provider discipline (server, multi-user): the RunView read, the entity objects, and the
+     * transaction ALL go through `this.ProviderToUse` — the connection allocated to this request.
+     * A bare `new RunView()` would run on the process-global provider/connection, outside this
+     * transaction and under the wrong user's context.
+     */
+    private async replaceContentItemChunks(
+        contentItemID: string,
+        chunks: PersistedChunk[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        const rv = this.ProviderToUse as unknown as IRunViewProvider;
+
+        // Load only the LIVE chunks (not already soft-deleted) — those are the ones being
+        // superseded by this re-vectorization. Chunks already marked for deletion are left alone.
+        const existing = await rv.RunView<MJContentItemChunkEntity>({
+            EntityName: 'MJ: Content Item Chunks',
+            ExtraFilter: `ContentItemID='${contentItemID}' AND DeleteStatus IS NULL`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        if (!existing.Success) {
+            throw new Error(`failed to load existing chunks for item ${contentItemID}: ${existing.ErrorMessage}`);
+        }
+
+        const newRows = await this.buildChunkRows(contentItemID, chunks, contextUser);
+        await this.commitChunkReplacement(contentItemID, existing.Results, newRows);
+    }
+
+    /**
+     * Build (in-memory only — no DB access) the replacement ContentItemChunk rows for an item.
+     * These rows are created only after the chunk's vector has been successfully embedded and
+     * upserted (see persistVectorReferences), so each row is stamped EmbeddingStatus='Complete'
+     * with LastEmbeddedAt=now — mirroring how the parent ContentItem is stamped on a successful
+     * embed. TaggingStatus is left at its 'Pending' default (chunks are not tagged individually;
+     * tagging happens at the Content Item level) and DeleteStatus is left null (not slated for
+     * deletion).
+     */
+    private async buildChunkRows(
+        contentItemID: string,
+        chunks: PersistedChunk[],
+        contextUser: UserInfo
+    ): Promise<MJContentItemChunkEntity[]> {
+        const md = this.ProviderToUse;
+        const now = new Date();
+        const rows: MJContentItemChunkEntity[] = [];
+        for (const chunk of chunks) {
+            const row = await md.GetEntityObject<MJContentItemChunkEntity>('MJ: Content Item Chunks', contextUser);
+            row.NewRecord();
+            // Pin the row PK to the id minted up front (chunkID) so the chunk's identity is stable
+            // and known before it is written — it is the same value put in the vector metadata's
+            // RecordID (Chunk-Identity Contract), so a search hit resolves to this row by id.
+            // NewRecord() applies an explicit PK last, so this overrides the auto-generated uuid.
+            row.ID = chunk.chunkID;
+            // VectorRecordID is the id the vector was actually upserted under (equal to chunkID
+            // under 'recordId', a hash under 'hash'). A re-chunk mints fresh ids for its new rows,
+            // so a superseded (soft-deleted) chunk and its replacement never share one — which is
+            // what makes PurgeDeletedChunks safe.
+            row.ContentItemID = contentItemID;
+            row.Sequence = chunk.chunkIndex;
+            row.Text = chunk.text;
+            row.VectorRecordID = chunk.vectorRecordID;
+            row.EmbeddingStatus = 'Complete';
+            row.LastEmbeddedAt = now;
+            rows.push(row);
+        }
+        return rows;
+    }
+
+    /**
+     * In one server-side transaction (SQL-only — no third-party calls): SOFT-delete the superseded
+     * live chunks (set DeleteStatus='Pending', keeping the rows) and insert the new chunks. Either
+     * the whole swap commits or it rolls back.
+     *
+     * The superseded chunks' vectors are removed from the vector database out-of-band by
+     * PurgeDeletedChunks, which batches the remote deletes to each provider's limits — a
+     * cross-system delete can't live inside this SQL transaction (it can't be rolled back if the
+     * remote store already applied it). Keeping the rows (soft delete) also preserves history and
+     * lets the vector purge be retried. There is no unique constraint on (ContentItemID, Sequence),
+     * so a superseded chunk and its replacement may share a Sequence until the old one is purged.
+     */
+    private async commitChunkReplacement(
+        contentItemID: string,
+        supersededRows: MJContentItemChunkEntity[],
+        newRows: MJContentItemChunkEntity[]
+    ): Promise<void> {
+        const provider = this.ProviderToUse as unknown as DatabaseProviderBase;
+        await provider.BeginTransaction();
+        let committed = false;
+        try {
+            // Soft-delete the superseded live chunks, then insert the new ones. Both phases fire
+            // in parallel (Promise.all) — this is SQL-only inside the transaction (no third-party
+            // call), and MJ's provider serializes transaction queries onto the single connection,
+            // so parallel dispatch is safe.
+            supersededRows.forEach(row => { row.DeleteStatus = 'Pending'; });
+            const softDeleteResults = await Promise.all(supersededRows.map(row => row.Save()));
+            const failedSoftDelete = supersededRows.find((_row, i) => !softDeleteResults[i]);
+            if (failedSoftDelete) {
+                throw new Error(`failed to soft-delete chunk ${failedSoftDelete.ID}: ${failedSoftDelete.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+
+            const saveResults = await Promise.all(newRows.map(row => row.Save()));
+            const failedSave = newRows.find((_row, i) => !saveResults[i]);
+            if (failedSave) {
+                throw new Error(`failed to save chunk ${failedSave.Sequence}: ${failedSave.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+
+            await provider.CommitTransaction();
+            committed = true;
+        } catch (e) {
+            // Guard the rollback so it can never mask the original error: a commit that throws has
+            // already self-rolled-back inside the provider (nulling its transaction, so a second
+            // rollback here throws "no active transaction"), and a rollback can fail on its own. The
+            // provider clears its transaction state on every path, so this never leaves one open.
+            if (!committed) {
+                try {
+                    await provider.RollbackTransaction();
+                } catch (rollbackErr) {
+                    const rbMsg = rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
+                    LogError(`commitChunkReplacement: rollback failed for item ${contentItemID}: ${rbMsg}`);
+                }
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Actually remove chunks that have been soft-deleted (DeleteStatus='Pending'): delete their
+     * vectors from whatever 3rd-party vector store holds them, then flip the row to 'Deleted' with
+     * LastDeletedAt (the SQL row is kept as a tombstone). Bounded per run (maxItems) and per remote
+     * call (PURGE_VECTORDB_SUBBATCH) + rate-limited, so a large backlog or a single big re-chunk
+     * can't hammer the DB or the vector provider. Meant to run out-of-band from vectorization
+     * (on demand or scheduled).
+     *
+     * Ordering is delete-vector-first, then mark 'Deleted': if the run dies mid-way the chunk stays
+     * 'Pending' and is retried next run (at worst a redundant remote delete, which is idempotent for
+     * the vector stores we target).
+     *
+     * @returns counts of chunks purged (vector removed + marked Deleted), failed, and skipped
+     *          (no VectorRecordID — marked Deleted directly, nothing to remove remotely).
+     */
+    public async PurgeDeletedChunks(
+        contextUser: UserInfo,
+        options?: { maxItems?: number }
+    ): Promise<ChunkPurgeStats> {
+        await AIEngine.Instance.Config(false, contextUser);
+        const maxItems = options?.maxItems && options.maxItems > 0 ? options.maxItems : DEFAULT_PURGE_BATCH_SIZE;
+        const stats: ChunkPurgeStats = { purged: 0, failed: 0, skipped: 0 };
+
+        const chunks = await this.loadPendingChunks(contextUser, maxItems);
+        if (chunks.length === 0) return stats;
+
+        // Chunks with no vector id have nothing to remove remotely — mark Deleted directly.
+        for (const c of chunks.filter(x => !x.VectorRecordID)) {
+            if (await this.markChunkDeleted(c)) stats.skipped++; else stats.failed++;
+        }
+
+        // Remove the rest from the vector DB (grouped by infrastructure), then mark Deleted.
+        const toPurge = chunks.filter(c => !!c.VectorRecordID);
+        if (toPurge.length > 0) {
+            await this.purgeChunksByInfrastructure(toPurge, contextUser, stats);
+        }
+
+        LogStatus(`PurgeDeletedChunks: ${stats.purged} purged, ${stats.skipped} skipped (no vector), ${stats.failed} failed`);
+        return stats;
+    }
+
+    /** Load soft-deleted chunks awaiting purge (bounded, oldest first). Returns [] on failure. */
+    private async loadPendingChunks(contextUser: UserInfo, maxItems: number): Promise<MJContentItemChunkEntity[]> {
+        const rv = this.ProviderToUse as unknown as IRunViewProvider;
+        const result = await rv.RunView<MJContentItemChunkEntity>({
+            EntityName: 'MJ: Content Item Chunks',
+            ExtraFilter: `DeleteStatus = 'Pending'`,
+            OrderBy: '__mj_CreatedAt ASC',
+            MaxRows: maxItems,
+            ResultType: 'entity_object'
+        }, contextUser);
+        if (!result.Success) {
+            LogError(`PurgeDeletedChunks: failed to load pending chunks: ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results;
+    }
+
+    /** Load the parent Content Items for a set of chunks (needed for infra resolution). null on failure. */
+    private async loadChunkParentItems(
+        chunks: MJContentItemChunkEntity[],
+        contextUser: UserInfo
+    ): Promise<MJContentItemEntity[] | null> {
+        const rv = this.ProviderToUse as unknown as IRunViewProvider;
+        const itemIDs = [...new Set(chunks.map(c => NormalizeUUID(c.ContentItemID)))];
+        const result = await rv.RunView<MJContentItemEntity>({
+            EntityName: 'MJ: Content Items',
+            ExtraFilter: `ID IN (${itemIDs.map(id => `'${id}'`).join(',')})`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        if (!result.Success) {
+            LogError(`loadChunkParentItems: failed to load parent items for chunks: ${result.ErrorMessage}`);
+            return null;
+        }
+        return result.Results;
+    }
+
+    /** Group chunks by their parent item's vector infrastructure and purge each group's vectors. */
+    private async purgeChunksByInfrastructure(
+        toPurge: MJContentItemChunkEntity[],
+        contextUser: UserInfo,
+        stats: ChunkPurgeStats
+    ): Promise<void> {
+        const items = await this.loadChunkParentItems(toPurge, contextUser);
+        if (!items) { stats.failed += toPurge.length; return; }
+
+        const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(items, contextUser);
+        const itemGroups = this.groupItemsByInfrastructure(items, sourceMap, typeMap);
+
+        for (const [groupKey, groupItems] of itemGroups) {
+            const groupItemIDs = new Set(groupItems.map(i => NormalizeUUID(i.ID)));
+            const groupChunks = toPurge.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
+            if (groupChunks.length === 0) continue;
+
+            let infra: ResolvedVectorInfrastructure;
+            try {
+                infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
+            } catch (e) {
+                LogError(`PurgeDeletedChunks: infrastructure resolve failed for group ${groupKey}: ${e instanceof Error ? e.message : String(e)}`);
+                stats.failed += groupChunks.length;
+                continue;
+            }
+            await this.purgeChunkGroup(groupChunks, infra, stats);
+        }
+    }
+
+    /** Delete one infra group's chunk vectors in bounded sub-batches, then mark the rows Deleted. */
+    private async purgeChunkGroup(
+        groupChunks: MJContentItemChunkEntity[],
+        infra: ResolvedVectorInfrastructure,
+        stats: ChunkPurgeStats
+    ): Promise<void> {
+        for (let i = 0; i < groupChunks.length; i += PURGE_VECTORDB_SUBBATCH) {
+            const batch = groupChunks.slice(i, i + PURGE_VECTORDB_SUBBATCH);
+            if (await this.deleteChunkVectors(batch, infra)) {
+                for (const c of batch) {
+                    if (await this.markChunkDeleted(c)) stats.purged++; else stats.failed++;
+                }
+            } else {
+                stats.failed += batch.length; // left 'Pending' → retried on the next run
+            }
+        }
+    }
+
+    /** Remove a batch of chunk vectors from the vector DB (rate-limited). Returns whether it succeeded. */
+    private async deleteChunkVectors(
+        batch: MJContentItemChunkEntity[],
+        infra: ResolvedVectorInfrastructure
+    ): Promise<boolean> {
+        const records: VectorRecord[] = batch.map(c => ({ id: c.VectorRecordID as string, values: [], metadata: {} }));
+        await this.VectorDBRateLimiter.Acquire();
+        try {
+            const resp = await infra.vectorDB.DeleteRecords(records, infra.indexName);
+            if (!resp.success) LogError(`PurgeDeletedChunks: DeleteRecords failed for index ${infra.indexName}: ${resp.message}`);
+            return resp.success;
+        } catch (e) {
+            LogError(`PurgeDeletedChunks: DeleteRecords threw for index ${infra.indexName}: ${e instanceof Error ? e.message : String(e)}`);
+            return false;
+        }
+    }
+
+    /** Mark a soft-deleted chunk as fully Deleted (its vector already removed). Best-effort save. */
+    private async markChunkDeleted(chunk: MJContentItemChunkEntity): Promise<boolean> {
+        chunk.DeleteStatus = 'Deleted';
+        chunk.LastDeletedAt = new Date();
+        const saved = await chunk.Save();
+        if (!saved) {
+            LogError(`PurgeDeletedChunks: failed to mark chunk ${chunk.ID} Deleted: ${chunk.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return saved;
+    }
+
+    /**
+     * (Re)embed persisted ContentItemChunk rows that are awaiting embedding
+     * (EmbeddingStatus='Pending' AND DeleteStatus IS NULL): embed each chunk's stored `.Text`,
+     * upsert the vector under the chunk's identity (see the Chunk-Identity Contract), then stamp
+     * the row EmbeddingStatus='Complete' with its VectorRecordID + LastEmbeddedAt. This is the
+     * migration path (backfill vectors for chunk rows created without them) and the recovery path
+     * (a chunk whose embed previously failed stays 'Pending' and is retried).
+     *
+     * Bounded per run by `maxItems` and per embed/upsert call by CHUNK_EMBED_SUBBATCH + rate-limited,
+     * so a large backlog drains over several runs rather than hammering the API or vector store.
+     * Meant to run out-of-band from live vectorization (on demand or scheduled). Best-effort per
+     * chunk — a failure leaves the row 'Pending' (retried next run) and never aborts the pass.
+     *
+     * @returns counts of chunks embedded, failed, and skipped (empty text / missing parent).
+     */
+    public async EmbedPendingChunks(
+        contextUser: UserInfo,
+        options?: { maxItems?: number }
+    ): Promise<ChunkEmbedStats> {
+        await AIEngine.Instance.Config(false, contextUser);
+        const maxItems = options?.maxItems && options.maxItems > 0 ? options.maxItems : DEFAULT_CHUNK_EMBED_BATCH_SIZE;
+        const stats: ChunkEmbedStats = { embedded: 0, failed: 0, skipped: 0 };
+
+        const chunks = await this.loadPendingEmbeddingChunks(contextUser, maxItems);
+        if (chunks.length === 0) return stats;
+
+        await this.embedChunksByInfrastructure(chunks, contextUser, stats);
+
+        LogStatus(`EmbedPendingChunks: ${stats.embedded} embedded, ${stats.skipped} skipped (empty text/no parent), ${stats.failed} failed`);
+        return stats;
+    }
+
+    /** Load chunks awaiting embedding (bounded, oldest first). Returns [] on failure. */
+    private async loadPendingEmbeddingChunks(contextUser: UserInfo, maxItems: number): Promise<MJContentItemChunkEntity[]> {
+        const rv = this.ProviderToUse as unknown as IRunViewProvider;
+        const result = await rv.RunView<MJContentItemChunkEntity>({
+            EntityName: 'MJ: Content Item Chunks',
+            ExtraFilter: `EmbeddingStatus = 'Pending' AND DeleteStatus IS NULL`,
+            OrderBy: '__mj_CreatedAt ASC',
+            MaxRows: maxItems,
+            ResultType: 'entity_object'
+        }, contextUser);
+        if (!result.Success) {
+            LogError(`EmbedPendingChunks: failed to load pending chunks: ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results;
+    }
+
+    /**
+     * Group pending chunks by their parent item's vector infrastructure (embedding model + index)
+     * and embed each group. Mirrors purgeChunksByInfrastructure so the two share the same
+     * chunk → parent-item → infrastructure resolution.
+     */
+    private async embedChunksByInfrastructure(
+        chunks: MJContentItemChunkEntity[],
+        contextUser: UserInfo,
+        stats: ChunkEmbedStats
+    ): Promise<void> {
+        const items = await this.loadChunkParentItems(chunks, contextUser);
+        if (!items) { stats.failed += chunks.length; return; }
+
+        const itemById = new Map(items.map(i => [NormalizeUUID(i.ID), i]));
+        const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(items, contextUser);
+        const itemGroups = this.groupItemsByInfrastructure(items, sourceMap, typeMap);
+        const tagMap = await this.loadTagsForItems(items, contextUser);
+
+        for (const [groupKey, groupItems] of itemGroups) {
+            const groupItemIDs = new Set(groupItems.map(i => NormalizeUUID(i.ID)));
+            const groupChunks = chunks.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
+            if (groupChunks.length === 0) continue;
+
+            let infra: ResolvedVectorInfrastructure;
+            try {
+                infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
+            } catch (e) {
+                LogError(`EmbedPendingChunks: infrastructure resolve failed for group ${groupKey}: ${e instanceof Error ? e.message : String(e)}`);
+                stats.failed += groupChunks.length;
+                continue;
+            }
+            await this.embedChunkGroup(groupChunks, itemById, infra, tagMap, contextUser, stats);
+        }
+    }
+
+    /** Embed + upsert one infra group's chunks in bounded sub-batches, then stamp each row Complete. */
+    private async embedChunkGroup(
+        groupChunks: MJContentItemChunkEntity[],
+        itemById: Map<string, MJContentItemEntity>,
+        infra: ResolvedVectorInfrastructure,
+        tagMap: Map<string, string[]>,
+        contextUser: UserInfo,
+        stats: ChunkEmbedStats
+    ): Promise<void> {
+        for (let i = 0; i < groupChunks.length; i += CHUNK_EMBED_SUBBATCH) {
+            const batch = groupChunks.slice(i, i + CHUNK_EMBED_SUBBATCH);
+            const embeddable = this.toEmbeddableChunks(batch, itemById, stats);
+            if (embeddable.length === 0) continue;
+            await this.embedAndPersistChunkBatch(embeddable, infra, tagMap, contextUser, stats);
+        }
+    }
+
+    /**
+     * Pair each persisted chunk with its parent item as an {@link EmbeddingChunk} (chunkID = the
+     * chunk's existing PK, so the vector id + metadata identity match the live write path). Chunks
+     * with empty text or a missing parent are counted as skipped and dropped.
+     */
+    private toEmbeddableChunks(
+        batch: MJContentItemChunkEntity[],
+        itemById: Map<string, MJContentItemEntity>,
+        stats: ChunkEmbedStats
+    ): { row: MJContentItemChunkEntity; chunk: EmbeddingChunk }[] {
+        const embeddable: { row: MJContentItemChunkEntity; chunk: EmbeddingChunk }[] = [];
+        for (const row of batch) {
+            const item = itemById.get(NormalizeUUID(row.ContentItemID));
+            const text = row.Text ?? '';
+            if (!item || text.trim().length === 0) {
+                stats.skipped++;
+                continue;
+            }
+            embeddable.push({ row, chunk: { item, chunkIndex: row.Sequence, text, chunkID: row.ID } });
+        }
+        return embeddable;
+    }
+
+    /** Embed one sub-batch's texts, upsert the vectors, and stamp each surviving chunk row Complete. */
+    private async embedAndPersistChunkBatch(
+        embeddable: { row: MJContentItemChunkEntity; chunk: EmbeddingChunk }[],
+        infra: ResolvedVectorInfrastructure,
+        tagMap: Map<string, string[]>,
+        contextUser: UserInfo,
+        stats: ChunkEmbedStats
+    ): Promise<void> {
+        const texts = embeddable.map(e => e.chunk.text);
+        await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
+
+        const runResult = await new AIModelRunner().RunEmbedding({
+            Texts: texts,
+            ModelID: infra.embeddingModelID,
+            PromptID: this.resolveEmbeddingPromptID(),
+            ContextUser: contextUser,
+            Description: `Pending content-chunk embedding: ${embeddable.length} chunks`,
+            Dimensions: infra.dimensions,
+        });
+        if (!runResult.Success || runResult.Vectors.length !== embeddable.length) {
+            LogError(`EmbedPendingChunks: embedding returned ${runResult.Vectors.length} vectors for ${embeddable.length} chunks — ${runResult.ErrorMessage ?? 'unknown error'}`);
+            stats.failed += embeddable.length;
+            return;
+        }
+
+        const contentItemEntity = this.ProviderToUse.EntityByName('MJ: Content Items');
+        const records: VectorRecord[] = embeddable.map((e, idx) => {
+            const config = this.resolveItemVectorStorageConfig(e.chunk.item);
+            const record: VectorRecord = {
+                id: this.resolveChunkVectorID(e.chunk, config, false),
+                values: runResult.Vectors[idx],
+                metadata: this.buildVectorMetadata(e.chunk, false, tagMap.get(e.chunk.item.ID), config, contentItemEntity),
+            };
+            const directives = this.buildProviderDirectives(e.chunk.item, infra);
+            if (directives) {
+                record.providerTemporaryDirectives = directives;
+            }
+            return record;
+        });
+
+        if (!await this.upsertVectorRecords(records, infra)) {
+            stats.failed += embeddable.length; // left 'Pending' → retried on the next run
+            return;
+        }
+
+        for (let idx = 0; idx < embeddable.length; idx++) {
+            if (await this.markChunkEmbedded(embeddable[idx].row, String(records[idx].id))) stats.embedded++; else stats.failed++;
+        }
+    }
+
+    /** Stamp a chunk row as embedded: record its vector id, flip to Complete, timestamp. Best-effort. */
+    private async markChunkEmbedded(chunk: MJContentItemChunkEntity, vectorRecordID: string): Promise<boolean> {
+        chunk.VectorRecordID = vectorRecordID;
+        chunk.EmbeddingStatus = 'Complete';
+        chunk.LastEmbeddedAt = new Date();
+        const saved = await chunk.Save();
+        if (!saved) {
+            LogError(`EmbedPendingChunks: failed to mark chunk ${chunk.ID} embedded: ${chunk.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return saved;
     }
 
     /**
@@ -1629,7 +2395,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         for (let j = 0; j < records.length; j += UPSERT_CHUNK) {
             const chunk = records.slice(j, j + UPSERT_CHUNK);
             await this.VectorDBRateLimiter.Acquire();
-            upsertPromises.push(Promise.resolve(infra.vectorDB.CreateRecords(chunk, infra.indexName)));
+            // Pass the index's ProviderConfig so drivers can apply routing (e.g. Pinecone reads
+            // providerConfig.namespace, or per-record providerTemporaryDirectives set above).
+            upsertPromises.push(Promise.resolve(infra.vectorDB.CreateRecords(chunk, infra.indexName, infra.providerConfig)));
         }
         const responses = await Promise.all(upsertPromises);
         let allSuccess = true;
@@ -1761,12 +2529,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         vectorIndexID: string,
         _contextUser: UserInfo
     ): Promise<ResolvedVectorInfrastructure> {
-        const vectorIndex = this.khEngine.GetVectorIndexById(vectorIndexID);
+        const vectorIndex = this.khEngine.GetVectorIndexByID(vectorIndexID);
         if (!vectorIndex) {
             throw new Error(`Vector index ${vectorIndexID} not found in KnowledgeHubMetadataEngine cache`);
         }
 
-        return this.createInfrastructureFromIndex(vectorIndex.Name, vectorIndex.VectorDatabaseID, embeddingModelID);
+        return this.createInfrastructureFromIndex(vectorIndex, embeddingModelID);
     }
 
     /**
@@ -1778,21 +2546,22 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             throw new Error('No vector indexes found — create one in the Configuration tab first');
         }
         const vectorIndex = vectorIndexes[0];
-        return this.createInfrastructureFromIndex(vectorIndex.Name, vectorIndex.VectorDatabaseID, vectorIndex.EmbeddingModelID);
+        return this.createInfrastructureFromIndex(vectorIndex, vectorIndex.EmbeddingModelID);
     }
 
     /**
-     * Shared helper: given vector index details and embedding model ID, resolve all
-     * driver instances needed for embedding + upsert. Uses AIEngine for Vector Databases.
+     * Shared helper: given a VectorIndex and embedding model ID, resolve all driver instances
+     * needed for embedding + upsert, plus the index's Dimensions / parsed ProviderConfig (so the
+     * embed call and the upsert can honor reduced dimensions and provider routing). Uses AIEngine
+     * for Vector Databases.
      */
     private async createInfrastructureFromIndex(
-        indexName: string,
-        vectorDatabaseID: string,
+        vectorIndex: MJVectorIndexEntity,
         embeddingModelID: string,
     ): Promise<ResolvedVectorInfrastructure> {
-        const vectorDBEntity = AIEngine.Instance.VectorDatabases.find(db => UUIDsEqual(db.ID, vectorDatabaseID));
+        const vectorDBEntity = AIEngine.Instance.VectorDatabases.find(db => UUIDsEqual(db.ID, vectorIndex.VectorDatabaseID));
         if (!vectorDBEntity || !vectorDBEntity.ClassKey) {
-            throw new Error(`Vector database ${vectorDatabaseID} not found in AIEngine cache`);
+            throw new Error(`Vector database ${vectorIndex.VectorDatabaseID} not found in AIEngine cache`);
         }
         const vectorDBClassKey = vectorDBEntity.ClassKey;
 
@@ -1800,12 +2569,39 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const driverClass = aiModel.DriverClass;
         const embeddingModelName = aiModel.APIName ?? aiModel.Name;
 
-        LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${indexName}"`);
+        LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${vectorIndex.Name}"`);
 
         const embedding = this.createEmbeddingInstance(driverClass);
         const vectorDB = this.createVectorDBInstance(vectorDBClassKey);
 
-        return { embedding, vectorDB, indexName, embeddingModelName, embeddingModelID };
+        return {
+            embedding,
+            vectorDB,
+            indexName: vectorIndex.Name,
+            embeddingModelName,
+            embeddingModelID,
+            dimensions: vectorIndex.Dimensions ?? undefined,
+            providerConfig: this.parseProviderConfig(vectorIndex.ProviderConfig),
+        };
+    }
+
+    /**
+     * Parse a VectorIndex's ProviderConfig JSON blob into an object for provider-specific routing
+     * (e.g. Pinecone's namespaceField). Mirrors the entity-vectorization pipeline's helper. Returns
+     * undefined for null/empty/invalid JSON — a bad blob is logged and treated as "no config" so it
+     * never blocks vectorization.
+     */
+    private parseProviderConfig(raw: string | null | undefined): Record<string, unknown> | undefined {
+        if (!raw) {
+            return undefined;
+        }
+        try {
+            const parsed = JSON.parse(raw) as unknown;
+            return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : undefined;
+        } catch {
+            LogError(`Invalid JSON in VectorIndex.ProviderConfig, ignoring`);
+            return undefined;
+        }
     }
 
     /** Find an embedding model by ID in AIEngine, with helpful error reporting */
@@ -1842,8 +2638,48 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /** SHA-1 deterministic vector ID for a content item */
-    private contentItemVectorId(contentItemId: string): string {
+    private contentItemVectorID(contentItemId: string): string {
         return crypto.createHash('sha1').update(`content-item_${contentItemId}`).digest('hex');
+    }
+
+    /**
+     * SHA-1 deterministic vector ID for a specific chunk of a content item, used only by the
+     * 'hash' {@link VectorIDStrategy} for multi-chunk items. It is deterministic on
+     * (contentItemId, chunkIndex), which is exactly what makes 'hash' unsafe with re-chunk +
+     * purge — a re-chunk that produces the same index reuses the id (documented on the config).
+     */
+    private contentItemChunkVectorID(contentItemId: string, chunkIndex: number): string {
+        return crypto.createHash('sha1').update(`content-item-chunk_${contentItemId}_${chunkIndex}`).digest('hex');
+    }
+
+    /**
+     * Resolve the vector-storage behavior for a content item using the cascade:
+     * ContentSource override -> ContentType default -> hardcoded default. Reads the strongly-typed
+     * ConfigurationObject accessors emitted by CodeGen for each entity's Configuration JSONType.
+     */
+    protected resolveItemVectorStorageConfig(item: MJContentItemEntity): ResolvedVectorStorageConfig {
+        const source = this.khEngine.GetContentSourceByID(item.ContentSourceID);
+        const srcCfg = source?.ConfigurationObject;
+
+        const contentType = this.khEngine.GetContentTypeByID(item.ContentTypeID);
+        const typeCfg = contentType?.ConfigurationObject;
+
+        return {
+            vectorIDStrategy: srcCfg?.VectorIDStrategy ?? typeCfg?.VectorIDStrategy ?? DEFAULT_VECTOR_ID_STRATEGY,
+            chunkTextStorage: srcCfg?.ChunkTextStorage ?? typeCfg?.ChunkTextStorage ?? DEFAULT_CHUNK_TEXT_STORAGE,
+            metadata: srcCfg?.VectorMetadata ?? typeCfg?.VectorMetadata ?? undefined,
+        };
+    }
+
+    /**
+     * True when this item's single embedding vector is stored at the ContentItem level (on
+     * ContentItem.VectorRecordID) rather than in a ContentItemChunk row. Only the 'mixed'
+     * storage mode does this, and only when the item produced exactly one chunk; 'alwaysChunk'
+     * always writes a chunk row (item-level id stays null). buildVectorRecords and
+     * persistVectorReferences share this predicate so the vector id and its persistence agree.
+     */
+    protected isItemLevelVector(config: ResolvedVectorStorageConfig, chunkCount: number): boolean {
+        return config.chunkTextStorage === 'mixed' && chunkCount === 1;
     }
 
     /** Build the text that gets embedded: Title + Description + full Text */
@@ -1857,7 +2693,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Build the text to embed for a content item, and chunk it if it exceeds
      * the embedding model's token limit. Returns one or more text chunks.
      */
-    private buildEmbeddingChunks(item: MJContentItemEntity): string[] {
+    private async buildEmbeddingChunks(item: MJContentItemEntity): Promise<string[]> {
         const parts: string[] = [];
         if (item.Name) parts.push(item.Name);
         if (item.Description) parts.push(item.Description);
@@ -1871,44 +2707,229 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             return [full];
         }
 
-        // Chunk using TextChunker for token-aware splitting
         LogStatus(`[Autotag] Chunking embedding text for "${item.Name}" (${full.length} chars, ~${Math.ceil(full.length / 4)} tokens)`);
-        try {
-            const chunkParams: ChunkTextParams = {
-                Text: full,
-                MaxChunkTokens: AutotagBaseEngine.MAX_EMBEDDING_TOKENS,
-                OverlapTokens: 100,
-            };
-            const chunks = TextChunker.ChunkText(chunkParams);
-            LogStatus(`[Autotag] Split into ${chunks.length} chunks for embedding`);
-            return chunks.map(c => c.Text);
-        } catch {
-            // Fallback: simple character-based splitting
-            const result: string[] = [];
-            for (let i = 0; i < full.length; i += charLimit) {
-                result.push(full.substring(i, i + charLimit));
-            }
-            return result;
+        const segments = await this.segmentTextForChunking(full, {
+            MaxSegmentTokens: AutotagBaseEngine.MAX_EMBEDDING_TOKENS,
+            OverlapTokens: 100,
+            TextStrategy: 'sentence',
+        });
+        if (segments) {
+            LogStatus(`[Autotag] Split into ${segments.length} chunks for embedding`);
+            return segments;
+        }
+
+        // Fallback: simple character-based splitting
+        const result: string[] = [];
+        for (let i = 0; i < full.length; i += charLimit) {
+            result.push(full.substring(i, i + charLimit));
+        }
+        return result;
+    }
+
+    /**
+     * Build the metadata object stored alongside the vector. Mirrors the entity-vectorization
+     * pipeline's decomposed shape ({@link addContentSystemMetadata}/{@link addCuratedMetadata}/
+     * {@link addStrategyDisplayFields}/{@link addEntityIconMetadata}/{@link addUpdatedAtMetadata}/
+     * {@link addTagsMetadata}) so each concern can be overridden independently.
+     *
+     * `VectorMetadata.FieldStrategy` selects the field set:
+     * - unset ⇒ the curated content default (source ids + Title / Description / URL), preserving
+     *   historical behavior.
+     * - 'all' / 'include' / 'exclude' / 'explicit' ⇒ ContentItem fields resolved by
+     *   {@link getContentDisplayFields}, with per-field StoreAs coercion + truncation.
+     *
+     * The identity keys are chunk-aware (see the Chunk-Identity Contract); under 'explicit' only
+     * `Entity` is kept so content search results stay labeled (record id is recovered from the
+     * vector id under the default 'recordId' strategy).
+     */
+    protected buildVectorMetadata(
+        chunk: EmbeddingChunk,
+        isItemLevel: boolean,
+        tags: string[] | undefined,
+        config: ResolvedVectorStorageConfig,
+        contentItemEntity: EntityInfo | undefined
+    ): Record<string, string | number | boolean | string[]> {
+        const item = chunk.item;
+        const metaCfg = config.metadata;
+        const strategy = metaCfg?.FieldStrategy;
+        const explicit = strategy === 'explicit';
+        const meta: Record<string, string | number | boolean | string[]> = {};
+
+        this.addContentSystemMetadata(meta, chunk, isItemLevel, explicit);
+
+        if (!strategy) {
+            this.addCuratedMetadata(meta, item);
+        } else {
+            const all = item.GetAll() as Record<string, unknown>;
+            this.addEntityIconMetadata(meta, contentItemEntity, metaCfg, explicit);
+            this.addUpdatedAtMetadata(meta, all, metaCfg, explicit);
+            // Display fields LAST so an explicitly-configured field (e.g. __mj_UpdatedAt with a
+            // StoreAs override) wins over the toggle-driven default value — matches the entity side.
+            this.addStrategyDisplayFields(meta, all, contentItemEntity, metaCfg);
+        }
+
+        this.addTagsMetadata(meta, tags, metaCfg, explicit);
+
+        // Optional embedded-text copy (surfaces as the search snippet). Off by default — external
+        // hydrators read the authoritative text from the row. Honored under every strategy.
+        if (metaCfg?.IncludeText && chunk.text) {
+            meta['Text'] = chunk.text.substring(0, DEFAULT_METADATA_TRUNCATION);
+        }
+        return meta;
+    }
+
+    /**
+     * Add the identity/system keys. `Entity` is always present (chunk-aware). Under 'explicit' the
+     * rest are omitted (minimal metadata); otherwise `RecordID` — plus `ContentItemID` / `Sequence`
+     * for chunk vectors — are included so an external hydrator can fetch the row(s).
+     */
+    private addContentSystemMetadata(
+        meta: Record<string, string | number | boolean | string[]>,
+        chunk: EmbeddingChunk,
+        isItemLevel: boolean,
+        explicit: boolean
+    ): void {
+        meta['Entity'] = isItemLevel ? 'MJ: Content Items' : 'MJ: Content Item Chunks';
+        if (explicit) return;
+        if (isItemLevel) {
+            meta['RecordID'] = chunk.item.ID;
+        } else {
+            meta['RecordID'] = chunk.chunkID;
+            meta['ContentItemID'] = chunk.item.ID;
+            meta['Sequence'] = chunk.chunkIndex;
         }
     }
 
-    /** Build metadata stored alongside the vector — truncate large text fields */
-    private buildVectorMetadata(
-        item: MJContentItemEntity,
-        tags: string[] | undefined
-    ): Record<string, string | number | boolean | string[]> {
-        const META_TEXT_LIMIT = 1000;
-        const meta: Record<string, string | number | boolean | string[]> = {
-            RecordID: item.ID,
-            Entity: 'MJ: Content Items',
-            ContentSourceID: item.ContentSourceID,
-            ContentSourceTypeID: item.ContentSourceTypeID,
-        };
-        if (item.Name) meta['Title'] = item.Name.substring(0, META_TEXT_LIMIT);
-        if (item.Description) meta['Description'] = item.Description.substring(0, META_TEXT_LIMIT);
+    /** The curated default content metadata set (historical behavior when no FieldStrategy is set). */
+    private addCuratedMetadata(
+        meta: Record<string, string | number | boolean | string[]>,
+        item: MJContentItemEntity
+    ): void {
+        meta['ContentSourceID'] = item.ContentSourceID;
+        meta['ContentSourceTypeID'] = item.ContentSourceTypeID;
+        if (item.Name) meta['Title'] = item.Name.substring(0, DEFAULT_METADATA_TRUNCATION);
+        if (item.Description) meta['Description'] = item.Description.substring(0, DEFAULT_METADATA_TRUNCATION);
         if (item.URL) meta['URL'] = item.URL;
-        if (tags && tags.length > 0) meta['Tags'] = tags;
-        return meta;
+    }
+
+    /** Add the strategy-selected ContentItem fields, with per-field StoreAs coercion + truncation. */
+    private addStrategyDisplayFields(
+        meta: Record<string, string | number | boolean | string[]>,
+        all: Record<string, unknown>,
+        contentItemEntity: EntityInfo | undefined,
+        metaCfg: VectorMetadataConfig | undefined
+    ): void {
+        for (const field of this.getContentDisplayFields(contentItemEntity, metaCfg)) {
+            const value = all[field.Name];
+            if (value == null) continue;
+            this.setCoercedFieldValue(meta, field, value, metaCfg);
+        }
+    }
+
+    /**
+     * Resolve which ContentItem fields go into metadata for the configured strategy. Mirrors the
+     * entity pipeline: 'include'/'explicit' take only fields explicitly marked Included (candidate
+     * set is the full field list; only unstorable binary types are refused); 'all'/'exclude' take
+     * the conservative eligible set (no PKs, uniqueidentifiers, binary, or __mj_* fields) minus any
+     * marked Included:false.
+     */
+    private getContentDisplayFields(
+        entityInfo: EntityInfo | undefined,
+        metaCfg: VectorMetadataConfig | undefined
+    ): EntityFieldInfo[] {
+        if (!entityInfo) return [];
+        const strategy = metaCfg?.FieldStrategy;
+        const overrides = metaCfg?.Fields ?? {};
+
+        if (strategy === 'include' || strategy === 'explicit') {
+            return entityInfo.Fields.filter(f => {
+                if (overrides[f.Name]?.Included !== true) return false;
+                if (UNSTORABLE_METADATA_TYPES.has(f.Type.toLowerCase())) {
+                    LogError(`Field "${f.Name}" is a binary type (${f.Type}) and cannot be stored in vector metadata — ignoring its explicit inclusion`);
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        const skip = new Set(['uniqueidentifier', ...UNSTORABLE_METADATA_TYPES]);
+        return entityInfo.Fields.filter(f =>
+            !f.IsPrimaryKey &&
+            !f.Name.startsWith('__mj_') &&
+            !skip.has(f.Type.toLowerCase()) &&
+            overrides[f.Name]?.Included !== false
+        );
+    }
+
+    /** Store one field's value with its configured/typed coercion (epoch/number/boolean/UUID/string). */
+    private setCoercedFieldValue(
+        meta: Record<string, string | number | boolean | string[]>,
+        field: EntityFieldInfo,
+        value: unknown,
+        metaCfg: VectorMetadataConfig | undefined
+    ): void {
+        const storeAs = metaCfg?.Fields?.[field.Name]?.StoreAs;
+        const fieldType = field.Type?.toLowerCase() ?? '';
+
+        if (storeAs === 'epochSeconds' || storeAs === 'epochMilliseconds') {
+            const ms = new Date(String(value)).getTime();
+            if (!Number.isNaN(ms)) meta[field.Name] = storeAs === 'epochSeconds' ? Math.floor(ms / 1000) : ms;
+        } else if (storeAs === 'number' || (storeAs == null && NUMERIC_SQL_TYPES.has(fieldType))) {
+            const n = Number(value);
+            if (!Number.isNaN(n)) meta[field.Name] = n;
+        } else if (storeAs === 'boolean') {
+            meta[field.Name] = Boolean(value);
+        } else if (fieldType === 'uniqueidentifier' && typeof value === 'string' && IsValidUUID(value)) {
+            meta[field.Name] = NormalizeUUID(value);
+        } else {
+            meta[field.Name] = String(value).substring(0, this.resolveMetadataTruncationLimit(field, metaCfg));
+        }
+    }
+
+    /** Per-field truncation: explicit override → field MaxLength (if small) → global default. */
+    private resolveMetadataTruncationLimit(field: EntityFieldInfo, metaCfg: VectorMetadataConfig | undefined): number {
+        const fieldCfg = metaCfg?.Fields?.[field.Name];
+        if (fieldCfg?.TruncationLimit != null && fieldCfg.TruncationLimit > 0) return fieldCfg.TruncationLimit;
+        if (field.MaxLength && field.MaxLength > 0 && field.MaxLength <= 5000) return field.MaxLength;
+        return metaCfg?.DefaultTruncationLimit ?? DEFAULT_METADATA_TRUNCATION;
+    }
+
+    /** Add the content entity's icon: default on under a set strategy, opt-in under 'explicit'. */
+    private addEntityIconMetadata(
+        meta: Record<string, string | number | boolean | string[]>,
+        entityInfo: EntityInfo | undefined,
+        metaCfg: VectorMetadataConfig | undefined,
+        explicit: boolean
+    ): void {
+        const include = explicit ? metaCfg?.IncludeEntityIcon === true : metaCfg?.IncludeEntityIcon !== false;
+        if (entityInfo?.Icon && include) meta['EntityIcon'] = entityInfo.Icon;
+    }
+
+    /** Add __mj_UpdatedAt for recency: default on under a set strategy, opt-in under 'explicit'. */
+    private addUpdatedAtMetadata(
+        meta: Record<string, string | number | boolean | string[]>,
+        all: Record<string, unknown>,
+        metaCfg: VectorMetadataConfig | undefined,
+        explicit: boolean
+    ): void {
+        const include = explicit ? metaCfg?.IncludeUpdatedAt === true : metaCfg?.IncludeUpdatedAt !== false;
+        if (all['__mj_UpdatedAt'] && include) meta['__mj_UpdatedAt'] = String(all['__mj_UpdatedAt']);
+    }
+
+    /**
+     * Add the item's Tags array. Tags aren't a ContentItem field (they're derived), so they're a
+     * toggle like icon/updatedAt: on by default (and under the curated default), opt-in under
+     * 'explicit'.
+     */
+    private addTagsMetadata(
+        meta: Record<string, string | number | boolean | string[]>,
+        tags: string[] | undefined,
+        metaCfg: VectorMetadataConfig | undefined,
+        explicit: boolean
+    ): void {
+        if (!tags || tags.length === 0) return;
+        const include = explicit ? metaCfg?.IncludeTags === true : metaCfg?.IncludeTags !== false;
+        if (include) meta['Tags'] = tags;
     }
 
     /** Load all tags for the given items in a single RunView call */
@@ -2113,6 +3134,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             Texts: [truncated],
             PromptID: embeddingPromptID ?? undefined,
             ContextUser: contextUser,
+            // Must match the index's dimensions so the query vector is comparable to stored vectors.
+            Dimensions: infra.dimensions,
         });
 
         if (!runResult?.Vectors || runResult.Vectors.length === 0) {
