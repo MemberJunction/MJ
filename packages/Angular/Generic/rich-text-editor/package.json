@@ -1,0 +1,48 @@
+{
+  "name": "@memberjunction/ng-rich-text-editor",
+  "version": "5.49.0",
+  "description": "MemberJunction: DOM-native WYSIWYG rich text editor. The contenteditable DOM is the document — no internal model, no schema, no re-normalization sweeps — so untouched HTML (Outlook/Gmail reply chains, tables, conditional comments) survives load→edit→serialize. Ships an Angular-free engine plus an Angular component with ControlValueAccessor.",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "ngc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "memberjunction",
+    "angular",
+    "rich-text",
+    "wysiwyg",
+    "contenteditable",
+    "editor",
+    "email"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "21.1.3",
+    "@angular/compiler-cli": "21.1.3",
+    "@memberjunction/ng-test-utils": "5.49.0",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@angular/common": "21.1.3",
+    "@angular/core": "21.1.3",
+    "@angular/forms": "21.1.3"
+  },
+  "dependencies": {
+    "@memberjunction/ng-shared-generic": "5.49.0",
+    "@memberjunction/ng-ui-components": "5.49.0",
+    "dompurify": "^3.3.0",
+    "tslib": "^2.8.1"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
