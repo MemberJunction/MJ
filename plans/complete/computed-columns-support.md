@@ -133,7 +133,7 @@ The remainder of this plan describes Option B.
 ### Step 1 — Add `EntityField.IsComputed` Column (Migration)
 
 **File**: `migrations/v5/V<YYYYMMDDHHMM>__v5.x_AddIsComputedToEntityField.sql`
-**Format**: per [`migrations/CLAUDE.md`](migrations/CLAUDE.md), use `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql` and `${flyway:defaultSchema}` placeholder.
+**Format**: per [`migrations/CLAUDE.md`](../../migrations/CLAUDE.md), use `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql` and `${flyway:defaultSchema}` placeholder.
 
 ```sql
 -- Add IsComputed flag to EntityField. Distinguishes SQL Server computed columns /
