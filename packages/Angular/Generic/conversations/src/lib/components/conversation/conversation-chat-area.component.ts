@@ -36,6 +36,7 @@ import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
+import type { ExportBranding } from '../../services/export.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -313,6 +314,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** Show the Export button in the conversation header. Default true. */
   @Input() showExportButton: boolean = true;
+
+  /** Label for the header Export button (white-label hosts relabel it, e.g. "Download"). */
+  @Input() exportButtonLabel: string = 'Export';
+
+  /** Font Awesome class(es) for the header Export button's icon. */
+  @Input() exportButtonIcon: string = 'fas fa-download';
+
+  /**
+   * Branding applied to exported files (theme tokens / logo / title) — forwarded
+   * to the export modal, where it also defaults the "Include branding" checkbox
+   * on. See `ExportBranding` in the export service. Null (default) keeps the
+   * stock unthemed export.
+   */
+  @Input() exportBranding: ExportBranding | null = null;
 
   /** Show the Share button in the conversation header. Default true. */
   @Input() showShareButton: boolean = true;
