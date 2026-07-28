@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
-import { ExportService, ExportFormat, ExportOptions } from '../../services/export.service';
+import { ExportService, ExportFormat, ExportOptions, ExportBranding } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 
@@ -65,6 +65,20 @@ import { ToastService } from '../../services/toast.service';
                 <span>Include metadata</span>
                 <small>Add creation date, IDs, and other metadata</small>
               </label>
+              <!-- Branding applies to EVERY format (HTML gets theme colors + logo +
+                   footer; markdown/text/JSON get the title and attribution), so it
+                   belongs here rather than under HTML Options. Shown for HTML even with
+                   no host branding, because it still snapshots the app's theme. -->
+              @if (selectedFormat === 'html' || branding) {
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="exportOptions.includeTheme"
+                    [disabled]="isExporting || (selectedFormat === 'html' && !exportOptions.includeCSS)">
+                  <span>Include branding</span>
+                  <small>{{ brandingHint }}</small>
+                </label>
+              }
             </div>
             @if (selectedFormat === 'json') {
               <div class="format-specific-options">
@@ -90,6 +104,22 @@ import { ToastService } from '../../services/toast.service';
                   <span>Include CSS styling</span>
                   <small>Embed styles for better presentation</small>
                 </label>
+                <!-- Which palette gets baked in — NOT the mode the app happens to be in.
+                     Exporting from a dark session would otherwise put dark text on the
+                     export's white page. -->
+                @if (exportOptions.includeTheme && exportOptions.includeCSS) {
+                  <label class="checkbox-label">
+                    <span>Theme</span>
+                    <select
+                      class="mj-input theme-mode-select"
+                      [(ngModel)]="exportOptions.themeMode"
+                      [disabled]="isExporting">
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                    <small>Palette baked into the exported file</small>
+                  </label>
+                }
               </div>
             }
           </section>
@@ -246,6 +276,12 @@ import { ToastService } from '../../services/toast.service';
       cursor: not-allowed;
     }
 
+    .theme-mode-select {
+      margin-left: 8px;
+      padding: 2px 6px;
+      font-size: 13px;
+    }
+
     .checkbox-label small {
       margin-left: 28px;
       font-size: 12px;
@@ -303,9 +339,33 @@ import { ToastService } from '../../services/toast.service';
   `]
 })
 export class ExportModalComponent {
-  @Input() isVisible = false;
+  private _isVisible = false;
+  @Input()
+  set isVisible(value: boolean) {
+    const opening = value && !this._isVisible;
+    this._isVisible = value;
+    if (opening) {
+      // Fresh open: "Include branding" defaults ON only when the host explicitly
+      // configured export branding — plain MJ Explorer keeps today's unthemed file.
+      // NOTE this reads `branding`, so a host binding both in one change-detection
+      // pass must bind [branding] FIRST (Angular sets inputs in template order).
+      // chat-area's template does; a host mounting with isVisible already true and
+      // branding bound after would get the checkbox defaulted off.
+      this.exportOptions.includeTheme = !!this.branding;
+    }
+  }
+  get isVisible(): boolean {
+    return this._isVisible;
+  }
+
   @Input() conversation?: MJConversationEntity;
   @Input() currentUser!: UserInfo;
+  /**
+   * Host-supplied export branding (theme tokens / logo / title). When set, the
+   * HTML format's "Include branding" checkbox defaults on and the branding is
+   * passed to {@link ExportService} on export. See `ExportBranding`.
+   */
+  @Input() branding: ExportBranding | null = null;
   @Output() cancelled = new EventEmitter<void>();
   @Output() exported = new EventEmitter<void>();
 
@@ -317,8 +377,43 @@ export class ExportModalComponent {
     includeMessages: true,
     includeMetadata: true,
     prettyPrint: true,
-    includeCSS: true
+    includeCSS: true,
+    includeTheme: false,
+    themeMode: 'light'
   };
+
+  /** Format-aware hint under the "Include branding" checkbox. */
+  get brandingHint(): string {
+    if (this.selectedFormat === 'html') {
+      if (!this.exportOptions.includeCSS) {
+        return 'Requires "Include CSS styling"';
+      }
+      return `Embed the app's theme colors${this.branding?.logoUrl ? ', logo,' : ''} and attribution line`;
+    }
+    const logo = this.branding?.logoUrl && this.selectedFormat === 'markdown' ? ', logo,' : '';
+    return `Add the title${logo} and attribution line`;
+  }
+
+  /**
+   * The options actually handed to the service. `includeTheme` is the user's INTENT;
+   * this resolves it against the selected format:
+   *
+   * - HTML with the stylesheet off cannot carry branding (a full-size unstyled logo and
+   *   an unstyled footer would leak), so it drops.
+   * - `includeCSS` is an HTML-only concern and must NOT decide anything for
+   *   markdown / text / JSON — resolving here rather than mutating `includeTheme` is
+   *   what keeps an HTML-format toggle from silently following the user into another
+   *   format.
+   */
+  private resolveExportOptions(): ExportOptions {
+    const unstyledHtml = this.selectedFormat === 'html' && !this.exportOptions.includeCSS;
+    const brandingOn = !!this.exportOptions.includeTheme && !unstyledHtml;
+    return {
+      ...this.exportOptions,
+      includeTheme: brandingOn,
+      branding: brandingOn ? (this.branding ?? undefined) : undefined
+    };
+  }
 
   get exportTitle(): string {
     return `Export: ${this.conversation?.Name || 'Conversation'}`;
@@ -387,7 +482,7 @@ export class ExportModalComponent {
         this.conversation.ID,
         this.selectedFormat!,
         this.currentUser,
-        this.exportOptions
+        this.resolveExportOptions()
       );
 
       this.toastService.success('Conversation exported successfully');
@@ -414,7 +509,9 @@ export class ExportModalComponent {
       includeMessages: true,
       includeMetadata: true,
       prettyPrint: true,
-      includeCSS: true
+      includeCSS: true,
+      includeTheme: !!this.branding,
+      themeMode: 'light'
     };
     this.isVisible = false;
   }

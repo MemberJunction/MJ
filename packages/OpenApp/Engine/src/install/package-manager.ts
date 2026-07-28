@@ -73,6 +73,13 @@ export interface PackageManagerOptions {
    * Each target specifies a path and role. Packages are distributed by role.
    */
   AdditionalTargets?: WorkspaceTarget[];
+  /**
+   * Package names that must SURVIVE a removal because another installed app still declares
+   * them (shared npm deps). Only honored by {@link RemoveAppPackages}: any package whose
+   * name is in this list is skipped, so removing one app cannot strip a dependency a
+   * surviving app needs to boot.
+   */
+  RetainPackages?: string[];
 }
 
 /**
@@ -136,8 +143,10 @@ export function RemoveAppPackages(options: PackageManagerOptions): PackageOperat
 
   try {
     const targets = buildTargetList(options);
-    const serverPkgs = [...options.ServerPackages, ...options.SharedPackages];
-    const clientPkgs = [...options.ClientPackages, ...options.SharedPackages];
+    // Never remove a package another installed app still declares — see RetainPackages.
+    const retained = new Set(options.RetainPackages ?? []);
+    const serverPkgs = [...options.ServerPackages, ...options.SharedPackages].filter((p) => !retained.has(p.name));
+    const clientPkgs = [...options.ClientPackages, ...options.SharedPackages].filter((p) => !retained.has(p.name));
 
     for (const target of targets) {
       const pkgs = target.Role === 'server' ? serverPkgs : clientPkgs;

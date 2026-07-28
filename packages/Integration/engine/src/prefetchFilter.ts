@@ -11,11 +11,33 @@
  * targets, so it does NOT reintroduce the "SS brackets break Postgres" problem that motivated the
  * previous (unsafe) unquoted form.
  */
+import type { DatabasePlatform } from '@memberjunction/core';
 
 /** The minimal dialect surface this builder needs; satisfied by `DatabaseProviderBase.Dialect` (SQLDialect). */
 export interface SqlQuoter {
     QuoteIdentifier(name: string): string;
     QuoteStringLiteral(value: string): string;
+    /** Which platform the quoter is for. Always present on a real `SQLDialect`. */
+    PlatformKey?: DatabasePlatform;
+}
+
+/**
+ * Quotes a value as a string literal that a **Unicode text column** comparison will actually match.
+ *
+ * On SQL Server a bare `'…'` is a *varchar* literal: every character outside the database's
+ * collation codepage is replaced with `?` before the comparison runs. On the default
+ * `SQL_Latin1_General_CP1_CI_AS`, an external ID of `ünïcödé-Ω-日本語` becomes `ünïcödé-O-???`, so
+ * `ExternalSystemRecordID = '…'` matches the (nvarchar) row zero times — the record reads as
+ * unmapped and the sync creates it a second time in the customer's external system. `N'…'` makes
+ * the literal nvarchar, which is what every MJ string column already is, so there is no implicit
+ * conversion on the column and the index seek is unaffected.
+ *
+ * PostgreSQL literals are already Unicode and it has no `N` prefix, hence the platform check
+ * rather than an unconditional prefix.
+ */
+export function quoteTextLiteral(value: string, q: SqlQuoter): string {
+    const quoted = q.QuoteStringLiteral(value);
+    return q.PlatformKey === 'sqlserver' ? `N${quoted}` : quoted;
 }
 
 /**
