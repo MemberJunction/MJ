@@ -5,9 +5,11 @@ import {
   validateStructure,
   checkPushFreeze,
   checkPrTransitions,
+  findDualCertified,
   parseCliArgs,
   stableStringify,
 } from './validate-release-lines.mjs';
+import { isPermanentTagError } from './dist-tag-all.mjs';
 
 const minimal = () => ({
   edge: { newest: null },
@@ -216,6 +218,26 @@ test('cli args: defaults and validation', () => {
   assert.deepEqual(parseCliArgs(['--base', 'origin/next', '--mode', 'pr']).mode, 'pr');
   assert.throws(() => parseCliArgs(['--base', 'origin/next']), /--mode/);
   assert.throws(() => parseCliArgs(['--bogus']), /unknown argument/);
+});
+
+test('findDualCertified: warns only when two or more lines are certified', () => {
+  const doc = minimal();
+  assert.deepEqual(findDualCertified(doc), []);
+  doc.lines['6.1'] = certifiedLine();
+  assert.deepEqual(findDualCertified(doc), []);
+  doc.lines['6.2'] = certifiedLine();
+  assert.deepEqual(findDualCertified(doc), ['6.1', '6.2']);
+  doc.lines['6.1'].status = 'maintenance';
+  assert.deepEqual(findDualCertified(doc), []);
+});
+
+test('isPermanentTagError: version-not-found signatures are permanent, transient errors are not', () => {
+  assert.equal(isPermanentTagError('npm error dist-tag add: version 6.1.0 does not exist'), true);
+  assert.equal(isPermanentTagError('npm error code E404'), true);
+  assert.equal(isPermanentTagError('404 Not Found - PUT https://registry.npmjs.org/...'), true);
+  assert.equal(isPermanentTagError('ETIMEDOUT connect timed out'), false);
+  assert.equal(isPermanentTagError('503 Service Unavailable'), false);
+  assert.equal(isPermanentTagError(undefined), false);
 });
 
 test('stableStringify: key order does not matter', () => {

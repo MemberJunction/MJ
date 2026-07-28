@@ -9,8 +9,16 @@
 //   node ci/dist-tag-all.mjs --version 5.50.1 --tag latest [--dry-run]
 //        [--registry URL] [--concurrency 8] [--scope @memberjunction]
 //
+// RUN FROM THE CERTIFIED TAG'S CHECKOUT (git checkout v<version> first).
+// Package enumeration walks the checked-out tree's workspace globs, so a run
+// from next/main uses TODAY'S package set, not the certified build's: a package
+// added since the certified version fails permanently ("version does not
+// exist" — re-running never converges), and a package removed or renamed since
+// is silently not enumerated, leaving its old tag pointing wherever it was.
+//
 // The scratch-scope drill from the doc: point --registry at a scratch registry
-// (or --scope at a scratch org) and run with --dry-run off.
+// (or --scope at a scratch org) and run with --dry-run off. Include a
+// renamed-package case in the drill to see both failure shapes.
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -121,12 +129,20 @@ function npmArgs(parts, registry) {
   return registry ? [...parts, '--registry', registry] : parts;
 }
 
+// A "version does not exist" / 404 failure is PERMANENT: retrying or re-running
+// can never succeed. The usual cause is running from a checkout whose workspace
+// set post-dates the certified version (a package added since certification).
+export function isPermanentTagError(text) {
+  return /E404|404 Not Found|does not exist|no such version/i.test(text ?? '');
+}
+
 async function moveOne(item, tag, registry) {
   try {
     await withRetry(() => execFileP('npm', npmArgs(['dist-tag', 'add', item.spec, tag], registry)));
     return { name: item.name, ok: true };
   } catch (err) {
-    return { name: item.name, ok: false, error: err.stderr?.trim() || err.message };
+    const error = err.stderr?.trim() || err.message;
+    return { name: item.name, ok: false, error, permanent: isPermanentTagError(error) };
   }
 }
 
@@ -162,6 +178,16 @@ async function main() {
   const moveFailures = report('move', moved);
   const verified = await runPool(plan, (item) => verifyOne(item, args.tag, args.version, args.registry), args.concurrency);
   const verifyFailures = report('verify', verified);
+  const permanent = moved.filter((r) => !r.ok && r.permanent);
+  if (permanent.length > 0) {
+    console.error(
+      `${permanent.length} PERMANENT failure(s) — ${args.version} is not published for: ${permanent.map((r) => r.name).join(', ')}.`
+    );
+    console.error(
+      `These packages likely post-date the certified version. Re-running from this checkout will never converge — run from the certified tag's checkout (git checkout v${args.version}) instead.`
+    );
+    process.exit(1);
+  }
   if (moveFailures + verifyFailures > 0) {
     console.error(`Tag state is inconsistent — re-run this script until both passes are clean.`);
     process.exit(1);

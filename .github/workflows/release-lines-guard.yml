@@ -59,6 +59,14 @@ jobs:
         with:
           node-version: 24
 
+      # STATED ASSUMPTION (LTS process §8): this guard is the SECOND net, not the
+      # first. The next/main ruleset requires changes to arrive via pull request,
+      # so direct pushes are rejected before this workflow matters. That matters
+      # because this push check is evadable by design: `[skip ci]` in a commit
+      # message skips push-triggered workflows entirely, and the merged-PR
+      # exemption below inspects only the push's HEAD commit (a multi-commit push
+      # under a merged head gets structural checks only). If the ruleset ever
+      # drops the PR requirement, harden this guard the same day.
       - name: Check whether this commit arrived via a merged PR
         id: origin
         env:

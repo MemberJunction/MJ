@@ -152,19 +152,27 @@ jobs:
 
       # LTS process (plans/lts-process.md §4.2): no publish ever omits its explicit
       # --tag. The channel is derived from the version grammar itself — an -edge.N
-      # prerelease goes to the `edge` dist-tag; a normal version goes to `latest`.
-      # This is inert for classic 5.x versions (they resolve to `latest`, today's
-      # behavior) and activates automatically when the 6.x Edge era opens.
+      # prerelease goes to the `edge` dist-tag. Unsuffixed versions are era-gated:
+      # era-5 (classic grammar, the bootstrap) publishes to `latest` — today's
+      # behavior, unchanged. From era 6 on, an unsuffixed version is a candidate or
+      # certified build and this routine path REFUSES it: `latest` moves only at
+      # certification (ci/dist-tag-all.mjs), and candidates publish via the
+      # candidate-cut flow / publish-lts.yml (§15 items 4 and 6). Without this gate
+      # a cycle-2 candidate cut transiting here would seize `latest` uncertified.
       - name: Determine release channel from version grammar
         id: channel
         run: |
           VERSION=$(jq -r .version packages/MJServer/package.json)
+          MAJOR=${VERSION%%.*}
           if [[ "$VERSION" == *-edge.* ]]; then
             NPM_TAG=edge
             PRERELEASE=true
-          else
+          elif [[ "$MAJOR" -le 5 ]]; then
             NPM_TAG=latest
             PRERELEASE=false
+          else
+            echo "::error::Unsuffixed version $VERSION on the routine publish path. Post-era-open, normal versions are candidate/certified builds: publish via the candidate-cut flow (publish-lts.yml); 'latest' moves only at certification via ci/dist-tag-all.mjs."
+            exit 1
           fi
           echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_OUTPUT"
           echo "PRERELEASE=$PRERELEASE" >> "$GITHUB_OUTPUT"
