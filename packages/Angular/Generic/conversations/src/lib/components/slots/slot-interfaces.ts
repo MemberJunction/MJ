@@ -16,7 +16,7 @@
  */
 
 import type { EventEmitter } from '@angular/core';
-import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import type { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 
 /** State surfaced to the agent-presence slot for visualization. */
 export type MJChatAgentPresenceState = 'idle' | 'listening' | 'thinking' | 'speaking';
@@ -55,6 +55,29 @@ export interface IMJChatHeaderComponent {
     ArtifactCount?: number;
     /** Pass-through whether the artifact-count chip should render at all. */
     ShowArtifactIndicator?: boolean;
+}
+
+/**
+ * Template CONTEXT for the `headerActions` slot — extra host buttons rendered
+ * INSIDE the default header's action strip, as the last children after the
+ * stock buttons (pin / artifacts / members / pickers / export / share).
+ *
+ * Unlike the other slot contracts this is a template-context shape, not a
+ * component contract: the slot is purely additive chrome, so consumers project
+ * an ad-hoc `<ng-template mjChatSlot="headerActions" let-conversation>` rather
+ * than implementing a component. For visual parity, projected buttons should
+ * use `mjButton variant="flat" size="sm"` like the stock actions.
+ *
+ * NOT rendered when a full `header` slot is projected — that slot replaces the
+ * entire header, actions included.
+ */
+export interface IMJChatHeaderActionsContext {
+    /** The active conversation (null before one exists). */
+    $implicit: MJConversationEntity | null;
+    /** The active conversation's ID (null before one exists). */
+    conversationId: string | null;
+    /** True while an agent turn is in flight — disable actions that mutate the conversation. */
+    isProcessing: boolean;
 }
 
 /**
