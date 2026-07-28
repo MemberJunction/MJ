@@ -145,17 +145,24 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       return;
     }
 
-    if (entityName === 'MJ: AI Agent Run Steps' ||
-        entityName === 'MJ: AI Prompt Runs' ||
-        entityName === 'MJ: Action Execution Logs') {
-      // A child row was written for SOME run — only react if it belongs
-      // to ours. AgentRunID is the FK on steps; for prompt runs and
-      // action logs we just refresh if any field matches (cheap and the
-      // data helper handles dedupe).
+    // Steps still carry AgentRunID, so a step write can be correlated exactly to this run.
+    if (entityName === 'MJ: AI Agent Run Steps') {
       const childAgentRunId = this.resolveEventField<string>(evt, 'AgentRunID');
       if (childAgentRunId && UUIDsEqual(childAgentRunId, runId)) {
         this.refreshRunDataDebounced();
       }
+      return;
+    }
+
+    // Prompt runs and action logs expose no AgentRunID to correlate on: AIPromptRun.AgentRunID was
+    // dropped in v5.50 (Break_CodeGen_Cycle_Remove_PromptRun_AgentRunID) and ActionExecutionLog never
+    // had one. Correlating on it made this branch dead for action logs from the start, and for prompt
+    // runs from v5.50 — the form simply stopped live-refreshing. Refresh unconditionally instead,
+    // which is what the original comment described: the reload is debounced and re-reads only THIS
+    // run, and the subscription is dropped once the run leaves 'Running', so a foreign write costs at
+    // most one collapsed reload while a run is open on screen.
+    if (entityName === 'MJ: AI Prompt Runs' || entityName === 'MJ: Action Execution Logs') {
+      this.refreshRunDataDebounced();
     }
   }
 
