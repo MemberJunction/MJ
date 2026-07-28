@@ -4209,14 +4209,6 @@ export const MJAIAgentTypeSchema = z.object({
         * * Display Name: Default Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Type-level DEFAULT configuration JSON for agents of this type — the base layer of the effective-configuration merge: type DefaultConfiguration <- agent TypeConfiguration <- runtime overrides (later layers win per key, deep-merged). Must itself conform to ConfigSchema when one is published. Null = no type defaults.`),
-    SystemPrompt: z.string().nullable().describe(`
-        * * Field Name: SystemPrompt
-        * * Display Name: System Prompt
-        * * SQL Data Type: nvarchar(255)`),
-    DefaultStorageAccount: z.string().nullable().describe(`
-        * * Field Name: DefaultStorageAccount
-        * * Display Name: Default Storage Account
-        * * SQL Data Type: nvarchar(200)`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
         * * Display Name: Context Compression Message Threshold
@@ -4256,6 +4248,14 @@ export const MJAIAgentTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Type-level default prompt used for cross-turn conversation compaction (the durable summary baseline). Distinct from ContextCompressionPromptID, which governs in-turn compression. Overridable per agent via AIAgent.ConversationSummaryPromptID.`),
+    SystemPrompt: z.string().nullable().describe(`
+        * * Field Name: SystemPrompt
+        * * Display Name: System Prompt
+        * * SQL Data Type: nvarchar(255)`),
+    DefaultStorageAccount: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccount
+        * * Display Name: Default Storage Account
+        * * SQL Data Type: nvarchar(200)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
         * * Display Name: Context Compression Prompt
@@ -4775,6 +4775,27 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, every root-level run of this agent executes in plan mode regardless of the per-request planMode flag — the agent must present a plan and receive human approval before any Actions or Sub-Agent steps execute. SupportsPlanMode is irrelevant when this is set. Use for high-consequence agents (e.g. ones with outbound-communication capabilities) where human-in-the-loop review is mandatory.`),
+    ContextWindowMaxTokens: z.number().nullable().describe(`
+        * * Field Name: ContextWindowMaxTokens
+        * * Display Name: Context Window Max Tokens
+        * * SQL Data Type: int
+        * * Description: Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.`),
+    CompactionTriggerPercent: z.number().nullable().describe(`
+        * * Field Name: CompactionTriggerPercent
+        * * Display Name: Compaction Trigger Percent
+        * * SQL Data Type: int
+        * * Description: Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.`),
+    CompactionTargetPercent: z.number().nullable().describe(`
+        * * Field Name: CompactionTargetPercent
+        * * Display Name: Compaction Target Percent
+        * * SQL Data Type: int
+        * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.`),
+    ConversationSummaryPromptID: z.string().nullable().describe(`
+        * * Field Name: ConversationSummaryPromptID
+        * * Display Name: Conversation Summary Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -4819,6 +4840,10 @@ if this limit is exceeded.`),
         * * Field Name: DefaultMediaCollection
         * * Display Name: Default Media Collection Name
         * * SQL Data Type: nvarchar(255)`),
+    ConversationSummaryPrompt: z.string().nullable().describe(`
+        * * Field Name: ConversationSummaryPrompt
+        * * Display Name: Conversation Summary Prompt
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -4827,31 +4852,6 @@ if this limit is exceeded.`),
         * * Field Name: RootDefaultCoAgentID
         * * Display Name: Root Default Co-Agent ID
         * * SQL Data Type: uniqueidentifier`),
-    ContextWindowMaxTokens: z.number().nullable().describe(`
-        * * Field Name: ContextWindowMaxTokens
-        * * Display Name: Context Window Max Tokens
-        * * SQL Data Type: int
-        * * Description: Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.`),
-    CompactionTriggerPercent: z.number().nullable().describe(`
-        * * Field Name: CompactionTriggerPercent
-        * * Display Name: Compaction Trigger Percent
-        * * SQL Data Type: int
-        * * Description: Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.`),
-    CompactionTargetPercent: z.number().nullable().describe(`
-        * * Field Name: CompactionTargetPercent
-        * * Display Name: Compaction Target Percent
-        * * SQL Data Type: int
-        * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.`),
-    ConversationSummaryPromptID: z.string().nullable().describe(`
-        * * Field Name: ConversationSummaryPromptID
-        * * Display Name: Conversation Summary Prompt ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
-        * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.`),
-    ConversationSummaryPrompt: z.string().nullable().describe(`
-        * * Field Name: ConversationSummaryPrompt
-        * * Display Name: Conversation Summary Prompt
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJAIAgentEntityType = z.infer<typeof MJAIAgentSchema>;
@@ -6959,10 +6959,6 @@ export const MJAIPromptRunSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
-    AgentRun: z.string().nullable().describe(`
-        * * Field Name: AgentRun
-        * * Display Name: Agent Run
-        * * SQL Data Type: nvarchar(255)`),
     OriginalModel: z.string().nullable().describe(`
         * * Field Name: OriginalModel
         * * Display Name: Original Model
@@ -7776,6 +7772,80 @@ export const MJAISkillPermissionSchema = z.object({
 export type MJAISkillPermissionEntityType = z.infer<typeof MJAISkillPermissionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Skill Search Scopes
+ */
+export const MJAISkillSearchScopeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SkillID: z.string().describe(`
+        * * Field Name: SkillID
+        * * Display Name: Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+        * * Description: The skill this grant belongs to.`),
+    SearchScopeID: z.string().describe(`
+        * * Field Name: SearchScopeID
+        * * Display Name: Search Scope ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+        * * Description: The Search Scope this skill may reach.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Active or Inactive. Inactive rows are ignored during resolution.`),
+    StartAt: z.date().nullable().describe(`
+        * * Field Name: StartAt
+        * * Display Name: Start At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional start of the window in which this grant is honoured. NULL = no lower bound. Evaluated against the current time on every resolution, so a window opening or closing needs no cache invalidation.`),
+    EndAt: z.date().nullable().describe(`
+        * * Field Name: EndAt
+        * * Display Name: End At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional end of the window in which this grant is honoured. NULL = no upper bound.`),
+    Priority: z.number().nullable().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Description: Lower numbers win when several granted scopes are candidates and none is marked IsDefault.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set, this scope is chosen for the skill ahead of Priority ordering.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Skill: z.string().describe(`
+        * * Field Name: Skill
+        * * Display Name: Skill
+        * * SQL Data Type: nvarchar(255)`),
+    SearchScope: z.string().describe(`
+        * * Field Name: SearchScope
+        * * Display Name: Search Scope
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJAISkillSearchScopeEntityType = z.infer<typeof MJAISkillSearchScopeSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Skill Sub Agents
  */
 export const MJAISkillSubAgentSchema = z.object({
@@ -7894,6 +7964,16 @@ export const MJAISkillSchema = z.object({
     *   * Auto
     *   * RequestedOnly
         * * Description: Controls whether this skill may ever be self-activated by an agent. Auto: the skill may appear in accepting agents' prompt catalogs and be activated mid-run on agent judgment — but only for agents whose own SkillActivationMode is also Auto (double gate). RequestedOnly (default): the skill is excluded from prompt catalogs entirely and can only be activated when the user explicitly requests it for the run (a /skill mention flowing through ExecuteAgentParams.requestedSkillIDs). All other activation gates (AcceptsSkills, skill Status, per-agent assignment, user Run permission) apply unchanged in both modes.`),
+    SearchScopeAccess: z.union([z.literal('All'), z.literal('Assigned'), z.literal('None')]).nullable().describe(`
+        * * Field Name: SearchScopeAccess
+        * * Display Name: Search Scope Access
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Assigned
+    *   * None
+        * * Description: Which Search Scopes this skill may reach when activated. None = grants no retrieval scope; Assigned = only scopes listed in AISkillSearchScope; All = any active scope. NULL behaves as None so existing skills are unaffected. Mirrors AIAgent.SearchScopeAccess so a skill and an agent are interchangeable principals to SearchScopePermissionResolver.`),
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
@@ -12359,6 +12439,22 @@ export const MJContentItemSchema = z.object({
         * * Display Name: Last Tagged At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp of the most recent successful autotagging run for this content item.`),
+    VectorRecordID: z.string().nullable().describe(`
+        * * Field Name: VectorRecordID
+        * * Display Name: Vector Record ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent Content
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+        * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.`),
+    DisplayLink: z.string().nullable().describe(`
+        * * Field Name: DisplayLink
+        * * Display Name: Display Link
+        * * SQL Data Type: nvarchar(2000)
+        * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source Name
@@ -12383,22 +12479,6 @@ export const MJContentItemSchema = z.object({
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
-    VectorRecordID: z.string().nullable().describe(`
-        * * Field Name: VectorRecordID
-        * * Display Name: Vector Record ID
-        * * SQL Data Type: nvarchar(100)
-        * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`),
-    ParentID: z.string().nullable().describe(`
-        * * Field Name: ParentID
-        * * Display Name: Parent Content
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
-        * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.`),
-    DisplayLink: z.string().nullable().describe(`
-        * * Field Name: DisplayLink
-        * * Display Name: Display Link
-        * * SQL Data Type: nvarchar(2000)
-        * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Content Name
@@ -13656,6 +13736,12 @@ export const MJConversationDetailSchema = z.object({
     *   * Text
     *   * Video
         * * Description: Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -13688,16 +13774,6 @@ export const MJConversationDetailSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    Sequence: z.number().describe(`
-        * * Field Name: Sequence
-        * * Display Name: Sequence
-        * * SQL Data Type: int
-        * * Default Value: 0
-        * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`),
-    SummaryPromptRun: z.string().nullable().describe(`
-        * * Field Name: SummaryPromptRun
-        * * Display Name: Summary Prompt Run
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJConversationDetailEntityType = z.infer<typeof MJConversationDetailSchema>;
@@ -27468,6 +27544,22 @@ export const MJSearchExecutionLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    AISkillID: z.string().nullable().describe(`
+        * * Field Name: AISkillID
+        * * Display Name: AI Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+        * * Description: The AI Skill on whose behalf this search ran, or NULL for a search with no active skill. Mirrors AIAgentID: since a skill is a search principal in its own right (AISkill.SearchScopeAccess plus MJ: AI Skill Search Scopes rows can reach a scope the user's own roles do not grant), the log must record which skill was active or the entitlement decision cannot be reconstructed.`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: The tenant this search ran for, taken from SearchContext.PrimaryScopeRecordID. Lets a multi-tenant deployment partition, filter and retain search audit history per customer. NULL for untenanted searches. Named for the existing primary-scope concept rather than OrganizationID because a scope's primary scope may be a Company, Client or Practice.`),
+    ScopeDecisionJSON: z.string().nullable().describe(`
+        * * Field Name: ScopeDecisionJSON
+        * * Display Name: Scope Decision JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Serialized ScopeExplanation recording WHY this search could reach what it reached: the entitlement decision and the grant that produced it, every dimension with its provenance (CallerSupplied / ServerDerived / Default / DiscardedCaller / Absent), and each lane's rendered filter with its active-or-skipped status and reason. Identical in shape to the value returned by SearchEngine.ExplainScope(), so the dry-run an administrator previews before running a search is the same structure the audit log stores afterwards. NULL when the engine did not capture a decision (older writers, or a failure before scope resolution).`),
     SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
@@ -27479,6 +27571,10 @@ export const MJSearchExecutionLogSchema = z.object({
     AIAgent: z.string().nullable().describe(`
         * * Field Name: AIAgent
         * * Display Name: AI Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    AISkill: z.string().nullable().describe(`
+        * * Field Name: AISkill
+        * * Display Name: AI Skill
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -27619,6 +27715,11 @@ export const MJSearchScopeEntitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RequiredMetadataKeys: z.string().nullable().describe(`
+        * * Field Name: RequiredMetadataKeys
+        * * Display Name: Required Metadata Keys
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of column or alias names the rendered ExtraFilter MUST reference for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if one is missing the lane is SKIPPED rather than queried, because a partially-rendered filter (an {% if %} clause dropped when its dimension was absent or discarded) is still valid SQL and silently widens the search. Same concept and same engine check as SearchScopeExternalIndex.RequiredMetadataKeys, applied to the SQL lane. NULL = no contract declared, which is the pre-migration behaviour.`),
     SearchScope: z.string().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope
@@ -27690,6 +27791,11 @@ export const MJSearchScopeExternalIndexSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RequiredMetadataKeys: z.string().nullable().describe(`
+        * * Field Name: RequiredMetadataKeys
+        * * Display Name: Required Metadata Keys
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of metadata key names the rendered MetadataFilter MUST constrain on for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if a key is missing the lane is SKIPPED rather than queried, because a partially-rendered filter silently widens the search. This also documents the ingest contract — these are the labels the writer must stamp on every document in the index, since a filter on a key that was never written either matches nothing or (on providers that ignore unknown keys) matches everything. NULL = no contract declared, which is the pre-migration behaviour.`),
     SearchScope: z.string().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope
@@ -27751,6 +27857,21 @@ export const MJSearchScopePermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StartAt: z.date().nullable().describe(`
+        * * Field Name: StartAt
+        * * Display Name: Start At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional start of the window in which this grant applies. NULL = no lower bound. SearchScopePermission was the only member of this family without a time window, so temporary grants previously needed a bespoke mechanism.`),
+    EndAt: z.date().nullable().describe(`
+        * * Field Name: EndAt
+        * * Display Name: End At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional end of the window in which this grant applies. NULL = no upper bound.`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Optional tenant this grant is limited to, matched against SearchContext.PrimaryScopeRecordID at search time and type-checkable against the scope's own PrimaryScopeEntityID. NULL = applies to every tenant, which is the pre-migration behaviour for all existing rows. Deliberately NOT called OrganizationID: MJ is domain-agnostic and a scope's primary scope may be a Company, Client or Practice, so this reuses the existing primary-scope concept rather than inventing a parallel tenancy column.`),
     SearchScope: z.string().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
@@ -44327,24 +44448,6 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
-    * * Field Name: SystemPrompt
-    * * Display Name: System Prompt
-    * * SQL Data Type: nvarchar(255)
-    */
-    get SystemPrompt(): string | null {
-        return this.Get('SystemPrompt');
-    }
-
-    /**
-    * * Field Name: DefaultStorageAccount
-    * * Display Name: Default Storage Account
-    * * SQL Data Type: nvarchar(200)
-    */
-    get DefaultStorageAccount(): string | null {
-        return this.Get('DefaultStorageAccount');
-    }
-
-    /**
     * * Field Name: ContextCompressionMessageThreshold
     * * Display Name: Context Compression Message Threshold
     * * SQL Data Type: int
@@ -44437,6 +44540,24 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
     set ConversationSummaryPromptID(value: string | null) {
         this.Set('ConversationSummaryPromptID', value);
+    }
+
+    /**
+    * * Field Name: SystemPrompt
+    * * Display Name: System Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SystemPrompt(): string | null {
+        return this.Get('SystemPrompt');
+    }
+
+    /**
+    * * Field Name: DefaultStorageAccount
+    * * Display Name: Default Storage Account
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultStorageAccount(): string | null {
+        return this.Get('DefaultStorageAccount');
     }
 
     /**
@@ -45809,6 +45930,59 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: ContextWindowMaxTokens
+    * * Display Name: Context Window Max Tokens
+    * * SQL Data Type: int
+    * * Description: Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.
+    */
+    get ContextWindowMaxTokens(): number | null {
+        return this.Get('ContextWindowMaxTokens');
+    }
+    set ContextWindowMaxTokens(value: number | null) {
+        this.Set('ContextWindowMaxTokens', value);
+    }
+
+    /**
+    * * Field Name: CompactionTriggerPercent
+    * * Display Name: Compaction Trigger Percent
+    * * SQL Data Type: int
+    * * Description: Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.
+    */
+    get CompactionTriggerPercent(): number | null {
+        return this.Get('CompactionTriggerPercent');
+    }
+    set CompactionTriggerPercent(value: number | null) {
+        this.Set('CompactionTriggerPercent', value);
+    }
+
+    /**
+    * * Field Name: CompactionTargetPercent
+    * * Display Name: Compaction Target Percent
+    * * SQL Data Type: int
+    * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.
+    */
+    get CompactionTargetPercent(): number | null {
+        return this.Get('CompactionTargetPercent');
+    }
+    set CompactionTargetPercent(value: number | null) {
+        this.Set('CompactionTargetPercent', value);
+    }
+
+    /**
+    * * Field Name: ConversationSummaryPromptID
+    * * Display Name: Conversation Summary Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.
+    */
+    get ConversationSummaryPromptID(): string | null {
+        return this.Get('ConversationSummaryPromptID');
+    }
+    set ConversationSummaryPromptID(value: string | null) {
+        this.Set('ConversationSummaryPromptID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -45908,6 +46082,15 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: ConversationSummaryPrompt
+    * * Display Name: Conversation Summary Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ConversationSummaryPrompt(): string | null {
+        return this.Get('ConversationSummaryPrompt');
+    }
+
+    /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
@@ -45923,68 +46106,6 @@ if this limit is exceeded.
     */
     get RootDefaultCoAgentID(): string | null {
         return this.Get('RootDefaultCoAgentID');
-    }
-
-    /**
-    * * Field Name: ContextWindowMaxTokens
-    * * Display Name: Context Window Max Tokens
-    * * SQL Data Type: int
-    * * Description: Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.
-    */
-    get ContextWindowMaxTokens(): number | null {
-        return this.Get('ContextWindowMaxTokens');
-    }
-    set ContextWindowMaxTokens(value: number | null) {
-        this.Set('ContextWindowMaxTokens', value);
-    }
-
-    /**
-    * * Field Name: CompactionTriggerPercent
-    * * Display Name: Compaction Trigger Percent
-    * * SQL Data Type: int
-    * * Description: Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.
-    */
-    get CompactionTriggerPercent(): number | null {
-        return this.Get('CompactionTriggerPercent');
-    }
-    set CompactionTriggerPercent(value: number | null) {
-        this.Set('CompactionTriggerPercent', value);
-    }
-
-    /**
-    * * Field Name: CompactionTargetPercent
-    * * Display Name: Compaction Target Percent
-    * * SQL Data Type: int
-    * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.
-    */
-    get CompactionTargetPercent(): number | null {
-        return this.Get('CompactionTargetPercent');
-    }
-    set CompactionTargetPercent(value: number | null) {
-        this.Set('CompactionTargetPercent', value);
-    }
-
-    /**
-    * * Field Name: ConversationSummaryPromptID
-    * * Display Name: Conversation Summary Prompt ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
-    * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.
-    */
-    get ConversationSummaryPromptID(): string | null {
-        return this.Get('ConversationSummaryPromptID');
-    }
-    set ConversationSummaryPromptID(value: string | null) {
-        this.Set('ConversationSummaryPromptID', value);
-    }
-
-    /**
-    * * Field Name: ConversationSummaryPrompt
-    * * Display Name: Conversation Summary Prompt
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ConversationSummaryPrompt(): string | null {
-        return this.Get('ConversationSummaryPrompt');
     }
 }
 
@@ -52005,15 +52126,6 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
-    * * Field Name: AgentRun
-    * * Display Name: Agent Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get AgentRun(): string | null {
-        return this.Get('AgentRun');
-    }
-
-    /**
     * * Field Name: OriginalModel
     * * Display Name: Original Model
     * * SQL Data Type: nvarchar(50)
@@ -54126,6 +54238,188 @@ export class MJAISkillPermissionEntity extends BaseEntity<MJAISkillPermissionEnt
 
 
 /**
+ * MJ: AI Skill Search Scopes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AISkillSearchScope
+ * * Base View: vwAISkillSearchScopes
+ * * @description Search Scopes an AI Skill may reach when activated, honoured when AISkill.SearchScopeAccess = 'Assigned'. Mirrors AIAgentSearchScope: Status plus an optional StartAt/EndAt window time-box a grant, and Priority/IsDefault pick among several. An empty table means no skill grants any scope - the pre-migration behaviour.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Skill Search Scopes')
+export class MJAISkillSearchScopeEntity extends BaseEntity<MJAISkillSearchScopeEntityType> {
+    /**
+    * Loads the MJ: AI Skill Search Scopes record from the database
+    * @param ID: string - primary key value to load the MJ: AI Skill Search Scopes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAISkillSearchScopeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SkillID
+    * * Display Name: Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    * * Description: The skill this grant belongs to.
+    */
+    get SkillID(): string {
+        return this.Get('SkillID');
+    }
+    set SkillID(value: string) {
+        this.Set('SkillID', value);
+    }
+
+    /**
+    * * Field Name: SearchScopeID
+    * * Display Name: Search Scope ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+    * * Description: The Search Scope this skill may reach.
+    */
+    get SearchScopeID(): string {
+        return this.Get('SearchScopeID');
+    }
+    set SearchScopeID(value: string) {
+        this.Set('SearchScopeID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Active or Inactive. Inactive rows are ignored during resolution.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartAt
+    * * Display Name: Start At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional start of the window in which this grant is honoured. NULL = no lower bound. Evaluated against the current time on every resolution, so a window opening or closing needs no cache invalidation.
+    */
+    get StartAt(): Date | null {
+        return this.Get('StartAt');
+    }
+    set StartAt(value: Date | null) {
+        this.Set('StartAt', value);
+    }
+
+    /**
+    * * Field Name: EndAt
+    * * Display Name: End At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional end of the window in which this grant is honoured. NULL = no upper bound.
+    */
+    get EndAt(): Date | null {
+        return this.Get('EndAt');
+    }
+    set EndAt(value: Date | null) {
+        this.Set('EndAt', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Description: Lower numbers win when several granted scopes are candidates and none is marked IsDefault.
+    */
+    get Priority(): number | null {
+        return this.Get('Priority');
+    }
+    set Priority(value: number | null) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set, this scope is chosen for the skill ahead of Priority ordering.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Skill
+    * * Display Name: Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Skill(): string {
+        return this.Get('Skill');
+    }
+
+    /**
+    * * Field Name: SearchScope
+    * * Display Name: Search Scope
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SearchScope(): string {
+        return this.Get('SearchScope');
+    }
+}
+
+
+/**
  * MJ: AI Skill Sub Agents - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AISkillSubAgent
@@ -54424,6 +54718,24 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
     }
     set ActivationMode(value: 'Auto' | 'RequestedOnly') {
         this.Set('ActivationMode', value);
+    }
+
+    /**
+    * * Field Name: SearchScopeAccess
+    * * Display Name: Search Scope Access
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Assigned
+    *   * None
+    * * Description: Which Search Scopes this skill may reach when activated. None = grants no retrieval scope; Assigned = only scopes listed in AISkillSearchScope; All = any active scope. NULL behaves as None so existing skills are unaffected. Mirrors AIAgent.SearchScopeAccess so a skill and an agent are interchangeable principals to SearchScopePermissionResolver.
+    */
+    get SearchScopeAccess(): 'All' | 'Assigned' | 'None' | null {
+        return this.Get('SearchScopeAccess');
+    }
+    set SearchScopeAccess(value: 'All' | 'Assigned' | 'None' | null) {
+        this.Set('SearchScopeAccess', value);
     }
 
     /**
@@ -65713,6 +66025,46 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     }
 
     /**
+    * * Field Name: VectorRecordID
+    * * Display Name: Vector Record ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.
+    */
+    get VectorRecordID(): string | null {
+        return this.Get('VectorRecordID');
+    }
+    set VectorRecordID(value: string | null) {
+        this.Set('VectorRecordID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent Content
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+    * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: DisplayLink
+    * * Display Name: Display Link
+    * * SQL Data Type: nvarchar(2000)
+    * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.
+    */
+    get DisplayLink(): string | null {
+        return this.Get('DisplayLink');
+    }
+    set DisplayLink(value: string | null) {
+        this.Set('DisplayLink', value);
+    }
+
+    /**
     * * Field Name: ContentSource
     * * Display Name: Content Source Name
     * * SQL Data Type: nvarchar(255)
@@ -65764,46 +66116,6 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     */
     get EmbeddingModel(): string | null {
         return this.Get('EmbeddingModel');
-    }
-
-    /**
-    * * Field Name: VectorRecordID
-    * * Display Name: Vector Record ID
-    * * SQL Data Type: nvarchar(100)
-    * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.
-    */
-    get VectorRecordID(): string | null {
-        return this.Get('VectorRecordID');
-    }
-    set VectorRecordID(value: string | null) {
-        this.Set('VectorRecordID', value);
-    }
-
-    /**
-    * * Field Name: ParentID
-    * * Display Name: Parent Content
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
-    * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.
-    */
-    get ParentID(): string | null {
-        return this.Get('ParentID');
-    }
-    set ParentID(value: string | null) {
-        this.Set('ParentID', value);
-    }
-
-    /**
-    * * Field Name: DisplayLink
-    * * Display Name: Display Link
-    * * SQL Data Type: nvarchar(2000)
-    * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.
-    */
-    get DisplayLink(): string | null {
-        return this.Get('DisplayLink');
-    }
-    set DisplayLink(value: string | null) {
-        this.Set('DisplayLink', value);
     }
 
     /**
@@ -67097,9 +67409,13 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
 }
 
 /**
- * Controls which keys land in a content vector's metadata. Mirrors the entity-vectorization
- * pipeline's metadata-control structure (field strategy, per-field overrides, storage-type
- * coercion, truncation, opt-out toggles), adapted to content-item vectors.
+ * Controls which keys land in a content vector's metadata. Vector metadata is expensive in a
+ * vector database (storage + query performance). This mirrors the entity-vectorization pipeline's
+ * metadata-control structure (field strategy, per-field overrides, storage-type coercion,
+ * truncation, opt-out toggles), adapted to content-item vectors.
+ *
+ * Field values are read from the parent ContentItem. The identity keys (Entity + RecordID, plus
+ * ContentItemID / Sequence for chunk vectors) are managed as system keys — see FieldStrategy.
  */
 export interface MJContentSourceEntity_IContentSourceVectorMetadataConfig {
     /**
@@ -69683,6 +69999,17 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     }
 
     /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+
+    /**
     * * Field Name: Conversation
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
@@ -69752,26 +70079,6 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: Sequence
-    * * Display Name: Sequence
-    * * SQL Data Type: int
-    * * Default Value: 0
-    * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.
-    */
-    get Sequence(): number {
-        return this.Get('Sequence');
-    }
-
-    /**
-    * * Field Name: SummaryPromptRun
-    * * Display Name: Summary Prompt Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get SummaryPromptRun(): string | null {
-        return this.Get('SummaryPromptRun');
     }
 }
 
@@ -104914,6 +105221,46 @@ export class MJSearchExecutionLogEntity extends BaseEntity<MJSearchExecutionLogE
     }
 
     /**
+    * * Field Name: AISkillID
+    * * Display Name: AI Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    * * Description: The AI Skill on whose behalf this search ran, or NULL for a search with no active skill. Mirrors AIAgentID: since a skill is a search principal in its own right (AISkill.SearchScopeAccess plus MJ: AI Skill Search Scopes rows can reach a scope the user's own roles do not grant), the log must record which skill was active or the entitlement decision cannot be reconstructed.
+    */
+    get AISkillID(): string | null {
+        return this.Get('AISkillID');
+    }
+    set AISkillID(value: string | null) {
+        this.Set('AISkillID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: The tenant this search ran for, taken from SearchContext.PrimaryScopeRecordID. Lets a multi-tenant deployment partition, filter and retain search audit history per customer. NULL for untenanted searches. Named for the existing primary-scope concept rather than OrganizationID because a scope's primary scope may be a Company, Client or Practice.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: ScopeDecisionJSON
+    * * Display Name: Scope Decision JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Serialized ScopeExplanation recording WHY this search could reach what it reached: the entitlement decision and the grant that produced it, every dimension with its provenance (CallerSupplied / ServerDerived / Default / DiscardedCaller / Absent), and each lane's rendered filter with its active-or-skipped status and reason. Identical in shape to the value returned by SearchEngine.ExplainScope(), so the dry-run an administrator previews before running a search is the same structure the audit log stores afterwards. NULL when the engine did not capture a decision (older writers, or a failure before scope resolution).
+    */
+    get ScopeDecisionJSON(): string | null {
+        return this.Get('ScopeDecisionJSON');
+    }
+    set ScopeDecisionJSON(value: string | null) {
+        this.Set('ScopeDecisionJSON', value);
+    }
+
+    /**
     * * Field Name: SearchScope
     * * Display Name: Search Scope Name
     * * SQL Data Type: nvarchar(200)
@@ -104938,6 +105285,15 @@ export class MJSearchExecutionLogEntity extends BaseEntity<MJSearchExecutionLogE
     */
     get AIAgent(): string | null {
         return this.Get('AIAgent');
+    }
+
+    /**
+    * * Field Name: AISkill
+    * * Display Name: AI Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AISkill(): string | null {
+        return this.Get('AISkill');
     }
 }
 
@@ -105328,6 +105684,19 @@ export class MJSearchScopeEntityEntity extends BaseEntity<MJSearchScopeEntityEnt
     }
 
     /**
+    * * Field Name: RequiredMetadataKeys
+    * * Display Name: Required Metadata Keys
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of column or alias names the rendered ExtraFilter MUST reference for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if one is missing the lane is SKIPPED rather than queried, because a partially-rendered filter (an {% if %} clause dropped when its dimension was absent or discarded) is still valid SQL and silently widens the search. Same concept and same engine check as SearchScopeExternalIndex.RequiredMetadataKeys, applied to the SQL lane. NULL = no contract declared, which is the pre-migration behaviour.
+    */
+    get RequiredMetadataKeys(): string | null {
+        return this.Get('RequiredMetadataKeys');
+    }
+    set RequiredMetadataKeys(value: string | null) {
+        this.Set('RequiredMetadataKeys', value);
+    }
+
+    /**
     * * Field Name: SearchScope
     * * Display Name: Search Scope
     * * SQL Data Type: nvarchar(200)
@@ -105541,6 +105910,19 @@ export class MJSearchScopeExternalIndexEntity extends BaseEntity<MJSearchScopeEx
     }
 
     /**
+    * * Field Name: RequiredMetadataKeys
+    * * Display Name: Required Metadata Keys
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of metadata key names the rendered MetadataFilter MUST constrain on for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if a key is missing the lane is SKIPPED rather than queried, because a partially-rendered filter silently widens the search. This also documents the ingest contract — these are the labels the writer must stamp on every document in the index, since a filter on a key that was never written either matches nothing or (on providers that ignore unknown keys) matches everything. NULL = no contract declared, which is the pre-migration behaviour.
+    */
+    get RequiredMetadataKeys(): string | null {
+        return this.Get('RequiredMetadataKeys');
+    }
+    set RequiredMetadataKeys(value: string | null) {
+        this.Set('RequiredMetadataKeys', value);
+    }
+
+    /**
     * * Field Name: SearchScope
     * * Display Name: Search Scope
     * * SQL Data Type: nvarchar(200)
@@ -105725,6 +106107,45 @@ export class MJSearchScopePermissionEntity extends BaseEntity<MJSearchScopePermi
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: StartAt
+    * * Display Name: Start At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional start of the window in which this grant applies. NULL = no lower bound. SearchScopePermission was the only member of this family without a time window, so temporary grants previously needed a bespoke mechanism.
+    */
+    get StartAt(): Date | null {
+        return this.Get('StartAt');
+    }
+    set StartAt(value: Date | null) {
+        this.Set('StartAt', value);
+    }
+
+    /**
+    * * Field Name: EndAt
+    * * Display Name: End At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional end of the window in which this grant applies. NULL = no upper bound.
+    */
+    get EndAt(): Date | null {
+        return this.Get('EndAt');
+    }
+    set EndAt(value: Date | null) {
+        this.Set('EndAt', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Optional tenant this grant is limited to, matched against SearchContext.PrimaryScopeRecordID at search time and type-checkable against the scope's own PrimaryScopeEntityID. NULL = applies to every tenant, which is the pre-migration behaviour for all existing rows. Deliberately NOT called OrganizationID: MJ is domain-agnostic and a scope's primary scope may be a Company, Client or Practice, so this reuses the existing primary-scope concept rather than inventing a parallel tenancy column.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
     }
 
     /**
