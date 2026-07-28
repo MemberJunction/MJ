@@ -174,7 +174,7 @@ describe('AddEntityPackageMapping — comma safety (#2975)', () => {
         const written = writtenContent();
         assertValidConfig(written);
         expect(written).toMatch(/},\s*entityPackageName\s*:/);
-        expect(written).toContain("'__mj_BizAppsCommon': '@mj-biz-apps/common-entities'");
+        expect(written).toContain('"__mj_BizAppsCommon": "@mj-biz-apps/common-entities"');
     });
 });
 
@@ -198,7 +198,7 @@ describe('Full install config write (bizapps-common shape) stays valid JS', () =
         expect(afterEntity).toContain('dynamicPackages');
         expect(afterEntity).toContain('entityPackageName');
         expect(afterEntity).toContain('@mj-biz-apps/common-server');
-        expect(afterEntity).toContain("'__mj_BizAppsCommon': '@mj-biz-apps/common-entities'");
+        expect(afterEntity).toContain('"__mj_BizAppsCommon": "@mj-biz-apps/common-entities"');
     });
 });
 
