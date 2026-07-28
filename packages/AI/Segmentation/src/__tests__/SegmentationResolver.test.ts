@@ -13,7 +13,7 @@ describe('segmenter registration', () => {
 
     it('resolves every built-in segmenter through the class factory', () => {
         LoadContentSegmenters();
-        for (const key of ['StructuralText', 'Transcript', 'FixedWindow', 'SemanticText']) {
+        for (const key of ['StructuralText', 'Transcript', 'FixedWindow', 'SemanticText', 'AdaptiveBoundary', 'PagedContent']) {
             const instance = BaseSegmenter.Resolve(key);
             expect(instance, `expected '${key}' to be registered`).not.toBeNull();
             expect(instance?.Key).toBe(key);
@@ -48,6 +48,10 @@ describe('SuggestSegmenterKey', () => {
             Text: 'also has text',
         });
         expect(key).toBe('Transcript');
+    });
+
+    it('prefers paged segmentation when pages are supplied', () => {
+        expect(SuggestSegmenterKey({ Pages: [{ PageNumber: 1, Text: 'p1' }], Text: 'also text' })).toBe('PagedContent');
     });
 
     it('prefers structural segmentation for text', () => {

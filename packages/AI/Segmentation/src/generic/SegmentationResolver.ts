@@ -9,6 +9,10 @@ import { BaseSegmenter } from './BaseSegmenter';
 import { FIXED_WINDOW_SEGMENTER_KEY, FixedWindowSegmenter } from './FixedWindowSegmenter';
 import { STRUCTURAL_TEXT_SEGMENTER_KEY } from './StructuralTextSegmenter';
 import { TRANSCRIPT_SEGMENTER_KEY } from './TranscriptSegmenter';
+import { PAGED_CONTENT_SEGMENTER_KEY } from './PagedContentSegmenter';
+import { BaseContentCleaner } from './BaseContentCleaner';
+import { HTML_CONTENT_CLEANER_KEY } from './HtmlContentCleaner';
+import { PLAIN_TEXT_CONTENT_CLEANER_KEY, PlainTextContentCleaner } from './PlainTextContentCleaner';
 import { SegmentationParams } from './Segmentation.types';
 
 /**
@@ -45,8 +49,40 @@ export function SuggestSegmenterKey(params: SegmentationParams): string {
     if (params.Cues && params.Cues.length > 0) {
         return TRANSCRIPT_SEGMENTER_KEY;
     }
+    if (params.Pages && params.Pages.length > 0) {
+        return PAGED_CONTENT_SEGMENTER_KEY;
+    }
     if (params.Text && params.Text.trim().length > 0) {
         return STRUCTURAL_TEXT_SEGMENTER_KEY;
     }
     return FIXED_WINDOW_SEGMENTER_KEY;
+}
+
+/**
+ * Resolve a content cleaner by registration key, falling back safely.
+ *
+ * Mirrors {@link ResolveSegmenter}: an unresolvable key logs and degrades to the
+ * plain-text cleaner (whitespace normalization only) rather than throwing mid-ingestion.
+ */
+export function ResolveContentCleaner(key?: string, fallbackKey?: string): BaseContentCleaner {
+    const requested = key ? BaseContentCleaner.Resolve(key) : null;
+    if (requested) {
+        return requested;
+    }
+    if (key) {
+        LogStatus(`[Segmentation] Content cleaner '${key}' is not registered — falling back.`);
+    }
+    const fallback = fallbackKey ? BaseContentCleaner.Resolve(fallbackKey) : null;
+    return fallback ?? BaseContentCleaner.Resolve(PLAIN_TEXT_CONTENT_CLEANER_KEY) ?? new PlainTextContentCleaner();
+}
+
+/**
+ * Suggest a cleaner for a piece of content based on its mime type.
+ *
+ * HTML is the only format that genuinely needs structural cleaning; everything else is
+ * already text and only wants whitespace normalization.
+ */
+export function SuggestCleanerKey(mimeType?: string): string {
+    const mime = (mimeType ?? '').toLowerCase();
+    return mime.includes('html') || mime.includes('xml') ? HTML_CONTENT_CLEANER_KEY : PLAIN_TEXT_CONTENT_CLEANER_KEY;
 }

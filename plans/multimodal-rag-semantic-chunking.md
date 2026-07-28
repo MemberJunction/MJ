@@ -175,9 +175,14 @@ the schema, on top of #3275 rather than against it.
 **4A — Chunk schema** (fold into #3275, one migration): `Modality`, `StartMs`/`EndMs`,
 `StartOffset`/`EndOffset`, `PageNumber`, `Description`, `Transcript`, `SegmentTitle`,
 `ParentChunkID`, and **relax `Text` to nullable**. `VectorRecordID` stays a single column —
-one chunk, one vector (§2.1) — with `Description`/`Transcript` as text hydrated at retrieval and
-optionally mirrored (truncated) into vector metadata. Add lexical indexing over
-`Description`/`Transcript` so a text query can reach a media chunk without a description vector.
+one chunk, one vector (§2.1).
+
+**`Description` and `Transcript` are columns on `Content Item Chunks`** — that is their home,
+and it is what makes them hydratable at retrieval, rerankable, and indexable by lexical and
+external search. Vector metadata gets only a **short summary plus structured fields**
+(`SegmentTitle`, `StartMs`/`EndMs`, `Speaker`, `Modality`, `PageNumber`); provider metadata is
+size-capped and is filter/payload rather than ranked full-text, so a full transcript does not
+belong there.
 
 **4B — Autotagger integration**: ✅ **done (behaviour-preserving).** `buildEmbeddingChunks` and
 `chunkExtractedText` now both resolve a segmenter through a shared `segmentTextForChunking` seam,

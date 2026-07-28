@@ -123,6 +123,23 @@ export interface RawSegment {
 }
 
 /**
+ * One page of a paginated source (PDF, slide deck).
+ *
+ * A page may carry extracted text, a media reference to the rendered page, or both —
+ * the both case is what lets a page be embedded natively by a multimodal model (preserving
+ * tables and charts that text extraction flattens) while its text remains available for
+ * lexical search.
+ */
+export interface ContentPage {
+    /** One-based page number. */
+    PageNumber: number;
+    /** Extracted text for this page. */
+    Text?: string;
+    /** Reference to the rendered page image, when available. */
+    Media?: MediaReference;
+}
+
+/**
  * Common knobs understood by every segmenter. Concrete segmenters extend this
  * with their own strongly-typed options rather than accepting a loose bag.
  */
@@ -154,6 +171,8 @@ export interface SegmentationParams<TOptions extends SegmentationOptions = Segme
     Media?: MediaReference;
     /** Timed transcript cues, when available (ASR output or MJ realtime capture). */
     Cues?: TranscriptCue[];
+    /** Pages of a paginated source, for page-aware segmentation. */
+    Pages?: ContentPage[];
     /** Total duration of the source asset in milliseconds, for AV content. */
     DurationMs?: number;
     /** Mime type of the source asset — lets a segmenter pick a structure parser. */

@@ -83,8 +83,68 @@ ALTER TABLE ${flyway:defaultSchema}.ContentItemChunk
 GO
 
 -------------------------------------------------------------------------------
+-- ContentSource / ContentType — strategy selection
+--
+-- Which cleaning and segmentation strategies a source uses is a property of the
+-- source, not of MemberJunction: the right HTML selector depends on the site's
+-- template, and the right chunking strategy depends on what the content is. These
+-- mirror the existing EmbeddingModelID / VectorIndexID pair, including its
+-- resolution order — ContentSource overrides ContentType, which falls back to a
+-- built-in default.
+--
+-- The keys live in columns (discoverable, filterable, visible in a grid); their
+-- OPTIONS — CSS selectors, target sizes — ride the existing Configuration JSONType
+-- alongside VectorIDStrategy and ChunkTextStorage.
+-------------------------------------------------------------------------------
+ALTER TABLE ${flyway:defaultSchema}.ContentSource ADD
+    SegmenterKey NVARCHAR(100) NULL,
+    CleanerKey NVARCHAR(100) NULL;
+GO
+
+ALTER TABLE ${flyway:defaultSchema}.ContentType ADD
+    SegmenterKey NVARCHAR(100) NULL,
+    CleanerKey NVARCHAR(100) NULL;
+GO
+
+-------------------------------------------------------------------------------
 -- Extended properties (descriptions consumed by CodeGen)
 -------------------------------------------------------------------------------
+
+-- ContentSource.SegmenterKey
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Registration key of the segmentation strategy used to split this source''s content into embeddable chunks — for example StructuralText (document headings), AdaptiveBoundary (target size closing on the nearest natural break), SemanticText (LLM-detected topic boundaries), Transcript (audio/video chapters), PagedContent (one segment per page), or FixedWindow (uniform windows). NULL falls back to the Content Type''s value, then to a built-in default.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'ContentSource',
+    @level2type = N'COLUMN', @level2name = N'SegmenterKey';
+GO
+
+-- ContentSource.CleanerKey
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Registration key of the content-cleaning strategy applied to this source before segmentation — for example Html (CSS-selector-driven extraction that drops navigation, sidebars, and advertising) or PlainText (whitespace normalization only). Cleaning is separate from segmentation because the two change for different reasons: a new site template needs new selectors, not a new chunking strategy. NULL falls back to the Content Type''s value, then to a default inferred from the content''s mime type.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'ContentSource',
+    @level2type = N'COLUMN', @level2name = N'CleanerKey';
+GO
+
+-- ContentType.SegmenterKey
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Default segmentation strategy for content of this type, used when a Content Source does not specify its own SegmenterKey. See ContentSource.SegmenterKey for the available strategies.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'ContentType',
+    @level2type = N'COLUMN', @level2name = N'SegmenterKey';
+GO
+
+-- ContentType.CleanerKey
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Default content-cleaning strategy for content of this type, used when a Content Source does not specify its own CleanerKey. See ContentSource.CleanerKey.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'ContentType',
+    @level2type = N'COLUMN', @level2name = N'CleanerKey';
+GO
 
 -- ContentItemChunk.Text — description replaced: the column is now nullable, because a
 -- media-only segment has no text of its own.

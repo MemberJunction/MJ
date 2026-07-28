@@ -76,9 +76,27 @@ hierarchy: **a real transcript beats document structure, which beats uniform win
 | Key | Class | Model calls | Best for |
 |---|---|---|---|
 | `StructuralText` | `StructuralTextSegmenter` | none | Documents with headings — markdown, HTML, converted PDFs. **The text default.** |
-| `SemanticText` | `SemanticTextSegmenter` | 1 per document | Prose with no structure — transcripts, reports, long articles. |
+| `AdaptiveBoundary` | `AdaptiveBoundarySegmenter` | none | Prose without headings. Targets a size and closes on the nearest natural break. |
+| `SemanticText` | `SemanticTextSegmenter` | 1 per document | Prose where topics shift with no structural signal at all. |
 | `Transcript` | `TranscriptSegmenter` | none | Audio/video with timed cues. Produces **chapters**. |
+| `PagedContent` | `PagedContentSegmenter` | none | PDFs and slide decks — one segment per page, with `PageNumber`. |
 | `FixedWindow` | `FixedWindowSegmenter` | none | Universal fallback — logs, machine text, untranscribed media. |
+
+### Size chunks to your queries, not to your model
+
+The embedding model's context window is an **upper bound, not a target**. A chunk should be
+roughly as much content as a good answer to a typical query, so that a matching chunk is
+mostly signal. If your queries are short paraphrases, smaller chunks retrieve better; if a
+downstream summarizer needs context, larger ones do. Deriving chunk size from
+`MAX_EMBEDDING_TOKENS` is the most common way to get retrieval quietly wrong.
+
+`AdaptiveBoundary` makes this explicit: `TargetTokens` is the goal, `MaxSegmentTokens` is
+only the ceiling. It escalates through boundary quality as it approaches the target —
+paragraph, then sentence, then word, then a hard cut — so segment sizes **vary on purpose**.
+A slightly short segment ending at a paragraph is worth more at retrieval time than an
+exactly-sized one ending mid-clause. It also declines to split at all when the whole text is
+only modestly over target (`NoSplitPercent`), which avoids one full chunk plus a two-sentence
+runt with no context.
 
 Selection is metadata-driven and degrades rather than throws:
 
@@ -106,6 +124,43 @@ return `Success: false`, matching `RunView` and `BaseEntity.Save()`.
 > pattern used by `LoadExpoPushProvider`, `LoadMJComputerUse`, and other factory-resolved packages.
 
 ---
+
+## Cleaning: the stage before segmentation
+
+Segmenting dirty content just produces well-bounded garbage. Real-world source pages are
+mostly *not* content — navigation, sidebars, cookie banners, share widgets, related-article
+rails, and advertising typically outweigh the article. Because that chrome repeats across
+every page of a site, it produces many near-identical chunks that crowd out real answers.
+
+Cleaning is therefore its own plug-in point, resolved the same way segmenters are:
+
+```typescript
+import { ResolveContentCleaner, SuggestCleanerKey } from '@memberjunction/ai-segmentation';
+
+const cleaner = ResolveContentCleaner(source.CleanerKey, SuggestCleanerKey(mimeType));
+const cleaned = cleaner.Clean({ Content: rawHtml, MimeType: mimeType, Options: cleaningOptions });
+// cleaned.Content feeds the segmenter; cleaned.CharactersRemoved is a cheap "is my selector wrong?" signal
+```
+
+| Key | Best for |
+|---|---|
+| `Html` | Markup. CSS-selector-driven extraction with a sensible default exclusion list. |
+| `PlainText` | Everything else — whitespace normalization and optional truncation only. |
+
+**`IncludeSelectors` is the highest-leverage knob.** Naming the one element that holds the
+content (`.article-body`, `main`, `#post`) discards everything else in one stroke, without
+enumerating what to drop. `ExcludeSelectors` then handles whatever survives inside it. Both
+are **per-source** configuration, because the right selector is a property of the site's
+template, not of MemberJunction.
+
+Two deliberate safety behaviours: an invalid selector is skipped rather than failing the
+whole clean, and if cleaning would remove *everything* the original content is returned with
+a warning — over-including beats silently dropping a document.
+
+Cleaning and segmentation are separate because they change for different reasons: a new CMS
+template needs new selectors, not a new chunking strategy. Splitting them also means the
+rules apply once and benefit every consumer — embedding chunks, tagging chunks, and
+full-text indexing alike.
 
 ## Two chunk sites, two budgets — do not unify them
 
@@ -157,6 +212,20 @@ graph LR
 This keeps `VectorRecordID` **1:1 with the chunk row**, so the chunk-identity contract, soft-delete,
 and purge machinery all carry over from text unchanged.
 
+### Which text is embedded, and which isn't
+
+A precise rule, because the columns look similar and guessing wrong is expensive:
+
+| Field | Embedded? | Purpose |
+|---|---|---|
+| `Text` | **Yes** — it *is* the embedded payload | For a media segment carrying both, the text is **fused with the media into one vector** (multimodal models accept interleaved text + media — an image and its caption become a single embedding). |
+| `Description` | No | Readable representation for agents, reranking, and lexical search. |
+| `Transcript` | No | Verbatim record; lexically searchable. |
+
+So `Modality: 'multimodal'` means exactly this: `Text` **and** `Media` on the same segment,
+fused into one vector. `Description`/`Transcript` never enter a vector — that is what keeps
+`VectorRecordID` 1:1 with the chunk row.
+
 **What each representation is for:**
 
 - **Native vector** — retrieval. What the multimodal model actually indexes.
@@ -194,6 +263,23 @@ after fusion so one chapter cannot surface twice.
 > **Cost note.** Embedding a ~200-token summary with a text model is a rounding error next to the
 > video embedding already paid for. C doubles *vector rows*, not spend; its real cost is schema and
 > retrieval complexity.
+
+### Reaching media chunks from non-semantic search
+
+Because `Description`/`Transcript` are plain columns, they are indexable by everything that
+isn't a vector — DB full-text search, and the external indexes MJ already queries (Azure AI
+Search, Elasticsearch, OpenSearch, Typesense). A recording becomes findable by keyword the
+same way a document is.
+
+`ExternalHitMapper` in `@memberjunction/search-engine` is the shared field mapping all four
+external providers use. It checks `description` and `transcript` when resolving a hit's
+snippet (after the conventional `content`/`body`/`text`), so a media chunk returns readable
+text rather than an empty snippet. It also recovers **chunk provenance** — `chunkId`,
+`modality`, `startMs`/`endMs`, `pageNumber` — into the result's `RawMetadata` when the
+indexing pipeline emits those fields, which is what lets a hit deep-link to a moment in a
+recording or a page in a PDF instead of just naming the asset. Field names are matched in
+camelCase, PascalCase, and snake_case, and numeric strings are coerced, since external
+indexes are populated outside MJ and their conventions vary.
 
 ### Consider transcript-only first
 

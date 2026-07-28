@@ -302,7 +302,8 @@ export abstract class BaseSegmenter {
     private hasPayload(params: SegmentationParams): boolean {
         const hasText = !!params.Text && params.Text.trim().length > 0;
         const hasCues = !!params.Cues && params.Cues.length > 0;
-        return hasText || hasCues || !!params.Media;
+        const hasPages = !!params.Pages && params.Pages.length > 0;
+        return hasText || hasCues || hasPages || !!params.Media;
     }
 
     /** True when a raw segment carries text or media. */
