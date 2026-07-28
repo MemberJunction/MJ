@@ -34308,8 +34308,8 @@ export class MJContentItemChunk_ {
     @Field(() => Int, {description: `Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.`}) 
     Sequence: number;
         
-    @Field({description: `The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector.`}) 
-    Text: string;
+    @Field({nullable: true, description: `The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector. NULL for media-only segments (for example an image, or a video window with no transcript), where the embedded payload is the media itself and any readable representation lives in Description/Transcript.`}) 
+    Text?: string;
         
     @Field({nullable: true, description: `The identifier of this chunk's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the chunk's embedding under. Provides traceability from the chunk back to its stored vector.`}) 
     @MaxLength(100)
@@ -34342,10 +34342,54 @@ export class MJContentItemChunk_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `The modality of this chunk's embedded payload: text (default), image, audio, video, or multimodal (text and media fused into a single vector). Determines which vector index the chunk's embedding belongs to, since a multimodal embedding model produces vectors of a different dimension than a text model, and is used at retrieval time to merge results per modality rather than taking a single global top-k.`}) 
+    @MaxLength(20)
+    Modality: string;
+        
+    @Field(() => Int, {nullable: true, description: `Inclusive character offset where this chunk begins within the parent Content Item's extracted text. Together with EndOffset this is the provenance link that resolves a search hit back to the exact passage in the source document. NULL for media segments, which are positioned by StartMs/EndMs instead.`}) 
+    StartOffset?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.`}) 
+    EndOffset?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.`}) 
+    StartMs?: number;
+        
+    @Field(() => Int, {nullable: true, description: `End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.`}) 
+    EndMs?: number;
+        
+    @Field(() => Int, {nullable: true, description: `One-based page number this chunk came from, for paginated sources such as PDFs or slide decks. Provides citation-grade provenance alongside the character offsets. NULL when the source is not paginated.`}) 
+    PageNumber?: number;
+        
+    @Field({nullable: true, description: `Human-readable label for this segment — a document heading for structure-based segmentation, or a generated chapter title for topic- and transcript-based segmentation. Displayed with search results and prepended to the embedded text so a chunk's vector carries its own topic.`}) 
+    @MaxLength(500)
+    SegmentTitle?: string;
+        
+    @Field({nullable: true, description: `An AI-generated description of this chunk's content, primarily for non-text segments. Retrieval of a media chunk otherwise yields only a pointer (an asset and a time window) that an agent cannot reason over; this column is the readable representation that an agent reads, a cross-encoder reranks, and lexical search matches. A short summary of it may be mirrored into the vector record's metadata for display and filtering, but the full text belongs here.`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `The verbatim transcript covering this chunk's time window, for audio and video segments, including speaker labels where the source provides them. Distinct from Description, which is a generated summary: this is what was actually said, and it is what makes a recording findable by lexical search.`}) 
+    Transcript?: string;
+        
+    @Field({nullable: true, description: `Registration key of the segmentation strategy that produced this chunk (for example StructuralText, SemanticText, Transcript, or FixedWindow). Provenance: when a Content Source's configured strategy changes, this identifies which chunks were produced by the previous strategy and therefore need re-chunking.`}) 
+    @MaxLength(100)
+    SegmenterKey?: string;
+        
+    @Field({nullable: true, description: `Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.`}) 
+    @MaxLength(36)
+    ParentChunkID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     ContentItem?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentChunkID?: string;
+        
+    @Field(() => [MJContentItemChunk_])
+    MJContentItemChunks_ParentChunkIDArray: MJContentItemChunk_[]; // Link to MJContentItemChunks
+    
 }
 
 //****************************************************************************
@@ -34363,7 +34407,7 @@ export class CreateMJContentItemChunkInput {
     Sequence?: number;
 
     @Field({ nullable: true })
-    Text?: string;
+    Text: string | null;
 
     @Field({ nullable: true })
     VectorRecordID: string | null;
@@ -34386,6 +34430,39 @@ export class CreateMJContentItemChunkInput {
     @Field({ nullable: true })
     LastDeletedAt: Date | null;
 
+    @Field({ nullable: true })
+    Modality?: string;
+
+    @Field(() => Int, { nullable: true })
+    StartOffset: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EndOffset: number | null;
+
+    @Field(() => Int, { nullable: true })
+    StartMs: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EndMs: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PageNumber: number | null;
+
+    @Field({ nullable: true })
+    SegmentTitle: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Transcript: string | null;
+
+    @Field({ nullable: true })
+    SegmenterKey: string | null;
+
+    @Field({ nullable: true })
+    ParentChunkID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -34406,7 +34483,7 @@ export class UpdateMJContentItemChunkInput {
     Sequence?: number;
 
     @Field({ nullable: true })
-    Text?: string;
+    Text?: string | null;
 
     @Field({ nullable: true })
     VectorRecordID?: string | null;
@@ -34428,6 +34505,39 @@ export class UpdateMJContentItemChunkInput {
 
     @Field({ nullable: true })
     LastDeletedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Modality?: string;
+
+    @Field(() => Int, { nullable: true })
+    StartOffset?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EndOffset?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    StartMs?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EndMs?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PageNumber?: number | null;
+
+    @Field({ nullable: true })
+    SegmentTitle?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Transcript?: string | null;
+
+    @Field({ nullable: true })
+    SegmenterKey?: string | null;
+
+    @Field({ nullable: true })
+    ParentChunkID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -34493,6 +34603,16 @@ export class MJContentItemChunkResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJContentItemChunk_])
+    async MJContentItemChunks_ParentChunkIDArray(@Root() mjcontentitemchunk_: MJContentItemChunk_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Chunks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemChunks')} WHERE ${provider.QuoteIdentifier('ParentChunkID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Chunks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjcontentitemchunk_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Chunks', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJContentItemChunk_)
     async CreateMJContentItemChunk(
         @Arg('input', () => CreateMJContentItemChunkInput) input: CreateMJContentItemChunkInput,
@@ -36697,6 +36817,14 @@ export class MJContentSource_ {
     @MaxLength(36)
     ScheduledActionID?: string;
         
+    @Field({nullable: true, description: `Registration key of the segmentation strategy used to split this source's content into embeddable chunks — for example StructuralText (document headings), AdaptiveBoundary (target size closing on the nearest natural break), SemanticText (LLM-detected topic boundaries), Transcript (audio/video chapters), PagedContent (one segment per page), or FixedWindow (uniform windows). NULL falls back to the Content Type's value, then to a built-in default.`}) 
+    @MaxLength(100)
+    SegmenterKey?: string;
+        
+    @Field({nullable: true, description: `Registration key of the content-cleaning strategy applied to this source before segmentation — for example Html (CSS-selector-driven extraction that drops navigation, sidebars, and advertising) or PlainText (whitespace normalization only). Cleaning is separate from segmentation because the two change for different reasons: a new site template needs new selectors, not a new chunking strategy. NULL falls back to the Content Type's value, then to a default inferred from the content's mime type.`}) 
+    @MaxLength(100)
+    CleanerKey?: string;
+        
     @Field() 
     @MaxLength(255)
     ContentType: string;
@@ -36787,6 +36915,12 @@ export class CreateMJContentSourceInput {
     @Field({ nullable: true })
     ScheduledActionID: string | null;
 
+    @Field({ nullable: true })
+    SegmenterKey: string | null;
+
+    @Field({ nullable: true })
+    CleanerKey: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -36832,6 +36966,12 @@ export class UpdateMJContentSourceInput {
 
     @Field({ nullable: true })
     ScheduledActionID?: string | null;
+
+    @Field({ nullable: true })
+    SegmenterKey?: string | null;
+
+    @Field({ nullable: true })
+    CleanerKey?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -37188,6 +37328,14 @@ export class MJContentType_ {
     @Field({nullable: true, description: `JSON configuration blob for content-type-level settings. Conforms to the IContentTypeConfiguration interface. Reserved for future type-wide settings such as default tag taxonomy rules and processing options.`}) 
     Configuration?: string;
         
+    @Field({nullable: true, description: `Default segmentation strategy for content of this type, used when a Content Source does not specify its own SegmenterKey. See ContentSource.SegmenterKey for the available strategies.`}) 
+    @MaxLength(100)
+    SegmenterKey?: string;
+        
+    @Field({nullable: true, description: `Default content-cleaning strategy for content of this type, used when a Content Source does not specify its own CleanerKey. See ContentSource.CleanerKey.`}) 
+    @MaxLength(100)
+    CleanerKey?: string;
+        
     @Field() 
     @MaxLength(50)
     AIModel: string;
@@ -37240,6 +37388,12 @@ export class CreateMJContentTypeInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field({ nullable: true })
+    SegmenterKey: string | null;
+
+    @Field({ nullable: true })
+    CleanerKey: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -37276,6 +37430,12 @@ export class UpdateMJContentTypeInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field({ nullable: true })
+    SegmenterKey?: string | null;
+
+    @Field({ nullable: true })
+    CleanerKey?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

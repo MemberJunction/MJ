@@ -30,6 +30,7 @@ import {
     SearchResultItem,
     ScopeConstraints,
 } from '../generic/search.types';
+import { ExtractChunkProvenance, HasChunkProvenance, ResolveHitID, ResolveHitSnippet, ResolveHitTitle } from '../generic/ExternalHitMapper';
 
 interface TypesenseHit {
     document: Record<string, unknown>;
@@ -168,10 +169,11 @@ export class TypesenseSearchProvider extends BaseSearchProvider {
             .slice(0, topK)
             .map((m, idx) => {
                 const doc = m.hit.document;
-                const id = String(doc['id'] ?? `${m.collection}-${idx}`);
-                const title = String(doc['title'] ?? doc['name'] ?? id);
+                const id = ResolveHitID(doc, `${m.collection}-${idx}`);
+                const title = ResolveHitTitle(doc, id);
+                const provenance = ExtractChunkProvenance(doc);
                 const snippetField = (this.parsedConfig?.defaultQueryBy ?? 'content,title').split(',')[0].trim();
-                const snippet = String(doc[snippetField] ?? '');
+                const snippet = ResolveHitSnippet(doc, snippetField);
                 const normalized = m.hit.text_match / topMatch;
                 return {
                     ID: `ts-${m.collection}-${id}`,
@@ -187,7 +189,7 @@ export class TypesenseSearchProvider extends BaseSearchProvider {
                     MatchedAt: new Date(),
                     EntityIcon: 'fa-solid fa-database',
                     RecordName: title.slice(0, 200),
-                    RawMetadata: JSON.stringify({ collection: m.collection, id, _rawMatch: m.hit.text_match }),
+                    RawMetadata: JSON.stringify({ collection: m.collection, id, _rawMatch: m.hit.text_match, ...(HasChunkProvenance(provenance) ? { chunk: provenance } : {}) }),
                 };
             });
     }

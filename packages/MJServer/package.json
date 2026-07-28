@@ -60,7 +60,6 @@
     "@memberjunction/codegen-lib": "5.49.0",
     "@memberjunction/communication-engine": "5.49.0",
     "@memberjunction/communication-ms-graph": "5.49.0",
-    "@memberjunction/notifications": "5.49.0",
     "@memberjunction/communication-sendgrid": "5.49.0",
     "@memberjunction/communication-types": "5.49.0",
     "@memberjunction/component-registry-client-sdk": "5.49.0",
@@ -84,12 +83,14 @@
     "@memberjunction/global": "5.49.0",
     "@memberjunction/graphql-dataprovider": "5.49.0",
     "@memberjunction/integration-engine": "5.49.0",
+    "@memberjunction/integration-engine-base": "5.49.0",
     "@memberjunction/integration-progress-artifacts": "5.49.0",
     "@memberjunction/integration-schema-builder": "5.49.0",
     "@memberjunction/interactive-component-types": "5.49.0",
     "@memberjunction/lists": "5.49.0",
     "@memberjunction/lists-base": "5.49.0",
     "@memberjunction/livekit-room-server": "5.49.0",
+    "@memberjunction/notifications": "5.49.0",
     "@memberjunction/postgresql-dataprovider": "5.49.0",
     "@memberjunction/queue": "5.49.0",
     "@memberjunction/record-comparison": "5.49.0",
@@ -150,9 +151,10 @@
     "typedi": "^0.10.0",
     "uuid": "^13.0.0",
     "ws": "^8.19.0",
-    "zod": "~3.24.4"
+    "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@types/express": "^4.17.25",
     "pkgroll": "2.23.0",
     "typescript": "^5.9.3",
     "vitest": "^3.1.1"

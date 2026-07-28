@@ -29,6 +29,7 @@ import {
     SearchResultItem,
     ScopeConstraints,
 } from '../generic/search.types';
+import { ExtractChunkProvenance, HasChunkProvenance, ResolveHitID, ResolveHitSnippet, ResolveHitTitle } from '../generic/ExternalHitMapper';
 
 interface AzureSearchHit {
     '@search.score': number;
@@ -171,9 +172,10 @@ export class AzureAISearchProvider extends BaseSearchProvider {
             .sort((a, b) => b.hit['@search.score'] - a.hit['@search.score'])
             .slice(0, topK)
             .map((m) => {
-                const id = String(m.hit['id'] ?? m.hit['Id'] ?? m.hit['ID'] ?? '');
-                const title = String(m.hit['title'] ?? m.hit['name'] ?? m.hit['Name'] ?? id);
-                const snippet = String(m.hit['content'] ?? m.hit['description'] ?? '');
+                const id = ResolveHitID(m.hit, '');
+                const title = ResolveHitTitle(m.hit, id);
+                const snippet = ResolveHitSnippet(m.hit);
+                const provenance = ExtractChunkProvenance(m.hit);
                 const normalized = m.hit['@search.score'] / topScore;
                 return {
                     ID: `azs-${m.index}-${id}`,
@@ -189,7 +191,12 @@ export class AzureAISearchProvider extends BaseSearchProvider {
                     MatchedAt: new Date(),
                     EntityIcon: 'fa-solid fa-cloud',
                     RecordName: title.slice(0, 200),
-                    RawMetadata: JSON.stringify({ index: m.index, id, _rawScore: m.hit['@search.score'] }),
+                    RawMetadata: JSON.stringify({
+                        index: m.index,
+                        id,
+                        _rawScore: m.hit['@search.score'],
+                        ...(HasChunkProvenance(provenance) ? { chunk: provenance } : {}),
+                    }),
                 };
             });
     }

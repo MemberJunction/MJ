@@ -16,6 +16,7 @@
           <button
             class="nav-bar-app-btn"
             [class.active]="IsActiveApp(app)"
+            [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
             [title]="app.Name"
             [style.--app-color]="app.GetColor()"
             (click)="onNavBarAppClick(app, $event)"
@@ -33,6 +34,8 @@
         [activeApp]="activeApp"
         [isViewingSystemTab]="isViewingSystemTab"
         [loadingAppId]="loadingAppId"
+        [SwitcherStyle]="AppSwitcherStyle"
+        [Provider]="Provider"
         (appSelected)="onAppSwitch($event)">
       </mj-app-switcher>
     }
@@ -42,6 +45,7 @@
       <mj-app-nav
         class="desktop-nav"
         [app]="activeApp"
+        [OverflowEnabled]="true"
         (navItemClick)="onNavItemClick($event)"
         (navItemDismiss)="onNavItemDismiss($event)">
       </mj-app-nav>
@@ -150,6 +154,7 @@
             <button
               class="nav-bar-app-btn"
               [class.active]="IsActiveApp(app)"
+              [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
               [title]="app.Name"
               [style.--app-color]="app.GetColor()"
               (click)="onNavBarAppClick(app, $event)"
@@ -278,6 +283,7 @@
         <div class="mobile-nav-section-title">{{ activeApp.Name }}</div>
         <mj-app-nav
           [app]="activeApp"
+          [OverflowEnabled]="false"
           (navItemClick)="onNavItemClick($event)"
           (navItemDismiss)="onNavItemDismiss($event)">
         </mj-app-nav>

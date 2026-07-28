@@ -75,8 +75,8 @@ mj-tab-container ::ng-deep .lm_stack {
   border-bottom: 1px solid var(--mj-border-default);
   display: flex;
   align-items: center;
-  padding: 0 16px;
-  gap: 16px;
+  padding: 0 var(--mj-space-4);
+  gap: var(--mj-space-4);
   box-shadow: var(--mj-shadow-sm);
   flex-shrink: 0;
   /* Creates a stacking context so children (search bar z-index: 99999, dropdown)
@@ -89,7 +89,7 @@ mj-tab-container ::ng-deep .lm_stack {
 .nav-bar-apps {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--mj-space-1);
 }
 
 .nav-bar-apps.left-of-switcher {
@@ -98,14 +98,14 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .nav-bar-apps.left-of-user-menu {
-  margin-right: 8px;
+  margin-right: var(--mj-space-2);
 }
 
 .nav-bar-app-btn {
   --app-color: var(--mj-text-muted);
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--mj-radius-md);
   border: none;
   background: transparent;
   cursor: pointer;
@@ -113,36 +113,27 @@ mj-tab-container ::ng-deep .lm_stack {
   align-items: center;
   justify-content: center;
   color: var(--mj-text-secondary);
-  font-size: 18px;
-  transition: all 0.15s ease;
+  font-size: var(--mj-text-lg);
+  transition: all var(--mj-transition-fast);
   position: relative;
 }
 
 .nav-bar-app-btn:hover {
-  background: color-mix(in srgb, var(--app-color) 15%, transparent);
-  color: var(--app-color);
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
 }
 
+/* Active = brand-primary (matches nav pills + switcher items); the app's
+   metadata color is reserved for identity accents, never state.
+   Shared active-tint recipe. */
 .nav-bar-app-btn.active {
-  background: color-mix(in srgb, var(--app-color) 20%, transparent);
-  color: var(--app-color);
-}
-
-.nav-bar-app-btn.active::after {
-  content: '';
-  position: absolute;
-  bottom: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 16px;
-  height: 3px;
-  background: var(--app-color);
-  border-radius: 2px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-brand-primary);
 }
 
 .nav-bar-app-btn i {
-  transition: transform 0.15s ease;
-  margin-top: 2px; /* Align with app switcher icon */
+  transition: transform var(--mj-transition-fast);
+  margin-top: var(--mj-space-0-5); /* Align with app switcher icon */
 }
 
 .nav-bar-app-btn:hover i {
@@ -153,10 +144,26 @@ mj-tab-container ::ng-deep .lm_stack {
   flex: 1;
 }
 
+/* Priority+ overflow support: on desktop the app nav owns the header's free
+   middle space (so it knows exactly how much room its items have) and the
+   spacer stands down. On mobile the nav is display:none'd, so the spacer's
+   flex: 1 keeps the action cluster right-aligned. When the nav isn't rendered
+   at all (app-locked sessions, Shell.AppNav.Enabled off), the sibling selector
+   doesn't match and the spacer behaves as before. */
+@media (min-width: 769px) {
+  mj-app-nav.desktop-nav {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  mj-app-nav.desktop-nav + .spacer {
+    flex: 0 0 0px;
+  }
+}
+
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--mj-space-2);
 }
 
 .icon-btn {
@@ -170,12 +177,22 @@ mj-tab-container ::ng-deep .lm_stack {
   align-items: center;
   justify-content: center;
   color: var(--mj-text-muted);
-  font-size: 18px;
-  transition: background 0.15s;
+  font-size: var(--mj-text-lg);
+  transition: background var(--mj-transition-fast);
 }
 
 .icon-btn:hover {
   background: var(--mj-bg-surface-hover);
+}
+
+/* Keyboard focus parity for all header controls (the search bar already has
+   its own ring at .search-btn:focus-visible). */
+.nav-bar-app-btn:focus-visible,
+.icon-btn:focus-visible,
+.hamburger-btn:focus-visible,
+.user-menu .avatar-btn:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
 }
 
 /* Universal search: a static-width bar styled as an input, anchored on the
@@ -276,17 +293,17 @@ mj-tab-container ::ng-deep .lm_stack {
   right: 4px;
   min-width: 16px;
   height: 16px;
-  padding: 0 4px;
+  padding: 0 var(--mj-space-1);
   background: var(--mj-status-error);
   color: var(--mj-text-inverse);
   font-size: 10px;
-  font-weight: 600;
-  border-radius: 8px;
+  font-weight: var(--mj-font-semibold);
+  border-radius: var(--mj-radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  line-height: var(--mj-leading-none);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .user-menu {
@@ -303,7 +320,7 @@ mj-tab-container ::ng-deep .lm_stack {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: box-shadow 0.15s, transform 0.15s;
+  transition: box-shadow var(--mj-transition-fast), transform var(--mj-transition-fast);
   padding: 0;
   overflow: hidden;
 }
@@ -322,7 +339,7 @@ mj-tab-container ::ng-deep .lm_stack {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.15s;
+  transition: border-color var(--mj-transition-fast);
 }
 
 .user-menu .avatar-btn:hover .icon-fallback {
@@ -331,7 +348,7 @@ mj-tab-container ::ng-deep .lm_stack {
 
 .user-menu .avatar-btn .icon-fallback i {
   color: var(--mj-text-muted);
-  font-size: 16px;
+  font-size: var(--mj-text-base);
 }
 
 /* Avatar image - replaces the gray circle entirely */
@@ -340,33 +357,33 @@ mj-tab-container ::ng-deep .lm_stack {
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .user-menu .avatar-btn:hover .avatar-img {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--mj-shadow-md);
 }
 
 /* User Menu Header */
 .user-menu-header {
-  padding: 12px 16px;
+  padding: var(--mj-space-3) var(--mj-space-4);
   background: var(--mj-bg-surface-sunken);
 }
 
 .user-menu-header .user-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--mj-space-0-5);
 }
 
 .user-menu-header .user-name {
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: var(--mj-font-semibold);
+  font-size: var(--mj-text-sm);
   color: var(--mj-text-primary);
 }
 
 .user-menu-header .user-email {
-  font-size: 12px;
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-muted);
 }
 
@@ -381,10 +398,10 @@ mj-tab-container ::ng-deep .lm_stack {
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 8px;
+  margin-top: var(--mj-space-2);
   background: var(--mj-bg-surface-elevated);
   border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
+  border-radius: var(--mj-radius-md);
   box-shadow: var(--mj-shadow-lg);
   min-width: 180px;
   z-index: 10000;
@@ -394,19 +411,19 @@ mj-tab-container ::ng-deep .lm_stack {
 .user-menu-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-4);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--mj-text-sm);
   color: var(--mj-text-primary);
-  transition: background 0.15s;
+  transition: background var(--mj-transition-fast);
 }
 
 .user-menu-item i {
   width: 18px;
   text-align: center;
   color: var(--mj-text-muted);
-  font-size: 14px;
+  font-size: var(--mj-text-sm);
 }
 
 .user-menu-item:hover {
@@ -428,7 +445,7 @@ mj-tab-container ::ng-deep .lm_stack {
 .user-menu-divider {
   height: 1px;
   background: var(--mj-border-default);
-  margin: 4px 0;
+  margin: var(--mj-space-1) 0;
 }
 
 /* Menu item disabled state */
@@ -450,10 +467,10 @@ mj-tab-container ::ng-deep .lm_stack {
   position: relative;
   width: 40px;
   height: 22px;
-  border-radius: 11px;
+  border-radius: var(--mj-radius-full);
   background: var(--mj-bg-surface-active);
   margin-left: auto;
-  transition: background 0.2s ease;
+  transition: background var(--mj-transition-base);
   flex-shrink: 0;
 }
 
@@ -469,11 +486,11 @@ mj-tab-container ::ng-deep .lm_stack {
   height: 18px;
   border-radius: 50%;
   background: var(--mj-bg-surface);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--mj-shadow-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease;
+  transition: transform var(--mj-transition-base);
 }
 
 .theme-toggle-track.dark .theme-toggle-thumb {
@@ -641,15 +658,15 @@ mj-tab-container ::ng-deep .lm_stack {
   display: none;
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--mj-radius-md);
   border: none;
   background: none;
   cursor: pointer;
   align-items: center;
   justify-content: center;
   color: var(--mj-text-secondary);
-  font-size: 20px;
-  transition: background 0.15s;
+  font-size: var(--mj-text-xl);
+  transition: background var(--mj-transition-fast);
 }
 .hamburger-btn:hover {
   background: var(--mj-bg-surface-hover);
@@ -663,7 +680,7 @@ mj-tab-container ::ng-deep .lm_stack {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--mj-bg-overlay);
   z-index: 9998;
 }
 
@@ -681,7 +698,7 @@ mj-tab-container ::ng-deep .lm_stack {
   z-index: 9999;
   flex-direction: column;
   transform: translateX(-100%);
-  transition: transform 0.3s ease;
+  transition: transform var(--mj-transition-slow);
 }
 .mobile-nav-drawer.open {
   transform: translateX(0);
@@ -691,13 +708,13 @@ mj-tab-container ::ng-deep .lm_stack {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: var(--mj-space-4) var(--mj-space-5);
   border-bottom: 1px solid var(--mj-border-default);
   background: var(--mj-bg-surface-sunken);
 }
 .mobile-nav-header span {
-  font-weight: 600;
-  font-size: 16px;
+  font-weight: var(--mj-font-semibold);
+  font-size: var(--mj-text-base);
   color: var(--mj-text-primary);
 }
 .mobile-nav-header .close-btn {
@@ -711,8 +728,8 @@ mj-tab-container ::ng-deep .lm_stack {
   align-items: center;
   justify-content: center;
   color: var(--mj-text-muted);
-  font-size: 18px;
-  transition: background 0.15s;
+  font-size: var(--mj-text-lg);
+  transition: background var(--mj-transition-fast);
 }
 .mobile-nav-header .close-btn:hover {
   background: var(--mj-bg-surface-active);
@@ -721,13 +738,13 @@ mj-tab-container ::ng-deep .lm_stack {
 .mobile-nav-content {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 0;
+  padding: var(--mj-space-4) 0;
 }
 
 .mobile-nav-section-title {
-  padding: 8px 20px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: var(--mj-space-2) var(--mj-space-5);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-disabled);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -735,26 +752,26 @@ mj-tab-container ::ng-deep .lm_stack {
 
 .mobile-nav-footer {
   border-top: 1px solid var(--mj-border-default);
-  padding: 12px 16px;
+  padding: var(--mj-space-3) var(--mj-space-4);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--mj-space-1);
 }
 
 .mobile-nav-action {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-4);
   border: none;
   background: none;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: var(--mj-radius-md);
   color: var(--mj-text-secondary);
-  font-size: 14px;
-  font-weight: 500;
-  transition: background 0.15s;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
+  transition: background var(--mj-transition-fast);
   width: 100%;
   text-align: left;
 }
@@ -762,7 +779,7 @@ mj-tab-container ::ng-deep .lm_stack {
   background: var(--mj-bg-surface-hover);
 }
 .mobile-nav-action i {
-  font-size: 16px;
+  font-size: var(--mj-text-base);
   width: 20px;
   text-align: center;
 }
@@ -790,8 +807,8 @@ mj-tab-container ::ng-deep .lm_stack {
   }
 
   .shell-header {
-    padding: 0 12px;
-    gap: 8px;
+    padding: 0 var(--mj-space-3);
+    gap: var(--mj-space-2);
   }
 
   /* Keep the right-edge cluster (chat/nav-bar app icons + avatar) on one row.
@@ -840,23 +857,23 @@ mj-tab-container ::ng-deep .lm_stack {
 ::ng-deep .settings-fullscreen-window .k-window-titlebar {
   background: var(--mj-bg-surface);
   border-bottom: 1px solid var(--mj-border-default);
-  padding: 12px 16px;
+  padding: var(--mj-space-3) var(--mj-space-4);
 }
 
 ::ng-deep .settings-fullscreen-window .k-window-title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--mj-text-lg);
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-primary);
 }
 
 ::ng-deep .settings-fullscreen-window .k-window-titlebar-actions {
-  gap: 4px;
+  gap: var(--mj-space-1);
 }
 
 ::ng-deep .settings-fullscreen-window .k-window-titlebar-action {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: var(--mj-radius-md);
 }
 
 ::ng-deep .settings-fullscreen-window .k-window-titlebar-action:hover {
@@ -892,7 +909,7 @@ mj-tab-container ::ng-deep .lm_stack {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--mj-bg-overlay);
   z-index: 9999;
   animation: fadeIn 0.15s ease;
 }
@@ -913,13 +930,13 @@ mj-tab-container ::ng-deep .lm_stack {
   width: 480px;
   max-width: calc(100vw - 32px);
   background: var(--mj-bg-surface-elevated);
-  border-radius: 12px;
+  border-radius: var(--mj-radius-lg);
   box-shadow: var(--mj-shadow-xl);
   z-index: 10000;
   opacity: 0;
   transform: translateY(-10px);
   pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity var(--mj-transition-base), transform var(--mj-transition-base);
 }
 
 .search-popup.open {
@@ -931,8 +948,8 @@ mj-tab-container ::ng-deep .lm_stack {
 .search-popup-content {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-3);
 }
 
 .search-entity-dropdown {
@@ -945,10 +962,10 @@ mj-tab-container ::ng-deep .lm_stack {
   flex: 1;
   min-width: 0;
   height: 40px;
-  padding: 8px 12px;
-  font-size: 14px;
+  padding: var(--mj-space-2) var(--mj-space-3);
+  font-size: var(--mj-text-sm);
   border: 1px solid var(--mj-border-default);
-  border-radius: 4px;
+  border-radius: var(--mj-radius-sm);
   outline: none;
   display: block !important;
   box-sizing: border-box;
@@ -962,7 +979,7 @@ mj-tab-container ::ng-deep .lm_stack {
 .search-submit-btn {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--mj-radius-md);
   border: none;
   background: var(--mj-brand-primary);
   color: var(--mj-text-inverse);
@@ -970,8 +987,8 @@ mj-tab-container ::ng-deep .lm_stack {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  transition: background 0.15s;
+  font-size: var(--mj-text-base);
+  transition: background var(--mj-transition-fast);
   flex-shrink: 0;
 }
 
@@ -994,13 +1011,13 @@ mj-tab-container ::ng-deep .lm_stack {
   background: var(--mj-status-error);
   color: var(--mj-text-inverse);
   font-size: 11px;
-  font-weight: 600;
-  border-radius: 9px;
+  font-weight: var(--mj-font-semibold);
+  border-radius: var(--mj-radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  line-height: var(--mj-leading-none);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 /* Mobile-specific search popup adjustments */
@@ -1052,10 +1069,10 @@ mj-tab-container ::ng-deep .lm_stack {
 .pin-progress-modal {
   background: var(--mj-bg-surface);
   border-radius: var(--mj-radius-xl);
-  padding: 28px 40px;
+  padding: var(--mj-space-7) var(--mj-space-10);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--mj-space-4);
   box-shadow: 0 16px 48px color-mix(in srgb, var(--mj-text-primary) 30%, transparent);
   animation: pinModalIn 0.25s ease;
 }
@@ -1083,12 +1100,12 @@ mj-tab-container ::ng-deep .lm_stack {
     right: 2px;
     min-width: 16px;
     height: 16px;
-    padding: 0 4px;
-    border-radius: 8px;
+    padding: 0 var(--mj-space-1);
+    border-radius: var(--mj-radius-md);
     background: var(--mj-brand-primary);
     color: var(--mj-text-inverse);
     font-size: 10px;
-    font-weight: 700;
+    font-weight: var(--mj-font-bold);
     line-height: 16px;
     text-align: center;
 }
@@ -1102,7 +1119,7 @@ mj-tab-container ::ng-deep .lm_stack {
     flex-direction: column;
     background: var(--mj-bg-surface-elevated);
     border: 1px solid var(--mj-border-default);
-    border-radius: 10px;
+    border-radius: var(--mj-radius-md);
     box-shadow: 0 8px 28px color-mix(in srgb, var(--mj-text-primary) 18%, transparent);
     z-index: 1000;
     overflow: hidden;
@@ -1111,8 +1128,8 @@ mj-tab-container ::ng-deep .lm_stack {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 12px;
-    font-weight: 700;
+    padding: var(--mj-space-2-5) var(--mj-space-3);
+    font-weight: var(--mj-font-bold);
     font-size: 0.85rem;
     color: var(--mj-text-primary);
     border-bottom: 1px solid var(--mj-border-default);
@@ -1123,29 +1140,29 @@ mj-tab-container ::ng-deep .lm_stack {
     color: var(--mj-text-muted);
     cursor: pointer;
     font-size: 0.8rem;
-    padding: 4px 6px;
-    border-radius: 6px;
+    padding: var(--mj-space-1) var(--mj-space-1-5);
+    border-radius: var(--mj-radius-md);
 }
 .activity-clear:hover { color: var(--mj-text-primary); background: var(--mj-bg-surface-hover); }
-.activity-list { overflow-y: auto; padding: 6px; }
+.activity-list { overflow-y: auto; padding: var(--mj-space-1-5); }
 .activity-row {
     display: flex;
-    gap: 10px;
-    padding: 9px 8px;
-    border-radius: 8px;
+    gap: var(--mj-space-2-5);
+    padding: var(--mj-space-2);
+    border-radius: var(--mj-radius-md);
 }
 .activity-row:hover { background: var(--mj-bg-surface-hover); }
-.activity-row-icon { margin-top: 2px; color: var(--mj-brand-primary); font-size: 0.85rem; }
+.activity-row-icon { margin-top: var(--mj-space-0-5); color: var(--mj-brand-primary); font-size: 0.85rem; }
 .activity-row.is-error .activity-row-icon { color: var(--mj-status-error); }
 .activity-row-body { flex: 1; min-width: 0; }
-.activity-row-label { font-size: 0.82rem; font-weight: 600; color: var(--mj-text-primary); }
-.activity-row-detail { font-size: 0.72rem; color: var(--mj-text-muted); margin-top: 1px; }
+.activity-row-label { font-size: 0.82rem; font-weight: var(--mj-font-semibold); color: var(--mj-text-primary); }
+.activity-row-detail { font-size: 0.72rem; color: var(--mj-text-muted); margin-top: var(--mj-space-px); }
 .activity-bar {
-    margin-top: 6px;
+    margin-top: var(--mj-space-1-5);
     height: 4px;
     background: var(--mj-bg-surface-sunken);
     border-radius: 2px;
     overflow: hidden;
 }
-.activity-bar-fill { height: 100%; background: var(--mj-brand-primary); transition: width 0.3s ease; }
+.activity-bar-fill { height: 100%; background: var(--mj-brand-primary); transition: width var(--mj-transition-slow); }
 

@@ -124,9 +124,9 @@
           </mj-conversation-agent-picker>
         }
         @if (showExportButton) {
-          <button mjButton variant="flat" size="sm" (click)="exportConversation()" title="Export conversation">
-            <i class="fas fa-download"></i>
-            <span class="btn-label">Export</span>
+          <button mjButton variant="flat" size="sm" (click)="exportConversation()" [title]="exportButtonLabel + ' conversation'">
+            <i [class]="exportButtonIcon"></i>
+            <span class="btn-label">{{ exportButtonLabel }}</span>
           </button>
         }
         @if (showShareButton && canShareConversation) {
@@ -137,6 +137,17 @@
             <i class="fas fa-share-nodes"></i>
             <span class="btn-label">Share</span>
           </button>
+        }
+        <!-- headerActions slot — ADDITIVE host buttons rendered after the stock
+             actions (unlike the `header` slot, which replaces the whole header
+             and therefore never reaches this branch). For visual parity,
+             projected buttons should use mjButton variant="flat" size="sm". -->
+        @if (slotTemplate('headerActions'); as t) {
+          <ng-container *ngTemplateOutlet="t; context: {
+            $implicit: conversation,
+            conversationId: conversationId,
+            isProcessing: isProcessing
+          }"></ng-container>
         }
       </div>
     </div>
@@ -204,6 +215,9 @@
             [showSuggestedPrompts]="showSuggestedPrompts"
             [enableAttachments]="enableAttachments && allowAttachments"
             [enableMentions]="allowMentions"
+            [enableAgentMentions]="allowAgentMentions"
+            [enableEntityMentions]="allowEntityMentions"
+            [enableSkillCommands]="allowSkillCommands"
             [maxAttachments]="maxAttachments"
             [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
             [acceptedFileTypes]="acceptedFileTypes"
@@ -231,6 +245,9 @@
                 [disabled]="isProcessing"
                 [enableAttachments]="enableAttachments && allowAttachments"
                 [enableMentions]="allowMentions"
+                [enableAgentMentions]="allowAgentMentions"
+                [enableEntityMentions]="allowEntityMentions"
+                [enableSkillCommands]="allowSkillCommands"
                 [enablePlanMode]="allowPlanMode"
                 [enableRealtime]="allowRealtime"
                 [maxAttachments]="maxAttachments"
@@ -260,6 +277,8 @@
               [allowPinning]="allowPinning"
               [allowMessageEdit]="allowMessageEdit"
               [allowMessageDelete]="allowMessageDelete"
+              [assistantDisplayName]="assistantDisplayName"
+              [assistantAvatarUrl]="assistantAvatarUrl"
               [messages]="messages"
               [conversation]="conversation"
               [currentUser]="currentUser"
@@ -337,6 +356,9 @@
                     [disabled]="isProcessing || isReadOnlyView"
                     [enableAttachments]="enableAttachments && allowAttachments"
                     [enableMentions]="allowMentions"
+                    [enableAgentMentions]="allowAgentMentions"
+                    [enableEntityMentions]="allowEntityMentions"
+                    [enableSkillCommands]="allowSkillCommands"
                     [enablePlanMode]="allowPlanMode"
                     [enableRealtime]="allowRealtime"
                     [maxAttachments]="maxAttachments"
@@ -467,7 +489,11 @@
 }
 
 <!-- Export Modal -->
+<!-- [branding] is bound BEFORE [isVisible] deliberately: Angular sets inputs in
+     template order within a change-detection pass, and the modal's isVisible setter
+     reads `branding` to default its "Include branding" checkbox on a fresh open. -->
 <mj-export-modal
+  [branding]="exportBranding"
   [isVisible]="showExportModal"
   [conversation]="conversation || undefined"
   [currentUser]="currentUser"
