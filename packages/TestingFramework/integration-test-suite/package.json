@@ -28,6 +28,7 @@
     "@memberjunction/scheduling-engine": "5.49.0",
     "@memberjunction/record-set-processor": "5.49.0",
     "@memberjunction/record-set-processor-base": "5.49.0",
+    "@memberjunction/content-autotagging": "5.49.0",
     "@memberjunction/ai-prompts": "5.49.0",
     "@memberjunction/api-keys": "5.49.0",
     "@memberjunction/predictive-studio": "5.49.0",

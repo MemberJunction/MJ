@@ -1,0 +1,13 @@
+---
+"@memberjunction/open-app-engine": patch
+---
+
+Harden the Open App install engine: four independent fixes to install, upgrade and remove.
+
+**Manifest values can no longer inject code into `mj.config.cjs`.** That file is `require`d — and therefore executed — by every `mj migrate`, `codegen` and build. The config writer built entries by concatenating single-quoted strings, so a manifest-sourced value containing a quote could escape its literal and have arbitrary expressions evaluated on the next `mj` command. Every injected value is now emitted as a fully escaped literal, and the removal/detection regexes accept both quote styles so entries written by earlier versions stay removable. As defence in depth — the config writer is not the only consumer of these values — package names and `schema.entityPackage` must now be valid npm names and `startupExport` a single JavaScript identifier, rejected at manifest validation before any engine code touches them.
+
+**Schema names are compared case-insensitively at read, fixing Postgres install/remove/reinstall.** PostgreSQL folds unquoted DDL identifiers to lowercase, so a schema declared as `__mj_BizAppsCommon` exists as `__mj_bizappscommon` while stored metadata may carry either casing. Three paths were comparing raw casing: the schema-existence check now tests the canonical name the create path actually produces (raw-casing checks sent Postgres reinstalls into an "already exists" dead end), the legacy `Schema Info` delete filter now matches case-insensitively, and the shared-schema check does too — previously two apps storing different casings of the same schema missed each other, and removing one could cascade-drop a schema the other still lives in. Healing happens at read rather than by rewriting stored rows, so installs that already carry mixed casing are fixed the moment this ships.
+
+**Removing an app keeps npm dependencies that co-installed apps still declare.** The remove path already computed the other installed manifests for prebundle excludes but never passed them to package removal, so uninstalling one app stripped `package.json` entries a surviving app depends on. Package removal now accepts a retain list, and the orchestrator derives it from every other installed app's server, client and shared package lists.
+
+**A failed `npm install` during upgrade finalizes the app as Disabled.** The upgrade path wrote `Active` unconditionally even when dependency installation had failed, leaving the server to load packages that were never installed. It now mirrors the install path: finalize `Disabled`, switch the app's dynamic-package entries off so the server loader and client bootstrap skip it, and tell the operator to run `npm install` followed by `mj app enable`.

@@ -117,7 +117,10 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 
 | Input | Gates |
 |---|---|
-| `allowMentions` | `@`-mention support in the composer |
+| `allowMentions` | MASTER switch for the composer's mention/command triggers (`@` agents, `#` entities, `/` skills). When `false`, all are off regardless of the per-type flags below |
+| `allowAgentMentions` | The `@` agent/user mention trigger (under `allowMentions`). Set `false` on a surface pinned to a default agent that wants `/` skills but not `@` — an `@` overrides the pinned agent in message routing |
+| `allowEntityMentions` | The `#` entity/query mention trigger (under `allowMentions`) |
+| `allowSkillCommands` | The `/` skill-command trigger (under `allowMentions`) |
 | `allowAttachments` | The file-attachment button |
 | `allowPlanMode` | The composer's Plan Mode toggle button |
 | `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
@@ -128,7 +131,7 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `showExportButton` | The conversation export button |
 | `showShareButton` | The conversation share button |
 | `showArtifactIndicator` | The artifact indicator |
-| `showAgentRunDetails` | The per-message agent run-detail grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide |
+| `showAgentRunDetails` | The per-message agent run-details section — the expander header AND its grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide. The gear button that opens the panel is itself hidden when nothing would be left in it (no run details, no associated tasks, and no delete/pin/rating overflow), so an end-user surface gets no dead control rather than one that opens an empty popup |
 | `showReactions` | The per-message reaction buttons (like / comment) |
 | `showMessageRating` | The per-message thumbs rating control |
 | `allowPinning` | Message pinning (per-message pin button, header pin chip, pinned-messages panel) |
@@ -193,6 +196,18 @@ Two gating rules are worth knowing:
 - **`includeTheme` gates only the token AUTO-SNAPSHOT.** An explicitly supplied `brandTokens` map, plus `logoUrl` / `title` / `trademark`, apply whenever `branding` is present. In the modal, "Include branding" is the single user-facing switch for all of it, and it sits with the general options because it affects every format — not just HTML.
 
 `trademark` and `title` are **not** markdown-escaped; a value containing `_`, `]`, `)`, or a newline can break the surrounding markdown. Supply plain text (the HTML and JSON paths are escaped).
+#### Assistant identity
+
+White-label hosts can brand the AI side of the message feed through the component contract (no CSS on `.message-sender` / `.avatar-circle` internals). Both default to `null` — the engine-resolved agent identity, today's behavior:
+
+| Input | Overrides |
+|---|---|
+| `assistantDisplayName` | The display name on AI messages (e.g. a per-tenant persona like "Betty the Teacher"). Display-only: internal logic such as the conversation-manager check keeps comparing the real agent name |
+| `assistantAvatarUrl` | The AI message avatar — an image replaces the agent's Font Awesome icon |
+
+These complement `agentCharacterConfig`, which drives only the `agentPresence` strip — the two inputs extend the same identity into every message bubble. Runtime changes propagate to already-rendered messages (branding configs that resolve after first render, per-conversation persona switches), and a broken/whitespace avatar URL degrades to the agent icon rather than a broken-image glyph.
+
+**Scope — what the override deliberately does NOT cover:** the run-details expander header and its record link (they describe the *real* agent's diagnostics), the role tooltip (the agent record's `Description`), and realtime session cards. Hosts needing those surfaces hidden from end users gate them with `showAgentRunDetails` / their own chrome rather than relabeling internal data.
 
 ### Chat Overlay
 

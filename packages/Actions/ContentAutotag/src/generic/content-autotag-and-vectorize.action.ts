@@ -16,6 +16,14 @@ import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
  * Params:
  *  * Autotag: Bit, if set to 1, will autotag content from all source types.
  *  * Vectorize: Bit, if set to 1, will embed tagged content items directly into the vector index.
+ *  * EmbedPendingChunks: Bit (optional, default 0). If set to 1, (re)embeds persisted
+ *          ContentItemChunk rows whose EmbeddingStatus is still 'Pending', upserting their vectors.
+ *          Independent of the other phases — used for migration backfill and error recovery.
+ *          Bounded by MaxItems.
+ *  * Purge: Bit (optional, default 0). If set to 1, runs PurgeDeletedChunks after vectorization —
+ *          removes the vectors of soft-deleted (superseded) ContentItemChunks from the 3rd-party
+ *          store and flips those rows to 'Deleted'. Independent of Vectorize, so a purge-only run
+ *          (Autotag=0, Vectorize=0, Purge=1 — e.g. scheduled cleanup) is valid. Bounded by MaxItems.
  *
  * Uses plugin architecture: iterates all ContentSourceType records and resolves
  * providers dynamically via ClassFactory using the DriverClass field.
@@ -54,6 +62,16 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         // Optional: force reprocessing of existing content items (skip checksum comparison)
         const forceReprocessParam = params.Params.find(p => p.Name === 'ForceReprocess');
         const forceReprocess = forceReprocessParam?.Value === 1 || forceReprocessParam?.Value === true;
+
+        // Optional: purge soft-deleted chunks after vectorization (default off). Independent of
+        // Vectorize so a purge-only invocation is valid.
+        const purgeParam = params.Params.find(p => p.Name === 'Purge');
+        const purge = purgeParam?.Value === 1 || purgeParam?.Value === true;
+
+        // Optional: (re)embed persisted ContentItemChunk rows still awaiting embedding (default off).
+        // Independent of the other phases — used for migration backfill and error recovery.
+        const embedPendingChunksParam = params.Params.find(p => p.Name === 'EmbedPendingChunks');
+        const embedPendingChunks = embedPendingChunksParam?.Value === 1 || embedPendingChunksParam?.Value === true;
 
         // Optional: ContentProcessRunID to link detail records for per-source tracking
         const processRunParam = params.Params.find(p => p.Name === 'ContentProcessRunID');
@@ -118,6 +136,22 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
 
                 LogStatus(`[AutotagAction] Phase 2: Running ${tasks.length} vectorization task(s)...`);
                 await Promise.all(tasks);
+            }
+
+            // Phase 3: (Re)embed persisted chunk rows still awaiting embedding. Runs whenever
+            // EmbedPendingChunks=1, independent of the other phases — used to backfill vectors for
+            // chunk rows created without them (migration) and to retry chunks whose embed failed
+            // (recovery). Bounded by MaxItems so a large backlog drains over several runs.
+            if (embedPendingChunks) {
+                await this.RunEmbedPendingChunks(params, maxItems);
+            }
+
+            // Phase 4: Purge soft-deleted chunks. Runs whenever Purge=1, independent of the other
+            // phases — a re-chunk during vectorization soft-deletes superseded chunks (rows kept,
+            // DeleteStatus='Pending'); this removes their vectors from the 3rd-party store and flips
+            // the rows to 'Deleted'. Bounded by MaxItems so a large backlog drains over several runs.
+            if (purge) {
+                await this.RunPurgeDeletedChunks(params, maxItems);
             }
             LogStatus(`[AutotagAction] All tasks completed`);
 
@@ -283,6 +317,38 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             await this.vectorizeSourceWithTracking(
                 sourceID, sourceItems, contentProcessRunID, params.ContextUser, provider
             );
+        }
+    }
+
+    /**
+     * Run EmbedPendingChunks on the engine: embed persisted ContentItemChunk rows awaiting embedding
+     * and upsert their vectors under the chunk's identity. Bounded by maxItems so a large backlog
+     * drains over several runs. Best-effort — a failure is logged but does not fail the action, since
+     * unembedded chunks stay 'Pending' and are retried on the next run.
+     */
+    private async RunEmbedPendingChunks(params: RunActionParams, maxItems: number): Promise<void> {
+        try {
+            LogStatus(`[AutotagAction] Phase 3: Embedding pending chunks (max ${maxItems})...`);
+            const stats = await AutotagBaseEngine.Instance.EmbedPendingChunks(params.ContextUser, { maxItems });
+            LogStatus(`[AutotagAction] Phase 3 complete — ${stats.embedded} embedded, ${stats.skipped} skipped (empty text/no parent), ${stats.failed} failed`);
+        } catch (error) {
+            LogError(`[AutotagAction] EmbedPendingChunks failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Run PurgeDeletedChunks on the engine: remove soft-deleted chunks' vectors from the 3rd-party
+     * store and flip those rows to 'Deleted'. Bounded by maxItems so a large backlog drains over
+     * several runs. Best-effort — a purge failure is logged but does not fail the action, since the
+     * chunks stay 'Pending' and are retried on the next run.
+     */
+    private async RunPurgeDeletedChunks(params: RunActionParams, maxItems: number): Promise<void> {
+        try {
+            LogStatus(`[AutotagAction] Phase 3: Purging soft-deleted chunks (max ${maxItems})...`);
+            const stats = await AutotagBaseEngine.Instance.PurgeDeletedChunks(params.ContextUser, { maxItems });
+            LogStatus(`[AutotagAction] Phase 3 complete — ${stats.purged} purged, ${stats.skipped} skipped (no vector), ${stats.failed} failed`);
+        } catch (error) {
+            LogError(`[AutotagAction] PurgeDeletedChunks failed: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 

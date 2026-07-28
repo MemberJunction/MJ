@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "rerank-v3.5",
-      "Description": "Cohere Rerank v3.5 - Latest semantic reranking model with state-of-the-art performance for English content. Optimized for RAG retrieval quality improvement.",
+      "Description": "Cohere Rerank v3.5 - Semantic reranking model with state-of-the-art performance for English content, optimized for RAG retrieval quality improvement. DEPRECATED 2026-07-01: starting 2026-08-01, requests to `cohere-rerank-3.5` are automatically routed to `cohere-rerank-4-fast` (which returns different relevance scores — re-tune hard-coded score thresholds before the switch). Migrate to `rerank-v4-fast` or `rerank-v4-pro` before August 1, 2026. Sources: https://docs.cohere.com/changelog/rerank-v4.0 ; https://docs.cohere.com/docs/deprecations",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
       "PowerRank": 100,
       "IsActive": true,

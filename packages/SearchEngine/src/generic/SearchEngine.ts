@@ -161,12 +161,14 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     private _defaultOverfetchFactor = 2;
 
     /**
-     * Minimum trimmed query length we accept. One- and two-character queries against
-     * a `LIKE '%term%'` fan-out are essentially full-database scans with negligible
+     * Minimum trimmed query length we accept. A single-character query against a
+     * `LIKE '%term%'` fan-out is essentially a full-database scan with negligible
      * relevance — the providers also enforce this, but we short-circuit here to
-     * avoid the cache lookup and provider dispatch overhead too.
+     * avoid the cache lookup and provider dispatch overhead too. Set to 2 (was 3) so
+     * legitimate short queries aren't silently dropped (bug C3); must stay in lockstep
+     * with the providers' MIN_TERM_LENGTH.
      */
-    private static readonly MIN_TERM_LENGTH = 3;
+    private static readonly MIN_TERM_LENGTH = 2;
 
     /**
      * Result cache TTL. 30s balances "user resubmits the same prefix" wins against
