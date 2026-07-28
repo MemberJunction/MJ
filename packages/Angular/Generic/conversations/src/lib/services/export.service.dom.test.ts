@@ -30,6 +30,9 @@ describe('ExportService — BuildExportContent branding', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    // Unconditional: a failing assertion inside a themed test would otherwise strand
+    // data-theme on documentElement and silently contaminate later tests.
+    document.documentElement.removeAttribute('data-theme');
   });
 
   it('unthemed HTML keeps the ENTIRE legacy palette as fallbacks — no :root block, no logo', async () => {
@@ -250,7 +253,6 @@ describe('ExportService — BuildExportContent branding', () => {
       expect(content).toContain('--mj-bg-page: #ffffff;');
       expect(content).toContain('--mj-text-primary: #333333;');
       expect(content).not.toContain('#eeeeee'); // no dark ink on a white page
-      document.documentElement.removeAttribute('data-theme');
     });
 
     it("themeMode:'dark' captures the dark palette from a LIGHT session", async () => {
@@ -265,7 +267,6 @@ describe('ExportService — BuildExportContent branding', () => {
       stubThemedTokens();
       await svc.BuildExportContent(data, 'html', { includeTheme: true, themeMode: 'light' });
       expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-      document.documentElement.removeAttribute('data-theme');
     });
 
     it('removes the attribute again when the app had none set', () => {
@@ -274,12 +275,25 @@ describe('ExportService — BuildExportContent branding', () => {
       expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
     });
 
+    it("reads light by REMOVING the attribute, not by writing \"light\"", () => {
+      // MJExplorerAppComponent removes data-theme for light rather than setting it, so
+      // the transient state must match — never invent a third value the CSS hasn't seen.
+      document.documentElement.setAttribute('data-theme', 'dark');
+      let seenDuringRead: string | null = 'unset';
+      vi.spyOn(window, 'getComputedStyle').mockImplementation(() => {
+        seenDuringRead = document.documentElement.getAttribute('data-theme');
+        return { getPropertyValue: () => '' } as unknown as CSSStyleDeclaration;
+      });
+      svc.SnapshotBrandTokens(undefined, 'light');
+      expect(seenDuringRead).toBeNull();
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark'); // restored
+    });
+
     it('restores the theme even if reading throws', () => {
       document.documentElement.setAttribute('data-theme', 'dark');
       vi.spyOn(window, 'getComputedStyle').mockImplementation(() => { throw new Error('boom'); });
       expect(() => svc.SnapshotBrandTokens(undefined, 'light')).toThrow('boom');
       expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-      document.documentElement.removeAttribute('data-theme');
     });
 
     it('omitting themeMode on a direct SnapshotBrandTokens call reads the live values', () => {
@@ -287,7 +301,6 @@ describe('ExportService — BuildExportContent branding', () => {
       stubThemedTokens();
       const snap = svc.SnapshotBrandTokens();
       expect(snap['--mj-bg-page']).toBe('#111111'); // live = dark, untouched
-      document.documentElement.removeAttribute('data-theme');
     });
   });
 });

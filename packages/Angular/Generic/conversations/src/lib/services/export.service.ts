@@ -202,11 +202,20 @@ export class ExportService {
   ): Record<string, string> {
     const root = document.documentElement;
     const previous = root.getAttribute('data-theme');
-    const wanted = mode === 'dark' ? 'dark' : 'light';
-    const mustSwap = mode != null && (previous ?? 'light') !== wanted;
+    // The app's two real states are `data-theme="dark"` and NO attribute at all —
+    // `MJExplorerAppComponent` removes it for light rather than writing "light"
+    // (explorer-app.component.ts). Reproduce those exactly rather than inventing a
+    // third state, so the transient DOM is one the stylesheet has actually seen.
+    const wantDark = mode === 'dark';
+    const isDark = previous === 'dark';
+    const mustSwap = mode != null && wantDark !== isDark;
 
     if (mustSwap) {
-      root.setAttribute('data-theme', wanted);
+      if (wantDark) {
+        root.setAttribute('data-theme', 'dark');
+      } else {
+        root.removeAttribute('data-theme');
+      }
     }
     try {
       const style = getComputedStyle(root);
