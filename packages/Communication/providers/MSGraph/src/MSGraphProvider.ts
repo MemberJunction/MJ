@@ -260,6 +260,14 @@ export class MSGraphProvider extends BaseCommunicationProvider {
     }
 
     /**
+     * Flattens a Graph recipient collection (toRecipients/ccRecipients/bccRecipients)
+     * into bare email addresses, dropping entries with no resolvable address.
+     */
+    private extractRecipientAddresses(recipients: Message['toRecipients']): string[] {
+        return recipients?.map((recipient) => recipient.emailAddress?.address || '').filter((address) => address.length > 0) || [];
+    }
+
+    /**
      * Sends a single email message via MS Graph.
      *
      * @requires MS Graph Scope: Mail.Send (Application)
@@ -482,6 +490,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             return {
                 From: msgTyped.from?.emailAddress?.address || '',
                 To: primaryToRecipient,
+                ToRecipients: this.extractRecipientAddresses(msgTyped.toRecipients),
+                CCRecipients: this.extractRecipientAddresses(msgTyped.ccRecipients),
                 ReplyTo: replyTo,
                 Subject: msgTyped.subject || '',
                 Body: contextData?.ReturnAsPlainText || contextData?.ReturnAsPlainTex ? this.HTMLConverter(msgTyped.body?.content || '') : msgTyped.body?.content || '',
@@ -1145,6 +1155,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 Message: {
                     From: msgTyped.from?.emailAddress?.address || '',
                     To: replyTo.length > 0 ? replyTo[0] : '',
+                    ToRecipients: this.extractRecipientAddresses(msgTyped.toRecipients),
+                    CCRecipients: this.extractRecipientAddresses(msgTyped.ccRecipients),
                     ReplyTo: replyTo,
                     Subject: msgTyped.subject || '',
                     Body: msgTyped.body?.content || '',
@@ -1439,6 +1451,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const messages = response.value.map((msg: Message) => ({
                 From: msg.from?.emailAddress?.address || '',
                 To: msg.toRecipients?.[0]?.emailAddress?.address || '',
+                ToRecipients: this.extractRecipientAddresses(msg.toRecipients),
+                CCRecipients: this.extractRecipientAddresses(msg.ccRecipients),
                 Subject: msg.subject || '',
                 Body: msg.bodyPreview || '',
                 ExternalSystemRecordID: msg.id || '',

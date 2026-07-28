@@ -11,7 +11,7 @@ import {
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
-import { mjCoreSchema, resolveEntityPackageName } from '../Config/config';
+import { getExternalEntitySchemas, mjCoreSchema, resolveEntityPackageName } from '../Config/config';
 import { makeDir, sortBySequenceAndCreatedAt, sortRelatedEntities } from './util';
 
 /**
@@ -60,6 +60,32 @@ export class GraphQLServerGeneratorBase {
    */
   protected getServerGraphQLTypeNameBase(entity: EntityInfo): string {
     return getGraphQLTypeNameBase(entity);
+  }
+
+  /**
+   * True when the related entity's GraphQL ObjectType will NOT be declared in the file being
+   * generated, so emitting a `@Field`/`@FieldResolver` that names it would not compile.
+   *
+   * Two cases:
+   * - the caller asked for a schema-scoped file (`excludeRelatedEntitiesExternalToSchema`) and the
+   *   related entity is in another schema;
+   * - the related entity's schema is owned by a different npm package (the `entityPackageName`
+   *   schema→package map). `runCodeGen` withholds those entities from the generated set so two
+   *   packages can't both declare an ObjectType for the same entity, so the name is undefined here.
+   *
+   * MJ-core-schema related entities are deliberately NOT out of scope: they are absent from the
+   * generated set too, but they resolve through the `mj_core_schema_server_object_types` namespace
+   * import instead of a local declaration.
+   */
+  protected isRelatedTypeOutOfScope(
+    entity: EntityInfo,
+    relatedEntity: EntityInfo,
+    excludeRelatedEntitiesExternalToSchema: boolean
+  ): boolean {
+    if (excludeRelatedEntitiesExternalToSchema && relatedEntity.SchemaName !== entity.SchemaName) return true;
+    if (relatedEntity.SchemaName === mjCoreSchema) return false;
+    const schema = relatedEntity.SchemaName.toLowerCase();
+    return getExternalEntitySchemas().some((s) => s.toLowerCase() === schema);
   }
 
   /**
@@ -114,9 +140,9 @@ export class GraphQLServerGeneratorBase {
             // Related entity is external (no MJ base view) — its resolver is skipped (see
             // generateServerGraphQLResolver), so skip the paired field declaration too for consistency.
             sEntityOutput += `// Relationship field to ${r.RelatedEntity} not generated: related entity is external (no local base view).\n`;
-          } else if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-            // only include the relationship if either we are NOT excluding related entities external to the schema
-            // or if the related entity is in the same schema as the current entity
+          } else if (this.isRelatedTypeOutOfScope(entity, re, excludeRelatedEntitiesExternalToSchema)) {
+            sEntityOutput += `// Relationship field to ${r.RelatedEntity} not generated: its GraphQL type is not declared in this file.\n`;
+          } else {
             sEntityOutput += this.generateServerRelationship(md, sortedRelatedEntities[j], isInternal);
           }
         } else {
@@ -224,9 +250,7 @@ import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
     for (let i: number = 0; i < sortedRelatedEntities.length; ++i) {
       const r = sortedRelatedEntities[i];
       const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
-      if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-        // we only include entities that are in the same schema as the current entity
-        // OR if we are not excluding related entities external to the schema
+      if (!this.isRelatedTypeOutOfScope(entity, re, excludeRelatedEntitiesExternalToSchema)) {
         const tableName = sortedRelatedEntities[i].RelatedEntityBaseTableCodeName;
         sRet += `\nimport ${tableName} from './${tableName}';`;
       }
@@ -474,9 +498,9 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
             // than emit a resolver that fails at runtime (external rows are reachable via that entity's
             // own RunView with a filter on the join column).
             sRet += `// Relationship to ${r.RelatedEntity} not generated: related entity is external (no local base view to query).\n`;
-          } else if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-            // only include the relationship if either we are NOT excluding related entities external to the schema
-            // or if the related entity is in the same schema as the current entity
+          } else if (this.isRelatedTypeOutOfScope(entity, re, excludeRelatedEntitiesExternalToSchema)) {
+            sRet += `// Relationship to ${r.RelatedEntity} not generated: its GraphQL type is not declared in this file.\n`;
+          } else {
             if (r.Type.toLowerCase().trim() == 'many to many') sRet += this.generateManyToManyFieldResolver(entity, r);
             else sRet += this.generateOneToManyFieldResolver(entity, r, isInternal);
           }
