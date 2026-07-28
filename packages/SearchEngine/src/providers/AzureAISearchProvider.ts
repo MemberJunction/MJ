@@ -22,6 +22,7 @@
 import { LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from '../generic/ISearchProvider';
+import { CheckScopeStringFilter } from '../generic/ScopeFilterGuard';
 import {
     SearchSource,
     SearchFilters,
@@ -125,8 +126,20 @@ export class AzureAISearchProvider extends BaseSearchProvider {
             if (this.parsedConfig?.defaultSearchFields) {
                 body.searchFields = this.parsedConfig.defaultSearchFields;
             }
-            if (idx.MetadataFilter && typeof idx.MetadataFilter === 'string') {
-                body.filter = idx.MetadataFilter;
+            // Permission / tenant push-down for this lane lives ENTIRELY in the scope's
+            // MetadataFilter (see the file header), so if one was authored but cannot be
+            // applied we must NOT query — an unfiltered Azure request would read the whole
+            // index. Fail this index closed instead.
+            const filterCheck = CheckScopeStringFilter(idx.MetadataFilter);
+            if (filterCheck.Status === 'unusable') {
+                LogError(
+                    `AzureAISearchProvider: skipping index "${idx.ExternalIndexName}" — its scope MetadataFilter cannot be applied (${filterCheck.Reason}). ` +
+                    `The index is NOT queried, because this lane's tenant/permission push-down lives entirely in that filter.`
+                );
+                return { index: idx.ExternalIndexName as string, hits: [] as AzureSearchHit[] };
+            }
+            if (filterCheck.Status === 'usable') {
+                body.filter = filterCheck.Value;
             }
             try {
                 const response = await fetch(url, {

@@ -23,6 +23,7 @@
 import { LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from '../generic/ISearchProvider';
+import { CheckScopeStringFilter } from '../generic/ScopeFilterGuard';
 import {
     SearchSource,
     SearchFilters,
@@ -119,8 +120,18 @@ export class TypesenseSearchProvider extends BaseSearchProvider {
                 query_by: queryBy,
                 per_page: String(topK),
             });
-            if (idx.MetadataFilter && typeof idx.MetadataFilter === 'string') {
-                params.set('filter_by', idx.MetadataFilter);
+            // A filter authored but not applicable must not degrade into an unfiltered
+            // collection scan — fail this collection closed instead.
+            const filterCheck = CheckScopeStringFilter(idx.MetadataFilter);
+            if (filterCheck.Status === 'unusable') {
+                LogError(
+                    `TypesenseSearchProvider: skipping collection "${idx.ExternalIndexName}" — its scope MetadataFilter cannot be applied (${filterCheck.Reason}). ` +
+                    `The collection is NOT queried, because running it without filter_by would ignore the scope's restriction.`
+                );
+                return { collection: idx.ExternalIndexName as string, hits: [] as TypesenseHit[] };
+            }
+            if (filterCheck.Status === 'usable') {
+                params.set('filter_by', filterCheck.Value);
             }
             const url = `${node}/collections/${encodeURIComponent(idx.ExternalIndexName as string)}/documents/search?${params.toString()}`;
             try {

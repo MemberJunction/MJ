@@ -27,6 +27,7 @@
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from '../generic/ISearchProvider';
+import { CheckScopeObjectFilter } from '../generic/ScopeFilterGuard';
 import {
     SearchSource,
     SearchFilters,
@@ -183,8 +184,19 @@ export class ElasticsearchSearchProvider extends BaseSearchProvider {
         const filterClauses: unknown[] = [];
         for (const idx of scopeConstraints?.ExternalIndexes ?? []) {
             if (idx.IndexType !== 'Elasticsearch') continue;
-            if (idx.MetadataFilter && typeof idx.MetadataFilter === 'object') {
-                filterClauses.push(idx.MetadataFilter);
+            const filterCheck = CheckScopeObjectFilter(idx.MetadataFilter);
+            if (filterCheck.Status === 'unusable') {
+                // All target indexes share ONE request here, so an inapplicable filter would
+                // under-filter the entire lane. Fail the lane closed rather than pushing down
+                // less restriction than the scope author declared.
+                LogError(
+                    `ElasticsearchSearchProvider: aborting search — index "${idx.ExternalIndexName}" has a scope MetadataFilter that cannot be applied (${filterCheck.Reason}). ` +
+                    `No query is issued, because this lane composes one request across indexes and would otherwise run under-filtered.`
+                );
+                return [];
+            }
+            if (filterCheck.Status === 'usable') {
+                filterClauses.push(filterCheck.Value);
             }
         }
 
