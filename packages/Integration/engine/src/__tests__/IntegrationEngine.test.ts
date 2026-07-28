@@ -27,6 +27,14 @@ import { IntegrationEngine } from '../IntegrationEngine.js';
 
 // Track mock RunView calls
 let mockRunViewsFn: ReturnType<typeof vi.fn>;
+
+/**
+ * Default batched-read behaviour: fan a `RunViews` call out to the per-params `RunView` mock, so
+ * the entity-aware routers each test installs answer batched legs too. A test that pins a specific
+ * batched read with `mockResolvedValueOnce` still overrides this.
+ */
+const fanOutToRunView = async (params: Array<Record<string, unknown>>, contextUser?: unknown) =>
+    Promise.all(params.map(p => mockRunViewFn(p, contextUser)));
 let mockRunViewFn: ReturnType<typeof vi.fn>;
 
 // Track mock entity Save/NewRecord/InnerLoad calls
@@ -190,7 +198,7 @@ describe('IntegrationEngine', () => {
         orchestrator = new IntegrationEngine();
         mockEntityInstances = new Map();
         mockRunViewFn = vi.fn();
-        mockRunViewsFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
         // Clear static activeSyncs between tests to prevent cross-test interference
         // Access via bracket notation since it's private static
         (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
