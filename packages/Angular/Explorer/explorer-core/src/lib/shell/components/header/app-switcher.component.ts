@@ -86,8 +86,10 @@ export class AppSwitcherComponent {
    */
   openConfigDialog(): void {
     this.showDropdown = false;
-    this.showConfigDialog = true;
-    // Use setTimeout to ensure ViewChild is available
+    // Open() drives the dialog AND updates `showConfigDialog` via the now-round-tripping
+    // `[(ShowDialog)]` binding (its setter emits ShowDialogChange) — no need to also set the flag
+    // here (bug F1: the old double-drive was redundant/fragile). The component is always rendered,
+    // so the ViewChild is available; the setTimeout stays only as defensive timing insurance.
     setTimeout(() => {
       if (this.appConfigDialog) {
         this.appConfigDialog.Open();

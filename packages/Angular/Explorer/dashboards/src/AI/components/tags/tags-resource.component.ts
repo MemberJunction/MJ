@@ -3481,7 +3481,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     private resolveVectorIndexName(indexId: string): string {
         if (!indexId) return 'System default';
         const engine = KnowledgeHubMetadataEngine.Instance;
-        const idx = engine.GetVectorIndexById(indexId);
+        const idx = engine.GetVectorIndexByID(indexId);
         return idx ? idx.Name : 'Unknown';
     }
 

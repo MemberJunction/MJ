@@ -1177,6 +1177,43 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Whether the agent-run gear's expanded panel would actually render anything —
+   * used to gate the gear button itself so it doesn't appear as a dead control
+   * that opens an empty popup. The panel hosts, in order: the run-details section
+   * (only when `showAgentRunDetails`), associated tasks, and (non-last messages
+   * only) the delete / rating / pin overflow. With `showAgentRunDetails=false` and
+   * none of those enabled — a white-labeled end-user surface — the gear vanishes
+   * entirely instead of opening onto nothing.
+   *
+   * Each arm below mirrors the corresponding template condition EXACTLY; keep them
+   * in lockstep with `message-item.component.html`'s `.agent-details-panel` block.
+   *
+   * Defaults leave it unchanged: with `showAgentRunDetails=true` (the default) this
+   * is unconditionally true, so the gear renders exactly as before — including the
+   * pre-existing window where `agentRun` hasn't loaded yet and the panel is briefly
+   * empty. That window is deliberately preserved (byte-identical defaults) rather
+   * than fixed here.
+   */
+  public get hasAgentDetailsPanelContent(): boolean {
+    // Run-details enabled → gear shows for any agent-run message (the button
+    // already AND-gates hasAgentRun), exactly as before the gate existed — even
+    // before the agentRun object finishes loading. This keeps the default
+    // (showAgentRunDetails=true) byte-identical.
+    if (this.showAgentRunDetails) return true;
+    if (this.detailTasks.length > 0) return true;
+    if (!this.isLastMessage) {
+      if (this.allowMessageDelete && this.isConversationOwner) return true;
+      if (this.allowPinning) return true;
+      // The rating only renders inside the template's `messageStatus === 'Complete'`
+      // branch, so an incomplete/errored message must NOT count it as content —
+      // otherwise the gear reappears over an empty panel, which is the whole bug
+      // this getter exists to prevent.
+      if (this.showMessageRating && this.messageStatus === 'Complete') return true;
+    }
+    return false;
+  }
+
+  /**
    * Toggle the agent details panel expansion
    */
   public async toggleAgentDetails(): Promise<void> {

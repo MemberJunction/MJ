@@ -39,6 +39,7 @@
     "src/lib/components/message/message-item-assistant-identity.dom.test.ts",
     "src/lib/components/message/message-list.component.ts",
     "src/lib/components/message/message-list-assistant-identity.dom.test.ts"
+    "src/lib/components/message/message-item-gear-affordance.dom.test.ts"
   ],
   "exclude": [
     "node_modules",

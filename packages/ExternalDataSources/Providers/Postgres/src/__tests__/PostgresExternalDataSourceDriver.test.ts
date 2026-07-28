@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
 import type { ExternalQueryParameter, ExternalViewParams } from '@memberjunction/external-data-sources';
+import type { EntityInfo } from '@memberjunction/core';
 import { PostgresExternalDataSourceDriver } from '../PostgresExternalDataSourceDriver';
 
 // Unit-test the pure SQL-building helpers (identifier quoting, qualification,
@@ -76,6 +77,36 @@ describe('PostgresExternalDataSourceDriver — SQL building', () => {
     });
     it('escapes embedded double-quotes in identifiers', () => {
       expect(d.qual(ds({ DefaultSchema: null as unknown as string }), 'we"ird')).toBe('"we""ird"');
+    });
+  });
+
+  describe('ResolveObjectName (PostgreSQL schema qualification from EntityInfo)', () => {
+    // The shared SQL-driver override the read router calls. For a PostgreSQL source the entity's
+    // SchemaName is the REAL schema CodeGen introspected against (e.g. 'public'), NOT the SQL-Server
+    // column default 'dbo' — so a bare name resolves under that real schema. Reads only
+    // ExternalObjectName / BaseTable / Name / SchemaName.
+    const entity = (o: { ExternalObjectName?: string; BaseTable?: string; Name?: string; SchemaName?: string }) =>
+      ({ ExternalObjectName: o.ExternalObjectName, BaseTable: o.BaseTable, Name: o.Name ?? 'X', SchemaName: o.SchemaName }) as unknown as EntityInfo;
+
+    it("qualifies a bare object under PostgreSQL's real default schema 'public'", () => {
+      expect(d.ResolveObjectName(entity({ ExternalObjectName: 'orders', SchemaName: 'public' }))).toBe('public.orders');
+    });
+    it('qualifies under a non-default PG schema (e.g. analytics)', () => {
+      expect(d.ResolveObjectName(entity({ ExternalObjectName: 'daily', SchemaName: 'analytics' }))).toBe('analytics.daily');
+    });
+    it('leaves an already schema-qualified name untouched (no double-qualify)', () => {
+      expect(d.ResolveObjectName(entity({ ExternalObjectName: 'public.orders', SchemaName: 'public' }))).toBe('public.orders');
+    });
+    it('returns the bare name when the entity has no SchemaName', () => {
+      expect(d.ResolveObjectName(entity({ ExternalObjectName: 'orders' }))).toBe('orders');
+    });
+    it('falls through an EMPTY-string ExternalObjectName to BaseTable (the `||`-not-`??` contract)', () => {
+      // Guards the intentional `||`: `??` (nullish) would keep the empty string and produce a broken `public.`.
+      expect(d.ResolveObjectName(entity({ ExternalObjectName: '', BaseTable: 'orders', SchemaName: 'public' }))).toBe('public.orders');
+    });
+    it('end-to-end: ResolveObjectName → qualifyObject yields a fully-quoted PG target', () => {
+      const objectName = d.ResolveObjectName(entity({ ExternalObjectName: 'orders', SchemaName: 'public' }));
+      expect(d.qual(ds({}), objectName)).toBe('"public"."orders"');
     });
   });
 

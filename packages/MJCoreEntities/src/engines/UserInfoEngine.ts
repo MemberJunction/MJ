@@ -895,6 +895,24 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
+   * The canonical "apps a NEW user should receive by default" list: **Active** applications flagged
+   * `DefaultForNewUser`, in `DefaultSequence` order. This is the SINGLE source of truth for
+   * default-app provisioning (bug F2). Previously the filter was re-implemented in several places
+   * that drifted — e.g. the JWT new-user path omitted the `Status === 'Active'` check, so an
+   * inactive default app could be provisioned there but not via the client self-heal path. All
+   * provisioning paths should call this. Callers that need to skip apps a user already has should
+   * filter the result by their existing ApplicationIDs.
+   *
+   * @param md the metadata source whose `Applications` cache to read (an `IMetadataProvider` or the
+   *           `Metadata` facade — both expose `Applications`)
+   */
+  public static GetDefaultApplicationsForNewUser(md: Pick<IMetadataProvider, 'Applications'>): ApplicationInfo[] {
+    return md.Applications
+      .filter((a) => a.DefaultForNewUser && a.Status === 'Active')
+      .sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
+  }
+
+  /**
    * Find application info by path or name (case-insensitive).
    * @param pathOrName - The path or name to search for
    */
@@ -1239,11 +1257,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     // Get existing UserApplication records for this user to prevent duplicates
     const existingAppIds = new Set(this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId)).map((ua) => ua.ApplicationID));
 
-    // Filter to Active apps with DefaultForNewUser=true, sorted by DefaultSequence
-    // Exclude apps that already have UserApplication records
-    const defaultApps = md.Applications.filter((a) => a.DefaultForNewUser && a.Status === 'Active' && !existingAppIds.has(a.ID)).sort(
-      (a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100),
-    );
+    // Active apps flagged DefaultForNewUser, in DefaultSequence order (shared source of truth),
+    // then exclude apps that already have UserApplication records for this user.
+    const defaultApps = UserInfoEngine.GetDefaultApplicationsForNewUser(md).filter((a) => !existingAppIds.has(a.ID));
 
     if (defaultApps.length === 0) {
       console.log('UserInfoEngine.CreateDefaultApplications: No new apps to install (all defaults already exist)');

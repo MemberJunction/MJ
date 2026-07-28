@@ -128,7 +128,7 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `showExportButton` | The conversation export button |
 | `showShareButton` | The conversation share button |
 | `showArtifactIndicator` | The artifact indicator |
-| `showAgentRunDetails` | The per-message agent run-detail grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide |
+| `showAgentRunDetails` | The per-message agent run-details section — the expander header AND its grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide. The gear button that opens the panel is itself hidden when nothing would be left in it (no run details, no associated tasks, and no delete/pin/rating overflow), so an end-user surface gets no dead control rather than one that opens an empty popup |
 | `showReactions` | The per-message reaction buttons (like / comment) |
 | `showMessageRating` | The per-message thumbs rating control |
 | `allowPinning` | Message pinning (per-message pin button, header pin chip, pinned-messages panel) |
