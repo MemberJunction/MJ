@@ -10,7 +10,7 @@ The widget exposes three layers of extension:
 
 | Surface | What it lets you do |
 |---|---|
-| **6 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **7 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected). Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
 | **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
 | **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
 
@@ -151,6 +151,51 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 </mj-conversation-chat-area>
 ```
 
+#### Header customization
+
+Beyond the boolean toggles, the header's Export button is re-brandable and the action strip is extensible:
+
+- `exportButtonLabel` (default `'Export'`) and `exportButtonIcon` (default `'fas fa-download'`) — relabel/re-icon the Export button (e.g. a white-label "Download").
+- The **`headerActions` slot** adds host buttons INSIDE the default header's action strip, after the stock buttons — unlike the `header` slot, which replaces the whole header (and therefore suppresses `headerActions`). Context carries the conversation, its ID, and `isProcessing`. Use `mjButton variant="flat" size="sm"` for visual parity:
+
+```html
+<mj-conversation-chat-area [conversationId]="conversationId">
+  <ng-template mjChatSlot="headerActions" let-conversation let-isProcessing="isProcessing">
+    <button mjButton variant="flat" size="sm" [disabled]="isProcessing" (click)="printConversation(conversation)">
+      <i class="fas fa-print"></i>
+      <span class="btn-label">Print</span>
+    </button>
+  </ng-template>
+</mj-conversation-chat-area>
+```
+
+#### Branded export
+
+Branding applies to **every** export format. HTML gets the full treatment (theme colors, an inlined logo, the title, and a trademark footer); JSON/markdown/text carry the title and trademark, markdown also references the logo, and JSON emits a `branding` block. Supply `exportBranding` on the chat area (forwarded to the export modal, where it defaults the "Include branding" checkbox on):
+
+```typescript
+// ExportBranding (from the export service)
+{
+  brandTokens?: Record<string, string>;  // HTML only: ':root{}' block baked into the file; when omitted
+                                         // and includeTheme is on, DEFAULT_EXPORT_THEME_TOKENS are
+                                         // auto-snapshotted from the live document at export time
+  logoUrl?: string;                      // HTML: inlined as a data URI above the title (raw URL on fetch
+                                         // failure); markdown: referenced by URL; JSON: carried as a string
+  title?: string;                        // overrides the document title (defaults to the conversation name)
+  trademark?: string;                    // short attribution line rendered at the foot of every format
+                                         // (styled HTML footer, markdown/text trailer, JSON branding field)
+}
+```
+
+Color theming (`brandTokens`) is HTML-only — it has no meaning in the data/plain-text formats, and those formats never serialize the tokens. Without branding the exported file is unchanged from previous releases: the HTML stylesheet reads `var(--mj-…, legacyHex)` so every color resolves to the exact prior value when no `:root` block is emitted, and JSON/markdown/text are byte-identical to before. Programmatic consumers can build export content without a download via `ExportService.BuildExportContent(...)` and snapshot the live theme via `ExportService.SnapshotBrandTokens()`.
+
+Two gating rules are worth knowing:
+
+- **`includeCSS` is an HTML-only concern.** In HTML the logo and the trademark footer each need their stylesheet rule, so both are suppressed when `includeCSS` is false — an unstyled full-size logo is worse than none. The `title` override has no stylesheet dependency and always applies. Markdown/text/JSON ignore `includeCSS` entirely.
+- **The theme snapshot captures a CHOSEN mode, not the live one.** `ExportOptions.themeMode` (`'light'` | `'dark'`, default `'light'`; surfaced as a Theme dropdown in the modal) decides which palette is baked in. Without it, exporting from a dark session put dark text on the export's white page. The exported `body` carries `--mj-bg-page` and `--mj-text-primary`, so a dark export is coherent rather than inverted.
+- **`includeTheme` gates only the token AUTO-SNAPSHOT.** An explicitly supplied `brandTokens` map, plus `logoUrl` / `title` / `trademark`, apply whenever `branding` is present. In the modal, "Include branding" is the single user-facing switch for all of it, and it sits with the general options because it affects every format — not just HTML.
+
+`trademark` and `title` are **not** markdown-escaped; a value containing `_`, `]`, `)`, or a newline can break the surrounding markdown. Supply plain text (the HTML and JSON paths are escaped).
 #### Assistant identity
 
 White-label hosts can brand the AI side of the message feed through the component contract (no CSS on `.message-sender` / `.avatar-circle` internals). Both default to `null` — the engine-resolved agent identity, today's behavior:
