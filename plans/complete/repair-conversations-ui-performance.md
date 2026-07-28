@@ -57,7 +57,7 @@ const result = await rv.RunView<{ID: string; ConversationID: string; AgentID: st
 - Use `entity_object` only when you need to call `.Save()`, `.Delete()`, or `.Validate()`
 - Use `simple` + `Fields` for read-only lookups
 
-See [CLAUDE.md - RunView ResultType and Fields Optimization](../CLAUDE.md#runview-resulttype-and-fields-optimization) for complete documentation.
+See [RunView ResultType and Fields Optimization](../../.claude/rules/data-access.md#runview-resulttype-and-fields-optimization) for complete documentation.
 
 ---
 

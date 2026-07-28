@@ -1165,7 +1165,7 @@ A simpler read-only example is `AIEngine.RefreshActions()` in `@memberjunction/a
 
 **Why this is a convention, not a one-off optimization**: donors are discovered dynamically at runtime. Consumers get faster automatically as new engines ship — no version coupling, no hardcoded donor lists. When no engine caches the entity, the lookup returns empty and the consumer falls back to its own `RunView`/`Load`, so adoption is always graceful.
 
-The same convention is summarized in the repo root [CLAUDE.md](../CLAUDE.md) under "Check the Registry Before You Query".
+The same convention is summarized in [`.claude/rules/data-access.md`](../.claude/rules/data-access.md) under "Check the Registry Before You Query".
 
 ### LocalCacheManager Independent Event Handling
 

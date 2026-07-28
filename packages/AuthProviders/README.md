@@ -243,7 +243,7 @@ export class KeycloakProvider extends BaseAuthProvider {
 // Then in mj.config.cjs use type: 'keycloak'
 ```
 
-> **Important:** because the provider is loaded via class-factory metadata and not by direct reference, your bundler may tree-shake it out. Make sure the file containing the `@RegisterClass` decorator is imported (directly or transitively) before `AuthProviderFactory.createProvider()` runs. The built-in providers do this from [`AuthProviderFactory.ts`](src/AuthProviderFactory.ts); follow the same pattern in your own entry point or a manifest. See the class-registration manifest discussion in the [root project guide](../../CLAUDE.md) for background.
+> **Important:** because the provider is loaded via class-factory metadata and not by direct reference, your bundler may tree-shake it out. Make sure the file containing the `@RegisterClass` decorator is imported (directly or transitively) before `AuthProviderFactory.createProvider()` runs. The built-in providers do this from [`AuthProviderFactory.ts`](src/AuthProviderFactory.ts); follow the same pattern in your own entry point or a manifest. See the class-registration manifest discussion in [packages/CodeGenLib/CLAUDE.md](../CodeGenLib/CLAUDE.md) for background.
 
 ## API reference
 
@@ -309,8 +309,8 @@ A `GraphQLError` with `extensions.code = 'JWT_EXPIRED'` and `extensions.expiryDa
 
 ## Project guidelines
 
-- Class registration & tree-shaking caveats: see the manifest section of the [root project guide](../../CLAUDE.md)
-- Singleton best practices: see the `BaseSingleton` rules in the [root project guide](../../CLAUDE.md)
+- Class registration & tree-shaking caveats: see the manifest section of [packages/CodeGenLib/CLAUDE.md](../CodeGenLib/CLAUDE.md)
+- Singleton best practices: see the `BaseSingleton` rules in [.claude/rules/typescript-style.md](../../.claude/rules/typescript-style.md)
 
 ## License
 

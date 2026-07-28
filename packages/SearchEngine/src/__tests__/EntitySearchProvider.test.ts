@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Hoisted mock variables that can be referenced inside vi.mock factories
 const { mockRunViewFn, mockEntities } = vi.hoisted(() => {
@@ -419,6 +419,109 @@ describe('EntitySearchProvider', () => {
             await provider.Search('normal query text', 10, undefined, contextUser);
             const passedSearchString = (mockRunViewFn.mock.calls[0][0] as { UserSearchString: string }).UserSearchString;
             expect(passedSearchString).toBe('normal query text');
+        });
+    });
+
+    /**
+     * Bug C3 — minimum term length lowered from 3 to 2 so legitimate short queries
+     * ("US", "AI", product codes, initials) are searchable. Single characters remain
+     * rejected (a `LIKE '%x%'` fan-out across every entity is a full-DB scan with no
+     * relevance). Verified via observable behavior: below-threshold queries short-circuit
+     * before any RunView call.
+     */
+    describe('Search — MIN_TERM_LENGTH boundary (C3)', () => {
+        const seedSearchableEntity = (): void => {
+            mockEntities.push({
+                Name: 'People',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 },
+                ],
+                NameField: { Name: 'Name' },
+            });
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+        };
+
+        it('rejects a 1-character query (below threshold) — no RunView call', async () => {
+            seedSearchableEntity();
+            const results = await provider.Search('U', 10, undefined, contextUser);
+            expect(results).toEqual([]);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('accepts a 2-character query (at threshold) — issues the RunView', async () => {
+            seedSearchableEntity();
+            await provider.Search('US', 10, undefined, contextUser);
+            expect(mockRunViewFn).toHaveBeenCalledWith(
+                expect.objectContaining({ EntityName: 'People', UserSearchString: 'US' }),
+                contextUser
+            );
+        });
+    });
+
+    /**
+     * Bug C3 — per-entity candidate depth is decoupled from the global `topK` budget.
+     * Previously `perEntityLimit = max(3, ceil(topK / entityCount))`, so widening the entity
+     * fan-out shrank each entity's slice toward the floor of 3 and real matches beyond row 3
+     * were never fetched. Now each entity fetches up to `PerEntityFetchDepth` candidates (but
+     * never more than `topK`, since the fused set is capped at `topK` anyway). We assert on the
+     * `MaxRows` passed to each per-entity RunView.
+     */
+    describe('Search — PerEntityFetchDepth decoupling (C3)', () => {
+        const seedEntities = (count: number): void => {
+            for (let i = 0; i < count; i++) {
+                mockEntities.push({
+                    Name: `Entity${i}`,
+                    AllowUserSearchAPI: true,
+                    Fields: [
+                        { Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 },
+                    ],
+                    NameField: { Name: 'Name' },
+                });
+            }
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+        };
+
+        const maxRowsFor = (callIndex: number): number =>
+            (mockRunViewFn.mock.calls[callIndex][0] as { MaxRows: number }).MaxRows;
+
+        const originalDepth = EntitySearchProvider.PerEntityFetchDepth;
+        afterEach(() => {
+            EntitySearchProvider.PerEntityFetchDepth = originalDepth;
+        });
+
+        it('fetches PerEntityFetchDepth per entity even when topK/entityCount is far smaller', async () => {
+            // 5 entities, topK=50: old code → max(3, ceil(50/5)=10) = 10 per entity.
+            // New code → min(50, max(15, 10)) = 15 per entity (the fan-out no longer starves entities).
+            seedEntities(5);
+            await provider.Search('test', 50, undefined, contextUser);
+
+            expect(mockRunViewFn).toHaveBeenCalledTimes(5);
+            for (let i = 0; i < 5; i++) {
+                expect(maxRowsFor(i)).toBe(15);
+            }
+        });
+
+        it('never fetches more than topK per entity (small topK caps the depth)', async () => {
+            // 5 entities, topK=10: min(10, max(15, ceil(10/5)=2)) = 10. Depth is capped at topK.
+            seedEntities(5);
+            await provider.Search('test', 10, undefined, contextUser);
+
+            expect(mockRunViewFn).toHaveBeenCalledTimes(5);
+            for (let i = 0; i < 5; i++) {
+                expect(maxRowsFor(i)).toBe(10);
+            }
+        });
+
+        it('honors a tuned PerEntityFetchDepth (deployment-adjustable static)', async () => {
+            EntitySearchProvider.PerEntityFetchDepth = 30;
+            // 5 entities, topK=100: min(100, max(30, ceil(100/5)=20)) = 30.
+            seedEntities(5);
+            await provider.Search('test', 100, undefined, contextUser);
+
+            for (let i = 0; i < 5; i++) {
+                expect(maxRowsFor(i)).toBe(30);
+            }
         });
     });
 });

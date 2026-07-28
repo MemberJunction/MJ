@@ -10,7 +10,7 @@ The widget exposes three layers of extension:
 
 | Surface | What it lets you do |
 |---|---|
-| **6 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **7 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected). Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
 | **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
 | **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
 
@@ -117,7 +117,10 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 
 | Input | Gates |
 |---|---|
-| `allowMentions` | `@`-mention support in the composer |
+| `allowMentions` | MASTER switch for the composer's mention/command triggers (`@` agents, `#` entities, `/` skills). When `false`, all are off regardless of the per-type flags below |
+| `allowAgentMentions` | The `@` agent/user mention trigger (under `allowMentions`). Set `false` on a surface pinned to a default agent that wants `/` skills but not `@` — an `@` overrides the pinned agent in message routing |
+| `allowEntityMentions` | The `#` entity/query mention trigger (under `allowMentions`) |
+| `allowSkillCommands` | The `/` skill-command trigger (under `allowMentions`) |
 | `allowAttachments` | The file-attachment button |
 | `allowPlanMode` | The composer's Plan Mode toggle button |
 | `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
@@ -128,7 +131,7 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `showExportButton` | The conversation export button |
 | `showShareButton` | The conversation share button |
 | `showArtifactIndicator` | The artifact indicator |
-| `showAgentRunDetails` | The per-message agent run-detail grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide |
+| `showAgentRunDetails` | The per-message agent run-details section — the expander header AND its grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide. The gear button that opens the panel is itself hidden when nothing would be left in it (no run details, no associated tasks, and no delete/pin/rating overflow), so an end-user surface gets no dead control rather than one that opens an empty popup |
 | `showReactions` | The per-message reaction buttons (like / comment) |
 | `showMessageRating` | The per-message thumbs rating control |
 | `allowPinning` | Message pinning (per-message pin button, header pin chip, pinned-messages panel) |
@@ -148,46 +151,63 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 </mj-conversation-chat-area>
 ```
 
-### Conversation List
+#### Header customization
 
-#### Feature toggles
+Beyond the boolean toggles, the header's Export button is re-brandable and the action strip is extensible:
 
-The same white-label pattern extends to `mj-conversation-list` (and passes through `mj-conversation-sidebar`). All default to `true`; set `false` to remove the chrome entirely:
+- `exportButtonLabel` (default `'Export'`) and `exportButtonIcon` (default `'fas fa-download'`) — relabel/re-icon the Export button (e.g. a white-label "Download").
+- The **`headerActions` slot** adds host buttons INSIDE the default header's action strip, after the stock buttons — unlike the `header` slot, which replaces the whole header (and therefore suppresses `headerActions`). Context carries the conversation, its ID, and `isProcessing`. Use `mjButton variant="flat" size="sm"` for visual parity:
 
-| Input | Gates |
-|---|---|
-| `showSearch` | The search box in the list header |
-| `showNewConversationButton` | The "New Conversation" button (hosts wiring their own new-chat affordance listen to `newConversationRequested` elsewhere) |
-| `showHeaderMenu` | The ⋯ options menu (refresh / select conversations / group-by / hide sidebar). The header strip is removed entirely whenever nothing would occupy it |
-| `showSectionHeaders` | The collapsible Pinned / Folders / Messages section headers. When `false`, the list renders FLAT and fully expanded — folder grouping is bypassed (the folder tree's root drop-zone and New Folder action live in the section header, so a headerless tree would allow one-way folder nesting) — the chrome-less rendering for embedded hosts |
+```html
+<mj-conversation-chat-area [conversationId]="conversationId">
+  <ng-template mjChatSlot="headerActions" let-conversation let-isProcessing="isProcessing">
+    <button mjButton variant="flat" size="sm" [disabled]="isProcessing" (click)="printConversation(conversation)">
+      <i class="fas fa-print"></i>
+      <span class="btn-label">Print</span>
+    </button>
+  </ng-template>
+</mj-conversation-chat-area>
+```
 
-`mj-conversation-sidebar` also now **re-emits** the list's `(conversationDeleted)` (payload = the deleted conversation's ID) and `(refreshRequested)` outputs — previously these died at the sidebar boundary, forcing hosts to watch `ConversationEngine.Conversations$` to notice their active conversation vanish.
+#### Branded export
 
-#### Theming tokens
+Branding applies to **every** export format. HTML gets the full treatment (theme colors, an inlined logo, the title, and a trademark footer); JSON/markdown/text carry the title and trademark, markdown also references the logo, and JSON emits a `branding` block. Supply `exportBranding` on the chat area (forwarded to the export modal, where it defaults the "Include branding" checkbox on):
 
-The list panel renders on brand tokens by default (a `--mj-brand-secondary` panel with `--mj-brand-on-secondary` ink — the stock navy sidebar). White-label hosts can remap it onto surface tokens so the list matches the chat area, via nine component-scoped custom properties (settable at `:root` or on any ancestor):
-
-| Token | Default | Governs |
-|---|---|---|
-| `--mj-chat-list-bg` | `var(--mj-brand-secondary)` | Panel background (and its dropdown/context menus) |
-| `--mj-chat-list-ink` | `var(--mj-brand-on-secondary)` | Text — hover, border, divider, and placeholder tints all derive from this via `color-mix`, so they follow automatically |
-| `--mj-chat-list-active-bg` | `var(--mj-brand-primary)` | The active conversation row's background |
-| `--mj-chat-list-active-ink` | `var(--mj-brand-on-secondary)` | ALL text on the active row (title, preview, badges, icons) — remap alongside `active-bg` to keep the row legible |
-| `--mj-chat-list-active-hover-bg` | `var(--mj-brand-primary-hover)` | Hovered controls (the ⋯ button) on the active row |
-| `--mj-chat-list-accent` | `var(--mj-brand-primary)` | The panel's ACTION color — New Conversation button, search-focus ring, checkbox tick, and drag-over highlights — independent of the active-row pair |
-| `--mj-chat-list-accent-ink` | `var(--mj-text-inverse)` | Text/icon on the accent (the New Conversation button label) |
-| `--mj-chat-list-accent-hover` | `var(--mj-brand-primary-hover)` | Hover state of the accent (the New Conversation button) |
-| `--mj-chat-list-hover-bg` | `color-mix(… var(--mj-chat-list-ink) 8% …)` | Row-hover wash. Defaults to the ink-derived neutral tint; point it at a brand tint (e.g. `color-mix(in srgb, var(--mj-brand-primary) 12%, transparent)`) to make hover a brand cue while the panel stays on a neutral surface |
-
-```css
-/* e.g. match the list to the chat area's light surface */
-:root {
-  --mj-chat-list-bg: var(--mj-bg-surface-card);
-  --mj-chat-list-ink: var(--mj-text-primary);
+```typescript
+// ExportBranding (from the export service)
+{
+  brandTokens?: Record<string, string>;  // HTML only: ':root{}' block baked into the file; when omitted
+                                         // and includeTheme is on, DEFAULT_EXPORT_THEME_TOKENS are
+                                         // auto-snapshotted from the live document at export time
+  logoUrl?: string;                      // HTML: inlined as a data URI above the title (raw URL on fetch
+                                         // failure); markdown: referenced by URL; JSON: carried as a string
+  title?: string;                        // overrides the document title (defaults to the conversation name)
+  trademark?: string;                    // short attribution line rendered at the foot of every format
+                                         // (styled HTML footer, markdown/text trailer, JSON branding field)
 }
 ```
 
-Between the panel pair (`bg`/`ink`), the active-row pair (`active-bg`/`active-ink`/`active-hover-bg`), and the accent trio (`accent`/`accent-ink`/`accent-hover`), essentially every colored surface of the list is host-overridable; hover, border, divider, preview, badge, and placeholder tints all derive from `ink` (or `active-ink` on the active row) via `color-mix`, so they follow their pair automatically. Three small surfaces deliberately stay on the global brand tokens: the bulk-delete button's ink (`--mj-brand-on-secondary` — it sits on the error-red button, not the panel), the message-being-dragged glow (keeps its multi-hue brand/accent/success gradient), and the selection-mode "Select All / Deselect All" link's resting color (`--mj-brand-accent`; its hover already resolves to the list ink). Only the last matters on a light-surface remap, and it appears solely in multi-select mode. The routines section at the bottom of the sidebar already renders on surface tokens. Note the rename-flash animation and these defaults resolve through MJ's semantic tokens — a host that doesn't load MJ's token stylesheet should define the list tokens (and the brand/status tokens) explicitly.
+Color theming (`brandTokens`) is HTML-only — it has no meaning in the data/plain-text formats, and those formats never serialize the tokens. Without branding the exported file is unchanged from previous releases: the HTML stylesheet reads `var(--mj-…, legacyHex)` so every color resolves to the exact prior value when no `:root` block is emitted, and JSON/markdown/text are byte-identical to before. Programmatic consumers can build export content without a download via `ExportService.BuildExportContent(...)` and snapshot the live theme via `ExportService.SnapshotBrandTokens()`.
+
+Two gating rules are worth knowing:
+
+- **`includeCSS` is an HTML-only concern.** In HTML the logo and the trademark footer each need their stylesheet rule, so both are suppressed when `includeCSS` is false — an unstyled full-size logo is worse than none. The `title` override has no stylesheet dependency and always applies. Markdown/text/JSON ignore `includeCSS` entirely.
+- **The theme snapshot captures a CHOSEN mode, not the live one.** `ExportOptions.themeMode` (`'light'` | `'dark'`, default `'light'`; surfaced as a Theme dropdown in the modal) decides which palette is baked in. Without it, exporting from a dark session put dark text on the export's white page. The exported `body` carries `--mj-bg-page` and `--mj-text-primary`, so a dark export is coherent rather than inverted.
+- **`includeTheme` gates only the token AUTO-SNAPSHOT.** An explicitly supplied `brandTokens` map, plus `logoUrl` / `title` / `trademark`, apply whenever `branding` is present. In the modal, "Include branding" is the single user-facing switch for all of it, and it sits with the general options because it affects every format — not just HTML.
+
+`trademark` and `title` are **not** markdown-escaped; a value containing `_`, `]`, `)`, or a newline can break the surrounding markdown. Supply plain text (the HTML and JSON paths are escaped).
+#### Assistant identity
+
+White-label hosts can brand the AI side of the message feed through the component contract (no CSS on `.message-sender` / `.avatar-circle` internals). Both default to `null` — the engine-resolved agent identity, today's behavior:
+
+| Input | Overrides |
+|---|---|
+| `assistantDisplayName` | The display name on AI messages (e.g. a per-tenant persona like "Betty the Teacher"). Display-only: internal logic such as the conversation-manager check keeps comparing the real agent name |
+| `assistantAvatarUrl` | The AI message avatar — an image replaces the agent's Font Awesome icon |
+
+These complement `agentCharacterConfig`, which drives only the `agentPresence` strip — the two inputs extend the same identity into every message bubble. Runtime changes propagate to already-rendered messages (branding configs that resolve after first render, per-conversation persona switches), and a broken/whitespace avatar URL degrades to the agent icon rather than a broken-image glyph.
+
+**Scope — what the override deliberately does NOT cover:** the run-details expander header and its record link (they describe the *real* agent's diagnostics), the role tooltip (the agent record's `Description`), and realtime session cards. Hosts needing those surfaces hidden from end users gate them with `showAgentRunDetails` / their own chrome rather than relabeling internal data.
 
 ### Chat Overlay
 

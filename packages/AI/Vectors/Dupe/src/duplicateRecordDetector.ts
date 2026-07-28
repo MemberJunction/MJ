@@ -537,7 +537,7 @@ export class DuplicateRecordDetector extends VectorBase {
     protected async ValidateEntityDocument(entityDocumentID: string): Promise<MJEntityDocumentEntity | null> {
         // Ensure KH engine is initialized (no-op if already loaded)
         await KnowledgeHubMetadataEngine.Instance.Config(false, this.CurrentUser);
-        const doc = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentById(entityDocumentID);
+        const doc = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentByID(entityDocumentID);
         return doc ?? null;
     }
 
@@ -591,7 +591,7 @@ export class DuplicateRecordDetector extends VectorBase {
         // Resolve the vector index name from the entity document's VectorIndexID
         // Uses KnowledgeHubMetadataEngine cache instead of a RunView query
         if (entityDocument.VectorIndexID) {
-            const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexById(entityDocument.VectorIndexID);
+            const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
             if (vectorIndex) {
                 this.indexName = vectorIndex.Name;
             }
