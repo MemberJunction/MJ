@@ -53,6 +53,12 @@
 .region-hidden * {
   visibility: hidden !important;
   pointer-events: none !important;
+  /* Region swaps must be INSTANT: `transition: all` rules on GL internals
+     (e.g. .lm_stack) would otherwise transition `visibility` — which
+     interpolates discretely, keeping the outgoing region painted on top for
+     the full transition duration (a ~200ms flash of the record form over
+     the destination page). */
+  transition: none !important;
 }
 
 /* Direct content container for single-resource mode */
