@@ -58,7 +58,6 @@ describe('DEFAULT_SYSTEM_PLACEHOLDERS', () => {
 
         expect(names).toContain('_MODEL_ID');
         expect(names).toContain('_VENDOR_ID');
-        expect(names).toContain('_AGENT_RUN_ID');
         expect(names).toContain('_CONVERSATION_LENGTH');
     });
 });

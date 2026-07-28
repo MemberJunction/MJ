@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
+import type { EntityInfo } from '@memberjunction/core';
 import { MongoExternalDataSourceDriver } from '../MongoExternalDataSourceDriver';
 
 // Unit-test the pure read-only pipeline guard — no database connection required.
@@ -65,5 +66,25 @@ describe('MongoExternalDataSourceDriver — native query param guard', () => {
     // failure is NOT the param-guard message.
     const res = await d.RunNativeQuery(fakeSource(), '{"collection":"c","pipeline":[]}', undefined);
     expect(res.errorMessage ?? '').not.toMatch(/do not support bound parameters/i);
+  });
+});
+
+describe('MongoExternalDataSourceDriver — object-name resolution', () => {
+  const d = new TestableMongoDriver();
+  const entity = (o: { ExternalObjectName?: string; BaseTable?: string; Name?: string; SchemaName?: string }) =>
+    ({ ExternalObjectName: o.ExternalObjectName, BaseTable: o.BaseTable, Name: o.Name ?? 'Orders', SchemaName: o.SchemaName }) as unknown as EntityInfo;
+
+  // REGRESSION GUARD: MongoDB uses objectName as a LITERAL collection name (db.collection(objectName)).
+  // Entity.SchemaName is NOT NULL DEFAULT 'dbo', so every Mongo entity carries a non-empty SchemaName.
+  // The base ResolveObjectName must NOT schema-qualify (that override is SQL-only) — otherwise a Mongo
+  // read would target db.collection('dbo.orders'), a non-existent collection, and silently return nothing.
+  it('returns the bare collection name even when the entity has a SchemaName', () => {
+    expect(d.ResolveObjectName(entity({ ExternalObjectName: 'orders', BaseTable: 'orders', SchemaName: 'dbo' }))).toBe('orders');
+  });
+  it('does not prepend a non-default schema for Mongo (unlike the SQL drivers)', () => {
+    expect(d.ResolveObjectName(entity({ ExternalObjectName: 'orders', SchemaName: 'salesdb' }))).toBe('orders');
+  });
+  it('falls back to BaseTable then Name when ExternalObjectName is unset', () => {
+    expect(d.ResolveObjectName(entity({ BaseTable: 'events', SchemaName: 'dbo' }))).toBe('events');
   });
 });
