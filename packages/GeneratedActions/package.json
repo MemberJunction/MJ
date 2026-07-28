@@ -29,7 +29,7 @@
     "@memberjunction/core-entities-server": "5.49.0",
     "@memberjunction/ai": "5.49.0",
     "@memberjunction/aiengine": "5.49.0",
-    "zod": "~3.24.4"
+    "zod": "^3.25.0"
   },
   "repository": {
     "type": "git",
