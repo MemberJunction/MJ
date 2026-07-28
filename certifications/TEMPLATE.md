@@ -44,7 +44,8 @@ Flake policy: suspected flake → max 2 reruns, must pass clean twice consecutiv
 
 - [ ] All gates pass with evidence linked above
 - [ ] `release-lines.json` PR opened (status → certified, certifiedBuild, certifiedDate, supportEnds, scorecard path)
-- [ ] npm `latest` flip executed (`node ci/dist-tag-all.mjs --version <certified> --tag latest`) and verified
+- [ ] npm `latest` flip executed **from the certified tag's checkout** (`git checkout v<certified> && node ci/dist-tag-all.mjs --version <certified> --tag latest`) and verified — enumeration reads the checked-out workspace globs, so running from `next` would use the wrong package set
+- [ ] Previous certified line flipped to `maintenance` in the same `release-lines.json` PR (the validator warns if two lines stay `certified`)
 - [ ] GitHub Release for the certified build marked as latest (`gh release edit v<certified> --latest`)
 - [ ] Comms sent (Appendix A.3 for the first certification; A.2-close otherwise)
 

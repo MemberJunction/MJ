@@ -7,3 +7,10 @@
 /ci/release-lines.schema.json @cadam11
 /ci/validate-release-lines.mjs @cadam11
 /certifications/ @cadam11
+
+# The enforcement chain itself: editing the guard workflow, the publish channel
+# logic, or the dist-tag mover can silently disable the checks above — those
+# changes need the same eyes as the data they protect.
+/.github/workflows/release-lines-guard.yml @cadam11
+/.github/workflows/publish.yml @cadam11
+/ci/dist-tag-all.mjs @cadam11

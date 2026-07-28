@@ -299,10 +299,29 @@ function loadAtRef(ref, file) {
   }
 }
 
+// Non-fatal PR-mode advisory: `certified → maintenance` is a legal transition but
+// nothing fires it automatically — the certification PR for line N+1 must flip
+// line N. Two simultaneously-certified lines almost always mean that step was
+// forgotten (§9.2: the sliding window is current + previous, previous = maintenance).
+export function findDualCertified(doc) {
+  const certified = Object.entries(doc.lines ?? {})
+    .filter(([, line]) => line?.status === 'certified')
+    .map(([key]) => key);
+  return certified.length > 1 ? certified : [];
+}
+
 function main() {
   const args = parseCliArgs(process.argv.slice(2));
   const head = JSON.parse(readFileSync(args.file, 'utf8'));
   const errors = validateStructure(head);
+  if (args.mode === 'pr' || !args.base) {
+    const dual = findDualCertified(head);
+    if (dual.length > 0) {
+      console.warn(
+        `WARN lines ${dual.join(', ')} are simultaneously "certified" — did the certification PR forget to flip the previous line to "maintenance"?`
+      );
+    }
+  }
   if (args.base) {
     const baseRaw = loadAtRef(args.base, args.file);
     if (baseRaw === null) {
