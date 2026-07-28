@@ -250,6 +250,15 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(gate).toBeDefined();
         expect(gate!.message).toMatch(/1 check/i);
         expect(gate!.message).toMatch(/mutation/i);
+
+        // Identify the checks by ID, not by their full prose Name. Check names already carry a
+        // "(mutation)" marker and a full sentence of description, so naming them inline produced
+        // a duplicated tier word and an unreadable wall of text for a bundle with 8 gated checks.
+        expect(gate!.message).toContain('unitallmut2.A');
+        expect(gate!.message).not.toContain('allMutA');
+        // The tier is named ONCE for the group, not once per check. (Counting bare "mutation"
+        // would be wrong — RUN_MUTATION_TESTS and runMutationTests legitimately contain it.)
+        expect(gate!.message.match(/mutation-tier/gi)!.length).toBe(1);
     });
 
     it('records the checks a PARTIAL filter dropped, so a 1-of-2 run cannot read as full coverage', async () => {

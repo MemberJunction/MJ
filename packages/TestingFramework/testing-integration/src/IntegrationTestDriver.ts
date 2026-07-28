@@ -335,32 +335,51 @@ export class IntegrationTestDriver extends BaseTestDriver {
             if (lifecycle) {
                 await lifecycle.Setup(checkCtx);
             }
-            // Names of checks the tier filter dropped. Recorded (below) rather than silently
-            // skipped: `score` is computed over the checks that RAN, so a bundle with 8 of 9
-            // checks filtered reports 1/1 = 100%, and a bundle with ALL of them filtered reports
-            // Skipped with nothing explaining why. Both read as coverage that never happened.
-            const filteredByTier: string[] = [];
+            // IDs of checks the tier filter dropped, grouped by the tier that dropped them.
+            // Recorded (below) rather than silently skipped: `score` is computed over the checks
+            // that RAN, so a bundle with 8 of 9 checks filtered reports 1/1 = 100%, and a bundle
+            // with ALL of them filtered reports Skipped with nothing explaining why. Both read as
+            // coverage that never happened.
+            //
+            // Identified by Id, NOT Name: a check's Name is a full sentence that already carries
+            // its own "(mutation)" marker, so listing names inline duplicated the tier word and
+            // turned an 8-check bundle's gate message into an unreadable paragraph.
+            const filteredMutation: string[] = [];
+            const filteredLiveModel: string[] = [];
             for (const check of bundle) {
                 if (isTimedOut()) {
                     break;
                 }
                 if (check.RequiresMutation && !mutationEnabled) {
-                    filteredByTier.push(`${check.Name} (mutation)`);
+                    filteredMutation.push(check.Id);
                     continue;
                 }
                 if (check.RequiresLiveModel && !liveModelEnabled) {
-                    filteredByTier.push(`${check.Name} (live-model)`);
+                    filteredLiveModel.push(check.Id);
                     continue;
                 }
                 await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, deadline);
             }
-            if (filteredByTier.length > 0) {
+            const filteredCount = filteredMutation.length + filteredLiveModel.length;
+            if (filteredCount > 0) {
+                // The tier is named ONCE per group, with the env var that would enable it — the
+                // reader's next action is turning a tier on, not reading N copies of the word.
+                const groups: string[] = [];
+                if (filteredMutation.length > 0) {
+                    groups.push(
+                        `${filteredMutation.length} mutation-tier (enable with RUN_MUTATION_TESTS=1 ` +
+                        `or the selector's runMutationTests): ${filteredMutation.join(', ')}`
+                    );
+                }
+                if (filteredLiveModel.length > 0) {
+                    groups.push(
+                        `${filteredLiveModel.length} live-model-tier (enable with RUN_AGENT_TESTS=1): ` +
+                        `${filteredLiveModel.join(', ')}`
+                    );
+                }
                 // A 'gate' oracle is run METADATA — buildResult excludes it from the check counts
                 // and the score, so recording the omission cannot itself inflate the result.
-                const message =
-                    `${bundleType}: ${filteredByTier.length} check(s) not run — tier not enabled ` +
-                    `(set RUN_MUTATION_TESTS=1 / RUN_AGENT_TESTS=1, or opt in via the selector's ` +
-                    `runMutationTests): ${filteredByTier.join(', ')}`;
+                const message = `${bundleType}: ${filteredCount} check(s) not run — ${groups.join('; ')}`;
                 oracleResults.push({ oracleType: 'gate', passed: true, score: 1, message, details: { DurationMs: 0 } });
                 this.logToTestRun(context, 'info', message);
             }

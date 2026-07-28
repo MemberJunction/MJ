@@ -306,10 +306,19 @@ export const CacheGauntletChecks: NamedCheck[] = [
 
             // Precondition: the slot must genuinely be served from cache, or "it re-executed after
             // drift" proves nothing — it would have re-executed anyway.
+            //
+            // Cache-write COUNTS, not ExecutionTime. A warm read writes no slot and a re-executed
+            // read writes one, which is exact; wall-clock is not. PostgreSQL re-executes this small
+            // query in sub-millisecond time and reports ExecutionTime 0 — indistinguishable from a
+            // cache hit — so the timing form made this check flaky on the PG lane (it passed on
+            // SQL Server and on one PG run, then failed on the next with identical code). This is
+            // the same idiom aggregates-cache already uses.
             await rv.RunView(params, ctx.User);
+            ctx.Storage.ResetCounts();
             const hit = await rv.RunView(params, ctx.User);
             Assert(hit.Success, `warm repeat failed: ${hit.ErrorMessage}`);
-            AssertEqual(hit.ExecutionTime, 0, 'the slot must be served from cache before drift can be shown to reject it');
+            AssertEqual(ctx.Storage.SetCount(CACHE_CATEGORY), 0,
+                'the slot must be served from cache before drift can be shown to reject it (a served read writes no slot)');
 
             // Drift EVERY slot for this entity, not just the first one carrying a hash.
             // Several coexist that differ only in trailing fingerprint segments (e.g. `imr:1` for
@@ -337,10 +346,11 @@ export const CacheGauntletChecks: NamedCheck[] = [
             // A slot whose stored hash no longer matches the entity's field list must be rejected
             // and the query re-run. This is the post-migration case: rows cached before a column
             // was added must never be served with the stale column set.
+            ctx.Storage.ResetCounts();
             const after = await rv.RunView(params, ctx.User);
             Assert(after.Success, `post-drift read failed: ${after.ErrorMessage}`);
-            Assert((after.ExecutionTime ?? 0) > 0,
-                'a slot whose schemaHash no longer matches the entity was served from cache — post-migration reads would return a stale column set');
+            Assert(ctx.Storage.SetCount(CACHE_CATEGORY) > 0,
+                'a slot whose schemaHash no longer matches the entity was served from cache (no slot was re-written) — post-migration reads would return a stale column set');
             console.log(`      → drifted ${drifted}/${candidates.length} slots; the stale slot was rejected and re-executed`);
         }
     },
