@@ -93,7 +93,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         ContentSourceTypes: [],
         ContentFileTypes: [],
         VectorIndexes: [],
-        GetVectorIndexById: vi.fn().mockReturnValue(undefined),
+        GetVectorIndexByID: vi.fn().mockReturnValue(undefined),
     };
     return {
         ...actual,
