@@ -73,6 +73,15 @@ export interface ExportOptions {
    * everything travels together.)
    */
   includeTheme?: boolean;
+  /**
+   * Which theme mode the snapshot captures — NOT whichever mode the app happens to be
+   * in when the user clicks Export. Defaults to `'light'`: an export taken during a
+   * dark session would otherwise bake dark text onto the page's white background and
+   * come out unreadable. `'dark'` pairs the dark palette with the dark
+   * `--mj-bg-page` the body rule applies, so the file is coherent either way.
+   * HTML only — the data formats carry no colors.
+   */
+  themeMode?: 'light' | 'dark';
   /** Branding (tokens / logo / title) applied to the export — see {@link ExportBranding}. */
   branding?: ExportBranding;
 }
@@ -83,13 +92,16 @@ export interface ExportOptions {
  * map via {@link ExportBranding.brandTokens} instead.
  */
 export const DEFAULT_EXPORT_THEME_TOKENS: readonly string[] = [
+  '--mj-bg-page',
   '--mj-text-primary',
   '--mj-text-secondary',
   '--mj-text-disabled',
   '--mj-border-default',
   '--mj-brand-primary',
+  '--mj-brand-accent-subtle',
   '--mj-bg-surface-card',
-  '--mj-status-info-bg',
+  '--mj-font-family',
+  '--mj-radius-md',
 ];
 
 /** Internal: options with defaults applied (branding stays optional). */
@@ -150,6 +162,7 @@ export class ExportService {
       prettyPrint: options.prettyPrint ?? true,
       includeCSS: options.includeCSS ?? true,
       includeTheme: options.includeTheme ?? false,
+      themeMode: options.themeMode ?? 'light',
       branding: options.branding
     };
     const baseName = `conversation-${data.conversation.Name}-${this.getTimestamp()}`;
@@ -173,19 +186,48 @@ export class ExportService {
   }
 
   /**
-   * Snapshot the given theme tokens from the live document (the values the app
-   * is rendering with right now). Empty/unset tokens are skipped.
+   * Snapshot the given theme tokens from the live document. Empty/unset tokens are
+   * skipped.
+   *
+   * `mode` captures a SPECIFIC palette rather than whatever the app is rendering right
+   * now. Without it, exporting from a dark session bakes dark text onto the export's
+   * white page and the file is unreadable. When the requested mode isn't the active one,
+   * `data-theme` is flipped on `documentElement`, read, and restored — all synchronous
+   * within one task, so the browser never paints the intermediate state. Omit `mode`
+   * to read the live values as-is.
    */
-  public SnapshotBrandTokens(tokens: readonly string[] = DEFAULT_EXPORT_THEME_TOKENS): Record<string, string> {
-    const style = getComputedStyle(document.documentElement);
-    const out: Record<string, string> = {};
-    for (const token of tokens) {
-      const value = style.getPropertyValue(token).trim();
-      if (value) {
-        out[token] = value;
+  public SnapshotBrandTokens(
+    tokens: readonly string[] = DEFAULT_EXPORT_THEME_TOKENS,
+    mode?: 'light' | 'dark'
+  ): Record<string, string> {
+    const root = document.documentElement;
+    const previous = root.getAttribute('data-theme');
+    const wanted = mode === 'dark' ? 'dark' : 'light';
+    const mustSwap = mode != null && (previous ?? 'light') !== wanted;
+
+    if (mustSwap) {
+      root.setAttribute('data-theme', wanted);
+    }
+    try {
+      const style = getComputedStyle(root);
+      const out: Record<string, string> = {};
+      for (const token of tokens) {
+        const value = style.getPropertyValue(token).trim();
+        if (value) {
+          out[token] = value;
+        }
+      }
+      return out;
+    } finally {
+      // Restore even if reading throws — never strand the app in the other theme.
+      if (mustSwap) {
+        if (previous === null) {
+          root.removeAttribute('data-theme');
+        } else {
+          root.setAttribute('data-theme', previous);
+        }
       }
     }
-    return out;
   }
 
   /** Resolve the HTML export's theme pieces once: tokens (explicit > snapshot), logo, title. */
@@ -212,7 +254,7 @@ export class ExportService {
     if (explicit && Object.keys(explicit).length > 0) {
       return explicit;
     }
-    return options.includeTheme ? this.SnapshotBrandTokens() : null;
+    return options.includeTheme ? this.SnapshotBrandTokens(DEFAULT_EXPORT_THEME_TOKENS, options.themeMode) : null;
   }
 
   /** Document title used by every format: branding override → conversation name → generic. */
@@ -467,11 +509,11 @@ export class ExportService {
     // while a themed one follows the app's palette.
     const styles = options.includeCSS ? `
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+    body { font-family: var(--mj-font-family, system-ui, -apple-system, sans-serif); background: var(--mj-bg-page, #fff); color: var(--mj-text-primary, #333); max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
     h1 { color: var(--mj-text-primary, #333); border-bottom: 2px solid var(--mj-brand-primary, #007bff); padding-bottom: 10px; }
     .meta { color: var(--mj-text-secondary, #666); font-size: 14px; margin-bottom: 30px; }
-    .message { margin-bottom: 30px; padding: 20px; border-radius: 8px; background: var(--mj-bg-surface-card, #f5f5f5); }
-    .message.user { background: var(--mj-status-info-bg, #e3f2fd); }
+    .message { margin-bottom: 30px; padding: 20px; border-radius: var(--mj-radius-md, 8px); background: var(--mj-bg-surface-card, #f5f5f5); }
+    .message.user { background: var(--mj-brand-accent-subtle, #e3f2fd); }
     .message.assistant { background: var(--mj-bg-surface-card, #f5f5f5); }
     .role { font-weight: 600; color: var(--mj-brand-primary, #007bff); margin-bottom: 10px; }
     .content { white-space: pre-wrap; }

@@ -189,6 +189,7 @@ Color theming (`brandTokens`) is HTML-only — it has no meaning in the data/pla
 Two gating rules are worth knowing:
 
 - **`includeCSS` is an HTML-only concern.** In HTML the logo and the trademark footer each need their stylesheet rule, so both are suppressed when `includeCSS` is false — an unstyled full-size logo is worse than none. The `title` override has no stylesheet dependency and always applies. Markdown/text/JSON ignore `includeCSS` entirely.
+- **The theme snapshot captures a CHOSEN mode, not the live one.** `ExportOptions.themeMode` (`'light'` | `'dark'`, default `'light'`; surfaced as a Theme dropdown in the modal) decides which palette is baked in. Without it, exporting from a dark session put dark text on the export's white page. The exported `body` carries `--mj-bg-page` and `--mj-text-primary`, so a dark export is coherent rather than inverted.
 - **`includeTheme` gates only the token AUTO-SNAPSHOT.** An explicitly supplied `brandTokens` map, plus `logoUrl` / `title` / `trademark`, apply whenever `branding` is present. In the modal, "Include branding" is the single user-facing switch for all of it, and it sits with the general options because it affects every format — not just HTML.
 
 `trademark` and `title` are **not** markdown-escaped; a value containing `_`, `]`, `)`, or a newline can break the surrounding markdown. Supply plain text (the HTML and JSON paths are escaped).

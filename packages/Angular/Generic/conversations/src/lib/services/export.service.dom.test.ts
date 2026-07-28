@@ -42,8 +42,12 @@ describe('ExportService — BuildExportContent branding', () => {
     expect(content).toContain('var(--mj-brand-primary, #007bff)'); // h1 border + .role
     expect(content).toContain('var(--mj-text-secondary, #666)'); // .meta
     expect(content).toContain('var(--mj-bg-surface-card, #f5f5f5)'); // .message / .assistant
-    expect(content).toContain('var(--mj-status-info-bg, #e3f2fd)'); // .message.user
+    expect(content).toContain('var(--mj-brand-accent-subtle, #e3f2fd)'); // .message.user — brand ramp, not status
     expect(content).toContain('var(--mj-text-disabled, #999)'); // .timestamp
+    // body carries the page surface + ink + brand type, each falling back to the prior look
+    expect(content).toContain('var(--mj-bg-page, #fff)');
+    expect(content).toContain('var(--mj-font-family, system-ui, -apple-system, sans-serif)');
+    expect(content).toContain('var(--mj-radius-md, 8px)'); // .message corners
     // …and nothing themed is emitted
     expect(content).not.toContain(':root {');
     expect(content).not.toContain('<img');
@@ -220,5 +224,70 @@ describe('ExportService — BuildExportContent branding', () => {
     expect(content).not.toContain('<img');            // logo not inlined/emitted without the stylesheet
     expect(content).not.toContain('brand-trademark');  // trademark footer suppressed too
     expect(content).not.toContain('<style');           // and no stylesheet at all
+  });
+
+  // Matt's review (#3306): exporting from a dark session baked dark text onto the
+  // export's white page. The snapshot now captures a CHOSEN mode, not the live one.
+  describe('themeMode — the snapshot captures a chosen palette, not the live one', () => {
+    /** Fake a stylesheet whose values depend on documentElement's data-theme. */
+    const stubThemedTokens = () => {
+      vi.spyOn(window, 'getComputedStyle').mockImplementation(() => {
+        const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+        return {
+          getPropertyValue: (token: string) => {
+            if (token === '--mj-bg-page') return dark ? '#111111' : '#ffffff';
+            if (token === '--mj-text-primary') return dark ? '#eeeeee' : '#333333';
+            return '';
+          },
+        } as unknown as CSSStyleDeclaration;
+      });
+    };
+
+    it("defaults to light even when the app is in dark mode (the bug Matt caught)", async () => {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      stubThemedTokens();
+      const { content } = await svc.BuildExportContent(data, 'html', { includeTheme: true });
+      expect(content).toContain('--mj-bg-page: #ffffff;');
+      expect(content).toContain('--mj-text-primary: #333333;');
+      expect(content).not.toContain('#eeeeee'); // no dark ink on a white page
+      document.documentElement.removeAttribute('data-theme');
+    });
+
+    it("themeMode:'dark' captures the dark palette from a LIGHT session", async () => {
+      stubThemedTokens(); // no data-theme set → light is active
+      const { content } = await svc.BuildExportContent(data, 'html', { includeTheme: true, themeMode: 'dark' });
+      expect(content).toContain('--mj-bg-page: #111111;');
+      expect(content).toContain('--mj-text-primary: #eeeeee;');
+    });
+
+    it('restores documentElement data-theme after reading the other mode', async () => {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      stubThemedTokens();
+      await svc.BuildExportContent(data, 'html', { includeTheme: true, themeMode: 'light' });
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+      document.documentElement.removeAttribute('data-theme');
+    });
+
+    it('removes the attribute again when the app had none set', () => {
+      stubThemedTokens();
+      svc.SnapshotBrandTokens(undefined, 'dark');
+      expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+    });
+
+    it('restores the theme even if reading throws', () => {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      vi.spyOn(window, 'getComputedStyle').mockImplementation(() => { throw new Error('boom'); });
+      expect(() => svc.SnapshotBrandTokens(undefined, 'light')).toThrow('boom');
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+      document.documentElement.removeAttribute('data-theme');
+    });
+
+    it('omitting themeMode on a direct SnapshotBrandTokens call reads the live values', () => {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      stubThemedTokens();
+      const snap = svc.SnapshotBrandTokens();
+      expect(snap['--mj-bg-page']).toBe('#111111'); // live = dark, untouched
+      document.documentElement.removeAttribute('data-theme');
+    });
   });
 });

@@ -104,6 +104,22 @@ import { ToastService } from '../../services/toast.service';
                   <span>Include CSS styling</span>
                   <small>Embed styles for better presentation</small>
                 </label>
+                <!-- Which palette gets baked in — NOT the mode the app happens to be in.
+                     Exporting from a dark session would otherwise put dark text on the
+                     export's white page. -->
+                @if (exportOptions.includeTheme && exportOptions.includeCSS) {
+                  <label class="checkbox-label">
+                    <span>Theme</span>
+                    <select
+                      class="mj-input theme-mode-select"
+                      [(ngModel)]="exportOptions.themeMode"
+                      [disabled]="isExporting">
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                    <small>Palette baked into the exported file</small>
+                  </label>
+                }
               </div>
             }
           </section>
@@ -260,6 +276,12 @@ import { ToastService } from '../../services/toast.service';
       cursor: not-allowed;
     }
 
+    .theme-mode-select {
+      margin-left: 8px;
+      padding: 2px 6px;
+      font-size: 13px;
+    }
+
     .checkbox-label small {
       margin-left: 28px;
       font-size: 12px;
@@ -356,7 +378,8 @@ export class ExportModalComponent {
     includeMetadata: true,
     prettyPrint: true,
     includeCSS: true,
-    includeTheme: false
+    includeTheme: false,
+    themeMode: 'light'
   };
 
   /** Format-aware hint under the "Include branding" checkbox. */
@@ -487,7 +510,8 @@ export class ExportModalComponent {
       includeMetadata: true,
       prettyPrint: true,
       includeCSS: true,
-      includeTheme: !!this.branding
+      includeTheme: !!this.branding,
+      themeMode: 'light'
     };
     this.isVisible = false;
   }
