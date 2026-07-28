@@ -91,6 +91,40 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public allowPinning: boolean = true;
   @Input() public allowMessageEdit: boolean = true;
   @Input() public allowMessageDelete: boolean = true;
+  // ── Assistant identity overrides — static host config forwarded to every message
+  //    item (null = engine identity). Setters (not ngOnChanges) so an imperative
+  //    host — `@ViewChild(MessageListComponent).assistantDisplayName = …` — restamps
+  //    too, and so identity changes don't pay a check on every other input's cycle.
+  //    Identity can land AFTER first render (branding resolves async) or change
+  //    mid-session (per-conversation persona), and message items are created
+  //    dynamically with the overrides stamped as static config — so a change has to
+  //    restamp the ALREADY-rendered items or existing bubbles keep the old identity
+  //    until the next messages-array mutation. ──
+  /** Display name shown on AI messages. Null = the engine-resolved agent name. */
+  @Input()
+  public set assistantDisplayName(value: string | null) {
+    if (value !== this._assistantDisplayName) {
+      this._assistantDisplayName = value;
+      this.restampAssistantIdentity();
+    }
+  }
+  public get assistantDisplayName(): string | null {
+    return this._assistantDisplayName;
+  }
+  private _assistantDisplayName: string | null = null;
+
+  /** Image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
+  @Input()
+  public set assistantAvatarUrl(value: string | null) {
+    if (value !== this._assistantAvatarUrl) {
+      this._assistantAvatarUrl = value;
+      this.restampAssistantIdentity();
+    }
+  }
+  public get assistantAvatarUrl(): string | null {
+    return this._assistantAvatarUrl;
+  }
+  private _assistantAvatarUrl: string | null = null;
   @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
   @Input() public agentRunMap: Map<string, MJAIAgentRunEntityExtended> = new Map();
   @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
@@ -238,6 +272,25 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // agent name / status chip once the (async, batched) session lookup lands
     if (changes['sessionMetaMap'] && this.messages && this.messageContainerRef) {
       this.updateMessages(this.messages);
+    }
+
+  }
+
+  /**
+   * Re-stamp the assistant-identity overrides onto every already-rendered message
+   * item. Called from the identity setters (see the inputs above) — items are created
+   * dynamically with these values stamped as static config, so without this a change
+   * that arrives after first render wouldn't reach existing bubbles.
+   *
+   * No-op before the first render (the map is empty), so it's safe to fire during
+   * Angular's initial input binding.
+   */
+  private restampAssistantIdentity(): void {
+    for (const entry of this._renderedMessages.values()) {
+      if (entry.kind === 'component') {
+        this.applyMessageItemFeatureFlags(entry.ref.instance);
+        entry.ref.changeDetectorRef.markForCheck();
+      }
     }
   }
 
@@ -470,6 +523,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.allowPinning = this.allowPinning;
     instance.allowMessageEdit = this.allowMessageEdit;
     instance.allowMessageDelete = this.allowMessageDelete;
+    instance.assistantDisplayName = this.assistantDisplayName;
+    instance.assistantAvatarUrl = this.assistantAvatarUrl;
   }
 
   /**

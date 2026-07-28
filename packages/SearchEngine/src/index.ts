@@ -31,3 +31,4 @@ export * from './providers/ElasticsearchSearchProvider';
 export * from './providers/TypesenseSearchProvider';
 export * from './providers/AzureAISearchProvider';
 export * from './providers/OpenSearchSearchProvider';
+export * from './generic/ExternalHitMapper';

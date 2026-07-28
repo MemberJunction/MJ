@@ -26,11 +26,20 @@
 
 import { Directive, Input, TemplateRef } from '@angular/core';
 
-/** Named slots the chat-area exposes. Keep in sync with the slot-interfaces module. */
+/**
+ * Named slots the chat-area exposes. Keep in sync with the slot-interfaces module.
+ *
+ * Note the header pair: `header` REPLACES the entire chat header (the consumer
+ * owns title, badges, and every action button), while `headerActions` is
+ * ADDITIVE — it renders the projected template inside the DEFAULT header's
+ * action strip, after the stock buttons. Projecting `header` suppresses
+ * `headerActions` (the replacement owns the whole header, actions included).
+ */
 export type MJChatSlotName =
     | 'emptyState'
     | 'agentPresence'
     | 'header'
+    | 'headerActions'
     | 'messageExtra'
     | 'demonstrationSurface'
     | 'messageRenderer';

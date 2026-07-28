@@ -92,6 +92,8 @@ Unit tests passing is necessary but **not sufficient** — the integration tier 
 
 **The generated ORM is the schema's source of truth** — not migration SQL. Migrations are append-only history; the entity classes reflect the net result.
 
+**CodeGen reads JSONType definitions from the database, not from `metadata/`.** Run `mj sync push` **before** `mj codegen`, or CodeGen regenerates from stale definitions and *silently deletes* properties from the generated types. Full ordering + why it's silent: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+
 **Build commands:**
 ```bash
 npm run build            # all packages, from repo root

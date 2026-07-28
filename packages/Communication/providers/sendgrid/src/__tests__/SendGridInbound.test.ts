@@ -23,7 +23,13 @@ vi.mock('@sendgrid/mail', () => ({
 
 // Mirror the real BaseCommunicationProvider: SupportsPush derives from
 // GetSubscriptionCapabilities() so a subclass opts in simply by overriding it.
-vi.mock('@memberjunction/communication-types', () => ({
+vi.mock('@memberjunction/communication-types', async () => ({
+  // Real address-list parser (pure, dependency-free) pulled straight from the base-types
+  // source so ParseNotification tests exercise genuine parsing; importing the whole actual
+  // package would drag in unmocked heavy dependencies.
+  ...(await vi.importActual<{ ParseEmailAddressList: (headerValue: string | null | undefined) => string[] }>(
+    '../../../../base-types/src/AddressUtils'
+  )),
   BaseCommunicationProvider: class {
     getSupportedOperations() { return []; }
     GetSubscriptionCapabilities() { return undefined; }
@@ -300,7 +306,27 @@ describe('SendGridProvider Inbound Parse', () => {
       expect(n.Message!.To).toBe('support@parse.example.com');
       expect(n.Message!.Subject).toBe('Help please');
       expect(n.Message!.Body).toBe('This is the plain body.'); // prefers text over html
+      expect(n.Message!.ToRecipients).toEqual(['support@parse.example.com']);
+      expect(n.Message!.CCRecipients).toEqual([]); // no cc field posted
       expect((n.RawData as Record<string, unknown>)['subject']).toBe('Help please');
+    });
+
+    it('populates ToRecipients/CCRecipients as bare addresses from multi-recipient to/cc fields', async () => {
+      const body = buildMultipart(boundary, [
+        { name: 'from', value: 'Assistant <assistant@sender.com>' },
+        { name: 'to', value: 'support@parse.example.com, "Doe, Jane" <jane@member.org>' },
+        { name: 'cc', value: 'Leader <leader@member.org>, staff@sender.com' },
+        { name: 'subject', value: 'Multi-party thread' },
+        { name: 'text', value: 'body' },
+      ]);
+
+      const result = await provider.ParseNotification(input(body));
+      expect(result.Success).toBe(true);
+
+      const message = result.Notifications[0].Message!;
+      expect(message.To).toBe('support@parse.example.com, "Doe, Jane" <jane@member.org>'); // raw, unchanged
+      expect(message.ToRecipients).toEqual(['support@parse.example.com', 'jane@member.org']);
+      expect(message.CCRecipients).toEqual(['leader@member.org', 'staff@sender.com']);
     });
 
     it('falls back to the raw "to" field when envelope is absent', async () => {

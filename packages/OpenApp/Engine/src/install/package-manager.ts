@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import type { ManifestPackageEntry } from '../manifest/manifest-schema.js';
+import { ResolveServerPackagePath, ResolveClientPackagePath } from './workspace-paths.js';
 
 /** Supported package managers. */
 export type PackageManagerType = 'npm' | 'pnpm' | 'yarn';
@@ -26,8 +27,7 @@ export type PackageManagerType = 'npm' | 'pnpm' | 'yarn';
  */
 export type VersionStrategy = 'semver' | 'exact' | 'catalog' | 'workspace' | 'auto';
 
-const DEFAULT_SERVER_PATH = 'packages/MJAPI';
-const DEFAULT_CLIENT_PATH = 'packages/MJExplorer';
+/* Workspace-layout detection is shared with config-manager — see workspace-paths.ts (#3270). */
 
 /**
  * A single workspace target for package operations.
@@ -56,9 +56,9 @@ export interface PackageManagerOptions {
   Version: string;
   /** Enable verbose output */
   Verbose?: boolean;
-  /** Path to server workspace relative to RepoRoot (default: 'packages/MJAPI') */
+  /** Path to server workspace relative to RepoRoot (default: detected — 'packages/MJAPI' or 'apps/MJAPI') */
   ServerPackagePath?: string;
-  /** Path to client workspace relative to RepoRoot (default: 'packages/MJExplorer') */
+  /** Path to client workspace relative to RepoRoot (default: detected — 'packages/MJExplorer' or 'apps/MJExplorer') */
   ClientPackagePath?: string;
   /** Package manager to use (default: auto-detected from lockfile) */
   PackageManager?: PackageManagerType;
@@ -73,6 +73,13 @@ export interface PackageManagerOptions {
    * Each target specifies a path and role. Packages are distributed by role.
    */
   AdditionalTargets?: WorkspaceTarget[];
+  /**
+   * Package names that must SURVIVE a removal because another installed app still declares
+   * them (shared npm deps). Only honored by {@link RemoveAppPackages}: any package whose
+   * name is in this list is skipped, so removing one app cannot strip a dependency a
+   * surviving app needs to boot.
+   */
+  RetainPackages?: string[];
 }
 
 /**
@@ -136,8 +143,10 @@ export function RemoveAppPackages(options: PackageManagerOptions): PackageOperat
 
   try {
     const targets = buildTargetList(options);
-    const serverPkgs = [...options.ServerPackages, ...options.SharedPackages];
-    const clientPkgs = [...options.ClientPackages, ...options.SharedPackages];
+    // Never remove a package another installed app still declares — see RetainPackages.
+    const retained = new Set(options.RetainPackages ?? []);
+    const serverPkgs = [...options.ServerPackages, ...options.SharedPackages].filter((p) => !retained.has(p.name));
+    const clientPkgs = [...options.ClientPackages, ...options.SharedPackages].filter((p) => !retained.has(p.name));
 
     for (const target of targets) {
       const pkgs = target.Role === 'server' ? serverPkgs : clientPkgs;
@@ -288,8 +297,8 @@ export function RunNpmInstall(repoRoot: string, verbose?: boolean, registryUrl?:
  */
 function buildTargetList(options: PackageManagerOptions): WorkspaceTarget[] {
   const targets: WorkspaceTarget[] = [
-    { Path: options.ServerPackagePath ?? DEFAULT_SERVER_PATH, Role: 'server' },
-    { Path: options.ClientPackagePath ?? DEFAULT_CLIENT_PATH, Role: 'client' },
+    { Path: ResolveServerPackagePath(options.RepoRoot, options.ServerPackagePath), Role: 'server' },
+    { Path: ResolveClientPackagePath(options.RepoRoot, options.ClientPackagePath), Role: 'client' },
   ];
 
   if (options.AdditionalTargets) {

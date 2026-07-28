@@ -92,7 +92,7 @@
     "pg-query-stream": "~4.8.0",
     "recast": "^0.23.11",
     "simple-git": "^3.30.0",
-    "zod": "~3.24.4"
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@oclif/prettier-config": "^0.2.1",
