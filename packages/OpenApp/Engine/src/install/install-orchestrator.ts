@@ -1765,10 +1765,21 @@ async function HandlePackageInstallation(
 function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContext): InternalResult {
   context.Callbacks?.OnProgress?.('Config', 'Updating server config...');
 
+  // Each config write targets EVERY mj.config.cjs a consumer may load (the server workspace's
+  // own config and the repo root) — see resolveConfigPaths. A file that cannot be edited (e.g.
+  // a `module.exports = require(...)` re-export) is reported as a warning rather than failing
+  // the install, so surface those instead of letting them pass silently.
+  const warnSkipped = (result: { Warnings?: string[] }): void => {
+    for (const w of result.Warnings ?? []) {
+      context.Callbacks?.OnWarn?.('Config', `Skipped a config file: ${w}`);
+    }
+  };
+
   const dynamicResult = AddServerDynamicPackages(context.RepoRoot, manifest, context.ServerPackagePath);
   if (!dynamicResult.Success) {
     return { Success: false, ErrorMessage: dynamicResult.ErrorMessage };
   }
+  warnSkipped(dynamicResult);
 
   // Record the app's client packages in dynamicPackages.client. `mj codegen manifest
   // --open-app-client-bootstrap` (run by MJExplorer's prebuild) turns each into a
@@ -1779,12 +1790,14 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
   if (!clientResult.Success) {
     return { Success: false, ErrorMessage: clientResult.ErrorMessage };
   }
+  warnSkipped(clientResult);
 
   // Add entityPackageName mapping so CodeGen resolves per-schema imports correctly
   const entityResult = AddEntityPackageMapping(context.RepoRoot, manifest, context.ServerPackagePath);
   if (!entityResult.Success) {
     return { Success: false, ErrorMessage: entityResult.ErrorMessage };
   }
+  warnSkipped(entityResult);
 
   // Add app schema to excludeSchemas so CodeGen skips entity discovery,
   // view generation, and Angular component generation for app-owned tables
@@ -1793,6 +1806,7 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
     if (!excludeResult.Success) {
       return { Success: false, ErrorMessage: excludeResult.ErrorMessage };
     }
+    warnSkipped(excludeResult);
   }
 
   return { Success: true };
