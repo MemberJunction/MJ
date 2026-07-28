@@ -5,11 +5,31 @@
  * dependency versions, and upgrade validation.
  */
 import { describe, it, expect } from 'vitest';
+import semver from 'semver';
 import {
     CheckMJVersionCompatibility,
     CheckDependencyVersionCompatibility,
+    CoerceToBaseVersion,
     IsValidUpgrade,
 } from '../dependency/version-checker.js';
+
+describe('CoerceToBaseVersion', () => {
+    it('should strip a prerelease suffix (6.2.0-edge.3 -> 6.2.0)', () => {
+        expect(CoerceToBaseVersion('6.2.0-edge.3')).toBe('6.2.0');
+    });
+
+    it('should strip build metadata (1.2.3+build.5 -> 1.2.3)', () => {
+        expect(CoerceToBaseVersion('1.2.3+build.5')).toBe('1.2.3');
+    });
+
+    it('should return a release version unchanged', () => {
+        expect(CoerceToBaseVersion('5.49.0')).toBe('5.49.0');
+    });
+
+    it('should return null for an unparseable version', () => {
+        expect(CoerceToBaseVersion('not-a-version')).toBeNull();
+    });
+});
 
 describe('CheckMJVersionCompatibility', () => {
     it('should accept MJ 4.3.1 for >=4.0.0 <5.0.0', () => {
@@ -63,6 +83,46 @@ describe('CheckMJVersionCompatibility', () => {
     it('should handle pre-release version (4.0.0-beta.1 for >=4.0.0-beta.0)', () => {
         const result = CheckMJVersionCompatibility('4.0.0-beta.1', '>=4.0.0-beta.0');
         expect(result.Compatible).toBe(true);
+    });
+
+    describe('prerelease host versions (Edge grammar)', () => {
+        it('should accept an -edge.N host for an era-correct range', () => {
+            const result = CheckMJVersionCompatibility('6.2.0-edge.3', '>=6.0.0 <7.0.0');
+            expect(result.Compatible).toBe(true);
+        });
+
+        it('should accept an -edge.N host for a caret range', () => {
+            const result = CheckMJVersionCompatibility('6.2.0-edge.3', '^6.0.0');
+            expect(result.Compatible).toBe(true);
+        });
+
+        it('should accept an -edge.N host exactly at the era floor (6.0.0-edge.1 for >=6.0.0 <7.0.0)', () => {
+            const result = CheckMJVersionCompatibility('6.0.0-edge.1', '>=6.0.0 <7.0.0');
+            expect(result.Compatible).toBe(true);
+        });
+
+        it('should reject a 7-era edge host for a <7.0.0 cap (the includePrerelease counterexample)', () => {
+            // includePrerelease would WRONGLY pass here, because semver orders a
+            // prerelease below its release (7.0.0-edge.0 < 7.0.0). Pin that fact so
+            // nobody "simplifies" the fix back to includePrerelease.
+            expect(semver.satisfies('7.0.0-edge.0', '>=6.1.0 <7.0.0', { includePrerelease: true })).toBe(true);
+
+            // Base-tuple coercion gives the era-correct answer: 7.0.0 fails <7.0.0.
+            const result = CheckMJVersionCompatibility('7.0.0-edge.0', '>=6.1.0 <7.0.0');
+            expect(result.Compatible).toBe(false);
+            expect(result.Message).toContain('evaluated as 7.0.0');
+        });
+
+        it('should reject an -edge.N host genuinely below the era floor', () => {
+            const result = CheckMJVersionCompatibility('5.9.0-edge.2', '>=6.0.0 <7.0.0');
+            expect(result.Compatible).toBe(false);
+        });
+
+        it('should still reject an unparseable prerelease-looking version with the invalid-version message', () => {
+            const result = CheckMJVersionCompatibility('6.2.0-edge..3', '>=6.0.0 <7.0.0');
+            expect(result.Compatible).toBe(false);
+            expect(result.Message).toContain('Invalid MJ version');
+        });
     });
 });
 
