@@ -130,9 +130,10 @@ function serveManifests(byRepoUrl: Record<string, string>): void {
 
 // Minimal context — the stubbed collaborators ignore the provider/user objects,
 // so a cast is sufficient for wiring (no real DB or GitHub is contacted).
+// CanonicalSchemaName is the one Dialect member HandleSchemaCreation calls directly.
 const context = {
     ContextUser: {},
-    DatabaseProvider: {},
+    DatabaseProvider: { Dialect: { CanonicalSchemaName: (s: string) => s } },
     DatabaseConfig: {},
     GitHubOptions: {},
     RepoRoot: '/tmp/test-repo',
@@ -284,7 +285,7 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
     });
     const source = 'https://github.com/MemberJunction/Integrations/CRM/HubSpot';
     const ctxFor = (platformKey: string) =>
-        ({ ...context, DatabaseProvider: { Dialect: { PlatformKey: platformKey } }, DatabaseConfig: {} } as unknown as OrchestratorContext);
+        ({ ...context, DatabaseProvider: { Dialect: { PlatformKey: platformKey, CanonicalSchemaName: (s: string) => s } }, DatabaseConfig: {} } as unknown as OrchestratorContext);
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -488,7 +489,7 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
     }
     const migContext = {
         ...context,
-        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver' } },
+        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
     } as unknown as OrchestratorContext;
 
     beforeEach(() => {
@@ -548,7 +549,7 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
 describe('UpgradeApp — migration failure is honest + recoverable (B21)', () => {
     const migContext = {
         ...context,
-        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver' } },
+        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
     } as unknown as OrchestratorContext;
 
     function v2ManifestWithMigrations(name: string): string {

@@ -417,8 +417,11 @@ export async function CheckSchemaSharedByOtherApps(
   const result = await rv.RunView<InstalledAppInfo>(
     {
       EntityName: 'MJ: Open Apps',
+      // Case-insensitive: two apps can store DIFFERENT casings of the same schema (manifest
+      // casing vs PG's lowercase-folded twin). A case-sensitive `=` would miss the co-tenant
+      // and let the remove CASCADE-drop a schema another app still lives in.
       ExtraFilter:
-        `SchemaName = '${EscapeSqlFilter(schemaName)}' ` +
+        `LOWER(SchemaName) = LOWER('${EscapeSqlFilter(schemaName)}') ` +
         `AND ID <> '${EscapeSqlFilter(excludeAppId)}' ` +
         `AND Status NOT IN ('Removed', 'Removing')`,
       ResultType: 'simple',
