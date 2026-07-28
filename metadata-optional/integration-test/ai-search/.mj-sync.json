@@ -1,0 +1,39 @@
+{
+  "entity": "MJ: Search Scopes",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".it-search-scope.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name LIKE 'IT:%'",
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "relatedEntities": {
+      "MJ: Search Scope Providers": {
+        "entity": "MJ: Search Scope Providers",
+        "foreignKey": "SearchScopeID",
+        "lookupFields": {
+          "SearchProviderID": {
+            "entity": "MJ: Search Providers",
+            "field": "Name"
+          }
+        }
+      },
+      "MJ: Search Scope Entities": {
+        "entity": "MJ: Search Scope Entities",
+        "foreignKey": "SearchScopeID",
+        "lookupFields": {
+          "EntityID": {
+            "entity": "MJ: Entities",
+            "field": "Name"
+          }
+        }
+      }
+    }
+  }
+}

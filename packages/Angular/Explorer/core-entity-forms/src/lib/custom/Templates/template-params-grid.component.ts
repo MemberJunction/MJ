@@ -13,11 +13,11 @@ import {
     RowEditingStoppedEvent,
     ICellRendererParams,
     themeAlpine,
-    colorSchemeVariable,
     type Theme
 } from 'ag-grid-community';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJ_AG_GRID_THEME_PARAMS } from '@memberjunction/ng-shared-generic';
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -67,7 +67,9 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
         filter: false,
         flex: 1
     };
-    public GridTheme: Theme = themeAlpine.withPart(colorSchemeVariable);
+    // Themed from the shared --mj-* token params so this grid follows light/dark and
+    // the org brand overlay, matching the main entity/query grids.
+    public GridTheme: Theme = themeAlpine.withParams(MJ_AG_GRID_THEME_PARAMS);
     private gridApi: GridApi | null = null;
 
     /** Row currently being edited (for cancel/revert) */

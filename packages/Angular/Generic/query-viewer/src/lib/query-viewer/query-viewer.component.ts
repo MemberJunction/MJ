@@ -59,6 +59,13 @@ import {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class QueryViewerComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+    /**
+     * Safety cap for the export path — deliberately large (exports should cover the full result set)
+     * but bounded to protect the browser from an unbounded query. Kept in lockstep with the
+     * entity-viewer's EXPORT_MAX_RECORDS so Export behaves the same across Queries and Data Explorer.
+     */
+    private static readonly EXPORT_MAX_RECORDS = 100000;
+
     // ========================================
     // Inputs
     // ========================================
@@ -406,6 +413,44 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
             this.cdr.markForCheck();
         }
     }
+
+    /**
+     * Fetches the FULL result set for the current query, used by the grid's export flow so exports
+     * aren't capped at the on-screen page (bug B3). Bound as an arrow property so it can be passed to
+     * the grid's ExportDataProvider input without losing `this`. Loads up to {@link EXPORT_MAX_RECORDS}
+     * (kept in lockstep with the entity-viewer's export cap) and warns — rather than silently
+     * truncating — when the query returns more. Uses the provider-scoped RunQuery so it targets the
+     * correct server in multi-provider setups. Falls back to the currently-loaded page on failure.
+     */
+    public FetchAllRowsForExport = async (): Promise<Record<string, unknown>[]> => {
+        if (!this._queryId) {
+            return this.QueryData;
+        }
+        try {
+            // MaxRows caps the pull to protect the browser from an unbounded query; StartRow 0 = from
+            // the top. This is a much larger window than the on-screen page, so export covers the set.
+            const result = await this.RunQueryToUse.RunQuery({
+                QueryID: this._queryId,
+                Parameters: this.SavedParams as Record<string, unknown>,
+                MaxRows: QueryViewerComponent.EXPORT_MAX_RECORDS,
+                StartRow: 0
+            });
+            if (result.Success) {
+                if (result.TotalRowCount > QueryViewerComponent.EXPORT_MAX_RECORDS) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `This export is limited to the first ${QueryViewerComponent.EXPORT_MAX_RECORDS.toLocaleString()} of ` +
+                        `${result.TotalRowCount.toLocaleString()} rows. Refine the query to include the rest.`,
+                        'warning',
+                        6000
+                    );
+                }
+                return result.Results || [];
+            }
+        } catch {
+            // Fall through to the loaded page.
+        }
+        return this.QueryData;
+    };
 
     // ========================================
     // Event Handlers

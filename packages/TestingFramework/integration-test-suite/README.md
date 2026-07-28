@@ -32,6 +32,9 @@ src/
                              mj.config.cjs checkModules assertion (see below)
 rigs/                   standalone tsx scripts that are deliberately NOT catalog entry paths
   lib/                  harness.ts + ai-bootstrap.ts (shared by the rigs only)
+docs/                   the suite's documentation home — per-sub-suite deep docs (mechanism +
+                        per-check inventory for every bundle family) + the candidate
+                        test-catalog. Start at docs/README.md.
 ```
 
 ## How bundles load at runtime — the `checkModules` seam
@@ -117,6 +120,7 @@ npx tsx packages/TestingFramework/integration-test-suite/rigs/runview-matrix-tes
 
 ## Further reading
 
+- [`docs/README.md`](docs/README.md) — **this suite's documentation home**: comprehensive per-sub-suite docs (cache, data-access, security, writes/transactions, AI, platform — mechanism, per-check inventory, tiers/transports, known pinned gaps) plus the [candidate test-catalog](docs/test-catalog.md)
 - [`guides/INTEGRATION_TESTING_QUICKSTART.md`](../../../guides/INTEGRATION_TESTING_QUICKSTART.md) — the full quickstart
 - [`packages/TestingFramework/testing-integration/CATALOG.md`](../testing-integration/CATALOG.md) — the living coverage index
 - [`plans/integration-test-expansion/framework-restructure-proposal.md`](../../../plans/integration-test-expansion/framework-restructure-proposal.md) — the restructure rationale (executed 2026-07-20)

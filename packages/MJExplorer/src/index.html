@@ -21,6 +21,11 @@
         var saved = localStorage.getItem('mj-theme');
         var isDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+        // Restore the org brand overlay attribute so the layout/selectors match on the
+        // first frame. The overlay CSS is a session Blob re-injected at login bootstrap,
+        // so brand colors repaint then; this only prevents a structural mismatch flash.
+        var overlay = localStorage.getItem('mj-theme-overlay');
+        if (overlay) document.documentElement.setAttribute('data-theme-overlay', overlay);
       } catch (e) { /* swallow — theme just falls back to light */ }
     })();
   </script>

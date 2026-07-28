@@ -1082,7 +1082,7 @@ export class EntityVectorSyncer extends VectorBase {
       );
     }
 
-    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexById(entityDocument.VectorIndexID);
+    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
     if (!vectorIndex) {
       throw new Error(
         `Vector Index with ID "${entityDocument.VectorIndexID}" not found for Entity Document "${entityDocument.Name}". ` +
@@ -1353,7 +1353,7 @@ export class EntityVectorSyncer extends VectorBase {
     contextUser: UserInfo
   ): Promise<void> {
     const vectorIndexID: string = String(embeddingData.VectorIndexID);
-    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexById(vectorIndexID);
+    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(vectorIndexID);
     if (!vectorIndex) {
       LogError(`Vector Index with ID ${vectorIndexID} not found in KnowledgeHubMetadataEngine cache`);
       return;

@@ -1,4 +1,4 @@
-import { BaseEntity, EntityPermissionType, EntitySaveOptions, RunView } from '@memberjunction/core';
+import { BaseEntity, EntityPermissionType, EntitySaveOptions, IMetadataProvider, RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 import { MJArtifactPermissionEntity } from '../../generated/entity_subclasses';
@@ -73,7 +73,9 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
     private async callerMayShareArtifact(): Promise<boolean> {
         const user = this.ContextCurrentUser;
         if (!user) return false;
-        const rv = new RunView();
+        // Must use this entity's provider and pass the caller as contextUser — the
+        // server's global provider has no CurrentUser, so an unscoped RunView fails there.
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse as unknown as IMetadataProvider);
         // One round-trip: fetch the artifact's owner AND any existing Share-capable
         // permission row for this caller on this artifact.
         const [ownerResult, grantResult] = await rv.RunViews([
@@ -91,7 +93,7 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
                 MaxRows: 1,
                 ResultType: 'simple',
             },
-        ]);
+        ], user);
         const ownerId = ownerResult.Success
             ? (ownerResult.Results?.[0] as { UserID?: string } | undefined)?.UserID
             : undefined;
@@ -100,14 +102,14 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
     }
 
     private async fetchArtifactName(): Promise<string | null> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse as unknown as IMetadataProvider);
         const result = await rv.RunView<{ ID: string; Name?: string | null }>({
             EntityName: 'MJ: Artifacts',
             ExtraFilter: `ID='${this.ArtifactID}'`,
             Fields: ['ID', 'Name'],
             MaxRows: 1,
             ResultType: 'simple',
-        });
+        }, this.ContextCurrentUser);
         return result.Success ? result.Results?.[0]?.Name ?? null : null;
     }
 }

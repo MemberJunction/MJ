@@ -1,5 +1,14 @@
 # @memberjunction/ng-kanban
 
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [9c07270]
+  - @memberjunction/global@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes

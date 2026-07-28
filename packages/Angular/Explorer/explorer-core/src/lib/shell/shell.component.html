@@ -16,6 +16,7 @@
           <button
             class="nav-bar-app-btn"
             [class.active]="IsActiveApp(app)"
+            [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
             [title]="app.Name"
             [style.--app-color]="app.GetColor()"
             (click)="onNavBarAppClick(app, $event)"
@@ -26,21 +27,25 @@
       </div>
     }
 
-    <!-- App Switcher (hidden for app-locked sessions, e.g. magic-link) -->
-    @if (!appSwitchingLocked) {
+    <!-- App Switcher (hidden for app-locked sessions, e.g. magic-link, and
+         removable per deployment via 'Shell.AppSwitcher.Enabled') -->
+    @if (!appSwitchingLocked && ShowAppSwitcher) {
       <mj-app-switcher
         [activeApp]="activeApp"
         [isViewingSystemTab]="isViewingSystemTab"
         [loadingAppId]="loadingAppId"
+        [SwitcherStyle]="AppSwitcherStyle"
+        [Provider]="Provider"
         (appSelected)="onAppSwitch($event)">
       </mj-app-switcher>
     }
 
-    <!-- App Navigation (desktop only) -->
-    @if (activeApp) {
+    <!-- App Navigation (desktop only; removable per deployment via 'Shell.AppNav.Enabled') -->
+    @if (activeApp && ShowAppNav) {
       <mj-app-nav
         class="desktop-nav"
         [app]="activeApp"
+        [OverflowEnabled]="true"
         (navItemClick)="onNavItemClick($event)"
         (navItemDismiss)="onNavItemDismiss($event)">
       </mj-app-nav>
@@ -132,14 +137,16 @@
           }
         </div>
       }
-      <button class="icon-btn desktop-only notification-btn" title="Notifications" (click)="showNotifications()">
-        <i class="fa-solid fa-bell"></i>
-        @if (unreadNotificationCount > 0) {
-          <span class="notification-badge">
-            {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
-          </span>
-        }
-      </button>
+      @if (ShowNotifications) {
+        <button class="icon-btn desktop-only notification-btn" title="Notifications" (click)="showNotifications()">
+          <i class="fa-solid fa-bell"></i>
+          @if (unreadNotificationCount > 0) {
+            <span class="notification-badge">
+              {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+            </span>
+          }
+        </button>
+      }
       <!-- Nav Bar Apps: Left of User Menu -->
       @if (leftOfUserMenuApps.length > 0) {
         <div class="nav-bar-apps left-of-user-menu">
@@ -147,6 +154,7 @@
             <button
               class="nav-bar-app-btn"
               [class.active]="IsActiveApp(app)"
+              [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
               [title]="app.Name"
               [style.--app-color]="app.GetColor()"
               (click)="onNavBarAppClick(app, $event)"
@@ -270,11 +278,12 @@
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
-    @if (activeApp) {
+    @if (activeApp && ShowAppNav) {
       <div class="mobile-nav-content">
         <div class="mobile-nav-section-title">{{ activeApp.Name }}</div>
         <mj-app-nav
           [app]="activeApp"
+          [OverflowEnabled]="false"
           (navItemClick)="onNavItemClick($event)"
           (navItemDismiss)="onNavItemDismiss($event)">
         </mj-app-nav>
@@ -285,15 +294,17 @@
         <i class="fa-solid fa-search"></i>
         <span>Search</span>
       </button>
-      <button class="mobile-nav-action" title="Notifications" (click)="showNotifications(); closeMobileNav()">
-        <i class="fa-solid fa-bell"></i>
-        <span>Notifications</span>
-        @if (unreadNotificationCount > 0) {
-          <span class="notification-badge-mobile">
-            {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
-          </span>
-        }
-      </button>
+      @if (ShowNotifications) {
+        <button class="mobile-nav-action" title="Notifications" (click)="showNotifications(); closeMobileNav()">
+          <i class="fa-solid fa-bell"></i>
+          <span>Notifications</span>
+          @if (unreadNotificationCount > 0) {
+            <span class="notification-badge-mobile">
+              {{ unreadNotificationCount > 99 ? '99+' : unreadNotificationCount }}
+            </span>
+          }
+        </button>
+      }
     </div>
   </div>
 

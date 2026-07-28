@@ -86,8 +86,10 @@ export class SharedService {
       LogError(`Failed to pre-warm AIEngineBase: ${err}`)
     );
 
-    // ArtifactMetadataEngine is lightweight (just artifact types)
-    // Used by Conversations and Artifact viewer
+    // ArtifactMetadataEngine.Config() loads only the artifact-type registry —
+    // a small, fixed set. Artifacts and versions (whose Content can be huge) are
+    // fetched on demand per-artifact, so this pre-warm stays cheap and bounded.
+    // Used by Conversations and the Artifact viewer.
     ArtifactMetadataEngine.Instance.Config(false).catch(err =>
       LogError(`Failed to pre-warm ArtifactMetadataEngine: ${err}`)
     );

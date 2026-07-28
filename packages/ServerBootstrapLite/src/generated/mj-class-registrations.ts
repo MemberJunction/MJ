@@ -182,7 +182,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (405 classes)
+// @memberjunction/core-entities (409 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -324,6 +324,7 @@ import {
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
+    MJContentItemChunkEntity,
     MJContentItemDuplicateEntity,
     MJContentItemEntity,
     MJContentItemTagEntity,
@@ -339,6 +340,7 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
@@ -429,6 +431,7 @@ import {
     MJListDetailEntity,
     MJListDetailEntityExtended,
     MJListEntity,
+    MJListEntityExtended,
     MJListInvitationEntity,
     MJListShareEntity,
     MJMCPServerConnectionEntity,
@@ -557,6 +560,7 @@ import {
     MJTestSuiteRunEntity,
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
+    MJThemeEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -953,7 +957,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (36 classes)
+// @memberjunction/core-entities-server (38 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -978,6 +982,8 @@ import {
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
+    MJListDetailEntityServer,
+    MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
@@ -1339,6 +1345,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
+    MJContentItemChunkEntity,
     MJContentItemDuplicateEntity,
     MJContentItemEntity,
     MJContentItemTagEntity,
@@ -1354,6 +1361,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
@@ -1444,6 +1452,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJListDetailEntity,
     MJListDetailEntityExtended,
     MJListEntity,
+    MJListEntityExtended,
     MJListInvitationEntity,
     MJListShareEntity,
     MJMCPServerConnectionEntity,
@@ -1572,6 +1581,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTestSuiteRunEntity,
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
+    MJThemeEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1869,6 +1879,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
+    MJListDetailEntityServer,
+    MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
@@ -2033,7 +2045,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 875;
+export const CLASS_REGISTRATIONS_COUNT = 881;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -4,6 +4,7 @@ import { RunView } from '@memberjunction/core';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { SharedService } from '@memberjunction/ng-shared';
+import { MJ_AG_GRID_THEME_PARAMS } from '@memberjunction/ng-shared-generic';
 import {
   ColDef,
   GridReadyEvent,
@@ -11,7 +12,6 @@ import {
   ModuleRegistry,
   AllCommunityModule,
   themeAlpine,
-  colorSchemeVariable,
   type Theme,
   ICellRendererParams
 } from 'ag-grid-community';
@@ -79,7 +79,9 @@ export class FilesGridComponent implements OnInit, OnChanges {
   public editFile: MJFileEntity | undefined;
 
   // AG Grid configuration
-  public GridTheme: Theme = themeAlpine.withPart(colorSchemeVariable);
+  // Themed from the shared --mj-* token params so this grid follows light/dark and
+  // the org brand overlay, matching the main entity/query grids.
+  public GridTheme: Theme = themeAlpine.withParams(MJ_AG_GRID_THEME_PARAMS);
   public ColumnDefs: ColDef[] = [];
   public DefaultColDef: ColDef = {
     sortable: true,

@@ -1,5 +1,55 @@
 # Change Log - @memberjunction/core-entities
 
+## 5.49.0
+
+### Patch Changes
+
+- c5e4b9e: Agent conversation compaction: durable cross-turn summaries stored on the conversation (Sequence + SummaryPromptRunID, budget knobs on AIAgentType/AIAgent, Compaction run steps), conversation-history retrieval tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange), edit handling with OriginalMessageChanged flagging and a wired chat edit affordance, plus hardening fixes: failed message expansions now surface a reason to the model (breaks an unbounded retry loop), json5 ESM import fix restores the local JSON-repair tier, and SQLConverter no longer truncates PG column comments at escaped apostrophes.
+- a8cb2b6: Explicit ClassFactory resolution failure + permission provider fault isolation (B34/B35)
+
+  `ClassFactory.CreateInstance` has never returned `null` for an unregistered key — it falls back to
+  instantiating the anchor base class — so every call site written as `if (instance) { use } else { error }`
+  had a dead failure branch and silently installed a hollow base-class object.
+  - **`@memberjunction/global`**: adds `TryCreateInstance` / `TryCreateInstanceAsync`, which return an
+    explicit `ClassResolutionResult<T>` (`Resolved` / `Instance` / `Reason`). Bases that cannot function
+    standalone opt in with `static readonly RequiresSubclass = true`: on a fallback they now throw from
+    `CreateInstance` and return `{Resolved: false, Instance: null}` from `TryCreateInstance`. Bases without
+    the marker keep the historical base-class fallback (e.g. `BaseEntity`) and emit a structured, once-per-key
+    warning listing the registered keys for that base plus the call-site stack. `CreateInstance`,
+    `CreateInstanceAsync`, and the `Try*` variants all route through one shared resolution path.
+  - **`@memberjunction/core`**: `PermissionProviderBase` declares `RequiresSubclass = true` — every member is
+    abstract, so a base instance is a method-less stub.
+  - **`@memberjunction/core-entities`**: `PermissionEngine.instantiateProviders` uses `TryCreateInstance`, so
+    an unresolvable `ProviderClassName` is now genuinely skipped instead of installing a stub as a live
+    provider. The `GetAllUserPermissions` / `GetPermissionsGrantedByUser` / `GetPermissionsSharedWithUser`
+    fan-outs defer each provider call into a promise body so a SYNCHRONOUS throw (a missing method) is
+    isolated by `Promise.allSettled` instead of rejecting the entire aggregate for every user.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/interactive-component-types@5.49.0
+
 ## 5.48.0
 
 ### Patch Changes

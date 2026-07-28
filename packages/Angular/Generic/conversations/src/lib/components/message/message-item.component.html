@@ -1,6 +1,7 @@
 <div [class]="messageClasses" [attr.data-message-id]="message.ID" (click)="onMessageBubbleClick($event)">
   <div class="message-avatar">
-    <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
+    <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage"
+         [class.avatar-has-image]="isAIMessage && effectiveAssistantAvatarUrl !== null">
       @if (isUserMessage) {
         @if (userAvatarUrl) {
           <img [src]="userAvatarUrl" alt="User avatar" class="avatar-image" />
@@ -10,7 +11,12 @@
           <i class="fas fa-user"></i>
         }
       } @else if (isAIMessage) {
-        <i class="fas" [ngClass]="aiAgentInfo?.iconClass || 'fa-robot'"></i>
+        @if (effectiveAssistantAvatarUrl) {
+          <img [src]="effectiveAssistantAvatarUrl" alt="Assistant avatar" class="avatar-image"
+               (error)="assistantAvatarFailed = true" />
+        } @else {
+          <i class="fas" [ngClass]="aiAgentInfo?.iconClass || 'fa-robot'"></i>
+        }
       }
     </div>
   </div>
@@ -32,7 +38,7 @@
 
       <!-- Edit (owner's completed user messages) — opens the inline editor; the server
            sets OriginalMessageChanged when the text actually changes on save -->
-      @if (isUserMessage && isConversationOwner && !isEditing && messageStatus === 'Complete') {
+      @if (allowMessageEdit && isUserMessage && isConversationOwner && !isEditing && messageStatus === 'Complete') {
         <span class="message-edit-icon" (click)="onEditClick()" title="Edit message">
           <i class="fas fa-pen"></i>
         </span>
@@ -61,8 +67,11 @@
         </span>
       }
 
-      <!-- Agent run icon (clickable to expand details) - always rightmost when present -->
-      @if (hasAgentRun) {
+      <!-- Agent run icon (clickable to expand details) - always rightmost when present.
+           Rendered only when its panel would actually have content, so it never
+           appears as a dead control opening an empty popup (e.g. a white-label
+           surface with showAgentRunDetails=false and no message actions). -->
+      @if (hasAgentRun && hasAgentDetailsPanelContent) {
         <span
           class="agent-run-icon"
           (click)="toggleAgentDetails()"
@@ -191,7 +200,7 @@
          Non-last messages have no footer — pin/delete/rating live in the gear panel. -->
     @if (!isEditing && isLastMessage && (isConversationOwner || (isAIMessage && messageStatus === 'Complete'))) {
       <div class="message-footer">
-        @if (isConversationOwner) {
+        @if (allowMessageDelete && isConversationOwner) {
           <button class="action-bar-btn danger inline-delete" (click)="onDeleteClick()" title="Delete this message and all messages below it">
             <i class="fas fa-trash"></i>
           </button>
@@ -199,21 +208,25 @@
         @if (isAIMessage && messageStatus === 'Complete') {
           <div class="ai-message-actions">
             <!-- Thumbs visible inline only on the latest AI message, left of pin -->
-            <mj-conversation-message-rating
-              [conversationDetailId]="message.ID"
-              [currentUser]="currentUser"
-              [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
-              [ratingsData]="ratings"
-              [canEdit]="isConversationOwner">
-            </mj-conversation-message-rating>
-            <button
-              class="action-bar-btn pin-btn"
-              [class.pinned]="message.IsPinned"
-              (click)="PinMessage()"
-              [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
-              type="button">
-              <i class="fas fa-thumbtack"></i>
-            </button>
+            @if (showMessageRating) {
+              <mj-conversation-message-rating
+                [conversationDetailId]="message.ID"
+                [currentUser]="currentUser"
+                [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
+                [ratingsData]="ratings"
+                [canEdit]="isConversationOwner">
+              </mj-conversation-message-rating>
+            }
+            @if (allowPinning) {
+              <button
+                class="action-bar-btn pin-btn"
+                [class.pinned]="message.IsPinned"
+                (click)="PinMessage()"
+                [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
+                type="button">
+                <i class="fas fa-thumbtack"></i>
+              </button>
+            }
           </div>
         }
       </div>
@@ -225,18 +238,26 @@
       @if (isAgentDetailsExpanded && hasAgentRun) {
         <!-- Agent Run Details Panel -->
         <div class="agent-details-panel">
-          @if (agentRun) {
+          @if (agentRun && showAgentRunDetails) {
             <div class="agent-details-content">
               <div class="agent-details-header">
                 <i class="fas fa-chart-line"></i>
                 <span>
+                  <!-- Deliberately the ENGINE-resolved name: this header labels the real
+                       agent's diagnostics, and the link opens the real agent record — a
+                       host assistantDisplayName override must not relabel either. -->
                   <a class="agent-name-link" (click)="openAgentRecord()" title="Open agent details">
-                    {{ aiAgentInfo?.name || 'Agent' }}
+                    {{ engineAgentInfo?.name || 'Agent' }}
                   </a>
                   Run Details
                 </span>
               </div>
 
+              <!-- Run-detail grid (run ID, step/token counts, $ cost, status) — developer/
+                   observability data. The whole run-details section (this grid AND its
+                   header above) is gated on showAgentRunDetails at the panel root, so a
+                   white-labeled surface hides all of it; the delete/pin/rating overflow
+                   below is a sibling block (outside this @if) and still renders. -->
               <div class="agent-details-grid">
                 <div class="detail-row">
                   <span class="detail-label">Run ID:</span>
@@ -284,29 +305,33 @@
           <!-- Delete + Rating + Pin in gear panel for non-last messages — mirrors last-message footer layout -->
           @if (!isLastMessage) {
             <div class="agent-panel-actions">
-              @if (isConversationOwner) {
+              @if (allowMessageDelete && isConversationOwner) {
                 <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete this message and all messages below it">
                   <i class="fas fa-trash"></i>
                 </button>
               }
               @if (messageStatus === 'Complete') {
                 <div class="ai-message-actions">
-                  <mj-conversation-message-rating
-                    [conversationDetailId]="message.ID"
-                    [currentUser]="currentUser"
-                    [ratingsData]="ratings"
-                    [canEdit]="isConversationOwner">
-                  </mj-conversation-message-rating>
-                  <button
-                    class="action-bar-btn pin-btn"
-                    [class.pinned]="message.IsPinned"
-                    (click)="PinMessage()"
-                    [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
-                    type="button">
-                    <i class="fas fa-thumbtack"></i>
-                  </button>
+                  @if (showMessageRating) {
+                    <mj-conversation-message-rating
+                      [conversationDetailId]="message.ID"
+                      [currentUser]="currentUser"
+                      [ratingsData]="ratings"
+                      [canEdit]="isConversationOwner">
+                    </mj-conversation-message-rating>
+                  }
+                  @if (allowPinning) {
+                    <button
+                      class="action-bar-btn pin-btn"
+                      [class.pinned]="message.IsPinned"
+                      (click)="PinMessage()"
+                      [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
+                      type="button">
+                      <i class="fas fa-thumbtack"></i>
+                    </button>
+                  }
                 </div>
-              } @else {
+              } @else if (allowPinning) {
                 <button
                   class="action-bar-btn pin-btn"
                   [class.pinned]="message.IsPinned"
@@ -357,7 +382,7 @@
     }
 
     <!-- Reaction Buttons -->
-    @if (!isProcessing && !isInProgressAIMessage && !isEditing) {
+    @if (showReactions && !isProcessing && !isInProgressAIMessage && !isEditing) {
       <div class="message-reactions">
         <button class="reaction-btn" (click)="toggleReaction('like')">
           <i class="far fa-thumbs-up"></i>
