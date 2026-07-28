@@ -132,7 +132,7 @@ describe('AddEntityPackageMapping', () => {
 
         expect(result.Success).toBe(true);
         const content = writtenContent();
-        expect(content).toContain("'acme': '@acme/core-entities'");
+        expect(content).toContain('"acme": "@acme/core-entities"');
         expect(content).toContain('entityPackageName');
     });
 
@@ -151,7 +151,7 @@ describe('AddEntityPackageMapping', () => {
 
         expect(result.Success).toBe(true);
         const content = writtenContent();
-        expect(content).toContain("'acme': '@acme/custom-entities-pkg'");
+        expect(content).toContain('"acme": "@acme/custom-entities-pkg"');
         expect(content).not.toContain('@acme/core-entities');
     });
 
@@ -228,8 +228,8 @@ describe('AddEntityPackageMapping', () => {
         expect(result2.Success).toBe(true);
         const afterSecond = writtenContent();
 
-        expect(afterSecond).toContain("'alpha': '@alpha/core-entities'");
-        expect(afterSecond).toContain("'beta': '@beta/entities-lib'");
+        expect(afterSecond).toContain('"alpha": "@alpha/core-entities"');
+        expect(afterSecond).toContain('"beta": "@beta/entities-lib"');
     });
 
     it('should replace existing mapping when installing same app again (no duplicates)', () => {
@@ -249,11 +249,12 @@ describe('AddEntityPackageMapping', () => {
 
         expect(result.Success).toBe(true);
         const content = writtenContent();
-        expect(content).toContain("'acme': '@acme/new-entities'");
+        expect(content).toContain('"acme": "@acme/new-entities"');
         expect(content).not.toContain('@acme/old-entities');
 
-        // Verify there's exactly one occurrence of the schema key
-        const matches = content.match(/'acme'/g);
+        // Verify there's exactly one occurrence of the schema key (either quote style —
+        // the stale single-quoted entry must be removed, the new one written double-quoted)
+        const matches = content.match(/['"]acme['"]/g);
         expect(matches).toHaveLength(1);
     });
 });
@@ -321,7 +322,7 @@ describe('EnsureEntityPackageNameSection (via AddEntityPackageMapping)', () => {
 
         const content = writtenContent();
         expect(content).toContain('entityPackageName: {');
-        expect(content).toContain("'acme': '@acme/core-entities'");
+        expect(content).toContain('"acme": "@acme/core-entities"');
     });
 
     it('converts a DEFAULT string (mj_generatedentities) to a Record losslessly (B9)', () => {
@@ -341,7 +342,7 @@ describe('EnsureEntityPackageNameSection (via AddEntityPackageMapping)', () => {
         expect(result.Success).toBe(true);
         const content = writtenContent();
         expect(content).toContain('entityPackageName: {');
-        expect(content).toContain("'acme': '@acme/core-entities'");
+        expect(content).toContain('"acme": "@acme/core-entities"');
         // The lossy "drop the value into a comment" behavior is gone.
         expect(content).not.toContain('Converted from string value');
     });
@@ -387,7 +388,7 @@ describe('EnsureEntityPackageNameSection (via AddEntityPackageMapping)', () => {
         // Existing entry preserved
         expect(content).toContain("'existing': '@existing/entities'");
         // New entry added
-        expect(content).toContain("'acme': '@acme/core-entities'");
+        expect(content).toContain('"acme": "@acme/core-entities"');
         // No conversion comment
         expect(content).not.toContain('Converted from string value');
     });
@@ -408,7 +409,7 @@ describe('ResolveEntityPackageFromManifest (via AddEntityPackageMapping)', () =>
         AddEntityPackageMapping(REPO_ROOT, manifest);
 
         const content = writtenContent();
-        expect(content).toContain("'acme': '@acme/explicit-entities'");
+        expect(content).toContain('"acme": "@acme/explicit-entities"');
         expect(content).not.toContain('@acme/core-entities');
     });
 
@@ -426,7 +427,7 @@ describe('ResolveEntityPackageFromManifest (via AddEntityPackageMapping)', () =>
         AddEntityPackageMapping(REPO_ROOT, manifest);
 
         const content = writtenContent();
-        expect(content).toContain("'acme': '@acme/acme-entities'");
+        expect(content).toContain('"acme": "@acme/acme-entities"');
     });
 
     it('should pick first library package with "entities" when multiple match', () => {
@@ -443,7 +444,7 @@ describe('ResolveEntityPackageFromManifest (via AddEntityPackageMapping)', () =>
         AddEntityPackageMapping(REPO_ROOT, manifest);
 
         const content = writtenContent();
-        expect(content).toContain("'acme': '@acme/core-entities'");
+        expect(content).toContain('"acme": "@acme/core-entities"');
         expect(content).not.toContain('@acme/extra-entities');
     });
 
@@ -477,7 +478,7 @@ describe('ResolveEntityPackageFromManifest (via AddEntityPackageMapping)', () =>
         AddEntityPackageMapping(REPO_ROOT, manifest);
 
         const content = writtenContent();
-        expect(content).toContain("'acme': '@acme/Core-Entities'");
+        expect(content).toContain('"acme": "@acme/Core-Entities"');
     });
 });
 
