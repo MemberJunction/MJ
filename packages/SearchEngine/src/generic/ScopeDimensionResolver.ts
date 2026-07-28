@@ -178,6 +178,25 @@ export class ScopeDimensionResolver {
                     `decision it is not advisory.`
                 );
             }
+            // §5.9 — a boundary defaults to STRICT; choosing the permissive mode must be explicit.
+            // `inheritanceMode` was the exact failure this resolver exists to fix, reproduced: the
+            // field shipped in the declaration type and NOTHING read it, so `cascading` on a
+            // boundary looked configured while behaving as an unenforced comment.
+            if (dim.restricts === true && dim.inheritanceMode === 'cascading'
+                && dim.acknowledgeCascadingOnBoundary !== true) {
+                throw new ScopeDimensionError(
+                    `Dimension "${dim.name}" is restricting and declares inheritanceMode 'cascading', which is ` +
+                    `PERMISSIVE — content lacking the dimension would apply to everyone, widening the bound. ` +
+                    `If that is genuinely intended, set "acknowledgeCascadingOnBoundary": true on the dimension ` +
+                    `so the choice is deliberate and greppable. Otherwise use 'strict' (the default for a boundary).`
+                );
+            }
+            if (dim.restricts === true && dim.valueType === 'freetext') {
+                throw new ScopeDimensionError(
+                    `Dimension "${dim.name}" is restricting but declares valueType 'freetext'. Free text cannot ` +
+                    `be made safe inside a filter — model it as a query input instead.`
+                );
+            }
             if (dim.supersededByRules?.length && dim.advisory !== true) {
                 throw new ScopeDimensionError(
                     `SearchScope "${scope.Name}" dimension "${dim.name}" declares supersededByRules but is not ` +
@@ -323,62 +342,11 @@ export class ScopeDimensionResolver {
         const trust: 'CallerSupplied' | 'ServerDerived' =
             restricts ? 'ServerDerived' : (dim.trust ?? 'CallerSupplied');
 
-        // §5.9 — a boundary defaults to STRICT, and choosing the permissive mode must be explicit.
-        //
-        // This check exists because `inheritanceMode` was the exact failure this whole resolver was
-        // written to fix, reproduced: the field shipped in the declaration type and NOTHING read it,
-        // so `cascading` on a boundary looked configured while behaving as an unenforced comment.
-        if (restricts && dim.inheritanceMode === 'cascading' && dim.acknowledgeCascadingOnBoundary !== true) {
-            throw new ScopeDimensionError(
-                `Dimension "${dim.name}" is restricting and declares inheritanceMode 'cascading', which is ` +
-                `PERMISSIVE — content lacking the dimension would apply to everyone, widening the bound. ` +
-                `If that is genuinely intended, set "acknowledgeCascadingOnBoundary": true on the dimension ` +
-                `so the choice is deliberate and greppable. Otherwise use 'strict' (the default for a boundary).`
-            );
-        }
+        let { Value: value, Provenance: provenance, Note: note } =
+            await this.resolveByTrust(dim, trust, callerScopes, input, diagnostics);
 
-        if (restricts && dim.valueType === 'freetext') {
-            throw new ScopeDimensionError(
-                `Dimension "${dim.name}" is restricting but declares valueType 'freetext'. Free text cannot be ` +
-                `made safe inside a filter — model it as a query input instead.`
-            );
-        }
-
-        let value: SecondaryScopeValue | undefined;
-        let provenance: DimensionProvenance;
-        let note: string | undefined;
-
-        if (trust === 'ServerDerived') {
-            if (dim.name in callerScopes) {
-                // THE ANTI-SPOOF RULE. Discarded, never merged.
-                diagnostics.push(
-                    `discarded caller-supplied value for ServerDerived dimension "${dim.name}"`
-                );
-                LogStatus(`ScopeDimensionResolver: discarded caller-supplied value for ServerDerived dimension "${dim.name}"`);
-                note = `a caller-supplied value was discarded (${JSON.stringify(callerScopes[dim.name]).substring(0, 80)})`;
-            }
-            value = await this.deriveServerValue(dim, input);
-            // The discard is the security-relevant event, so it wins the label even when a
-            // server value replaced it — an audit needs to see that someone tried.
-            provenance = note ? 'DiscardedCaller' : 'ServerDerived';
-        } else {
-            const raw = callerScopes[dim.name];
-            value = raw === undefined ? undefined : this.validateGrammar(dim, raw);
-            provenance = raw === undefined ? 'Absent' : 'CallerSupplied';
-        }
-
-        if (value === undefined && dim.defaultValue !== undefined && dim.defaultValue !== null) {
-            // A default may NOT stand in for a restricting dimension: "absent" must mean deny.
-            if (restricts) {
-                throw new ScopeDimensionError(
-                    `Dimension "${dim.name}" is restricting and could not be derived; a defaultValue must not ` +
-                    `substitute for an access bound.`
-                );
-            }
-            value = dim.defaultValue;
-            diagnostics.push(`applied defaultValue for "${dim.name}"`);
-            provenance = 'Default';
-        }
+        ({ Value: value, Provenance: provenance } =
+            this.applyDefaultValue(dim, restricts, value, provenance, diagnostics));
 
         if (value === undefined && dim.required) {
             throw new ScopeDimensionError(
@@ -401,6 +369,70 @@ export class ScopeDimensionResolver {
         // one an attacker would most like erased.
         if (value === undefined && provenance !== 'DiscardedCaller') provenance = 'Absent';
         return { Value: value, Provenance: provenance, Note: note };
+    }
+
+    /**
+     * Produce a value according to the dimension's TRUST, which is the whole security hinge.
+     *
+     * `ServerDerived` never merges a caller value — it discards it and derives its own. The discard
+     * also wins the provenance label even when a server value replaced it, because an audit needs to
+     * see that someone tried; a successful override would otherwise look identical to a quiet run.
+     */
+    protected async resolveByTrust(
+        dim: ScopeSecondaryDimension,
+        trust: 'CallerSupplied' | 'ServerDerived',
+        callerScopes: Record<string, SecondaryScopeValue>,
+        input: DimensionResolutionInput,
+        diagnostics: string[]
+    ): Promise<DimensionOutcome> {
+        if (trust !== 'ServerDerived') {
+            const raw = callerScopes[dim.name];
+            return {
+                Value: raw === undefined ? undefined : this.validateGrammar(dim, raw),
+                Provenance: raw === undefined ? 'Absent' : 'CallerSupplied',
+            };
+        }
+
+        let note: string | undefined;
+        if (dim.name in callerScopes) {
+            // THE ANTI-SPOOF RULE. Discarded, never merged.
+            const msg = `discarded caller-supplied value for ServerDerived dimension "${dim.name}"`;
+            diagnostics.push(msg);
+            LogStatus(`ScopeDimensionResolver: ${msg}`);
+            note = `a caller-supplied value was discarded (${JSON.stringify(callerScopes[dim.name]).substring(0, 80)})`;
+        }
+        return {
+            Value: await this.deriveServerValue(dim, input),
+            Provenance: note ? 'DiscardedCaller' : 'ServerDerived',
+            Note: note,
+        };
+    }
+
+    /**
+     * Apply a declared `defaultValue` when nothing resolved.
+     *
+     * A default may NOT stand in for a restricting dimension: for a bound, "absent" has to mean
+     * deny. Allowing a default there would let an author turn a failed derivation into a silent
+     * grant, which is the inverse of what the bound is for.
+     */
+    protected applyDefaultValue(
+        dim: ScopeSecondaryDimension,
+        restricts: boolean,
+        value: SecondaryScopeValue | undefined,
+        provenance: DimensionProvenance,
+        diagnostics: string[]
+    ): DimensionOutcome {
+        if (value !== undefined || dim.defaultValue === undefined || dim.defaultValue === null) {
+            return { Value: value, Provenance: provenance };
+        }
+        if (restricts) {
+            throw new ScopeDimensionError(
+                `Dimension "${dim.name}" is restricting and could not be derived; a defaultValue must not ` +
+                `substitute for an access bound.`
+            );
+        }
+        diagnostics.push(`applied defaultValue for "${dim.name}"`);
+        return { Value: dim.defaultValue, Provenance: 'Default' };
     }
 
     /** Derive a ServerDerived value: an approved `MJ: Queries` row, else nothing. */
@@ -434,6 +466,42 @@ export class ScopeDimensionResolver {
             .map((r) => { const v = Object.values(r)[0]; return typeof v === 'string' ? v : String(v ?? ''); })
             .filter((v) => v.length > 0);
         return dim.valueType === 'uuid' ? values[0] : values;
+    }
+
+    /**
+     * Meet a caller value against a SET-valued server bound.
+     *
+     * A scalar caller value is a MEMBERSHIP test — "pick one of the allowed values" — not equality
+     * against the set. An earlier version compared the scalar to a stringified array and therefore
+     * rejected every legitimate pick, which is why the two shapes are handled apart here.
+     */
+    protected meetAgainstSet(
+        dim: ScopeSecondaryDimension,
+        callerValue: SecondaryScopeValue,
+        serverSet: string[],
+        callerIsSet: boolean,
+        widened: (detail: string) => ScopeDimensionError
+    ): SecondaryScopeValue {
+        const lower = (v: unknown) => String(v).toLowerCase();
+        const allowed = new Set(serverSet.map(lower));
+
+        if (!callerIsSet) {
+            if (!allowed.has(lower(callerValue))) {
+                throw widened(`'${String(callerValue)}' is not one of the ${allowed.size} allowed value(s)`);
+            }
+            return callerValue;
+        }
+
+        const intersection = (callerValue as string[]).filter((v) => allowed.has(lower(v)));
+        if (!intersection.length) {
+            // Bottom. Never fall back to the unrestricted bound: an empty value renders as a
+            // REMOVED clause under the `{% if %}` idiom, which inverts narrowing into widening.
+            throw new ScopeDimensionError(
+                `Dimension "${dim.name}" narrowed to NOTHING — the caller's values lie entirely outside the ` +
+                `server-derived bound "${dim.narrowingOf}". Refusing to search (never widen on a degenerate scope).`
+            );
+        }
+        return intersection;
     }
 
     /** Enforce the declared grammar. A failure REJECTS — never coerce, never drop-and-continue. */
@@ -500,23 +568,7 @@ export class ScopeDimensionResolver {
         );
 
         if (serverIsSet) {
-            const allowed = new Set((serverValue as string[]).map(lower));
-            if (!callerIsSet) {
-                // Membership: one pick out of the allowed set.
-                if (!allowed.has(lower(callerValue))) {
-                    throw widened(`'${String(callerValue)}' is not one of the ${allowed.size} allowed value(s)`);
-                }
-                return callerValue;
-            }
-            // Set ∩ set.
-            const meet = (callerValue as string[]).filter((v) => allowed.has(lower(v)));
-            if (!meet.length) {
-                throw new ScopeDimensionError(
-                    `Dimension "${dim.name}" narrowed to NOTHING — the caller's values lie entirely outside the ` +
-                    `server-derived bound "${dim.narrowingOf}". Refusing to search (never widen on a degenerate scope).`
-                );
-            }
-            return meet;
+            return this.meetAgainstSet(dim, callerValue, serverValue as string[], callerIsSet, widened);
         }
 
         // Server bound is a single value: the caller may only restate it.
