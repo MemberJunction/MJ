@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildContentHashPrefetchFilter, type SqlQuoter } from '../prefetchFilter.js';
+import { buildContentHashPrefetchFilter, quoteTextLiteral, type SqlQuoter } from '../prefetchFilter.js';
 
 // Dialect stand-ins mirroring the real providers (see MJCore databaseProviderBase.test.ts):
 // SQL Server brackets identifiers, PostgreSQL double-quotes them; both single-quote string literals
@@ -53,5 +53,36 @@ describe('buildContentHashPrefetchFilter (MJ#3047 — reserved-word PK content-h
                 '("a" = \'x\' AND "b" = \'\')',
             );
         });
+    });
+});
+
+describe('quoteTextLiteral (SQL Server varchar-literal truncation)', () => {
+    // The quoters above deliberately carry no PlatformKey — see the last test.
+    const ss: SqlQuoter = { ...sqlServer, PlatformKey: 'sqlserver' };
+    const pg: SqlQuoter = { ...postgres, PlatformKey: 'postgresql' };
+
+    it('SQL Server: prefixes N so the literal is nvarchar, matching the column', () => {
+        // Verified live on SQL_Latin1_General_CP1_CI_AS: the bare form reads as
+        // 'ünïcödé-O-???' and matches zero rows; the N-prefixed form matches the stored row.
+        expect(quoteTextLiteral('ünïcödé-Ω-日本語', ss)).toBe("N'ünïcödé-Ω-日本語'");
+    });
+
+    it('PostgreSQL: no prefix — its literals are already Unicode and it has no N form', () => {
+        expect(quoteTextLiteral('ünïcödé-Ω-日本語', pg)).toBe("'ünïcödé-Ω-日本語'");
+    });
+
+    it('still escapes embedded apostrophes on both platforms', () => {
+        expect(quoteTextLiteral("O'Brien", ss)).toBe("N'O''Brien'");
+        expect(quoteTextLiteral("O'Brien", pg)).toBe("'O''Brien'");
+    });
+
+    it('leaves plain ASCII alone apart from the prefix (no behaviour change for the common case)', () => {
+        expect(quoteTextLiteral('EXT-000001', ss)).toBe("N'EXT-000001'");
+        expect(quoteTextLiteral('EXT-000001', pg)).toBe("'EXT-000001'");
+    });
+
+    it('falls back to the plain literal when the quoter reports no platform', () => {
+        // A hand-rolled quoter (or a future dialect) must not silently get SQL Server syntax.
+        expect(quoteTextLiteral('x', sqlServer)).toBe("'x'");
     });
 });

@@ -226,9 +226,17 @@ export class SchemaBuilder {
         // Step 2: Build RSU pipeline input from SchemaBuilder output
         const rsuInput = this.BuildRSUInput(schemaOutput, input, rsuOptions);
 
-        // Step 3: Execute the RSU pipeline
+        // Step 3: Execute the RSU pipeline.
+        //
+        // Retrying wrapper, not the bare RunPipeline: this is the path every `ApplyAll` /
+        // `ApplyAllBatch` install runs through, and its expensive middle steps
+        // (ExecuteMigration, RunCodeGen, CompileTypeScript, RestartMJAPI) fail transiently —
+        // a dropped connection during the migration, an EBUSY during compile, an MJAPI that
+        // isn't back up yet. `RunPipelineWithRetry` already whitelists exactly those four
+        // steps and refuses to retry validation or git; the callers simply never used it, so
+        // an install died on a hiccup that a 5s backoff would have absorbed.
         const rsm = RuntimeSchemaManager.Instance;
-        const pipelineResult = await rsm.RunPipeline(rsuInput);
+        const pipelineResult = await rsm.RunPipelineWithRetry(rsuInput);
 
         return { SchemaOutput: schemaOutput, PipelineResult: pipelineResult };
     }
