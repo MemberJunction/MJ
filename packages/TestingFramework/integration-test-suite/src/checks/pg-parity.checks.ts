@@ -138,15 +138,28 @@ async function readUntil(
     predicate: (rows: Record<string, unknown>[]) => boolean,
     what: string
 ): Promise<Record<string, unknown>[]> {
+    const rows = await pollUntil(read, predicate);
+    Assert(predicate(rows),
+        `${what}: still not satisfied ${WRITE_VISIBILITY_TIMEOUT_MS}ms after the write reported success. ` +
+        `Last read returned ${rows.length} row(s): ${JSON.stringify(rows)}`);
+    return rows;
+}
+
+/**
+ * The polling loop itself, without the assertion. Returns the last rows seen when the window
+ * expires instead of throwing, for the one caller that must REPORT a failure rather than raise
+ * it — cleanup runs inside a `finally`, where throwing would replace the body's real error.
+ */
+async function pollUntil(
+    read: () => Promise<Record<string, unknown>[]>,
+    predicate: (rows: Record<string, unknown>[]) => boolean
+): Promise<Record<string, unknown>[]> {
     const deadline = Date.now() + WRITE_VISIBILITY_TIMEOUT_MS;
     let rows = await read();
     while (!predicate(rows) && Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, WRITE_VISIBILITY_POLL_MS));
         rows = await read();
     }
-    Assert(predicate(rows),
-        `${what}: still not satisfied ${WRITE_VISIBILITY_TIMEOUT_MS}ms after the write reported success. ` +
-        `Last read returned ${rows.length} row(s): ${JSON.stringify(rows)}`);
     return rows;
 }
 
@@ -165,14 +178,22 @@ async function readUntil(
  * so no rejection can escape and do that accidentally.
  */
 async function cleanupFixture(
-    view: MJUserViewEntity, tag: string, user: UserInfo, alreadyGone: boolean
+    view: MJUserViewEntity, fixtureId: string, tag: string, user: UserInfo, alreadyGone: boolean
 ): Promise<void> {
     if (alreadyGone) return;
 
     let leakReason: string | undefined;
     try {
         await view.Delete();
-        const remaining = await readViewById(view.ID, ['ID'], user, `${tag} cleanup verification read`);
+        // Keyed on the CAPTURED id: Delete() replaces `view.ID` with a fresh UUID via NewRecord(),
+        // so re-reading `view.ID` here would report a genuine leak as clean. And POLLED rather
+        // than read once, because `MJUserViewEntityExtended.Delete()` does not await
+        // `super.Delete()` — a single read races the in-flight delete and would report a phantom
+        // leak on exactly the failing runs where this output is the triage material.
+        const remaining = await pollUntil(
+            () => readViewById(fixtureId, ['ID'], user, `${tag} cleanup verification read`),
+            rows => rows.length === 0
+        );
         if (remaining.length > 0) {
             leakReason = `the row is still present after Delete(): ${view.LatestResult?.CompleteMessage ?? 'no error message'}`;
         }
@@ -181,7 +202,7 @@ async function cleanupFixture(
     }
     if (!leakReason) return;
 
-    console.error(`      ✗ ${tag}: cleanup of fixture '${view.ID}' FAILED — a row has been leaked. ${leakReason}`);
+    console.error(`      ✗ ${tag}: cleanup of fixture '${fixtureId}' FAILED — a row has been leaked. ${leakReason}`);
 }
 
 /**
@@ -211,17 +232,19 @@ const PG1: NamedCheck = {
     RequiresMutation: true,
     Fn: async (ctx: IntegrationCheckContext) => {
         const view = await createUserView(ctx.Provider, ctx.User, 'pg1');
+        // Captured before the delete leg, which replaces `view.ID` via NewRecord() — every read
+        // below, and the cleanup in the `finally`, is keyed on this rather than on the live entity.
+        //
+        // Deliberately NOT asserted non-empty: `NewRecord()` generates the UUID client-side before
+        // the INSERT, so `view.ID` is populated regardless of what the provider returned. The
+        // round-trip is proven by reading the row back by this id below.
+        const createdId = view.ID;
         // Set ONLY after the row's absence is verified. Wiring it to Delete()'s return value would
         // short-circuit cleanup on exactly the failure this check exists to catch — a provider
         // that reports a successful delete without removing the row would then leak one fixture
         // row per run, forever.
         let verifiedGone = false;
         try {
-            // Asserted INSIDE the try: an INSERT that commits but fails to return the generated
-            // key is a plausible RETURNING-clause parity bug and exactly what this assertion is
-            // for — throwing outside the try would leak the very row it just created.
-            const createdId = view.ID;
-            Assert(!!createdId, 'PG1: the provider returned no primary key after Save() — the create leg never round-tripped');
 
             // READ by filter — exercises the generated WHERE against a uniqueidentifier/uuid column.
             const byId = await readViewById(createdId, ['ID', 'Name'], ctx.User, 'PG1 read-back by ID');
@@ -254,7 +277,7 @@ const PG1: NamedCheck = {
                 'PG1: the row must be gone after Delete()');
             verifiedGone = true;
         } finally {
-            await cleanupFixture(view, 'PG1', ctx.User, verifiedGone);
+            await cleanupFixture(view, createdId, 'PG1', ctx.User, verifiedGone);
         }
     },
 };
@@ -316,6 +339,12 @@ const PG4: NamedCheck = {
     RequiresMutation: true,
     Fn: async (ctx: IntegrationCheckContext) => {
         const view = await createUserView(ctx.Provider, ctx.User, 'pg4');
+        // Captured BEFORE any delete. `BaseEntity._InnerDelete` calls `NewRecord()` on success,
+        // which mints a fresh client-side UUID into the entity — so `view.ID` after a delete is a
+        // row that never existed, and a post-delete read keyed on it returns 0 rows no matter what
+        // the database did. Reading `view.ID` there would make the absence assertion vacuous and,
+        // worse, mark the fixture verified-gone so cleanup skips a row that was never removed.
+        const fixtureId = view.ID;
         let verifiedGone = false;   // see PG1 — set only after the row's absence is verified
         try {
             // Move BOTH booleans false→true. createUserView writes both false, and both columns
@@ -395,15 +424,16 @@ const PG4: NamedCheck = {
             AssertEqual(cleared[0].IsShared, false, 'PG4: IsShared was written false and must read back false');
             AssertEqual(cleared[0].IsDefault, false, 'PG4: IsDefault was written false and must read back false');
 
-            // Asserted on the row's absence, not on Delete()'s return — see PG1.
+            // Asserted on the row's absence, not on Delete()'s return — see PG1. Keyed on the
+            // captured id, NOT view.ID, which Delete() has by now replaced.
             await view.Delete();
             await readUntil(
-                () => readViewById(view.ID, ['ID'], ctx.User, 'PG4 post-delete absence read'),
+                () => readViewById(fixtureId, ['ID'], ctx.User, 'PG4 post-delete absence read'),
                 rows => rows.length === 0,
                 'PG4: the row must be gone after Delete()');
             verifiedGone = true;
         } finally {
-            await cleanupFixture(view, 'PG4', ctx.User, verifiedGone);
+            await cleanupFixture(view, fixtureId, 'PG4', ctx.User, verifiedGone);
         }
     },
 };

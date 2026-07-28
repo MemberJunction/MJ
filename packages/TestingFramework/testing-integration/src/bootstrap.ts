@@ -159,18 +159,20 @@ async function setupPostgreSQLProvider(
     // undefined" and still returns true, so a non-throwing metadata fetch failure remains
     // reachable — a narrower gap, tracked separately rather than papered over here.
     const configured = await provider.Config(pgConfig);
-    if (!configured) {
-        throw new Error(
-            `PostgreSQLDataProvider.Config returned false for database '${db.Database}' (schema '${db.Schema}') — ` +
-            `metadata could not be loaded. Verify the database is migrated (migrations-pg/v5) and that ` +
-            `'${db.User}' can read the ${db.Schema} metadata tables. The provider logged the underlying error above.`
-        );
-    }
 
-    // Everything past Config() owns a live pg pool. A throw here (empty user table, unreadable
-    // vwUsers, wrong schema — all fail-loud) would otherwise leave that pool open and unreachable,
-    // and its open sockets keep the event loop alive.
+    // Config() itself opens the pg pool (`cm.Initialize`) BEFORE the metadata load that decides
+    // its return value, so a `false` return leaves a live pool behind just as a later throw would.
+    // The failure check therefore lives INSIDE the try whose catch closes it — outside, a
+    // half-provisioned database leaked the pool and its open sockets held the event loop open.
     try {
+        if (!configured) {
+            throw new Error(
+                `PostgreSQLDataProvider.Config returned false for database '${db.Database}' (schema '${db.Schema}') — ` +
+                `metadata could not be loaded. Verify the database is migrated (migrations-pg/v5) and that ` +
+                `'${db.User}' can read the ${db.Schema} metadata tables. The provider logged the underlying error above.`
+            );
+        }
+
         SetProvider(provider);
         // The specific provider, not Metadata.Provider — it is in scope here, so there is no reason
         // to route through the global.
@@ -186,8 +188,15 @@ async function setupPostgreSQLProvider(
             ClosePool: async () => { await provider.DatabaseConnection.end(); }
         };
     } catch (err) {
-        await provider.DatabaseConnection.end().catch(closeErr =>
-            LogError(`PostgreSQL bootstrap failed, and closing its pool also failed: ${closeErr instanceof Error ? closeErr.message : String(closeErr)}`));
+        // try/catch, not `.catch()`: the `DatabaseConnection` getter THROWS SYNCHRONOUSLY when the
+        // pool was never initialized (Config() failing before `cm.Initialize`), and a synchronous
+        // throw would escape a promise `.catch` and replace the real bootstrap error with a
+        // confusing "pool is null".
+        try {
+            await provider.DatabaseConnection.end();
+        } catch (closeErr) {
+            LogError(`PostgreSQL bootstrap failed, and closing its pool also failed: ${closeErr instanceof Error ? closeErr.message : String(closeErr)}`);
+        }
         throw err;
     }
 }

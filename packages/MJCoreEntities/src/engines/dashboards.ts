@@ -193,10 +193,13 @@ export class DashboardEngine extends BaseEngine<DashboardEngine> {
 
         // This engine answers from an in-memory cache. If it was never configured the cache is
         // empty, and EVERY dashboard would look like "not found" — reported as a denial that is
-        // really "I was never asked to load". Report that state distinctly so a caller enforcing
-        // a gate can tell the difference; grants stay false either way, so this is not an
-        // escalation. (`mj sync push` runs StartupManager in 'task' mode, which pre-warms no
-        // engines, so this path is reached on every metadata push that touches a dashboard.)
+        // really "I was never asked to load". Report that state distinctly so a caller can say WHY
+        // it refused; grants stay false, so this is diagnostic rather than an escalation and every
+        // caller that gates on CanEdit/CanDelete still fails closed.
+        //
+        // Callers enforcing a gate should LOAD the engine before asking rather than interpreting
+        // this value — see MJDashboardEntityExtended, which calls EnsureLoaded from Save()/Delete()
+        // so this branch means the load was attempted and failed, not that nobody asked.
         if (!this.Loaded) {
             return { ...noPermissions, PermissionSource: 'unevaluated' };
         }

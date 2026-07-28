@@ -94,8 +94,31 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * race the INSERT's reload (the "stuck at EndedAt=NULL / shows Running forever" bug is structurally
     * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
     * long-lived singleton.
+    *
+    * That chaining guarantee covers the log row's OWN writes only. A DIFFERENT row taking a foreign
+    * key to `LogEntry.ID` is not ordered by it and must call {@link FlushActionLogs} first — see
+    * that method.
     */
    private readonly _logQueue = new BaseEntitySaveQueue();
+
+   /**
+    * Wait for queued action-log writes to reach the database.
+    *
+    * {@link StartActionLog} fire-and-forgets the 'started' INSERT so an action never sits behind a
+    * DB round trip, and returns immediately because `NewRecord()` assigns the PK client-side. The ID
+    * is therefore *valid* before the row *exists* — fine for the log's own chained UPDATE, but a
+    * foreign key pointing at it will not resolve until the INSERT commits.
+    *
+    * `MJ: User Routine Runs.ActionExecutionLogID` is exactly such an FK. Writing it without flushing
+    * raises `FK_UserRoutineRun_ActionExecutionLog`, and because that Save() returns false rather than
+    * throwing, the run row is left stranded at `Status = 'Running'` with a null `CompletedAt`. It is
+    * a race, so it fails intermittently on SQL Server and near-deterministically on PostgreSQL.
+    *
+    * Any caller persisting an FK to a `LogEntry.ID` must await this first.
+    */
+   public async FlushActionLogs(): Promise<void> {
+      await this._logQueue.Flush();
+   }
 
    /**
     * Engine-default wall-clock timeout applied to any action whose

@@ -447,12 +447,50 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 }
             } catch (error) {
                 this.logError(`Test failed in suite: ${test.Name}`, error as Error);
+                testResults.push(this.buildUnstartedTestResult(test, error as Error, testSequence));
             } finally {
                 testSequence++;
             }
         }
 
         return testResults;
+    }
+
+    /**
+     * A result standing in for a test that threw BEFORE its driver produced one — a failed
+     * `createTestRun`, an unresolvable test type, a variable-resolution failure, a driver that
+     * would not instantiate.
+     *
+     * Without this the test is simply absent from `testResults`, and every count derives from
+     * that array: `summarizeSuiteResults` is failure-closed across STATUSES but not across the
+     * array boundary, so a vanished test shrinks `totalTests` rather than going red and the suite
+     * exits 0. Recording it as `'Error'` — "never produced a verdict" — puts it in the same bucket
+     * as a driver that threw mid-run, which is exactly what happened.
+     * @private
+     */
+    private buildUnstartedTestResult(test: MJTestEntity, error: Error, sequence: number): TestRunResult {
+        const now = new Date();
+        return {
+            // No MJTestRun row exists — that create is usually what failed. Empty rather than
+            // fabricated, so nothing downstream joins against an ID that was never persisted.
+            testRunId: '',
+            testId: test.ID,
+            testName: test.Name,
+            status: 'Error',
+            score: 0,
+            passedChecks: 0,
+            failedChecks: 0,
+            totalChecks: 0,
+            oracleResults: [],
+            targetType: 'Unknown',
+            targetLogId: '',
+            durationMs: 0,
+            totalCost: 0,
+            startedAt: now,
+            completedAt: now,
+            errorMessage: error?.message ?? String(error),
+            sequence
+        };
     }
 
     /**
@@ -564,6 +602,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 }
             } catch (error) {
                 this.logError(`[Worker ${workerIndex + 1}] Test failed: ${test.Name}`, error as Error);
+                // Same reasoning as the sequential path — a test that could not start must be
+                // counted, not dropped. See buildUnstartedTestResult.
+                results.push(this.buildUnstartedTestResult(test, error as Error, sequence));
             }
         }
 

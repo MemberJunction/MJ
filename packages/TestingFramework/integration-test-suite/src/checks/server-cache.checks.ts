@@ -284,13 +284,23 @@ export const ServerCacheChecks: NamedCheck[] = [
                 Fields: ['Name'],
                 ResultType: 'simple' as const
             };
-            const isSorted = (rows: Record<string, unknown>[]): boolean =>
-                rows.every((r, i) => i === 0 || String(rows[i - 1].Name).localeCompare(String(r.Name)) <= 0);
+            // The assertion is that the CACHE preserves the database's order — deliberately NOT
+            // that the order matches a JS collator. `localeCompare` (ICU) and the database's
+            // collation are different sort algorithms: PostgreSQL clusters here use glibc
+            // `en_US.utf8`, which ignores spaces at the primary level, so it orders
+            // 'MJ: AI Models' before 'MJ: AI Model Types' while ICU orders them the other way.
+            // 49 such pairs exist in this entity alone. SQL Server's default collation happens to
+            // agree with ICU, which is the only reason a JS-side sort check ever passed — it was
+            // asserting a coincidence, not the behaviour this check is named for.
+            const names = (rows: Record<string, unknown>[]): string[] => rows.map(r => String(r.Name));
             const miss = await rv.RunView(params, ctx.User);
-            Assert(miss.Success && isSorted(miss.Results), 'miss-path results must be sorted by Name');
+            Assert(miss.Success, `miss-path read failed: ${miss.ErrorMessage}`);
+            Assert(miss.Results.length > 1, 'need 2+ rows to prove the ordering survived the cache');
             const hit = await rv.RunView(params, ctx.User);
-            Assert(hit.Success && isSorted(hit.Results), 'hit-path results must be sorted by Name');
+            Assert(hit.Success, `hit-path read failed: ${hit.ErrorMessage}`);
             AssertEqual(hit.Results.length, miss.Results.length, 'hit and miss row counts must match');
+            AssertEqual(names(hit.Results).join(' '), names(miss.Results).join(' '),
+                'hit-path returned a DIFFERENT row order than the miss path — the cache did not preserve OrderBy');
         }
     },
     {
@@ -584,8 +594,15 @@ export const ServerCacheChecks: NamedCheck[] = [
             Assert(desc.Success, `desc failed: ${desc.ErrorMessage}`);
             AssertEqual(desc.Results.length, asc.Results.length, 'ASC and DESC must return the same row set');
             Assert(desc.Results.length > 1, 'need 2+ rows to prove ordering');
-            const isDescending = desc.Results.every((r, i) => i === 0 || String(desc.Results[i - 1].Name).localeCompare(String(r.Name)) >= 0);
-            Assert(isDescending, 'OrderBy cross-serve: DESC results were not descending — likely served the ASC-ordered slot');
+            // DESC must be ASC REVERSED — a relation between the two reads, which is what
+            // "never cross-serve" actually means and which no collation can disagree about.
+            // Asserting "descending per localeCompare" instead compared the database's sort to
+            // ICU's, and those genuinely differ on PostgreSQL (see S15) — that made this check
+            // fail for a reason unrelated to caching.
+            const ascNames = asc.Results.map(r => String(r.Name));
+            const descNames = desc.Results.map(r => String(r.Name));
+            AssertEqual(descNames.join(' '), [...ascNames].reverse().join(' '),
+                'OrderBy cross-serve: DESC was not the reverse of ASC — likely served the ASC-ordered slot');
         }
     },
     {

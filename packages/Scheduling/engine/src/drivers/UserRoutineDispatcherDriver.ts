@@ -357,7 +357,28 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         run.AgentRunID = outcome.AgentRunID;
         run.PromptRunID = outcome.PromptRunID;
         run.ActionExecutionLogID = outcome.ActionExecutionLogID;
-        const saved = await run.Save();
+
+        // The action-log INSERT is fire-and-forget, so `ActionExecutionLogID` can name a row that
+        // does not exist yet — and this row carries an FK to it. Flush before saving, or the
+        // constraint rejects the write and the run is stranded at 'Running' forever.
+        if (outcome.ActionExecutionLogID) {
+            await ActionEngineServer.Instance.FlushActionLogs();
+        }
+
+        let saved = await run.Save();
+        if (!saved && run.ActionExecutionLogID) {
+            // Salvage: the run's OWN terminal state (Status, CompletedAt, result) matters more than
+            // the convenience link to the log. Dropping the FK and retrying leaves an accurate,
+            // queryable row instead of one stuck mid-flight — the log is still reachable from the
+            // action side. Logged loudly either way: this should not happen now that we flush.
+            this.logError(
+                `Finalizing run ${run.ID} failed while linking ActionExecutionLogID ` +
+                `'${run.ActionExecutionLogID}' (${run.LatestResult?.CompleteMessage ?? 'unknown'}). ` +
+                `Retrying without the link so the run does not stay 'Running'.`
+            );
+            run.ActionExecutionLogID = null;
+            saved = await run.Save();
+        }
         if (!saved) {
             this.logError(`Failed to finalize run ${run.ID}: ${run.LatestResult?.CompleteMessage ?? 'unknown'}`);
         }

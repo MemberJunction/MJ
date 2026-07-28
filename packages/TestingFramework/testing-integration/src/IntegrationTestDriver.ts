@@ -335,17 +335,34 @@ export class IntegrationTestDriver extends BaseTestDriver {
             if (lifecycle) {
                 await lifecycle.Setup(checkCtx);
             }
+            // Names of checks the tier filter dropped. Recorded (below) rather than silently
+            // skipped: `score` is computed over the checks that RAN, so a bundle with 8 of 9
+            // checks filtered reports 1/1 = 100%, and a bundle with ALL of them filtered reports
+            // Skipped with nothing explaining why. Both read as coverage that never happened.
+            const filteredByTier: string[] = [];
             for (const check of bundle) {
                 if (isTimedOut()) {
                     break;
                 }
                 if (check.RequiresMutation && !mutationEnabled) {
+                    filteredByTier.push(`${check.Name} (mutation)`);
                     continue;
                 }
                 if (check.RequiresLiveModel && !liveModelEnabled) {
+                    filteredByTier.push(`${check.Name} (live-model)`);
                     continue;
                 }
                 await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, deadline);
+            }
+            if (filteredByTier.length > 0) {
+                // A 'gate' oracle is run METADATA — buildResult excludes it from the check counts
+                // and the score, so recording the omission cannot itself inflate the result.
+                const message =
+                    `${bundleType}: ${filteredByTier.length} check(s) not run — tier not enabled ` +
+                    `(set RUN_MUTATION_TESTS=1 / RUN_AGENT_TESTS=1, or opt in via the selector's ` +
+                    `runMutationTests): ${filteredByTier.join(', ')}`;
+                oracleResults.push({ oracleType: 'gate', passed: true, score: 1, message, details: { DurationMs: 0 } });
+                this.logToTestRun(context, 'info', message);
             }
         } catch (fxErr) {
             // The only throw reachable here is from lifecycle.Setup — runCheck swallows per-check

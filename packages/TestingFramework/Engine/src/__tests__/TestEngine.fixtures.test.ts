@@ -231,3 +231,59 @@ describe('TestEngine suite-scoped fixture lifecycle', () => {
         expect(behavior.teardownCalls).toBe(2);
     });
 });
+
+/**
+ * A test can fail BEFORE the driver is ever reached — `createTestRun` throwing (its Save()
+ * returned false), an unresolvable test type, a variable-resolution failure, a driver that will
+ * not instantiate. Those throws land in RunSuite's per-test catch, which logged and moved on
+ * WITHOUT recording a result.
+ *
+ * That is the same false-green this branch exists to remove, one level up: `summarizeSuiteResults`
+ * is failure-closed only over results that EXIST. A vanished test shrinks `totalTests` instead of
+ * going red, so `failedTests = total - passed - skipped` stays 0 and `mj test suite` exits 0. A
+ * suite where every test failed to start reported green with `0/0 passed`.
+ */
+describe('TestEngine — a test that fails before producing a result', () => {
+    it('records it as an Error instead of dropping it, so the suite gates red', async () => {
+        const tests = fakeTests(['T1', 'T2', 'T3']);
+        const engine = wireEngine(tests);
+        const priv = engine as unknown as EnginePrivates;
+
+        // T2 dies before the driver runs — the shape of a failed spCreateTestRun.
+        let call = 0;
+        vi.spyOn(priv, 'createTestRun').mockImplementation(async () => {
+            call++;
+            if (call === 2) {
+                throw new Error('Failed to create test run record');
+            }
+            return { ID: `testrun-${call}`, StartedAt: new Date(), CompletedAt: new Date(), Status: 'Running' } as unknown as MJTestRunEntity;
+        });
+
+        const result = await engine.RunSuite(SUITE_ID, { verbose: false }, USER);
+
+        // The test must still be COUNTED — a run that could not start is not an absent test.
+        expect(result.testResults).toHaveLength(3);
+        const errored = result.testResults.filter(r => r.status === 'Error');
+        expect(errored).toHaveLength(1);
+        expect(errored[0].errorMessage).toContain('Failed to create test run record');
+
+        // ...and it must drive the exit code, which reads failedTests (`mj test suite` exits
+        // non-zero iff failedTests > 0). The other two tests still passed.
+        expect(result.passedTests).toBe(2);
+        expect(result.failedTests).toBe(1);
+    });
+
+    it('gates red when EVERY test fails to start (the all-vanished suite)', async () => {
+        const engine = wireEngine(fakeTests(['T1', 'T2']));
+        const priv = engine as unknown as EnginePrivates;
+        vi.spyOn(priv, 'createTestRun').mockRejectedValue(new Error('database unreachable'));
+
+        const result = await engine.RunSuite(SUITE_ID, { verbose: false }, USER);
+
+        // Previously: totalTests 0, failedTests 0, "0/0 executed tests passed" — and exit 0.
+        expect(result.totalTests).toBe(2);
+        expect(result.passedTests).toBe(0);
+        expect(result.failedTests).toBe(2);
+        expect(result.testResults.every(r => r.status === 'Error')).toBe(true);
+    });
+});

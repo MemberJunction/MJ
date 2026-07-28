@@ -99,10 +99,14 @@ describe('IntegrationTestDriver bundle dispatch', () => {
     it('RequiresMutation checks are skipped unless the selector opts in', async () => {
         const driver = new IntegrationTestDriver();
         const off = await driver.Execute(makeContext({ checks: [{ type: 'unitmut' }] }));
-        expect(off.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A']);
+        // The gated check does not RUN, but its omission is recorded as run metadata — see
+        // 'records the checks a PARTIAL filter dropped'. Only unitmut.A is an executed check.
+        expect(off.oracleResults.filter(o => o.oracleType !== 'gate').map(o => o.oracleType)).toEqual(['unitmut.A']);
 
         const on = await driver.Execute(makeContext({ checks: [{ type: 'unitmut', config: { runMutationTests: true } }] }));
         expect(on.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitmut.M']);
+        // Nothing was filtered when the selector opts in, so there is no omission to record.
+        expect(on.oracleResults.some(o => o.oracleType === 'gate')).toBe(false);
     });
 
     it('RequiresMutation checks also run when RUN_MUTATION_TESTS=1 (env, no selector opt-in)', async () => {
@@ -155,7 +159,10 @@ describe('IntegrationTestDriver bundle dispatch', () => {
     it('multiple bundles run in declared order, results concatenated', async () => {
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ checks: [{ type: 'unitmut' }, { type: 'unitpass' }] }));
-        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitpass.A', 'unitpass.B']);
+        // Executed checks keep their declared order across bundles. unitmut's gated check
+        // contributes a 'gate' metadata oracle, not a check result, so it is filtered out here.
+        expect(result.oracleResults.filter(o => o.oracleType !== 'gate').map(o => o.oracleType))
+            .toEqual(['unitmut.A', 'unitpass.A', 'unitpass.B']);
     });
 
     it('a server bundle inside an already-claimed process (live MJAPI) → Error pointing to the CLI, never throws', async () => {
@@ -226,6 +233,39 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         const result = await driver.Execute(makeContext({ checks: [{ type: 'unitallmut' }] }));
         expect(result.status).toBe('Skipped');
         expect(result.totalChecks).toBe(0);
+    });
+
+    it('records WHY an all-filtered bundle was skipped, so the skip is never reasonless', async () => {
+        // The platform gate and the env gate both attach a 'gate' oracle naming what they dropped;
+        // the tier filter did not, so this skip class reached the reports as "— no reason
+        // recorded". A skip nobody can explain is the same triage dead-end as a silent pass.
+        IntegrationCheckRegistry.Instance.Register({
+            Id: 'unitallmut2.A', Name: 'allMutA', RequiresMutation: true, Fn: async () => { /* pass */ }
+        });
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ checks: [{ type: 'unitallmut2' }] }));
+
+        expect(result.status).toBe('Skipped');
+        const gate = result.oracleResults.find(o => o.oracleType === 'gate');
+        expect(gate).toBeDefined();
+        expect(gate!.message).toMatch(/1 check/i);
+        expect(gate!.message).toMatch(/mutation/i);
+    });
+
+    it('records the checks a PARTIAL filter dropped, so a 1-of-2 run cannot read as full coverage', async () => {
+        // unitmut = { A (always), M (RequiresMutation) }. With the gate unmet only A runs, and the
+        // score is computed over survivors — 1/1 = 100%. Reporting a perfect score for half the
+        // assertions is the inflated-pass-count form of the same false green.
+        const driver = new IntegrationTestDriver();
+        const result = await driver.Execute(makeContext({ checks: [{ type: 'unitmut' }] }));
+
+        expect(result.status).toBe('Passed');
+        const gate = result.oracleResults.find(o => o.oracleType === 'gate');
+        expect(gate).toBeDefined();
+        expect(gate!.message).toMatch(/1 check/i);
+        // The gate oracle must not pad the counts it is reporting on.
+        expect(result.totalChecks).toBe(1);
+        expect(result.passedChecks).toBe(1);
     });
 
     it('env gate unmet → Skipped with a single "gate" oracle and zero checks, never throws', async () => {

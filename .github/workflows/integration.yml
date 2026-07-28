@@ -204,7 +204,34 @@ jobs:
           # symmetric: the PostgreSQL lane needs it for pg-parity's CRUD legs, and SQL Server is
           # only a useful baseline oracle if it runs the same set.
           RUN_MUTATION_TESTS: '1'
-        run: npm run test:integration
+        run: npm run test:integration 2>&1 | tee integration-sqlserver.log; exit "${PIPESTATUS[0]}"
+
+      # The skip count is an INVARIANT, not a note. Skips are excluded from failedTests by
+      # design, so a bundle that silently stops running — a RegisterBundlePlatforms used as a
+      # quarantine, a dropped RUN_MUTATION_TESTS, a new client-transport member — raises this
+      # number and nothing goes red. That is the same false green the branch exists to remove,
+      # so the documented expectation is asserted here (mirroring the RLS fixture guard above).
+      # A MISSING count fails too: silence must never read as zero.
+      - name: Verify the skip count is exactly the documented expectation
+        env:
+          EXPECTED_SKIPS: '19'
+        run: |
+          LINE=$(grep -oE '\[SKIPPED\] [0-9]+ test' integration-sqlserver.log | tail -1) || true
+          if [ -z "$LINE" ]; then
+            if grep -q '\[SUITE_COMPLETE\]' integration-sqlserver.log; then
+              ACTUAL=0
+            else
+              echo "::error::Could not read a skip count from the integration output — the suite did not report [SUITE_COMPLETE]. Treating as a failure rather than as zero skips." >&2
+              exit 1
+            fi
+          else
+            ACTUAL=$(echo "$LINE" | grep -oE '[0-9]+')
+          fi
+          if [ "$ACTUAL" != "$EXPECTED_SKIPS" ]; then
+            echo "::error::SQL Server lane skipped ${ACTUAL} tests; expected exactly ${EXPECTED_SKIPS}. MORE skips mean coverage silently stopped running (a bundle quarantined via RegisterBundlePlatforms, RUN_MUTATION_TESTS dropped, or a new client-transport member). FEWER means coverage was restored — update EXPECTED_SKIPS in this workflow to lock in the gain." >&2
+            exit 1
+          fi
+          echo "Skip count is ${ACTUAL}, matching the documented expectation."
 
   # ─────────────────────────────────────────────────────────────────────────────────────────
   # PostgreSQL lane. Same suite, same check code, second backend — this is what turns "SS/PG
@@ -216,9 +243,14 @@ jobs:
   # the cdp_* roles the migration GRANTs reference, and `migrations-pg/v5`. Everything from
   # `mj sync push` onward is byte-identical work against a different database.
   #
-  # EXPECTED SKIPS on this lane: TWENTY.
+  # EXPECTED SKIPS on this lane: TWENTY-ONE.
   #   * IT24 — `metadata-consistency` declares Platforms: ['sqlserver'] because its `sys.*`
   #     catalog queries have no PostgreSQL equivalent (dialect-impossible).
+  #   * IT67 — `content-vectorization` is declared ['sqlserver'] as a TEMPORARY provisioning
+  #     exclusion: `MJ: Content Item Chunks` has no migrations-pg counterpart, so the entity does
+  #     not exist here and the bundle has no target. Unlike IT24 this bundle IS runnable on PG and
+  #     must be re-enabled the moment that migration is ported — see the note at the bottom of
+  #     content-vectorization.checks.ts. This is the one declared exception to the rule below.
   #   * The 19 client-transport members of the deterministic suite (every record whose
   #     Configuration sets transport: "client"). CI runs no MJAPI and sets no MJ_API_KEY, so
   #     they cannot execute on EITHER lane; the SQL Server lane reports the same 19. Before
@@ -315,8 +347,14 @@ jobs:
           GRANT USAGE ON SCHEMA public TO "cdp_UI", "cdp_Developer", "cdp_Integration";
           SQL
 
+      # Invoked through the built entry point rather than `npx mj`: npx silently falls back to
+      # the PUBLISHED cli if the workspace symlink is ever missing, which would run a released
+      # CLI against this branch's migrations. The explicit path fails loudly instead — and it is
+      # what the SQL Server lane already does.
       - name: Migrate — apply committed PG migrations to the fresh DB
-        run: npx mj migrate --dir=migrations-pg/v5 -v
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'   # cold-runner headroom, matching the other lanes
+        run: node packages/MJCLI/bin/run.js migrate --dir=migrations-pg/v5 -v
 
       # ⚠ First time `mj sync push` runs against PostgreSQL in CI. It was fixed for PG in #3253
       # but has never been exercised by a workflow, so this is the most likely first breakage
@@ -347,4 +385,28 @@ jobs:
       - name: Run integration tier (mj test)
         env:
           RUN_MUTATION_TESTS: '1'   # see the SQL Server lane's note — the lanes must stay symmetric
-        run: npm run test:integration
+        run: npm run test:integration 2>&1 | tee integration-postgresql.log; exit "${PIPESTATUS[0]}"
+
+      # Same invariant as the SQL Server lane, one higher: this lane additionally skips IT24
+      # (metadata-consistency, dialect-impossible). See that lane's step for why an unasserted
+      # skip count is a false-green channel.
+      - name: Verify the skip count is exactly the documented expectation
+        env:
+          EXPECTED_SKIPS: '21'
+        run: |
+          LINE=$(grep -oE '\[SKIPPED\] [0-9]+ test' integration-postgresql.log | tail -1) || true
+          if [ -z "$LINE" ]; then
+            if grep -q '\[SUITE_COMPLETE\]' integration-postgresql.log; then
+              ACTUAL=0
+            else
+              echo "::error::Could not read a skip count from the integration output — the suite did not report [SUITE_COMPLETE]. Treating as a failure rather than as zero skips." >&2
+              exit 1
+            fi
+          else
+            ACTUAL=$(echo "$LINE" | grep -oE '[0-9]+')
+          fi
+          if [ "$ACTUAL" != "$EXPECTED_SKIPS" ]; then
+            echo "::error::PostgreSQL lane skipped ${ACTUAL} tests; expected exactly ${EXPECTED_SKIPS} (19 client-transport + IT24 metadata-consistency + IT67 content-vectorization). MORE skips mean coverage silently stopped running — most likely a RegisterBundlePlatforms declaration used as a quarantine, which this lane explicitly forbids. FEWER means coverage was restored — update EXPECTED_SKIPS to lock in the gain." >&2
+            exit 1
+          fi
+          echo "Skip count is ${ACTUAL}, matching the documented expectation."

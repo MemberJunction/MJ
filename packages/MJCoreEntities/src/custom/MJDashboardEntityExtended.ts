@@ -1,7 +1,7 @@
-import { BaseEntity, EntityDeleteOptions, IMetadataProvider, LogError, LogStatus } from "@memberjunction/core";
+import { BaseEntity, EntityDeleteOptions, EntitySaveOptions, IMetadataProvider, LogError, UserInfo } from "@memberjunction/core";
 import { RegisterClass, ValidationErrorInfo, ValidationResult } from "@memberjunction/global";
 import { MJDashboardEntity } from "../generated/entity_subclasses";
-import { DashboardEngine } from "../engines/dashboards";
+import { DashboardEngine, DashboardUserPermissions } from "../engines/dashboards";
 
 @RegisterClass(BaseEntity, 'MJ: Dashboards')
 export class MJDashboardEntityExtended extends MJDashboardEntity  {
@@ -60,32 +60,26 @@ export class MJDashboardEntityExtended extends MJDashboardEntity  {
         if (this.IsSaved) {
             const permissions = DashboardEngine.Instance.GetDashboardPermissions(this.ID, currentUser.ID);
 
-            // 'unevaluated' means DashboardEngine was never configured in this process, so the
-            // sharing model could not be consulted — NOT that this user was refused. Blocking here
-            // would deny every writer in any process that does not pre-warm engines, which is what
-            // made `mj sync push` fail on every dashboard with a permissions message describing a
-            // problem that did not exist.
+            // 'unevaluated' (the engine's cache was never loaded) is reported as a DENIAL, not
+            // waved through. This gate is the only server-side enforcement of dashboard sharing —
+            // the GraphQL UpdateMJDashboard resolver reaches it through BaseEntity.Save — so
+            // treating "I could not evaluate" as permission-to-proceed would be fail-OPEN for every
+            // authenticated user. MJServer never configures this engine explicitly; it is pre-warmed
+            // only by StartupManager 'full' (via @RegisterForStartup), which BOTH `task` mode and a
+            // failed boot load bypass — and BaseEngine.Load leaves _loaded false WITHOUT throwing
+            // when a config fails. So the unloaded state is genuinely reachable in a live MJAPI.
             //
-            // Skipping is not a hole in the sharing model: every multi-user surface loads this
-            // engine (MJAPI pre-warms it via StartupManager 'full'; Explorer configures it before
-            // rendering a dashboard), so the gate stays enforced exactly where untrusted callers
-            // reach it. The processes that land here — the CLI and metadata sync — run as the
-            // System user against declarative metadata, where per-user dashboard sharing is not
-            // the security boundary. Logged rather than silent so this can never be mistaken for
-            // an enforced check.
-            if (permissions.PermissionSource === 'unevaluated') {
-                LogStatus(
-                    `MJDashboardEntityExtended.Validate: dashboard sharing permissions not enforced for '${this.ID}' — ` +
-                    `DashboardEngine is not configured in this process (expected for CLI/metadata-sync; ` +
-                    `NOT expected inside MJAPI or Explorer).`
-                );
-            } else if (!permissions.CanEdit) {
+            // Save() pre-loads the engine (see the override below) so this branch means the load
+            // was ATTEMPTED and failed, not that nobody asked. The error text names that cause,
+            // because the previous message sent people hunting for a permissions problem that did
+            // not exist.
+            if (!permissions.CanEdit) {
+                const why = nonAuthoritativeReason(permissions);
+                const reason = why
+                    ? `Dashboard permissions could not be evaluated — ${why}. Failing closed.`
+                    : 'You do not have permission to edit this dashboard';
                 result.Success = false;
-                result.Errors.push(new ValidationErrorInfo(
-                    'Permission',
-                    'You do not have permission to edit this dashboard',
-                    this.ID
-                ));
+                result.Errors.push(new ValidationErrorInfo('Permission', reason, this.ID));
             }
         }
 
@@ -93,11 +87,33 @@ export class MJDashboardEntityExtended extends MJDashboardEntity  {
     }
 
     /**
+     * Load the sharing model before validating.
+     *
+     * {@link Validate} is synchronous and cannot await, so without this the gate would read an
+     * unloaded cache and deny every write in any process that does not pre-warm engines — which is
+     * exactly what broke `mj sync push` (it runs StartupManager in 'task' mode). Loading here lets
+     * the gate answer from real data on every path: the CLI and metadata-sync run as the System
+     * user, which OWNS the dashboards in `metadata/dashboards`, so they pass on genuine ownership
+     * rather than on an exemption.
+     *
+     * `EnsureLoaded` is a no-op once loaded, so the cost is one load per process. A load failure is
+     * logged and left to {@link Validate}, which fails closed.
+     */
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
+        const currentUser = this.ContextCurrentUser || md?.CurrentUser;
+        if (this.IsSaved && currentUser) {
+            await ensureSharingModelLoaded(currentUser, md, this.ID);
+        }
+        return super.Save(options);
+    }
+
+    /**
      * Override Delete to check dashboard permissions before deletion.
      * User must have delete permission (typically only owners can delete).
      */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        const md = this.ProviderToUse as any as IMetadataProvider;
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
         const currentUser = this.ContextCurrentUser || md.CurrentUser;
 
         if (!currentUser) {
@@ -105,23 +121,85 @@ export class MJDashboardEntityExtended extends MJDashboardEntity  {
             return false;
         }
 
-        // Check delete permission. Same 'unevaluated' distinction as Validate() — see the long
-        // comment there for why an unconfigured engine must not be read as a refusal. Without
-        // this, a CLI-context delete is rejected with a message blaming the user's permissions.
+        // Load the sharing model before consulting it — same reasoning as Save(): an unloaded
+        // engine must not be mistaken for a denial (that broke `mj sync push`) NOR for consent
+        // (that would be fail-open on the GraphQL DeleteMJDashboard path). Load, then honour the
+        // real answer.
+        await ensureSharingModelLoaded(currentUser, md, this.ID);
         const permissions = DashboardEngine.Instance.GetDashboardPermissions(this.ID, currentUser.ID);
 
-        if (permissions.PermissionSource === 'unevaluated') {
-            LogStatus(
-                `MJDashboardEntityExtended.Delete: dashboard sharing permissions not enforced for '${this.ID}' — ` +
-                `DashboardEngine is not configured in this process (expected for CLI/metadata-sync; ` +
-                `NOT expected inside MJAPI or Explorer).`
+        if (!permissions.CanDelete) {
+            const why = nonAuthoritativeReason(permissions);
+            LogError(
+                why
+                    ? `Cannot delete dashboard ${this.ID}: permissions could not be evaluated — ${why}. Failing closed.`
+                    : `User ${currentUser.ID} does not have permission to delete dashboard ${this.ID}`
             );
-        } else if (!permissions.CanDelete) {
-            LogError(`User ${currentUser.ID} does not have permission to delete dashboard ${this.ID}`);
             return false;
         }
 
         // Permission granted, proceed with delete
         return super.Delete(options);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Module-level helpers, deliberately NOT class members.
+//
+// A member that does not exist on `MJDashboardEntity` breaks structural assignability from the
+// base class to this one, and callers rely on that assignability — e.g.
+// `dashboard: null as unknown as MJDashboardEntity` assigned to a `MJDashboardEntityExtended`
+// field in ng-dashboards' DashboardConfig. Adding one broke the Angular build even though the
+// overrides above (which already exist on the base) are fine. Keep new helpers at module scope.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Why this permission answer must NOT be read as an authoritative "no", or null when it can be.
+ *
+ * Two states produce all-false grants that look identical to a genuine denial:
+ *
+ *  - the engine was never loaded (`'unevaluated'`); and
+ *  - the engine WAS loaded, but by a user lacking read on one of its configs. `BaseEngine`'s
+ *    permission handling is all-or-nothing (`CheckPermissionsOrSkipAll`): every array is set to
+ *    `[]`, `_loaded` flips true, and `EnsureLoaded` never retries. Because the engine is a
+ *    process-global singleton, the first restricted writer to touch it seats that empty cache
+ *    for every user in the process — after which each dashboard "isn't found" and reports
+ *    `'none'`.
+ *
+ * Both fail closed either way, so this changes no grant. It changes the MESSAGE, which is the
+ * whole point: "you do not have permission" sends someone to audit sharing rows, when the real
+ * cause is an unloaded or permission-constrained cache. That misdiagnosis is exactly what this
+ * class already cost people once.
+ */
+function nonAuthoritativeReason(permissions: DashboardUserPermissions): string | null {
+    if (permissions.PermissionSource === 'unevaluated') {
+        return 'DashboardEngine is not loaded in this process';
+    }
+    if (DashboardEngine.Instance.IsPermissionConstrained) {
+        return 'DashboardEngine was loaded by a user without read access to the dashboard sharing tables, ' +
+               'so its cache is empty for everyone in this process';
+    }
+    return null;
+}
+
+/**
+ * Best-effort load of {@link DashboardEngine}. Never throws: the permission gates fail closed on
+ * an unloaded engine, so a load failure must surface as a denial with a diagnosable log line
+ * rather than as an exception from Save()/Delete().
+ *
+ * `provider` is the ENTITY'S own provider, not the global — this may run under a non-default
+ * provider. Callers cast `ProviderToUse` (typed `IEntityDataProvider`) to `IMetadataProvider`;
+ * every concrete provider implements both, but the two interfaces do not overlap structurally.
+ */
+async function ensureSharingModelLoaded(
+    currentUser: UserInfo, provider: IMetadataProvider, dashboardId: string
+): Promise<void> {
+    try {
+        await DashboardEngine.Instance.EnsureLoaded(currentUser, provider);
+    } catch (err) {
+        LogError(
+            `MJDashboardEntityExtended: DashboardEngine failed to load while checking permissions on dashboard ` +
+            `'${dashboardId}'. The permission check will fail closed. Cause: ${(err as Error)?.message ?? err}`
+        );
     }
 }

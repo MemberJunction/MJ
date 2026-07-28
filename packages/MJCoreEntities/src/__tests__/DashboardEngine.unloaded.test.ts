@@ -10,7 +10,13 @@ import { DashboardEngine } from '../engines/dashboards';
  * That is not a theoretical concern: `mj sync push` runs `StartupManager` in `'task'` mode, which
  * skips engine pre-warm, so every dashboard push was denied with "You do not have permission to
  * edit this dashboard" — a message that sent people looking for a permissions problem that did
- * not exist. Failing CLOSED on an unanswerable question is still answering it.
+ * not exist.
+ *
+ * Reporting the state distinctly is DIAGNOSTIC, not permissive. Grants stay false, so callers that
+ * gate on `CanEdit`/`CanDelete` still fail closed; the source merely lets them say WHY. The gates
+ * in `MJDashboardEntityExtended` load the engine before consulting it and then honour the real
+ * answer — see MJDashboardEntityExtended.gates.test.ts — so the CLI passes on genuine ownership
+ * rather than on an exemption, and an unloaded engine inside MJAPI denies rather than waves through.
  */
 function resetEngine(): void {
     const g = GetGlobalObjectStore();
