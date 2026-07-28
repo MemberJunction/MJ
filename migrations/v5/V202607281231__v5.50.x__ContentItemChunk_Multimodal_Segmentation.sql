@@ -1,4 +1,25 @@
 /*
+    ⚠️  CODEGEN SECTION IS STALE — RE-RUN REQUIRED BEFORE MERGE  ⚠️
+
+    The generated section at the bottom of this file was produced BEFORE the
+    ContentSource / ContentType strategy columns were added to the hand-written DDL.
+    It currently covers `MJ: Content Item Chunks` only.
+
+    Missing from the generated section (verified — zero occurrences below the separator):
+        ContentSource.SegmenterKey      ContentSource.CleanerKey
+        ContentType.SegmenterKey        ContentType.CleanerKey
+
+    Merging as-is would move the schema ahead of MemberJunction's metadata for those four
+    columns: no EntityField rows, un-regenerated vwContentSources / vwContentTypes, and
+    spCreate/spUpdate procedures that don't know the columns exist.
+
+    To complete: apply this file to a clean database at the v5.50 candidate baseline, run
+    `mj codegen`, then REPLACE the entire generated section (everything below the separator
+    block) with the new CodeGen_Run_*.sql output, delete the standalone CodeGen file, and
+    remove this banner. See the PR discussion for the step-by-step runbook.
+
+    ================================================================================
+
     ContentItemChunk — multimodal segmentation columns
 
     Extends the chunk entity so a chunk can represent a segment of ANY modality, not just a
