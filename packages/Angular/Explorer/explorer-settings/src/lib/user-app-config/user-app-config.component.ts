@@ -44,6 +44,11 @@ export class UserAppConfigComponent extends BaseAngularComponent {
   set ShowDialog(value: boolean) {
     if (value !== this._showDialog) {
       this._showDialog = value;
+      // Emit on EVERY change so the parent's `[(ShowDialog)]` two-way binding round-trips (bug F1).
+      // Previously the setter never emitted, so when child and parent state diverged the dialog got
+      // stuck in a state only a full browser refresh could clear. This is the single emit path —
+      // Open()/Close() route through this setter rather than emitting themselves.
+      this.ShowDialogChange.emit(value);
     }
   }
   get ShowDialog(): boolean {
@@ -72,9 +77,10 @@ export class UserAppConfigComponent extends BaseAngularComponent {
    * Opens the dialog and loads user's app configuration
    */
   async Open(): Promise<void> {
-    this._showDialog = true;
-    this.ShowDialogChange.emit(true);
-    this.ErrorMessage = '';
+    // Route through the setter (single emit path). Reset stale lists before the async load so a
+    // reopen never briefly flashes the previous session's apps (bug F1).
+    this.resetLists();
+    this.ShowDialog = true;
     await this.loadConfiguration();
   }
 
@@ -82,8 +88,17 @@ export class UserAppConfigComponent extends BaseAngularComponent {
    * Closes the dialog without saving
    */
   Close(): void {
-    this._showDialog = false;
-    this.ShowDialogChange.emit(false);
+    this.ShowDialog = false;   // routes through the setter → emits ShowDialogChange
+    // Clear the working lists so the next Open() can't bind stale rows before its load completes.
+    this.resetLists();
+  }
+
+  /** Clears the transient app-config working state (used on open + close to avoid stale-flash). */
+  private resetLists(): void {
+    this.AllApps = [];
+    this.ActiveApps = [];
+    this.AvailableApps = [];
+    this.ErrorMessage = '';
   }
 
   /**
@@ -196,10 +211,19 @@ export class UserAppConfigComponent extends BaseAngularComponent {
       this.sharedService.CreateSimpleNotification('App configuration saved successfully!', 'success', 3000);
       this.ConfigSaved.emit();
       this.Close();
+      // Backstop for a dropped/coalesced debounced engine event: force a reconcile from the source
+      // of truth so the app switcher can't be left "one save behind". DEFERRED past the current CD
+      // cycle — a synchronous reload here previously triggered NG0100 (commits e2059e6114 /
+      // 7bf8be7dc6). No-op cost when the event chain already delivered.
+      Promise.resolve().then(() => this.appManager.ReloadUserApplications());
 
     } catch (error) {
       this.ErrorMessage = 'Failed to save configuration. Please try again.';
       LogError('Error saving app configuration:', undefined, error instanceof Error ? error.message : String(error));
+      // A partial-save failure can leave in-memory state half-committed (some items saved+clean,
+      // others still dirty) and divergent from the DB. Reconcile from the source of truth so
+      // recovery doesn't require a browser refresh — deferred, for the same NG0100 reason.
+      Promise.resolve().then(() => this.appManager.ReloadUserApplications());
     } finally {
       this.ngZone.run(() => {
         this.IsSaving = false;

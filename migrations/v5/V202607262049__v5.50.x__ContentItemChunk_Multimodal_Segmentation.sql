@@ -1,17 +1,4 @@
 /*
-    ⚠️  INCOMPLETE — HAND-WRITTEN DDL ONLY, CODEGEN OUTPUT NOT YET APPENDED  ⚠️
-
-    This migration is awaiting the `mj codegen` pass. Do NOT merge or apply it in this state:
-    the schema would move ahead of MemberJunction's metadata, leaving the entity without
-    EntityField rows, an un-regenerated vwContentItemChunks view, and stale CRUD procedures.
-
-    To complete it: apply this file to a database at v5.49.0, run `mj codegen`, then append the
-    resulting CodeGen_Run_*.sql beneath 50 blank lines and the generated-output header block
-    (see V202607240220__v5.50.x__ContentItem_VectorRecordID_And_ContentItemChunk.sql for the
-    reference layout), delete the standalone CodeGen file, and remove this banner.
-
-    ================================================================================
-
     ContentItemChunk — multimodal segmentation columns
 
     Extends the chunk entity so a chunk can represent a segment of ANY modality, not just a
@@ -269,3 +256,1665 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'ContentItemChunk',
     @level2type = N'COLUMN', @level2name = N'ParentChunkID';
 GO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ============================================================================
+ * ==== BELOW THIS LINE: MEMBERJUNCTION CODEGEN OUTPUT — DO NOT HAND-EDIT ====
+ * ============================================================================
+ *
+ * Produced by `mj codegen` from the hand-written DDL above, for MJ: Content Item Chunks:
+ * EntityField rows for the 11 new columns, the Modality value-list rows + ValueListType
+ * (both derived from that column's CHECK constraint), the self-referencing ParentChunkID
+ * EntityRelationship plus CodeGen's derived RootParentChunkID field and its Root ID function,
+ * FK auto-indexes, field categories, the regenerated vwContentItemChunks view,
+ * spCreate/spUpdate/spDelete, and permission grants.
+ *
+ * DO NOT edit by hand. If the hand-written DDL above changes, re-run `mj codegen` and replace
+ * this entire section. An unrelated "Generated Validation Functions for MJ: AI Agent Types"
+ * regeneration, an artifact of this environment's fresh-install state, was intentionally
+ * excluded.
+ * ============================================================================ */
+
+/* SQL text to insert 11 new entity field(s) */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4f00910f-a59c-4e6f-b09c-efac5435a979' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Modality')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4f00910f-a59c-4e6f-b09c-efac5435a979',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100039,
+            'Modality',
+            'Modality',
+            'The modality of this chunk''s embedded payload: text (default), image, audio, video, or multimodal (text and media fused into a single vector). Determines which vector index the chunk''s embedding belongs to, since a multimodal embedding model produces vectors of a different dimension than a text model, and is used at retrieval time to merge results per modality rather than taking a single global top-k.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'text',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '08f64b3f-a7d9-48ca-a72d-58d8fde6a475' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'StartOffset')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '08f64b3f-a7d9-48ca-a72d-58d8fde6a475',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100040,
+            'StartOffset',
+            'Start Offset',
+            'Inclusive character offset where this chunk begins within the parent Content Item''s extracted text. Together with EndOffset this is the provenance link that resolves a search hit back to the exact passage in the source document. NULL for media segments, which are positioned by StartMs/EndMs instead.',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '69ef8105-9dd4-48ee-ad8c-b9ca72d9effc' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'EndOffset')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '69ef8105-9dd4-48ee-ad8c-b9ca72d9effc',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100041,
+            'EndOffset',
+            'End Offset',
+            'Exclusive character offset where this chunk ends within the parent Content Item''s extracted text. See StartOffset. NULL for media segments.',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f2b962a0-2ae8-4b8f-9d0f-e45946adfa78' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'StartMs')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f2b962a0-2ae8-4b8f-9d0f-e45946adfa78',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100042,
+            'StartMs',
+            'Start Ms',
+            'Start of this chunk''s time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a8d97dc7-f2c8-4454-9d46-b458fea56f01' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'EndMs')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a8d97dc7-f2c8-4454-9d46-b458fea56f01',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100043,
+            'EndMs',
+            'End Ms',
+            'End of this chunk''s time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'db35fb41-830d-4ecc-82a0-0bff46f93398' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'PageNumber')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'db35fb41-830d-4ecc-82a0-0bff46f93398',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100044,
+            'PageNumber',
+            'Page Number',
+            'One-based page number this chunk came from, for paginated sources such as PDFs or slide decks. Provides citation-grade provenance alongside the character offsets. NULL when the source is not paginated.',
+            'int',
+            4,
+            10,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd1779c3a-6e94-4d82-a776-0ef1271b75e7' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'SegmentTitle')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'd1779c3a-6e94-4d82-a776-0ef1271b75e7',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100045,
+            'SegmentTitle',
+            'Segment Title',
+            'Human-readable label for this segment — a document heading for structure-based segmentation, or a generated chapter title for topic- and transcript-based segmentation. Displayed with search results and prepended to the embedded text so a chunk''s vector carries its own topic.',
+            'nvarchar',
+            1000,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'de94985c-57ef-4480-86c9-79d11331da58' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Description')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'de94985c-57ef-4480-86c9-79d11331da58',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100046,
+            'Description',
+            'Description',
+            'An AI-generated description of this chunk''s content, primarily for non-text segments. Retrieval of a media chunk otherwise yields only a pointer (an asset and a time window) that an agent cannot reason over; this column is the readable representation that an agent reads, a cross-encoder reranks, and lexical search matches. A short summary of it may be mirrored into the vector record''s metadata for display and filtering, but the full text belongs here.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5da90752-15a6-4d43-bba5-daddaf2273e3' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'Transcript')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5da90752-15a6-4d43-bba5-daddaf2273e3',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100047,
+            'Transcript',
+            'Transcript',
+            'The verbatim transcript covering this chunk''s time window, for audio and video segments, including speaker labels where the source provides them. Distinct from Description, which is a generated summary: this is what was actually said, and it is what makes a recording findable by lexical search.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ff055d0e-5ae2-4563-9b89-4ff91ce6abef' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'SegmenterKey')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ff055d0e-5ae2-4563-9b89-4ff91ce6abef',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100048,
+            'SegmenterKey',
+            'Segmenter Key',
+            'Registration key of the segmentation strategy that produced this chunk (for example StructuralText, SemanticText, Transcript, or FixedWindow). Provenance: when a Content Source''s configured strategy changes, this identifies which chunks were produced by the previous strategy and therefore need re-chunking.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '566671b6-ac5c-454c-8c91-85b47a19e532' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'ParentChunkID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '566671b6-ac5c-454c-8c91-85b47a19e532',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100049,
+            'ParentChunkID',
+            'Parent Chunk ID',
+            'Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert entity field value with ID ac10471b-e778-455a-b5b1-da2b240ee6f3 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('ac10471b-e778-455a-b5b1-da2b240ee6f3', '4F00910F-A59C-4E6F-B09C-EFAC5435A979', 1, 'audio', 'audio', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 90b2d7fd-1a99-47d3-968f-1f32b905e4d9 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('90b2d7fd-1a99-47d3-968f-1f32b905e4d9', '4F00910F-A59C-4E6F-B09C-EFAC5435A979', 2, 'image', 'image', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 2633c8ee-553d-4b7b-8704-0c292b649354 */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('2633c8ee-553d-4b7b-8704-0c292b649354', '4F00910F-A59C-4E6F-B09C-EFAC5435A979', 3, 'multimodal', 'multimodal', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID 72159e42-7904-46a5-87c2-0d95e417eabf */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('72159e42-7904-46a5-87c2-0d95e417eabf', '4F00910F-A59C-4E6F-B09C-EFAC5435A979', 4, 'text', 'text', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to insert entity field value with ID c4a3492a-6364-491f-9b3f-198e55b726fa */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('c4a3492a-6364-491f-9b3f-198e55b726fa', '4F00910F-A59C-4E6F-B09C-EFAC5435A979', 5, 'video', 'video', GETUTCDATE(), GETUTCDATE());
+
+/* SQL text to update ValueListType for entity field ID 4F00910F-A59C-4E6F-B09C-EFAC5435A979 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='4F00910F-A59C-4E6F-B09C-EFAC5435A979';
+
+
+/* Create Entity Relationship: MJ: Content Item Chunks -> MJ: Content Item Chunks (One To Many via ParentChunkID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'c117f679-ebfe-4005-9d9c-084a7df64ae9'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('c117f679-ebfe-4005-9d9c-084a7df64ae9', '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', 'ParentChunkID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Index for Foreign Keys for ContentItemChunk */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Item Chunks
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ContentItemID in table ContentItemChunk
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentItemChunk_ContentItemID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentItemChunk]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentItemChunk_ContentItemID ON [${flyway:defaultSchema}].[ContentItemChunk] ([ContentItemID]);
+
+-- Index for foreign key ParentChunkID in table ContentItemChunk
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ContentItemChunk_ParentChunkID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ContentItemChunk]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ContentItemChunk_ParentChunkID ON [${flyway:defaultSchema}].[ContentItemChunk] ([ParentChunkID]);
+
+/* Root ID Function SQL for MJ: Content Item Chunks.ParentChunkID */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Item Chunks
+-- Item: fnContentItemChunkParentChunkID_GetRootID
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: [ContentItemChunk].[ParentChunkID]
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[fnContentItemChunkParentChunkID_GetRootID]', 'IF') IS NOT NULL
+    DROP FUNCTION [${flyway:defaultSchema}].[fnContentItemChunkParentChunkID_GetRootID];
+GO
+
+CREATE FUNCTION [${flyway:defaultSchema}].[fnContentItemChunkParentChunkID_GetRootID]
+(
+    @RecordID uniqueidentifier,
+    @ParentID uniqueidentifier
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_RootParent AS (
+        SELECT
+            [ID],
+            [ParentChunkID],
+            [ID] AS [RootParentID],
+            0 AS [Depth]
+        FROM
+            [${flyway:defaultSchema}].[ContentItemChunk]
+        WHERE
+            [ID] = COALESCE(@ParentID, @RecordID)
+
+        UNION ALL
+
+        SELECT
+            c.[ID],
+            c.[ParentChunkID],
+            c.[ID] AS [RootParentID],
+            p.[Depth] + 1 AS [Depth]
+        FROM
+            [${flyway:defaultSchema}].[ContentItemChunk] c
+        INNER JOIN
+            CTE_RootParent p ON c.[ID] = p.[ParentChunkID]
+        WHERE
+            p.[Depth] < 100
+    )
+    SELECT TOP 1
+        [RootParentID] AS RootID
+    FROM
+        CTE_RootParent
+    WHERE
+        [ParentChunkID] IS NULL
+    ORDER BY
+        [RootParentID]
+);
+GO
+
+/* Base View SQL for MJ: Content Item Chunks */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Item Chunks
+-- Item: vwContentItemChunks
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Content Item Chunks
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  ContentItemChunk
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwContentItemChunks]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwContentItemChunks];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwContentItemChunks]
+AS
+SELECT
+    c.*,
+    MJContentItem_ContentItemID.[Name] AS [ContentItem],
+    root_ParentChunkID.RootID AS [RootParentChunkID]
+FROM
+    [${flyway:defaultSchema}].[ContentItemChunk] AS c
+INNER JOIN
+    [${flyway:defaultSchema}].[ContentItem] AS MJContentItem_ContentItemID
+  ON
+    [c].[ContentItemID] = MJContentItem_ContentItemID.[ID]
+OUTER APPLY
+    [${flyway:defaultSchema}].[fnContentItemChunkParentChunkID_GetRootID]([c].[ID], [c].[ParentChunkID]) AS root_ParentChunkID
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwContentItemChunks] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: Content Item Chunks */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Item Chunks
+-- Item: Permissions for vwContentItemChunks
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwContentItemChunks] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: Content Item Chunks */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Item Chunks
+-- Item: spCreateContentItemChunk
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR ContentItemChunk
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateContentItemChunk]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateContentItemChunk];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentItemChunk]
+    @ID uniqueidentifier = NULL,
+    @ContentItemID uniqueidentifier,
+    @Sequence int,
+    @Text_Clear bit = 0,
+    @Text nvarchar(MAX) = NULL,
+    @VectorRecordID_Clear bit = 0,
+    @VectorRecordID nvarchar(100) = NULL,
+    @EmbeddingStatus nvarchar(20) = NULL,
+    @TaggingStatus nvarchar(20) = NULL,
+    @DeleteStatus_Clear bit = 0,
+    @DeleteStatus nvarchar(20) = NULL,
+    @LastEmbeddedAt_Clear bit = 0,
+    @LastEmbeddedAt datetimeoffset = NULL,
+    @LastTaggedAt_Clear bit = 0,
+    @LastTaggedAt datetimeoffset = NULL,
+    @LastDeletedAt_Clear bit = 0,
+    @LastDeletedAt datetimeoffset = NULL,
+    @Modality nvarchar(20) = NULL,
+    @StartOffset_Clear bit = 0,
+    @StartOffset int = NULL,
+    @EndOffset_Clear bit = 0,
+    @EndOffset int = NULL,
+    @StartMs_Clear bit = 0,
+    @StartMs int = NULL,
+    @EndMs_Clear bit = 0,
+    @EndMs int = NULL,
+    @PageNumber_Clear bit = 0,
+    @PageNumber int = NULL,
+    @SegmentTitle_Clear bit = 0,
+    @SegmentTitle nvarchar(500) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @Transcript_Clear bit = 0,
+    @Transcript nvarchar(MAX) = NULL,
+    @SegmenterKey_Clear bit = 0,
+    @SegmenterKey nvarchar(100) = NULL,
+    @ParentChunkID_Clear bit = 0,
+    @ParentChunkID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[ContentItemChunk]
+            (
+                [ID],
+                [ContentItemID],
+                [Sequence],
+                [Text],
+                [VectorRecordID],
+                [EmbeddingStatus],
+                [TaggingStatus],
+                [DeleteStatus],
+                [LastEmbeddedAt],
+                [LastTaggedAt],
+                [LastDeletedAt],
+                [Modality],
+                [StartOffset],
+                [EndOffset],
+                [StartMs],
+                [EndMs],
+                [PageNumber],
+                [SegmentTitle],
+                [Description],
+                [Transcript],
+                [SegmenterKey],
+                [ParentChunkID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @ContentItemID,
+                @Sequence,
+                CASE WHEN @Text_Clear = 1 THEN NULL ELSE ISNULL(@Text, NULL) END,
+                CASE WHEN @VectorRecordID_Clear = 1 THEN NULL ELSE ISNULL(@VectorRecordID, NULL) END,
+                ISNULL(@EmbeddingStatus, 'Pending'),
+                ISNULL(@TaggingStatus, 'Pending'),
+                CASE WHEN @DeleteStatus_Clear = 1 THEN NULL ELSE ISNULL(@DeleteStatus, NULL) END,
+                CASE WHEN @LastEmbeddedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastEmbeddedAt, NULL) END,
+                CASE WHEN @LastTaggedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastTaggedAt, NULL) END,
+                CASE WHEN @LastDeletedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDeletedAt, NULL) END,
+                ISNULL(@Modality, 'text'),
+                CASE WHEN @StartOffset_Clear = 1 THEN NULL ELSE ISNULL(@StartOffset, NULL) END,
+                CASE WHEN @EndOffset_Clear = 1 THEN NULL ELSE ISNULL(@EndOffset, NULL) END,
+                CASE WHEN @StartMs_Clear = 1 THEN NULL ELSE ISNULL(@StartMs, NULL) END,
+                CASE WHEN @EndMs_Clear = 1 THEN NULL ELSE ISNULL(@EndMs, NULL) END,
+                CASE WHEN @PageNumber_Clear = 1 THEN NULL ELSE ISNULL(@PageNumber, NULL) END,
+                CASE WHEN @SegmentTitle_Clear = 1 THEN NULL ELSE ISNULL(@SegmentTitle, NULL) END,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                CASE WHEN @Transcript_Clear = 1 THEN NULL ELSE ISNULL(@Transcript, NULL) END,
+                CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
+                CASE WHEN @ParentChunkID_Clear = 1 THEN NULL ELSE ISNULL(@ParentChunkID, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[ContentItemChunk]
+            (
+                [ContentItemID],
+                [Sequence],
+                [Text],
+                [VectorRecordID],
+                [EmbeddingStatus],
+                [TaggingStatus],
+                [DeleteStatus],
+                [LastEmbeddedAt],
+                [LastTaggedAt],
+                [LastDeletedAt],
+                [Modality],
+                [StartOffset],
+                [EndOffset],
+                [StartMs],
+                [EndMs],
+                [PageNumber],
+                [SegmentTitle],
+                [Description],
+                [Transcript],
+                [SegmenterKey],
+                [ParentChunkID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ContentItemID,
+                @Sequence,
+                CASE WHEN @Text_Clear = 1 THEN NULL ELSE ISNULL(@Text, NULL) END,
+                CASE WHEN @VectorRecordID_Clear = 1 THEN NULL ELSE ISNULL(@VectorRecordID, NULL) END,
+                ISNULL(@EmbeddingStatus, 'Pending'),
+                ISNULL(@TaggingStatus, 'Pending'),
+                CASE WHEN @DeleteStatus_Clear = 1 THEN NULL ELSE ISNULL(@DeleteStatus, NULL) END,
+                CASE WHEN @LastEmbeddedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastEmbeddedAt, NULL) END,
+                CASE WHEN @LastTaggedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastTaggedAt, NULL) END,
+                CASE WHEN @LastDeletedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDeletedAt, NULL) END,
+                ISNULL(@Modality, 'text'),
+                CASE WHEN @StartOffset_Clear = 1 THEN NULL ELSE ISNULL(@StartOffset, NULL) END,
+                CASE WHEN @EndOffset_Clear = 1 THEN NULL ELSE ISNULL(@EndOffset, NULL) END,
+                CASE WHEN @StartMs_Clear = 1 THEN NULL ELSE ISNULL(@StartMs, NULL) END,
+                CASE WHEN @EndMs_Clear = 1 THEN NULL ELSE ISNULL(@EndMs, NULL) END,
+                CASE WHEN @PageNumber_Clear = 1 THEN NULL ELSE ISNULL(@PageNumber, NULL) END,
+                CASE WHEN @SegmentTitle_Clear = 1 THEN NULL ELSE ISNULL(@SegmentTitle, NULL) END,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                CASE WHEN @Transcript_Clear = 1 THEN NULL ELSE ISNULL(@Transcript, NULL) END,
+                CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
+                CASE WHEN @ParentChunkID_Clear = 1 THEN NULL ELSE ISNULL(@ParentChunkID, NULL) END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwContentItemChunks] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentItemChunk] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: Content Item Chunks */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateContentItemChunk] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: Content Item Chunks */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Item Chunks
+-- Item: spUpdateContentItemChunk
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ContentItemChunk
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateContentItemChunk]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateContentItemChunk];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentItemChunk]
+    @ID uniqueidentifier,
+    @ContentItemID uniqueidentifier = NULL,
+    @Sequence int = NULL,
+    @Text_Clear bit = 0,
+    @Text nvarchar(MAX) = NULL,
+    @VectorRecordID_Clear bit = 0,
+    @VectorRecordID nvarchar(100) = NULL,
+    @EmbeddingStatus nvarchar(20) = NULL,
+    @TaggingStatus nvarchar(20) = NULL,
+    @DeleteStatus_Clear bit = 0,
+    @DeleteStatus nvarchar(20) = NULL,
+    @LastEmbeddedAt_Clear bit = 0,
+    @LastEmbeddedAt datetimeoffset = NULL,
+    @LastTaggedAt_Clear bit = 0,
+    @LastTaggedAt datetimeoffset = NULL,
+    @LastDeletedAt_Clear bit = 0,
+    @LastDeletedAt datetimeoffset = NULL,
+    @Modality nvarchar(20) = NULL,
+    @StartOffset_Clear bit = 0,
+    @StartOffset int = NULL,
+    @EndOffset_Clear bit = 0,
+    @EndOffset int = NULL,
+    @StartMs_Clear bit = 0,
+    @StartMs int = NULL,
+    @EndMs_Clear bit = 0,
+    @EndMs int = NULL,
+    @PageNumber_Clear bit = 0,
+    @PageNumber int = NULL,
+    @SegmentTitle_Clear bit = 0,
+    @SegmentTitle nvarchar(500) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @Transcript_Clear bit = 0,
+    @Transcript nvarchar(MAX) = NULL,
+    @SegmenterKey_Clear bit = 0,
+    @SegmenterKey nvarchar(100) = NULL,
+    @ParentChunkID_Clear bit = 0,
+    @ParentChunkID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ContentItemChunk]
+    SET
+        [ContentItemID] = ISNULL(@ContentItemID, [ContentItemID]),
+        [Sequence] = ISNULL(@Sequence, [Sequence]),
+        [Text] = CASE WHEN @Text_Clear = 1 THEN NULL ELSE ISNULL(@Text, [Text]) END,
+        [VectorRecordID] = CASE WHEN @VectorRecordID_Clear = 1 THEN NULL ELSE ISNULL(@VectorRecordID, [VectorRecordID]) END,
+        [EmbeddingStatus] = ISNULL(@EmbeddingStatus, [EmbeddingStatus]),
+        [TaggingStatus] = ISNULL(@TaggingStatus, [TaggingStatus]),
+        [DeleteStatus] = CASE WHEN @DeleteStatus_Clear = 1 THEN NULL ELSE ISNULL(@DeleteStatus, [DeleteStatus]) END,
+        [LastEmbeddedAt] = CASE WHEN @LastEmbeddedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastEmbeddedAt, [LastEmbeddedAt]) END,
+        [LastTaggedAt] = CASE WHEN @LastTaggedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastTaggedAt, [LastTaggedAt]) END,
+        [LastDeletedAt] = CASE WHEN @LastDeletedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDeletedAt, [LastDeletedAt]) END,
+        [Modality] = ISNULL(@Modality, [Modality]),
+        [StartOffset] = CASE WHEN @StartOffset_Clear = 1 THEN NULL ELSE ISNULL(@StartOffset, [StartOffset]) END,
+        [EndOffset] = CASE WHEN @EndOffset_Clear = 1 THEN NULL ELSE ISNULL(@EndOffset, [EndOffset]) END,
+        [StartMs] = CASE WHEN @StartMs_Clear = 1 THEN NULL ELSE ISNULL(@StartMs, [StartMs]) END,
+        [EndMs] = CASE WHEN @EndMs_Clear = 1 THEN NULL ELSE ISNULL(@EndMs, [EndMs]) END,
+        [PageNumber] = CASE WHEN @PageNumber_Clear = 1 THEN NULL ELSE ISNULL(@PageNumber, [PageNumber]) END,
+        [SegmentTitle] = CASE WHEN @SegmentTitle_Clear = 1 THEN NULL ELSE ISNULL(@SegmentTitle, [SegmentTitle]) END,
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [Transcript] = CASE WHEN @Transcript_Clear = 1 THEN NULL ELSE ISNULL(@Transcript, [Transcript]) END,
+        [SegmenterKey] = CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, [SegmenterKey]) END,
+        [ParentChunkID] = CASE WHEN @ParentChunkID_Clear = 1 THEN NULL ELSE ISNULL(@ParentChunkID, [ParentChunkID]) END
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwContentItemChunks] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwContentItemChunks]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentItemChunk] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ContentItemChunk table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateContentItemChunk]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateContentItemChunk];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateContentItemChunk
+ON [${flyway:defaultSchema}].[ContentItemChunk]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ContentItemChunk]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[ContentItemChunk] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: Content Item Chunks */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentItemChunk] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: Content Item Chunks */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Content Item Chunks
+-- Item: spDeleteContentItemChunk
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ContentItemChunk
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteContentItemChunk]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteContentItemChunk];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteContentItemChunk]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[ContentItemChunk]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemChunk] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: Content Item Chunks */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentItemChunk] TO [cdp_Developer], [cdp_Integration];
+
+/* SQL text to insert 1 new entity field(s) */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fd0eede5-a9d7-46b3-a67b-a5be1de3de04' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'RootParentChunkID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'fd0eede5-a9d7-46b3-a67b-a5be1de3de04',
+            '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
+            100051,
+            'RootParentChunkID',
+            'Root Parent Chunk ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = 'D1779C3A-6E94-4D82-A776-0EF1271B75E7'
+               AND AutoUpdateIsNameField = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '4F00910F-A59C-4E6F-B09C-EFAC5435A979'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'D1779C3A-6E94-4D82-A776-0EF1271B75E7'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'D1779C3A-6E94-4D82-A776-0EF1271B75E7'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = 'DE94985C-57EF-4480-86C9-79D11331DA58'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '5DA90752-15A6-4D43-BBA5-DADDAF2273E3'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = 'D1779C3A-6E94-4D82-A776-0EF1271B75E7'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+/* Set categories for 26 fields */
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'C07B5B08-0084-4F59-B638-243F526546E4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '2D402F99-B9A1-4ABB-9D19-A4B204D09BAC' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9E337B81-5B94-46AC-B696-0EFA27C9F85B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.ContentItemID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '073F4C8A-F2AB-4F27-9FE3-743882972F31' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.Sequence 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7618B84A-5040-4C23-9007-71F193E13B8A' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.ContentItem 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9527FB1B-0C05-4C0E-A709-C8922FAC9C8E' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.ParentChunkID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Chunk Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Parent Chunk',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '566671B6-AC5C-454C-8C91-85B47A19E532' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.RootParentChunkID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Chunk Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Root Parent Chunk',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FD0EEDE5-A9D7-46B3-A67B-A5BE1DE3DE04' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.Text 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '80DC7D33-19F5-4781-BC71-E1E1B882C514' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Chunk Content',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DE94985C-57EF-4480-86C9-79D11331DA58' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.Transcript 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Chunk Content',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '5DA90752-15A6-4D43-BBA5-DADDAF2273E3' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.SegmentTitle 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Chunk Content',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'D1779C3A-6E94-4D82-A776-0EF1271B75E7' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.VectorRecordID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F761D312-981B-47E1-94DC-42FF4550CC13' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.Modality 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Vector Integration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '4F00910F-A59C-4E6F-B09C-EFAC5435A979' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.SegmenterKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Vector Integration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Segmenter Strategy',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FF055D0E-5AE2-4563-9B89-4FF91CE6ABEF' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.EmbeddingStatus 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '06DB407C-561A-4740-8A28-E93DC745435B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.TaggingStatus 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A805FBDB-79C6-4B2B-B39D-693CCE47A9E7' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.DeleteStatus 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'EDEFD181-AC1E-4533-A7F7-CAD268E1EC07' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.LastEmbeddedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9F645E2C-17FF-4569-B28C-BF8CAEAA0B68' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.LastTaggedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '2C847A8B-A352-43F7-BCDF-CA951AD2F9A6' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.LastDeletedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '7EB2AE41-CE4E-45E5-B481-B929099AC6E6' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.StartOffset 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provenance and Positioning',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '08F64B3F-A7D9-48CA-A72D-58D8FDE6A475' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.EndOffset 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provenance and Positioning',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '69EF8105-9DD4-48EE-AD8C-B9CA72D9EFFC' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.StartMs 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provenance and Positioning',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Start Time (ms)',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F2B962A0-2AE8-4B8F-9D0F-E45946ADFA78' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.EndMs 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provenance and Positioning',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'End Time (ms)',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'A8D97DC7-F2C8-4454-9D46-B458FEA56F01' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Content Item Chunks.PageNumber 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provenance and Positioning',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'DB35FB41-830D-4ECC-82A0-0BFF46F93398' AND AutoUpdateCategory = 1;
+
+/* Update FieldCategoryInfo setting for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntitySetting]
+               SET [Value] = '{"Provenance and Positioning":{"icon":"fa fa-map-marked-alt","description":"Spatial and temporal markers defining the chunk''s location in the source material"}}', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [EntityID] = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND [Name] = 'FieldCategoryInfo';
+
+/* Update FieldCategoryIcons setting (legacy) */
+
+               UPDATE [${flyway:defaultSchema}].[EntitySetting]
+               SET [Value] = '{"Provenance and Positioning":"fa fa-map-marked-alt"}', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [EntityID] = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND [Name] = 'FieldCategoryIcons';

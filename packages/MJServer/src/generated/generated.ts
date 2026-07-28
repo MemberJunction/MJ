@@ -10900,14 +10900,6 @@ export class MJAIAgentType_ {
     @Field({nullable: true, description: `Type-level DEFAULT configuration JSON for agents of this type — the base layer of the effective-configuration merge: type DefaultConfiguration <- agent TypeConfiguration <- runtime overrides (later layers win per key, deep-merged). Must itself conform to ConfigSchema when one is published. Null = no type defaults.`}) 
     DefaultConfiguration?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    SystemPrompt?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    DefaultStorageAccount?: string;
-        
     @Field(() => Int, {nullable: true, description: `Type-level default for the in-turn context-compression message-count threshold. Overridable per agent via AIAgent.ContextCompressionMessageThreshold.`}) 
     ContextCompressionMessageThreshold?: number;
         
@@ -10930,6 +10922,14 @@ export class MJAIAgentType_ {
     @Field({nullable: true, description: `Type-level default prompt used for cross-turn conversation compaction (the durable summary baseline). Distinct from ContextCompressionPromptID, which governs in-turn compression. Overridable per agent via AIAgent.ConversationSummaryPromptID.`}) 
     @MaxLength(36)
     ConversationSummaryPromptID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    SystemPrompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    DefaultStorageAccount?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -11479,6 +11479,19 @@ if this limit is exceeded.`})
     @Field(() => Boolean, {description: `When 1, every root-level run of this agent executes in plan mode regardless of the per-request planMode flag — the agent must present a plan and receive human approval before any Actions or Sub-Agent steps execute. SupportsPlanMode is irrelevant when this is set. Use for high-consequence agents (e.g. ones with outbound-communication capabilities) where human-in-the-loop review is mandatory.`}) 
     RequirePlanMode: boolean;
         
+    @Field(() => Int, {nullable: true, description: `Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.`}) 
+    ContextWindowMaxTokens?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.`}) 
+    CompactionTriggerPercent?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.`}) 
+    CompactionTargetPercent?: number;
+        
+    @Field({nullable: true, description: `Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.`}) 
+    @MaxLength(36)
+    ConversationSummaryPromptID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -11524,29 +11537,16 @@ if this limit is exceeded.`})
     DefaultMediaCollection?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(255)
+    ConversationSummaryPrompt?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
     RootDefaultCoAgentID?: string;
-        
-    @Field(() => Int, {nullable: true, description: `Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.`}) 
-    ContextWindowMaxTokens?: number;
-        
-    @Field(() => Int, {nullable: true, description: `Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.`}) 
-    CompactionTriggerPercent?: number;
-        
-    @Field(() => Int, {nullable: true, description: `Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.`}) 
-    CompactionTargetPercent?: number;
-        
-    @Field({nullable: true, description: `Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.`}) 
-    @MaxLength(36)
-    ConversationSummaryPromptID?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ConversationSummaryPrompt?: string;
         
     @Field(() => [MJAIAgentAction_])
     MJAIAgentActions_AgentIDArray: MJAIAgentAction_[]; // Link to MJAIAgentActions
@@ -18221,10 +18221,6 @@ export class MJAIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    AgentRun?: string;
         
     @Field({nullable: true}) 
     @MaxLength(50)
@@ -34071,8 +34067,8 @@ export class MJContentItemChunk_ {
     @Field(() => Int, {description: `Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.`}) 
     Sequence: number;
         
-    @Field({description: `The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector.`}) 
-    Text: string;
+    @Field({nullable: true, description: `The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector. NULL for media-only segments (for example an image, or a video window with no transcript), where the embedded payload is the media itself and any readable representation lives in Description/Transcript.`}) 
+    Text?: string;
         
     @Field({nullable: true, description: `The identifier of this chunk's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the chunk's embedding under. Provides traceability from the chunk back to its stored vector.`}) 
     @MaxLength(100)
@@ -34105,10 +34101,54 @@ export class MJContentItemChunk_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `The modality of this chunk's embedded payload: text (default), image, audio, video, or multimodal (text and media fused into a single vector). Determines which vector index the chunk's embedding belongs to, since a multimodal embedding model produces vectors of a different dimension than a text model, and is used at retrieval time to merge results per modality rather than taking a single global top-k.`}) 
+    @MaxLength(20)
+    Modality: string;
+        
+    @Field(() => Int, {nullable: true, description: `Inclusive character offset where this chunk begins within the parent Content Item's extracted text. Together with EndOffset this is the provenance link that resolves a search hit back to the exact passage in the source document. NULL for media segments, which are positioned by StartMs/EndMs instead.`}) 
+    StartOffset?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.`}) 
+    EndOffset?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.`}) 
+    StartMs?: number;
+        
+    @Field(() => Int, {nullable: true, description: `End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.`}) 
+    EndMs?: number;
+        
+    @Field(() => Int, {nullable: true, description: `One-based page number this chunk came from, for paginated sources such as PDFs or slide decks. Provides citation-grade provenance alongside the character offsets. NULL when the source is not paginated.`}) 
+    PageNumber?: number;
+        
+    @Field({nullable: true, description: `Human-readable label for this segment — a document heading for structure-based segmentation, or a generated chapter title for topic- and transcript-based segmentation. Displayed with search results and prepended to the embedded text so a chunk's vector carries its own topic.`}) 
+    @MaxLength(500)
+    SegmentTitle?: string;
+        
+    @Field({nullable: true, description: `An AI-generated description of this chunk's content, primarily for non-text segments. Retrieval of a media chunk otherwise yields only a pointer (an asset and a time window) that an agent cannot reason over; this column is the readable representation that an agent reads, a cross-encoder reranks, and lexical search matches. A short summary of it may be mirrored into the vector record's metadata for display and filtering, but the full text belongs here.`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `The verbatim transcript covering this chunk's time window, for audio and video segments, including speaker labels where the source provides them. Distinct from Description, which is a generated summary: this is what was actually said, and it is what makes a recording findable by lexical search.`}) 
+    Transcript?: string;
+        
+    @Field({nullable: true, description: `Registration key of the segmentation strategy that produced this chunk (for example StructuralText, SemanticText, Transcript, or FixedWindow). Provenance: when a Content Source's configured strategy changes, this identifies which chunks were produced by the previous strategy and therefore need re-chunking.`}) 
+    @MaxLength(100)
+    SegmenterKey?: string;
+        
+    @Field({nullable: true, description: `Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.`}) 
+    @MaxLength(36)
+    ParentChunkID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(250)
     ContentItem?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentChunkID?: string;
+        
+    @Field(() => [MJContentItemChunk_])
+    MJContentItemChunks_ParentChunkIDArray: MJContentItemChunk_[]; // Link to MJContentItemChunks
+    
 }
 
 //****************************************************************************
@@ -34126,7 +34166,7 @@ export class CreateMJContentItemChunkInput {
     Sequence?: number;
 
     @Field({ nullable: true })
-    Text?: string;
+    Text: string | null;
 
     @Field({ nullable: true })
     VectorRecordID: string | null;
@@ -34149,6 +34189,39 @@ export class CreateMJContentItemChunkInput {
     @Field({ nullable: true })
     LastDeletedAt: Date | null;
 
+    @Field({ nullable: true })
+    Modality?: string;
+
+    @Field(() => Int, { nullable: true })
+    StartOffset: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EndOffset: number | null;
+
+    @Field(() => Int, { nullable: true })
+    StartMs: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EndMs: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PageNumber: number | null;
+
+    @Field({ nullable: true })
+    SegmentTitle: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Transcript: string | null;
+
+    @Field({ nullable: true })
+    SegmenterKey: string | null;
+
+    @Field({ nullable: true })
+    ParentChunkID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -34169,7 +34242,7 @@ export class UpdateMJContentItemChunkInput {
     Sequence?: number;
 
     @Field({ nullable: true })
-    Text?: string;
+    Text?: string | null;
 
     @Field({ nullable: true })
     VectorRecordID?: string | null;
@@ -34191,6 +34264,39 @@ export class UpdateMJContentItemChunkInput {
 
     @Field({ nullable: true })
     LastDeletedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Modality?: string;
+
+    @Field(() => Int, { nullable: true })
+    StartOffset?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EndOffset?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    StartMs?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    EndMs?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PageNumber?: number | null;
+
+    @Field({ nullable: true })
+    SegmentTitle?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Transcript?: string | null;
+
+    @Field({ nullable: true })
+    SegmenterKey?: string | null;
+
+    @Field({ nullable: true })
+    ParentChunkID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -34256,6 +34362,16 @@ export class MJContentItemChunkResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [MJContentItemChunk_])
+    async MJContentItemChunks_ParentChunkIDArray(@Root() mjcontentitemchunk_: MJContentItemChunk_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Content Item Chunks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwContentItemChunks')} WHERE ${provider.QuoteIdentifier('ParentChunkID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Content Item Chunks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjcontentitemchunk_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Content Item Chunks', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJContentItemChunk_)
     async CreateMJContentItemChunk(
         @Arg('input', () => CreateMJContentItemChunkInput) input: CreateMJContentItemChunkInput,
@@ -34778,6 +34894,18 @@ export class MJContentItem_ {
     @Field({nullable: true, description: `Timestamp of the most recent successful autotagging run for this content item.`}) 
     LastTaggedAt?: Date;
         
+    @Field({nullable: true, description: `The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`}) 
+    @MaxLength(100)
+    VectorRecordID?: string;
+        
+    @Field({nullable: true, description: `Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.`}) 
+    @MaxLength(36)
+    ParentID?: string;
+        
+    @Field({nullable: true, description: `Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`}) 
+    @MaxLength(2000)
+    DisplayLink?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     ContentSource?: string;
@@ -34801,18 +34929,6 @@ export class MJContentItem_ {
     @Field({nullable: true}) 
     @MaxLength(50)
     EmbeddingModel?: string;
-        
-    @Field({nullable: true, description: `The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`}) 
-    @MaxLength(100)
-    VectorRecordID?: string;
-        
-    @Field({nullable: true, description: `Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.`}) 
-    @MaxLength(36)
-    ParentID?: string;
-        
-    @Field({nullable: true, description: `Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`}) 
-    @MaxLength(2000)
-    DisplayLink?: string;
         
     @Field({nullable: true}) 
     @MaxLength(250)
@@ -38646,6 +38762,9 @@ export class MJConversationDetail_ {
     @MaxLength(20)
     MediaType?: string;
         
+    @Field(() => Int, {description: `Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`}) 
+    Sequence: number;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
@@ -38677,13 +38796,6 @@ export class MJConversationDetail_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
-        
-    @Field(() => Int, {description: `Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`}) 
-    Sequence: number;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    SummaryPromptRun?: string;
         
     @Field(() => [MJReport_])
     MJReports_ConversationDetailIDArray: MJReport_[]; // Link to MJReports

@@ -4209,14 +4209,6 @@ export const MJAIAgentTypeSchema = z.object({
         * * Display Name: Default Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Type-level DEFAULT configuration JSON for agents of this type — the base layer of the effective-configuration merge: type DefaultConfiguration <- agent TypeConfiguration <- runtime overrides (later layers win per key, deep-merged). Must itself conform to ConfigSchema when one is published. Null = no type defaults.`),
-    SystemPrompt: z.string().nullable().describe(`
-        * * Field Name: SystemPrompt
-        * * Display Name: System Prompt
-        * * SQL Data Type: nvarchar(255)`),
-    DefaultStorageAccount: z.string().nullable().describe(`
-        * * Field Name: DefaultStorageAccount
-        * * Display Name: Default Storage Account
-        * * SQL Data Type: nvarchar(200)`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
         * * Display Name: Context Compression Message Threshold
@@ -4256,6 +4248,14 @@ export const MJAIAgentTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Type-level default prompt used for cross-turn conversation compaction (the durable summary baseline). Distinct from ContextCompressionPromptID, which governs in-turn compression. Overridable per agent via AIAgent.ConversationSummaryPromptID.`),
+    SystemPrompt: z.string().nullable().describe(`
+        * * Field Name: SystemPrompt
+        * * Display Name: System Prompt
+        * * SQL Data Type: nvarchar(255)`),
+    DefaultStorageAccount: z.string().nullable().describe(`
+        * * Field Name: DefaultStorageAccount
+        * * Display Name: Default Storage Account
+        * * SQL Data Type: nvarchar(200)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
         * * Display Name: Context Compression Prompt
@@ -4775,6 +4775,27 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, every root-level run of this agent executes in plan mode regardless of the per-request planMode flag — the agent must present a plan and receive human approval before any Actions or Sub-Agent steps execute. SupportsPlanMode is irrelevant when this is set. Use for high-consequence agents (e.g. ones with outbound-communication capabilities) where human-in-the-loop review is mandatory.`),
+    ContextWindowMaxTokens: z.number().nullable().describe(`
+        * * Field Name: ContextWindowMaxTokens
+        * * Display Name: Context Window Max Tokens
+        * * SQL Data Type: int
+        * * Description: Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.`),
+    CompactionTriggerPercent: z.number().nullable().describe(`
+        * * Field Name: CompactionTriggerPercent
+        * * Display Name: Compaction Trigger Percent
+        * * SQL Data Type: int
+        * * Description: Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.`),
+    CompactionTargetPercent: z.number().nullable().describe(`
+        * * Field Name: CompactionTargetPercent
+        * * Display Name: Compaction Target Percent
+        * * SQL Data Type: int
+        * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.`),
+    ConversationSummaryPromptID: z.string().nullable().describe(`
+        * * Field Name: ConversationSummaryPromptID
+        * * Display Name: Conversation Summary Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -4819,6 +4840,10 @@ if this limit is exceeded.`),
         * * Field Name: DefaultMediaCollection
         * * Display Name: Default Media Collection Name
         * * SQL Data Type: nvarchar(255)`),
+    ConversationSummaryPrompt: z.string().nullable().describe(`
+        * * Field Name: ConversationSummaryPrompt
+        * * Display Name: Conversation Summary Prompt
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -4827,31 +4852,6 @@ if this limit is exceeded.`),
         * * Field Name: RootDefaultCoAgentID
         * * Display Name: Root Default Co-Agent ID
         * * SQL Data Type: uniqueidentifier`),
-    ContextWindowMaxTokens: z.number().nullable().describe(`
-        * * Field Name: ContextWindowMaxTokens
-        * * Display Name: Context Window Max Tokens
-        * * SQL Data Type: int
-        * * Description: Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.`),
-    CompactionTriggerPercent: z.number().nullable().describe(`
-        * * Field Name: CompactionTriggerPercent
-        * * Display Name: Compaction Trigger Percent
-        * * SQL Data Type: int
-        * * Description: Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.`),
-    CompactionTargetPercent: z.number().nullable().describe(`
-        * * Field Name: CompactionTargetPercent
-        * * Display Name: Compaction Target Percent
-        * * SQL Data Type: int
-        * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.`),
-    ConversationSummaryPromptID: z.string().nullable().describe(`
-        * * Field Name: ConversationSummaryPromptID
-        * * Display Name: Conversation Summary Prompt ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
-        * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.`),
-    ConversationSummaryPrompt: z.string().nullable().describe(`
-        * * Field Name: ConversationSummaryPrompt
-        * * Display Name: Conversation Summary Prompt
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJAIAgentEntityType = z.infer<typeof MJAIAgentSchema>;
@@ -6958,10 +6958,6 @@ export const MJAIPromptRunSchema = z.object({
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
-        * * SQL Data Type: nvarchar(255)`),
-    AgentRun: z.string().nullable().describe(`
-        * * Field Name: AgentRun
-        * * Display Name: Agent Run
         * * SQL Data Type: nvarchar(255)`),
     OriginalModel: z.string().nullable().describe(`
         * * Field Name: OriginalModel
@@ -12005,11 +12001,11 @@ export const MJContentItemChunkSchema = z.object({
         * * Display Name: Sequence
         * * SQL Data Type: int
         * * Description: Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.`),
-    Text: z.string().describe(`
+    Text: z.string().nullable().describe(`
         * * Field Name: Text
         * * Display Name: Text Content
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector.`),
+        * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector. NULL for media-only segments (for example an image, or a video window with no transcript), where the embedded payload is the media itself and any readable representation lives in Description/Transcript.`),
     VectorRecordID: z.string().nullable().describe(`
         * * Field Name: VectorRecordID
         * * Display Name: Vector Record ID
@@ -12079,10 +12075,78 @@ export const MJContentItemChunkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Modality: z.union([z.literal('audio'), z.literal('image'), z.literal('multimodal'), z.literal('text'), z.literal('video')]).describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio
+    *   * image
+    *   * multimodal
+    *   * text
+    *   * video
+        * * Description: The modality of this chunk's embedded payload: text (default), image, audio, video, or multimodal (text and media fused into a single vector). Determines which vector index the chunk's embedding belongs to, since a multimodal embedding model produces vectors of a different dimension than a text model, and is used at retrieval time to merge results per modality rather than taking a single global top-k.`),
+    StartOffset: z.number().nullable().describe(`
+        * * Field Name: StartOffset
+        * * Display Name: Start Offset
+        * * SQL Data Type: int
+        * * Description: Inclusive character offset where this chunk begins within the parent Content Item's extracted text. Together with EndOffset this is the provenance link that resolves a search hit back to the exact passage in the source document. NULL for media segments, which are positioned by StartMs/EndMs instead.`),
+    EndOffset: z.number().nullable().describe(`
+        * * Field Name: EndOffset
+        * * Display Name: End Offset
+        * * SQL Data Type: int
+        * * Description: Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.`),
+    StartMs: z.number().nullable().describe(`
+        * * Field Name: StartMs
+        * * Display Name: Start Time (ms)
+        * * SQL Data Type: int
+        * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.`),
+    EndMs: z.number().nullable().describe(`
+        * * Field Name: EndMs
+        * * Display Name: End Time (ms)
+        * * SQL Data Type: int
+        * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.`),
+    PageNumber: z.number().nullable().describe(`
+        * * Field Name: PageNumber
+        * * Display Name: Page Number
+        * * SQL Data Type: int
+        * * Description: One-based page number this chunk came from, for paginated sources such as PDFs or slide decks. Provides citation-grade provenance alongside the character offsets. NULL when the source is not paginated.`),
+    SegmentTitle: z.string().nullable().describe(`
+        * * Field Name: SegmentTitle
+        * * Display Name: Segment Title
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Human-readable label for this segment — a document heading for structure-based segmentation, or a generated chapter title for topic- and transcript-based segmentation. Displayed with search results and prepended to the embedded text so a chunk's vector carries its own topic.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: An AI-generated description of this chunk's content, primarily for non-text segments. Retrieval of a media chunk otherwise yields only a pointer (an asset and a time window) that an agent cannot reason over; this column is the readable representation that an agent reads, a cross-encoder reranks, and lexical search matches. A short summary of it may be mirrored into the vector record's metadata for display and filtering, but the full text belongs here.`),
+    Transcript: z.string().nullable().describe(`
+        * * Field Name: Transcript
+        * * Display Name: Transcript
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The verbatim transcript covering this chunk's time window, for audio and video segments, including speaker labels where the source provides them. Distinct from Description, which is a generated summary: this is what was actually said, and it is what makes a recording findable by lexical search.`),
+    SegmenterKey: z.string().nullable().describe(`
+        * * Field Name: SegmenterKey
+        * * Display Name: Segmenter Strategy
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Registration key of the segmentation strategy that produced this chunk (for example StructuralText, SemanticText, Transcript, or FixedWindow). Provenance: when a Content Source's configured strategy changes, this identifies which chunks were produced by the previous strategy and therefore need re-chunking.`),
+    ParentChunkID: z.string().nullable().describe(`
+        * * Field Name: ParentChunkID
+        * * Display Name: Parent Chunk
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Item Chunks (vwContentItemChunks.ID)
+        * * Description: Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
         * * Display Name: Content Item Name
         * * SQL Data Type: nvarchar(250)`),
+    RootParentChunkID: z.string().nullable().describe(`
+        * * Field Name: RootParentChunkID
+        * * Display Name: Root Parent Chunk
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type MJContentItemChunkEntityType = z.infer<typeof MJContentItemChunkSchema>;
@@ -12359,6 +12423,22 @@ export const MJContentItemSchema = z.object({
         * * Display Name: Last Tagged At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp of the most recent successful autotagging run for this content item.`),
+    VectorRecordID: z.string().nullable().describe(`
+        * * Field Name: VectorRecordID
+        * * Display Name: Vector Record ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent Content
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+        * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.`),
+    DisplayLink: z.string().nullable().describe(`
+        * * Field Name: DisplayLink
+        * * Display Name: Display Link
+        * * SQL Data Type: nvarchar(2000)
+        * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
         * * Display Name: Content Source Name
@@ -12383,22 +12463,6 @@ export const MJContentItemSchema = z.object({
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
-    VectorRecordID: z.string().nullable().describe(`
-        * * Field Name: VectorRecordID
-        * * Display Name: Vector Record ID
-        * * SQL Data Type: nvarchar(100)
-        * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`),
-    ParentID: z.string().nullable().describe(`
-        * * Field Name: ParentID
-        * * Display Name: Parent Content
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
-        * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.`),
-    DisplayLink: z.string().nullable().describe(`
-        * * Field Name: DisplayLink
-        * * Display Name: Display Link
-        * * SQL Data Type: nvarchar(2000)
-        * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Content Name
@@ -13656,6 +13720,12 @@ export const MJConversationDetailSchema = z.object({
     *   * Text
     *   * Video
         * * Description: Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -13688,16 +13758,6 @@ export const MJConversationDetailSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
-    Sequence: z.number().describe(`
-        * * Field Name: Sequence
-        * * Display Name: Sequence
-        * * SQL Data Type: int
-        * * Default Value: 0
-        * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`),
-    SummaryPromptRun: z.string().nullable().describe(`
-        * * Field Name: SummaryPromptRun
-        * * Display Name: Summary Prompt Run
-        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJConversationDetailEntityType = z.infer<typeof MJConversationDetailSchema>;
@@ -44037,6 +44097,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     /**
     * Validate() method override for MJ: AI Agent Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CompactionTargetPercent: The compaction target percentage must be a value between 1 and 100 percent.
+    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100 percent.
     * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than 0.
     * * Table-Level: The compaction target percentage must be less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
     * @public
@@ -44046,6 +44107,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateCompactionTargetPercentRange(result);
+        this.ValidateCompactionTriggerPercentRange(result);
         this.ValidateContextWindowMaxTokensGreaterThanZero(result);
         this.ValidateCompactionTargetPercentLessThanTriggerPercent(result);
         result.Success = result.Success && (result.Errors.length === 0);
@@ -44065,6 +44127,23 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     			'CompactionTargetPercent',
     			'Compaction Target Percent must be between 1 and 100.',
     			this.CompactionTargetPercent,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The compaction trigger percentage must be a value between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
+    	if (this.CompactionTriggerPercent != null && (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CompactionTriggerPercent",
+    			"Compaction trigger percentage must be between 1 and 100.",
+    			this.CompactionTriggerPercent,
     			ValidationErrorType.Failure
     		));
     	}
@@ -44327,24 +44406,6 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
-    * * Field Name: SystemPrompt
-    * * Display Name: System Prompt
-    * * SQL Data Type: nvarchar(255)
-    */
-    get SystemPrompt(): string | null {
-        return this.Get('SystemPrompt');
-    }
-
-    /**
-    * * Field Name: DefaultStorageAccount
-    * * Display Name: Default Storage Account
-    * * SQL Data Type: nvarchar(200)
-    */
-    get DefaultStorageAccount(): string | null {
-        return this.Get('DefaultStorageAccount');
-    }
-
-    /**
     * * Field Name: ContextCompressionMessageThreshold
     * * Display Name: Context Compression Message Threshold
     * * SQL Data Type: int
@@ -44437,6 +44498,24 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
     set ConversationSummaryPromptID(value: string | null) {
         this.Set('ConversationSummaryPromptID', value);
+    }
+
+    /**
+    * * Field Name: SystemPrompt
+    * * Display Name: System Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SystemPrompt(): string | null {
+        return this.Get('SystemPrompt');
+    }
+
+    /**
+    * * Field Name: DefaultStorageAccount
+    * * Display Name: Default Storage Account
+    * * SQL Data Type: nvarchar(200)
+    */
+    get DefaultStorageAccount(): string | null {
+        return this.Get('DefaultStorageAccount');
     }
 
     /**
@@ -45809,6 +45888,59 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: ContextWindowMaxTokens
+    * * Display Name: Context Window Max Tokens
+    * * SQL Data Type: int
+    * * Description: Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.
+    */
+    get ContextWindowMaxTokens(): number | null {
+        return this.Get('ContextWindowMaxTokens');
+    }
+    set ContextWindowMaxTokens(value: number | null) {
+        this.Set('ContextWindowMaxTokens', value);
+    }
+
+    /**
+    * * Field Name: CompactionTriggerPercent
+    * * Display Name: Compaction Trigger Percent
+    * * SQL Data Type: int
+    * * Description: Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.
+    */
+    get CompactionTriggerPercent(): number | null {
+        return this.Get('CompactionTriggerPercent');
+    }
+    set CompactionTriggerPercent(value: number | null) {
+        this.Set('CompactionTriggerPercent', value);
+    }
+
+    /**
+    * * Field Name: CompactionTargetPercent
+    * * Display Name: Compaction Target Percent
+    * * SQL Data Type: int
+    * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.
+    */
+    get CompactionTargetPercent(): number | null {
+        return this.Get('CompactionTargetPercent');
+    }
+    set CompactionTargetPercent(value: number | null) {
+        this.Set('CompactionTargetPercent', value);
+    }
+
+    /**
+    * * Field Name: ConversationSummaryPromptID
+    * * Display Name: Conversation Summary Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.
+    */
+    get ConversationSummaryPromptID(): string | null {
+        return this.Get('ConversationSummaryPromptID');
+    }
+    set ConversationSummaryPromptID(value: string | null) {
+        this.Set('ConversationSummaryPromptID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -45908,6 +46040,15 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: ConversationSummaryPrompt
+    * * Display Name: Conversation Summary Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ConversationSummaryPrompt(): string | null {
+        return this.Get('ConversationSummaryPrompt');
+    }
+
+    /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
@@ -45923,68 +46064,6 @@ if this limit is exceeded.
     */
     get RootDefaultCoAgentID(): string | null {
         return this.Get('RootDefaultCoAgentID');
-    }
-
-    /**
-    * * Field Name: ContextWindowMaxTokens
-    * * Display Name: Context Window Max Tokens
-    * * SQL Data Type: int
-    * * Description: Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.
-    */
-    get ContextWindowMaxTokens(): number | null {
-        return this.Get('ContextWindowMaxTokens');
-    }
-    set ContextWindowMaxTokens(value: number | null) {
-        this.Set('ContextWindowMaxTokens', value);
-    }
-
-    /**
-    * * Field Name: CompactionTriggerPercent
-    * * Display Name: Compaction Trigger Percent
-    * * SQL Data Type: int
-    * * Description: Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.
-    */
-    get CompactionTriggerPercent(): number | null {
-        return this.Get('CompactionTriggerPercent');
-    }
-    set CompactionTriggerPercent(value: number | null) {
-        this.Set('CompactionTriggerPercent', value);
-    }
-
-    /**
-    * * Field Name: CompactionTargetPercent
-    * * Display Name: Compaction Target Percent
-    * * SQL Data Type: int
-    * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.
-    */
-    get CompactionTargetPercent(): number | null {
-        return this.Get('CompactionTargetPercent');
-    }
-    set CompactionTargetPercent(value: number | null) {
-        this.Set('CompactionTargetPercent', value);
-    }
-
-    /**
-    * * Field Name: ConversationSummaryPromptID
-    * * Display Name: Conversation Summary Prompt ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
-    * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.
-    */
-    get ConversationSummaryPromptID(): string | null {
-        return this.Get('ConversationSummaryPromptID');
-    }
-    set ConversationSummaryPromptID(value: string | null) {
-        this.Set('ConversationSummaryPromptID', value);
-    }
-
-    /**
-    * * Field Name: ConversationSummaryPrompt
-    * * Display Name: Conversation Summary Prompt
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ConversationSummaryPrompt(): string | null {
-        return this.Get('ConversationSummaryPrompt');
     }
 }
 
@@ -52002,15 +52081,6 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
-    }
-
-    /**
-    * * Field Name: AgentRun
-    * * Display Name: Agent Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get AgentRun(): string | null {
-        return this.Get('AgentRun');
     }
 
     /**
@@ -64895,12 +64965,12 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     * * Field Name: Text
     * * Display Name: Text Content
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector.
+    * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector. NULL for media-only segments (for example an image, or a video window with no transcript), where the embedded payload is the media itself and any readable representation lives in Description/Transcript.
     */
-    get Text(): string {
+    get Text(): string | null {
         return this.Get('Text');
     }
-    set Text(value: string) {
+    set Text(value: string | null) {
         this.Set('Text', value);
     }
 
@@ -65040,12 +65110,173 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     }
 
     /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio
+    *   * image
+    *   * multimodal
+    *   * text
+    *   * video
+    * * Description: The modality of this chunk's embedded payload: text (default), image, audio, video, or multimodal (text and media fused into a single vector). Determines which vector index the chunk's embedding belongs to, since a multimodal embedding model produces vectors of a different dimension than a text model, and is used at retrieval time to merge results per modality rather than taking a single global top-k.
+    */
+    get Modality(): 'audio' | 'image' | 'multimodal' | 'text' | 'video' {
+        return this.Get('Modality');
+    }
+    set Modality(value: 'audio' | 'image' | 'multimodal' | 'text' | 'video') {
+        this.Set('Modality', value);
+    }
+
+    /**
+    * * Field Name: StartOffset
+    * * Display Name: Start Offset
+    * * SQL Data Type: int
+    * * Description: Inclusive character offset where this chunk begins within the parent Content Item's extracted text. Together with EndOffset this is the provenance link that resolves a search hit back to the exact passage in the source document. NULL for media segments, which are positioned by StartMs/EndMs instead.
+    */
+    get StartOffset(): number | null {
+        return this.Get('StartOffset');
+    }
+    set StartOffset(value: number | null) {
+        this.Set('StartOffset', value);
+    }
+
+    /**
+    * * Field Name: EndOffset
+    * * Display Name: End Offset
+    * * SQL Data Type: int
+    * * Description: Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.
+    */
+    get EndOffset(): number | null {
+        return this.Get('EndOffset');
+    }
+    set EndOffset(value: number | null) {
+        this.Set('EndOffset', value);
+    }
+
+    /**
+    * * Field Name: StartMs
+    * * Display Name: Start Time (ms)
+    * * SQL Data Type: int
+    * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.
+    */
+    get StartMs(): number | null {
+        return this.Get('StartMs');
+    }
+    set StartMs(value: number | null) {
+        this.Set('StartMs', value);
+    }
+
+    /**
+    * * Field Name: EndMs
+    * * Display Name: End Time (ms)
+    * * SQL Data Type: int
+    * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.
+    */
+    get EndMs(): number | null {
+        return this.Get('EndMs');
+    }
+    set EndMs(value: number | null) {
+        this.Set('EndMs', value);
+    }
+
+    /**
+    * * Field Name: PageNumber
+    * * Display Name: Page Number
+    * * SQL Data Type: int
+    * * Description: One-based page number this chunk came from, for paginated sources such as PDFs or slide decks. Provides citation-grade provenance alongside the character offsets. NULL when the source is not paginated.
+    */
+    get PageNumber(): number | null {
+        return this.Get('PageNumber');
+    }
+    set PageNumber(value: number | null) {
+        this.Set('PageNumber', value);
+    }
+
+    /**
+    * * Field Name: SegmentTitle
+    * * Display Name: Segment Title
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Human-readable label for this segment — a document heading for structure-based segmentation, or a generated chapter title for topic- and transcript-based segmentation. Displayed with search results and prepended to the embedded text so a chunk's vector carries its own topic.
+    */
+    get SegmentTitle(): string | null {
+        return this.Get('SegmentTitle');
+    }
+    set SegmentTitle(value: string | null) {
+        this.Set('SegmentTitle', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: An AI-generated description of this chunk's content, primarily for non-text segments. Retrieval of a media chunk otherwise yields only a pointer (an asset and a time window) that an agent cannot reason over; this column is the readable representation that an agent reads, a cross-encoder reranks, and lexical search matches. A short summary of it may be mirrored into the vector record's metadata for display and filtering, but the full text belongs here.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Transcript
+    * * Display Name: Transcript
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The verbatim transcript covering this chunk's time window, for audio and video segments, including speaker labels where the source provides them. Distinct from Description, which is a generated summary: this is what was actually said, and it is what makes a recording findable by lexical search.
+    */
+    get Transcript(): string | null {
+        return this.Get('Transcript');
+    }
+    set Transcript(value: string | null) {
+        this.Set('Transcript', value);
+    }
+
+    /**
+    * * Field Name: SegmenterKey
+    * * Display Name: Segmenter Strategy
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Registration key of the segmentation strategy that produced this chunk (for example StructuralText, SemanticText, Transcript, or FixedWindow). Provenance: when a Content Source's configured strategy changes, this identifies which chunks were produced by the previous strategy and therefore need re-chunking.
+    */
+    get SegmenterKey(): string | null {
+        return this.Get('SegmenterKey');
+    }
+    set SegmenterKey(value: string | null) {
+        this.Set('SegmenterKey', value);
+    }
+
+    /**
+    * * Field Name: ParentChunkID
+    * * Display Name: Parent Chunk
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Item Chunks (vwContentItemChunks.ID)
+    * * Description: Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.
+    */
+    get ParentChunkID(): string | null {
+        return this.Get('ParentChunkID');
+    }
+    set ParentChunkID(value: string | null) {
+        this.Set('ParentChunkID', value);
+    }
+
+    /**
     * * Field Name: ContentItem
     * * Display Name: Content Item Name
     * * SQL Data Type: nvarchar(250)
     */
     get ContentItem(): string | null {
         return this.Get('ContentItem');
+    }
+
+    /**
+    * * Field Name: RootParentChunkID
+    * * Display Name: Root Parent Chunk
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentChunkID(): string | null {
+        return this.Get('RootParentChunkID');
     }
 }
 
@@ -65713,6 +65944,46 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     }
 
     /**
+    * * Field Name: VectorRecordID
+    * * Display Name: Vector Record ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.
+    */
+    get VectorRecordID(): string | null {
+        return this.Get('VectorRecordID');
+    }
+    set VectorRecordID(value: string | null) {
+        this.Set('VectorRecordID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent Content
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+    * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: DisplayLink
+    * * Display Name: Display Link
+    * * SQL Data Type: nvarchar(2000)
+    * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.
+    */
+    get DisplayLink(): string | null {
+        return this.Get('DisplayLink');
+    }
+    set DisplayLink(value: string | null) {
+        this.Set('DisplayLink', value);
+    }
+
+    /**
     * * Field Name: ContentSource
     * * Display Name: Content Source Name
     * * SQL Data Type: nvarchar(255)
@@ -65764,46 +66035,6 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     */
     get EmbeddingModel(): string | null {
         return this.Get('EmbeddingModel');
-    }
-
-    /**
-    * * Field Name: VectorRecordID
-    * * Display Name: Vector Record ID
-    * * SQL Data Type: nvarchar(100)
-    * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.
-    */
-    get VectorRecordID(): string | null {
-        return this.Get('VectorRecordID');
-    }
-    set VectorRecordID(value: string | null) {
-        this.Set('VectorRecordID', value);
-    }
-
-    /**
-    * * Field Name: ParentID
-    * * Display Name: Parent Content
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
-    * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.
-    */
-    get ParentID(): string | null {
-        return this.Get('ParentID');
-    }
-    set ParentID(value: string | null) {
-        this.Set('ParentID', value);
-    }
-
-    /**
-    * * Field Name: DisplayLink
-    * * Display Name: Display Link
-    * * SQL Data Type: nvarchar(2000)
-    * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.
-    */
-    get DisplayLink(): string | null {
-        return this.Get('DisplayLink');
-    }
-    set DisplayLink(value: string | null) {
-        this.Set('DisplayLink', value);
     }
 
     /**
@@ -67097,9 +67328,13 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
 }
 
 /**
- * Controls which keys land in a content vector's metadata. Mirrors the entity-vectorization
- * pipeline's metadata-control structure (field strategy, per-field overrides, storage-type
- * coercion, truncation, opt-out toggles), adapted to content-item vectors.
+ * Controls which keys land in a content vector's metadata. Vector metadata is expensive in a
+ * vector database (storage + query performance). This mirrors the entity-vectorization pipeline's
+ * metadata-control structure (field strategy, per-field overrides, storage-type coercion,
+ * truncation, opt-out toggles), adapted to content-item vectors.
+ *
+ * Field values are read from the parent ContentItem. The identity keys (Entity + RecordID, plus
+ * ContentItemID / Sequence for chunk vectors) are managed as system keys — see FieldStrategy.
  */
 export interface MJContentSourceEntity_IContentSourceVectorMetadataConfig {
     /**
@@ -69683,6 +69918,17 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     }
 
     /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+
+    /**
     * * Field Name: Conversation
     * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
@@ -69752,26 +69998,6 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
-    }
-
-    /**
-    * * Field Name: Sequence
-    * * Display Name: Sequence
-    * * SQL Data Type: int
-    * * Default Value: 0
-    * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.
-    */
-    get Sequence(): number {
-        return this.Get('Sequence');
-    }
-
-    /**
-    * * Field Name: SummaryPromptRun
-    * * Display Name: Summary Prompt Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get SummaryPromptRun(): string | null {
-        return this.Get('SummaryPromptRun');
     }
 }
 
