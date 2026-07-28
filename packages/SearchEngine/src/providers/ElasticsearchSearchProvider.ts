@@ -33,6 +33,7 @@ import {
     SearchResultItem,
     ScopeConstraints,
 } from '../generic/search.types';
+import { ExtractChunkProvenance, HasChunkProvenance, ResolveHitID, ResolveHitSnippet, ResolveHitTitle } from '../generic/ExternalHitMapper';
 
 /** Minimal subset of the Elasticsearch JS client surface this provider uses. */
 interface ElasticsearchClientLike {
@@ -212,8 +213,9 @@ export class ElasticsearchSearchProvider extends BaseSearchProvider {
 
             return hits.map((hit, idx) => {
                 const src = hit._source ?? {};
-                const title = (src['title'] as string | undefined) ?? (src[defaultField] as string | undefined) ?? hit._id;
-                const snippet = (src[defaultField] as string | undefined) ?? '';
+                const title = ResolveHitTitle(src, hit._id, defaultField);
+                const snippet = ResolveHitSnippet(src, defaultField);
+                const provenance = ExtractChunkProvenance(src);
                 return {
                     ID: `es-${hit._index}-${hit._id}`,
                     EntityName: hit._index,
@@ -228,7 +230,7 @@ export class ElasticsearchSearchProvider extends BaseSearchProvider {
                     MatchedAt: new Date(),
                     EntityIcon: 'fa-solid fa-database',
                     RecordName: title.slice(0, 200),
-                    RawMetadata: JSON.stringify({ _index: hit._index, _id: hit._id, _rank: idx, _rawScore: hit._score }),
+                    RawMetadata: JSON.stringify({ _index: hit._index, _id: hit._id, _rank: idx, _rawScore: hit._score, ...(HasChunkProvenance(provenance) ? { chunk: provenance } : {}) }),
                 };
             });
         } catch (err) {

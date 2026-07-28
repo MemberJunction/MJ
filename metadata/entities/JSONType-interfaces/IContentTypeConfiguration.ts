@@ -7,6 +7,21 @@
  * their own {@link IContentSourceConfiguration}.
  */
 export interface IContentTypeConfiguration {
+    /**
+     * Options passed to the segmentation strategy named by SegmenterKey.
+     *
+     * Sizing note: TargetTokens should be driven by the shape of your QUERIES, not by the
+     * embedding model's context window. The window is an upper bound; a good chunk is about
+     * as much content as a good answer, so that a matching chunk is mostly signal.
+     */
+    SegmentationOptions?: IContentSegmentationOptions;
+
+    /**
+     * Options passed to the cleaning strategy named by CleanerKey. Selector rules are
+     * per-source because the right selector is a property of the site's template.
+     */
+    CleaningOptions?: IContentCleaningOptions;
+
     /** Whether to share tag taxonomy with LLM by default for all sources of this type. Can be overridden per source. Default true */
     ShareTaxonomyWithLLM?: boolean;
     /** Default tag taxonomy mode for sources of this type. Can be overridden per source */
@@ -67,4 +82,61 @@ export interface IContentTypeVectorMetadataFieldConfig {
     TruncationLimit?: number;
     /** How to store this field's value ('string' default, 'number', 'boolean', 'epochSeconds', 'epochMilliseconds'). */
     StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+}
+
+/**
+ * Options for the segmentation strategy. All optional; each segmenter ignores options
+ * that don't apply to it.
+ */
+export interface IContentSegmentationOptions {
+    /** Hard ceiling on tokens per segment. Segments larger than this are split. */
+    MaxSegmentTokens?: number;
+    /** Overlap tokens applied when an oversized segment must be split. */
+    OverlapTokens?: number;
+    /** Merge adjacent text segments estimating below this many tokens. */
+    MinSegmentTokens?: number;
+    /** AdaptiveBoundary: desired segment size — size this to your queries, not to the model. */
+    TargetTokens?: number;
+    /** AdaptiveBoundary: percent below target at which a paragraph break is accepted. */
+    UndershootPercent?: number;
+    /** AdaptiveBoundary: percent above target to keep looking for a sentence/word break. */
+    OvershootPercent?: number;
+    /** AdaptiveBoundary: if the whole text is within this percent of target, don't split at all. */
+    NoSplitPercent?: number;
+    /** Transcript: maximum wall-clock length of one chapter, in milliseconds. */
+    MaxChapterMs?: number;
+    /** Transcript: a silence gap at least this long starts a new chapter. */
+    BoundaryGapMs?: number;
+    /** Transcript: also emit one child segment per speaker turn within each chapter. */
+    EmitSubChapters?: boolean;
+    /** FixedWindow: window length in milliseconds for audio/video with no transcript. */
+    WindowMs?: number;
+    /** SemanticText: skip the LLM boundary pass for documents below this token count. */
+    MinTokensForLLM?: number;
+}
+
+/**
+ * Options for the content-cleaning strategy that runs before segmentation.
+ *
+ * Garbage that survives cleaning is expensive: it gets embedded, stored, retrieved, and
+ * shown to a user or an agent. Navigation chrome repeated across a thousand pages produces
+ * a thousand near-identical vectors that crowd out real answers.
+ */
+export interface IContentCleaningOptions {
+    /**
+     * CSS selectors whose content is the ONLY content to keep. The highest-leverage knob:
+     * naming the element that holds the article (e.g. '.article-body', 'main') discards
+     * navigation, sidebars, and advertising without enumerating what to drop.
+     */
+    IncludeSelectors?: string[];
+    /** CSS selectors to remove, applied after IncludeSelectors (inline ad slots, share widgets). */
+    ExcludeSelectors?: string[];
+    /** Collapse runs of whitespace and blank lines. Default true. */
+    NormalizeWhitespace?: boolean;
+    /** Maximum characters to retain after cleaning. */
+    MaxLength?: number;
+    /** Html cleaner: replace the built-in exclusion list rather than appending to it. */
+    ReplaceDefaultExcludes?: boolean;
+    /** Html cleaner: keep `alt` text from images as content. */
+    IncludeImageAltText?: boolean;
 }
