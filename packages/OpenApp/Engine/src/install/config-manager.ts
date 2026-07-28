@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { compileFunction } from 'node:vm';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
+import { ResolveServerPackagePath } from './workspace-paths.js';
 
 /** Config file name. All MJ projects use mj.config.cjs. */
 const CONFIG_FILE_NAME = 'mj.config.cjs';
@@ -42,6 +43,12 @@ export interface ConfigOperationResult {
     Success: boolean;
     /** Error message if the operation failed */
     ErrorMessage?: string;
+    /**
+     * Non-fatal per-file problems from a multi-config write: at least one config was updated,
+     * but another could not be (e.g. a re-export config with no object literal to insert into).
+     * Present only when the operation succeeded overall.
+     */
+    Warnings?: string[];
 }
 
 /**
@@ -56,32 +63,21 @@ export function AddServerDynamicPackages(
     manifest: MJAppManifest,
     serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
-    }
     const serverPackages = GetServerPackagesFromManifest(manifest);
 
     if (serverPackages.length === 0) {
         return { Success: true };
     }
 
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = EnsureDynamicPackagesSection(content);
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update dynamicPackages.server', (input) => {
+        let content = EnsureDynamicPackagesSection(input);
         content = EnsureDynamicArrayPresent(content, 'server');
 
         for (const entry of serverPackages) {
             content = AddEntryToDynamicArray(content, entry, 'server');
         }
-
-        WriteConfigChecked(configPath, content);
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update config: ${message}` };
-    }
+        return content;
+    });
 }
 
 /**
@@ -102,32 +98,21 @@ export function AddClientDynamicPackages(
     manifest: MJAppManifest,
     serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
-    }
     const clientPackages = GetClientPackagesFromManifest(manifest);
 
     if (clientPackages.length === 0) {
         return { Success: true };
     }
 
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = EnsureDynamicPackagesSection(content);
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update dynamicPackages.client', (input) => {
+        let content = EnsureDynamicPackagesSection(input);
         content = EnsureDynamicArrayPresent(content, 'client');
 
         for (const entry of clientPackages) {
             content = AddEntryToDynamicArray(content, entry, 'client');
         }
-
-        WriteConfigChecked(configPath, content);
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update config: ${message}` };
-    }
+        return content;
+    });
 }
 
 /**
@@ -144,21 +129,7 @@ export function RemoveServerDynamicPackages(
     appName: string,
     serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
-    }
-
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = RemoveEntriesForApp(content, appName);
-        WriteConfigChecked(configPath, content);
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update config: ${message}` };
-    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'remove dynamicPackages entries', (content) => RemoveEntriesForApp(content, appName));
 }
 
 /**
@@ -175,41 +146,119 @@ export function ToggleServerDynamicPackages(
     enabled: boolean,
     serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
-    }
-
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = ToggleEntriesForApp(content, appName, enabled);
-        WriteConfigChecked(configPath, content);
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update config: ${message}` };
-    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'toggle dynamicPackages entries', (content) => ToggleEntriesForApp(content, appName, enabled));
 }
 
 /**
- * Resolves the path to the MJ config file.
+ * Resolves EVERY MJ config file that a consumer of `dynamicPackages` may load, nearest first:
+ *   1. ServerPackagePath (e.g. apps/MJAPI/mj.config.cjs) — what MJAPI loads when started from
+ *      its own workspace (`npm run start --workspace=apps/MJAPI` sets cwd there).
+ *   2. Repo root (mj.config.cjs) — what `mj codegen manifest --open-app-client-bootstrap`
+ *      loads (it resolves from the CLIENT workspace, so it never sees a server-workspace
+ *      config), and what a container / App Service deploy loads when only the root config
+ *      ships in the artifact.
  *
- * Checks multiple locations in priority order, matching how cosmiconfig (used by
- * ServerBootstrap) discovers the config at runtime:
- *   1. ServerPackagePath (e.g. apps/MJAPI/mj.config.cjs) — the MJAPI's own config
- *   2. Repo root (mj.config.cjs) — fallback for monorepos without a per-app config
- *
- * This ensures the dynamicPackages section is written to the same file the MJAPI
- * will actually load at boot, not a root config that gets shadowed by a closer one.
+ * Writing to ONE of these is not enough (#3271). A server-workspace-only write leaves the
+ * client bootstrap manifest with `0 client packages wired` — the app's @RegisterClass
+ * decorators never fire — and leaves a root-config deployment loading no server package at
+ * all, so the API's GraphQL schema silently lacks every one of the app's types while
+ * `__mj.OpenApp` still reports the app Active. Both entries therefore go to every config a
+ * consumer might read; a duplicate entry is harmless (AddEntryToDynamicArray is idempotent),
+ * whereas a missing one fails silently and is very hard to diagnose from the symptoms.
  */
-function resolveConfigPath(repoRoot: string, serverPackagePath?: string): string | undefined {
-    if (serverPackagePath) {
-        const serverConfig = resolve(repoRoot, serverPackagePath, CONFIG_FILE_NAME);
-        if (existsSync(serverConfig)) return serverConfig;
-    }
+function resolveConfigPaths(repoRoot: string, serverPackagePath?: string): string[] {
+    const paths: string[] = [];
+    // Detect the layout when it isn't configured, so an unconfigured host still gets the
+    // server-workspace config written and not just the root one (#3270 + #3271).
+    const effectiveServerPath = ResolveServerPackagePath(repoRoot, serverPackagePath);
+    const serverConfig = resolve(repoRoot, effectiveServerPath, CONFIG_FILE_NAME);
+    if (existsSync(serverConfig)) paths.push(serverConfig);
     const rootConfig = resolve(repoRoot, CONFIG_FILE_NAME);
-    return existsSync(rootConfig) ? rootConfig : undefined;
+    if (existsSync(rootConfig) && !paths.includes(rootConfig)) paths.push(rootConfig);
+    return paths;
+}
+
+/**
+ * True when a config has no object literal of its own and simply re-exports another config:
+ *
+ *     module.exports = require('../../mj.config.cjs');
+ *
+ * This is what `packages/MJAPI/mj.config.cjs` ships as — in the monorepo AND in an `mj install`
+ * distribution. There is nothing to inject into it, and nothing SHOULD be: it re-exports the root
+ * config, which is itself a target in {@link resolveConfigPaths} and does get written. Recognising
+ * the shape keeps the expected case a silent no-op instead of a "skipped a config file" warning on
+ * every install, while a genuinely malformed or unsupported config still surfaces as one.
+ *
+ * Note `module.exports = { ...require('../../mj.config.cjs') }` deliberately does NOT match — that
+ * spread form HAS an object literal, so it is editable and inserting into it is correct.
+ */
+function IsDelegatingConfig(content: string): boolean {
+    return /module\.exports\s*=\s*require\s*\(/.test(content);
+}
+
+/**
+ * Applies `edit` to every config returned by {@link resolveConfigPaths}.
+ *
+ * Two asymmetries matter here:
+ *
+ * 1. The ROOT config is load-bearing for two of the three consumers — the client bootstrap
+ *    manifest step (which resolves from the CLIENT workspace and so only ever sees root) and any
+ *    container / App Service deploy that ships only the root config. Failing to write root while
+ *    some other target succeeded would report success and silently re-create #3271, so a root
+ *    write failure is FATAL even when another config was updated.
+ * 2. A non-root target may legitimately be un-editable, and is collected as a warning. The only
+ *    such shape in practice is a delegating config, which {@link IsDelegatingConfig} skips
+ *    silently before we ever try to edit it.
+ *
+ * `operation` names the caller's intent so a failure keeps the diagnostic specificity these
+ * messages had before they were funnelled through one helper (e.g. "update excludeSchemas").
+ */
+function ApplyToConfigs(
+    repoRoot: string,
+    serverPackagePath: string | undefined,
+    operation: string,
+    edit: (content: string) => string
+): ConfigOperationResult {
+    const rootConfig = resolve(repoRoot, CONFIG_FILE_NAME);
+    const configPaths = resolveConfigPaths(repoRoot, serverPackagePath);
+    if (configPaths.length === 0) {
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
+    }
+
+    const warnings: string[] = [];
+    let updated = 0;
+    let delegated = 0;
+
+    for (const configPath of configPaths) {
+        try {
+            const content = readFileSync(configPath, 'utf-8');
+            // Re-exports another config in this list — correct to leave alone, so stay quiet.
+            if (IsDelegatingConfig(content)) {
+                delegated++;
+                continue;
+            }
+            WriteConfigChecked(configPath, edit(content));
+            updated++;
+        }
+        catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (configPath === rootConfig) {
+                // Fatal: see asymmetry (1) above.
+                return { Success: false, ErrorMessage: `Failed to ${operation} in ${configPath}: ${message}` };
+            }
+            warnings.push(`${configPath}: ${message}`);
+        }
+    }
+
+    if (updated === 0) {
+        const detail = warnings.length > 0
+            ? warnings.join('; ')
+            : delegated > 0
+                ? `every candidate config only re-exports another config, so there was nowhere to write. Expected an object literal in ${rootConfig}.`
+                : 'no candidate config had an injectable config object.';
+        return { Success: false, ErrorMessage: `Failed to ${operation}: ${detail}` };
+    }
+    return { Success: true, Warnings: warnings.length > 0 ? warnings : undefined };
 }
 
 /**
@@ -612,22 +661,8 @@ export function AddExcludeSchema(
         return { Success: true };
     }
 
-    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
-    }
-
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = EnsureExcludeSchemasSection(content);
-        content = AddSchemaToExcludeArray(content, schemaName);
-        WriteConfigChecked(configPath, content);
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update excludeSchemas config: ${message}` };
-    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update excludeSchemas', (input) =>
+        AddSchemaToExcludeArray(EnsureExcludeSchemasSection(input), schemaName));
 }
 
 /**
@@ -647,21 +682,8 @@ export function RemoveExcludeSchema(
         return { Success: true };
     }
 
-    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
-    }
-
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = RemoveSchemaFromExcludeArray(content, schemaName);
-        WriteConfigChecked(configPath, content);
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to remove schema from excludeSchemas: ${message}` };
-    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'remove schema from excludeSchemas', (content) =>
+        RemoveSchemaFromExcludeArray(content, schemaName));
 }
 
 /**
@@ -767,22 +789,8 @@ export function AddEntityPackageMapping(
         return { Success: true }; // No entities package found → nothing to map
     }
 
-    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
-    }
-
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = EnsureEntityPackageNameSection(content);
-        content = AddEntityPackageEntry(content, schemaName, entityPkg);
-        WriteConfigChecked(configPath, content);
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update entityPackageName config: ${message}` };
-    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update entityPackageName', (input) =>
+        AddEntityPackageEntry(EnsureEntityPackageNameSection(input), schemaName, entityPkg));
 }
 
 /**
@@ -801,21 +809,8 @@ export function RemoveEntityPackageMapping(
         return { Success: true };
     }
 
-    const configPath = resolveConfigPath(repoRoot, serverPackagePath);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
-    }
-
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = RemoveEntityPackageEntry(content, schemaName);
-        WriteConfigChecked(configPath, content);
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to remove entityPackageName mapping: ${message}` };
-    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'remove entityPackageName mapping', (content) =>
+        RemoveEntityPackageEntry(content, schemaName));
 }
 
 /**

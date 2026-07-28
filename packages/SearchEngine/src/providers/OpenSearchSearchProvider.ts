@@ -28,6 +28,7 @@ import {
     SearchResultItem,
     ScopeConstraints,
 } from '../generic/search.types';
+import { ExtractChunkProvenance, HasChunkProvenance, ResolveHitID, ResolveHitSnippet, ResolveHitTitle } from '../generic/ExternalHitMapper';
 
 interface OpenSearchHit {
     _index: string;
@@ -141,8 +142,9 @@ export class OpenSearchSearchProvider extends BaseSearchProvider {
 
             return hits.slice(0, topK).map((hit, idx) => {
                 const src = hit._source ?? {};
-                const title = String(src['title'] ?? src[defaultField] ?? hit._id);
-                const snippet = String(src[defaultField] ?? '');
+                const title = ResolveHitTitle(src, hit._id, defaultField);
+                const snippet = ResolveHitSnippet(src, defaultField);
+                const provenance = ExtractChunkProvenance(src);
                 const normalized = hit._score / topScore;
                 return {
                     ID: `os-${hit._index}-${hit._id}`,
@@ -158,7 +160,7 @@ export class OpenSearchSearchProvider extends BaseSearchProvider {
                     MatchedAt: new Date(),
                     EntityIcon: 'fa-solid fa-database',
                     RecordName: title.slice(0, 200),
-                    RawMetadata: JSON.stringify({ _index: hit._index, _id: hit._id, _rank: idx, _rawScore: hit._score }),
+                    RawMetadata: JSON.stringify({ _index: hit._index, _id: hit._id, _rank: idx, _rawScore: hit._score, ...(HasChunkProvenance(provenance) ? { chunk: provenance } : {}) }),
                 };
             });
         } catch (err) {
