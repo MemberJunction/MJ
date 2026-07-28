@@ -122,6 +122,70 @@ describe('MSGraphProvider', () => {
     });
   });
 
+  describe('GetMessages recipient extraction', () => {
+    type NormalizedMessage = {
+      To: string;
+      ToRecipients: string[];
+      CCRecipients: string[];
+      ReplyTo: string[];
+    };
+
+    /**
+     * Drives one Graph message resource through the public GetMessages() path.
+     * GetMessages chains .filter().top().get(), so the api mock must be chainable;
+     * mockReturnValueOnce keeps the default (non-chainable) api mock intact for other tests.
+     */
+    const getMessageFor = async (graphMessage: Record<string, unknown>): Promise<NormalizedMessage> => {
+      const chain = {
+        filter: vi.fn().mockReturnThis(),
+        top: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue({ value: [graphMessage] }),
+      };
+      mockGraphApi.mockReturnValueOnce(chain);
+
+      const result = (await provider.GetMessages({ NumMessages: 1 })) as {
+        Success: boolean;
+        Messages: NormalizedMessage[];
+      };
+      expect(result.Success).toBe(true);
+      expect(result.Messages).toHaveLength(1);
+      return result.Messages[0];
+    };
+
+    it('populates ToRecipients and CCRecipients from the Graph recipient collections', async () => {
+      const message = await getMessageFor({
+        id: 'msg-1',
+        conversationId: 'conv-1',
+        subject: 'Hello',
+        from: { emailAddress: { address: 'assistant@example.com' } },
+        replyTo: [{ emailAddress: { address: 'assistant@example.com' } }],
+        toRecipients: [
+          { emailAddress: { address: 'us@example.org' } },
+          { emailAddress: { address: 'other@example.com' } },
+        ],
+        ccRecipients: [{ emailAddress: { address: 'leader@example.com' } }],
+        body: { content: 'body' },
+      });
+      expect(message.ToRecipients).toEqual(['us@example.org', 'other@example.com']);
+      expect(message.CCRecipients).toEqual(['leader@example.com']);
+      // Legacy To keeps its historical replyTo[0] behavior — deliberately unchanged.
+      expect(message.To).toBe('assistant@example.com');
+    });
+
+    it('returns empty arrays when recipient collections are absent and drops address-less entries', async () => {
+      const message = await getMessageFor({
+        id: 'msg-2',
+        conversationId: 'conv-1',
+        subject: 'Hello',
+        from: { emailAddress: { address: 'assistant@example.com' } },
+        toRecipients: [{ emailAddress: {} }],
+        body: { content: 'body' },
+      });
+      expect(message.ToRecipients).toEqual([]);
+      expect(message.CCRecipients).toEqual([]);
+    });
+  });
+
   describe('credential resolution', () => {
     it('should return failure when required credentials are missing with fallback disabled', async () => {
       const message = {

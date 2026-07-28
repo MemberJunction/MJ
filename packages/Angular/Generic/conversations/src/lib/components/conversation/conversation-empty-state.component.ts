@@ -15,6 +15,10 @@ export class ConversationEmptyStateComponent {
   @Input() showSidebarToggle: boolean = false;
   @Input() enableAttachments: boolean = false;
   @Input() enableMentions: boolean = true;
+  /** Per-type mention caps under enableMentions (all default true) — forwarded to the composer. */
+  @Input() enableAgentMentions: boolean = true;
+  @Input() enableEntityMentions: boolean = true;
+  @Input() enableSkillCommands: boolean = true;
   /** Show the built-in suggested-prompt chips. Hosts that don't want the default prompt vocabulary set false. */
   @Input() showSuggestedPrompts: boolean = true;
   @Input() maxAttachments: number = 10;
