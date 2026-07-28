@@ -166,6 +166,14 @@ mj sync push --dir=metadata --include="application-settings"
 conversation): the widget's per-conversation agent picker writes to
 `MJConversationEntity.DefaultAgentID`. Higher-priority than step 1.
 
+**An `@` mention outranks every step above.** Addressing an agent in the composer routes
+that turn to it, so a surface pinned to one agent hasn't really pinned it while `@` is
+available. Close the hole with the per-type mention caps on chat-area —
+`[allowAgentMentions]="false"` REMOVES the `@` trigger provider rather than hiding UI,
+and leaves `/` skill commands and `#` entity mentions working. All three sit under the
+`allowMentions` master (false there disables everything regardless). See the package
+README's feature-toggle table.
+
 ---
 
 ## 6. The slot system (extension surface)

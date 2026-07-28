@@ -35,6 +35,8 @@
     "src/lib/components/tasks/tasks-dropdown.component.dom.test.ts",
     "src/lib/components/collection/collection-artifact-card.component.ts",
     "src/lib/components/collection/collection-artifact-card.component.dom.test.ts",
+    "src/lib/components/composer/ai-composer.component.ts",
+    "src/lib/components/composer/ai-composer-mention-toggles.dom.test.ts"
     "src/lib/components/message/message-item.component.ts",
     "src/lib/components/message/message-item-assistant-identity.dom.test.ts",
     "src/lib/components/message/message-list.component.ts",

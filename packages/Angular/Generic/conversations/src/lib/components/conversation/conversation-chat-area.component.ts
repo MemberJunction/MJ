@@ -138,12 +138,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input() suppressNewConversationEmptyState = false;
 
   /**
-   * Host-level cap for @-mention autocomplete (agents and users).
-   * Defaults true. Hosts addressing a single fixed agent (e.g. Form Builder
-   * cockpit pinned to the Form Builder agent) should set false so the user
-   * can't accidentally redirect a turn to a different agent.
+   * Host-level MASTER cap for the composer's mention/command triggers.
+   * Defaults true. When false, ALL triggers (@ agents, # entities, / skills)
+   * are off regardless of the per-type flags below. Hosts addressing a single
+   * fixed agent (e.g. Form Builder cockpit) can set false wholesale.
    */
   @Input() allowMentions = true;
+
+  /**
+   * Per-type caps under {@link allowMentions}, all default true. Let a host keep
+   * one trigger while dropping another — e.g. a white-label surface pinned to a
+   * default agent that wants to offer `/` skill-commands but NOT `@` agent
+   * mentions (an `@` overrides the pinned default agent in message routing).
+   * Effective only when `allowMentions` is also true.
+   */
+  @Input() allowAgentMentions = true;
+  @Input() allowEntityMentions = true;
+  @Input() allowSkillCommands = true;
 
   /**
    * Host-level cap for attachments. Defaults true. When false, the host
