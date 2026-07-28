@@ -162,6 +162,20 @@ correctness); all findings remediated in the same commit.
   design pass.
 - Release note: one-time saved-main-layout reset on first boot when an
   existing workspace contains record tabs.
+- **Slide-panel punch-through (FIXED 2026-07-28):** overlays whose show-state
+  class was named `visible` collided with explorer-app's global
+  `.visible { visibility: visible !important }` utility and punched through
+  the records region's visibility-hidden main area (bespoke AI detail panels
+  stayed painted over open records; also stale-open on return). Fixes: the
+  region-hidden rule now force-hides descendants
+  (`.region-hidden, .region-hidden * { visibility: hidden !important }`);
+  `mj-slide-panel`'s own state class renamed `visible` → `sp-open` (it had
+  the same collision); all four bespoke AI detail panels (Agents, Models,
+  System Config, Prompts) MIGRATED onto `mj-slide-panel`; Open Full Record
+  now closes the panel (execution-monitor precedent, Matt's ruling).
+  **QUEUED follow-up:** audit/scope the global `.visible !important` utility
+  itself (`explorer-app/src/lib/styles/_utilities.scss:425`) — it remains a
+  repo-wide name-collision landmine for any component state class.
 - **lm_tab redesign (QUEUED — own branch, Matt 2026-07-27):** GL tab chrome
   is now a primary surface but still pre-Phase-1 design. Current state:
   `tab-container.component.css:204-345` (!important overrides of GL stock) —

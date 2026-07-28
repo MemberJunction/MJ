@@ -42,9 +42,17 @@
   background: var(--mj-bg-page);
 }
 
-.region-hidden {
-  visibility: hidden;
-  pointer-events: none;
+/* Defense against visibility punch-through: `visibility: visible` on a
+   DESCENDANT defeats an ancestor's visibility:hidden (unlike display:none).
+   Real case: explorer-app's global `.visible { visibility: visible
+   !important }` utility collides with components whose show-state class is
+   named `visible` (several bespoke detail panels did this), leaving their
+   overlays painted on top of the records region. The two-class specificity
+   here outranks the single-class utility even with both !important. */
+.region-hidden,
+.region-hidden * {
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* Direct content container for single-resource mode */
