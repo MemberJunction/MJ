@@ -132,21 +132,49 @@ Design gate: 2–3 mockup variants → Matt picks → build.
 
 ---
 
-## Phase 4 — Record-open context (BLOCKED on D3)
+## Phase 4 — Record-open context (D3 ✅ DECIDED 2026-07-27: "records style")
 
-**Problem:** opening a record from inside an app silently reassigns you to the Home
-app (`NavigationService.getDefaultApplicationId()` groups orphan resources under
-Home). Header nav flips, source context vanishes, no breadcrumb, no visible way back.
+**Problem (historical):** opening a record from inside an app silently reassigned
+you to the Home app. Header nav flipped, source context vanished, no way back.
 
-Options under consideration (Matt deciding):
-- **(a) Stay in source app** — record opens as dismissible dynamic item/tab within
-  the app you're in. Change: default-app resolution + dynamic-nav-item surfacing.
-- **(b) Keep Home + breadcrumb** — smaller change; record page gets
-  `AI › Agents › ActionSmith` breadcrumb with working links.
-- **(c) Browser-style tabs** — records always open as a tab; tab bar always visible
-  when any record is open.
+**Decision:** after prototyping (a), (b), and (c) live, Matt landed on a synthesis —
+**records are their own global surface**. Shipped on branch `record-open-context`
+(`b2a2a690f5`), gated by instance config `Shell.RecordOpen.Style`
+('records' default | 'classic' escape hatch):
 
-Note: (a) and (c) compose well with D4 option (a).
+- Record opens stay in the active app (no Home reassignment, no nav flip),
+  always as a tab; re-open focuses the existing tab (browser-style dedup).
+- Records live in a **separate Golden Layout region** in the tab container
+  (own tab strip, native close/drag-split, own `recordsLayout` persistence
+  slot), visible only while a record is being viewed. The main tab bar never
+  contains records (`WorkspaceStateManager.MainLayoutTabFilter`).
+- A count-badged **Records pill** in the app-nav's trailing slot resumes the
+  last-viewed record from anywhere (+ standalone header fallback and a
+  mobile-drawer entry for reachability). Invariant: any open record is ≤2
+  clicks away from anywhere.
+- Home's dynamic orphan nav items are skipped under records style.
+
+Independently audited (3 agents: best-practices / downstream-compat / GL
+correctness); all findings remediated in the same commit.
+
+**Phase 4 follow-ups (open):**
+- Mobile records UX: drawer entry is a minimal treatment — needs a real
+  design pass.
+- Release note: one-time saved-main-layout reset on first boot when an
+  existing workspace contains record tabs.
+- **lm_tab redesign (QUEUED — own branch, Matt 2026-07-27):** GL tab chrome
+  is now a primary surface but still pre-Phase-1 design. Current state:
+  `tab-container.component.css:204-345` (!important overrides of GL stock) —
+  raised-card active tab (borders/rounded top/-1px margin trick), 3px
+  app-color left-edge bar with glow on active (the app-color-as-state +
+  left-bar pattern Phase 1 killed elsewhere), 35px/13px density, hover-X
+  error-red. Italic-title (unpinned) + thumbtack pin are INLINE styles
+  injected from `golden-layout-manager.ts` `applyTabStyles` — the redesign
+  must include that JS, not just CSS. Open design axes (Matt to pick,
+  side-by-side mockups like the launcher round): active-state language
+  (brand-tint pill recipe vs refined raised-card vs underline), app color
+  (drop / identity dot / keep bar), density (35px vs nav-pill height),
+  pinned/temp vocabulary (italic+pin is invisible vocabulary).
 
 ---
 
