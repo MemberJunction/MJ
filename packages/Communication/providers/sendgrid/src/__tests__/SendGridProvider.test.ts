@@ -20,7 +20,12 @@ vi.mock('@sendgrid/mail', () => ({
   },
 }));
 
-vi.mock('@memberjunction/communication-types', () => ({
+vi.mock('@memberjunction/communication-types', async () => ({
+  // Real address-list parser (pure module) — the provider imports it by name, and Vitest
+  // rejects named imports missing from a mock factory even when the test never calls them.
+  ...(await vi.importActual<{ ParseEmailAddressList: (headerValue: string | null | undefined) => string[] }>(
+    '../../../../base-types/src/AddressUtils'
+  )),
   BaseCommunicationProvider: class {
     getSupportedOperations() { return []; }
   },

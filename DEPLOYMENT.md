@@ -515,8 +515,20 @@ MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migra
 
 This is not hypothetical. It has happened in both directions:
 
-- **v5.45** shipped `Metadata_Sync.pg.sql` as a **126-byte marker** — 12,041 lines of SQL Server metadata DML reduced to two comment lines. PostgreSQL deployments migrating through v5.45 silently received none of that release's curated metadata (issue #3253).
+- **v5.45** shipped `Metadata_Sync.pg.sql` as a **126-byte marker** — 12,041 lines of SQL Server metadata DML reduced to two comment lines. PostgreSQL deployments migrating through v5.45 silently received none of that release's curated metadata (issue #3253). The v5.46 PG baseline was dumped from a gapped database, so **fresh installs from that baseline were gapped too**. Healed forward in v5.50 by the idempotent reseed [`V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql`](migrations-pg/v5/V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql) (derivation: [`scripts/generate-v545-metadata-reseed.mjs`](scripts/generate-v545-metadata-reseed.mjs); rationale below) — no `mj sync push` required.
 - In a later build the converter emitted **three** header-only stubs and one file containing six bare `;` statements where six `CREATE INDEX` statements belonged — while reporting `unhandled stmts: 0` and exiting successfully (issue #3252).
+
+##### How to heal a ledger gap (and why the obvious repairs are wrong)
+
+If you find a gap like v5.45's, **do not repair history.** Committed `.pg.sql` files and baselines are an immutable ledger: deployed databases hold their Flyway checksums, so editing one breaks validation for everyone who already ran it. Three repairs look attractive and are all wrong:
+
+- **Rewriting the bad file in place** breaks checksum validation on every deployment that already executed it, and does nothing for databases already past that version.
+- **Regenerating the gapped baseline** has the same checksum problem for every install created from it, and again does nothing for migrate-through deployments. (Future baselines self-heal on their own: any database they are dumped from will have run the reseed.)
+- **Producing a delta with `mj sync push` against a gapped database** emits current-JSON state, which entangles unreleased metadata with the fix and is not reproducible from the repo alone.
+
+What works is a **forward-dated, idempotent reseed**, derived by replaying the original source through the converter and post-processing it — with the derivation script committed next to the artifact so the 7,000-line output is reviewable. Three properties make it safe to run on every database, gapped or whole: each create is guarded by an `IF EXISTS (… WHERE "ID" = …) THEN RETURN` on its primary key; updates that a later release already re-applied full-row are excluded (computed from the ledger, with a field-superset assertion, so replaying older values cannot revert newer state); and the delete is `IF EXISTS`-guarded. The gapped file and baseline stay in the ledger permanently — the content gate grandfathers them.
+
+**Heal any future gap of this class the same way**, and stamp the reseed *after* every migration whose counterpart is still pending: Flyway runs with `outOfOrder: false`, so a counterpart generated later but stamped earlier cannot be applied to a database that already ran the reseed.
 
 **Always diff output size against source before committing:**
 
@@ -529,6 +541,15 @@ for f in migrations/v5/V*.sql; do
   [ "$p" -le 25 ] && [ "$ss" -gt 60 ] && printf 'SUSPECT %-58s SS=%s PG=%s\n' "${b:0:56}" "$ss" "$p"
 done
 ```
+
+**Also check DELETE parity in the metadata sync specifically.** mj-sync emits record deletions as bare `EXEC …spDelete… @ID = '…'` batches with no `DECLARE` block. The legacy converter (the mandated path for `*_Metadata_Sync.sql`) used to silently skip these — they vanished into the anonymous "skipped" count while the run reported OK, which is how v5.45's `spDeleteComponentRegistry` was dropped (issue #3253). It was never the only one: **196 such deletions across 10 metadata syncs (v5.9 through v5.45) reached zero committed PG counterparts.** The converter now converts all 196 (see `StatementClassifier` "bare EXEC CRUD sp calls" and `ExecBlockRule.splitIntoBlocks`), and **you no longer check this by hand** — size-diffing can't see one missing statement, so [`scripts/check-pg-migration-content.mjs`](scripts/check-pg-migration-content.mjs) counts the deletions on both sides and fails the build when they disagree. It runs in CI ([`pg-migrations.yml`](.github/workflows/pg-migrations.yml)) and locally:
+
+```bash
+node scripts/check-pg-migration-content.mjs
+# → PG content OK — … Delete parity OK — 10 pair(s) with deletions, 10 grandfathered, 0 mismatched.
+```
+
+The 10 historical gaps are grandfathered in `DELETE_PARITY_GRANDFATHERED` because committed `.pg.sql` files are Flyway-checksummed and immutable. **A new release must have parity** — do not add an entry to silence a failure; a new gap means the converter dropped a statement. If a deletion genuinely doesn't apply to PostgreSQL, hand-port it as a guarded `DO` block (`IF EXISTS (SELECT 1 FROM __mj."<Table>" WHERE "ID" = '…') THEN PERFORM __mj."spDelete<Table>"(p_ID := '…'); END IF;` — see the synthesized delete in [`V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql`](migrations-pg/v5/V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql) for the exact shape) and say why in the migration.
 
 **An empty counterpart is sometimes correct** — do not blindly treat every hit as a defect. Two legitimate cases:
 
@@ -662,21 +683,25 @@ Builds and pushes multi-platform Docker images (`linux/amd64`, `linux/arm64`):
 
 > **Known issue:** This workflow sometimes fails because it tries to install the newly published npm packages before they've fully propagated on the npm registry. If it fails, **re-run the failed job** — it usually succeeds on the second attempt.
 
-### 10c. `docs.yml` — Update Package Documentation
+### 10c. `docs.yml` — Build & Deploy the Documentation Site
 
-**Triggered by:** `publish.yml` completion
+**Triggered by:** `publish.yml` completion — **and** any push to `main` touching a docs source (`docs-site/**`, `guides/**`, `README.md`, `DEPLOYMENT.md`, `UPGRADE-v5.0.md`, `CONTRIBUTING.md`, `metadata/README.md`, `.claude/skills/**`) — **and** manual `workflow_dispatch`, when you need the site refreshed without waiting for a release.
 
-Runs `npm ci` → `npm run build` → `npx typedoc` → deploy to GitHub Pages. Publishes the API reference for every shipped package (`typedoc.json` `entryPoints: ["packages/**"]`, excluding CLI/CodeGen/MJAPI/MJExplorer and generated packages) to **https://memberjunction.github.io/MJ/**.
+Runs `npm ci` → `npm run build` → `npx typedoc` → installs and unit-tests [`docs-site/`](docs-site) → ingest + Astro build → copies the TypeDoc output to `dist/api` → deploys to GitHub Pages. Publishes **https://docs.memberjunction.org** (custom domain via [`docs-site/public/CNAME`](docs-site/public/CNAME), served at the domain root with `DOCS_BASE: /`; the old `memberjunction.github.io/MJ/` now redirects here). The API reference for every shipped package (`typedoc.json` `entryPoints: ["packages/**"]`, excluding CLI/CodeGen/MJAPI/MJExplorer and generated packages) is attached at **https://docs.memberjunction.org/api**.
+
+**The site is compiled from the repo — there is no site to edit.** [`docs-site/scripts/ingest.mjs`](docs-site/scripts/ingest.mjs) turns every `guides/*.md`, every `packages/**/README.md`, and five root docs (this file among them) into pages; repo-relative links are rewritten to site links when the target is itself a page and to commit-pinned GitHub links otherwise. Nothing here is a per-release step — but it does mean **a stale README ships as stale public documentation**, and that copy-pasting prose into `docs-site/` is always the wrong fix. Correct the source file instead.
 
 > This workflow failed silently on every release from v5.45.1 through v5.48.0 — the published docs sat weeks stale while each release otherwise looked green, because `docs.yml` is downstream of the tag and nobody checks it. **Look at its result, not just `publish.yml`'s.**
 
 > **Both 10b and 10c chain off `publish.yml` *completion*, not success.** If `publish.yml` is cancelled or fails, these fire anyway and fail with nothing to install or build — that failure is **collateral, not a real defect**. After re-running `publish.yml` successfully, both trigger again; judge them on the *later* run.
+>
+> For 10c specifically, also check *which trigger* the run you are looking at came from. `docs.yml` now fires on doc pushes to `main` and on manual dispatch as well, so a green `docs.yml` in the list may be an unrelated docs deploy rather than your release's. Match it to the release run before ticking the checklist.
 
 ### Post-Merge Checklist
 
 - [ ] `publish.yml` completes successfully (npm packages published, tag created)
 - [ ] `docker.yml` completes successfully (Docker images pushed)
-- [ ] `docs.yml` completes successfully (GitHub Pages updated)
+- [ ] `docs.yml` completes successfully (https://docs.memberjunction.org rebuilt, `/api` included)
 - [ ] `main` auto-merged back into `next` (includes lock file updates)
 - [ ] **`next` branch build passes** after the auto-merge — the lock file and version updates can sometimes cause issues, so always verify `build.yml` passes on `next` after a release
 
@@ -730,7 +755,8 @@ gh pr view <release-pr-number> --json body --jq .body | pbcopy
 | `changes.yml` | PR to `next` or `main` | Validate migration naming & changesets |
 | `publish.yml` | Push to `main` | Version, build, publish to npm |
 | `docker.yml` | After `publish.yml` | Build & push Docker images |
-| `docs.yml` | After `publish.yml` | Deploy TypeDoc to GitHub Pages |
+| `docs.yml` | After `publish.yml`, doc pushes to `main`, manual dispatch | Build & deploy docs.memberjunction.org (site + `/api`) |
+| `docs-site-ci.yml` | PR touching a docs source | Fast (~2 min) "does the docs site still build" check |
 | `generate-release-notes.yml` | PR to `main` | Auto-generate PR description |
 | `integration.yml` | PR to `next` + push to `next` | Deterministic integration tier against a fresh SQL Server |
 
