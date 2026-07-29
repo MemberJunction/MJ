@@ -49,11 +49,12 @@ import {
 } from "@memberjunction/integration-schema-builder";
 import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput } from "@memberjunction/schema-engine";
 import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-builder";
-import { IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
+import { IntegrationProgressEmitter, IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage } from "../integration/SchemaRefreshLaunch.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -559,6 +560,12 @@ class CreateConnectionInput {
 @ObjectType()
 class CreateConnectionPipelineSummary {
     @Field() RunID: string;
+    /**
+     * True when the pipeline was launched detached (`awaitSchemaRefresh: false`) and is STILL RUNNING —
+     * every count below is a placeholder zero, not a result. Tail `RunID` via IntegrationTailRunEvents
+     * (or the IntegrationProgress subscription, kind='ConnectorCreation') for the real outcome.
+     */
+    @Field() InProgress: boolean;
     @Field() ObjectsCreated: number;
     @Field() ObjectsUpdated: number;
     @Field() FieldsCreated: number;
@@ -2376,6 +2383,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         user: UserInfo,
         provider: IMetadataProvider,
         universalPKConvention?: string,
+        runID?: string,
     ): Promise<CreateConnectionPipelineSummary> {
         const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
         const pipeline = new IntegrationConnectorCreationPipeline();
@@ -2387,6 +2395,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             UniversalPKConvention: universalPKConvention || undefined,
             ConsoleMirror: true,
             TriggerType: 'Manual' as const,
+            // Caller-supplied runID: lets the detached path hand a tailable ID back to the client
+            // BEFORE the pipeline has done any work. Omitted ⇒ the pipeline generates its own.
+            RunID: runID,
         };
         const result = await pipeline.Run(runOpts as unknown as Parameters<typeof pipeline.Run>[0]);
 
@@ -2397,6 +2408,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
         return {
             RunID: result.RunID,
+            InProgress: false,
             ObjectsCreated: result.PersistResult?.ObjectsCreated ?? 0,
             ObjectsUpdated: result.PersistResult?.ObjectsUpdated ?? 0,
             FieldsCreated: result.PersistResult?.FieldsCreated ?? 0,
@@ -2410,6 +2422,45 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Strategy: v.Strategy,
                 Reason: v.Reason,
             })),
+        };
+    }
+
+    /**
+     * Launches the schema-refresh pipeline WITHOUT awaiting it and returns a summary carrying the
+     * tailable `RunID` and `InProgress: true`.
+     *
+     * Why: the pipeline is a live vendor introspect — minutes on a large catalog (HubSpot: 130
+     * objects). Awaiting it inline holds the create/update mutation open for that entire time, so the
+     * connection wizard's Finish button sits on an indeterminate spinner with no way to tell progress
+     * from a hang. The pipeline already writes a complete, durable, per-run event stream keyed by its
+     * runID; the only thing missing was handing that ID to the caller BEFORE the work starts. Hence
+     * the caller-supplied runID.
+     *
+     * Trade-off the caller opts into: the mutation no longer reports what the refresh found (counts
+     * are placeholder zeros) and a refresh failure no longer surfaces in the mutation's Message — both
+     * live on the run stream instead. That is why `awaitSchemaRefresh` defaults to true.
+     */
+    private startSchemaRefreshPipelineDetached(
+        companyIntegrationID: string,
+        user: UserInfo,
+        provider: IMetadataProvider,
+        universalPKConvention?: string,
+    ): CreateConnectionPipelineSummary {
+        const runID = IntegrationProgressEmitter.newRunID('connector');
+        // Deliberately not awaited. Every outcome, success or failure, is already recorded on this
+        // run's artifact stream under `runID` — the catch exists only so a rejection can never become
+        // an unhandled promise rejection, and to leave a server-log breadcrumb next to the run ID.
+        void this.runSchemaRefreshPipeline(companyIntegrationID, user, provider, universalPKConvention, runID)
+            .catch(err => LogError(`Detached schema refresh (run ${runID}) failed: ${this.formatError(err)}`));
+        return {
+            RunID: runID,
+            InProgress: true,
+            ObjectsCreated: 0,
+            ObjectsUpdated: 0,
+            FieldsCreated: 0,
+            FieldsUpdated: 0,
+            UnresolvedObjects: [],
+            PKVerdicts: [],
         };
     }
 
@@ -2584,6 +2635,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
         @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default) and TestConnection succeeds, automatically runs IntegrationConnectorCreationPipeline (live introspect → persist Declared/Discovered/Custom → SoftPKClassifier). The intermittent server-side work the wizard's Forward step represents." }) runSchemaRefresh: boolean,
         @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK hint (e.g. 'id' for HubSpot). Improves SoftPKClassifier convergence." }) universalPKConvention: string | undefined,
+        @Arg("awaitSchemaRefresh", () => Boolean, { defaultValue: true, description: "When false, the schema refresh is launched detached and this mutation returns immediately with SchemaRefresh.RunID + InProgress=true — tail that run instead of blocking on a minutes-long live introspect. Default true preserves the blocking behaviour (counts returned inline)." }) awaitSchemaRefresh: boolean,
         @Ctx() ctx: AppContext
     ): Promise<CreateConnectionOutput> {
         try {
@@ -2645,7 +2697,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // caller also asked for a test.  The wizard may have tested separately
             // and just be hitting Create to save.
             let schemaRefreshSummary: CreateConnectionPipelineSummary | undefined;
-            if (runSchemaRefresh) {
+            if (runSchemaRefresh && !awaitSchemaRefresh) {
+                schemaRefreshSummary = this.startSchemaRefreshPipelineDetached(ci.ID, user, md, universalPKConvention);
+            } else if (runSchemaRefresh) {
                 try {
                     const refreshResult = await this.runSchemaRefreshPipeline(
                         ci.ID, user, md, universalPKConvention
@@ -2661,9 +2715,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (testConnection || schemaRefreshSummary) {
                 return {
                     Success: true,
-                    Message: schemaRefreshSummary
-                        ? `Connection created${testConnection ? ', test passed' : ''}, schema refresh: ${schemaRefreshSummary.ObjectsCreated} created, ${schemaRefreshSummary.ObjectsUpdated} updated, ${schemaRefreshSummary.UnresolvedObjects.length} PK-unresolved`
-                        : 'Connection created and test passed',
+                    Message: BuildCreateConnectionMessage(testConnection, schemaRefreshSummary),
                     CompanyIntegrationID: ci.ID,
                     CredentialID: credentialID,
                     ConnectionTestSuccess: testPassed,
@@ -2696,6 +2748,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
         @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default) and TestConnection succeeds, automatically runs IntegrationConnectorCreationPipeline. Same intermittent server-side step as the create flow." }) runSchemaRefresh: boolean,
         @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK hint (e.g. 'id' for HubSpot)" }) universalPKConvention: string | undefined,
+        @Arg("awaitSchemaRefresh", () => Boolean, { defaultValue: true, description: "When false, the schema refresh is launched detached and this mutation returns immediately with the run ID to tail instead of blocking on a minutes-long live introspect. Default true preserves the blocking behaviour." }) awaitSchemaRefresh: boolean,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
@@ -2742,6 +2795,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Fires whenever runSchemaRefresh=true, regardless of whether the
             // caller also asked for a test — the wizard may have tested separately
             // already and is just hitting Update to save edits.
+            if (runSchemaRefresh && !awaitSchemaRefresh) {
+                const detached = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md, universalPKConvention);
+                return { Success: true, Message: BuildDetachedRefreshMessage(detached.RunID) };
+            }
             if (runSchemaRefresh) {
                 try {
                     const refreshResult = await this.runSchemaRefreshPipeline(
