@@ -133,6 +133,38 @@ export function RemoveServerDynamicPackages(
 }
 
 /**
+ * Removes this app's `dynamicPackages` entries whose PackageName is NOT in the supplied manifest —
+ * i.e. packages a NEW version of the app no longer ships.
+ *
+ * The Add* functions are add-only and idempotent, which is correct for install but leaves upgrade
+ * converging on the union of every version ever installed: a dropped `startupExport` package keeps
+ * its server entry, so the loader tries to import a package that may no longer build. Pair this
+ * with {@link AddServerDynamicPackages} / {@link AddClientDynamicPackages} on the upgrade path to
+ * make the config match the new manifest exactly.
+ *
+ * Surviving entries are left byte-identical rather than removed and re-added, so a disabled app's
+ * `Enabled: false` state is preserved. Server and client keep-sets are computed per array, so a
+ * server-only package is not pruned from `server` just because it is absent from `client`.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param manifest - The NEW (target) manifest the config should converge on
+ * @returns Operation result
+ */
+export function PruneDynamicPackagesNotInManifest(
+    repoRoot: string,
+    manifest: MJAppManifest,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'prune stale dynamicPackages entries', (content) => {
+        let result = PruneEntriesForApp(content, manifest, 'server');
+        result = PruneEntriesForApp(result, manifest, 'client');
+        result = NormalizeEmptyDynamicArray(result, 'server');
+        result = NormalizeEmptyDynamicArray(result, 'client');
+        return result;
+    });
+}
+
+/**
  * Toggles the enabled state of all dynamic package entries for an app.
  *
  * @param repoRoot - Absolute path to the monorepo root
@@ -376,30 +408,50 @@ function EnsureDynamicArrayPresent(content: string, arrayName: 'server' | 'clien
 }
 
 /**
+ * Locates the named `dynamicPackages.<arrayName>` array and returns the offsets of its opening
+ * `[` and its matching `]`.
+ *
+ * Anchored to the dynamicPackages section — NOT the first `<arrayName>: [` anywhere in the file,
+ * which could be an unrelated nested config (B8). Returns null when the section, the array, or
+ * the array's closing bracket is absent, so callers decide whether that is fatal.
+ */
+function LocateDynamicArray(
+    content: string,
+    arrayName: 'server' | 'client'
+): { OpenBracketPos: number; ClosePos: number } | null {
+    const dynMatch = content.match(/dynamicPackages\s*:\s*\{/);
+    if (!dynMatch || dynMatch.index === undefined) return null;
+    const afterDyn = content.slice(dynMatch.index);
+    const arrayRel = afterDyn.match(new RegExp(`${arrayName}:\\s*\\[`));
+    if (!arrayRel || arrayRel.index === undefined) return null;
+    const openBracketPos = dynMatch.index + arrayRel.index + arrayRel[0].length - 1; // the '['
+    const closePos = FindMatchingBracket(content, openBracketPos);
+    if (closePos === -1) return null;
+    return { OpenBracketPos: openBracketPos, ClosePos: closePos };
+}
+
+/**
  * Adds a single entry to the named dynamicPackages array (`server` | `client`) in the
  * config string. Client entries omit the StartupExport line (they are side-effect imports).
  */
 function AddEntryToDynamicArray(content: string, entry: DynamicPackageEntry, arrayName: 'server' | 'client'): string {
-    // Skip if an entry with the same PackageName and AppName already exists
+    const location = LocateDynamicArray(content, arrayName);
+    if (!location) {
+        throw new Error(`dynamicPackages.${arrayName} array not found in mj.config.cjs when adding a package.`);
+    }
+
+    // The idempotency check is scoped to the TARGET array's body, not the whole file. A `shared`
+    // package is written to BOTH arrays: matching file-wide meant the server entry written moments
+    // earlier satisfied the client check, so the client insert was skipped and the package never
+    // reached dynamicPackages.client — its @RegisterClass components were then absent from the
+    // bundle with no error raised anywhere.
+    const arrayBody = content.slice(location.OpenBracketPos, location.ClosePos);
     const existsPattern = new RegExp(
         `PackageName:\\s*['"]${EscapeRegex(entry.PackageName)}['"][^{}]*AppName:\\s*['"]${EscapeRegex(entry.AppName)}['"]`
     );
-    if (existsPattern.test(content)) {
+    if (existsPattern.test(arrayBody)) {
         return content;
     }
-
-    // Anchor the target array to the dynamicPackages section — NOT the first
-    // `<arrayName>: [` anywhere in the file (which could be an unrelated nested config) — B8.
-    const dynMatch = content.match(/dynamicPackages\s*:\s*\{/);
-    if (!dynMatch || dynMatch.index === undefined) {
-        throw new Error(`dynamicPackages section not found in mj.config.cjs when adding a ${arrayName} package.`);
-    }
-    const afterDyn = content.slice(dynMatch.index);
-    const arrayRel = afterDyn.match(new RegExp(`${arrayName}:\\s*\\[`));
-    if (!arrayRel || arrayRel.index === undefined) {
-        throw new Error(`dynamicPackages.${arrayName} array not found in mj.config.cjs.`);
-    }
-    const arrayIndex = dynMatch.index + arrayRel.index;
 
     // JSON.stringify every manifest-sourced value: it emits a quoted, fully-escaped JS string
     // literal, so a value containing quotes/backslashes/newlines can never terminate the literal
@@ -409,14 +461,41 @@ function AddEntryToDynamicArray(content: string, entry: DynamicPackageEntry, arr
     const startupLine = entry.StartupExport ? `\n        StartupExport: ${JSON.stringify(entry.StartupExport)},` : '';
     const entryStr = `\n      {\n        PackageName: ${JSON.stringify(entry.PackageName)},${startupLine}\n        AppName: ${JSON.stringify(entry.AppName)},\n        Enabled: ${entry.Enabled}\n      },`;
 
-    // Find the closing bracket of the target array
-    const arrayStart = arrayIndex + arrayRel[0].length;
-    const closingBracket = FindMatchingBracket(content, arrayStart - 1);
-    if (closingBracket === -1) {
-        throw new Error(`Could not find the closing bracket of dynamicPackages.${arrayName} in mj.config.cjs.`);
-    }
+    return content.slice(0, location.ClosePos) + entryStr + '\n    ' + content.slice(location.ClosePos);
+}
 
-    return content.slice(0, closingBracket) + entryStr + '\n    ' + content.slice(closingBracket);
+/**
+ * Removes this app's entries from ONE dynamicPackages array when their PackageName is absent from
+ * the manifest's set for that array. Scoped to the array's own body via {@link LocateDynamicArray},
+ * so pruning `server` can never touch `client`.
+ *
+ * An entry block whose PackageName cannot be parsed is left in place: this function deletes config
+ * the user may have hand-edited, so an unrecognized shape must be a no-op rather than a guess.
+ */
+function PruneEntriesForApp(content: string, manifest: MJAppManifest, arrayName: 'server' | 'client'): string {
+    const location = LocateDynamicArray(content, arrayName);
+    if (!location) return content;
+
+    const manifestEntries = arrayName === 'server'
+        ? GetServerPackagesFromManifest(manifest)
+        : GetClientPackagesFromManifest(manifest);
+    const keep = new Set(manifestEntries.map((e) => e.PackageName));
+
+    const body = content.slice(location.OpenBracketPos, location.ClosePos);
+    // Same entry-block shape as RemoveEntriesForApp: [^{}] keeps the match inside a single entry
+    // object rather than spanning from the enclosing dynamicPackages brace.
+    const entryPattern = new RegExp(
+        `\\s*\\{[^{}]*AppName:\\s*['"]${EscapeRegex(manifest.name)}['"][^{}]*\\},?`,
+        'g'
+    );
+    const prunedBody = body.replace(entryPattern, (block) => {
+        const packageMatch = block.match(/PackageName:\s*['"]([^'"]+)['"]/);
+        if (!packageMatch) return block;
+        return keep.has(packageMatch[1]) ? block : '';
+    });
+    if (prunedBody === body) return content;
+
+    return content.slice(0, location.OpenBracketPos) + prunedBody + content.slice(location.ClosePos);
 }
 
 /**
@@ -446,16 +525,10 @@ function RemoveEntriesForApp(content: string, appName: string): string {
  * file is touched (B12).
  */
 function NormalizeEmptyDynamicArray(content: string, arrayName: 'server' | 'client'): string {
-    const dynMatch = content.match(/dynamicPackages\s*:\s*\{/);
-    if (!dynMatch || dynMatch.index === undefined) return content;
-    const afterDyn = content.slice(dynMatch.index);
-    const arrayRel = afterDyn.match(new RegExp(`${arrayName}:\\s*\\[`));
-    if (!arrayRel || arrayRel.index === undefined) return content;
-    const openBracketPos = dynMatch.index + arrayRel.index + arrayRel[0].length - 1; // the '['
-    const closePos = FindMatchingBracket(content, openBracketPos);
-    if (closePos === -1) return content;
-    if (content.slice(openBracketPos + 1, closePos).trim() === '') {
-        return content.slice(0, openBracketPos) + '[]' + content.slice(closePos + 1);
+    const location = LocateDynamicArray(content, arrayName);
+    if (!location) return content;
+    if (content.slice(location.OpenBracketPos + 1, location.ClosePos).trim() === '') {
+        return content.slice(0, location.OpenBracketPos) + '[]' + content.slice(location.ClosePos + 1);
     }
     return content;
 }

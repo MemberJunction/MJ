@@ -23,7 +23,7 @@ import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.
 import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
@@ -44,7 +44,7 @@ import {
   UpdateAppRecord,
   SetAppStep,
 } from './history-recorder.js';
-import type { InstallStep, UpgradeStep, RemoveStep } from '../types/open-app-types.js';
+import type { InstallStep, UpgradeStep, RemoveStep, InstalledAppInfo } from '../types/open-app-types.js';
 
 /**
  * Ordered checkpoint sequences for the resumable phase of each action. `IsStepDone` tells the
@@ -811,6 +811,18 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 7: Update server config if changed
     if (!IsStepDone(UPGRADE_STEP_ORDER, resumeCheckpoint, 'ConfigUpdated')) {
+      // Prune BEFORE adding. HandleServerConfig is add-only and idempotent — correct for install,
+      // but on upgrade it leaves the config converging on the union of every version ever
+      // installed. A package the new version dropped keeps its dynamicPackages.server entry, and
+      // the server loader then tries to import a package that may no longer be built or present.
+      // Pruning first, then re-adding, makes the config match THIS manifest exactly.
+      const pruneResult = PruneStaleServerConfig(existingApp, manifest, context);
+      if (!pruneResult.Success) {
+        await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', pruneResult.ErrorMessage ?? 'Config prune failed', startTime, previousVersion);
+        await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, pruneResult.ErrorMessage ?? 'Config prune failed');
+      }
+
       const configResult = HandleServerConfig(manifest, context);
       if (!configResult.Success) {
         await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', configResult.ErrorMessage ?? 'Config update failed', startTime, previousVersion);
@@ -1756,6 +1768,66 @@ async function HandlePackageInstallation(
   if (!installResult.Success) {
     return { Success: false, PackageJsonUpdated: true, ErrorMessage: installResult.ErrorMessage };
   }
+  return { Success: true };
+}
+
+/**
+ * Removes the config references a NEW version of an app no longer declares, so the upgrade path
+ * converges on the target manifest instead of on the union of every version ever installed.
+ *
+ * Two independent kinds of staleness:
+ * 1. **Dropped packages** — an entry in `dynamicPackages.server` / `.client` whose package is gone
+ *    from the manifest. The server loader / client bootstrap would still try to import it.
+ * 2. **A renamed schema** — `entityPackageName` and `excludeSchemas` are keyed by schema name, and
+ *    the Add* functions key off the NEW name, so the OLD name's mapping and exclusion survive
+ *    forever. CodeGen then keeps skipping discovery for a schema the app no longer owns.
+ *
+ * The previous manifest is read from the persisted `ManifestJSON` (the documented source of truth).
+ * If it cannot be parsed we prune what we can from the new manifest and warn — never fail the
+ * upgrade over an unreadable historical record.
+ */
+function PruneStaleServerConfig(
+  existingApp: InstalledAppInfo,
+  manifest: MJAppManifest,
+  context: OrchestratorContext
+): InternalResult {
+  const pruneResult = PruneDynamicPackagesNotInManifest(context.RepoRoot, manifest, context.ServerPackagePath);
+  if (!pruneResult.Success) {
+    return { Success: false, ErrorMessage: pruneResult.ErrorMessage };
+  }
+  for (const w of pruneResult.Warnings ?? []) {
+    context.Callbacks?.OnWarn?.('Config', `Skipped a config file while pruning: ${w}`);
+  }
+
+  let previousSchemaName: string | undefined;
+  try {
+    previousSchemaName = (JSON.parse(existingApp.ManifestJSON) as MJAppManifest).schema?.name;
+  } catch {
+    context.Callbacks?.OnWarn?.(
+      'Config',
+      `Could not parse the previously-installed manifest for '${existingApp.Name}', so a schema rename could not be detected. ` +
+      `If the app's schema name changed, remove the old entityPackageName mapping and excludeSchemas entry by hand.`
+    );
+    return { Success: true };
+  }
+
+  const newSchemaName = manifest.schema?.name;
+  if (!previousSchemaName || previousSchemaName === newSchemaName) {
+    return { Success: true };
+  }
+
+  const mappingResult = RemoveEntityPackageMapping(context.RepoRoot, previousSchemaName, context.ServerPackagePath);
+  if (!mappingResult.Success) {
+    return { Success: false, ErrorMessage: mappingResult.ErrorMessage };
+  }
+  const excludeResult = RemoveExcludeSchema(context.RepoRoot, previousSchemaName, context.ServerPackagePath);
+  if (!excludeResult.Success) {
+    return { Success: false, ErrorMessage: excludeResult.ErrorMessage };
+  }
+  context.Callbacks?.OnProgress?.(
+    'Config',
+    `Schema renamed ${previousSchemaName} -> ${newSchemaName ?? '(none)'}; removed the old schema's config references.`
+  );
   return { Success: true };
 }
 

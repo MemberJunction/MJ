@@ -2,7 +2,8 @@ import { Command } from '@oclif/core';
 import { ListInstalledApps, GetLatestVersion } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import { buildContextUser } from '../../utils/open-app-context.js';
+import { buildContextUser, buildGitHubOptions } from '../../utils/open-app-context.js';
+import { CheckAppsForUpdates } from '../../utils/update-check.js';
 import { getValidatedConfig } from '../../config.js';
 
 /**
@@ -32,28 +33,33 @@ export default class AppCheckUpdates extends Command {
         return;
       }
 
-      const githubOptions = { Token: config.openApps?.github?.token ?? process.env.GITHUB_TOKEN };
-      const updates: Array<{ Name: string; Current: string; Latest: string }> = [];
-
-      for (const app of apps) {
-        const latest = await GetLatestVersion(app.RepositoryURL, githubOptions);
-        if (latest && latest !== app.Version) {
-          updates.push({ Name: app.Name, Current: app.Version, Latest: latest });
-        }
-      }
+      // Same options `mj app install` / `upgrade` use, so a repo reachable there is reachable here.
+      // A bare `{ Token }` dropped the per-repo TokenMap, and every private repo whose token lives
+      // there reported "up to date" forever.
+      const githubOptions = buildGitHubOptions(config);
+      const { Updates: updates, Failures: failures } = await CheckAppsForUpdates(apps, (repoUrl, subpath) =>
+        GetLatestVersion(repoUrl, githubOptions, subpath)
+      );
 
       spinner.stop();
 
       if (updates.length === 0) {
         this.log(chalk.green('\nAll apps are up to date.'));
-        return;
+      } else {
+        this.log(chalk.bold('\nUpdates available:\n'));
+        for (const update of updates) {
+          this.log(`  ${update.Name}: ${chalk.yellow(update.Current)} -> ${chalk.green(update.Latest)}`);
+        }
+        this.log(`\nRun ${chalk.cyan('mj app upgrade <name>')} to upgrade.`);
       }
 
-      this.log(chalk.bold('\nUpdates available:\n'));
-      for (const update of updates) {
-        this.log(`  ${update.Name}: ${chalk.yellow(update.Current)} -> ${chalk.green(update.Latest)}`);
+      if (failures.length > 0) {
+        this.log(chalk.yellow(`\nCould not check ${failures.length} app(s):\n`));
+        for (const failure of failures) {
+          this.log(`  ${failure.Name}: ${chalk.red(failure.Message)}`);
+        }
+        this.log(chalk.dim('\nThese apps may or may not have updates — the check did not complete for them.'));
       }
-      this.log(`\nRun ${chalk.cyan('mj app upgrade <name>')} to upgrade.`);
     } catch (error) {
       spinner.fail('Failed to check for updates');
       const message = error instanceof Error ? error.message : String(error);

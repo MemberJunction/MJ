@@ -6,7 +6,7 @@
  * and we will dynamically instantiate that sub-class from that point forward
  ******************************************************************************************************/
 
-import { GetRootClass, IsRootClass } from './ClassUtils';
+import { AreClassesRelated, GetRootClass, IsRootClass } from './ClassUtils';
 import { ClassRequiresSubclass } from './RequiresSubclass';
 import { ClassIsOptionalKeyedSpecialization } from './OptionalKeyedSpecialization';
 
@@ -255,6 +255,18 @@ export class ClassFactory {
                     if (registrations[i].Priority > highestPriority)
                         highestPriority = registrations[i].Priority;
                 }
+
+                // The auto-increment above makes this registration outrank every earlier one for the
+                // same base class + key. That is exactly right for an inheritance chain (a subclass
+                // loading after its parent SHOULD win — that is the documented contract on `priority`),
+                // but it is silent when the earlier registration is an UNRELATED class: two
+                // independently-installed Open Apps registering the same key clobber each other with
+                // no diagnostic anywhere, and the loser is simply never resolved. The `priority > 0`
+                // branch above already warns for explicit priorities; the decorator passes 0, so in
+                // practice nothing ever warned. Warn on precisely the unrelated case so a hierarchy
+                // override — the overwhelmingly common path — stays quiet.
+                this.warnOnUnrelatedRegistrations(registrations, subClass, subClassName, effectiveBaseClassName, key);
+
                 // now set the priority to one higher than the highest priority we found
                 priority = highestPriority + 1;
             }
@@ -276,6 +288,39 @@ export class ClassFactory {
             // diagnostic to be emitted again if it fails a second time.
             this._reportedResolutionFailures.clear();
         }
+    }
+
+    /**
+     * Emits a single warning when an incoming registration collides with one or more EXISTING
+     * registrations for the same base class + key that are **not in its inheritance chain**.
+     *
+     * Relatedness is compared by class name (see {@link AreClassesRelated}) for the same reason
+     * {@link GetAllRegistrations} matches on name: the same class loaded through two module paths
+     * is two distinct constructor objects, and identity comparison would report that duplicate as
+     * a collision.
+     *
+     * Diagnostic only — the registration still proceeds, so this cannot change resolution for any
+     * existing consumer.
+     */
+    private warnOnUnrelatedRegistrations(
+        registrations: ClassRegistration[],
+        subClass: unknown,
+        subClassName: string,
+        effectiveBaseClassName: string,
+        key: string | null
+    ): void {
+        const unrelated = registrations.filter(r => !AreClassesRelated(r.SubClass, subClass));
+        if (unrelated.length === 0) {
+            return;
+        }
+        const names = unrelated.map(r => (r.SubClass as NamedClass)?.name ?? 'Anonymous').join(', ');
+        console.warn(
+            `*** ClassFactory.Register: ${subClassName} is registering for base class ${effectiveBaseClassName} ` +
+            `with key '${key}', which is already registered by unrelated class(es): ${names}. These are not in the ` +
+            `same inheritance chain, so this is a COLLISION rather than a subclass override — ${subClassName} wins ` +
+            `only by virtue of registering last, and ${names} will never be resolved for this key. Give one of them ` +
+            `a distinct key, or set an explicit priority if one really is meant to supersede the other. ***`
+        );
     }
 
     /**
