@@ -60,7 +60,9 @@ export {
     DownloadMigrations,
     GetLatestVersion,
     ParseGitHubUrl,
-    GitHubAccessError
+    GitHubAccessError,
+    CompareSemver,
+    IsPrereleaseVersion
 } from './github/github-client.js';
 export type {
     GitHubClientOptions,

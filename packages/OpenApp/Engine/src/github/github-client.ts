@@ -279,6 +279,10 @@ export async function FetchManifestFromGitHub(
 /**
  * Lists available releases for a GitHub repository.
  *
+ * Paginated: a repo with more than one page of releases would otherwise be silently
+ * truncated at 100, so an app whose stable release has fallen past that boundary would
+ * resolve as having no releases at all.
+ *
  * @param repoUrl - GitHub repository URL
  * @param options - GitHub client options
  * @returns List of releases sorted by creation date (newest first)
@@ -293,7 +297,8 @@ export async function ListGitHubReleases(
     }
 
     try {
-        const { data } = await CreateOctokit(repoUrl, options).repos.listReleases({ owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
+        const octokit = CreateOctokit(repoUrl, options);
+        const data = await octokit.paginate(octokit.repos.listReleases, { owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
         return data.map(r => ({
             TagName: r.tag_name,
             PreRelease: r.prerelease,
@@ -391,7 +396,10 @@ export async function GetLatestVersion(
 
     const tags = await ListGitHubTags(repoUrl, options, subpath);
     if (tags.length > 0) {
-        return tags[0].replace(/^v/, '');
+        // Mirror the releases path's stable preference: never offer a prerelease as the latest
+        // version an installed app should upgrade to, unless nothing stable is tagged at all.
+        const stableTag = tags.find(t => !IsPrereleaseVersion(t));
+        return (stableTag ?? tags[0]).replace(/^v/, '');
     }
 
     return null;
@@ -399,7 +407,11 @@ export async function GetLatestVersion(
 
 /**
  * Lists semver tags for a GitHub repository, sorted by version descending.
- * Only returns tags matching the `v{major}.{minor}.{patch}` pattern.
+ * Only returns tags matching the `v{major}.{minor}.{patch}` pattern (optionally with a
+ * prerelease suffix), or `<subpath>@{major}.{minor}.{patch}` in a multi-app repo.
+ *
+ * Paginated: GitHub returns tags in its own order (not semver order), so truncating at the
+ * first 100 could hide the newest version entirely in a repo that tags many apps.
  *
  * @param repoUrl - GitHub repository URL
  * @param options - GitHub client options
@@ -424,11 +436,12 @@ export async function ListGitHubTags(
         : new RegExp(`^(v?${semver})$`);
 
     try {
-        const { data } = await CreateOctokit(repoUrl, options).repos.listTags({ owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
+        const octokit = CreateOctokit(repoUrl, options);
+        const data = await octokit.paginate(octokit.repos.listTags, { owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
         return data
             .map(t => t.name.match(pattern)?.[1])
             .filter((v): v is string => v != null)
-            .sort((a, b) => compareSemver(b, a));
+            .sort((a, b) => CompareSemver(b, a));
     }
     catch (error: unknown) {
         // Surface a 403/429 (rate limit / access denied) instead of swallowing it into an empty
@@ -474,16 +487,76 @@ export async function ValidateGitHubTag(
 }
 
 /**
- * Compares two semver version strings (with optional 'v' prefix).
- * Returns negative if a < b, positive if a > b, zero if equal.
+ * Compares two semver version strings (with optional 'v' prefix) by semver precedence.
+ * Returns negative if a < b, positive if a > b, zero if they have equal precedence.
+ *
+ * Prerelease-aware: `1.2.0-beta.1` sorts BELOW `1.2.0`. The prior implementation ran
+ * `Number()` across the dot-split string, so any prerelease produced NaN
+ * (`'1.2.0-beta.1'` → `[1, 2, NaN, 1]`); `NaN !== 0` is true, so the comparator returned
+ * NaN and `Array.prototype.sort` ordering became implementation-defined — letting
+ * {@link GetLatestVersion} report an arbitrary tag as the newest version.
+ *
+ * Build metadata (`+sha`) is ignored, per the semver spec.
  */
-function compareSemver(a: string, b: string): number {
-    const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
-    const pa = parse(a);
-    const pb = parse(b);
+export function CompareSemver(a: string, b: string): number {
+    const va = ParseSemver(a);
+    const vb = ParseSemver(b);
     for (let i = 0; i < 3; i++) {
-        const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+        const diff = va.Release[i] - vb.Release[i];
         if (diff !== 0) return diff;
     }
-    return 0;
+    return ComparePrerelease(va.Prerelease, vb.Prerelease);
+}
+
+/** True when a version string carries a prerelease suffix (e.g. `1.2.0-beta.1`). */
+export function IsPrereleaseVersion(version: string): boolean {
+    return ParseSemver(version).Prerelease.length > 0;
+}
+
+/** Splits a version into its numeric release triple and its dot-separated prerelease identifiers. */
+function ParseSemver(version: string): { Release: [number, number, number]; Prerelease: string[] } {
+    // Strip a leading 'v' and any build metadata, neither of which affects precedence.
+    const core = version.replace(/^v/, '').split('+')[0];
+    const dash = core.indexOf('-');
+    const releasePart = dash === -1 ? core : core.slice(0, dash);
+    const prereleasePart = dash === -1 ? '' : core.slice(dash + 1);
+
+    // A non-numeric release segment coerces to 0 rather than NaN so the comparator stays total.
+    const nums = releasePart.split('.').map((segment) => {
+        const parsed = Number(segment);
+        return Number.isFinite(parsed) ? parsed : 0;
+    });
+
+    return {
+        Release: [nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0],
+        Prerelease: prereleasePart.length > 0 ? prereleasePart.split('.') : []
+    };
+}
+
+/**
+ * Semver prerelease precedence: a version WITH a prerelease ranks below the same version
+ * without one, and when both have prereleases the identifiers are compared left to right,
+ * with a shorter identifier list ranking lower when all shared identifiers are equal.
+ */
+function ComparePrerelease(a: string[], b: string[]): number {
+    if (a.length === 0 && b.length === 0) return 0;
+    if (a.length === 0) return 1;   // 1.2.0 > 1.2.0-beta.1
+    if (b.length === 0) return -1;  // 1.2.0-beta.1 < 1.2.0
+
+    const shared = Math.min(a.length, b.length);
+    for (let i = 0; i < shared; i++) {
+        const diff = ComparePrereleaseIdentifier(a[i], b[i]);
+        if (diff !== 0) return diff;
+    }
+    return a.length - b.length;     // 1.2.0-beta < 1.2.0-beta.1
+}
+
+/** Numeric identifiers compare numerically and rank below alphanumeric ones, which compare ASCII-lexically. */
+function ComparePrereleaseIdentifier(a: string, b: string): number {
+    const aNumeric = /^\d+$/.test(a);
+    const bNumeric = /^\d+$/.test(b);
+    if (aNumeric && bNumeric) return Number(a) - Number(b);
+    if (aNumeric) return -1;
+    if (bNumeric) return 1;
+    return a < b ? -1 : a > b ? 1 : 0;
 }

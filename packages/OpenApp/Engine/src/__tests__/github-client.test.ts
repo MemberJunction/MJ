@@ -17,17 +17,44 @@ const mocks = vi.hoisted(() => ({
     getBlob: vi.fn(),
 }));
 
+/**
+ * Stand-in for Octokit's paginate plugin: calls the endpoint page by page and concatenates the
+ * results, stopping on the first short page (Octokit follows Link headers; page length is the
+ * faithful equivalent for a mocked endpoint). A test that stubs a single sub-`per_page` page
+ * therefore behaves exactly as it did before pagination was introduced.
+ */
+type PagedEndpoint = (params: Record<string, unknown>) => Promise<{ data: unknown[] }>;
+async function fakePaginate(endpoint: PagedEndpoint, params: Record<string, unknown>): Promise<unknown[]> {
+    const perPage = typeof params.per_page === 'number' ? params.per_page : 100;
+    const all: unknown[] = [];
+    for (let page = 1; ; page++) {
+        const { data } = await endpoint({ ...params, page });
+        all.push(...data);
+        if (data.length < perPage) return all;
+    }
+}
+
 vi.mock('@octokit/rest', () => ({
     Octokit: class {
         repos = { getContent: mocks.getContent, listTags: mocks.listTags, listReleases: mocks.listReleases };
         git = { getRef: mocks.getRef, getBlob: mocks.getBlob };
+        paginate = fakePaginate;
         constructor(opts: { auth?: string; userAgent?: string }) {
             mocks.ctor(opts);
         }
     },
 }));
 
-import { ValidateGitHubTag, ListGitHubTags, GetLatestVersion, ParseGitHubUrl, FetchManifestFromGitHub } from '../github/github-client.js';
+import {
+    ValidateGitHubTag,
+    ListGitHubTags,
+    ListGitHubReleases,
+    GetLatestVersion,
+    ParseGitHubUrl,
+    FetchManifestFromGitHub,
+    CompareSemver,
+    IsPrereleaseVersion,
+} from '../github/github-client.js';
 import type { GitHubClientOptions } from '../github/github-client.js';
 
 /** The auth token the most-recently-constructed Octokit received. */
@@ -282,6 +309,124 @@ describe('TokenMap resolution', () => {
 
         await FetchManifestFromGitHub('https://github.com/Acme/UnmatchedRepo', undefined, options);
         expect(lastAuth()).toBeUndefined();
+    });
+});
+
+describe('CompareSemver — prerelease precedence', () => {
+    it('orders the release triple numerically (10 > 9, not lexically)', () => {
+        expect(CompareSemver('1.10.0', '1.9.0')).toBeGreaterThan(0);
+        expect(CompareSemver('2.0.0', '10.0.0')).toBeLessThan(0);
+        expect(CompareSemver('1.2.3', '1.2.3')).toBe(0);
+    });
+
+    it('never returns NaN for a prerelease version (the sort-poisoning defect)', () => {
+        // Old impl: '1.2.0-beta.1'.split('.').map(Number) => [1, 2, NaN, 1]; NaN !== 0 is true,
+        // so the comparator returned NaN and Array.sort ordering became implementation-defined.
+        for (const pair of [['1.2.0-beta.1', '1.2.0'], ['1.2.0', '1.2.0-beta.1'], ['1.2.0-rc.1', '1.2.0-beta.9']]) {
+            expect(Number.isNaN(CompareSemver(pair[0], pair[1]))).toBe(false);
+        }
+    });
+
+    it('ranks a prerelease BELOW the same release without one', () => {
+        expect(CompareSemver('1.2.0-beta.1', '1.2.0')).toBeLessThan(0);
+        expect(CompareSemver('1.2.0', '1.2.0-beta.1')).toBeGreaterThan(0);
+    });
+
+    it('compares prerelease identifiers left to right, numerically when numeric', () => {
+        expect(CompareSemver('1.0.0-beta.2', '1.0.0-beta.10')).toBeLessThan(0);   // 2 < 10 numerically
+        expect(CompareSemver('1.0.0-alpha.1', '1.0.0-beta.1')).toBeLessThan(0);   // alpha < beta lexically
+        expect(CompareSemver('1.0.0-1', '1.0.0-alpha')).toBeLessThan(0);          // numeric < alphanumeric
+        expect(CompareSemver('1.0.0-beta', '1.0.0-beta.1')).toBeLessThan(0);      // fewer identifiers rank lower
+        expect(CompareSemver('1.0.0-beta.1', '1.0.0-beta.1')).toBe(0);
+    });
+
+    it('ignores a leading v and build metadata', () => {
+        expect(CompareSemver('v1.2.0', '1.2.0')).toBe(0);
+        expect(CompareSemver('1.2.0+build.7', '1.2.0+build.1')).toBe(0);
+    });
+
+    it('is a total ordering — sorting a mixed list is stable and correct', () => {
+        const sorted = ['1.2.0', '1.2.0-beta.1', '1.10.0', '1.2.0-rc.1', '1.9.0', '2.0.0-alpha.1']
+            .sort((a, b) => CompareSemver(b, a));
+        expect(sorted).toEqual(['2.0.0-alpha.1', '1.10.0', '1.9.0', '1.2.0', '1.2.0-rc.1', '1.2.0-beta.1']);
+    });
+
+    it('IsPrereleaseVersion detects the suffix, not build metadata', () => {
+        expect(IsPrereleaseVersion('1.2.0-beta.1')).toBe(true);
+        expect(IsPrereleaseVersion('v1.2.0')).toBe(false);
+        expect(IsPrereleaseVersion('1.2.0+sha.abc')).toBe(false);
+    });
+});
+
+describe('tag listing — prerelease sorting and pagination', () => {
+    it('sorts prerelease tags below their stable release', async () => {
+        mocks.listTags.mockResolvedValueOnce({
+            data: [{ name: 'v1.2.0-beta.1' }, { name: 'v1.2.0' }, { name: 'v1.2.0-rc.1' }, { name: 'v1.1.0' }],
+        });
+
+        const tags = await ListGitHubTags('https://github.com/Acme/App', {});
+        expect(tags).toEqual(['v1.2.0', 'v1.2.0-rc.1', 'v1.2.0-beta.1', 'v1.1.0']);
+    });
+
+    it('reads every page of tags — the newest version past the first 100 is not lost', async () => {
+        // GitHub returns tags in its own order, so a full first page can hide the newest version.
+        const firstPage = Array.from({ length: 100 }, (_, i) => ({ name: `v1.0.${i}` }));
+        mocks.listTags
+            .mockResolvedValueOnce({ data: firstPage })
+            .mockResolvedValueOnce({ data: [{ name: 'v2.0.0' }] });
+
+        const tags = await ListGitHubTags('https://github.com/Acme/App', {});
+        expect(mocks.listTags).toHaveBeenCalledTimes(2);
+        expect(tags[0]).toBe('v2.0.0');
+        expect(tags).toHaveLength(101);
+    });
+
+    it('reads every page of releases — a stable release past the first 100 is not lost', async () => {
+        const prereleases = Array.from({ length: 100 }, (_, i) => ({
+            tag_name: `v1.0.${i}-beta.1`, prerelease: true, draft: false, created_at: '2026-04-20T00:00:00Z',
+        }));
+        mocks.listReleases
+            .mockResolvedValueOnce({ data: prereleases })
+            .mockResolvedValueOnce({ data: [{ tag_name: 'v1.0.0', prerelease: false, draft: false, created_at: '2026-01-01T00:00:00Z' }] });
+
+        const releases = await ListGitHubReleases('https://github.com/Acme/App', {});
+        expect(mocks.listReleases).toHaveBeenCalledTimes(2);
+        expect(releases).toHaveLength(101);
+        expect(releases.some(r => !r.PreRelease)).toBe(true);
+    });
+});
+
+describe('GetLatestVersion — stable preference on the tag path', () => {
+    it('does not offer a prerelease tag as the latest version when a stable tag exists', async () => {
+        mocks.listReleases.mockResolvedValueOnce({ data: [] });
+        mocks.listTags.mockResolvedValueOnce({
+            data: [{ name: 'v1.3.0-beta.1' }, { name: 'v1.2.0' }, { name: 'v1.1.0' }],
+        });
+
+        // Matches the releases path, which already filters `!PreRelease && !Draft`.
+        expect(await GetLatestVersion('https://github.com/Acme/App', {})).toBe('1.2.0');
+    });
+
+    it('falls back to the newest prerelease when nothing stable is tagged', async () => {
+        mocks.listReleases.mockResolvedValueOnce({ data: [] });
+        mocks.listTags.mockResolvedValueOnce({
+            data: [{ name: 'v1.0.0-alpha.1' }, { name: 'v1.0.0-alpha.2' }],
+        });
+
+        expect(await GetLatestVersion('https://github.com/Acme/App', {})).toBe('1.0.0-alpha.2');
+    });
+
+    it('applies the same stable preference to scoped multi-app tags', async () => {
+        mocks.listTags.mockResolvedValueOnce({
+            data: [
+                { name: 'CRM-HubSpot@2.0.0-rc.1' },
+                { name: 'CRM-HubSpot@1.4.1' },
+                { name: 'CRM-Salesforce@9.9.9' },
+            ],
+        });
+
+        const v = await GetLatestVersion('https://github.com/MemberJunction/Integrations/CRM/HubSpot', {});
+        expect(v).toBe('1.4.1');
     });
 });
 
