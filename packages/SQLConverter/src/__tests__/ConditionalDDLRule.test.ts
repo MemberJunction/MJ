@@ -350,20 +350,49 @@ BEGIN
     EXEC('CREATE SCHEMA [__mj_UDT]')
 END`;
       const result = convert(sql);
-      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS "__mj_UDT"');
+      // Emitted UNQUOTED so PostgreSQL folds it to lowercase. T-SQL brackets carry no case
+      // meaning, so `[__mj_UDT]` is the same schema as an unbracketed `__mj_UDT` elsewhere in
+      // the migration set — and those unbracketed references fold. Quoting the CREATE would
+      // preserve the case and produce a SECOND, distinct schema that nothing else resolves to.
+      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS __mj_udt;');
+      expect(result).not.toContain('"__mj_UDT"');
       // Should NOT fall through to the DO $$ block path
       expect(result).not.toContain('DO $$');
       expect(result).not.toContain('sys.schemas');
       expect(result).not.toContain('EXEC');
     });
 
-    it('should preserve schema name with mixed case', () => {
+    it('should fold a mixed-case schema name to lowercase to match its unquoted references', () => {
       const sql = `IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'MyCustomSchema')
 BEGIN
     EXEC('CREATE SCHEMA [MyCustomSchema]')
 END`;
       const result = convert(sql);
-      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS "MyCustomSchema"');
+      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS mycustomschema;');
+    });
+
+    it('should quote a schema name that would not survive folding', () => {
+      // A name containing characters that cannot appear unquoted must keep its quotes —
+      // there is no lowercase form for it to fold to.
+      const sql = `IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'my-custom schema')
+BEGIN
+    EXEC('CREATE SCHEMA [my-custom schema]')
+END`;
+      const result = convert(sql);
+      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS "my-custom schema";');
+    });
+
+    it('should not create a phantom schema from CREATE SCHEMA mentioned in a comment', () => {
+      // The rule used to scan the raw text, so prose in a comment was parsed as SQL: the
+      // commented name won the match and the real statement was dropped entirely.
+      const sql = `-- This block mirrors CREATE SCHEMA demo_ghost from the baseline script.
+IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'demo_app')
+BEGIN
+    EXEC('CREATE SCHEMA [demo_app]')
+END`;
+      const result = convert(sql);
+      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS demo_app;');
+      expect(result).not.toContain('demo_ghost;');
     });
 
     it('should not match if there is no CREATE SCHEMA in the body', () => {

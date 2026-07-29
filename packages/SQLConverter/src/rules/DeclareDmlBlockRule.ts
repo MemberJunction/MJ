@@ -16,7 +16,10 @@
  *   - @var references → local variable references
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeNPrefix, convertCommonFunctions, quotePascalCaseIdentifiers } from './ExpressionHelpers.js';
+import {
+  convertIdentifiers, removeNPrefix, convertCommonFunctions, quotePascalCaseIdentifiers,
+  castBooleanInsertValues, convertBooleanLiteralComparisons,
+} from './ExpressionHelpers.js';
 import { resolveType } from './TypeResolver.js';
 
 export class DeclareDmlBlockRule implements IConversionRule {
@@ -28,7 +31,7 @@ export class DeclareDmlBlockRule implements IConversionRule {
   BypassSqlglot = true;
   BypassJustification = 'T-SQL DECLARE @var blocks with DML or dynamic EXEC are control-flow constructs that need wrapping in PG DO $ DECLARE ... BEGIN ... END $ blocks with @var → v_var renaming, IF/BEGIN/END → IF/THEN/END IF, and EXEC(\'...\' + @var) → EXECUTE format(\'...\', v_var). sqlglot does not perform this structural transformation.';
 
-  PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
+  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = sql;
 
     // Early pattern simplification: T-SQL "drop default constraint + add default" block
@@ -64,6 +67,9 @@ export class DeclareDmlBlockRule implements IConversionRule {
     // Convert SELECT @var = expr FROM → SELECT expr INTO var FROM
     result = this.convertSelectInto(result);
 
+    // Convert SET @var = expr → v_var := expr (PL/pgSQL assignment)
+    result = this.convertSetAssignment(result);
+
     // Convert @variable references to local variable names (without @)
     result = this.convertVariableRefs(result);
 
@@ -83,6 +89,14 @@ export class DeclareDmlBlockRule implements IConversionRule {
 
     // Quote PascalCase identifiers (ID, Name, etc.) outside string literals
     result = quotePascalCaseIdentifiers(result);
+
+    // Cast SS BIT literals (0/1) → PG FALSE/TRUE at boolean-column positions, exactly
+    // as InsertRule does for standalone statements. A DECLARE/DML block reaches PG as
+    // one batch, so its INSERTs never pass through InsertRule; without this they keep
+    // integer literals and PG rejects them ("column is of type boolean but expression
+    // is of type integer"). castBooleanInsertValues rewrites every INSERT in the block.
+    result = castBooleanInsertValues(result, context.TableColumns);
+    result = convertBooleanLiteralComparisons(result, context.TableColumns);
 
     // Convert IF condition BEGIN ... END → IF condition THEN ... END IF;
     result = this.convertIfBlocks(result);
@@ -108,21 +122,80 @@ export class DeclareDmlBlockRule implements IConversionRule {
     return result + '\n';
   }
 
-  /** Convert DECLARE @var TYPE[, @var2 TYPE2] to PG DECLARE section lines */
+  /**
+   * Convert `DECLARE @var TYPE[ = <expr>][, @var2 TYPE2[ = <expr>]]` to PG DECLARE lines.
+   *
+   * T-SQL allows an inline initializer (`DECLARE @x UNIQUEIDENTIFIER = (SELECT ...)`),
+   * and PL/pgSQL supports the same thing as a default expression (`v_x UUID := (SELECT ...)`),
+   * evaluated on block entry. The initializer is split off at the first top-level `=` so
+   * the type still parses; without that split the whole item fell through to the
+   * "Could not parse" comment below — which dropped the declaration while
+   * convertVariableRefs went on rewriting `@x` to `v_x` in the body, producing a block
+   * that references an undeclared variable and fails at apply time with
+   * `column "v_x" does not exist`.
+   */
   private convertDeclare(sql: string): string {
     return sql.replace(
       /^(\s*)DECLARE\s+(.+?);\s*$/gim,
       (_match, indent: string, varList: string) => {
         const vars = this.splitTopLevel(varList, ',');
-        const converted = vars.map(v => {
-          const m = v.trim().match(/^@(\w+)\s+([\w\s(),]+)$/i);
-          if (!m) return `${indent}  -- Could not parse: ${v.trim()}`;
-          const pgType = resolveType(m[2].trim());
-          return `${indent}v_${m[1]} ${pgType};`;
-        });
+        const converted = vars.map(v => this.convertDeclareItem(v.trim(), indent));
         return `${indent}DECLARE\n${converted.join('\n')}`;
       }
     );
+  }
+
+  /** Convert one `@var TYPE[ = expr]` DECLARE item to its PL/pgSQL declaration line. */
+  private convertDeclareItem(item: string, indent: string): string {
+    const eq = this.indexOfTopLevelEquals(item);
+    const decl = eq >= 0 ? item.slice(0, eq).trim() : item;
+    const init = eq >= 0 ? item.slice(eq + 1).trim() : null;
+
+    const m = decl.match(/^@(\w+)\s+([\w\s(),]+)$/i);
+    if (!m) return `${indent}  -- Could not parse: ${item}`;
+
+    const pgType = resolveType(m[2].trim());
+    return init
+      ? `${indent}v_${m[1]} ${pgType} := ${init};`
+      : `${indent}v_${m[1]} ${pgType};`;
+  }
+
+  /**
+   * Index of the first `=` at paren depth 0 and outside a string literal, or -1.
+   * Used to split a DECLARE item's type from its initializer. Comparison operators
+   * (`>=`, `<=`, `<>`, `!=`, `==`) are skipped so an expression that leaks into the
+   * scan can't be mistaken for the assignment.
+   */
+  private indexOfTopLevelEquals(s: string): number {
+    let depth = 0;
+    let inStr = false;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (inStr) {
+        if (c === "'") { if (s[i + 1] === "'") i++; else inStr = false; }
+      } else if (c === "'") inStr = true;
+      else if (c === '(') depth++;
+      else if (c === ')') depth--;
+      else if (c === '=' && depth === 0) {
+        const prev = s[i - 1];
+        const next = s[i + 1];
+        if (prev === '>' || prev === '<' || prev === '!' || prev === '=' || next === '=') continue;
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Convert `SET @var = expr;` to `v_var := expr;`.
+   *
+   * T-SQL's SET-assignment has no PL/pgSQL equivalent — there `SET` sets a run-time
+   * configuration parameter, so `SET v_var = ...` is a syntax error. Matches only
+   * `SET` immediately followed by `@`, which leaves `UPDATE ... SET col = ...` and
+   * `SET NOCOUNT ON` untouched.
+   */
+  private convertSetAssignment(sql: string): string {
+    return sql.replace(/^(\s*)SET\s+@(\w+)\s*=\s*/gim, '$1v_$2 := ');
   }
 
   /** Convert SELECT @var = expr FROM table → SELECT expr INTO v_var FROM table */
@@ -266,7 +339,11 @@ export class DeclareDmlBlockRule implements IConversionRule {
         continue;
       }
       if (inDeclare && !pastDeclare) {
-        if (trimmed.match(/^\s*v_\w+\s+/i) || trimmed.startsWith('--')) {
+        // A declaration is `v_name TYPE[ := default];` — the token after the name is a
+        // type. `v_name := expr;` is a body assignment (from T-SQL `SET @name = expr`)
+        // and must NOT be pulled into the DECLARE section, where it has no type and
+        // would be a syntax error.
+        if (trimmed.match(/^v_\w+\s+(?!:=)/i) || trimmed.startsWith('--')) {
           declareLines.push('  ' + trimmed);
           continue;
         }

@@ -179,7 +179,13 @@ export class ViewRule implements IConversionRule {
     // so it matches the AS "Alias" definition from quoteAsAliases.
     sql = sql.replace(/\b(\w+)\.(?!")([A-Z]\w*)\b/g, (match, alias: string, col: string) => {
       if (SQL_KEYWORDS.has(col.toUpperCase()) || SQL_KEYWORDS.has(alias.toUpperCase())) return match;
-      const needsQuote = /^[A-Z]/.test(alias) && !SQL_KEYWORDS.has(alias.toUpperCase());
+      // ANY uppercase means the alias will not survive folding, so the reference has to be quoted
+      // to match the quoted `AS "Alias"` definition. quoteAsAliases matches case-insensitively, so
+      // it quotes aliases that merely CONTAIN uppercase (`mjCommonPerson_PayerID`) as well as ones
+      // that start with it. Testing `^[A-Z]` here left exactly those out of step: definition
+      // quoted and case-preserved, references unquoted and folded, so the alias resolves to
+      // nothing and the whole view fails to create.
+      const needsQuote = /[A-Z]/.test(alias) && !SQL_KEYWORDS.has(alias.toUpperCase());
       const quotedAlias = needsQuote ? `"${alias}"` : alias;
       return `${quotedAlias}."${col}"`;
     });
@@ -190,8 +196,10 @@ export class ViewRule implements IConversionRule {
     });
     // UnquotedPascalAlias."QuotedColumn" (unquoted alias, already-quoted column)
     // Handles cases where convertIdentifiers already quoted [Col] → "Col"
-    sql = sql.replace(/\b([A-Z]\w*)\."(\w+)"/g, (match, alias: string, col: string) => {
-      if (SQL_KEYWORDS.has(alias.toUpperCase())) return match;
+    // Same folding rule as above: an alias containing uppercase anywhere needs quoting, not just
+    // one starting with it.
+    sql = sql.replace(/\b([A-Za-z]\w*)\."(\w+)"/g, (match, alias: string, col: string) => {
+      if (SQL_KEYWORDS.has(alias.toUpperCase()) || !/[A-Z]/.test(alias)) return match;
       return `"${alias}"."${col}"`;
     });
     return sql;

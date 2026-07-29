@@ -185,6 +185,45 @@ SELECT * FROM flyway_schema_history`;
     });
   });
 
+  describe('mixed-case table aliases', () => {
+    // A view's related-entity aliases are written bare in the T-SQL source and referenced bare.
+    // Quoting only ONE side leaves the definition case-preserved while every reference folds to
+    // lowercase, so the alias cannot resolve and the whole view fails to create.
+    it('should quote references to an alias whose definition it quoted', () => {
+      const sql = `CREATE VIEW [__mj].[vwPayments] AS
+SELECT p.*, mjCommonPerson_PayerID.[DisplayName] AS [Payer]
+FROM [__mj].[Payment] AS p
+INNER JOIN [__mj].[Person] AS mjCommonPerson_PayerID
+  ON [p].[PayerID] = mjCommonPerson_PayerID.[ID]`;
+      const result = convert(sql);
+      expect(result).toContain('"mjCommonPerson_PayerID"."DisplayName"');
+      expect(result).toContain('"mjCommonPerson_PayerID"."ID"');
+      // No half-quoted survivors: never a bare alias followed by a quoted column.
+      expect(result).not.toMatch(/(?<!")\bmjCommonPerson_PayerID\./);
+    });
+
+    it('should leave an all-lowercase alias unquoted', () => {
+      const sql = `CREATE VIEW [__mj].[vwFoo] AS
+SELECT p.[ID] FROM [__mj].[Payment] AS p`;
+      const result = convert(sql);
+      expect(result).toContain('p."ID"');
+      expect(result).not.toContain('"p"');
+    });
+  });
+
+  describe('placeholder-composed schema names', () => {
+    // An open app references a sibling app's schema through a migration placeholder. The
+    // placeholder is substituted as plain text at apply time, so quoting it produces a
+    // case-preserved schema that does not exist — every real schema is created folded.
+    it('should leave a schema built from a placeholder unquoted', () => {
+      const sql = `CREATE VIEW [__mj].[vwFoo] AS
+SELECT x.[ID] FROM [\${mjSchema}_BizAppsCommon].[Person] AS x`;
+      const result = convert(sql);
+      expect(result).toContain('${mjSchema}_BizAppsCommon."Person"');
+      expect(result).not.toContain('"${mjSchema}_BizAppsCommon"');
+    });
+  });
+
   describe('output formatting', () => {
     it('should ensure DO block output ends with $do$; and newline', () => {
       const sql = `CREATE VIEW [__mj].[vwSimple] AS
