@@ -18,6 +18,7 @@ export class MJSearchScopeEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'scopeConfiguration', sectionName: 'Scope Configuration', isExpanded: true },
             { sectionKey: 'entityConfiguration', sectionName: 'Entity Configuration', isExpanded: true },
             { sectionKey: 'searchLogic', sectionName: 'Search Logic', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

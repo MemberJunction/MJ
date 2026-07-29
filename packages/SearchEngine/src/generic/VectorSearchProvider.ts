@@ -17,6 +17,7 @@ import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
 import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
+import { CheckScopeJsonFilter, ScopeFilterCheck } from './ScopeFilterGuard';
 
 /**
  * Provides vector similarity search across all configured vector indexes.
@@ -243,7 +244,18 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 const perIndexRow = scopedRows?.find(
                     r => r.VectorIndexID && UUIDsEqual(r.VectorIndexID, vectorIndex.ID)
                 );
-                const mergedFilter = this.mergeMetadataFilters(filter, perIndexRow?.MetadataFilter);
+                const merge = this.mergeMetadataFilters(filter, perIndexRow?.MetadataFilter);
+                if (merge.Status === 'unusable') {
+                    // FAIL CLOSED. A filter was authored for this index but cannot be applied,
+                    // so querying would silently drop the scope's restriction — including the
+                    // tenant clause — and read the entire index. Skip this index instead.
+                    LogError(
+                        `VectorSearchProvider: skipping index "${vectorIndex.Name}" because its scope MetadataFilter cannot be applied — ${merge.Reason}. ` +
+                        `The index is NOT queried, because running it unfiltered would ignore the scope's tenant/permission push-down.`
+                    );
+                    return Promise.resolve([] as SearchResultItem[]);
+                }
+                const mergedFilter = merge.Status === 'usable' ? merge.Value : undefined;
                 const providerConfig = perIndexRow?.ExternalIndexConfig as Record<string, unknown> | undefined;
                 return this.queryOneIndex(vectorIndex, queryVector!, query, topK, mergedFilter, providerConfig, contextUser)
                     .catch(error => {
@@ -500,31 +512,22 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * so scope and user filters compose conjunctively. Scope filter may be either an
      * object (already parsed) or a JSON string — both are accepted.
      */
-    private mergeMetadataFilters(
+    protected mergeMetadataFilters(
         baseFilter: object | undefined,
         scopeFilter: unknown
-    ): object | undefined {
-        if (scopeFilter == null) return baseFilter;
-
-        let parsed: object | undefined;
-        if (typeof scopeFilter === 'string') {
-            const trimmed = scopeFilter.trim();
-            if (!trimmed) return baseFilter;
-            try {
-                parsed = JSON.parse(trimmed);
-            } catch {
-                LogError(`VectorSearchProvider: Scope MetadataFilter is not valid JSON — skipping: ${trimmed.substring(0, 120)}`);
-                return baseFilter;
-            }
-        } else if (typeof scopeFilter === 'object') {
-            parsed = scopeFilter as object;
-        } else {
-            return baseFilter;
+    ): ScopeFilterCheck<object> {
+        const check = CheckScopeJsonFilter(scopeFilter);
+        // A filter was authored but is unusable — propagate so the caller fails the index
+        // closed. Previously this returned `baseFilter` (usually `undefined`), which meant
+        // an unparseable filter silently became NO filter and the query read the whole index.
+        if (check.Status === 'unusable') return check;
+        if (check.Status === 'absent') {
+            return baseFilter ? { Status: 'usable', Value: baseFilter } : { Status: 'absent' };
         }
-
-        if (!parsed) return baseFilter;
-        if (!baseFilter) return parsed;
-        return { $and: [baseFilter, parsed] };
+        return {
+            Status: 'usable',
+            Value: baseFilter ? { $and: [baseFilter, check.Value] } : check.Value,
+        };
     }
 
     /** Build metadata filter from SearchFilters for vector DB queries */
