@@ -176,37 +176,75 @@ export function requireRows<T>(result: RunViewResult<T>, what: string): T[] {
 }
 
 /**
+ * EVERY step type whose TargetLogID is an AIPromptRun. base-agent writes three:
+ *
+ * - `Prompt` — the ordinary model call (base-agent.ts:8833, via onPromptRunCreated).
+ * - `Compaction` — cross-turn conversation compaction (base-agent.ts:13689,
+ *   `targetLogId: outcome.PromptRunId`).
+ * - `Tool` — a conversation tool call that made its own model call (base-agent.ts:5965). Its
+ *   comment there is explicit that this is done "without a duplicate Prompt step for the same
+ *   call", so a Prompt-only rule cannot reach that prompt run by any route.
+ *
+ * Deletion MUST use the full set: teardown removes the steps, and a prompt run whose only linkage
+ * row is gone is orphaned permanently.
+ */
+export const PROMPT_RUN_BEARING_STEP_TYPES: readonly string[] = ['Prompt', 'Compaction', 'Tool'];
+
+/**
+ * The subset base-agent counts toward the run's token rollup — `Prompt` and `Compaction` only
+ * (base-agent.ts:13255). `Tool` steps' prompt runs are deliberately absent: including them would
+ * add tokens the rollup never counted, so any check reconciling Σ(prompt run tokens) against
+ * `AIAgentRun.TotalTokensUsed` must use THIS set, not the full one.
+ */
+export const ROLLUP_BEARING_STEP_TYPES: readonly string[] = ['Prompt', 'Compaction'];
+
+/**
  * The agent-run → prompt-run linkage rule, in one place.
  *
  * `MJ: AI Prompt Runs` has NO AgentRunID column (its only agent-facing field is AgentID). A prompt
- * run is reachable from its agent run solely through the step that invoked it: an
- * `MJ: AI Agent Run Steps` row with `StepType='Prompt'` whose TargetLogID is the AIPromptRun's ID.
- * Filtering prompt runs on AgentRunID is a SQL error, not an empty result set.
+ * run is reachable from its agent run only through the step that invoked it — an
+ * `MJ: AI Agent Run Steps` row whose TargetLogID is the AIPromptRun's ID. Filtering prompt runs on
+ * AgentRunID is a SQL error, not an empty result set.
+ *
+ * `stepTypes` decides WHICH linkage rows count; it is explicit because the correct answer differs
+ * by purpose (see the two constants above). Step types outside the set are skipped because their
+ * TargetLogID points at something else entirely — `Sub-Agent` at a child agent run, `Actions` at
+ * an Action Execution Log — so treating those ids as prompt-run ids reads or deletes wrong rows.
  */
-export function promptRunIdsFromSteps(steps: Array<{ StepType: string | null; TargetLogID: string | null }>): string[] {
-    return steps.filter(s => s.StepType === 'Prompt' && s.TargetLogID).map(s => s.TargetLogID!);
+export function promptRunIdsFromSteps(
+    steps: Array<{ StepType: string | null; TargetLogID: string | null }>,
+    stepTypes: readonly string[] = PROMPT_RUN_BEARING_STEP_TYPES
+): string[] {
+    return steps.filter(s => s.StepType != null && stepTypes.includes(s.StepType) && s.TargetLogID).map(s => s.TargetLogID!);
 }
 
 /**
- * Resolve every AIPromptRun ID produced by the given agent runs, via their Prompt steps.
+ * Resolve every AIPromptRun ID produced by the given agent runs, via their prompt-run-bearing steps.
  *
  * Callers that already hold the step rows should use `promptRunIdsFromSteps` directly rather than
  * re-reading them. Callers that are about to DELETE the steps must call this FIRST — deleting the
  * steps destroys the only path to the prompt runs.
  */
-export async function resolvePromptRunIdsForAgentRuns(agentRunIds: string[], user: UserInfo): Promise<string[]> {
+export async function resolvePromptRunIdsForAgentRuns(
+    agentRunIds: string[],
+    user: UserInfo,
+    stepTypes: readonly string[] = PROMPT_RUN_BEARING_STEP_TYPES
+): Promise<string[]> {
     if (agentRunIds.length === 0) {
         return [];
     }
     const inList = agentRunIds.map(id => `'${id}'`).join(',');
+    // The step-type set is applied in SQL as well as in promptRunIdsFromSteps — narrowing here and
+    // widening there would silently drop rows before the JS filter ever sees them.
+    const typeList = stepTypes.map(t => `'${t}'`).join(',');
     const r = await new RunView().RunView<{ StepType: string | null; TargetLogID: string | null }>({
         EntityName: 'MJ: AI Agent Run Steps',
-        ExtraFilter: `AgentRunID IN (${inList}) AND StepType='Prompt'`,
+        ExtraFilter: `AgentRunID IN (${inList}) AND StepType IN (${typeList})`,
         Fields: ['StepType', 'TargetLogID'],
         ResultType: 'simple',
         BypassCache: true,
     }, user);
-    return promptRunIdsFromSteps(requireRows(r, `prompt-step read for agent runs ${inList}`));
+    return promptRunIdsFromSteps(requireRows(r, `prompt-step read for agent runs ${inList}`), stepTypes);
 }
 
 /** A run's steps (fresh DB read), ordered by StepNumber. */
@@ -233,7 +271,13 @@ export async function getRunSteps(runId: string, user: UserInfo): Promise<StepRo
     return requireRows(r, `step read for run ${runId}`);
 }
 
-/** All AIPromptRun rows for a run (fresh), ordered oldest-first. */
+/**
+ * The AIPromptRun rows a run's ROLLUP-BEARING steps produced (fresh), ordered oldest-first.
+ *
+ * Scoped to ROLLUP_BEARING_STEP_TYPES because this feeds the token-reconciliation checks
+ * (sumPromptRunTokens vs AIAgentRun.TotalTokensUsed). Teardown deliberately uses the wider
+ * PROMPT_RUN_BEARING_STEP_TYPES — it must reach every prompt run, not just the counted ones.
+ */
 export interface PromptRunRow {
     ID: string;
     ModelID: string | null;
@@ -245,9 +289,9 @@ export interface PromptRunRow {
 }
 
 export async function getPromptRuns(runId: string, user: UserInfo): Promise<PromptRunRow[]> {
-    // Reached through the run's Prompt steps — AIPromptRun has no AgentRunID (see
-    // promptRunIdsFromSteps). A run that made no model call legitimately has none.
-    const promptRunIds = await resolvePromptRunIdsForAgentRuns([runId], user);
+    // Reached through the run's steps — AIPromptRun has no AgentRunID (see promptRunIdsFromSteps).
+    // A run that made no model call legitimately has none.
+    const promptRunIds = await resolvePromptRunIdsForAgentRuns([runId], user, ROLLUP_BEARING_STEP_TYPES);
     if (promptRunIds.length === 0) {
         return [];
     }
@@ -343,7 +387,7 @@ export async function deleteById(entity: string, id: string, provider: IMetadata
  */
 export async function purgeAgentRun(runId: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
     const rv = new RunView();
-    // Steps first (they reference prompt runs via TargetLogID for prompt-type steps), then the run.
+    // Steps first (they reference prompt runs via TargetLogID on prompt-run-bearing steps), then the run.
     const stepsResult = await rv.RunView<{ ID: string; StepType: string; TargetLogID: string | null }>({
         EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${runId}'`,
         Fields: ['ID', 'StepType', 'TargetLogID'], ResultType: 'simple', BypassCache: true,
@@ -354,7 +398,8 @@ export async function purgeAgentRun(runId: string, provider: IMetadataProvider, 
         console.error(`purgeAgentRun: step read for run ${runId} failed, prompt runs may leak: ${stepsResult.ErrorMessage}`);
     }
     const steps = stepsResult.Success ? stepsResult.Results : [];
-    // Delete prompt runs linked through prompt-type steps. Resolved from the step rows we already
+    // Delete prompt runs linked through prompt-run-bearing steps (Prompt/Compaction/Tool — the full
+    // set, since teardown must not orphan any). Resolved from the step rows we already
     // hold, and BEFORE the steps are deleted below — the steps are the only path to them.
     for (const prId of promptRunIdsFromSteps(steps)) {
         await deleteById('MJ: AI Prompt Runs', prId, provider, user);

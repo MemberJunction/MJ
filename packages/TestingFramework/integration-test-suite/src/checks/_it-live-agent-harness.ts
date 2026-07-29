@@ -55,7 +55,7 @@ export interface AgentStepRow {
  * Deterministic framework projection of an AI Prompt Run row.
  *
  * No AgentRunID member: that column does not exist on AIPromptRun. The owning agent run is
- * recovered through the Prompt step that invoked it — see promptRunIdsFromSteps in agent-live-shared.
+ * recovered through the step that invoked it — see promptRunIdsFromSteps in agent-live-shared.
  */
 export interface PromptRunRow {
     ID: string;
@@ -196,7 +196,7 @@ export async function readPromptRunsForAgent(
     agentId: string
 ): Promise<PromptRunRow[]> {
     if (agentRunIds.length === 0) return [];
-    // The runs' Prompt steps are the only path to their prompt runs (AIPromptRun has no
+    // The runs' prompt-run-bearing steps are the only path to their prompt runs (AIPromptRun has no
     // AgentRunID). AgentID still narrows to the agent that owns them, which is what makes this
     // "for agent" — a sub-agent's prompt runs hang off the same run tree.
     const promptRunIds = await resolvePromptRunIdsForAgentRuns(agentRunIds, user);

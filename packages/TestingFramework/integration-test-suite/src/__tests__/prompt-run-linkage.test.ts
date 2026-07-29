@@ -17,7 +17,12 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { RunViewResult } from '@memberjunction/core';
-import { promptRunIdsFromSteps, requireRows } from '../checks/agent-live-shared';
+import {
+    promptRunIdsFromSteps,
+    requireRows,
+    PROMPT_RUN_BEARING_STEP_TYPES,
+    ROLLUP_BEARING_STEP_TYPES,
+} from '../checks/agent-live-shared';
 
 /** Build a RunViewResult without a DB — only the fields these helpers read carry meaning. */
 function runViewResult<T>(partial: Partial<RunViewResult<T>>): RunViewResult<T> {
@@ -65,6 +70,36 @@ describe('promptRunIdsFromSteps', () => {
 
     it('returns empty for a run with no steps rather than throwing', () => {
         expect(promptRunIdsFromSteps([])).toEqual([]);
+    });
+
+    it('includes a Compaction step — cross-turn compaction stores its AIPromptRun in TargetLogID', () => {
+        // base-agent.ts:13689 — recordCompactionRunStep creates stepType 'Compaction' with
+        // targetLogId: outcome.PromptRunId. base-agent's own rollup (:13255) treats Compaction as
+        // prompt-run-bearing alongside Prompt. Missing it here means teardown deletes the step and
+        // orphans the prompt run permanently.
+        expect(promptRunIdsFromSteps([{ StepType: 'Compaction', TargetLogID: 'pr-compaction' }])).toEqual(['pr-compaction']);
+    });
+
+    it('includes a Tool step — a conversation tool call stores its AIPromptRun there with NO Prompt step', () => {
+        // base-agent.ts:5965 — `toolStep.TargetLogID = executed.promptRunId`, described there as
+        // "one step + one prompt run: full lineage without a duplicate Prompt step for the same
+        // call". Because no Prompt step is created, a Prompt-only rule cannot reach it at all.
+        expect(promptRunIdsFromSteps([{ StepType: 'Tool', TargetLogID: 'pr-tool' }])).toEqual(['pr-tool']);
+    });
+
+    it('scoped to the rollup step types, excludes Tool but keeps Prompt and Compaction', () => {
+        // base-agent.ts:13255 sums TokensUsedRollup for Prompt and Compaction steps ONLY. A check
+        // reconciling Σ(prompt run tokens) against AIAgentRun.TotalTokensUsed must therefore use the
+        // narrower set — counting a Tool step's prompt run would add tokens the rollup never did,
+        // turning a correct rollup into a failed assertion.
+        const steps = [
+            { StepType: 'Prompt', TargetLogID: 'pr-1' },
+            { StepType: 'Compaction', TargetLogID: 'pr-compaction' },
+            { StepType: 'Tool', TargetLogID: 'pr-tool' },
+        ];
+        expect(promptRunIdsFromSteps(steps, ROLLUP_BEARING_STEP_TYPES)).toEqual(['pr-1', 'pr-compaction']);
+        // The full set still reaches all three, so deletion cannot orphan the Tool one.
+        expect(promptRunIdsFromSteps(steps, PROMPT_RUN_BEARING_STEP_TYPES)).toEqual(['pr-1', 'pr-compaction', 'pr-tool']);
     });
 });
 
