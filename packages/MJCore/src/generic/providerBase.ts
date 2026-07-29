@@ -16,7 +16,7 @@ import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { Metadata } from "./metadata";
-import { RunView, RunViewParams } from "../views/runView";
+import { RunView, RunViewParams, IsMaterializedDataSource } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
@@ -1226,11 +1226,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      *   the seek key, so caching a page would poison the entity+filter slot
      * - `ResultType 'count_only'` — returns no rows; caching its empty Results under
      *   a fingerprint that excludes ResultType would poison row queries
+     * - `DataSource: 'Materialized'` — the snapshot is rebuilt OUT-OF-BAND by the scheduled refresh
+     *   (direct SQL, no BaseEntity save), so the entity's normal event-driven cache invalidation never
+     *   fires for it; a cached materialized result would be served indefinitely stale after a refresh.
+     *   Bypass caching entirely for materialized reads. (The `ds:materialized` fingerprint segment still
+     *   keeps the short-lived dedup/linger layer from cross-serving Live vs Materialized in-flight reads.)
      * - entities where server caching is disallowed
      */
     protected runViewCacheEligible(param: RunViewParams): boolean {
         return !param.BypassCache &&
             !param.AfterKey &&
+            !IsMaterializedDataSource(param.DataSource) &&
             param.ResultType !== 'count_only' &&
             (param.CacheLocal === true || this.TrustLocalCacheCompletely) &&
             this.IsServerCacheAllowedForEntity(param);
@@ -2528,7 +2534,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 param.Fields = entity.Fields.map(f => f.Name);
             }
 
-            if (param.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
+            // Gate on runViewCacheEligible (NOT raw param.CacheLocal): the smart-cache-check path is a
+            // second, independent cache transport, and gating it on CacheLocal alone re-admits the exact
+            // params runViewCacheEligible excludes — DataSource:'Materialized' (out-of-band refreshed, no
+            // BaseEntity event), count_only, AfterKey, BypassCache, cache-disallowed entities. On a client
+            // (!TrustLocalCacheCompletely) runViewCacheEligible already implies CacheLocal===true, so this is
+            // strictly a tightening — normal cacheable slots are unaffected.
+            if (this.runViewCacheEligible(param) && LocalCacheManager.Instance.IsInitialized) {
                 cacheable.push({ paramIndex: i, fingerprint: this.clientCacheFingerprint(param) });
             }
         }
@@ -2730,8 +2742,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const entity = this.EntityByName(param.EntityName);
             const primaryKeyFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
 
-            // Apply differential update to cache
-            if (param.CacheLocal && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
+            // Apply differential update to cache (runViewCacheEligible, not raw CacheLocal — see the
+            // cacheable-gate note in prepareSmartCacheCheckParams; keeps Materialized/count_only/etc. out).
+            if (this.runViewCacheEligible(param) && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
                 const merged = await LocalCacheManager.Instance.ApplyDifferentialUpdate(
                     fingerprint,
                     param,
@@ -2795,8 +2808,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 AggregateResults: checkResult.aggregateResults // Include fresh aggregate results
             };
 
-            // Update the local cache with fresh data (don't await - fire and forget for performance)
-            if (param.CacheLocal && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
+            // Update the local cache with fresh data (don't await - fire and forget for performance).
+            // runViewCacheEligible, not raw CacheLocal — see the cacheable-gate note; a first-time
+            // Materialized read reaches this 'stale' branch with fresh data and would otherwise be cached.
+            if (this.runViewCacheEligible(param) && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
                 const fingerprint = this.clientCacheFingerprint(param);
                 // Note: We don't await here to avoid blocking the response
                 // Cache update happens in background
@@ -3251,6 +3266,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // invalidated by entity events. Even if TrustServerCacheCompletely is accidentally
         // set to true, we still skip caching for this entity.
         if (entity.Name === 'MJ: Record Changes') return false;
+
+        // Same rationale for MATERIALIZED QUERY entities: their wrapper view (materialized_vw<CodeName>) is
+        // rebuilt OUT-OF-BAND by the scheduled materialization refresh (a direct-SQL atomic table swap),
+        // which fires no BaseEntity.Save event for this entity — so a cached read would be served the
+        // pre-refresh snapshot indefinitely. Identify them by BOTH the CodeGen wrapper-view naming convention
+        // AND the VirtualEntity flag (CodeGen mints these as virtual entities) — the conjunction avoids
+        // over-matching a real, event-invalidated entity that merely happens to be named materialized_vw*.
+        // (Base-view materializations reuse the SOURCE entity and are handled by the DataSource:'Materialized'
+        // bypass in runViewCacheEligible; this covers the query-materialization Live-read path.)
+        if (entity.VirtualEntity && entity.BaseView && entity.BaseView.toLowerCase().startsWith('materialized_vw')) return false;
 
         return entity.TrustServerCacheCompletely !== false;
     }

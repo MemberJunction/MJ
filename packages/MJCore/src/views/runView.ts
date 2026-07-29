@@ -147,6 +147,16 @@ export class RunViewParams {
      */
     EntityName?: string;
     /**
+     * optional - choose the live source-of-truth vs the materialized snapshot, for entities that have a
+     * base-view materialization (an `MJ: Materialized Results` row with `SourceType='EntityBaseView'`).
+     * Defaults to `'Live'`. When `'Materialized'`, the read is routed to the materialized wrapper view
+     * (`materialized_vw<Name>`) instead of the entity's live base view — RLS, paging, and field selection
+     * apply identically because it's the same entity/shape. Choosing the snapshot is an explicit caller
+     * decision (never silent). No effect on entities that have no base-view materialization (the wrapper
+     * view won't exist). The enum (vs. a bare boolean) leaves room for future modes without a breaking change.
+     */
+    DataSource?: 'Live' | 'Materialized';
+    /**
      * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
      * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
      *
@@ -501,10 +511,26 @@ export class RunViewParams {
             && a.sqlserver === b.sqlserver
             && a.postgresql === b.postgresql;
     }
-} 
+}
 
 /**
- * Class for running views in a generic, tier-independent manner - uses a provider model for 
+ * Canonical test for whether a `RunViewParams.DataSource` value requests the MATERIALIZED snapshot.
+ *
+ * `DataSource` is typed `'Live' | 'Materialized'` here, but it crosses a GraphQL `String` boundary
+ * (RunViewResolver declares it as an unconstrained `@Field(() => String)`), so a cross-version or non-MJ
+ * client can send `'materialized'`, `'MATERIALIZED'`, or `'Materialized '`. This trims + lowercases before
+ * comparing, so every such variant is recognized as materialized; anything else (including a typo) means a
+ * live read — the safe default. Use this at EVERY DataSource decision point (read routing in
+ * GetEffectiveBaseView, the cache-eligibility gate in runViewCacheEligible, and the cache fingerprint in
+ * LocalCacheManager) so a mis-cased request can never be routed to the snapshot by one site while being
+ * cached as Live by another (the silent-stale hazard that separate `=== 'Materialized'` checks allow).
+ */
+export function IsMaterializedDataSource(dataSource: string | null | undefined): boolean {
+    return typeof dataSource === 'string' && dataSource.trim().toLowerCase() === 'materialized';
+}
+
+/**
+ * Class for running views in a generic, tier-independent manner - uses a provider model for
  * implementation transparently from the viewpoint of the consumer of the class. By default the RunView class you create will
  * connect to the DEFAULT provider. If you want your RunView to connect to a different provider, you can pass in the provider
  * to the constructor.

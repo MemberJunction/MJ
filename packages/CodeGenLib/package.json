@@ -33,6 +33,7 @@
     "vitest": "^3.1.1"
   },
   "dependencies": {
+    "@memberjunction/query-processor": "5.50.0",
     "@memberjunction/actions": "5.50.0",
     "@memberjunction/actions-base": "5.50.0",
     "@memberjunction/cli-core": "5.50.0",

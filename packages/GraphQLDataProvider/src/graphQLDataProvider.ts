@@ -882,6 +882,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // (server caching enabled) is unchanged.
                 if (params.BypassCache !== undefined)
                     innerParams.BypassCache = params.BypassCache;
+                // DataSource lets a caller opt into an entity's materialized snapshot ('Materialized')
+                // vs its live base view ('Live', default). Only forward when set so default is unchanged.
+                if (params.DataSource !== undefined)
+                    innerParams.DataSource = params.DataSource;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1054,6 +1058,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (param.BypassCache !== undefined) {
                         innerParam.BypassCache = param.BypassCache;
                     }
+                    if (param.DataSource !== undefined) {
+                        innerParam.DataSource = param.DataSource;
+                    }
 
                     if (!dynamicView) {
                         innerParam.ExcludeUserViewRunID = param.ExcludeUserViewRunID || "";
@@ -1175,6 +1182,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // response could carry them — but the request never asked. Every layer
                     // downstream looked correct while the caller got Success with no aggregates.
                     Aggregates: item.params.Aggregates ?? null,
+                    // DataSource MUST be forwarded here too (as on the InternalRunView/InternalRunViews maps):
+                    // a CacheLocal batch routes through this smart-cache-check path, so omitting it silently
+                    // downgrades a DataSource:'Materialized' request to a live read.
+                    DataSource: item.params.DataSource,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
