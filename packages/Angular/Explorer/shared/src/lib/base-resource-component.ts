@@ -178,7 +178,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
                 }),
                 takeUntil(this.destroy$)
             )
-            .subscribe(event => this.deliverQueryParams(event.Params));
+            .subscribe(event => this.deliverQueryParams(event.Params, event.Force === true));
     }
 
     /**
@@ -204,9 +204,13 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * identical deliveries (the two paths overlap on back/forward) and labels the first
      * meaningful delivery as a 'deeplink', subsequent ones as 'popstate'.
      */
-    private deliverQueryParams(params: Record<string, string>): void {
+    private deliverQueryParams(params: Record<string, string>, force = false): void {
         const key = this.queryParamsKey(params);
-        if (key === this._lastDeliveredParamsKey) {
+        // The duplicate guard assumes delivered params == applied state, but a
+        // component's state can DRIFT after a delivery (internal navigation
+        // whose write-back was suppressed or lost). Explicit restores (origin
+        // crumb) pass force to reach OnQueryParamsChanged regardless.
+        if (key === this._lastDeliveredParamsKey && !force) {
             return; // Already delivered these exact params.
         }
         const isInitial = this._lastDeliveredParamsKey === null;

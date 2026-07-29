@@ -1066,12 +1066,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Guard: only update the title if THIS component is the currently displayed one.
     // Without this guard, cached components (detached but alive) can fire this callback
     // and overwrite the active tab's title with a stale name.
+    // CRITICAL: rename the tab this component was RENDERED FOR — never
+    // GetActiveTabId(). Under the records style the active tab can be a
+    // record (region showing) while the main region keeps a SUBSTITUTE nav
+    // component alive underneath; its emission was renaming the user's
+    // record tab (an Action Params record ended up titled "Data").
+    const renderedTabId = activeTab.id;
     instance.DisplayNameChangedEvent = (newName: string) => {
       if (this.singleResourceComponentRef?.instance === instance) {
-        const tabId = this.workspaceManager.GetActiveTabId();
-        if (tabId) {
-          this.workspaceManager.UpdateTabTitle(tabId, newName);
-        }
+        this.workspaceManager.UpdateTabTitle(renderedTabId, newName);
       }
     };
 

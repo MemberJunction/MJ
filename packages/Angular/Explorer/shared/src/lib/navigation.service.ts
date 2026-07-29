@@ -15,8 +15,15 @@ import { BaseResourceComponent } from './base-resource-component';
  * preventing cross-tab leakage in multi-tab scenarios.
  */
 export interface QueryParamChangeEvent {
-    TabId: string;
-    Params: Record<string, string>;
+  TabId: string;
+  Params: Record<string, string>;
+  /**
+   * Bypass the receiving component's duplicate-delivery guard. Set by
+   * explicit restore navigations (e.g. the origin crumb): the component's
+   * state may have DRIFTED from the last-delivered params, in which case a
+   * restore to those same params would otherwise be dropped as a duplicate.
+   */
+  Force?: boolean;
 }
 
 /**
@@ -725,6 +732,13 @@ export class NavigationService implements OnDestroy {
         if (Object.keys(restore).length > 0) {
           this.applyQueryParamsToTab(sourceTab.id, restore);
         }
+        // FORCE delivery: the component's state may have drifted while its
+        // last-delivered params already equal the snapshot — the reactive
+        // path would drop the restore as a duplicate (crumb lands on the
+        // dashboard's home instead of the captured section).
+        if (origin.sourceQueryParams && Object.keys(origin.sourceQueryParams).length > 0) {
+          this.NotifyQueryParamsChanged(sourceTab.id, origin.sourceQueryParams, true);
+        }
         // Set the app context first so the shell's nav renders the right
         // app the moment the tab activates (activation alone would also
         // flip it, but explicit sequencing avoids a visible two-step).
@@ -737,6 +751,14 @@ export class NavigationService implements OnDestroy {
     // is a display title that may have mutated into something SwitchToApp's
     // nav-item lookup can't match (e.g. a drilled entity name).
     await this.SwitchToApp(origin.sourceAppId, origin.sourceNavItemName ?? origin.sourceNavLabel, origin.sourceQueryParams);
+    // Same drift-proofing as the exact-tab path: force the delivery so the
+    // restore can't be deduped away.
+    if (origin.sourceQueryParams && Object.keys(origin.sourceQueryParams).length > 0) {
+      const targetTabId = this.workspaceManager.GetActiveTabId();
+      if (targetTabId) {
+        this.NotifyQueryParamsChanged(targetTabId, origin.sourceQueryParams, true);
+      }
+    }
   }
 
   /**
@@ -1260,8 +1282,8 @@ export class NavigationService implements OnDestroy {
    * Called by the shell when back/forward navigation changes query params on the active tab.
    * The notification includes the tab ID so only the component in that tab reacts.
    */
-  NotifyQueryParamsChanged(tabId: string, params: Record<string, string>): void {
-    this.queryParamChanged$.next({ TabId: tabId, Params: params });
+  NotifyQueryParamsChanged(tabId: string, params: Record<string, string>, force = false): void {
+    this.queryParamChanged$.next({ TabId: tabId, Params: params, Force: force });
   }
 
   /**

@@ -237,6 +237,14 @@ mj-tab-container .lm_item {
   overflow: hidden !important;
 }
 
+/* SPLIT panes get a subtle frame so side-by-side content doesn't bleed
+   together (single-pane layouts stay frameless). "Adjacent to a splitter"
+   is exactly and only the split case — any orientation, any nesting. */
+mj-tab-container .lm_stack:has(+ .lm_splitter),
+mj-tab-container .lm_splitter + .lm_stack {
+  border: 1px solid var(--mj-border-default) !important;
+}
+
 /* Fix for .lm_items - the content container inside stacks */
 /* This is separate from .lm_item - it holds the actual tab content */
 mj-tab-container .lm_items {
