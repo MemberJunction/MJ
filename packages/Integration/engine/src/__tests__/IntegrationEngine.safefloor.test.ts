@@ -58,6 +58,14 @@ const DIRTY_WATERMARK = '2024-06-15T11:00:00.000Z';
 const PRIOR_WATERMARK = '2024-06-15T09:00:00.000Z';
 
 let mockRunViewsFn: ReturnType<typeof vi.fn>;
+
+/**
+ * Default batched-read behaviour: fan a `RunViews` call out to the per-params `RunView` mock, so
+ * the entity-aware routers each test installs answer batched legs too. A test that pins a specific
+ * batched read with `mockResolvedValueOnce` still overrides this.
+ */
+const fanOutToRunView = async (params: Array<Record<string, unknown>>, contextUser?: unknown) =>
+    Promise.all(params.map(p => mockRunViewFn(p, contextUser)));
 let mockRunViewFn: ReturnType<typeof vi.fn>;
 let mockEntityInstances: Map<string, ReturnType<typeof createMockEntity>>;
 
@@ -222,7 +230,7 @@ describe('IntegrationEngine — watermark advances on record error, failed recor
         orchestrator = new IntegrationEngine();
         mockEntityInstances = new Map();
         mockRunViewFn = vi.fn();
-        mockRunViewsFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
         (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
     });
 
@@ -498,7 +506,7 @@ describe('IntegrationEngine — skip-and-continue on an offset-page fetch error 
         orchestrator = new IntegrationEngine();
         mockEntityInstances = new Map();
         mockRunViewFn = vi.fn();
-        mockRunViewsFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
         (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
     });
 

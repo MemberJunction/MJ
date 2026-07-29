@@ -34,6 +34,14 @@ import { RateLimiter } from '../RateLimiter.js';
 // limiter instance the engine builds from the connector's policy.
 
 let mockRunViewsFn: ReturnType<typeof vi.fn>;
+
+/**
+ * Default batched-read behaviour: fan a `RunViews` call out to the per-params `RunView` mock, so
+ * the entity-aware routers each test installs answer batched legs too. A test that pins a specific
+ * batched read with `mockResolvedValueOnce` still overrides this.
+ */
+const fanOutToRunView = async (params: Array<Record<string, unknown>>, contextUser?: unknown) =>
+    Promise.all(params.map(p => mockRunViewFn(p, contextUser)));
 let mockRunViewFn: ReturnType<typeof vi.fn>;
 let mockEntityInstances: Map<string, ReturnType<typeof createMockEntity>>;
 
@@ -248,7 +256,7 @@ describe('IntegrationEngine — rate-limit / AIMD wiring (connector policy → l
         orchestrator = new IntegrationEngine();
         mockEntityInstances = new Map();
         mockRunViewFn = vi.fn();
-        mockRunViewsFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
         (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
         // Spy on the REAL limiter prototype. The engine builds its limiter from the connector's
         // policy via `new RateLimiter(...)` against this same module, so these spies observe the

@@ -1,0 +1,42 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration — V202607282018__v5.50.x__Fix_UI_Own_AIPromptRuns_RLS_Filter.sql
+-- Hand-authored: pure metadata DML. No DDL and no CodeGen objects to bake.
+-- ============================================================================
+--
+-- Fix: the "UI: Own AI Prompt Runs" row-level-security filter still filtered on
+-- AIPromptRun.AgentRunID, which V202607241645__v5.50.x__Break_CodeGen_Cycle_
+-- Remove_PromptRun_AgentRunID dropped.
+--
+-- MJ appends a filter's FilterText as a WHERE clause against the entity's base
+-- view, so every read of MJ: AI Prompt Runs by a user holding the UI role -- i.e.
+-- ordinary end users -- failed. Observed live on PostgreSQL before this fix:
+--
+--   SELECT ... FROM __mj."vwAIPromptRuns"
+--   WHERE (("AgentRunID" IN (SELECT "ID" FROM __mj."vwAIAgentRuns" WHERE "UserID" = '...')))
+--   ERROR: column "AgentRunID" does not exist
+--
+-- Affects both platforms identically -- RLS filters are entity metadata, not
+-- per-platform DDL -- so the SQL Server counterpart makes the same change.
+--
+-- The replacement preserves the original intent (a UI user sees only prompt runs
+-- belonging to their own agent runs) via the derivation the cycle-break migration
+-- prescribes: AIAgentRunStep.TargetLogID for prompt-type steps.
+--
+-- Identifier style deliberately matches the filter being replaced (bare column
+-- names, schema-qualified + quoted view name) because the provider quotes
+-- identifiers when it interpolates FilterText -- that interpolation was already
+-- correct for the old filter; only the column it referenced was gone. The
+-- 'Prompt' string literal follows existing precedent (see the
+-- "Demo - Last Starts w/ A, B, or C" filter's LIKE literals).
+--
+-- Visibility is unchanged for standalone prompt runs: previously they had a NULL
+-- AgentRunID and so never matched `AgentRunID IN (...)`; now their ID is not a
+-- TargetLogID of any of the user's prompt steps, so they still never match.
+--
+-- The sibling "UI: Own AI Agent Run Steps" filter is deliberately left alone --
+-- AIAgentRunStep.AgentRunID still exists and that filter is correct.
+-- ============================================================================
+
+UPDATE __mj."RowLevelSecurityFilter"
+SET "FilterText" = 'ID IN (SELECT TargetLogID FROM __mj."vwAIAgentRunSteps" WHERE StepType = ''Prompt'' AND TargetLogID IS NOT NULL AND AgentRunID IN (SELECT ID FROM __mj."vwAIAgentRuns" WHERE UserID = ''{{UserID}}''))'
+WHERE "ID" = 'E1AF0003-0000-4000-B000-000000000003';  -- UI: Own AI Prompt Runs

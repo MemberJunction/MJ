@@ -25,7 +25,7 @@ without forking.
 │            OR React/Vue/Node consumer driving ConversationsRuntime directly
 ├─ Layer 3   @memberjunction/ng-conversations                            (Angular widget)
 │            chat-area / message-list / message-item / overlay /
-│            realtime overlay / 6 slots + ChatSlotDirective /
+│            realtime overlay / 7 slots + ChatSlotDirective /
 │            ConversationsRuntimeBootstrap (registers adapters into runtime)
 ├─ Layer 2   @memberjunction/conversations-runtime  ★ pure TS, zero UX deps
 │            ConversationsRuntime singleton (BaseEngine + @RegisterForStartup)
@@ -166,17 +166,26 @@ mj sync push --dir=metadata --include="application-settings"
 conversation): the widget's per-conversation agent picker writes to
 `MJConversationEntity.DefaultAgentID`. Higher-priority than step 1.
 
+**An `@` mention outranks every step above.** Addressing an agent in the composer routes
+that turn to it, so a surface pinned to one agent hasn't really pinned it while `@` is
+available. Close the hole with the per-type mention caps on chat-area —
+`[allowAgentMentions]="false"` REMOVES the `@` trigger provider rather than hiding UI,
+and leaves `/` skill commands and `#` entity mentions working. All three sit under the
+`allowMentions` master (false there disables everything regardless). See the package
+README's feature-toggle table.
+
 ---
 
 ## 6. The slot system (extension surface)
 
-The chat-area exposes 6 named template slots. Project a template via the
+The chat-area exposes 7 named template slots. Project a template via the
 `mjChatSlot` directive to replace or augment the default rendering. Every
 slot is **opt-in** — existing embeds see no UI change.
 
 | Slot | What it covers | Activation |
 |---|---|---|
 | `header` | Replaces the entire `.chat-header` chrome (title, badges, export/share buttons) | Consumer projects `mjChatSlot="header"` |
+| `headerActions` | **Additive** host buttons appended to the DEFAULT header's action strip, after the stock buttons. Suppressed when `header` is projected (that slot owns the whole header, actions included) | Consumer projects `mjChatSlot="headerActions"` |
 | `agentPresence` | Sticky-top character/voice-state presence bar | `[showAgentCharacter]="true"` AND optional slot |
 | `emptyState` | Replaces the welcome block on a fresh conversation | Consumer projects `mjChatSlot="emptyState"` |
 | `messageRenderer` | Per-message renderer (full bubble replacement) | Consumer projects `mjChatSlot="messageRenderer"` |
@@ -299,6 +308,25 @@ Three inputs on chat-area drive the "agent character" UX (default off):
 When `[showAgentCharacter]` is `true`, the `agentPresence` slot renders a sticky
 bar above the header. Per Matt's 06-10 placement design.
 
+### Assistant identity in the message feed
+
+`agentCharacterConfig` covers only the presence strip. Two further inputs extend the
+same identity into every AI **message bubble** — both default `null`, meaning the
+engine-resolved agent identity (today's behavior):
+
+| Input | Overrides |
+|---|---|
+| `assistantDisplayName` | The display name on AI messages (e.g. a per-tenant persona). **Display only** — internal logic such as the conversation-manager check keeps comparing the real agent name, so an override can never change routing or behavior |
+| `assistantAvatarUrl` | The AI message avatar — an image replaces the agent's Font Awesome icon; a broken or whitespace URL degrades back to the icon |
+
+Both propagate to already-rendered messages, so a branding config that resolves after
+first render (or a mid-session persona switch) updates existing bubbles.
+
+**Deliberately NOT covered**: the run-details expander header and its record link (they
+describe the *real* agent's diagnostics), the role tooltip (the agent record's
+`Description`), and realtime session cards. Hide those with `showAgentRunDetails` rather
+than relabeling internal data.
+
 ---
 
 ## 9. Design tokens (`--mj-chat-*`)
@@ -327,6 +355,21 @@ tokens, so dark mode "just works" without consumer code. Override at any
     --mj-chat-voice-listening: var(--mj-status-info);
     --mj-chat-voice-thinking:  var(--mj-status-warning);
     --mj-chat-voice-speaking:  var(--mj-brand-primary);
+
+    /* Conversation LIST panel (mj-conversation-list, also via mj-conversation-sidebar).
+       Defaults are the stock navy rail; remap onto surface tokens to match the chat
+       area. Hover / border / divider / preview / badge / placeholder tints all derive
+       from `ink` (or `active-ink` on the active row) via color-mix, so they follow
+       their pair automatically. */
+    --mj-chat-list-bg:              var(--mj-brand-secondary);
+    --mj-chat-list-ink:             var(--mj-brand-on-secondary);
+    --mj-chat-list-hover-bg:        color-mix(in srgb, var(--mj-chat-list-ink) 8%, transparent);
+    --mj-chat-list-active-bg:       var(--mj-brand-primary);
+    --mj-chat-list-active-ink:      var(--mj-brand-on-secondary);
+    --mj-chat-list-active-hover-bg: var(--mj-brand-primary-hover);
+    --mj-chat-list-accent:          var(--mj-brand-primary);   /* action surfaces */
+    --mj-chat-list-accent-ink:      var(--mj-text-inverse);
+    --mj-chat-list-accent-hover:    var(--mj-brand-primary-hover);
 }
 
 /* Theme override — warm tutor surface */
@@ -340,6 +383,18 @@ The tokens are injected at runtime by `ConversationsRuntimeBootstrap` via a
 `<style id="mj-chat-tokens">` element in `<head>`. (Angular's emulated view
 encapsulation rewrites `:root {}` inside `styleUrls`, breaking the global
 selector — runtime injection sidesteps the issue.)
+
+The `--mj-chat-list-*` family is the exception: it resolves in the list component's own
+`:host` block, onto private `--conv-list-*` names. That indirection is required, not
+stylistic — a custom property cannot name itself in its own fallback without forming a
+cycle, so the public name and the name the ~40 rules read have to differ. The practical
+consequence for consumers is nil: set `--mj-chat-list-*` at `:root` (or any ancestor)
+exactly like the rest of the palette. The chrome TOGGLES that go with these tokens
+(`showSearch`, `showNewConversationButton`, `showHeaderMenu`, `showSectionHeaders`) are
+documented in the package README.
+
+A host that doesn't load MJ's token stylesheet at all should define the list tokens (and
+the brand/status tokens they fall back to) explicitly.
 
 ---
 

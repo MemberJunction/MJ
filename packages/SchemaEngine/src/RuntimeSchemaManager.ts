@@ -963,8 +963,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * @param baseDelayMs Base delay for exponential backoff (default: 5000ms)
    */
   public async RunPipelineWithRetry(input: RSUPipelineInput, maxRetries: number = 2, baseDelayMs: number = 5000): Promise<RSUPipelineResult> {
-    const RETRYABLE_STEPS = new Set(['ExecuteMigration', 'RunCodeGen', 'CompileTypeScript', 'RestartMJAPI']);
-
     let lastResult: RSUPipelineResult | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -979,12 +977,9 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
       lastResult = result;
 
-      // Check if the failed step is retryable
-      const failedStep = result.ErrorStep;
-      if (!failedStep || !RETRYABLE_STEPS.has(failedStep)) {
-        console.log(`[RSU] Step '${failedStep}' is not retryable — aborting`);
-        return result;
-      }
+      // A retry re-runs the WHOLE pipeline, migration included. That is only safe while the
+      // migration has not been applied — see `canSafelyRetry`.
+      if (!this.canSafelyRetry(result.ErrorStep, this.migrationWasApplied(result.Steps))) return result;
 
       if (attempt >= maxRetries) {
         console.log(`[RSU] Max retries (${maxRetries}) exhausted — aborting`);
@@ -992,11 +987,86 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       }
 
       const delayMs = baseDelayMs * Math.pow(2, attempt);
-      console.log(`[RSU] Step '${failedStep}' failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`);
+      console.log(`[RSU] Step '${result.ErrorStep}' failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
     return lastResult!;
+  }
+
+  /**
+   * Batch equivalent of {@link RunPipelineWithRetry}, for the `ApplyAll` / `ApplyAllBatch`
+   * install path.
+   *
+   * Same transient-step whitelist, same backoff, same safety rule: a retry re-runs every
+   * input's migration, so it is only attempted when NOTHING was applied on the failed pass.
+   * Once even one migration has committed, the batch is returned as-is rather than replayed.
+   */
+  public async RunPipelineBatchWithRetry(
+    inputs: RSUPipelineInput[],
+    maxRetries: number = 2,
+    baseDelayMs: number = 5000
+  ): Promise<RSUPipelineBatchResult> {
+    let lastResult: RSUPipelineBatchResult | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const result = await this.RunPipelineBatch(inputs);
+
+      if (result.FailureCount === 0) {
+        if (attempt > 0) console.log(`[RSU] Pipeline batch succeeded on retry attempt ${attempt}`);
+        return result;
+      }
+
+      lastResult = result;
+
+      // `SuccessCount > 0` means at least one migration committed — replaying the batch would
+      // re-execute it. Report the failure instead of risking a double-apply.
+      const failedStep = result.Results.find(r => !r.Success)?.ErrorStep;
+      if (!this.canSafelyRetry(failedStep, result.SuccessCount > 0)) return result;
+
+      if (attempt >= maxRetries) {
+        console.log(`[RSU] Max retries (${maxRetries}) exhausted — aborting`);
+        return result;
+      }
+
+      const delayMs = baseDelayMs * Math.pow(2, attempt);
+      console.log(`[RSU] Batch step '${failedStep}' failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    return lastResult!;
+  }
+
+  /**
+   * Decides whether a failed pipeline pass may be replayed.
+   *
+   * Two conditions, both required:
+   *  - the failed step is one of the four known-transient ones. Validation and git are
+   *    deterministic — replaying them just burns the backoff and reports the same error.
+   *  - the migration has NOT been applied. Retrying runs the pipeline from the top, so a
+   *    committed `CREATE TABLE` would be re-executed and fail on the replay, which then
+   *    *overwrites* the real error (a RunCodeGen failure gets reported as an ExecuteMigration
+   *    failure) and sends the operator chasing the wrong thing. Post-migration failures are
+   *    exactly the transient ones you'd most want to retry, which is why this is stated
+   *    explicitly rather than left implicit: replaying them is not safe here.
+   */
+  private canSafelyRetry(failedStep: string | undefined, migrationApplied: boolean): boolean {
+    const RETRYABLE_STEPS = new Set(['ExecuteMigration', 'RunCodeGen', 'CompileTypeScript', 'RestartMJAPI']);
+
+    if (!failedStep || !RETRYABLE_STEPS.has(failedStep)) {
+      console.log(`[RSU] Step '${failedStep}' is not retryable — aborting`);
+      return false;
+    }
+    if (migrationApplied) {
+      console.log(`[RSU] Step '${failedStep}' failed after the migration was applied — not retrying (a replay would re-execute committed DDL)`);
+      return false;
+    }
+    return true;
+  }
+
+  /** True when the pass got far enough to commit its migration SQL. */
+  private migrationWasApplied(steps: RSUPipelineStep[] | undefined): boolean {
+    return (steps ?? []).some(s => s.Name === 'ExecuteMigration' && s.Status === 'success');
   }
 
   /**
