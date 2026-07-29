@@ -26,7 +26,7 @@ interface LazyRegistryShape {
         registered: string[];
         loaded: string[];
         chunks: Array<{ chunkId: string; loaded: boolean; keys: string[] }>;
-        chunkCount: number;
+        loadedChunkCount: number;
     };
     ForceLoad(compoundKey: string): Promise<boolean>;
 }

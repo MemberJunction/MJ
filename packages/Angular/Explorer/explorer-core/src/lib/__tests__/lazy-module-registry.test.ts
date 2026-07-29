@@ -4,7 +4,7 @@
  * The regression these lock down: chunks must be deduped by their declared `chunkId`,
  * never by anything derived from the loader function. The generated LAZY_FEATURE_CONFIG
  * builds every chunk's `load` the same way, so their closures are source-identical —
- * keying off `Function.toString()` collapsed all 15 chunks into one, and the first chunk
+ * keying off `Function.toString()` collapsed all 18 chunks into one, and the first chunk
  * loaded made every other chunk look already-loaded (so its classes never registered).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -123,6 +123,66 @@ describe('LazyModuleRegistry', () => {
     expect(otherLoads).toBe(1);
   });
 
+  // A later candidate may be the chunk that actually holds the class, so one failure must not
+  // abort the sweep. Sequential awaits without a try/catch stopped at the first rejection.
+  it('still loads a later candidate when an earlier one fails', async () => {
+    let goodLoads = 0;
+    registry.Register('BaseA::SharedResource', makeChunk('pkg/broken.module', async () => {
+      throw new Error('chunk 404');
+    }));
+    registry.Register('BaseB::SharedResource', makeChunk('pkg/good.module', async () => { goodLoads++; }));
+
+    expect(await registry.Load('mangled::SharedResource')).toBe(true);
+    expect(goodLoads).toBe(1);
+  });
+
+  it('rejects with the first error when every candidate for a subclass key fails', async () => {
+    registry.Register('BaseA::AllBrokenResource', makeChunk('pkg/broken-a.module', async () => {
+      throw new Error('first failure');
+    }));
+    registry.Register('BaseB::AllBrokenResource', makeChunk('pkg/broken-b.module', async () => {
+      throw new Error('second failure');
+    }));
+
+    await expect(registry.Load('mangled::AllBrokenResource')).rejects.toThrow('first failure');
+  });
+
+  // Re-registering a compound key REPLACES it in the primary map; the subclass-key index must
+  // follow. Accumulating into a Set kept the superseded chunk as a fallback candidate forever.
+  it('drops the superseded chunk when a compound key is re-registered', async () => {
+    let overrideLoads = 0;
+    registry.Register(
+      'BaseResourceComponent::FeaturePipelinesResource',
+      makeChunk('pkg/override.module', async () => { overrideLoads++; })
+    );
+
+    expect(await registry.Load('mangled::FeaturePipelinesResource')).toBe(true);
+    expect(overrideLoads).toBe(1);
+    expect(aiLoads).toBe(0);
+  });
+
+  it('shares one in-flight import between concurrent loads of the same chunk', async () => {
+    let releaseImport: () => void = () => {};
+    const importGate = new Promise<void>(resolve => { releaseImport = resolve; });
+    let deferredLoads = 0;
+    const deferred = makeChunk('pkg/deferred.module', async () => {
+      deferredLoads++;
+      await importGate;
+    });
+    registry.Register('BaseResourceComponent::DeferredOne', deferred);
+    registry.Register('BaseResourceComponent::DeferredTwo', deferred);
+
+    const first = registry.Load('BaseResourceComponent::DeferredOne');
+    const second = registry.Load('BaseResourceComponent::DeferredTwo');
+    // The second caller must join the in-flight import, not start a new one.
+    expect(deferredLoads).toBe(1);
+
+    releaseImport();
+    expect(await first).toBe(true);
+    expect(await second).toBe(true);
+    expect(deferredLoads).toBe(1);
+  });
+
   it('clears a failed load so the next attempt retries instead of re-throwing', async () => {
     let attempts = 0;
     registry.Register('BaseResourceComponent::FlakyResource', makeChunk('pkg/flaky.module', async () => {
@@ -142,7 +202,7 @@ describe('LazyModuleRegistry', () => {
     const snap = registry.GetSnapshot();
 
     expect(snap.chunks).toHaveLength(2);
-    expect(snap.chunkCount).toBe(1);
+    expect(snap.loadedChunkCount).toBe(1);
 
     const aiChunk = snap.chunks.find(c => c.chunkId === ai.chunkId);
     expect(aiChunk?.loaded).toBe(true);
