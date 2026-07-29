@@ -123,8 +123,10 @@ export const SearchChecks: NamedCheck[] = [
             await engine.Config({}, ctx.User, true);
 
             // Sub-minimum-length query: deterministic empty SUCCESS regardless of configuration
-            // (and no provider fan-out, no audit row).
-            const short = await engine.Search({ Query: 'mj' }, ctx.User);
+            // (and no provider fan-out, no audit row). MIN_TERM_LENGTH is 2 (lowered from 3 in the
+            // C3 fix so 2-char queries like "US"/"AI" are searchable), so the boundary probe must be
+            // a SINGLE character — "mj" (2 chars) is now a valid, searchable query.
+            const short = await engine.Search({ Query: 'm' }, ctx.User);
             AssertEqual(short.Success, true, 'a sub-minimum-length query must return empty success');
             AssertEqual(short.TotalCount, 0, 'a sub-minimum-length query must return zero results');
 

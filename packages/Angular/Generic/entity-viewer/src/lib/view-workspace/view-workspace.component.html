@@ -11,6 +11,7 @@
       (OpenInTabRequested)="onOpenInTabRequested($event)"
       (ConfigureViewRequested)="onConfigureViewRequested()"
       (CreateNewRecordRequested)="onCreateNewRecordRequested()"
+      (ExportRequested)="onExportRequested()"
       (DuplicateViewRequested)="onDuplicateViewRequested($event)"
       (QuickSaveRequested)="onQuickSaveRequested($event)"
       (RevertRequested)="onRevertView()">
@@ -138,4 +139,12 @@
     (Action)="onSharedViewAction($event)"
     (Cancel)="onSharedViewWarningCancel()">
   </mj-shared-view-warning-dialog>
+
+  <!-- Export dialog — opened by the toolbar Export button for ANY view type. The dialog is generic
+       (data + columns only), so Excel/CSV/JSON + sampling work identically on Grid/Cards/Map/Timeline. -->
+  <mj-export-dialog
+    [visible]="showExportDialog"
+    [config]="exportDialogConfig"
+    (closed)="onExportDialogClosed($event)">
+  </mj-export-dialog>
 </div>

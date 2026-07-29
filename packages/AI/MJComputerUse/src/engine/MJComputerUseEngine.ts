@@ -479,7 +479,6 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         params.prompt = promptEntity;
         params.data = templateData;
         params.contextUser = this.contextUser;
-        params.agentRunId = this.agentRunId;
         params.attemptJSONRepair = true;
 
         if (conversationMessages.length > 0) {

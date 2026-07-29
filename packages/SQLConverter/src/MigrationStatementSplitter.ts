@@ -43,8 +43,19 @@ export interface StatementBatch {
 
 const GO_SPLIT = /^[ \t]*GO[ \t]*;?[ \t]*$/im;
 
-/** CodeGen routine/view/trigger naming conventions — these are regenerated, not translated. */
-const CODEGEN_NAME = /^(spCreate|spUpdate|spDelete|spRecompile|vw|fn|trgUpdate|trgCreate|trgDelete|trg)/i;
+/**
+ * CodeGen routine/view/trigger naming conventions — these are regenerated, not translated.
+ *
+ * The bare `trg` alternative was REMOVED (issue #3252 RC2): it matched EVERY trigger name,
+ * so a hand-written trigger (the only one in the v5 ledger is `trgConversationDetail_AssignSequence`)
+ * was misclassified as a CodeGen object and silently dropped. A ledger sweep of migrations/v5/*.sql
+ * confirms the narrowing is safe: of 381 distinct triggers, 379 are `trgUpdate*` (kept below),
+ * zero are `trgCreate*`/`trgDelete*`, and the only two non-`trgUpdate` triggers are hand-written
+ * (`trgConversationDetail_AssignSequence`, and `tr_APIScope_UpdateFullPath` which the `tr_` prefix
+ * excludes from BOTH the old and new regex — already hand-procedural, unaffected). `trgCreate|trgDelete`
+ * are retained as documented CodeGen conventions though none are currently committed.
+ */
+const CODEGEN_NAME = /^(spCreate|spUpdate|spDelete|spRecompile|vw|fn|trgUpdate|trgCreate|trgDelete)/i;
 
 /**
  * Hand-written objects whose names collide with the CodeGen conventions. CodeGen does

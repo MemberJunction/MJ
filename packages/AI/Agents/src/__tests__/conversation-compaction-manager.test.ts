@@ -23,9 +23,15 @@ const mockRows: { rows: ConversationWindowSourceRow[]; success: boolean; errorMe
 const mockDetailEntity = {
     ID: '',
     SummaryOfEarlierConversation: null as string | null,
-    SummaryPromptRunID: null as string | null,
     LatestResult: { CompleteMessage: '' },
     Load: vi.fn().mockResolvedValue(true),
+    Save: vi.fn().mockResolvedValue(true),
+};
+const mockCompactionRunEntity = {
+    ConversationDetailID: '' as string,
+    PromptRunID: '' as string,
+    LatestResult: { CompleteMessage: '' },
+    NewRecord: vi.fn(),
     Save: vi.fn().mockResolvedValue(true),
 };
 const mockExecutePrompt = vi.fn();
@@ -42,7 +48,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
             ...actual.RunView,
             FromMetadataProvider: vi.fn().mockImplementation(() => ({ RunView: mockRunViewFn })),
         },
-        Metadata: { Provider: { GetEntityObject: vi.fn().mockImplementation(async () => mockDetailEntity) } },
+        Metadata: { Provider: { GetEntityObject: vi.fn().mockImplementation(async (entityName: string) =>
+            entityName === 'MJ: Conversation Compaction Runs' ? mockCompactionRunEntity : mockDetailEntity
+        ) } },
         LogError: vi.fn(),
         LogStatusEx: vi.fn(),
     };
@@ -152,9 +160,12 @@ describe('ConversationCompactionManager', () => {
         mockRunViewFn.mockClear();
         mockDetailEntity.ID = '';
         mockDetailEntity.SummaryOfEarlierConversation = null;
-        mockDetailEntity.SummaryPromptRunID = null;
         mockDetailEntity.Load.mockClear().mockResolvedValue(true);
         mockDetailEntity.Save.mockClear().mockResolvedValue(true);
+        mockCompactionRunEntity.ConversationDetailID = '';
+        mockCompactionRunEntity.PromptRunID = '';
+        mockCompactionRunEntity.NewRecord.mockClear();
+        mockCompactionRunEntity.Save.mockClear().mockResolvedValue(true);
         mockExecutePrompt.mockReset().mockResolvedValue({
             success: true,
             result: 'NEW SUMMARY',
@@ -249,11 +260,16 @@ describe('ConversationCompactionManager', () => {
             expect(promptParams.data.deltaMessages).not.toContain('[seq 5]');
             expect(promptParams.data.deltaMessages).not.toContain('[seq 6]');
 
-            // Boundary row write: summary + prompt-run linkage through the entity save path
+            // Boundary row write: summary persisted on the detail row
             expect(mockDetailEntity.Load).toHaveBeenCalledWith('detail-5');
             expect(mockDetailEntity.SummaryOfEarlierConversation).toBe('NEW SUMMARY');
-            expect(mockDetailEntity.SummaryPromptRunID).toBe('PROMPT-RUN-1');
             expect(mockDetailEntity.Save).toHaveBeenCalled();
+
+            // Audit record: prompt-run linkage via ConversationCompactionRun
+            expect(mockCompactionRunEntity.NewRecord).toHaveBeenCalled();
+            expect(mockCompactionRunEntity.ConversationDetailID).toBe('detail-5');
+            expect(mockCompactionRunEntity.PromptRunID).toBe('PROMPT-RUN-1');
+            expect(mockCompactionRunEntity.Save).toHaveBeenCalled();
         });
 
         it('never selects the newest raw row as boundary, even when it alone exceeds the tail budget', async () => {
@@ -282,16 +298,6 @@ describe('ConversationCompactionManager', () => {
             expect(outcome.Fired).toBe(true);
             expect(outcome.BoundarySequence).toBe(5);
             expect(mockDetailEntity.Load).toHaveBeenCalledWith('detail-5');
-        });
-
-        it('stamps AgentRunId onto the summary prompt params (per-run cost rollup linkage)', async () => {
-            mockRows.rows = [1, 2, 3, 4, 5, 6].map(n => sourceRow(n, 'User', 'x'.repeat(1000)));
-            const outcome = await ConversationCompactionManager.CompactIfNeeded(baseInput({
-                AgentRunId: 'RUN-42',
-            }) as never);
-            expect(outcome.Fired).toBe(true);
-            const promptParams = mockExecutePrompt.mock.calls[0][0];
-            expect(promptParams.agentRunId).toBe('RUN-42');
         });
 
         it('fails LOUD (error outcome, no prompt, no write) when the window load fails', async () => {

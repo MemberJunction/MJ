@@ -4,12 +4,13 @@
  * registers nothing on the IntegrationCheckRegistry — it is pulled in transitively when a
  * bundle imports it, and exists purely to keep the two bundles DRY.
  *
- * TRANSPORT: CLIENT-FIRST. Every agent run goes over the GraphQL wire (GraphQLAIClient → live
- * MJAPI), exactly like the agent-memory rig (`rigs/agent-memory-tests.ts`), so serialization,
- * the resolver auth/scope layer, and transport framing are exercised. When the bundle is driven
- * under a non-GraphQL (server-in-process) provider, `resolveClient` returns undefined and the
- * caller skips-as-pass loudly — these bundles are `RequiresLiveModel` and belong to the
- * "Integration Tests — Live Model" suite, which runs client transport per doctrine.
+ * TRANSPORT: SERVER-IN-PROCESS (Q8). Every agent run executes in-process via AgentRunner.RunAgent
+ * — NOT over the GraphQL wire. The headless integration client cannot consume the wire RunAIAgent's
+ * fire-and-forget PubSub, and the correlation-heavy checks need a synchronous run handle (the
+ * dedicated wire path is IT63 agent-wire-callback). `resolveClient` always returns an invoker and
+ * REQUIRES the run's `ctx.User`: it runs against the CLI's SQL provider, whose `CurrentUser` is
+ * null, so a run without an explicit contextUser dies in BaseEngine.Load (issue #3251). These
+ * bundles are `RequiresLiveModel` and belong to the "Integration Tests — Live Model" suite.
  *
  * DETERMINISM: the model is nondeterministic, the framework is not. Every assertion in the
  * bundles reads deterministic framework state (AIAgentRun/Step Payload snapshots + OutputData,
@@ -20,6 +21,7 @@
  */
 import { RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
+import { resolveContextUserOrThrow } from './agent-live-shared';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
@@ -86,14 +88,27 @@ export interface AgentInvoker {
     RunAIAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult>;
 }
 
-export function resolveClient(provider: IMetadataProvider): AgentInvoker | undefined {
+/**
+ * Build a server-in-process agent invoker bound to the run-scoped provider + the run's context
+ * user. `user` is REQUIRED (pass `ctx.User`): the agent runs in-process via AgentRunner.RunAgent,
+ * so a null contextUser dies in BaseEngine.Load ("For server-side use of all engine classes...").
+ * The contract is `params.contextUser ?? user`, else a REJECTED promise with a harness-attributed
+ * error — deliberately NO fallback to `provider.CurrentUser` (null on the CLI's SQL provider; the
+ * pre-#3251 code relied on it and failed every server-in-process run). Always returns an invoker
+ * (never undefined — the run always executes in-process).
+ */
+export function resolveClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
     return {
-        RunAIAgent: (params: ExecuteAgentParams) =>
-            new AgentRunner(provider).RunAgent({
+        // async so a missing user surfaces as a REJECTION, never a sync throw — RunAIAgent
+        // returns a Promise, and a sync throw would escape a `.catch(...)`-style caller.
+        RunAIAgent: async (params: ExecuteAgentParams) => {
+            const contextUser = resolveContextUserOrThrow(params.contextUser, user, 'resolveClient');
+            return new AgentRunner(provider).RunAgent({
                 ...params,
-                contextUser: (params as { contextUser?: unknown }).contextUser ?? provider.CurrentUser,
+                contextUser,
                 provider,
-            } as ExecuteAgentParams),
+            } as ExecuteAgentParams);
+        },
     };
 }
 
@@ -116,7 +131,7 @@ export async function loadAgentByName(
     return r.Success && r.Results.length > 0 ? r.Results[0] : undefined;
 }
 
-/** Run an agent over the wire and return the completed result. Errors are captured, never thrown. */
+/** Run an agent server-in-process (via the resolveClient invoker) and return the completed result. */
 export async function runAgentClient(
     client: AgentInvoker,
     agent: MJAIAgentEntity,
@@ -293,15 +308,25 @@ export async function runWithCompliance(
     label: string,
     maxAttempts = 3
 ): Promise<string> {
-    let lastRunId: string | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const runId = await scenario();
-        lastRunId = runId;
-        if (runId && (await isCompliant(runId))) {
+        // No run landed at all = an EXECUTION failure (harness or product), NOT model variance.
+        // Fail immediately with an `agent-run-failed:` prefix so §4.6 triage classifies it correctly
+        // and we don't burn live-model retries on a structurally doomed run (#3251 — this is exactly
+        // how the contextUser defect hid behind IT56/IT57's `model-noncompliance:` reports). The
+        // run's own ErrorMessage isn't available here (scenario surfaces only the run id) — read the
+        // persisted run row to get it.
+        if (!runId) {
+            throw new Error(
+                `agent-run-failed: ${label} — the agent run never landed (no run id) on attempt ` +
+                `${attempt}/${maxAttempts}; this is an execution failure, not model variance. ` +
+                `Read the run's ErrorMessage.`);
+        }
+        if (await isCompliant(runId)) {
             if (attempt > 1) console.warn(`  ↻ ${label} — model complied on attempt ${attempt}/${maxAttempts}`);
             return runId;
         }
-        console.warn(`  ↻ ${label} — attempt ${attempt}/${maxAttempts} non-compliant (runId=${runId ?? 'none'})`);
+        console.warn(`  ↻ ${label} — attempt ${attempt}/${maxAttempts} non-compliant (runId=${runId})`);
     }
-    throw new Error(`model-noncompliance: ${label} — the model never took the instructed action after ${maxAttempts} attempts (last runId=${lastRunId ?? 'none'}). Fix the prompt, not the check.`);
+    throw new Error(`model-noncompliance: ${label} — the model never took the instructed action after ${maxAttempts} attempts. Fix the prompt, not the check.`);
 }
