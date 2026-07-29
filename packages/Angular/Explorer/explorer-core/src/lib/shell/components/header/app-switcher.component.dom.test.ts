@@ -122,6 +122,21 @@ describe('AppSwitcherComponent (DOM)', () => {
     expect(attr(fixture, '.app-switcher-button', 'aria-expanded')).toBe('true');
   });
 
+  it('keeps a recently-used app visible in BOTH the Recent and All apps sections', () => {
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+      key === 'mj.shell.recentApps.v1' ? JSON.stringify([{ id: 'a2', ts: 1 }]) : undefined
+    );
+    const fixture = render();
+    openLauncher(fixture);
+    const recentNames = queryAll(fixture, '[aria-label="Recent applications"] .app-card .app-card-name-label')
+      .map((e) => e.textContent?.trim());
+    const allNames = queryAll(fixture, '[aria-label="All applications"] .app-card .app-card-name-label')
+      .map((e) => e.textContent?.trim());
+    expect(recentNames).toEqual(['Marketing']);
+    // The recent app does NOT vanish from the full list — it renders in both
+    expect(allNames).toEqual(['Sales', 'Marketing', 'Lists']);
+  });
+
   it('renders each app card with its Description summary', () => {
     const fixture = render();
     openLauncher(fixture);

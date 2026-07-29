@@ -91,8 +91,9 @@ const GRANDFATHERED = new Map([
 
   ['V202607071019__v5.45.x__Metadata_Sync',
    'NOT correct — a real, shipped gap (issue #3253). The converter emitted a 126-byte ' +
-   'reseed marker for 12,041 lines of metadata DML. PG deployments that migrated through ' +
-   'v5.45 need `mj sync push` to be whole. Immutable now; tracked for a forward-fix.'],
+   'reseed marker for 12,041 lines of metadata DML. Immutable now; healed forward by ' +
+   'V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql (see ' +
+   'DEPLOYMENT.md ("How to heal a ledger gap")).'],
 
   ['V202607202000__v5.49.x__SS_Materialize_Catalog_Views_spUpdateExistingEntityFields',
    'Correctly empty — same proc/TypeScript split as the v5.38 entry above. Committed ' +
@@ -106,6 +107,31 @@ const GRANDFATHERED = new Map([
    'Correctly empty — PostgreSQL never had the AFTER-trigger deadlock the SS migration ' +
    'fixes; its trigger is already BEFORE ROW + pg_advisory_xact_lock. The file carries a ' +
    'prose explanation but predates the machine-readable token.'],
+]);
+
+/**
+ * Delete-parity ratchet — the 10 metadata syncs whose record deletions never reached
+ * PostgreSQL (196 deletions, v5.9 through v5.45; issue #3253). Every one is a committed,
+ * Flyway-checksummed `.pg.sql` and therefore immutable — the gap is healed forward, not
+ * by editing history. v5.45's ComponentRegistry row is removed by
+ * V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql; the other 195 targets were
+ * verified absent from the fresh-install path.
+ *
+ * The converter now converts all 196 (StatementClassifier's bare-EXEC carve-out plus
+ * ExecBlockRule.splitIntoBlocks), so any NEW release must have parity. Do not add
+ * entries here to silence a failure — a new gap means the converter dropped a statement.
+ */
+const DELETE_PARITY_GRANDFATHERED = new Map([
+  ['V202603081507__v5.9.x__Metadata_Sync', '1 deletion lost'],
+  ['V202603161414__v5.12.x__Metadata_Sync', '23 deletions lost'],
+  ['V202603192021__v5.14.x__Metadata_Sync', '149 deletions lost'],
+  ['V202603221948__v5.15.x__Metadata_Sync', '7 deletions lost'],
+  ['V202604031940__v5.23.x__Metadata_Sync', '7 deletions lost'],
+  ['V202604221600__v5.29.x__Metadata_Sync', '1 deletion lost'],
+  ['V202605021448__v5.31.x__Metadata_Sync', '2 deletions lost'],
+  ['V202605201903__v5.35.x__Metadata_Sync', '1 deletion lost'],
+  ['V202605291451__v5.38.x__Metadata_Sync', '4 deletions lost'],
+  ['V202607071019__v5.45.x__Metadata_Sync', '1 deletion lost — healed by the v5.50 reseed'],
 ]);
 
 /**
@@ -172,6 +198,155 @@ export function classify(ssSql, pgSql) {
 }
 
 /**
+ * mj-sync emits a record DELETION as a bare, single-argument sp call — on the SS side
+ * `EXEC [schema].[spDeleteX] @ID = '<uuid>'`, on the PG side
+ * `PERFORM schema."spDeleteX"(p_ID := '<uuid>')`. Requiring that one ID argument is what
+ * separates a data deletion from everything else named spDelete: CodeGen's maintenance
+ * procs (spDeleteUnneededEntityFields) take no ID, and CREATE/DROP FUNCTION statements
+ * define the sproc rather than call it. None of those are counted.
+ *
+ * DELIBERATELY NOT END-ANCHORED, unlike the sibling pattern in StatementClassifier that
+ * decides whether the converter handles a batch. That one requires the argument to be the
+ * end of the batch, so a trailing comment or a second parameter makes the converter fall
+ * back to skipping the statement silently. This one still counts those, which is what
+ * turns a silent drop into a failed build. Aligning the two regexes would feel tidier and
+ * would delete the safety net: the gate must be able to see deletions the converter cannot.
+ */
+const SS_SYNC_DELETE = /EXEC\s+\[?[\w${}:]+\]?\s*\.\s*\[?spDelete\w+\]?\s+@ID\s*=\s*N?'[0-9a-fA-F-]{36}'/gi;
+const PG_SYNC_DELETE = /PERFORM\s+[\w"]+\s*\.\s*"spDelete\w+"\s*\(\s*p_ID\s*:=\s*'[0-9a-fA-F-]{36}'/gi;
+
+/**
+ * Character ranges occupied by comments, skipping over string literals.
+ *
+ * Being literal-aware is load-bearing rather than fastidious. Metadata syncs carry prompt
+ * and component source inside string literals, and 7 of the 49 have unbalanced `/*` vs
+ * `*​/` counts because of it. A regex strip pairs a `/*` living inside a literal with a
+ * `*​/` from a real comment further down and removes everything between. Since the SS and
+ * PG texts differ, that can drop a deletion from one side only (a false failure) or from
+ * both (silently hiding a real gap, which is the exact thing this gate exists to catch).
+ * Scanning is the only way to tell a comment from text that merely looks like one.
+ *
+ * Returns ranges instead of stripped text on purpose: the caller only needs to know
+ * whether a match landed in a comment, and building a cleaned copy of every migration
+ * costs several seconds across the repo for a string nothing reads.
+ */
+function commentRanges(sql) {
+  const ranges = [];
+  let i = 0;
+  const n = sql.length;
+  while (i < n) {
+    const ch = sql[i];
+    if (ch === "'") {
+      i++;
+      while (i < n) {
+        if (sql[i] === "'" && sql[i + 1] === "'") { i += 2; continue; }   // doubled-quote escape
+        if (sql[i] === "'") { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    if (ch === '-' && sql[i + 1] === '-') {
+      const start = i;
+      while (i < n && sql[i] !== '\n') i++;
+      ranges.push([start, i]);
+      continue;
+    }
+    if (ch === '/' && sql[i + 1] === '*') {
+      const start = i;
+      i += 2;
+      while (i < n && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
+      i = Math.min(i + 2, n);                                            // unterminated runs to EOF
+      ranges.push([start, i]);
+      continue;
+    }
+    i++;
+  }
+  return ranges;
+}
+
+/**
+ * Count mj-sync record deletions on each side of a counterpart pair.
+ *
+ * WHY A DEDICATED CHECK: `classify` is a magnitude detector — it answers "did the
+ * converter drop EVERYTHING?". A metadata sync with 194 saves and 1 deletion that loses
+ * only the deletion still scores hundreds of statements on both sides and sails through.
+ * That is precisely what happened: 196 deletions across 10 releases (v5.9–v5.45) reached
+ * ZERO committed PG counterparts, invisible to every automated check (issue #3253). Size
+ * diffing cannot see one missing statement; counting the statements can.
+ *
+ * @returns {{ss:number, pg:number, matched:boolean}}
+ */
+export function deleteParity(ssSql, pgSql) {
+  const ss = countSyncDeletes(ssSql, SS_SYNC_DELETE);
+  const pg = countSyncDeletes(pgSql, PG_SYNC_DELETE);
+  return { ss, pg, matched: ss === pg };
+}
+
+/**
+ * Count deletions that are real code rather than commented-out text.
+ *
+ * The `spDelete` pre-test skips the character scan for migrations that mention no sproc
+ * deletion at all, which is most of them. It cannot change a result: a file with no
+ * `spDelete` token has nothing for the pattern to match, comments or not.
+ */
+function countSyncDeletes(sql, pattern) {
+  if (!/spDelete/i.test(sql)) return 0;
+  const ranges = commentRanges(sql);
+  let count = 0;
+  for (const m of sql.matchAll(pattern)) {
+    if (!ranges.some(([start, end]) => m.index >= start && m.index < end)) count++;
+  }
+  return count;
+}
+
+/**
+ * Reduce per-pair deletion counts to the ones that must FAIL the gate.
+ *
+ * Parity is an equality, not a floor: a counterpart that gained a deletion the source
+ * never had would remove a row SQL Server keeps, diverging the two platforms just as
+ * badly as losing one.
+ *
+ * @param {Array<{stem:string, ss:number, pg:number}>} entries every checked pair
+ * @param {Iterable<string>} grandfatheredStems immutable pairs that already shipped gapped
+ * @returns {Array<{stem:string, ss:number, pg:number}>}
+ */
+export function deleteParityGaps(entries, grandfatheredStems) {
+  const shielded = new Set(grandfatheredStems);
+  return entries.filter((e) => e.ss !== e.pg && !shielded.has(e.stem));
+}
+
+/**
+ * Same ratchet-hygiene job as `staleGrandfatherWarnings`, for the delete-parity map.
+ *
+ * The two stale cases need different advice and must not be collapsed. "The gap is gone,
+ * remove the entry" is wrong when the truth is that the pair was never checked, because
+ * no `.pg.sql` counterpart exists for it yet — that entry is still doing its job, or is a
+ * typo, and either way the fix is not deletion.
+ *
+ * @param {Iterable<string>} grandfatheredStems
+ * @param {Map<string,{ss:number, pg:number}>} parityByStem every checked pair
+ * @returns {string[]} one warning per stale entry
+ */
+export function staleDeleteGrandfatherWarnings(grandfatheredStems, parityByStem) {
+  const warnings = [];
+  for (const stem of grandfatheredStems) {
+    const parity = parityByStem.get(stem);
+    if (parity === undefined) {
+      warnings.push(
+        `stale DELETE_PARITY_GRANDFATHERED entry "${stem}" — no committed counterpart pair ` +
+        `matches it (file renamed/removed, or a typo in the entry). Remove or correct the entry.`,
+      );
+    } else if (parity.ss === parity.pg) {
+      warnings.push(
+        `stale DELETE_PARITY_GRANDFATHERED entry "${stem}" — it no longer has a deletion gap ` +
+        `(source ${parity.ss}, counterpart ${parity.pg}), so the entry shields nothing. Remove it.`,
+      );
+    }
+  }
+  return warnings;
+}
+
+/**
  * The GRANDFATHERED map is load-bearing — the gate is green partly because of it.
  * An entry whose stem no longer matches a checked pair (renamed/removed file, or a
  * typo when the entry was added), or whose pair no longer classifies as suspect, is
@@ -209,6 +384,10 @@ function runCheck() {
 
   const suspects = [];
   const verdictByStem = new Map();
+  // Every checked pair, not only those with deletions: a grandfathered entry whose gap
+  // closed and one whose counterpart does not exist yet are different situations needing
+  // different advice, and recording only the gapped pairs makes them indistinguishable.
+  const parityByStem = new Map();
   let checked = 0;
   let documented = 0;
   let grandfathered = 0;
@@ -219,10 +398,11 @@ function runCheck() {
     if (!existsSync(pgPath)) continue;   // existence is check-pg-migration-parity.mjs's job
 
     checked++;
-    const { verdict, ssStmts, pgStmts } = classify(
-      readFileSync(join(SS_DIR, f), 'utf8'),
-      readFileSync(pgPath, 'utf8'),
-    );
+    const ssSql = readFileSync(join(SS_DIR, f), 'utf8');
+    const pgSql = readFileSync(pgPath, 'utf8');
+    const { verdict, ssStmts, pgStmts } = classify(ssSql, pgSql);
+    const { ss, pg } = deleteParity(ssSql, pgSql);
+    parityByStem.set(stem, { ss, pg });
     verdictByStem.set(stem, verdict);
     if (verdict === 'documented') {
       documented++;
@@ -242,13 +422,47 @@ function runCheck() {
     if (process.env.GITHUB_ACTIONS) console.log(`::warning::${w}`);
   }
 
-  if (suspects.length === 0) {
+  const deleteCounts = [...parityByStem].map(([stem, p]) => ({ stem, ...p }));
+  const withDeletions = deleteCounts.filter((e) => e.ss > 0 || e.pg > 0).length;
+  const deleteGaps = deleteParityGaps(deleteCounts, DELETE_PARITY_GRANDFATHERED.keys());
+  for (const w of staleDeleteGrandfatherWarnings(DELETE_PARITY_GRANDFATHERED.keys(), parityByStem)) {
+    console.warn(`WARNING: ${w}`);
+    if (process.env.GITHUB_ACTIONS) console.log(`::warning::${w}`);
+  }
+
+  if (deleteGaps.length > 0) {
+    console.error(`\nPG delete parity FAILED — ${deleteGaps.length} counterpart(s) disagree on record deletions:\n`);
+    for (const g of deleteGaps) {
+      console.error(`  ${g.stem}`);
+      console.error(`      source performs ${g.ss} mj-sync deletion(s); PG counterpart performs ${g.pg}.`);
+    }
+    console.error(`
+mj-sync emits deletions as bare 'EXEC [schema].[spDeleteX] @ID = ...' batches. The legacy
+converter used to skip those silently — 196 deletions across v5.9-v5.45 reached zero PG
+counterparts before anyone noticed (issue #3253). A size diff cannot see one missing
+statement, so this counts them instead.
+
+Re-convert the counterpart. If the deletion genuinely does not apply to PostgreSQL, port it
+by hand as a guarded block and say why in the migration:
+
+    DO $mj$ BEGIN
+      IF EXISTS (SELECT 1 FROM __mj."<Table>" WHERE "ID" = '<uuid>') THEN
+        PERFORM __mj."spDelete<Table>"(p_ID := '<uuid>');
+      END IF;
+    END $mj$;
+`);
+  }
+
+  if (suspects.length === 0 && deleteGaps.length === 0) {
     console.log(
       `PG content OK — ${checked} counterpart(s) checked, ` +
-      `${documented} documented no-op(s), ${grandfathered} grandfathered, 0 suspect.`,
+      `${documented} documented no-op(s), ${grandfathered} grandfathered, 0 suspect. ` +
+      `Delete parity OK — ${withDeletions} pair(s) with deletions, ` +
+      `${DELETE_PARITY_GRANDFATHERED.size} grandfathered, 0 mismatched.`,
     );
     return 0;
   }
+  if (suspects.length === 0) return 1;
 
   console.error(`\nPG content FAILED — ${suspects.length} counterpart(s) look silently emptied:\n`);
   for (const s of suspects) {

@@ -27,14 +27,24 @@
                 "output": "/assets"
               },
               {
+                "glob": "**/*",
+                "input": "node_modules/@memberjunction/ng-explorer-app/dist/assets",
+                "output": "/assets"
+              },
+              {
                 "glob": "pdf.worker.min.mjs",
                 "input": "../../node_modules/pdfjs-dist/build",
+                "output": "/assets"
+              },
+              {
+                "glob": "pdf.worker.min.mjs",
+                "input": "node_modules/pdfjs-dist/build",
                 "output": "/assets"
               }
             ],
             "styles": ["src/styles.scss"],
             "stylePreprocessorOptions": {
-              "includePaths": ["../../node_modules"]
+              "includePaths": ["../../node_modules", "node_modules"]
             },
             "scripts": []
           },
@@ -111,6 +121,11 @@
                 "src/staticwebapp.config.json",
                 {
                   "glob": "**/*",
+                  "input": "../../node_modules/@memberjunction/ng-explorer-app/dist/assets",
+                  "output": "/assets"
+                },
+                {
+                  "glob": "**/*",
                   "input": "node_modules/@memberjunction/ng-explorer-app/dist/assets",
                   "output": "/assets"
                 }
@@ -155,6 +170,11 @@
               {
                 "glob": "**/*",
                 "input": "../../node_modules/@memberjunction/ng-explorer-app/dist/assets",
+                "output": "/assets"
+              },
+              {
+                "glob": "**/*",
+                "input": "node_modules/@memberjunction/ng-explorer-app/dist/assets",
                 "output": "/assets"
               }
             ],

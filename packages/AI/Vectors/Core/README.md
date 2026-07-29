@@ -73,6 +73,18 @@ graph TD
 
 Token-aware text splitting that respects natural language boundaries. All methods are static.
 
+> **Looking for chunking *strategy*?** `TextChunker` is the low-level primitive — given a string and a
+> budget, split it. It has no notion of documents, media, or meaning. Choosing *where* content should
+> be cut (headings, topic shifts, audio chapters) belongs to `BaseSegmenter` in
+> [`@memberjunction/ai-segmentation`](../../Segmentation/README.md), which sits one layer up and uses
+> `TextChunker` to enforce the budget within a unit it identified. Ingestion pipelines should call a
+> segmenter, not this class directly. See the
+> [Content Segmentation Guide](../../../../guides/CONTENT_SEGMENTATION_GUIDE.md).
+>
+> **Offsets are provenance.** `StartOffset`/`EndOffset` are persisted as chunk provenance and used to
+> resolve a search hit back to its source passage — always verify that
+> `text.slice(StartOffset, EndOffset)` contains the chunk when changing this class.
+
 ### Strategies
 
 | Strategy | Splits On | Best For |

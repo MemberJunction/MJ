@@ -27,6 +27,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
+import { ResolveClientPackagePath } from './workspace-paths.js';
 
 /**
  * Result of an angular.json configuration operation.
@@ -81,7 +82,10 @@ export class AngularConfigManager {
    * @throws If the file exists but can't be parsed as JSON.
    */
   Load(): boolean {
-    const clientDir = resolve(this.repoRoot, this.clientPackagePath ?? 'packages/MJExplorer');
+    // Detect the layout when the path isn't configured — a distribution host built by
+    // `mj install` puts the client at apps/MJExplorer, and hardcoding packages/MJExplorer
+    // made Load() silently return false there, skipping the prebundle-exclude step (#3270).
+    const clientDir = resolve(this.repoRoot, ResolveClientPackagePath(this.repoRoot, this.clientPackagePath));
     const candidate = join(clientDir, 'angular.json');
 
     if (!existsSync(candidate)) {

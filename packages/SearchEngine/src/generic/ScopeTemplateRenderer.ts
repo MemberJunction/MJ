@@ -19,6 +19,7 @@
  */
 
 import nunjucks from 'nunjucks';
+import { EscapeScopeValueDeep, type ScopeLaneKind } from './ScopeValueEscaper';
 import { LogError } from '@memberjunction/core';
 import { SearchContext } from './search.types';
 
@@ -68,7 +69,16 @@ env.addFilter('jsonparse', (value: unknown): unknown => {
 export function RenderScopeTemplate(
     template: string | null | undefined,
     context: SearchContext | undefined,
-    extraData?: Record<string, unknown>
+    extraData?: Record<string, unknown>,
+    /**
+     * The dialect this template renders into (§5.4). Every interpolated context value is escaped
+     * for it automatically, so an author never has to remember.
+     *
+     * Defaults to `'none'` rather than to a guess: this function also renders NON-filter fields
+     * (`UserSearchString`, query transforms) where the value becomes search text, and escaping
+     * those would corrupt the query rather than protect it. Filter call sites pass their real kind.
+     */
+    laneKind: ScopeLaneKind = 'none'
 ): string {
     if (!template) return '';
     if (!template.includes('{{') && !template.includes('{%')) {
@@ -76,9 +86,19 @@ export function RenderScopeTemplate(
         return template;
     }
 
+    // `context` is escaped for the lane; `contextRaw` is the untouched original. Deliberate raw
+    // insertion is therefore spelled `{{ contextRaw.X }}` — one grep finds every such site, which
+    // is the point. A post-escape `| raw` filter could not do this: by the time a filter runs the
+    // original value is already gone.
     const data: Record<string, unknown> = {
-        context: context ?? {},
-        ...(extraData ?? {})
+        context: EscapeScopeValueDeep(context ?? {}, laneKind) as Record<string, unknown>,
+        contextRaw: context ?? {},
+        // extraData is escaped too. It previously spread in un-escaped, which meant the one exported
+        // function whose entire job is escaping had a silent bypass sitting in its signature. No
+        // in-repo caller passes it today, so this was latent rather than live — but leaving an
+        // unescaped channel in a security primitive is how a future caller introduces an injection
+        // without touching this file or noticing anything.
+        ...(EscapeScopeValueDeep(extraData ?? {}, laneKind) as Record<string, unknown>)
     };
 
     try {
@@ -101,10 +121,11 @@ export function RenderScopeTemplate(
 export function RenderScopeJsonTemplate(
     template: string | null | undefined,
     context: SearchContext | undefined,
-    extraData?: Record<string, unknown>
+    extraData?: Record<string, unknown>,
+    laneKind: ScopeLaneKind = 'json'
 ): unknown {
     if (!template) return undefined;
-    const rendered = RenderScopeTemplate(template, context, extraData);
+    const rendered = RenderScopeTemplate(template, context, extraData, laneKind);
     const trimmed = rendered.trim();
     if (!trimmed) return undefined;
     try {

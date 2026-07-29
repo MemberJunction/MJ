@@ -226,20 +226,35 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
     return this.applyFilter(result);
   }
 
-  /** Every switcher app not already shown in the Recent section, in the
-   *  user's chosen sort (custom Sequence order or A–Z) */
-  get OtherApps(): BaseApplication[] {
-    const recentIds = new Set(this.RecentAppsUnfiltered.map(a => NormalizeUUID(a.ID)));
-    let list = this.apps.filter(a => !recentIds.has(NormalizeUUID(a.ID)));
-    if (this.SortMode === 'alpha') {
-      list = [...list].sort((a, b) => a.Name.localeCompare(b.Name));
-    }
-    return this.applyFilter(list);
+  /** All switcher apps in the user's chosen sort (custom Sequence order or A–Z) */
+  private get sortedApps(): BaseApplication[] {
+    return this.SortMode === 'alpha'
+      ? [...this.apps].sort((a, b) => a.Name.localeCompare(b.Name))
+      : this.apps;
   }
 
-  /** Flat visible list (Recent then All) — the keyboard-navigation order */
+  /** The complete "All apps" section, in the user's chosen sort. Apps shown in
+   *  Recent appear here TOO — being recently used must not make an app vanish
+   *  from its expected place in the full list. */
+  get OtherApps(): BaseApplication[] {
+    return this.applyFilter(this.sortedApps);
+  }
+
+  /** Flat visible list in RENDERED card order — the keyboard-navigation index
+   *  space. Filtering collapses the sections into one deduplicated list;
+   *  otherwise it's Recent followed by the full All-apps list (a recent app
+   *  intentionally appears twice, matching the two cards on screen). */
   get VisibleApps(): BaseApplication[] {
+    if (this.IsFiltering) {
+      return this.applyFilter(this.sortedApps);
+    }
     return [...this.RecentApps, ...this.OtherApps];
+  }
+
+  /** Distinct app count for the screen-reader status (VisibleApps can contain
+   *  the same app twice when it's in both Recent and All apps) */
+  get AnnouncedAppCount(): number {
+    return this.IsFiltering ? this.VisibleApps.length : this.applyFilter(this.apps).length;
   }
 
   /** True when a filter is active (sections collapse into one result list) */
@@ -250,24 +265,6 @@ export class AppSwitcherComponent extends BaseAngularComponent implements OnInit
   /** Compact mode hides the filter under a handful of apps — it's noise there */
   get ShowFilter(): boolean {
     return !this.CompactMode || this.apps.length >= COMPACT_FILTER_THRESHOLD;
-  }
-
-  private get RecentAppsUnfiltered(): BaseApplication[] {
-    if (this.CompactMode) {
-      return [];
-    }
-    const byId = new Map(this.apps.map(a => [NormalizeUUID(a.ID), a]));
-    const result: BaseApplication[] = [];
-    for (const entry of this.recentEntries) {
-      const app = byId.get(NormalizeUUID(entry.id));
-      if (app) {
-        result.push(app);
-        if (result.length >= RECENT_DISPLAY_MAX) {
-          break;
-        }
-      }
-    }
-    return result;
   }
 
   private applyFilter(apps: BaseApplication[]): BaseApplication[] {
