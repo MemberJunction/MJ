@@ -45,6 +45,13 @@ function navTab(id: string, title: string): StubTab {
   };
 }
 
+/** A record promoted to the main workspace layout ("Move to Workspace") */
+function dockedRecordTab(id: string, title: string, sequence = 0, lastAccessedAt = ''): StubTab {
+  const tab = recordTab(id, title, sequence, lastAccessedAt);
+  tab.configuration['recordDockedToWorkspace'] = true;
+  return tab;
+}
+
 interface StubConfig {
   tabs: StubTab[];
   activeTabId: string | null;
@@ -103,5 +110,33 @@ describe('RecordsHubPillComponent (DOM)', () => {
     const { fixture, ws } = render([nav, t2, t3], 't1');
     (query(fixture, '.records-pill') as HTMLElement).click();
     expect(ws.stub.SetActiveTab).toHaveBeenCalledWith('t3'); // newest lastAccessedAt
+  });
+
+  describe('docked records (Move to Workspace)', () => {
+    it('excludes docked records from the badge count', () => {
+      const { fixture } = render(
+        [recordTab('t2', 'Widget A', 0), dockedRecordTab('t3', 'Widget B', 1)], 't2');
+      expect(query(fixture, '.records-pill-count')?.textContent?.trim()).toBe('1');
+    });
+
+    it('renders nothing when the only open record is docked', () => {
+      const { fixture } = render(
+        [navTab('t1', 'Dashboard'), dockedRecordTab('t2', 'Widget A')], 't1');
+      expect(query(fixture, '.records-pill')).toBeNull();
+    });
+
+    it('never resumes to a docked record, even when it is the most recent', () => {
+      const region = recordTab('t2', 'Widget A', 0, '2026-07-27T10:00:00Z');
+      const dockedNewest = dockedRecordTab('t3', 'Widget B', 1, '2026-07-27T12:00:00Z');
+      const { fixture, ws } = render([navTab('t1', 'Dashboard'), region, dockedNewest], 't1');
+      (query(fixture, '.records-pill') as HTMLElement).click();
+      expect(ws.stub.SetActiveTab).toHaveBeenCalledWith('t2');
+    });
+
+    it('is not lit while a DOCKED record is the active tab (main layout is the surface)', () => {
+      const { fixture } = render(
+        [recordTab('t2', 'Widget A', 0), dockedRecordTab('t3', 'Widget B', 1)], 't3');
+      expect(query(fixture, '.records-pill')?.classList.contains('active')).toBe(false);
+    });
   });
 });

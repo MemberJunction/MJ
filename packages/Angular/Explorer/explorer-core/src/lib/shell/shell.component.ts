@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -211,8 +211,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const raw = InstanceConfigEngine.Instance.Get('Shell.RecordOpen.Style');
       this.resolvedRecordOpenStyle = raw === 'classic' ? 'classic' : 'records';
       SetRecordOpenStyle(this.resolvedRecordOpenStyle);
+      // Region membership, not record identity: a record DOCKED to the
+      // workspace ("Move to Workspace") is a main-layout tab.
       this.workspaceManager.MainLayoutTabFilter = this.resolvedRecordOpenStyle === 'records'
-        ? (tab) => tab.configuration?.['resourceType'] !== RECORDS_RESOURCE_TYPE
+        ? (tab) => !IsRecordsRegionTab(tab.configuration)
+        : null;
+      // But NO record tab — docked included — may be consumed as the
+      // replaceable nav temp tab: the next nav click must never silently
+      // destroy an open record.
+      this.workspaceManager.TempTabConsumptionFilter = this.resolvedRecordOpenStyle === 'records'
+        ? (tab) => !IsRecordsTabConfiguration(tab.configuration)
         : null;
   }
 
@@ -855,13 +863,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.isViewingSystemTab = false;
     this.cdr.detectChanges();
 
-    // Records style: record tabs are a GLOBAL
+    // Records style: records-REGION tabs are a GLOBAL
     // surface — viewing one must never flip the user's app context. Without
     // this guard, resuming a record opened from another app yanked the whole
     // header to that app (the "clicked Records in AI, landed in Data
     // Explorer" bug). The Records pill carries the active state; the nav
-    // stays wherever the user is.
-    if (this.RecordTabsStyle && activeTab.configuration?.['resourceType'] === RECORDS_RESOURCE_TYPE) {
+    // stays wherever the user is. Records DOCKED to the workspace fall
+    // through: they are ordinary main-layout tabs and DO flip app context.
+    if (this.RecordTabsStyle && IsRecordsRegionTab(activeTab.configuration)) {
       this.titleService.setContext(this.activeApp?.Name || null, activeTab.title || null);
       return;
     }

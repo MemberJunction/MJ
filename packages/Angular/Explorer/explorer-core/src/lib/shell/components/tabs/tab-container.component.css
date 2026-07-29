@@ -169,6 +169,19 @@
   font-size: 13px;
   color: var(--mj-text-primary);
   transition: background 0.15s;
+  /* Real <button role="menuitem"> now — neutralize UA chrome */
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+}
+
+/* Keyboard roving highlights like hover; ring omitted on purpose — the
+   moving highlight IS the focus indicator inside a menu. */
+.context-menu .context-menu-item:focus-visible {
+  outline: none;
+  background: var(--mj-bg-surface-hover);
 }
 
 .context-menu .context-menu-item i {
@@ -304,7 +317,17 @@ mj-tab-container .lm_controls {
 }
 
 mj-tab-container .lm_header .lm_tab {
-  padding: 0 16px !important;
+  /* Flex centering: the type-icon slot (and any future adornment) must sit
+     on the tab's vertical center — inline baseline alignment inside the
+     35px line-height text line pushed it ~15px low. */
+  /* FULL FLEX FLOW (Matt's refactor): [type icon] [title] [pin] [close] are
+     ordinary flex siblings — no absolute anchoring, no padding reservations,
+     no vertical transforms. gap owns horizontal rhythm; align-items owns
+     vertical centering for every child. */
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 0 9px !important;
   font-size: 13px !important;
   height: 35px !important;
   line-height: 35px !important;
@@ -320,31 +343,80 @@ mj-tab-container .lm_header .lm_tab {
   margin-right: 1px !important;
 }
 
-/* App color accent - left edge indicator */
-mj-tab-container .lm_header .lm_tab::before {
-  content: '' !important;
-  position: absolute !important;
-  left: 0 !important;
-  top: 4px !important;
-  bottom: 4px !important;
-  width: 3px !important;
-  border-radius: 0 2px 2px 0 !important;
-  background-color: var(--app-color, transparent) !important;
-  opacity: 0.6 !important;
-  transition: all 0.15s ease !important;
+/* Type-icon slot (Matt's tab design, 2026-07-29): every tab leads with its
+   TYPE icon tinted in the app color — entity icon for records, nav-item/app
+   icon for pages. The old 3px app-color left-edge bar is GONE; the icon
+   tint carries app identity now. Hovering the TAB swaps the icon to an
+   ellipsis: the slot is the visible "this tab has actions" affordance —
+   clicking it opens the tab-actions menu (same menu as right-click). */
+mj-tab-container .lm_header .lm_tab .mj-tab-type-slot {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  /* 24px = WCAG 2.2 AA minimum pointer target (SC 2.5.8); glyph stays 12px */
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 5px !important;
+  flex-shrink: 0 !important;
+  cursor: pointer !important;
+  /* The slot is a real <button> now — neutralize UA button chrome */
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  font: inherit !important;
+  color: inherit !important;
+}
+
+/* Keyboard parity with hover: focused slot shows the dots + house focus
+   ring (outline idiom — GL headers clip box-shadows). */
+mj-tab-container .lm_header .lm_tab .mj-tab-type-slot:focus-visible {
+  outline: 2px solid var(--mj-border-focus) !important;
+  outline-offset: -2px !important;
+}
+mj-tab-container .lm_header .lm_tab .mj-tab-type-slot:focus-visible .mj-tab-type-ico {
+  display: none !important;
+}
+mj-tab-container .lm_header .lm_tab .mj-tab-type-slot:focus-visible .mj-tab-dots {
+  display: inline-block !important;
+}
+/* GL's base stylesheet styles EVERY `i` inside a tab as its legacy 2x19px
+   absolutely-positioned corner decoration (.lm_header .lm_tab i) — which
+   turns our icon elements into slivers the glyph overflows. Restore normal
+   flow for the slot's icons. */
+mj-tab-container .lm_header .lm_tab .mj-tab-type-slot i {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+mj-tab-container .lm_header .lm_tab .mj-tab-type-ico {
+  color: var(--app-color, var(--mj-text-muted)) !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+mj-tab-container .lm_header .lm_tab .mj-tab-dots {
+  display: none !important;
+  color: var(--mj-text-secondary) !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+mj-tab-container .lm_header .lm_tab:hover .mj-tab-type-ico {
+  display: none !important;
+}
+mj-tab-container .lm_header .lm_tab:hover .mj-tab-dots {
+  display: inline-block !important;
+}
+mj-tab-container .lm_header .lm_tab .mj-tab-type-slot:hover {
+  background: var(--mj-bg-surface-hover) !important;
+}
+mj-tab-container .lm_header .lm_tab .mj-tab-type-slot:hover .mj-tab-dots {
+  color: var(--mj-text-primary) !important;
 }
 
 mj-tab-container .lm_header .lm_tab:hover {
   background: var(--mj-bg-surface-hover) !important;
 }
 
-mj-tab-container .lm_header .lm_tab:hover .lm_close_tab {
-  opacity: 0.7 !important;
-}
-
-mj-tab-container .lm_header .lm_tab:hover::before {
-  opacity: 0.8 !important;
-}
 
 mj-tab-container .lm_header .lm_tab.lm_active {
   background: var(--mj-bg-surface) !important;
@@ -357,30 +429,39 @@ mj-tab-container .lm_header .lm_tab.lm_active {
   z-index: 2 !important;
 }
 
-/* Enhanced app color accent for active tab */
-mj-tab-container .lm_header .lm_tab.lm_active::before {
-  opacity: 1 !important;
-  width: 3px !important;
-  top: 2px !important;
-  bottom: 2px !important;
-  box-shadow: 0 0 6px var(--app-color, transparent) !important;
-}
 
 mj-tab-container .lm_title {
   cursor: pointer !important;
   user-select: none !important;
+  /* In-flow flex child: normalize the inherited 35px line-height so the
+     text box is glyph-height and centers identically to its siblings;
+     truncate instead of colliding when GL constrains tab width. */
+  line-height: normal !important;
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  /* Glyph-overhang room: italics (unpinned tabs) paint past the last
+     glyph's advance width, and overflow:hidden clips at the padding edge —
+     without this the final letter loses its slant. */
+  padding-right: 3px !important;
 }
 
 mj-tab-container .lm_close_tab {
-  position: absolute !important;
-  right: 4px !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  width: 16px !important;
-  height: 16px !important;
+  position: static !important;
+  order: 10 !important;
+  transform: none !important;
+  margin: 0 !important;
+  /* 24px WCAG target; glyph stays 10px */
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 5px !important;
   cursor: pointer !important;
-  opacity: 0 !important;
-  transition: all 0.15s ease !important;
+  /* ALWAYS visible (Matt's call): quiet at rest, full on its own hover/focus.
+     Discoverability shouldn't depend on hovering. */
+  opacity: 0.55 !important;
+  transition: opacity 0.15s ease !important;
   flex-shrink: 0 !important;
   display: flex !important;
   align-items: center !important;
@@ -389,32 +470,24 @@ mj-tab-container .lm_close_tab {
   color: var(--mj-text-secondary) !important;
 }
 
+mj-tab-container .lm_close_tab:focus-visible {
+  outline: 2px solid var(--mj-border-focus) !important;
+  outline-offset: -2px !important;
+  opacity: 1 !important;
+}
+
 mj-tab-container .lm_close_tab:hover {
   opacity: 1 !important;
   color: var(--mj-status-error) !important;
+  /* background-COLOR, never the shorthand: GL's stock close was a
+     background-image PNG and the shorthand silently wiped it (now it's an
+     FA ::before glyph, but the discipline stands). */
+  background-color: var(--mj-bg-surface-hover) !important;
 }
 
-/* Show close button on hover (except pinned) */
-mj-tab-container .lm_header .lm_tab:hover:not(.pinned) .lm_close_tab {
-  opacity: 0.7 !important;
-}
-
-/* Pinned tabs never show close button */
+/* Pinned tabs never show close button (the pin control replaces it) */
 mj-tab-container .lm_header .lm_tab.pinned .lm_close_tab {
   display: none !important;
 }
 
-/* Hide close button on active tab by default */
-mj-tab-container .lm_active .lm_close_tab {
-  opacity: 0 !important;
-}
 
-/* Show close button when hovering active tab */
-mj-tab-container .lm_active:hover .lm_close_tab {
-  opacity: 0.7 !important;
-}
-
-/* Adjust padding for close button */
-mj-tab-container .lm_header .lm_tab {
-  padding-right: 24px !important;
-}

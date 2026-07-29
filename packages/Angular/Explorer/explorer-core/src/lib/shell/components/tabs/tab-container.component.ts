@@ -28,7 +28,7 @@ import {
   LayoutNode
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, GetRecordSourceContext, RecordSourceContext, RecordSourceHasReturnTarget, SafeDetectChanges } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, RecordSourceContext, RecordSourceHasReturnTarget, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
@@ -107,6 +107,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   contextMenuX = 0;
   contextMenuY = 0;
   contextMenuTabId: string | null = null;
+  /** The control that opened the context menu — focus returns here on close */
+  private contextMenuAnchor: HTMLElement | null = null;
 
   // ---- RECORDS region (records-style record opens) ----
   /**
@@ -152,9 +154,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     return RecordSourceHasReturnTarget(this.ActiveRecordOrigin);
   }
 
-  /** A tab belongs to the records region (not the main workspace layout) */
+  /**
+   * A tab belongs to the records REGION (not the main workspace layout).
+   * Records docked to the workspace ("Move to Workspace") fail this check —
+   * they are main-layout tabs everywhere this predicate gates.
+   */
   private isRecordTab(tab: WorkspaceTab): boolean {
-    return this.RecordsStyleActive && IsRecordsTabConfiguration(tab.configuration);
+    return this.RecordsStyleActive && IsRecordsRegionTab(tab.configuration);
   }
 
   /**
@@ -257,7 +263,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.recordsLayoutManager.UpdateTabStyle(tab.id, {
           isPinned: tab.isPinned,
           title: tab.title,
-          appColor: app?.GetColor() || DEFAULT_APP_COLOR
+          appColor: app?.GetColor() || DEFAULT_APP_COLOR,
+          typeIcon: this.resolveTabTypeIcon(tab)
         });
       }
     });
@@ -337,7 +344,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       title: tab.title,
       route: tab.configuration['route'] as string || '',
       isPinned: tab.isPinned,
-      isLoaded: false
+      isLoaded: false,
+      typeIcon: this.resolveTabTypeIcon(tab)
     };
     this.recordsLayoutManager.AddTab(state);
     this.updateTabDisplayName(tab);
@@ -365,6 +373,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       }),
       this.layoutManager.TabClosed.subscribe(tabId => {
         this.cleanupTabComponent(tabId);
+        // DEMOTE guard ("Move to Records"): the tab was removed from the
+        // main GL because its region membership changed — it's still in the
+        // workspace config and the records region is about to pick it up.
+        // Closing it here would destroy the tab the user asked to keep.
+        // cleanupTabComponent above still runs: the cache detach is what
+        // lets the records GL reattach the component with state intact.
+        const movedTab = this.workspaceManager.GetTab(tabId);
+        if (movedTab && this.isRecordTab(movedTab)) {
+          return;
+        }
         this.workspaceManager.CloseTab(tabId);
       }),
       this.layoutManager.LayoutChanged.subscribe(event => {
@@ -380,7 +398,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.workspaceManager.TogglePin(tabId);
       }),
       this.layoutManager.TabRightClicked.subscribe(event => {
-        this.showContextMenu(event.x, event.y, event.tabId);
+        this.showContextMenu(event.x, event.y, event.tabId, event.anchorEl);
       })
     );
 
@@ -472,10 +490,20 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       }),
       this.recordsLayoutManager.TabClosed.subscribe(async tabId => {
         this.cleanupTabComponent(tabId);
+        const closedTab = this.workspaceManager.GetTab(tabId);
+        // PROMOTE guard ("Move to Workspace"): the tab left the records GL
+        // because its region membership changed — it's still in the
+        // workspace config and the MAIN layout is about to pick it up.
+        // Closing it here would destroy the tab the user just promoted.
+        // cleanupTabComponent above still runs: the cache detach is what
+        // lets the main GL reattach the component with state intact.
+        if (closedTab && !this.isRecordTab(closedTab)) {
+          return;
+        }
         // Guard: a configuration sync that removed this tab already updated
         // the workspace — closing again would re-emit an unchanged config
         // from inside a subscription pass.
-        if (this.workspaceManager.GetTab(tabId)) {
+        if (closedTab) {
           this.workspaceManager.CloseTab(tabId);
         }
         // Records close OUTRIGHT (no keep-last-tab-alive rule) — if that
@@ -498,7 +526,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.workspaceManager.TogglePin(tabId);
       }),
       this.recordsLayoutManager.TabRightClicked.subscribe(event => {
-        this.showContextMenu(event.x, event.y, event.tabId);
+        this.showContextMenu(event.x, event.y, event.tabId, event.anchorEl);
       })
     );
   }
@@ -1359,13 +1387,61 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       title: tab.title,
       route: tab.configuration['route'] as string || '',
       isPinned: tab.isPinned,
-      isLoaded: false
+      isLoaded: false,
+      typeIcon: this.resolveTabTypeIcon(tab)
     };
 
     this.layoutManager.AddTab(state);
 
+    // Nav-item icons live behind an async lookup — upgrade in the background
+    void this.upgradeNavTabIcon(tab, this.layoutManager);
+
     // Load display name in background without loading full component
     this.updateTabDisplayName(tab);
+  }
+
+  /**
+   * Synchronous best-effort TYPE icon for a tab (the app-colored icon in
+   * the tab's type slot — see TabComponentState.typeIcon). Record tabs
+   * resolve fully here (entity metadata is loaded); nav tabs start with the
+   * app's icon and get upgraded to the nav item's own icon asynchronously
+   * (upgradeNavTabIcon).
+   */
+  private resolveTabTypeIcon(tab: WorkspaceTab): string {
+    if (IsRecordsTabConfiguration(tab.configuration)) {
+      const entityName = tab.configuration?.['Entity'];
+      const entityIcon = typeof entityName === 'string'
+        ? this.ProviderToUse?.EntityByName(entityName)?.Icon
+        : undefined;
+      return entityIcon || 'fa-regular fa-file-lines';
+    }
+    const app = this.appManager.GetAppById(tab.applicationId);
+    return app?.Icon || 'fa-regular fa-file';
+  }
+
+  /**
+   * Resolve and apply a NAV tab's type icon — the async owner of nav-tab
+   * icons (GetNavItems is a cached JSON parse: near-instant, but async by
+   * contract). Ladder: nav item's own icon → app icon → generic. No-op for
+   * record tabs (their icons resolve synchronously). Idempotent: the slot
+   * only touches the DOM when the class actually changes.
+   */
+  private async upgradeNavTabIcon(tab: WorkspaceTab, manager: GoldenLayoutManager): Promise<void> {
+    if (IsRecordsTabConfiguration(tab.configuration)) {
+      return;
+    }
+    const app = this.appManager.GetAppById(tab.applicationId);
+    let navItemIcon: string | undefined;
+    const navItemName = tab.configuration?.['navItemName'];
+    if (app && typeof navItemName === 'string' && navItemName) {
+      try {
+        const navItems = await app.GetNavItems();
+        navItemIcon = navItems.find(i => i.Label === navItemName)?.Icon;
+      } catch {
+        // Icon resolution is cosmetic — fall through to the app fallback.
+      }
+    }
+    manager.UpdateTabStyle(tab.id, { typeIcon: navItemIcon || app?.Icon || 'fa-regular fa-file' });
   }
 
   /**
@@ -1904,13 +1980,23 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           }
         }
 
-        // Update styling for existing tabs
+        // Update styling for existing tabs. typeIcon ownership is split:
+        // record tabs resolve synchronously here; NAV tab icons are owned
+        // by upgradeNavTabIcon (async ladder) — setting the sync fallback
+        // here too would downgrade an upgraded icon every emission and
+        // flicker. Restored nav tabs never pass through createTab, so the
+        // upgrade call here is also their FIRST icon application.
         const app = this.appManager.GetAppById(tab.applicationId);
-        this.layoutManager.UpdateTabStyle(tab.id, {
+        const styleUpdate: Partial<TabComponentState> = {
           isPinned: tab.isPinned,
           title: tab.title,
           appColor: app?.GetColor() || DEFAULT_APP_COLOR
-        });
+        };
+        if (IsRecordsTabConfiguration(tab.configuration)) {
+          styleUpdate.typeIcon = this.resolveTabTypeIcon(tab);
+        }
+        this.layoutManager.UpdateTabStyle(tab.id, styleUpdate);
+        void this.upgradeNavTabIcon(tab, this.layoutManager);
       }
     });
 
@@ -1925,11 +2011,28 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   /**
    * Show context menu
    */
-  showContextMenu(x: number, y: number, tabId: string): void {
+  showContextMenu(x: number, y: number, tabId: string, anchorEl?: HTMLElement): void {
     this.contextMenuX = x;
     this.contextMenuY = y;
     this.contextMenuTabId = tabId;
     this.contextMenuVisible = true;
+    // Remember the invoking control so closing can hand focus back (the
+    // slot button passes itself; right-click falls back to whatever was
+    // focused). aria-expanded reflects the open menu on the anchor.
+    this.contextMenuAnchor = anchorEl ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    if (this.contextMenuAnchor?.classList.contains('mj-tab-type-slot')) {
+      this.contextMenuAnchor.setAttribute('aria-expanded', 'true');
+    }
+    // GL tab events (right-click, type-slot click) originate OUTSIDE any
+    // Angular CD trigger — zoneless: without an explicit flush the flag
+    // flips but the menu never renders.
+    SafeDetectChanges(this.cdr);
+    // Menu-pattern focus: land on the first enabled item so arrow keys work
+    // immediately (rAF — the flush above just created the DOM).
+    requestAnimationFrame(() => {
+      const first = document.querySelector<HTMLButtonElement>('.context-menu [role="menuitem"]:not([disabled])');
+      first?.focus();
+    });
 
     // Close menu when clicking outside - use setTimeout to avoid immediate trigger
     setTimeout(() => {
@@ -1958,9 +2061,64 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   /**
    * Hide context menu
    */
-  hideContextMenu(): void {
+  hideContextMenu(restoreFocus = true): void {
     this.contextMenuVisible = false;
     this.contextMenuTabId = null;
+    const anchor = this.contextMenuAnchor;
+    this.contextMenuAnchor = null;
+    if (anchor?.classList.contains('mj-tab-type-slot')) {
+      anchor.setAttribute('aria-expanded', 'false');
+    }
+    // Outside-click/Escape teardown also runs outside CD — flush so the
+    // menu actually disappears (see showContextMenu).
+    SafeDetectChanges(this.cdr);
+    // Menu-pattern focus return (app-switcher precedent). Actions that
+    // deliberately move the user to another surface pass restoreFocus=false
+    // and let the destination own focus.
+    if (restoreFocus && anchor?.isConnected) {
+      requestAnimationFrame(() => anchor.focus());
+    }
+  }
+
+  /**
+   * role="menu" keyboard model: ArrowUp/Down rove (wrapping) over enabled
+   * items, Home/End jump, Escape closes with focus return, Tab dismisses
+   * (native menus don't trap Tab).
+   */
+  onMenuKeydown(event: KeyboardEvent): void {
+    const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.context-menu [role="menuitem"]:not([disabled])'));
+    if (items.length === 0) {
+      return;
+    }
+    const idx = items.indexOf(document.activeElement as HTMLButtonElement);
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        items[(idx + 1) % items.length].focus();
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        items[(idx - 1 + items.length) % items.length].focus();
+        break;
+      case 'Home':
+        event.preventDefault();
+        items[0].focus();
+        break;
+      case 'End':
+        event.preventDefault();
+        items[items.length - 1].focus();
+        break;
+      case 'Escape':
+        // Handle here (with stopPropagation) so Escape works even before the
+        // deferred document-level teardown listener attaches.
+        event.preventDefault();
+        event.stopPropagation();
+        this.hideContextMenu();
+        break;
+      case 'Tab':
+        this.hideContextMenu(false);
+        break;
+    }
   }
 
   /**
@@ -1970,6 +2128,69 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (!this.contextMenuTabId) return false;
     const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
     return tab?.isPinned || false;
+  }
+
+  /** Context tab is a records-REGION record — eligible for "Move to Workspace" */
+  get canContextMoveToWorkspace(): boolean {
+    if (!this.contextMenuTabId || !this.RecordsStyleActive) return false;
+    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+    return !!tab && IsRecordsRegionTab(tab.configuration);
+  }
+
+  /** Context tab is a DOCKED record — eligible for "Move to Records" */
+  get canContextMoveToRecords(): boolean {
+    if (!this.contextMenuTabId || !this.RecordsStyleActive) return false;
+    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+    return !!tab && IsRecordsTabConfiguration(tab.configuration) && IsRecordDockedToWorkspace(tab.configuration);
+  }
+
+  /**
+   * Promote: records region → main workspace layout ("Move to Workspace").
+   * ORDER MATTERS: activate FIRST, then flip the flag. With the tab already
+   * active, (a) the moved tab stays the user's focus through the membership
+   * flip (syncTabsWithConfiguration's tail focuses config.activeTabId), and
+   * (b) a single-resource→multi-tab transition triggered by the flip exempts
+   * it from the force-pin sweep (it IS the activeTabId).
+   */
+  onContextMoveToWorkspace(): void {
+    const tabId = this.contextMenuTabId;
+    this.hideContextMenu(false);
+    if (!tabId) return;
+    this.workspaceManager.SetActiveTab(tabId);
+    this.workspaceManager.UpdateTabConfiguration(tabId, { [RECORD_DOCKED_TO_WORKSPACE_KEY]: true });
+    this.assertMovedTabActivation(tabId);
+  }
+
+  /**
+   * Demote: main workspace layout → records region ("Move to Records").
+   * Same activate-first ordering: the flip's emission then computes
+   * showing=true in syncRecordsRegion, so the region surfaces focused on
+   * the returned tab. `false` (not undefined) so the choice is explicit in
+   * the persisted configuration.
+   */
+  onContextMoveToRecords(): void {
+    const tabId = this.contextMenuTabId;
+    this.hideContextMenu(false);
+    if (!tabId) return;
+    this.workspaceManager.SetActiveTab(tabId);
+    this.workspaceManager.UpdateTabConfiguration(tabId, { [RECORD_DOCKED_TO_WORKSPACE_KEY]: false });
+    this.assertMovedTabActivation(tabId);
+  }
+
+  /**
+   * A move's SOURCE layout auto-activates its next tab when the moved tab is
+   * removed, and that GL activation WRITES BACK into the workspace — stomping
+   * the moved tab's activation (demote left the user staring at the main
+   * layout while the record surfaced in the records region). Re-assert after
+   * the removal cascade settles — the assertRecordActivation pattern.
+   */
+  private assertMovedTabActivation(tabId: string): void {
+    setTimeout(() => {
+      const config = this.workspaceManager.GetConfiguration();
+      if (config?.tabs.some(t => t.id === tabId) && config.activeTabId !== tabId) {
+        this.workspaceManager.SetActiveTab(tabId);
+      }
+    }, 0);
   }
 
   /**
@@ -1991,7 +2212,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       const manager = tab && this.isRecordTab(tab) ? this.recordsLayoutManager : this.layoutManager;
       manager.RemoveTab(this.contextMenuTabId);
     }
-    this.hideContextMenu();
+    // The anchor lives on the closed tab — nothing to return focus to.
+    this.hideContextMenu(false);
   }
 
   /**

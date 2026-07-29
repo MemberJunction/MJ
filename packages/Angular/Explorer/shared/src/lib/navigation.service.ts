@@ -1115,8 +1115,10 @@ export class NavigationService implements OnDestroy {
     // don't count here. Without this filter, the active record tab (which
     // belongs to the target app) satisfied the "already on this app's tab"
     // check and the whole switch silently no-oped — the dead origin-crumb
-    // click when the crumb only knew the app. Classic style keeps records
-    // as ordinary tabs.
+    // click when the crumb only knew the app. Records DOCKED to the
+    // workspace are excluded too (identity check, not region membership):
+    // switch-to-app must land on a page, never a record. Classic style
+    // keeps records as ordinary tabs.
     const appTabs = IsRecordTabsStyle()
       ? this.workspaceManager.GetAppTabs(appId).filter(t => !IsRecordsTabConfiguration(t.configuration))
       : this.workspaceManager.GetAppTabs(appId);

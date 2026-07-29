@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter, inject } from '@angular/core';
 import { WorkspaceStateManager, WorkspaceTab } from '@memberjunction/ng-base-application';
-import { IsRecordsTabConfiguration, SafeDetectChanges } from '@memberjunction/ng-shared';
+import { IsRecordsRegionTab, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { Subscription } from 'rxjs';
 
 /**
@@ -41,8 +41,11 @@ export class RecordsHubPillComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.sub = this.workspaceManager.Configuration.subscribe(config => {
+      // REGION records only: a record docked to the workspace ("Move to
+      // Workspace") is a visible main-layout tab — it doesn't count toward
+      // the pill's badge and is never a resume target.
       this.RecordTabs = (config?.tabs ?? [])
-        .filter(t => IsRecordsTabConfiguration(t.configuration))
+        .filter(t => IsRecordsRegionTab(t.configuration))
         .sort((a, b) => a.sequence - b.sequence);
       this.activeTabId = config?.activeTabId ?? null;
       const activeIsRecord = this.RecordTabs.some(t => t.id === this.activeTabId);

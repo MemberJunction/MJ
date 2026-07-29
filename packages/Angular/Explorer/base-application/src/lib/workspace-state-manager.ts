@@ -37,12 +37,30 @@ export class WorkspaceStateManager {
    * CloseTab. Null = every tab is a main-layout tab (classic behavior).
    * Kept as a settable predicate (not an import) because this package sits
    * below the package that owns the record-open style.
+   * NOTE: record tabs DOCKED to the workspace ("Move to Workspace")
+   * intentionally PASS this filter — they are main-layout tabs.
    */
   public MainLayoutTabFilter: ((tab: WorkspaceTab) => boolean) | null = null;
 
   /** True when the tab participates in main-layout semantics (see MainLayoutTabFilter) */
   private isMainLayoutTab(tab: WorkspaceTab): boolean {
     return this.MainLayoutTabFilter ? this.MainLayoutTabFilter(tab) : true;
+  }
+
+  /**
+   * Optional predicate identifying tabs that may be CONSUMED as the
+   * replaceable "temporary tab" by OpenTab. Record tabs (docked or not) are
+   * deliberately unpinned yet must never be silently replaced by the next
+   * nav click — the shell sets this to exclude ALL record tabs under the
+   * records style. Null = every unpinned main-layout tab is consumable
+   * (classic behavior). Settable predicate for the same layering reason as
+   * MainLayoutTabFilter.
+   */
+  public TempTabConsumptionFilter: ((tab: WorkspaceTab) => boolean) | null = null;
+
+  /** True when the tab may be consumed as OpenTab's replaceable temp tab */
+  private isTempTabConsumable(tab: WorkspaceTab): boolean {
+    return this.TempTabConsumptionFilter ? this.TempTabConsumptionFilter(tab) : true;
   }
 
   /**
@@ -442,7 +460,7 @@ export class WorkspaceStateManager {
     // NEVER consume a non-main-layout tab (e.g. an open record under the
     // records style — they're deliberately unpinned, and replacing one here
     // would silently destroy an open record with zero user feedback).
-    const tempTab = config.tabs.find(tab => !tab.isPinned && this.isMainLayoutTab(tab));
+    const tempTab = config.tabs.find(tab => !tab.isPinned && this.isMainLayoutTab(tab) && this.isTempTabConsumable(tab));
 
     if (tempTab) {
       // Replace temporary tab

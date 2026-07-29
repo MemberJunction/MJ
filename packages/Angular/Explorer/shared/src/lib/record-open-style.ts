@@ -35,6 +35,32 @@ export function IsRecordsTabConfiguration(configuration: Record<string, unknown>
 }
 
 /**
+ * Tab-configuration key marking a record tab the user has promoted ("docked")
+ * out of the records region into the MAIN workspace layout ("Move to
+ * Workspace"). Persisted with the tab configuration. ALWAYS read through
+ * IsRecordDockedToWorkspace.
+ */
+export const RECORD_DOCKED_TO_WORKSPACE_KEY = 'recordDockedToWorkspace';
+
+/** True when a record tab has been promoted into the main workspace layout */
+export function IsRecordDockedToWorkspace(configuration: Record<string, unknown> | undefined | null): boolean {
+  return configuration?.[RECORD_DOCKED_TO_WORKSPACE_KEY] === true;
+}
+
+/**
+ * True when a tab LIVES in the records region: it is a record tab that has
+ * NOT been docked to the workspace. This is the REGION-MEMBERSHIP predicate —
+ * layout routing, region visibility, the Records pill, and the shell's
+ * app-flip guard all fork on it. Record IDENTITY checks (open dedup,
+ * record→record origin capture, SwitchToApp's "never land on a record"
+ * filter) must keep using IsRecordsTabConfiguration: a docked record is
+ * still a record, it just lives in the main layout.
+ */
+export function IsRecordsRegionTab(configuration: Record<string, unknown> | undefined | null): boolean {
+  return IsRecordsTabConfiguration(configuration) && !IsRecordDockedToWorkspace(configuration);
+}
+
+/**
  * Where the user was standing when a record was opened — captured by
  * NavigationService.OpenEntityRecord into the record tab's configuration.
  * Powers the origin crumb in the records region ("← App › Page"), which takes

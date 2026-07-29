@@ -78,6 +78,13 @@ export interface TabComponentState {
   route: string;
   isPinned: boolean;
   isLoaded: boolean;
+  /**
+   * Font Awesome classes for the tab's TYPE icon (entity icon for record
+   * tabs, nav-item/app icon for nav tabs), rendered in the app color at the
+   * left of the tab. Hovering the tab swaps it to an ellipsis that opens
+   * the tab-actions menu — the icon slot IS the visible menu affordance.
+   */
+  typeIcon?: string;
 }
 
 /**
@@ -128,7 +135,7 @@ export class GoldenLayoutManager {
   private layoutChanged$ = new Subject<LayoutChangedEvent>();
   private activeTab$ = new BehaviorSubject<string | null>(null);
   private tabDoubleClicked = new Subject<string>();
-  private tabRightClicked = new Subject<{ tabId: string; x: number; y: number }>();
+  private tabRightClicked = new Subject<{ tabId: string; x: number; y: number; anchorEl?: HTMLElement }>();
 
   // Track loaded tabs for lazy loading
   private loadedTabs = new Set<string>();
@@ -174,7 +181,7 @@ export class GoldenLayoutManager {
   /**
    * Observable for tab right-click events (to show context menu)
    */
-  get TabRightClicked(): Observable<{ tabId: string; x: number; y: number }> {
+  get TabRightClicked(): Observable<{ tabId: string; x: number; y: number; anchorEl?: HTMLElement }> {
     return this.tabRightClicked.asObservable();
   }
 
@@ -510,6 +517,31 @@ export class GoldenLayoutManager {
       titleElement.style.fontStyle = state.isPinned ? 'normal' : 'italic';
     }
 
+    // Type-icon slot: the tab's type icon (app-colored) that swaps to an
+    // ellipsis on tab hover — clicking it opens the tab-actions menu. This
+    // slot is the DEFAULT visible affordance for every tab (Matt's design);
+    // the CSS driving the swap lives with the tab styles in tab-container.
+    this.applyTypeIconSlot(tabElement, titleElement, state);
+
+    // GL's close control is a bare div — give it button semantics, an
+    // accessible name that tracks the title, and keyboard activation.
+    const closeEl = tabElement.querySelector('.lm_close_tab') as HTMLElement | null;
+    if (closeEl) {
+      closeEl.setAttribute('role', 'button');
+      closeEl.setAttribute('tabindex', '0');
+      closeEl.setAttribute('aria-label', `Close ${state.title}`);
+      if (!closeEl.hasAttribute('data-key-attached')) {
+        closeEl.setAttribute('data-key-attached', 'true');
+        closeEl.addEventListener('keydown', (e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            closeEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+          }
+        });
+      }
+    }
+
     // Add event listeners if not already added (use data attribute to track)
     if (!tabElement.hasAttribute('data-events-attached')) {
       tabElement.setAttribute('data-events-attached', 'true');
@@ -534,24 +566,36 @@ export class GoldenLayoutManager {
       if (!tabElement.querySelector('.pin-icon')) {
         const pinIcon = document.createElement('i');
         pinIcon.className = 'fa-solid fa-thumbtack pin-icon';
+        pinIcon.setAttribute('role', 'button');
+        pinIcon.setAttribute('tabindex', '0');
+        pinIcon.setAttribute('aria-label', `Unpin ${state.title}`);
+        // In-flow flex sibling (tab is a flex row); order slots it between
+        // the title and the close button. 24px box = WCAG 2.5.8 target.
         pinIcon.style.cssText = `
-          position: absolute;
-          right: 4px;
-          top: 50%;
-          transform: translateY(-50%) rotate(45deg);
+          position: static;
+          transform: rotate(45deg);
           font-size: 9px;
           color: var(--mj-text-muted);
-          width: 16px;
-          height: 16px;
+          width: 24px;
+          height: 24px;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
+          flex-shrink: 0;
+          order: 9;
         `;
         // Click on pin to unpin
         pinIcon.addEventListener('click', (e) => {
           e.stopPropagation();
           this.tabDoubleClicked.next(state.tabId);
+        });
+        pinIcon.addEventListener('keydown', (e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            this.tabDoubleClicked.next(state.tabId);
+          }
         });
         tabElement.appendChild(pinIcon);
       }
@@ -560,6 +604,66 @@ export class GoldenLayoutManager {
       const pinIcon = tabElement.querySelector('.pin-icon');
       if (pinIcon) {
         pinIcon.remove();
+      }
+    }
+  }
+
+  /**
+   * Create/update the type-icon slot inside a tab element. Idempotent: the
+   * slot is created once, its icon classes are updated in place on later
+   * style passes (e.g. a nav tab whose icon resolves asynchronously). No
+   * typeIcon = no slot (and removal if one existed from a previous state).
+   */
+  private applyTypeIconSlot(tabElement: HTMLElement, titleElement: HTMLElement | null, state: TabComponentState): void {
+    let slot = tabElement.querySelector('.mj-tab-type-slot') as HTMLButtonElement | null;
+    if (!state.typeIcon) {
+      slot?.remove();
+      return;
+    }
+    if (!slot) {
+      // A REAL button: tab-focusable, Enter/Space for free, announced with an
+      // accessible name — the slot is the keyboard door to the tab-actions
+      // menu, not just a hover ornament.
+      slot = document.createElement('button');
+      slot.type = 'button';
+      slot.className = 'mj-tab-type-slot';
+      slot.title = 'Tab actions';
+      slot.setAttribute('aria-label', `Tab actions — ${state.title}`);
+      slot.setAttribute('aria-haspopup', 'menu');
+      const icon = document.createElement('i');
+      icon.className = `mj-tab-type-ico ${state.typeIcon}`;
+      icon.setAttribute('aria-hidden', 'true');
+      const dots = document.createElement('i');
+      dots.className = 'mj-tab-dots fa-solid fa-ellipsis';
+      dots.setAttribute('aria-hidden', 'true');
+      slot.appendChild(icon);
+      slot.appendChild(dots);
+      // The dots ARE the menu affordance: open the same tab-actions menu the
+      // right-click path uses, anchored under the slot. The slot passes
+      // itself as the anchor so the menu can return focus on close.
+      slot.addEventListener('click', (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = slot!.getBoundingClientRect();
+        this.tabRightClicked.next({ tabId: state.tabId, x: rect.left, y: rect.bottom + 2, anchorEl: slot! });
+      });
+      // GL's own tab handlers listen for keydown/mousedown on the tab — keep
+      // keyboard activation of the slot from leaking into tab drag/select.
+      slot.addEventListener('keydown', (e: KeyboardEvent) => e.stopPropagation());
+      if (titleElement) {
+        tabElement.insertBefore(slot, titleElement);
+      } else {
+        tabElement.prepend(slot);
+      }
+    } else {
+      const icon = slot.querySelector('.mj-tab-type-ico') as HTMLElement | null;
+      const expected = `mj-tab-type-ico ${state.typeIcon}`;
+      if (icon && icon.className !== expected) {
+        icon.className = expected;
+      }
+      const expectedLabel = `Tab actions — ${state.title}`;
+      if (slot.getAttribute('aria-label') !== expectedLabel) {
+        slot.setAttribute('aria-label', expectedLabel);
       }
     }
   }
