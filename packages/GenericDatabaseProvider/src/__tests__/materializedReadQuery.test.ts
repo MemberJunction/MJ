@@ -1,0 +1,213 @@
+import { describe, it, expect } from 'vitest';
+import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+
+/**
+ * Phase 2 (plan §5): the PURE materialized-read query builder — the injection-safe, faithfulness-critical
+ * core of parameterized RowFilterBroad read-time injection. Every caller value is BOUND (never in the SQL
+ * string); ANY condition that would diverge from the live query returns null (→ caller runs live).
+ */
+describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
+    const build = GenericDatabaseProvider.buildMaterializedReadQuery;
+    const base = {
+        outputColumns: ['ID', 'Status', 'ChapterID'],
+        schemaName: '__mj',
+        viewName: 'materialized_vwDonations',
+    };
+
+    describe('scalar equality', () => {
+        it('SQL Server: binds the value with a `?` placeholder, never interpolates', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: '=', paramName: 'status', kind: 'scalar' }],
+                paramValues: { status: 'Active' },
+                isPostgres: false,
+            });
+            expect(plan).not.toBeNull();
+            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] = ?');
+            expect(plan!.parameters).toEqual(['Active']);
+        });
+
+        it('PostgreSQL: uses `$1` placeholder + quoted identifiers', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: '=', paramName: 'status', kind: 'scalar' }],
+                paramValues: { status: 'Active' },
+                isPostgres: true,
+            });
+            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "Status" = $1');
+            expect(plan!.parameters).toEqual(['Active']);
+        });
+    });
+
+    describe('range operators are emitted verbatim', () => {
+        for (const op of ['!=', '<>', '<', '>', '<=', '>=']) {
+            it(`operator ${op}`, () => {
+                const plan = build({
+                    ...base,
+                    spec: [{ column: 'ChapterID', operator: op, paramName: 'c', kind: 'scalar' }],
+                    paramValues: { c: 42 },
+                    isPostgres: false,
+                });
+                expect(plan!.sql).toBe(`SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [ChapterID] ${op} ?`);
+                expect(plan!.parameters).toEqual([42]);
+            });
+        }
+    });
+
+    describe('IN / NOT IN list', () => {
+        it('SQL Server: one `?` per element, bound in order', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: 'IN', paramName: 'statuses', kind: 'list' }],
+                paramValues: { statuses: ['A', 'B', 'C'] },
+                isPostgres: false,
+            });
+            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] IN (?, ?, ?)');
+            expect(plan!.parameters).toEqual(['A', 'B', 'C']);
+        });
+
+        it('PostgreSQL: $-placeholders numbered across the whole statement', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: 'NOT IN', paramName: 'statuses', kind: 'list' }],
+                paramValues: { statuses: ['X', 'Y'] },
+                isPostgres: true,
+            });
+            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "Status" NOT IN ($1, $2)');
+            expect(plan!.parameters).toEqual(['X', 'Y']);
+        });
+    });
+
+    describe('multi-parameter conjunction — placeholder indexing stays aligned', () => {
+        it('PostgreSQL: scalar then list continues the $-numbering', () => {
+            const plan = build({
+                ...base,
+                spec: [
+                    { column: 'ChapterID', operator: '>=', paramName: 'minChapter', kind: 'scalar' },
+                    { column: 'Status', operator: 'IN', paramName: 'statuses', kind: 'list' },
+                ],
+                paramValues: { minChapter: 10, statuses: ['A', 'B'] },
+                isPostgres: true,
+            });
+            expect(plan!.sql).toBe('SELECT "ID", "Status", "ChapterID" FROM "__mj"."materialized_vwDonations" WHERE "ChapterID" >= $1 AND "Status" IN ($2, $3)');
+            expect(plan!.parameters).toEqual([10, 'A', 'B']);
+        });
+
+        it('SQL Server: predicates ANDed in spec order', () => {
+            const plan = build({
+                ...base,
+                spec: [
+                    { column: 'ChapterID', operator: '=', paramName: 'c', kind: 'scalar' },
+                    { column: 'Status', operator: '=', paramName: 's', kind: 'scalar' },
+                ],
+                paramValues: { c: 7, s: 'Open' },
+                isPostgres: false,
+            });
+            expect(plan!.sql).toContain('WHERE [ChapterID] = ? AND [Status] = ?');
+            expect(plan!.parameters).toEqual([7, 'Open']);
+        });
+    });
+
+    describe('injection safety — caller values are ONLY ever in the parameters array', () => {
+        it("a value containing SQL never reaches the SQL string", () => {
+            const evil = "'; DROP TABLE Users; --";
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: '=', paramName: 'status', kind: 'scalar' }],
+                paramValues: { status: evil },
+                isPostgres: false,
+            });
+            expect(plan!.sql).not.toContain('DROP TABLE');
+            expect(plan!.sql).not.toContain(evil);
+            expect(plan!.parameters).toEqual([evil]); // bound, inert
+        });
+
+        it('an injection attempt inside an IN list is bound element-wise', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: 'IN', paramName: 'statuses', kind: 'list' }],
+                paramValues: { statuses: ["a", "b') OR 1=1 --"] },
+                isPostgres: false,
+            });
+            expect(plan!.sql).toBe('SELECT [ID], [Status], [ChapterID] FROM [__mj].[materialized_vwDonations] WHERE [Status] IN (?, ?)');
+            expect(plan!.parameters).toEqual(['a', "b') OR 1=1 --"]);
+        });
+    });
+
+    describe('identifier quoting escapes the closer', () => {
+        it('SQL Server escapes `]` in a column name', () => {
+            const plan = build({
+                outputColumns: ['Wei]rd'],
+                schemaName: '__mj',
+                viewName: 'v',
+                spec: [{ column: 'Wei]rd', operator: '=', paramName: 'p', kind: 'scalar' }],
+                paramValues: { p: 1 },
+                isPostgres: false,
+            });
+            expect(plan!.sql).toBe('SELECT [Wei]]rd] FROM [__mj].[v] WHERE [Wei]]rd] = ?');
+        });
+
+        it('PostgreSQL escapes `"` in a column name', () => {
+            const plan = build({
+                outputColumns: ['Wei"rd'],
+                schemaName: '__mj',
+                viewName: 'v',
+                spec: [{ column: 'Wei"rd', operator: '=', paramName: 'p', kind: 'scalar' }],
+                paramValues: { p: 1 },
+                isPostgres: true,
+            });
+            expect(plan!.sql).toBe('SELECT "Wei""rd" FROM "__mj"."v" WHERE "Wei""rd" = $1');
+        });
+    });
+
+    describe('refuse-to-live (null) on any faithfulness risk', () => {
+        const spec = [{ column: 'Status', operator: '=', paramName: 'status', kind: 'scalar' as const }];
+
+        it('a spec parameter the caller did not supply → null (live applies the default)', () => {
+            expect(build({ ...base, spec, paramValues: {}, isPostgres: false })).toBeNull();
+            expect(build({ ...base, spec, paramValues: undefined, isPostgres: false })).toBeNull();
+        });
+
+        it('a null / undefined value → null', () => {
+            expect(build({ ...base, spec, paramValues: { status: null }, isPostgres: false })).toBeNull();
+            expect(build({ ...base, spec, paramValues: { status: undefined }, isPostgres: false })).toBeNull();
+        });
+
+        it('an operator outside the safe set → null (defense-in-depth)', () => {
+            for (const op of ['LIKE', 'NOT LIKE', 'IS', 'IS NOT', 'BETWEEN', 'NOT BETWEEN', 'GLOB', '; DROP']) {
+                const plan = build({
+                    ...base,
+                    spec: [{ column: 'Status', operator: op, paramName: 'status', kind: 'scalar' }],
+                    paramValues: { status: 'x' },
+                    isPostgres: false,
+                });
+                expect(plan).toBeNull();
+            }
+        });
+
+        it('an empty or non-array value for an IN predicate → null', () => {
+            const inSpec = [{ column: 'Status', operator: 'IN', paramName: 'statuses', kind: 'list' as const }];
+            expect(build({ ...base, spec: inSpec, paramValues: { statuses: [] }, isPostgres: false })).toBeNull();
+            expect(build({ ...base, spec: inSpec, paramValues: { statuses: 'notArray' }, isPostgres: false })).toBeNull();
+        });
+
+        it('no output columns or empty spec → null', () => {
+            expect(build({ ...base, outputColumns: [], spec, paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
+            expect(build({ ...base, spec: [], paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
+        });
+
+        it('a malformed spec element (missing/non-string column, operator, or paramName) → null, never throws', () => {
+            const bad = [
+                [{ operator: '=', paramName: 'status', kind: 'scalar' }],            // missing column
+                [{ column: 'Status', paramName: 'status', kind: 'scalar' }],         // missing operator
+                [{ column: 'Status', operator: '=', kind: 'scalar' }],               // missing paramName
+                [{ column: 123, operator: '=', paramName: 'status', kind: 'scalar' }], // non-string column
+                [null],                                                              // null element
+            ];
+            for (const s of bad) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                expect(build({ ...base, spec: s as any, paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
+            }
+        });
+    });
+});
