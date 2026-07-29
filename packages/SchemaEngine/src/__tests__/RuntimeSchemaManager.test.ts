@@ -335,6 +335,140 @@ describe('RuntimeSchemaManager', () => {
         });
     });
 
+    describe('Retry safety', () => {
+        const input = {
+            MigrationSQL: 'CREATE TABLE [custom].[Test] (ID INT NOT NULL);',
+            Description: 'test',
+            AffectedTables: ['custom.Test'],
+        };
+
+        /** A failed pass, with control over which step failed and whether the migration committed. */
+        function failedPass(errorStep: string, migrationApplied: boolean) {
+            return {
+                Success: false,
+                ErrorStep: errorStep,
+                Steps: migrationApplied
+                    ? [{ Name: 'ExecuteMigration', Status: 'success' }, { Name: errorStep, Status: 'failed' }]
+                    : [{ Name: errorStep, Status: 'failed' }],
+            };
+        }
+
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        it('retries a transient failure that happened BEFORE the migration committed', async () => {
+            const rsm = RuntimeSchemaManager.Instance;
+            const run = vi.spyOn(rsm, 'RunPipeline')
+                .mockResolvedValueOnce(failedPass('ExecuteMigration', false) as never)
+                .mockResolvedValueOnce({ Success: true, Steps: [] } as never);
+
+            const result = await rsm.RunPipelineWithRetry(input, 2, 0);
+
+            expect(result.Success).toBe(true);
+            expect(run).toHaveBeenCalledTimes(2);
+        });
+
+        it('does NOT retry once the migration has been applied — a replay would re-execute committed DDL', async () => {
+            const rsm = RuntimeSchemaManager.Instance;
+            // CodeGen is a transient step, but the migration already committed on this pass. A
+            // replay would fail on the (already-applied) DDL and OVERWRITE the real CodeGen error.
+            const run = vi.spyOn(rsm, 'RunPipeline')
+                .mockResolvedValue(failedPass('RunCodeGen', true) as never);
+
+            const result = await rsm.RunPipelineWithRetry(input, 2, 0);
+
+            expect(run).toHaveBeenCalledTimes(1);
+            expect(result.ErrorStep).toBe('RunCodeGen'); // the TRUE error, not a replay artifact
+        });
+
+        it('does not retry a deterministic step', async () => {
+            const rsm = RuntimeSchemaManager.Instance;
+            const run = vi.spyOn(rsm, 'RunPipeline')
+                .mockResolvedValue(failedPass('ValidateSQL', false) as never);
+
+            await rsm.RunPipelineWithRetry(input, 2, 0);
+
+            expect(run).toHaveBeenCalledTimes(1);
+        });
+
+        it('does not retry a failure that names no step — an unknown failure is not a known-safe one', async () => {
+            // A pass can fail without setting ErrorStep (a throw outside a named step). The retry
+            // decision is "is this step on the replayable list", and an absent step cannot be on
+            // it, so the answer has to be no. Defaulting the other way would replay a pass whose
+            // side effects are unknown — the exact thing the applied-migration guard exists to stop.
+            const rsm = RuntimeSchemaManager.Instance;
+            const run = vi.spyOn(rsm, 'RunPipeline')
+                .mockResolvedValue({ Success: false, Steps: [] } as never);
+
+            await rsm.RunPipelineWithRetry(input, 2, 0);
+
+            expect(run).toHaveBeenCalledTimes(1);
+        });
+
+        it('stops at maxRetries', async () => {
+            const rsm = RuntimeSchemaManager.Instance;
+            const run = vi.spyOn(rsm, 'RunPipeline')
+                .mockResolvedValue(failedPass('RestartMJAPI', false) as never);
+
+            await rsm.RunPipelineWithRetry(input, 2, 0);
+
+            expect(run).toHaveBeenCalledTimes(3); // initial + 2 retries
+        });
+
+        describe('batch', () => {
+            it('retries when nothing in the batch was applied', async () => {
+                const rsm = RuntimeSchemaManager.Instance;
+                const run = vi.spyOn(rsm, 'RunPipelineBatch')
+                    .mockResolvedValueOnce({
+                        FailureCount: 1, SuccessCount: 0,
+                        Results: [failedPass('RunCodeGen', false)],
+                    } as never)
+                    .mockResolvedValueOnce({ FailureCount: 0, SuccessCount: 1, Results: [] } as never);
+
+                const result = await rsm.RunPipelineBatchWithRetry([input], 2, 0);
+
+                expect(result.FailureCount).toBe(0);
+                expect(run).toHaveBeenCalledTimes(2);
+            });
+
+            it('does NOT retry once any migration in the batch has committed', async () => {
+                const rsm = RuntimeSchemaManager.Instance;
+                const run = vi.spyOn(rsm, 'RunPipelineBatch').mockResolvedValue({
+                    FailureCount: 1, SuccessCount: 1,
+                    Results: [failedPass('RunCodeGen', false)],
+                } as never);
+
+                await rsm.RunPipelineBatchWithRetry([input, input], 2, 0);
+
+                expect(run).toHaveBeenCalledTimes(1);
+            });
+
+            it('does not retry a batch whose failed result names no step', async () => {
+                // Same rule on the batch path, where the step is read off the first failed result.
+                const rsm = RuntimeSchemaManager.Instance;
+                const run = vi.spyOn(rsm, 'RunPipelineBatch').mockResolvedValue({
+                    FailureCount: 1, SuccessCount: 0,
+                    Results: [{ Success: false, Steps: [] }],
+                } as never);
+
+                await rsm.RunPipelineBatchWithRetry([input], 2, 0);
+
+                expect(run).toHaveBeenCalledTimes(1);
+            });
+
+            it('returns immediately when the batch fully succeeds', async () => {
+                const rsm = RuntimeSchemaManager.Instance;
+                const run = vi.spyOn(rsm, 'RunPipelineBatch')
+                    .mockResolvedValue({ FailureCount: 0, SuccessCount: 2, Results: [] } as never);
+
+                await rsm.RunPipelineBatchWithRetry([input, input], 2, 0);
+
+                expect(run).toHaveBeenCalledTimes(1);
+            });
+        });
+    });
+
     describe('RSUError', () => {
         it('should carry a code and message', () => {
             const error = new RSUError('TEST_CODE', 'Test message');

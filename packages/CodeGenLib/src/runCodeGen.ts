@@ -11,6 +11,7 @@ import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
+import { applyIncludeSchemaScope } from './Database/schema-scope';
 import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
@@ -206,6 +207,14 @@ export class RunCodeGenBase {
         }
         return m;
       });
+
+      // Secondary application of the opt-in `includeSchemas` scope, against the schemas present in
+      // metadata. The authoritative pass runs inside ManageMetadataBase.manageMetadata against the
+      // DATABASE's schema list (it is the one that can see never-before-seen schemas); this one exists
+      // so the scope still applies on the `--skipdb` path, which skips manageMetadata entirely but
+      // still generates files from configInfo.excludeSchemas. applyIncludeSchemaScope is idempotent, so
+      // running both is safe and the second pass is a no-op when the first already ran.
+      applyIncludeSchemaScope(Array.from(new Set(md.Entities.map((e) => e.SchemaName))), configInfo);
 
       const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase)!;
       const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase)!;
