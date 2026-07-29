@@ -17,8 +17,14 @@ import { NavigationTab } from '../../models/conversation-state.model';
             [renamedConversationId]="renamedConversationId"
             [isSidebarPinned]="isSidebarPinned"
             [isMobileView]="isMobileView"
+            [showSearch]="showSearch"
+            [showNewConversationButton]="showNewConversationButton"
+            [showHeaderMenu]="showHeaderMenu"
+            [showSectionHeaders]="showSectionHeaders"
             (conversationSelected)="conversationSelected.emit($event)"
+            (conversationDeleted)="conversationDeleted.emit($event)"
             (newConversationRequested)="newConversationRequested.emit()"
+            (refreshRequested)="refreshRequested.emit()"
             (pinSidebarRequested)="onPinSidebarRequested()"
             (unpinSidebarRequested)="onUnpinSidebarRequested()">
           </mj-conversation-list>
@@ -81,12 +87,28 @@ export class ConversationSidebarComponent extends BaseAngularComponent {
   /** Show the Routines section at the bottom of the sidebar (bubbled from the workspace; default true). */
   @Input() ShowRoutines: boolean = true;
 
+  // ── White-label chrome toggles, passed through to the conversation list
+  //    (all default true = stock rendering; see ConversationListComponent). ──
+  /** Show the list's search box. */
+  @Input() showSearch: boolean = true;
+  /** Show the list's "New Conversation" button. */
+  @Input() showNewConversationButton: boolean = true;
+  /** Show the list's ⋯ header options menu. */
+  @Input() showHeaderMenu: boolean = true;
+  /** Show the list's collapsible section headers. */
+  @Input() showSectionHeaders: boolean = true;
+
   @Output() conversationSelected = new EventEmitter<string>();
   /** Forwarded from the routines section — a run's linked execution record was clicked. */
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
   @Output() newConversationRequested = new EventEmitter<void>();
   @Output() pinSidebarRequested = new EventEmitter<void>();
   @Output() unpinSidebarRequested = new EventEmitter<void>();
+  /** Re-emitted from the conversation list — a conversation was deleted (payload = its ID).
+   *  Hosts use this to recover when the ACTIVE conversation is deleted. */
+  @Output() conversationDeleted = new EventEmitter<string>();
+  /** Re-emitted from the conversation list — the user refreshed the list. */
+  @Output() refreshRequested = new EventEmitter<void>();
 
   onPinSidebarRequested(): void {
     this.pinSidebarRequested.emit();
