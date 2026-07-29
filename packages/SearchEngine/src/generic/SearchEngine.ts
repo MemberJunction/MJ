@@ -1035,7 +1035,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         const lanes: LaneExplanation[] = [];
 
         for (const row of bundle.ExternalIndexes) {
-            const rendered = constraints.ExternalIndexes?.find((c) => c.SearchScopeExternalIndexID === row.ID);
+            const rendered = constraints.ExternalIndexes?.find((c) => UUIDsEqual(c.SearchScopeExternalIndexID, row.ID));
             lanes.push({
                 Kind: 'ExternalIndex',
                 Target: row.ExternalIndexName ?? row.ID,
@@ -1048,7 +1048,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         }
 
         for (const row of bundle.Entities) {
-            const rendered = constraints.Entities?.find((c) => c.SearchScopeEntityID === row.ID);
+            const rendered = constraints.Entities?.find((c) => UUIDsEqual(c.SearchScopeEntityID, row.ID));
             lanes.push({
                 Kind: 'Entity',
                 Target: this.lookupEntityName(row.EntityID) || row.EntityID,
@@ -1061,7 +1061,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         }
 
         for (const row of bundle.StorageAccounts) {
-            const rendered = constraints.StorageAccounts?.find((c) => c.SearchScopeStorageAccountID === row.ID);
+            const rendered = constraints.StorageAccounts?.find((c) => UUIDsEqual(c.SearchScopeStorageAccountID, row.ID));
             lanes.push({
                 Kind: 'StorageAccount',
                 Target: row.FileStorageAccountID,
