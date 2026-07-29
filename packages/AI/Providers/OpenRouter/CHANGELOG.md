@@ -1,5 +1,15 @@
 # @memberjunction/ai-openrouter
 
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [c221553]
+- Updated dependencies [0ba33b3]
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/ai-openai@5.50.0
+  - @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes
