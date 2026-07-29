@@ -21,7 +21,7 @@
  */
 import { RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { resolveContextUserOrThrow } from './agent-live-shared';
+import { resolveContextUserOrThrow, resolvePromptRunIdsForAgentRuns, requireRows } from './agent-live-shared';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
@@ -51,11 +51,15 @@ export interface AgentStepRow {
     FinalPayloadValidationMessages: string | null;
 }
 
-/** Deterministic framework projection of an AI Prompt Run row. */
+/**
+ * Deterministic framework projection of an AI Prompt Run row.
+ *
+ * No AgentRunID member: that column does not exist on AIPromptRun. The owning agent run is
+ * recovered through the Prompt step that invoked it — see promptRunIdsFromSteps in agent-live-shared.
+ */
 export interface PromptRunRow {
     ID: string;
     AgentID: string | null;
-    AgentRunID: string | null;
     Messages: string | null;
     Result: string | null;
 }
@@ -166,7 +170,9 @@ export async function readRun(provider: IMetadataProvider, user: UserInfo, runId
         ResultType: 'simple',
         BypassCache: true
     }, user);
-    return r.Success && r.Results.length > 0 ? r.Results[0] : undefined;
+    // undefined means the run genuinely is not there; a broken query throws rather than
+    // impersonating an absent run and failing a later assertion for the wrong reason.
+    return requireRows(r, `run read for ${runId}`)[0];
 }
 
 /** Read every step of a run fresh, oldest first. */
@@ -179,7 +185,7 @@ export async function readSteps(provider: IMetadataProvider, user: UserInfo, run
         ResultType: 'simple',
         BypassCache: true
     }, user);
-    return r.Success ? r.Results : [];
+    return requireRows(r, `step read for run ${runId}`);
 }
 
 /** Read the prompt runs a given agent produced within a run tree (its raw model responses live here). */
@@ -190,15 +196,19 @@ export async function readPromptRunsForAgent(
     agentId: string
 ): Promise<PromptRunRow[]> {
     if (agentRunIds.length === 0) return [];
-    const inList = agentRunIds.map((id) => `'${id}'`).join(',');
+    // The runs' Prompt steps are the only path to their prompt runs (AIPromptRun has no
+    // AgentRunID). AgentID still narrows to the agent that owns them, which is what makes this
+    // "for agent" — a sub-agent's prompt runs hang off the same run tree.
+    const promptRunIds = await resolvePromptRunIdsForAgentRuns(agentRunIds, user);
+    if (promptRunIds.length === 0) return [];
     const r = await new RunView().RunView<PromptRunRow>({
         EntityName: 'MJ: AI Prompt Runs',
-        ExtraFilter: `AgentRunID IN (${inList}) AND AgentID='${agentId}'`,
-        Fields: ['ID', 'AgentID', 'AgentRunID', 'Messages', 'Result'],
+        ExtraFilter: `ID IN (${promptRunIds.map((id) => `'${id}'`).join(',')}) AND AgentID='${agentId}'`,
+        Fields: ['ID', 'AgentID', 'Messages', 'Result'],
         ResultType: 'simple',
         BypassCache: true
     }, user);
-    return r.Success ? r.Results : [];
+    return requireRows(r, `prompt-run read for agent ${agentId}`);
 }
 
 /** BFS the ParentRunID tree from a root, returning every run ID (root first). Bounded to avoid cycles. */
@@ -261,11 +271,22 @@ export async function deepDeleteRunTrees(provider: IMetadataProvider, user: User
     if (ids.length === 0) return;
     const inList = ids.map((id) => `'${id}'`).join(',');
 
-    // 1. Steps of every run in the trees.
+    // 1. Resolve prompt runs BEFORE deleting steps. AIPromptRun has no AgentRunID, so the Prompt
+    //    steps are the only path to these rows — deleting the steps first orphans them permanently.
+    let promptRunIds: string[] = [];
+    try {
+        promptRunIds = await resolvePromptRunIdsForAgentRuns(ids, user);
+    } catch (e) {
+        // Best-effort teardown: keep purging what we can reach, but never silently.
+        console.error(`deepDeleteRunTrees: prompt-run resolution failed, prompt runs may leak: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    // 2. Steps of every run in the trees.
     await deleteMatching(provider, user, 'MJ: AI Agent Run Steps', `AgentRunID IN (${inList})`);
-    // 2. Prompt runs of every run in the trees.
-    await deleteMatching(provider, user, 'MJ: AI Prompt Runs', `AgentRunID IN (${inList})`);
-    // 3. The runs themselves, child-first (reverse collection order puts descendants before roots).
+    // 3. The prompt runs resolved in step 1, addressed by their own primary key.
+    if (promptRunIds.length > 0) {
+        await deleteMatching(provider, user, 'MJ: AI Prompt Runs', `ID IN (${promptRunIds.map((id) => `'${id}'`).join(',')})`);
+    }
+    // 4. The runs themselves, child-first (reverse collection order puts descendants before roots).
     for (const id of [...ids].reverse()) {
         await deleteMatching(provider, user, 'MJ: AI Agent Runs', `ID='${id}'`);
     }

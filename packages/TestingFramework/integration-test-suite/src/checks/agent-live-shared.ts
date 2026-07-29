@@ -17,7 +17,7 @@
  * observed regardless of any cache the run populated.
  */
 import { RunView, CompositeKey } from '@memberjunction/core';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, UserInfo, RunViewResult } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
@@ -159,6 +159,56 @@ export async function resolveRunId(
     return r.Success ? r.Results?.[0]?.ID : undefined;
 }
 
+/**
+ * Unwrap a RunView result, throwing with the provider's own error text when the query failed.
+ *
+ * RunView does not throw — it returns `Success: false` plus an ErrorMessage. Coalescing that to
+ * `[]` makes a broken query indistinguishable from "no rows", which is exactly how a filter on a
+ * column that does not exist (`AIPromptRun.AgentRunID`) survived in this file: every caller read
+ * zero prompt runs and either passed vacuously or failed on an unrelated-looking assertion. A
+ * check that cannot read its observables must fail loudly, naming the query that broke.
+ */
+export function requireRows<T>(result: RunViewResult<T>, what: string): T[] {
+    if (!result.Success) {
+        throw new Error(`${what} failed: ${result.ErrorMessage || 'no error message returned'}`);
+    }
+    return result.Results || [];
+}
+
+/**
+ * The agent-run → prompt-run linkage rule, in one place.
+ *
+ * `MJ: AI Prompt Runs` has NO AgentRunID column (its only agent-facing field is AgentID). A prompt
+ * run is reachable from its agent run solely through the step that invoked it: an
+ * `MJ: AI Agent Run Steps` row with `StepType='Prompt'` whose TargetLogID is the AIPromptRun's ID.
+ * Filtering prompt runs on AgentRunID is a SQL error, not an empty result set.
+ */
+export function promptRunIdsFromSteps(steps: Array<{ StepType: string | null; TargetLogID: string | null }>): string[] {
+    return steps.filter(s => s.StepType === 'Prompt' && s.TargetLogID).map(s => s.TargetLogID!);
+}
+
+/**
+ * Resolve every AIPromptRun ID produced by the given agent runs, via their Prompt steps.
+ *
+ * Callers that already hold the step rows should use `promptRunIdsFromSteps` directly rather than
+ * re-reading them. Callers that are about to DELETE the steps must call this FIRST — deleting the
+ * steps destroys the only path to the prompt runs.
+ */
+export async function resolvePromptRunIdsForAgentRuns(agentRunIds: string[], user: UserInfo): Promise<string[]> {
+    if (agentRunIds.length === 0) {
+        return [];
+    }
+    const inList = agentRunIds.map(id => `'${id}'`).join(',');
+    const r = await new RunView().RunView<{ StepType: string | null; TargetLogID: string | null }>({
+        EntityName: 'MJ: AI Agent Run Steps',
+        ExtraFilter: `AgentRunID IN (${inList}) AND StepType='Prompt'`,
+        Fields: ['StepType', 'TargetLogID'],
+        ResultType: 'simple',
+        BypassCache: true,
+    }, user);
+    return promptRunIdsFromSteps(requireRows(r, `prompt-step read for agent runs ${inList}`));
+}
+
 /** A run's steps (fresh DB read), ordered by StepNumber. */
 export interface StepRow {
     ID: string;
@@ -180,7 +230,7 @@ export async function getRunSteps(runId: string, user: UserInfo): Promise<StepRo
         ResultType: 'simple',
         BypassCache: true,
     }, user);
-    return r.Success ? (r.Results || []) : [];
+    return requireRows(r, `step read for run ${runId}`);
 }
 
 /** All AIPromptRun rows for a run (fresh), ordered oldest-first. */
@@ -195,15 +245,21 @@ export interface PromptRunRow {
 }
 
 export async function getPromptRuns(runId: string, user: UserInfo): Promise<PromptRunRow[]> {
+    // Reached through the run's Prompt steps — AIPromptRun has no AgentRunID (see
+    // promptRunIdsFromSteps). A run that made no model call legitimately has none.
+    const promptRunIds = await resolvePromptRunIdsForAgentRuns([runId], user);
+    if (promptRunIds.length === 0) {
+        return [];
+    }
     const r = await new RunView().RunView<PromptRunRow>({
         EntityName: 'MJ: AI Prompt Runs',
-        ExtraFilter: `AgentRunID='${runId}'`,
+        ExtraFilter: `ID IN (${promptRunIds.map(id => `'${id}'`).join(',')})`,
         OrderBy: '__mj_CreatedAt ASC',
         Fields: ['ID', 'ModelID', 'VendorID', 'Messages', 'TokensUsed', 'Success', 'Status'],
         ResultType: 'simple',
         BypassCache: true,
     }, user);
-    return r.Success ? (r.Results || []) : [];
+    return requireRows(r, `prompt-run read for run ${runId}`);
 }
 
 /** Sum of TokensUsed across every AIPromptRun for a run (nulls coalesced to 0). */
@@ -292,10 +348,15 @@ export async function purgeAgentRun(runId: string, provider: IMetadataProvider, 
         EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${runId}'`,
         Fields: ['ID', 'StepType', 'TargetLogID'], ResultType: 'simple', BypassCache: true,
     }, user);
+    // Deliberately non-throwing (teardown must keep going), but NOT silent: a failed step read
+    // means the prompt runs below cannot be found and will be left behind, so it must be visible.
+    if (!stepsResult.Success) {
+        console.error(`purgeAgentRun: step read for run ${runId} failed, prompt runs may leak: ${stepsResult.ErrorMessage}`);
+    }
     const steps = stepsResult.Success ? stepsResult.Results : [];
-    // Delete prompt runs linked through prompt-type steps
-    const promptRunIds = steps.filter(s => s.StepType === 'Prompt' && s.TargetLogID).map(s => s.TargetLogID!);
-    for (const prId of promptRunIds) {
+    // Delete prompt runs linked through prompt-type steps. Resolved from the step rows we already
+    // hold, and BEFORE the steps are deleted below — the steps are the only path to them.
+    for (const prId of promptRunIdsFromSteps(steps)) {
         await deleteById('MJ: AI Prompt Runs', prId, provider, user);
     }
     for (const s of steps) {
