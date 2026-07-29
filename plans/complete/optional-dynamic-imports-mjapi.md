@@ -817,7 +817,7 @@ const mjServerConfig = {
 - Config file: [packages/MJAPI/mj.config.cjs](packages/MJAPI/mj.config.cjs)
 
 ### Documentation
-- MemberJunction Developer Guide: [CLAUDE.md](CLAUDE.md)
+- MemberJunction Developer Guide: [CLAUDE.md](../../CLAUDE.md)
 - Server Bootstrap README: [packages/ServerBootstrap/README.md](../../packages/ServerBootstrap/README.md)
 - MJAPI README: [packages/MJAPI/README.md](packages/MJAPI/README.md)
 

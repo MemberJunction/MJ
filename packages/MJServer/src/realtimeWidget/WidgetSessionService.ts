@@ -15,7 +15,7 @@
  */
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { MJLruCache, UUIDsEqual } from '@memberjunction/global';
 import type { MJConversationWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
@@ -283,9 +283,26 @@ export class WidgetSessionService {
     return this.MintGuestSession(input);
   }
 
-  /** Short-TTL cache of resolved per-instance rate limits, so the limiter doesn't hit the DB per request. */
-  private readonly rateLimitCache = new Map<string, { limit: number; expiresAtMs: number }>();
+  /**
+   * Short-TTL, size-bounded cache of resolved per-instance rate limits, so the limiter doesn't hit
+   * the DB per request. The cache key (`widgetKey`) is presented by an UNAUTHENTICATED caller on the
+   * public `/widget/session` endpoint, so an unbounded `Map` here lets anyone grow server memory
+   * forever by sending an endless stream of distinct garbage keys (Memory Leak Audit Round 8,
+   * Critical finding). `MJLruCache` evicts the least-recently-used entry once `RATE_LIMIT_CACHE_MAX_SIZE`
+   * is reached, in addition to the existing TTL — `RATE_LIMIT_CACHE_MAX_SIZE` is sized well above any
+   * realistic deployment's widget-instance count so legitimate lookups are never evicted prematurely.
+   */
+  private readonly rateLimitCache = new MJLruCache<string, number>({
+    maxSize: WidgetSessionService.RATE_LIMIT_CACHE_MAX_SIZE,
+    ttlMs: WidgetSessionService.RATE_LIMIT_CACHE_TTL_MS,
+  });
   private static readonly RATE_LIMIT_CACHE_TTL_MS = 60_000;
+  private static readonly RATE_LIMIT_CACHE_MAX_SIZE = 10_000;
+
+  /** Current entry count in the per-instance rate-limit cache (diagnostic / test hook). */
+  public get RateLimitCacheSize(): number {
+    return this.rateLimitCache.Size;
+  }
 
   /**
    * Resolves the per-instance `RateLimitPerMinute` for a widget key (W6 hardening), falling back to the
@@ -299,10 +316,9 @@ export class WidgetSessionService {
     if (!key) {
       return fallback;
     }
-    const cached = this.rateLimitCache.get(key);
-    const now = Date.now();
-    if (cached && cached.expiresAtMs > now) {
-      return cached.limit;
+    const cached = this.rateLimitCache.Get(key);
+    if (cached !== undefined) {
+      return cached;
     }
     let limit = fallback;
     try {
@@ -316,7 +332,7 @@ export class WidgetSessionService {
     } catch (e) {
       LogError(e);
     }
-    this.rateLimitCache.set(key, { limit, expiresAtMs: now + WidgetSessionService.RATE_LIMIT_CACHE_TTL_MS });
+    this.rateLimitCache.Set(key, limit);
     return limit;
   }
 

@@ -46,6 +46,7 @@ export type {
 export {
     CheckMJVersionCompatibility,
     CheckDependencyVersionCompatibility,
+    CoerceToBaseVersion,
     IsValidUpgrade
 } from './dependency/version-checker.js';
 export type { VersionCheckResult } from './dependency/version-checker.js';

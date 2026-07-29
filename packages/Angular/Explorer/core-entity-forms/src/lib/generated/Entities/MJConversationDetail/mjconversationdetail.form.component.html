@@ -110,18 +110,9 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Sequence"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="SummaryPromptRunID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -235,7 +226,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ResponseForm"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -243,7 +234,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ActionableCommands"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -251,7 +242,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AutomaticCommands"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -576,6 +567,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Conversation Compaction Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJConversationCompactionRuns"
+        SectionName="Conversation Compaction Runs"
+        Icon="fa fa-link"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJConversationCompactionRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Compaction Runs','ConversationDetailID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Compaction Runs')"
+                [AllowLoad]="IsSectionExpanded('mJConversationCompactionRuns')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationCompactionRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

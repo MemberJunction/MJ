@@ -865,7 +865,6 @@ export class RealtimeClientSessionService {
         promptRun.RunAt = new Date();
         promptRun.RunType = 'Single';
         promptRun.Status = 'Running';
-        promptRun.AgentRunID = coAgentRunID;
         if (await promptRun.Save()) {
             return promptRun.ID;
         }
@@ -991,21 +990,50 @@ export class RealtimeClientSessionService {
         return finalized;
     }
 
-    /** Finds the still-`Running` prompt-run + run-step ids for a co-agent run (orphan finalize path). */
+    /**
+     * Finds the still-`Running` prompt-run + run-step ids for a co-agent run (orphan finalize path).
+     *
+     * `AIPromptRun.AgentRunID` was dropped in v5.50 (Break_CodeGen_Cycle_Remove_PromptRun_AgentRunID);
+     * filtering prompt runs on it now fails outright and yields no rows. The relationship is derived
+     * through the run's Prompt-type steps instead — `AIAgentRunStep.TargetLogID` points at the prompt
+     * run — which is the replacement path that migration's design notes prescribe.
+     */
     private async findCoAgentChildLogIds(
         coAgentRunID: string,
         contextUser: UserInfo,
     ): Promise<{ PromptRunID: string | null; StepID: string | null }> {
         const rv = new RunView();
-        const results = await rv.RunViews([
-            { EntityName: 'MJ: AI Prompt Runs', ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`, Fields: ['ID'], ResultType: 'simple' },
-            { EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`, Fields: ['ID'], ResultType: 'simple' },
-        ], contextUser);
-        const firstId = (r: { Success: boolean; Results: unknown[] } | undefined): string | null => {
-            const first = r?.Success ? (r.Results[0] as { ID?: string } | undefined) : undefined;
-            return first?.ID ?? null;
-        };
-        return { PromptRunID: firstId(results[0]), StepID: firstId(results[1]) };
+        const steps = await rv.RunView<{ ID: string; StepType: string; TargetLogID: string | null }>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`,
+            Fields: ['ID', 'StepType', 'TargetLogID'],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!steps.Success) {
+            LogError(`RealtimeClientSessionService.findCoAgentChildLogIds: step lookup failed for co-agent run ${coAgentRunID}: ${steps.ErrorMessage}`);
+            return { PromptRunID: null, StepID: null };
+        }
+
+        const stepID = steps.Results[0]?.ID ?? null;
+        const promptLogIDs = steps.Results.filter(s => s.StepType === 'Prompt' && s.TargetLogID).map(s => s.TargetLogID!);
+        if (promptLogIDs.length === 0) {
+            return { PromptRunID: null, StepID: stepID };
+        }
+
+        // Re-check Status on the prompt runs themselves: a Prompt step can still be Running while its
+        // underlying prompt run has already landed, and this path only finalizes what is still open.
+        const inList = promptLogIDs.map(id => `'${this.escapeSqlLiteral(id)}'`).join(',');
+        const promptRuns = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: AI Prompt Runs',
+            ExtraFilter: `ID IN (${inList}) AND Status='Running'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!promptRuns.Success) {
+            LogError(`RealtimeClientSessionService.findCoAgentChildLogIds: prompt-run lookup failed for co-agent run ${coAgentRunID}: ${promptRuns.ErrorMessage}`);
+            return { PromptRunID: null, StepID: stepID };
+        }
+        return { PromptRunID: promptRuns.Results[0]?.ID ?? null, StepID: stepID };
     }
 
     /** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */

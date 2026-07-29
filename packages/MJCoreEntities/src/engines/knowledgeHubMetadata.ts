@@ -1,5 +1,5 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { NormalizeUUID } from "@memberjunction/global";
 import {
     MJEntityDocumentEntity,
     MJVectorIndexEntity,
@@ -25,12 +25,27 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
         return super.getInstance<KnowledgeHubMetadataEngine>();
     }
 
+    protected constructor() {
+        super();
+        // Any data change (add/update/delete or full refresh, on any cached array) invalidates the
+        // by-id indexes wholesale — the cheapest correct strategy, since NotifyDataChange fires on
+        // every BaseEngine mutation path. Lazily rebuilt on the next lookup.
+        this.DataChange$.subscribe(() => this._idIndexes.clear());
+    }
+
     private _entityDocuments: MJEntityDocumentEntity[] = [];
     private _vectorIndexes: MJVectorIndexEntity[] = [];
     private _contentSources: MJContentSourceEntity[] = [];
     private _contentTypes: MJContentTypeEntity[] = [];
     private _contentSourceTypes: MJContentSourceTypeEntity[] = [];
     private _contentFileTypes: MJContentFileTypeEntity[] = [];
+
+    /**
+     * Lazily-built `NormalizeUUID(ID) → row` indexes, one per cached array (keyed by array name),
+     * powering the O(1) `Get…ByID` helpers. Cleared wholesale on any {@link DataChange$} emission
+     * (see the constructor) so entries never go stale as the underlying caches mutate.
+     */
+    private _idIndexes = new Map<string, Map<string, BaseEntity>>();
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
@@ -117,10 +132,54 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
         return this._entityDocuments.filter(d => d.Status === 'Active');
     }
 
-    /** Find an entity document by ID (case-insensitive UUID comparison) */
-    public GetEntityDocumentById(id: string): MJEntityDocumentEntity | undefined {
+    /**
+     * Returns a cached `NormalizeUUID(ID) → row` index for one of the engine's cached arrays,
+     * building it on first use. The whole index cache is cleared on any {@link DataChange$}
+     * emission, so a returned index is always consistent with the current cache contents.
+     * O(N) to build once, then O(1) per lookup.
+     */
+    private getIDIndex<T extends BaseEntity>(key: string, rows: T[], idOf: (row: T) => string): Map<string, T> {
+        // Downcast is safe by construction: each `key` is only ever paired with one row type.
+        let index = this._idIndexes.get(key) as Map<string, T> | undefined;
+        if (!index) {
+            index = new Map<string, T>();
+            for (const row of rows) {
+                const id = idOf(row);
+                if (id) index.set(NormalizeUUID(id), row);
+            }
+            this._idIndexes.set(key, index);
+        }
+        return index;
+    }
+
+    /** Find an entity document by ID (case-insensitive UUID comparison). O(1) after first hit. */
+    public GetEntityDocumentByID(id: string): MJEntityDocumentEntity | undefined {
         if (!id) return undefined;
-        return this._entityDocuments.find(d => UUIDsEqual(d.ID, id));
+        return this.getIDIndex('entityDocuments', this._entityDocuments, d => d.ID).get(NormalizeUUID(id));
+    }
+
+    /** Find a content source by ID (case-insensitive UUID comparison). O(1) after first hit. */
+    public GetContentSourceByID(id: string): MJContentSourceEntity | undefined {
+        if (!id) return undefined;
+        return this.getIDIndex('contentSources', this._contentSources, s => s.ID).get(NormalizeUUID(id));
+    }
+
+    /** Find a content type by ID (case-insensitive UUID comparison). O(1) after first hit. */
+    public GetContentTypeByID(id: string): MJContentTypeEntity | undefined {
+        if (!id) return undefined;
+        return this.getIDIndex('contentTypes', this._contentTypes, t => t.ID).get(NormalizeUUID(id));
+    }
+
+    /** Find a content source type by ID (case-insensitive UUID comparison). O(1) after first hit. */
+    public GetContentSourceTypeByID(id: string): MJContentSourceTypeEntity | undefined {
+        if (!id) return undefined;
+        return this.getIDIndex('contentSourceTypes', this._contentSourceTypes, t => t.ID).get(NormalizeUUID(id));
+    }
+
+    /** Find a content file type by ID (case-insensitive UUID comparison). O(1) after first hit. */
+    public GetContentFileTypeByID(id: string): MJContentFileTypeEntity | undefined {
+        if (!id) return undefined;
+        return this.getIDIndex('contentFileTypes', this._contentFileTypes, t => t.ID).get(NormalizeUUID(id));
     }
 
     /** Find all entity documents for a given entity name (case-insensitive) */
@@ -130,10 +189,10 @@ export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataE
         return this._entityDocuments.filter(d => d.Entity?.trim().toLowerCase() === lower);
     }
 
-    /** Find a vector index by ID (case-insensitive UUID comparison) */
-    public GetVectorIndexById(id: string): MJVectorIndexEntity | undefined {
+    /** Find a vector index by ID (case-insensitive UUID comparison). O(1) after first hit. */
+    public GetVectorIndexByID(id: string): MJVectorIndexEntity | undefined {
         if (!id) return undefined;
-        return this._vectorIndexes.find(v => UUIDsEqual(v.ID, id));
+        return this.getIDIndex('vectorIndexes', this._vectorIndexes, v => v.ID).get(NormalizeUUID(id));
     }
 
     /**

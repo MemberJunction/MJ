@@ -27,7 +27,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (406 classes)
+// @memberjunction/core-entities (410 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -99,6 +99,7 @@ import {
     MJAISkillActionEntity,
     MJAISkillEntity,
     MJAISkillPermissionEntity,
+    MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
@@ -169,6 +170,7 @@ import {
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
+    MJContentItemChunkEntity,
     MJContentItemDuplicateEntity,
     MJContentItemEntity,
     MJContentItemTagEntity,
@@ -184,6 +186,7 @@ import {
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
@@ -274,6 +277,7 @@ import {
     MJListDetailEntity,
     MJListDetailEntityExtended,
     MJListEntity,
+    MJListEntityExtended,
     MJListInvitationEntity,
     MJListShareEntity,
     MJMCPServerConnectionEntity,
@@ -793,6 +797,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAISkillActionEntity,
     MJAISkillEntity,
     MJAISkillPermissionEntity,
+    MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
@@ -863,6 +868,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
+    MJContentItemChunkEntity,
     MJContentItemDuplicateEntity,
     MJContentItemEntity,
     MJContentItemTagEntity,
@@ -878,6 +884,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationArtifactEntity,
     MJConversationArtifactPermissionEntity,
     MJConversationArtifactVersionEntity,
+    MJConversationCompactionRunEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
     MJConversationDetailEntity,
@@ -968,6 +975,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJListDetailEntity,
     MJListDetailEntityExtended,
     MJListEntity,
+    MJListEntityExtended,
     MJListInvitationEntity,
     MJListShareEntity,
     MJMCPServerConnectionEntity,
@@ -1335,7 +1343,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 614;
+export const CLASS_REGISTRATIONS_COUNT = 618;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

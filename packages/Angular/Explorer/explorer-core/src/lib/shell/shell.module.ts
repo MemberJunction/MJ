@@ -11,7 +11,7 @@ import { OmnibarPaletteComponent } from '../omnibar/omnibar-palette.component';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJDropdownComponent, MJClickableDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJDropdownComponent, MJClickableDirective, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SearchModule } from '@memberjunction/ng-search';
 
 @NgModule({
@@ -29,6 +29,7 @@ import { SearchModule } from '@memberjunction/ng-search';
     FormsModule,
     MJDropdownComponent,
     MJClickableDirective,
+    MJButtonDirective,
     MJEmptyStateComponent,
     ExplorerSettingsModule,
     SharedGenericModule,
