@@ -1,6 +1,6 @@
 import { SQLDialect, SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenQueryRow, CodeGenDatabaseProvider, MaterializedColumnSpec } from './codeGenDatabaseProvider';
-import { analyzeQueryForMaterialization, detectAggregationKeyColumns, detectAdditiveMeasures, MATERIALIZATION_SURROGATE_COLUMN } from './materializationAnalysis';
+import { analyzeQueryForMaterialization, detectAggregationKeyColumns, detectAdditiveMeasures, MATERIALIZATION_SURROGATE_COLUMN, type ReadFilterSpecEntry } from './materializationAnalysis';
 import { evaluateMaterializationDrift, type MaterializationDriftFacts } from './materializationDrift';
 import { classifyQueryParameters, buildHeldValues, type QueryParamDef, type VariantRenderer } from './materializationParamClassifier';
 import { buildBroadRowFilterSQL } from './materializationBroadRender';
@@ -1423,7 +1423,7 @@ export class ManageMetadataBase {
       queryName: string,
       outputColumns: string[],
       currentUser: UserInfo,
-   ): Promise<{ qualifies: true; rowFilterColumns: string[]; broadSQL: string } | { qualifies: false; reason: string }> {
+   ): Promise<{ qualifies: true; rowFilterColumns: string[]; broadSQL: string; readFilterSpec: ReadFilterSpecEntry[] } | { qualifies: false; reason: string }> {
       const coreSchema = mj_core_schema();
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
 
@@ -1431,7 +1431,10 @@ export class ManageMetadataBase {
       const qRes = await this.runQueryWithParams(pool, `SELECT SQL, UsesTemplate FROM ${this.qs(coreSchema, 'Query')} WHERE ID = @QID`, { QID: queryId });
       const sqlText = (qRes.recordset[0]?.SQL as string) ?? '';
       const usesTemplate = !!qRes.recordset[0]?.UsesTemplate;
-      const paramRows = await this.runQueryWithParams(pool, `SELECT Name, Type, SampleValue, DefaultValue, IsRequired, ValidationFilters FROM ${this.qs(coreSchema, 'QueryParameter')} WHERE QueryID = @QID ORDER BY Sequence`, { QID: queryId });
+      // NB: QueryParameter has no Sequence column (unlike QueryField) — order by Name for deterministic,
+      // stable classification output. (Ordering only affects the persisted spec's element order; the
+      // read-time predicate is an AND of all entries, so it's order-independent for correctness.)
+      const paramRows = await this.runQueryWithParams(pool, `SELECT Name, Type, SampleValue, DefaultValue, IsRequired, ValidationFilters FROM ${this.qs(coreSchema, 'QueryParameter')} WHERE QueryID = @QID ORDER BY Name`, { QID: queryId });
       const queryParams: MJQueryParameterEntity[] = [];
       for (const row of paramRows.recordset) {
          const pe = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters', currentUser);
@@ -1453,7 +1456,10 @@ export class ManageMetadataBase {
       };
 
       const paramDefs: QueryParamDef[] = queryParams.map((p) => ({ Name: p.Name, Type: p.Type, SampleValue: p.SampleValue }));
-      const classification = classifyQueryParameters({ queryName, params: paramDefs, outputColumns, dialect, render });
+      // Phase 2 is shipped: enable Bucket-1 row-filter broad materialization. The provider now auto-injects
+      // the read-time predicate from the persisted ReadFilterSpec (bound params), so a RowFilterBroad
+      // materialization is safe to mint. `allowRowFilterBroad` remains the build-level kill switch.
+      const classification = classifyQueryParameters({ queryName, params: paramDefs, outputColumns, dialect, render, allowRowFilterBroad: true });
       if (!classification.qualification.qualifies) {
          const detail = classification.perParam.map((pp) => `${pp.name}: ${pp.verdict.reason}`).join('; ');
          return { qualifies: false, reason: `${classification.qualification.reason ?? 'parameters not materializable'}${detail ? ` — [${detail}]` : ''}` };
@@ -1477,7 +1483,7 @@ export class ManageMetadataBase {
       if (broad.ambiguous) {
          return { qualifies: false, reason: `expected to strip exactly ${expectedRemovals} row-filter parameter predicate(s) on [${classification.qualification.rowFilterColumns.join(', ')}] but matched ${broad.removedCount} — the parameter predicate(s) cannot be cleanly isolated from other static or same-named predicates on those columns, so a broad materialization would include or exclude rows the live query never would. Refusing (query stays live-only).` };
       }
-      return { qualifies: true, rowFilterColumns: classification.qualification.rowFilterColumns, broadSQL: broad.sql };
+      return { qualifies: true, rowFilterColumns: classification.qualification.rowFilterColumns, broadSQL: broad.sql, readFilterSpec: classification.qualification.readFilterSpec };
    }
 
    /**
@@ -1531,6 +1537,7 @@ export class ManageMetadataBase {
          let paramMode: 'None' | 'RowFilterBroad' = 'None';
          let rowFilterColumns: string[] = [];
          let broadSQL: string | null = null;
+         let readFilterSpec: ReadFilterSpecEntry[] = [];
          if (isParameterized) {
             const pc = await this.classifyParameterizedQueryForMaterialization(pool, queryId, queryName, fields.map((f) => f.Name), currentUser);
             if (!pc.qualifies) {
@@ -1540,6 +1547,7 @@ export class ManageMetadataBase {
             paramMode = 'RowFilterBroad';
             rowFilterColumns = pc.rowFilterColumns;
             broadSQL = pc.broadSQL;
+            readFilterSpec = pc.readFilterSpec;
          }
 
          // Phase 3: detect an aggregation key (the grouping columns) so the refresh can compute a stable
@@ -1586,6 +1594,8 @@ export class ManageMetadataBase {
          // SQL literals for the row-filter persistence columns (shared by the insert/update branches).
          const rowFilterColumnsLit = rowFilterColumns.length > 0 ? `'${esc(JSON.stringify(rowFilterColumns))}'` : 'NULL';
          const broadSQLLit = broadSQL ? `'${esc(broadSQL)}'` : 'NULL';
+         // Phase 2: the structured read-filter spec the provider injects at read time (bound params).
+         const readFilterSpecLit = readFilterSpec.length > 0 ? `'${esc(JSON.stringify(readFilterSpec))}'` : 'NULL';
 
          // Phase 3/4: a keyed aggregation over a SINGLE source table is eligible for incremental in-place
          // refresh (the refresher still guards at runtime: baseline watermark + delete detection).
@@ -1691,7 +1701,7 @@ export class ManageMetadataBase {
             matResultId = existing.recordset[0].ID;
             const sqlUpd = `UPDATE ${this.qs(coreSchema, 'MaterializedResult')}
                               SET GeneratedEntityID=${idLit(generatedEntityId)}, SchemaName='${esc(coreSchema)}', TableName='${esc(tableName)}', ViewName='${esc(viewName)}',
-                                  ${this.qi('ParamMode')}='${paramMode}', ${this.qi('RowFilterColumns')}=${rowFilterColumnsLit}, ${this.qi('BroadSQL')}=${broadSQLLit}, ${this.qi('KeyColumns')}=${keyColumnsLit}, ${this.qi('RefreshStrategy')}='${refreshStrategy}'
+                                  ${this.qi('ParamMode')}='${paramMode}', ${this.qi('RowFilterColumns')}=${rowFilterColumnsLit}, ${this.qi('BroadSQL')}=${broadSQLLit}, ${this.qi('ReadFilterSpec')}=${readFilterSpecLit}, ${this.qi('KeyColumns')}=${keyColumnsLit}, ${this.qi('RefreshStrategy')}='${refreshStrategy}'
                             WHERE ID='${matResultId}'`;
             await this.LogSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for query "${queryName}"`);
          } else {
@@ -1699,9 +1709,9 @@ export class ManageMetadataBase {
             const c = (n: string) => this.qi(n);
             const sqlIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResult')} (
                                  ${c('ID')}, ${c('SourceType')}, ${c('SourceQueryID')}, ${c('GeneratedEntityID')}, ${c('SchemaName')}, ${c('TableName')}, ${c('ViewName')},
-                                 ${c('ParamMode')}, ${c('RowFilterColumns')}, ${c('BroadSQL')}, ${c('KeyColumns')}, ${c('RefreshStrategy')}, ${c('Status')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
+                                 ${c('ParamMode')}, ${c('RowFilterColumns')}, ${c('BroadSQL')}, ${c('ReadFilterSpec')}, ${c('KeyColumns')}, ${c('RefreshStrategy')}, ${c('Status')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
                             VALUES ( '${matResultId}', 'Query', '${queryId}', ${idLit(generatedEntityId)}, '${esc(coreSchema)}', '${esc(tableName)}', '${esc(viewName)}',
-                                 '${paramMode}', ${rowFilterColumnsLit}, ${broadSQLLit}, ${keyColumnsLit}, '${refreshStrategy}', 'Building', ${this.utcNow()}, ${this.utcNow()} )`;
+                                 '${paramMode}', ${rowFilterColumnsLit}, ${broadSQLLit}, ${readFilterSpecLit}, ${keyColumnsLit}, '${refreshStrategy}', 'Building', ${this.utcNow()}, ${this.utcNow()} )`;
             await this.LogSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for query "${queryName}"`);
          }
          await this.LogSQLAndExecute(pool, `UPDATE ${this.qs(coreSchema, 'Query')} SET MaterializedResultID='${matResultId}' WHERE ID='${queryId}'`, `Set Query.MaterializedResultID back-link for "${queryName}"`);

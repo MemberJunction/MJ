@@ -196,6 +196,8 @@ export function classifyQueryParameters(opts: {
         name: pv.name,
         role: pv.verdict.role,
         filterColumn: pv.verdict.filterColumn,
+        filterOperator: pv.verdict.filterOperator,
+        filterKind: pv.verdict.filterKind,
     }));
 
     const qualification = qualifyParameterizedQuery({

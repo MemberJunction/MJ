@@ -3164,6 +3164,145 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * execute → paginate → audit → cache store. Platform providers inherit this; only
      * `ExecuteSQL()` is platform-specific.
      */
+    /**
+     * Phase 2 read-time filter predicate — the runtime mirror of CodeGen's persisted `ReadFilterSpec`
+     * entry. Duplicated here (not imported) because the provider must not depend on the dev-time
+     * CodeGenLib; the JSON shape is the contract (plan §4).
+     */
+    private static readonly RUNTIME_SAFE_READ_FILTER_OPERATORS: ReadonlySet<string> = new Set<string>([
+        '=', '!=', '<>', '<', '>', '<=', '>=', 'IN', 'NOT IN',
+    ]);
+
+    /** Quotes a SQL identifier for the target engine (SQL Server `[x]`, PostgreSQL `"x"`), escaping the closer. */
+    private static quoteMaterializedIdentifier(name: string, isPostgres: boolean): string {
+        return isPostgres ? `"${name.replace(/"/g, '""')}"` : `[${name.replace(/]/g, ']]')}]`;
+    }
+
+    /**
+     * PURE, dialect-aware builder for the Phase-2 materialized read query (plan §5). Given the query's
+     * output columns, the materialized view (schema + name), the persisted read-filter spec, the caller's
+     * parameter values, and the platform, returns `{ sql, parameters }` whose WHERE injects each spec
+     * predicate as `column <op> <placeholder>` with the value **bound** (SQL Server `?`, PostgreSQL `$n`) —
+     * never interpolating a caller value (SQL-injection-safe by construction).
+     *
+     * Returns null on ANY condition that would make the materialized read UNFAITHFUL to the live query, so
+     * the caller falls back to running live (always correct): an operator outside the safe set, a spec
+     * parameter the caller did not supply (the live query would apply the param's default), a null value,
+     * or an empty/non-array value for a list (`IN`/`NOT IN`) predicate. No IO — fully unit-testable.
+     */
+    public static buildMaterializedReadQuery(opts: {
+        outputColumns: string[];
+        schemaName: string;
+        viewName: string;
+        spec: Array<{ column: string; operator: string; paramName: string; kind: 'scalar' | 'list' }>;
+        paramValues: Record<string, unknown> | undefined;
+        isPostgres: boolean;
+    }): { sql: string; parameters: unknown[] } | null {
+        const { outputColumns, schemaName, viewName, spec, paramValues, isPostgres } = opts;
+        if (!outputColumns || outputColumns.length === 0) return null;
+        if (!spec || spec.length === 0) return null;
+
+        const q = (name: string) => GenericDatabaseProvider.quoteMaterializedIdentifier(name, isPostgres);
+        const parameters: unknown[] = [];
+        const predicates: string[] = [];
+        // Placeholder for the NEXT bound value: SQL Server uses positional `?`; PostgreSQL uses `$n` (1-based,
+        // computed BEFORE the value is pushed so the index aligns with the array position).
+        const nextPlaceholder = () => (isPostgres ? `$${parameters.length + 1}` : '?');
+
+        for (const e of spec) {
+            // Defensive: the spec is parsed from a persisted JSON string, so validate each element's shape
+            // before use — a malformed element (missing/non-string column/operator/paramName) returns null
+            // (→ caller falls back to live), never throws mid-build (Phase 2 §2: any uncertainty → live).
+            if (!e || typeof e.column !== 'string' || typeof e.operator !== 'string' || typeof e.paramName !== 'string') return null;
+            if (!GenericDatabaseProvider.RUNTIME_SAFE_READ_FILTER_OPERATORS.has(e.operator)) return null;
+            const val = paramValues ? paramValues[e.paramName] : undefined;
+            if (val === undefined || val === null) return null; // caller omitted it → live applies the default
+            const col = q(e.column);
+            const isListOp = e.operator === 'IN' || e.operator === 'NOT IN';
+            if (isListOp) {
+                if (!Array.isArray(val) || val.length === 0) return null; // empty/non-array IN → live
+                const phs = val.map((item) => {
+                    const ph = nextPlaceholder();
+                    parameters.push(item);
+                    return ph;
+                });
+                predicates.push(`${col} ${e.operator} (${phs.join(', ')})`);
+            } else {
+                const ph = nextPlaceholder();
+                parameters.push(val);
+                predicates.push(`${col} ${e.operator} ${ph}`);
+            }
+        }
+
+        const cols = outputColumns.map((c) => q(c)).join(', ');
+        const sql = `SELECT ${cols} FROM ${q(schemaName)}.${q(viewName)} WHERE ${predicates.join(' AND ')}`;
+        return { sql, parameters };
+    }
+
+    /**
+     * Phase 2 (plan §5): resolve a materialized read plan for a query IF the caller opted into
+     * `DataSource:'Materialized'` AND the query has a fresh, Active `RowFilterBroad` materialization whose
+     * persisted spec fully covers the query's parameters. Returns null on ANY uncertainty → the caller runs
+     * the live query (serving live is always correct — this is a transparent optimization, never a
+     * correctness dependency).
+     */
+    protected async tryBuildMaterializedQueryPlan(
+        query: MJQueryEntityExtended,
+        params: RunQueryParams,
+        contextUser?: UserInfo,
+    ): Promise<{ sql: string; parameters: unknown[] } | null> {
+        if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
+        if (query.ExternalDataSourceID) return null;                   // external source → materialized table is local; live
+        const matId = query.MaterializedResultID;
+        if (!matId) return null;                                       // query not materialized → live
+
+        // Load the materialization metadata. matId is our own UUID (from committed metadata), so it is safe
+        // to interpolate into ExtraFilter — it never carries caller input.
+        const rv = new RunView(this);
+        const res = await rv.RunView<{ Status: string; ParamMode: string; ReadFilterSpec: string | null; SchemaName: string; ViewName: string }>(
+            {
+                EntityName: 'MJ: Materialized Results',
+                ExtraFilter: `ID='${matId}'`,
+                Fields: ['Status', 'ParamMode', 'ReadFilterSpec', 'SchemaName', 'ViewName'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            contextUser,
+        );
+        if (!res.Success || !res.Results || res.Results.length === 0) return null;
+        const mat = res.Results[0];
+        if (mat.Status !== 'Active') return null;                 // Building / DriftHold / stale → live
+        if (mat.ParamMode !== 'RowFilterBroad') return null;      // None / PerValueCache → live (this path only serves Bucket 1)
+        if (!mat.ReadFilterSpec) return null;
+
+        let spec: Array<{ column: string; operator: string; paramName: string; kind: 'scalar' | 'list' }>;
+        try {
+            spec = JSON.parse(mat.ReadFilterSpec);
+        } catch {
+            return null; // malformed spec → live
+        }
+        if (!Array.isArray(spec) || spec.length === 0) return null;
+
+        // Coverage invariant: a RowFilterBroad query's parameters are ALL row-filters (a mix refuses at
+        // classify time), so every query parameter MUST be represented in the spec. If any isn't, our
+        // metadata is inconsistent with this query → refuse to the live path rather than under-filter.
+        const specNames = new Set(spec.map((s) => s.paramName));
+        const queryParamNames = (query.QueryParameters ?? []).map((p) => p.Name);
+        if (queryParamNames.some((n) => !specNames.has(n))) return null;
+
+        const outputColumns = (query.QueryFields ?? []).map((f) => f.Name).filter((n): n is string => !!n);
+        if (outputColumns.length === 0) return null;
+
+        return GenericDatabaseProvider.buildMaterializedReadQuery({
+            outputColumns,
+            schemaName: mat.SchemaName,
+            viewName: mat.ViewName,
+            spec,
+            paramValues: params.Parameters,
+            isPostgres: this.PlatformKey === 'postgresql',
+        });
+    }
+
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // Route ad-hoc SQL queries to dedicated handler
         if (params.SQL) {
@@ -3179,6 +3318,53 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const resolved = this.processQueryParameters(query, params.Parameters, contextUser);
             finalSQL = resolved.finalSQL;
             const appliedParameters = resolved.appliedParameters;
+
+            // ── Phase 2: materialized read redirect (plan §5) ──
+            // If the caller opted into DataSource:'Materialized' and this query has a fresh, Active
+            // RowFilterBroad materialization, serve from the materialized table with the row-filter params
+            // injected as BOUND predicates. On ANY uncertainty tryBuildMaterializedQueryPlan returns null and
+            // we fall through to the live execution below — a materialized read can never diverge from live.
+            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser);
+            if (matPlan) {
+                // Use a LOCAL for the materialized SQL — never overwrite `finalSQL` (which stays the
+                // live-rendered SQL), so a fallback below runs the live path unchanged.
+                try {
+                    const materializedSQL = matPlan.sql;
+                    const timing = await this.executeQueryWithTiming(materializedSQL, contextUser, matPlan.parameters);
+                    const paginated = this.applyQueryPagination(timing.result, params);
+                    let rows = paginated.paginatedResult;
+                    if (params.Enrichment?.EnricherKey) {
+                        rows = await this.enrichQueryResults(rows, params, query, contextUser);
+                    }
+                    this.auditQueryExecution(query, params, materializedSQL, rows.length, paginated.totalRowCount, timing.executionTime, contextUser);
+                    // Report PageNumber/PageSize consistently with the live path when the caller requested paging
+                    // (the materialized branch paginates in memory, but the reported metadata must match live).
+                    const matPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+                    return {
+                        Success: true,
+                        QueryID: query.ID,
+                        QueryName: query.Name,
+                        Results: rows,
+                        RowCount: rows.length,
+                        TotalRowCount: paginated.totalRowCount,
+                        PageNumber: matPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                        PageSize: matPaging ? params.MaxRows! : undefined,
+                        ExecutionTime: timing.executionTime,
+                        ErrorMessage: '',
+                        AppliedParameters: appliedParameters,
+                        RenderedSQL: materializedSQL,
+                        CacheHit: false,
+                    };
+                } catch (matErr) {
+                    // A connection error is fatal for the live path too — let the outer handler surface it.
+                    if (this.isConnectionError(matErr)) throw matErr;
+                    // Any other materialized-read failure (e.g. the wrapper view was rebuilt/dropped between the
+                    // freshness check and execution, or a column/grant mismatch) FALLS BACK to the live query.
+                    // Serving live is always correct, so a materialized-read failure must never fail a request
+                    // that would otherwise succeed (Phase 2 §2 safety model). `finalSQL` is still the live SQL.
+                    LogError(`Materialized read failed for query '${query.Name}' — falling back to live: ${matErr instanceof Error ? matErr.message : String(matErr)}`);
+                }
+            }
 
             // ── External data source dispatch ──
             // Queries bound to an external data source execute their (now fully-rendered)
@@ -3651,9 +3837,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected async executeQueryWithTiming(
         sql: string,
         contextUser?: UserInfo,
+        parameters?: unknown[],
     ): Promise<{ result: Record<string, unknown>[]; executionTime: number }> {
         const start = Date.now();
-        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, parameters, undefined, contextUser);
         const executionTime = Date.now() - start;
 
         if (!result) {

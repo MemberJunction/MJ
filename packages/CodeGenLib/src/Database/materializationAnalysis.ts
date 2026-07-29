@@ -111,6 +111,33 @@ export type ParamRole = 'RowFilter' | 'Structural' | 'Unbounded';
 /** Persisted parameterization mode (mirrors the `MaterializedResult.ParamMode` CHECK values). */
 export type ParamMode = 'None' | 'RowFilterBroad' | 'PerValueCache' | 'BoundFixed';
 
+/**
+ * Phase 2 read-time-injectable operators — the SAFE whitelist. A `column <op> value` predicate in this
+ * set can be faithfully re-applied against the broad materialized table with a bound parameter (§3 of the
+ * Phase-2 plan). `LIKE`/`IS`/`BETWEEN` and their negations are intentionally EXCLUDED in v1 (subtler
+ * pattern/null/two-operand semantics) — a query using them stays live-only, which is harmless (§10).
+ */
+export const SAFE_READ_FILTER_OPERATORS: ReadonlySet<string> = new Set<string>([
+    '=', '!=', '<>', '<', '>', '<=', '>=', 'IN', 'NOT IN',
+]);
+
+/**
+ * One read-time filter predicate persisted as the contract between CodeGen (classify-time) and the runtime
+ * provider (read-time): `column <operator> value(s)` against the broad materialized table. Self-sufficient —
+ * the provider consumes this JSON directly and never re-parses the query. Values are ALWAYS bound as SQL
+ * parameters at read time (never interpolated), so `column`/`operator` are the only trusted-from-here fields.
+ */
+export interface ReadFilterSpecEntry {
+    /** The materialized output column to filter (proven present in the output at qualify time). */
+    column: string;
+    /** The normalized `column <op> value` operator — always one of {@link SAFE_READ_FILTER_OPERATORS}. */
+    operator: string;
+    /** The `MJ: Query Parameter` name whose incoming value binds into this predicate. */
+    paramName: string;
+    /** `scalar` → single bound value; `list` → `IN (@p0,@p1,…)` bound element-wise. */
+    kind: 'scalar' | 'list';
+}
+
 /** One parameter's verified classification (input to {@link qualifyParameterizedQuery}). */
 export interface ParamClassification {
     /** Parameter name (the Nunjucks variable). */
@@ -119,6 +146,10 @@ export interface ParamClassification {
     role: ParamRole;
     /** Bucket 1: the output column the param filters on (must be present in the materialized output). */
     filterColumn?: string;
+    /** Bucket 1: the normalized `column <op> value` operator (Phase 2 — required to reconstruct the predicate). */
+    filterOperator?: string;
+    /** Bucket 1: scalar vs. list (`IN`/`NOT IN`) value shape. */
+    filterKind?: 'scalar' | 'list';
     /** Bucket 2: the verifier-bounded value domain (advisory — the runtime guard still recomputes on a miss). */
     boundedDomain?: string[];
 }
@@ -133,6 +164,11 @@ export interface ParamQualification {
     paramMode: ParamMode;
     /** RowFilterBroad: the columns to apply as read-time predicates against the broad materialized table (§6.4). */
     rowFilterColumns: string[];
+    /**
+     * RowFilterBroad: the structured, self-sufficient predicate spec the runtime provider injects at read time
+     * (Phase 2). Empty for every other mode. Persisted as JSON on `MJ: Materialized Results . ReadFilterSpec`.
+     */
+    readFilterSpec: ReadFilterSpecEntry[];
 }
 
 /**
@@ -170,14 +206,15 @@ export function qualifyParameterizedQuery(opts: {
     const { queryName, params, outputColumns } = opts;
     const allowPerValueCache = opts.allowPerValueCache ?? false;
     const allowRowFilterBroad = opts.allowRowFilterBroad ?? false;
-    const refuse = (reason: string): ParamQualification => ({ qualifies: false, reason, paramMode: 'None', rowFilterColumns: [] });
+    const refuse = (reason: string): ParamQualification => ({ qualifies: false, reason, paramMode: 'None', rowFilterColumns: [], readFilterSpec: [] });
 
     if (!params || params.length === 0) {
-        return { qualifies: true, paramMode: 'None', rowFilterColumns: [] };
+        return { qualifies: true, paramMode: 'None', rowFilterColumns: [], readFilterSpec: [] };
     }
 
     const outputSet = new Set(outputColumns.map((c) => c.trim().toLowerCase()));
     const rowFilterColumns: string[] = [];
+    const readFilterSpec: ReadFilterSpecEntry[] = [];
     let hasStructural = false;
 
     for (const p of params) {
@@ -201,21 +238,36 @@ export function qualifyParameterizedQuery(opts: {
         if (!outputSet.has(p.filterColumn.trim().toLowerCase())) {
             return refuse(`query "${queryName}" param "${p.name}" filters on column "${p.filterColumn}", which is not in the materialized output — disqualify (or project that column into the query)`);
         }
+        // Phase 2 read-time-safety gate: only mint a RowFilterBroad materialization when the operator is
+        // provably reconstructable against the broad table with a bound param (§3). Anything outside the
+        // whitelist (LIKE/IS/BETWEEN, or an unresolved operator) stays live-only — harmless (§10).
+        const op = p.filterOperator;
+        if (!op || !SAFE_READ_FILTER_OPERATORS.has(op)) {
+            return refuse(`query "${queryName}" param "${p.name}" filters on "${p.filterColumn}" with operator "${op ?? '(unresolved)'}", which is not in the read-time-safe operator set {${[...SAFE_READ_FILTER_OPERATORS].join(', ')}} — deferred; the query stays live-only`);
+        }
+        // Operator/value-shape consistency: IN/NOT IN must carry a list value; every other op a scalar.
+        // A mismatch means our AST reading is inconsistent → refuse under uncertainty rather than guess.
+        const isListOp = op === 'IN' || op === 'NOT IN';
+        const expectedKind = isListOp ? 'list' : 'scalar';
+        if (p.filterKind !== expectedKind) {
+            return refuse(`query "${queryName}" param "${p.name}" operator "${op}" expects a ${expectedKind} value but the verifier reported "${p.filterKind ?? '(none)'}" — refusing under uncertainty`);
+        }
         rowFilterColumns.push(p.filterColumn);
+        readFilterSpec.push({ column: p.filterColumn, operator: op, paramName: p.name, kind: expectedKind });
     }
 
     if (rowFilterColumns.length > 0 && hasStructural) {
         return refuse(`query "${queryName}" mixes row-filter and structural params — not modeled in v1; refusing under uncertainty`);
     }
     if (hasStructural) {
-        return { qualifies: true, paramMode: 'PerValueCache', rowFilterColumns: [] };
+        return { qualifies: true, paramMode: 'PerValueCache', rowFilterColumns: [], readFilterSpec: [] };
     }
     if (!allowRowFilterBroad) {
-        // Phase 2 not shipped: the read-time row-filter predicate isn't auto-injected, so materializing
-        // broad would let a caller read the unfiltered set. Refuse (stay live-only) until Phase 2 enables it.
-        return refuse(`query "${queryName}" has row-filter parameter(s) on [${rowFilterColumns.join(', ')}] (Bucket 1 / RowFilterBroad) — parameterized row-filter materialization is deferred to Phase 2 and not enabled in this build (the read-time predicate is not auto-injected yet); the query stays live-only`);
+        // Enablement switch (Phase 2). When off, refuse row-filter queries to live-only — a defense-in-depth
+        // kill switch even though the read-time predicate injection is now implemented in the provider.
+        return refuse(`query "${queryName}" has row-filter parameter(s) on [${rowFilterColumns.join(', ')}] (Bucket 1 / RowFilterBroad) — parameterized row-filter materialization is not enabled in this build; the query stays live-only`);
     }
-    return { qualifies: true, paramMode: 'RowFilterBroad', rowFilterColumns };
+    return { qualifies: true, paramMode: 'RowFilterBroad', rowFilterColumns, readFilterSpec };
 }
 
 // AST-walking primitives are shared with the param verifier + broad-render via ./materializationSqlAst
