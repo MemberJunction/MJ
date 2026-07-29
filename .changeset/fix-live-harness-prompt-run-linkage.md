@@ -6,14 +6,24 @@ Fix the live-agent harness reaching prompt runs through a column that does not e
 
 Three live-harness helpers filtered `MJ: AI Prompt Runs` on `AgentRunID`. That column is not on
 `AIPromptRun` — its only agent-facing field is `AgentID`. A prompt run is reachable from its agent
-run solely through the step that invoked it: an `MJ: AI Agent Run Steps` row with `StepType='Prompt'`
-whose `TargetLogID` is the prompt run's ID.
+run only through the step that invoked it: an `MJ: AI Agent Run Steps` row whose `TargetLogID` is
+the prompt run's ID.
 
 The reason a nonexistent column survived in committed code is the second half. `RunView` does not
 throw — it returns `Success: false` with an `ErrorMessage` — and each helper coalesced that to `[]`,
 making a SQL error indistinguishable from "this run made no model calls". Callers read zero prompt
 runs and either passed vacuously or failed on an unrelated-looking assertion. The swallow was the
 actual defect; the wrong column name only exploited it.
+
+Which step types carry a prompt run is the other half of the rule, and `Prompt` alone is wrong.
+base-agent writes a prompt run's id into `TargetLogID` on three step types: `Prompt` (the ordinary
+model call), `Compaction` (cross-turn conversation compaction), and `Tool` (a conversation tool call
+that made its own model call, deliberately with no duplicate `Prompt` step — so a Prompt-only rule
+cannot reach it by any route). Two named sets now encode this, because the correct answer differs by
+purpose: `PROMPT_RUN_BEARING_STEP_TYPES` (all three) for deletion, which must be exhaustive or it
+orphans rows, and `ROLLUP_BEARING_STEP_TYPES` (`Prompt` + `Compaction`) for token reads, mirroring
+the step types base-agent actually counts toward `AIAgentRun.TotalTokensUsed`. A single blanket
+filter would have fixed the orphaning and broken the token reconciliation in the same stroke.
 
 The linkage rule now exists once, in `promptRunIdsFromSteps`, instead of being restated in four
 places with three of them wrong. `deepDeleteRunTrees` resolves prompt runs *before* deleting steps —

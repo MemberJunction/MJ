@@ -8,8 +8,14 @@
  * either passed vacuously or failed on an unrelated-looking assertion, and teardown silently left
  * every prompt-run row behind.
  *
- * A prompt run is reachable from its agent run ONLY through the step that invoked it: an
- * `MJ: AI Agent Run Steps` row with `StepType='Prompt'` whose TargetLogID is the AIPromptRun's ID.
+ * A prompt run is reachable from its agent run only through the step that invoked it: an
+ * `MJ: AI Agent Run Steps` row whose TargetLogID is the AIPromptRun's ID. Which step types qualify
+ * is NOT just `Prompt` — base-agent writes a prompt run's id into TargetLogID on `Prompt`,
+ * `Compaction`, and `Tool` steps, and counts only `Prompt` and `Compaction` toward the run's token
+ * rollup. Stating the rule as Prompt-only is what made teardown orphan the other two, so the tests
+ * below pin both sets deliberately: the exhaustive one that deletion must use, and the narrower
+ * rollup-scoped one that token reconciliation must use.
+ *
  * These tests pin that rule (`promptRunIdsFromSteps`) and pin that a failed RunView is surfaced
  * rather than swallowed (`requireRows`) — the property whose absence hid the original defect.
  */
@@ -47,7 +53,7 @@ describe('promptRunIdsFromSteps', () => {
         ).toEqual(['pr-1', 'pr-2']);
     });
 
-    it('ignores non-Prompt steps — their TargetLogID points at another log type', () => {
+    it('ignores Sub-Agent and Actions steps — their TargetLogID points at another log type', () => {
         // Sub-Agent steps link a child AGENT RUN and Actions steps an Action Execution Log.
         // Treating those ids as prompt-run ids would delete or read the wrong rows entirely.
         expect(
