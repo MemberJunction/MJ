@@ -1636,7 +1636,7 @@ export class ManageMetadataBase {
             `SELECT SourceType, SourceQueryID FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE SchemaName = @S AND TableName = @T`,
             { S: coreSchema, T: tableName },
          );
-         const foreignOwner = tableOwners.recordset.find((row: CodeGenQueryRow) => !(row.SourceType === 'Query' && row.SourceQueryID === queryId));
+         const foreignOwner = tableOwners.recordset.find((row: CodeGenQueryRow) => !(row.SourceType === 'Query' && UUIDsEqual(row.SourceQueryID as string, queryId)));
          if (foreignOwner) {
             logError(
                `    > REFUSING to materialize query "${queryName}": its derived table [${coreSchema}].[${tableName}] (from CodeName "${codeName}") is already owned by a different materialization (SourceType=${foreignOwner.SourceType}, SourceQueryID=${foreignOwner.SourceQueryID ?? 'n/a'}). Two sources whose names normalize to the same CodeName would clobber each other's snapshot — rename one so their CodeNames differ. Skipping.`,
@@ -5884,7 +5884,7 @@ export class ManageMetadataBase {
       }
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const roleCanReadAllSources = (roleId: string): boolean =>
-         sourceEntities.every((e) => e.Permissions.some((p) => p.RoleID === roleId && p.CanRead));
+         sourceEntities.every((e) => e.Permissions.some((p) => UUIDsEqual(p.RoleID, roleId) && p.CanRead));
       for (const p of configInfo.newEntityDefaults.PermissionDefaults.Permissions) {
          const roleId = md.Roles.find((r) => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
          if (!roleId) {
