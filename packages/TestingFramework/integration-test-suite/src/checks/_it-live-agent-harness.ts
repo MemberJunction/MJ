@@ -271,8 +271,10 @@ export async function deepDeleteRunTrees(provider: IMetadataProvider, user: User
     if (ids.length === 0) return;
     const inList = ids.map((id) => `'${id}'`).join(',');
 
-    // 1. Resolve prompt runs BEFORE deleting steps. AIPromptRun has no AgentRunID, so the Prompt
-    //    steps are the only path to these rows — deleting the steps first orphans them permanently.
+    // 1. Resolve prompt runs BEFORE deleting steps. AIPromptRun has no AgentRunID, so the
+    //    prompt-run-bearing steps are the only path to these rows — deleting the steps first
+    //    orphans them permanently. Uses the FULL step-type set (the resolver's default), not the
+    //    rollup subset: teardown must reach every prompt run, including Compaction and Tool ones.
     let promptRunIds: string[] = [];
     try {
         promptRunIds = await resolvePromptRunIdsForAgentRuns(ids, user);
