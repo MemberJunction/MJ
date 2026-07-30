@@ -191,8 +191,17 @@ the exact edges.
   survive verbatim into the rendered SQL; if it doesn't (a value transform, or a type coercion it can't
   verify), the parameter is refused (`Unbounded`) and the query stays **live-only**. Conservative by design
   (§10): a coerced-but-faithful value (e.g. a boolean rendered as `1`) refuses too — a missed optimization,
-  never wrong; the whitelist can widen later with proof. Verified against the real Nunjucks pipeline
-  (`| upper | sqlString` refuses, `| sqlString` qualifies) + unit tests.
+  never wrong; the whitelist can widen later with proof. The per-type sentinels are hardened against the
+  transform classes a follow-up adversarial pass found could otherwise slip through: **strings/arrays** carry
+  whitespace + mixed case + a digit/dash/dot so `trim`/`upper`/`replace('-','')`/`replace('.','')` all alter
+  them; the **number** sentinel is negative and non-integer so `round`/`int`/`floor`/`ceil`/`abs` alter it (a
+  plain integer would be identity under `round`/`int` and pass falsely); the **date** sentinel carries a
+  time+offset that rolls the UTC day so `sqlDate`'s ISO reformat alters it (date row-filters are therefore
+  conservatively refused). Verified against the real Nunjucks pipeline — `round`/`int`/`abs`/`replace`/`trim`/
+  `upper`/`sqlDate`/array-`first` all refuse; identity `sqlString`/`sqlNumber`/`IN`-list qualify (12/12) — plus
+  unit tests. **Residual (inherent to a sentinel heuristic):** a pathological custom filter that is exactly
+  identity on the sentinel — most realistically a `replace()` of a character the sentinel doesn't contain —
+  could still slip through; the guard is conservative best-effort, not a proof.
 - **Session-dependent query SQL (pre-existing Phase-1 property, not a Phase-2 regression).** A materialized
   broad table is a snapshot built once under the *refresh job's* identity. If a query's SQL embeds an implicit
   per-user/session predicate that is NOT a declared parameter (`SESSION_USER`, `CURRENT_USER`, a context

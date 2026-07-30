@@ -155,18 +155,28 @@ function renderVariantsForParam(
  * typically coerce (`true`→`1`, a reformatted date) — which the guard then treats as non-passthrough.
  */
 function passthroughSentinel(type: QueryParamType): unknown {
-    // The string/array sentinels deliberately combine features the common value-transforming filters would
-    // alter, so the verbatim-contains check catches them: leading/trailing + interior WHITESPACE (trim,
-    // ltrim, rtrim, collapse), MIXED CASE (upper, lower, capitalize, title), and SEPARATORS (replace, split).
-    // No single-quote (which sqlString escapes → would false-refuse an identity render). A pathological
-    // custom filter that happens to be identity on this exact value could still slip through — the guard is
-    // conservative best-effort, not a proof; documented in plan §9.
+    // Each sentinel deliberately combines features the common value-transforming filters would alter, so the
+    // verbatim-contains check catches them:
+    //  - STRING/ARRAY: leading/trailing + interior WHITESPACE (trim/ltrim/rtrim/collapse), MIXED CASE (upper/
+    //    lower/capitalize/title), and DIGITS + SEPARATORS — a dash and a dot — so a normalizing `replace('-','')`
+    //    / `replace('.','')` / digit-strip alters it. No single-quote (which sqlString escapes → would
+    //    false-refuse an identity render).
+    //  - NUMBER: a NEGATIVE, NON-INTEGER value. An integer-preserving numeric filter (round/int/floor/ceil)
+    //    drops the fractional part and abs drops the sign, so any of them changes it → refuse — while sqlNumber
+    //    renders it verbatim, so a genuine identity render still passes. (A plain integer sentinel would be
+    //    identity under round/int and slip through.)
+    //  - DATE: a time + non-UTC offset that rolls to the NEXT calendar day in UTC, so sqlDate's
+    //    `new Date(x).toISOString()` normalization changes the date portion → refuse. In practice every SQL-safe
+    //    date filter reformats, so date row-filters are conservatively refused (a never-wrong missed optimization).
+    // The guard is conservative best-effort, NOT a proof: a pathological custom filter that is identity on this
+    // exact sentinel could still slip through (plan §9) — most realistically a `replace()` of a character the
+    // sentinel happens not to contain.
     switch (type) {
-        case 'string': return '  Mj_Pt zQ9x_Kw  ';
-        case 'number': return 305419896; // 0x12345678 — distinctive, unlikely to appear coincidentally
-        case 'date': return '2019-03-14';
+        case 'string': return '  Mj0_Pt9-zQx.Kw  ';
+        case 'number': return -305419896.5073; // negative + fractional → catches round/int/floor/ceil/abs; sqlNumber renders verbatim
+        case 'date': return '2019-03-14T20:00:00-05:00'; // → 2019-03-15T01:00:00.000Z in UTC: sqlDate changes the date portion
         case 'boolean': return true;
-        case 'array': return ['  Mj_PtA zQ9x  ', '  Mj_PtB zQ9x  '];
+        case 'array': return ['  Mj0_PtA9-zx.  ', '  Mj0_PtB9-zx.  '];
     }
 }
 

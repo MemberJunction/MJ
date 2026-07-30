@@ -85,6 +85,38 @@ describe('classifyQueryParameters', () => {
         expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
     });
 
+    it('a value-ROUNDING numeric filter (| round / | int) is refused — a plain-integer sentinel would have slipped through (F1)', () => {
+        // Live rounds the value; the read path binds the caller's raw (possibly fractional) value → wrong rows.
+        // The negative, NON-INTEGER sentinel is altered by round (fraction dropped) → guard refuses. A plain
+        // integer sentinel would be identity under round/int and pass falsely.
+        const params: QueryParamDef[] = [{ Name: 'minScore', Type: 'number' }];
+        const render: VariantRenderer = (v) => `SELECT ID, Score FROM Members WHERE Score >= ${Math.round(Number(v['minScore']))}`;
+        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Score'], dialect: tsql, render, allowRowFilterBroad: true });
+        expect(r.perParam[0].verdict.role).toBe('Unbounded');
+        expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
+    });
+
+    it('a value-NORMALIZING string filter (| replace("-","")) is refused — the sentinel carries a dash (F2)', () => {
+        // Dash-stripping normalization (phone/SKU/SSN) diverges: live filters on the stripped value, the read
+        // path binds the raw dashed value. The enriched sentinel contains a dash → replace alters it → refuse.
+        const params: QueryParamDef[] = [{ Name: 'code', Type: 'string' }];
+        const render: VariantRenderer = (v) => `SELECT ID, Code FROM Items WHERE Code = '${String(v['code']).replace(/-/g, '')}'`;
+        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Code'], dialect: tsql, render, allowRowFilterBroad: true });
+        expect(r.perParam[0].verdict.role).toBe('Unbounded');
+        expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
+    });
+
+    it('a DATE filter that ISO-normalizes (sqlDate) is refused — the sentinel rolls the UTC day (F3)', () => {
+        // sqlDate does `new Date(x).toISOString()`; a caller date-with-time can shift its UTC calendar day while
+        // the read path binds the raw value → off-by-a-day rows. The time+offset sentinel changes its date part
+        // under toISOString → guard refuses (dates are conservatively refused — never wrong).
+        const params: QueryParamDef[] = [{ Name: 'asOf', Type: 'date' }];
+        const render: VariantRenderer = (v) => `SELECT ID, D FROM Snap WHERE D = '${new Date(String(v['asOf'])).toISOString()}'`;
+        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'D'], dialect: tsql, render, allowRowFilterBroad: true });
+        expect(r.perParam[0].verdict.role).toBe('Unbounded');
+        expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
+    });
+
     it('a value-PRESERVING filter still qualifies — the passthrough guard does not over-refuse the common case', () => {
         // Both string (quote-only) and numeric (identity) row filters render the value verbatim, so the
         // sentinel survives → still RowFilterBroad. Confirms the guard is targeted, not blanket.
