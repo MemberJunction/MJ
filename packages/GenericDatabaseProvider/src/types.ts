@@ -74,6 +74,31 @@ export interface SqlLoggingOptions {
    * Note: If filterPatterns is empty/undefined, all SQL is logged regardless of filterType.
    */
   filterType?: 'include' | 'exclude';
+
+  /**
+   * Maximum size, in bytes, of a single generated SQL log file. When set to a positive
+   * value and the session's output would exceed it, the logger rotates to a new part file
+   * at a safe statement boundary, so no single file exceeds the limit. This exists so a
+   * very large capture (e.g. a full metadata-sync push) can be committed under host file-size
+   * limits such as GitHub's 100 MiB cap.
+   *
+   * Behavior:
+   * - Splitting occurs ONLY when the content actually exceeds the limit. A session whose
+   *   output fits under the limit produces exactly one file at the original `filePath`
+   *   (fully backward compatible — no part suffix).
+   * - Rotation happens strictly BETWEEN complete statements — a statement is never torn
+   *   across files — and each part is a self-contained, individually-runnable migration
+   *   (its own header/footer, and per-part batch-separator counting reset so a `GO` batch
+   *   never spans a file boundary).
+   * - When splitting triggers, every part (including the first) is named by inserting
+   *   `.partNN` before the extension of `filePath` (e.g. `push.sql` → `push.part01.sql`,
+   *   `push.part02.sql`, ...). Enumerate all produced files via {@link SqlLoggingSession.filePaths}.
+   * - A single statement larger than `maxFileSize` cannot be split; it is written whole to
+   *   its own part (which then exceeds the limit). This is unavoidable and does not loop.
+   *
+   * Undefined or 0 disables splitting (default).
+   */
+  maxFileSize?: number;
 }
 
 /**
@@ -82,8 +107,18 @@ export interface SqlLoggingOptions {
 export interface SqlLoggingSession {
   /** Unique session ID */
   readonly id: string;
-  /** File path where SQL is being logged */
+  /**
+   * File path where SQL is being logged. When {@link SqlLoggingOptions.maxFileSize} splitting
+   * triggers, this is the FIRST part (`*.part01.sql`); use {@link filePaths} to get every part.
+   */
   readonly filePath: string;
+  /**
+   * Every file path produced by this session, in order. When size-based splitting did not
+   * trigger this is a single-element array (`[filePath]`); when the session rotated across
+   * multiple parts it lists each part file. Read after logging completes (before or after
+   * `dispose()` — the list is final once the last statement is written).
+   */
+  readonly filePaths: string[];
   /** Session start time */
   readonly startTime: Date;
   /** Number of statements logged so far */

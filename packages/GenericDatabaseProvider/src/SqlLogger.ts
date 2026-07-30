@@ -22,6 +22,13 @@ import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
  * @internal
  */
 export class SqlLoggingSessionImpl implements SqlLoggingSession {
+  /**
+   * Bytes held back from `maxFileSize` when deciding to rotate, so the per-part footer (written
+   * after the tracked byte count) cannot push a finalized part over the limit. Comfortably larger
+   * than the footer any part emits.
+   */
+  private static readonly FOOTER_RESERVE_BYTES = 1024;
+
   public readonly id: string;
   public readonly filePath: string;
   public readonly startTime: Date;
@@ -33,6 +40,20 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private _disposed: boolean = false;
   private _compiledPatterns: RegExp[] | undefined;
   private _dialect: SQLDialect;
+
+  // --- size-based file splitting (maxFileSize) state ---
+  /** Max bytes per part file; 0 disables splitting. */
+  private _maxFileSize: number = 0;
+  /** Byte count written to the current part so far (header + emitted statement blocks). */
+  private _currentFileBytes: number = 0;
+  /** Number of statement blocks emitted into the CURRENT part (rotation only allowed once >0). */
+  private _currentPartStatements: number = 0;
+  /** 1-based index of the part currently being written. */
+  private _partIndex: number = 1;
+  /** True once at least one rotation has occurred (the base file was renamed to part01). */
+  private _rotated: boolean = false;
+  /** Ordered list of every part path produced (starts with the base filePath). */
+  private _partPaths: string[] = [];
 
   /**
    * @param dialect - The SQL dialect to use for platform-specific SQL emission
@@ -46,6 +67,8 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     this.startTime = new Date();
     this.options = options;
     this._dialect = dialect;
+    this._maxFileSize = options.maxFileSize && options.maxFileSize > 0 ? options.maxFileSize : 0;
+    this._partPaths = [filePath];
 
     // Compile patterns once during construction
     if (options.filterPatterns && options.filterPatterns.length > 0) {
@@ -62,6 +85,24 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   }
 
   /**
+   * Every part file produced by this session, in order. Single-element (`[filePath]`)
+   * unless size-based splitting rotated across multiple parts.
+   */
+  public get filePaths(): string[] {
+    return this._partPaths;
+  }
+
+  /**
+   * Derives a part file path by inserting `.partNN` before the extension of the base path.
+   * e.g. `/x/push.sql` + index 2 → `/x/push.part02.sql`.
+   */
+  private _partFilePath(index: number): string {
+    const parsed = path.parse(this.filePath);
+    const suffix = `.part${String(index).padStart(2, '0')}`;
+    return path.join(parsed.dir, `${parsed.name}${suffix}${parsed.ext}`);
+  }
+
+  /**
    * Initializes the logging session by creating the log file and writing the header
    * @throws Error if file creation fails
    */
@@ -73,9 +114,55 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     // Open file for writing
     this._fileHandle = await fs.promises.open(this.filePath, 'w');
 
-    // Write header comment
+    // Write header comment. Part 1's header is intentionally NOT labeled with a part number:
+    // at open time we don't yet know whether splitting will trigger, and a lone (unsplit) file
+    // must stay neutral. Parts 2+ are labeled at rotation; part 1's footer is labeled then too
+    // if a split does occur.
     const header = this._generateHeader();
     await this._fileHandle.writeFile(header);
+    this._currentFileBytes = Buffer.byteLength(header);
+  }
+
+  /**
+   * Rotate to a new part file (size-based splitting). Finalizes the current part with a
+   * footer, closes it, and opens the next part with a fresh header. On the FIRST rotation
+   * the base file is renamed to `.part01` so all parts share the `.partNN` naming.
+   *
+   * Called only from `logSqlStatement`, only when splitting is enabled and the current part
+   * already holds at least one statement — so rotation always happens on a statement boundary
+   * and never produces an empty leading part.
+   */
+  private async _rotateToNextPart(): Promise<void> {
+    if (!this._fileHandle) {
+      return;
+    }
+
+    // On the FIRST rotation, rename the base file to part01 (before finalizing) so all parts
+    // share `.partNN` naming and the part-1 footer is labeled correctly. The open handle keeps
+    // writing to the same file after the rename (POSIX renames the path, not the descriptor).
+    if (!this._rotated) {
+      const part01 = this._partFilePath(1);
+      await fs.promises.rename(this.filePath, part01);
+      this._partPaths[0] = part01;
+      this._rotated = true;
+    }
+
+    // Finalize the part being closed.
+    await this._fileHandle.writeFile(this._generateFooter(this._partIndex));
+    await this._fileHandle.close();
+
+    // Open the next part.
+    this._partIndex += 1;
+    const nextPath = this._partFilePath(this._partIndex);
+    this._fileHandle = await fs.promises.open(nextPath, 'w');
+    this._partPaths.push(nextPath);
+
+    // Reset per-part state: fresh header, fresh batch (a GO batch never spans a file), fresh counters.
+    const header = this._generateHeader(this._partIndex);
+    await this._fileHandle.writeFile(header);
+    this._currentFileBytes = Buffer.byteLength(header);
+    this._currentPartStatements = 0;
+    this._currentBatchVariableCount = 0;
   }
 
   /**
@@ -220,10 +307,24 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       }
     }
 
-    // Batch separator logic:
+    // At this point `logEntry` is the complete statement block (description + SQL + params),
+    // WITHOUT any batch separator yet. When size-based splitting is enabled, decide rotation on
+    // the block size BEFORE applying the (intra-file) batch separator — so a freshly rotated part
+    // never starts with a stray leading GO. The +1 accounts for the trailing blank line added below.
+    if (this._maxFileSize > 0 &&
+        this._currentPartStatements > 0 &&
+        this._currentFileBytes + Buffer.byteLength(logEntry) + SqlLoggingSessionImpl.FOOTER_RESERVE_BYTES > this._maxFileSize) {
+      // The current part already holds ≥1 statement and this block would push it over the limit —
+      // finalize the part and continue in a fresh one. (A single block larger than the whole limit
+      // still lands in its own part; it cannot be split further.)
+      await this._rotateToNextPart();
+    }
+
+    // Batch separator logic (relative to the CURRENT part):
     // - Threshold mode: emit separator when accumulated variable declarations reach the threshold.
     //   The separator is prepended BEFORE the current statement (ending the previous batch).
     // - Legacy mode (no threshold): emit separator after every statement.
+    // A freshly rotated part has _currentBatchVariableCount === 0, so no leading separator is added.
     const threshold = this.options.variableBatchThreshold;
     if (this.options.batchSeparator && threshold && threshold > 0) {
       const newVarCount = this._countVariableDeclarations(processedQuery);
@@ -252,6 +353,8 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       await this._fileHandle.writeFile(logEntry);
       this._statementCount++;
       this._emittedStatementCount++; // Track actually emitted statements
+      this._currentPartStatements++;
+      this._currentFileBytes += Buffer.byteLength(logEntry);
       if (verbose) {
         console.log(`Session ${this.id}: Successfully wrote to file. New counts - total: ${this._statementCount}, emitted: ${this._emittedStatementCount}`);
       }
@@ -272,8 +375,8 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     this._disposed = true;
 
     if (this._fileHandle) {
-      // Write footer comment
-      const footer = this._generateFooter();
+      // Write footer comment (label the part number only when splitting produced multiple parts)
+      const footer = this._generateFooter(this._rotated ? this._partIndex : undefined);
       await this._fileHandle.writeFile(footer);
 
       await this._fileHandle.close();
@@ -294,10 +397,18 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     }
   }
 
-  private _generateHeader(): string {
+  /**
+   * @param partIndex - when size-based splitting is active, the 1-based part number this
+   *   header belongs to. Omitted for a single (unsplit) file so its header stays neutral.
+   */
+  private _generateHeader(partIndex?: number): string {
     let header = `-- SQL Logging Session\n`;
     header += `-- Session ID: ${this.id}\n`;
     header += `-- Started: ${this.startTime.toISOString()}\n`;
+
+    if (partIndex !== undefined) {
+      header += `-- Part: ${partIndex} (size-split; each part is an independent, runnable migration)\n`;
+    }
 
     if (this.options.description) {
       header += `-- Description: ${this.options.description}\n`;
@@ -313,15 +424,23 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     return header;
   }
 
-  private _generateFooter(): string {
+  /**
+   * @param partIndex - when size-based splitting is active, the 1-based part number this footer
+   *   closes. `-- Total Statements` reflects the current part's own emitted count in that case;
+   *   omitted for a single (unsplit) file, where it reflects the whole session.
+   */
+  private _generateFooter(partIndex?: number): string {
     const endTime = new Date();
     const duration = endTime.getTime() - this.startTime.getTime();
 
     let footer = `\n-- End of SQL Logging Session\n`;
     footer += `-- Session ID: ${this.id}\n`;
+    if (partIndex !== undefined) {
+      footer += `-- Part: ${partIndex}\n`;
+    }
     footer += `-- Completed: ${endTime.toISOString()}\n`;
     footer += `-- Duration: ${duration}ms\n`;
-    footer += `-- Total Statements: ${this._emittedStatementCount}\n`;
+    footer += `-- ${partIndex !== undefined ? 'Statements (this part)' : 'Total Statements'}: ${partIndex !== undefined ? this._currentPartStatements : this._emittedStatementCount}\n`;
 
     return footer;
   }
