@@ -11,6 +11,8 @@ name: External Data Sources integration
 # beforeAll, so every service container below is blank — no seed step needed and the
 # runs are deterministic. (Snowflake has no CI job: it needs a hosted account, and its
 # catalog doesn't expose FKs reliably — it's exercised locally with tester-supplied creds.)
+# Microsoft Fabric and Databricks likewise have no service container — both run MANUAL-ONLY
+# (workflow_dispatch) against a hosted endpoint with tester-supplied GitHub Secrets.
 #
 # NOTE: the DB credentials in the service-container/env blocks below are intentionally
 # throwaway literals for ephemeral CI containers (nothing real to leak). Do NOT "promote"
@@ -327,3 +329,49 @@ jobs:
           FABRIC_CLIENT_ID: ${{ secrets.FABRIC_CLIENT_ID }}
           FABRIC_CLIENT_SECRET: ${{ secrets.FABRIC_CLIENT_SECRET }}
         run: npm run test -- fabric.integration
+
+  # Databricks — a live SQL Warehouse over the @databricks/sql SDK (always HTTPS). No service
+  # container exists (like Snowflake/Fabric), so this runs against a hosted workspace via tester-supplied
+  # GitHub Secrets. MANUAL ONLY (workflow_dispatch) so it never runs on normal PRs/pushes and can't fail
+  # for contributors without the secrets. The read-only `samples.tpch` fixture is present in every
+  # workspace, so the suite is deterministic. Either a PAT (DATABRICKS_TOKEN) or an OAuth M2M pair
+  # (DATABRICKS_CLIENT_ID + DATABRICKS_CLIENT_SECRET) authenticates.
+  databricks-integration:
+    name: Databricks (integration, manual)
+    runs-on: ubuntu-latest
+    # Connects to a live external cloud endpoint, so bound it explicitly — a hung handshake shouldn't
+    # burn the default 6-hour cap.
+    timeout-minutes: 15
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build Databricks external driver
+        run: npx turbo build --filter=@memberjunction/external-data-source-databricks
+
+      # @databricks/sql is an OPTIONAL peer (not installed by npm ci); install it into the provider
+      # so the driver's dynamic import resolves and the suite's sdk-availability guard passes.
+      - name: Install the @databricks/sql optional peer
+        working-directory: packages/ExternalDataSources/Providers/Databricks
+        run: npm install --no-save @databricks/sql
+
+      # No fixture seeding — reads the read-only `samples.tpch` catalog present in every workspace.
+      - name: Run Databricks integration test
+        working-directory: packages/ExternalDataSources/Providers/Databricks
+        env:
+          RUN_DATABRICKS_INTEGRATION: '1'
+          DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+        run: npm run test -- integration

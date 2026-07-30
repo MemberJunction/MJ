@@ -53,6 +53,7 @@
     "@memberjunction/external-data-source-sqlserver": "5.50.0",
     "@memberjunction/external-data-source-mysql": "5.50.0",
     "@memberjunction/external-data-source-oracle": "5.50.0",
+    "@memberjunction/external-data-source-databricks": "5.50.0",
     "@memberjunction/sql-parser": "5.50.0",
     "@memberjunction/global": "5.50.0",
     "@memberjunction/server-bootstrap-lite": "5.50.0",

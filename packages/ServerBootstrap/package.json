@@ -113,6 +113,7 @@
     "@memberjunction/esignature-docusign": "5.50.0",
     "@memberjunction/esignature-dropboxsign": "5.50.0",
     "@memberjunction/esignature-pandadoc": "5.50.0",
+    "@memberjunction/external-data-source-databricks": "5.50.0",
     "@memberjunction/external-data-source-mongodb": "5.50.0",
     "@memberjunction/external-data-source-mysql": "5.50.0",
     "@memberjunction/external-data-source-oracle": "5.50.0",

@@ -35,7 +35,7 @@ ExternalDataSourceReadRouter   (abstract, @memberjunction/core — dependency-in
 ExternalDataSourceReadRouterImpl   (@memberjunction/external-data-sources, server-only)
    │  picks the driver + connection for the data source
    ▼
-BaseExternalDataSourceDriver  →  Postgres / SQL Server / MySQL / Oracle / Snowflake / MongoDB driver
+BaseExternalDataSourceDriver  →  Postgres / SQL Server / MySQL / Oracle / Snowflake / Databricks / MongoDB driver
    ▼
 Remote system
 ```
@@ -51,7 +51,7 @@ Key points:
 
 ### 1. Register the data source *type* (driver catalog)
 
-`ExternalDataSourceType` (entity `MJ: External Data Source Types`) maps a type name to a `DriverClass` (the `@RegisterClass` key of a driver). Types are seeded as metadata in `metadata/external-data-source-types/`. The starter catalog ships with **PostgreSQL, SQL Server, MySQL, Oracle, Snowflake, and MongoDB** (all `Active` — drivers included), plus a **Microsoft Fabric SQL Endpoint (External)** type that reuses the SQL Server driver over Microsoft Entra service-principal auth (see *Microsoft Fabric* below). Add more by seeding rows (see *Adding a driver* below).
+`ExternalDataSourceType` (entity `MJ: External Data Source Types`) maps a type name to a `DriverClass` (the `@RegisterClass` key of a driver). Types are seeded as metadata in `metadata/external-data-source-types/`. The starter catalog ships with **PostgreSQL, SQL Server, MySQL, Oracle, Snowflake, Databricks, and MongoDB** (all `Active` — drivers included), plus a **Microsoft Fabric SQL Endpoint (External)** type that reuses the SQL Server driver over Microsoft Entra service-principal auth (see *Microsoft Fabric* below). Add more by seeding rows (see *Adding a driver* below).
 
 > **Note:** the `Status` column only accepts `Active` or `Deprecated` — there is no "Draft". Only seed a type as `Active` once its driver actually ships; otherwise selecting it produces a runtime "no driver registered" error.
 
@@ -87,7 +87,7 @@ Remote data can't be event-invalidated (no `BaseEntity` save/delete events fire 
 - **Plain server-side `RunView`/`RunViews`** — e.g. `new RunView().RunView(...)` from Actions, agents, or scheduled jobs — do **not** currently cache external results; each call reads the remote. (Server-side external `RunView` caching is a planned follow-up.)
 - A `DefaultCacheTTLSeconds` of `0` disables caching for the source.
 
-The TTL primarily benefits Explorer grid reads. If a metered warehouse (e.g. Snowflake) is read in **server-side loops** (agents/jobs), be aware those reads are *not* yet cached — bound cost via the query itself and a least-privilege credential rather than relying on the TTL.
+The TTL primarily benefits Explorer grid reads. If a metered warehouse (e.g. Snowflake or Databricks) is read in **server-side loops** (agents/jobs), be aware those reads are *not* yet cached — bound cost via the query itself and a least-privilege credential rather than relying on the TTL.
 
 ### Security
 - **Credentials** are resolved and decrypted through `CredentialEngine`; nothing secret lives in code or `ConnectionConfig`.
@@ -136,6 +136,7 @@ The class-registration manifest captures the driver automatically (no extra wiri
 | MySQL | `MySQLExternalDriver` | `mysql2` | username/password | `` `backticks` `` · `LIMIT`/`OFFSET` | `INFORMATION_SCHEMA` — PK + **FK** |
 | Oracle | `OracleExternalDriver` | `oracledb` (Thin) | username/password | `"quotes"` · `OFFSET..FETCH` | `ALL_*` catalog — PK + **FK** |
 | Snowflake | `SnowflakeExternalDriver` | `snowflake-sdk` | password / PAT / key-pair (JWT) | `"quotes"` · `LIMIT`/`OFFSET` | `INFORMATION_SCHEMA` — PK only (no reliable FKs) |
+| Databricks | `DatabricksExternalDriver` | `@databricks/sql` | PAT (`access-token`) · OAuth M2M service principal (`databricks-oauth`) | `` `backticks` `` · `LIMIT`/`OFFSET` (`LIMIT ALL` offset-only) | Unity Catalog `information_schema` — PK + **FK** (informational constraints) |
 | MongoDB | `MongoExternalDriver` | `mongodb` | username/password | n/a · skip/limit | document sampling — no FKs |
 
 All four relational drivers introspect foreign keys (composite-key aware) into the schema contract's `Relationships`; CodeGen consumes them as described under *Point an Entity or Query at it* above. `node-oracledb` runs in **Thin mode** — pure JS, no Oracle Instant Client to install.
@@ -190,6 +191,36 @@ with `DefaultDatabase` set to the warehouse name and a credential carrying `tena
 | `Invalid object name '…'` | Casing mismatch (Fabric is case-sensitive), or the object isn't in the default schema | Match Fabric's exact object/column casing, and ensure the object is schema-qualified (set the entity's `SchemaName`). |
 | A just-created table isn't visible to introspection/queries | The Lakehouse SQL endpoint hasn't synced the new Delta table yet | Wait — discovery is asynchronous (seconds-to-minutes); re-run CodeGen / retry once it appears. |
 
+### Databricks (SQL warehouse)
+
+A Databricks **SQL Warehouse** (or a SQL-enabled all-purpose cluster) is served by the dedicated `DatabricksExternalDriver` over the official `@databricks/sql` SDK (always HTTPS). It's the second "cloud warehouse behind an HTTPS SDK" (Snowflake is the first), so it shares the ANSI-SQL / `LIMIT`/`OFFSET` shape, but with **backtick** identifier quoting and **Unity Catalog** introspection.
+
+- **`@databricks/sql` is an optional peer dependency.** Like `snowflake-sdk`, it's loaded via dynamic import only when the driver is actually used, and is declared `optional` in the package's `peerDependenciesMeta` — a base install never pulls it in. Install it where the driver runs: `npm install @databricks/sql`.
+- **Two auth modes, chosen by the resolved credential:**
+  - **Personal Access Token (PAT)** — store a credential with a `token`; the driver uses `authType: 'access-token'`. Works everywhere, including Free Edition / trials. The near-term default.
+  - **OAuth M2M (service principal)** — store a credential with `clientId` + `clientSecret`; the driver uses `authType: 'databricks-oauth'`. The production-grade path. If both a token and a client-id/secret pair are present, OAuth wins.
+- **`ConnectionConfig` (non-secret):** `{ "serverHostname": "dbc-abc123.cloud.databricks.com", "httpPath": "/sql/1.0/warehouses/abc123", "catalog": "main" }`. `serverHostname` and `httpPath` are required (copy them from the warehouse's **Connection details** tab). `catalog` is optional — it defaults to the source's `DefaultDatabase` (the Unity Catalog catalog); `DefaultSchema` is the schema.
+- **Unity Catalog introspection.** Tables/columns come from `<catalog>.information_schema`; PK/FK relationships come from the informational constraint views (`table_constraints` / `key_column_usage` / `referential_constraints` / `constraint_column_usage`). These constraints are **`NOT ENFORCED`** and only exist on curated (often gold-layer) tables — when they're absent the driver returns empty PK/FK sets rather than guessing, so `Relationships` is simply empty for raw bronze/silver tables.
+- **Numeric fidelity** is handled SDK-side via `preserveBigNumericPrecision` — see *Databricks fidelity* under **Known limitations**.
+
+**Connecting a Databricks source, end to end.**
+1. **Create (or reuse) a SQL Warehouse** in the Databricks workspace (Serverless is simplest). Note its **Server hostname** and **HTTP path** from the warehouse's *Connection details* tab.
+2. **Mint a credential.** Easiest: a **PAT** (user settings → *Developer* → *Access tokens*). For production: create a **service principal**, give it an OAuth secret, and grant it `CAN USE` on the warehouse + `USE CATALOG`/`USE SCHEMA`/`SELECT` on the target catalog/schema.
+3. **Store the credential** (`MJ: Credentials`) with either a `token`, or `clientId` + `clientSecret`.
+4. **Seed / confirm the type row** — **Databricks SQL Warehouse (External)** (`DriverClass: DatabricksExternalDriver`) in `metadata/external-data-source-types/`.
+5. **Create the data source instance** (`MJ: External Data Sources`): `TypeID` → **Databricks SQL Warehouse (External)**, `CredentialID` → step 3, `DefaultDatabase` → the Unity Catalog catalog, `DefaultSchema` → the schema, and the `ConnectionConfig` above.
+6. **Point an Entity/Query at it** and run CodeGen as with any external source.
+
+**Troubleshooting.**
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `Cannot find package '@databricks/sql'` | The optional peer isn't installed where the driver runs | `npm install @databricks/sql` in the deploying app. |
+| `401` / `Invalid access token` / `token expired` | PAT revoked/expired, or SP secret rotated | Rotate the credential — the driver self-heals on the next read (evict + reconnect). |
+| `invalid_client` (OAuth) | Wrong `clientId`/`clientSecret`, or the SP lacks warehouse access | Verify the SP credential and grant it `CAN USE` on the warehouse. |
+| Empty `Relationships` after import | The Unity Catalog tables carry no informational PK/FK constraints | Expected for raw tables — add `NOT ENFORCED` constraints on curated tables if you want MJ relationships. |
+| `[TABLE_OR_VIEW_NOT_FOUND]` | Object not catalog/schema-qualified, or the warehouse's session catalog differs | Fully qualify (`catalog.schema.object`) or set the source's `DefaultDatabase`/`DefaultSchema`. |
+
 ---
 
 ## Known limitations
@@ -205,9 +236,10 @@ with `DefaultDatabase` set to the warehouse name and a credential carrying `tena
 
   Interim mitigation until server-side `remote-invalidate` is wired up: set a short `DefaultCacheTTLSeconds`, and/or add a per-read `Status`/row-version re-check to bound the staleness window. **Single-instance deployments are unaffected.**
 - **Removing a data source does not auto-remove its entities or relationships.** Deleting an `ExternalDataSource` leaves its imported external entities and their materialized `EntityRelationship` rows in place — deliberate, since auto-pruning on a transient introspection failure would be destructive. They become **stale** (not dangling) and require manual cleanup: delete or re-import the affected entities by hand after removing a source.
-- **Transport is secure-by-default for the SQL drivers.** Postgres, SQL Server, MySQL, Oracle, and MongoDB **refuse** a plaintext connection to a non-local host: enable TLS (Postgres `ssl:true` — cert verification then on by default via `sslRejectUnauthorized`; SQL Server `ssl:true`; MySQL `ssl:true`; Oracle via TCPS; MongoDB `tls:true` or a `mongodb+srv://`/`tls=true` URI), or set `allowInsecureTransport:true` in `ConnectionConfig` to consciously accept plaintext. Local hosts (`localhost`/`127.0.0.1`) are exempt for dev convenience. Snowflake's SDK is always HTTPS.
+- **Transport is secure-by-default for the SQL drivers.** Postgres, SQL Server, MySQL, Oracle, and MongoDB **refuse** a plaintext connection to a non-local host: enable TLS (Postgres `ssl:true` — cert verification then on by default via `sslRejectUnauthorized`; SQL Server `ssl:true`; MySQL `ssl:true`; Oracle via TCPS; MongoDB `tls:true` or a `mongodb+srv://`/`tls=true` URI), or set `allowInsecureTransport:true` in `ConnectionConfig` to consciously accept plaintext. Local hosts (`localhost`/`127.0.0.1`) are exempt for dev convenience. Snowflake's and Databricks' SDKs are always HTTPS.
 - **Snowflake fidelity.** High-precision `NUMBER` columns (scale > 0, or precision > 15) are **cast to string** in structured `RunView`/`LoadSingle` reads to avoid 2^53 float-precision loss (`FLOAT`/`REAL` stay native); native `RunQuery` reads instead use the blunter `fetchAsString: ['Number']` lever. One open caveat remains: Snowflake returns **uppercase column identifiers**, so result-row keys must line up with the MJ field names as-is.
-- **Integration tests** — the Postgres, SQL Server, MySQL, Oracle, and MongoDB driver suites are self-seeding and run in CI against service containers (`.github/workflows/eds-integration.yml`), each gated by its own `RUN_<DB>_INTEGRATION=1` flag so the default unit-test gate stays DB-free. The Snowflake suite is opt-in (`RUN_SNOWFLAKE_INTEGRATION=1`) against your own account — it needs a hosted Snowflake (no service container) and tester-supplied credentials via env vars (never committed). The **Microsoft Fabric** suite (`RUN_FABRIC_INTEGRATION=1`) is likewise opt-in against a live Fabric warehouse via Entra service principal; in CI it runs **manually only** (`workflow_dispatch`) with `FABRIC_*` GitHub Secrets, so it never blocks normal PRs and doubles as a clean-cloud reachability check.
+- **Databricks fidelity.** The driver sets the SDK's `preserveBigNumericPrecision`, so `DECIMAL` columns come back as **exact strings** and `BIGINT` as JS `bigint` (which the base normalizer renders as a lossless decimal string) — no 2^53 rounding, and no per-object CAST probe. Unity Catalog PK/FK constraints are **informational (`NOT ENFORCED`)** and only present on curated tables; when absent the introspection returns empty PK/FK sets (never guessed). The `samples` catalog's `information_schema` is used as the deterministic integration fixture.
+- **Integration tests** — the Postgres, SQL Server, MySQL, Oracle, and MongoDB driver suites are self-seeding and run in CI against service containers (`.github/workflows/eds-integration.yml`), each gated by its own `RUN_<DB>_INTEGRATION=1` flag so the default unit-test gate stays DB-free. The Snowflake suite is opt-in (`RUN_SNOWFLAKE_INTEGRATION=1`) against your own account — it needs a hosted Snowflake (no service container) and tester-supplied credentials via env vars (never committed). The **Databricks** suite (`RUN_DATABRICKS_INTEGRATION=1`) is likewise opt-in against a live SQL warehouse (the read-only `samples.tpch` fixture, present in every workspace); in CI it runs **manually only** (`workflow_dispatch`) with `DATABRICKS_*` GitHub Secrets. The **Microsoft Fabric** suite (`RUN_FABRIC_INTEGRATION=1`) is likewise opt-in against a live Fabric warehouse via Entra service principal; in CI it runs **manually only** (`workflow_dispatch`) with `FABRIC_*` GitHub Secrets, so it never blocks normal PRs and doubles as a clean-cloud reachability check.
 
 ---
 
