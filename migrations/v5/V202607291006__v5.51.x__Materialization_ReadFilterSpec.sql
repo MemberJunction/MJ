@@ -1,6 +1,6 @@
 /* ============================================================================
    Query Materialization — Phase 2: Read-Time Filter Spec
-   v5.50.x
+   v5.51.x
 
    Companion plan: /plans/query-entity-materialization-phase2.md (§4 metadata)
 
