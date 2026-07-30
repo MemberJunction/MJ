@@ -1,5 +1,88 @@
 # @memberjunction/ng-dashboards
 
+## 5.50.0
+
+### Patch Changes
+
+- 0ba33b3: Client-issue batch fixes. Exports (Query viewer, Data Explorer, and User Views) now cover the FULL result set — capped at 100k with an over-cap warning — instead of just the on-screen page, and the Data Explorer toolbar Export button opens a unified Excel/CSV/JSON dialog for every view type (Grid/Cards/Map/Timeline). UI-role users can now create and manage Lists, with owner-scoped delete (or Developer/Integration) enforced server-side on BOTH Lists and List Details — a List Detail's authorization is scoped through its parent List's owner, so a user can't delete membership rows of lists they don't own. Also: grid quick-filter matches hidden columns, primary-key integer columns render without thousands separators, the Queries search-box icon/placeholder overlap is fixed, and the streaming thinking-tag stripper no longer leaks partial `<think>`/`</think>` tags split across chunks — and now flushes a genuine trailing tag-prefix (e.g. a response ending in `<`) at end of stream instead of dropping it.
+- Updated dependencies [1c991f7]
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [28c1dcd]
+- Updated dependencies [d36131a]
+- Updated dependencies [8580aef]
+- Updated dependencies [35fb5e3]
+- Updated dependencies [abab5dc]
+- Updated dependencies [dd04a24]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [fe1b8e7]
+- Updated dependencies [dd04a24]
+  - @memberjunction/ng-explorer-settings@5.50.0
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/ng-conversations@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ng-core-entity-forms@5.50.0
+  - @memberjunction/ng-action-gallery@5.50.0
+  - @memberjunction/ng-entity-viewer@5.50.0
+  - @memberjunction/ng-query-viewer@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/predictive-studio-core@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/tag-engine-base@5.50.0
+  - @memberjunction/api-keys-base@5.50.0
+  - @memberjunction/ng-base-application@5.50.0
+  - @memberjunction/ng-shared@5.50.0
+  - @memberjunction/ng-testing@5.50.0
+  - @memberjunction/ng-actions@5.50.0
+  - @memberjunction/ng-agent-requests@5.50.0
+  - @memberjunction/ng-agents@5.50.0
+  - @memberjunction/ng-ai-test-harness@5.50.0
+  - @memberjunction/ng-archive-manager@5.50.0
+  - @memberjunction/ng-base-forms@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-clustering@5.50.0
+  - @memberjunction/ng-code-editor@5.50.0
+  - @memberjunction/ng-credentials@5.50.0
+  - @memberjunction/ng-dashboard-viewer@5.50.0
+  - @memberjunction/ng-list-management@5.50.0
+  - @memberjunction/ng-map-view@5.50.0
+  - @memberjunction/ng-notifications@5.50.0
+  - @memberjunction/ng-react@5.50.0
+  - @memberjunction/ng-record-process-studio@5.50.0
+  - @memberjunction/ng-resource-permissions@5.50.0
+  - @memberjunction/ng-scheduling@5.50.0
+  - @memberjunction/ng-search@5.50.0
+  - @memberjunction/ng-shared-generic@5.50.0
+  - @memberjunction/ng-trees@5.50.0
+  - @memberjunction/ng-user-routines@5.50.0
+  - @memberjunction/ng-versions@5.50.0
+  - @memberjunction/credentials@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/integration-engine-base@5.50.0
+  - @memberjunction/templates-base-types@5.50.0
+  - @memberjunction/testing-engine-base@5.50.0
+  - @memberjunction/ng-composer@5.50.0
+  - @memberjunction/ng-container-directives@5.50.0
+  - @memberjunction/ng-entity-relationship-diagram@5.50.0
+  - @memberjunction/ng-filter-builder@5.50.0
+  - @memberjunction/ng-media-player@5.50.0
+  - @memberjunction/interactive-component-types@5.50.0
+  - @memberjunction/ng-export-service@5.50.0
+  - @memberjunction/ng-markdown@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+  - @memberjunction/ng-word-cloud@5.50.0
+  - @memberjunction/lists-base@5.50.0
+  - @memberjunction/export-engine@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/theme-engine@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

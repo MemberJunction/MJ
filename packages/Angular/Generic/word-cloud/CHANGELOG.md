@@ -1,5 +1,7 @@
 # @memberjunction/ng-word-cloud
 
+## 5.50.0
+
 ## 5.49.0
 
 ## 5.48.0
