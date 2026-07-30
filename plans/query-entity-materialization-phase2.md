@@ -181,15 +181,18 @@ These are **documented, bounded** limitations — none is a silent correctness r
 each errs toward the safe side (over-refuse or match live behavior). Recorded so authors and reviewers know
 the exact edges.
 
-- **Value-TRANSFORMING param filters (bounded correctness edge).** The read path binds the caller's *raw*
-  parameter value; the live path renders it through the query template. For the standard value-preserving
-  filters (`sqlString`, `sqlNumber`, direct binding — the overwhelmingly common case, proven faithful by
-  §6's 13/13 + 16/16) the two are identical. But a **value-changing** filter on a row-filter parameter (e.g.
-  `WHERE Status = {{ status | upper | sqlString }}`) makes the materialized read filter on the raw value
-  while live filters on the transformed value → divergent rows. The classifier does not yet detect this.
-  **Guidance:** do not mark such a query `IsMaterialized`. **Planned hardening:** a classify-time
-  passthrough check (the rendered literal must equal the raw probe value; anything else → refuse → live-only,
-  §10 bias). Deferred here to avoid a rushed change to the soundness-critical verifier.
+- **Value-TRANSFORMING param filters — CLOSED (classify-time passthrough guard).** The read path binds the
+  caller's *raw* parameter value; the live path renders it through the query template. For the standard
+  value-preserving filters (`sqlString`, `sqlNumber`, direct binding — the overwhelmingly common case) the
+  two are identical. But a **value-changing** filter on a row-filter parameter (e.g.
+  `WHERE Status = {{ status | upper | sqlString }}`) would make the materialized read filter on the raw value
+  while live filters on the transformed value → divergent rows. **The classifier now detects and refuses
+  this**: `isValuePassthrough` renders the query with a distinctive sentinel and requires the sentinel to
+  survive verbatim into the rendered SQL; if it doesn't (a value transform, or a type coercion it can't
+  verify), the parameter is refused (`Unbounded`) and the query stays **live-only**. Conservative by design
+  (§10): a coerced-but-faithful value (e.g. a boolean rendered as `1`) refuses too — a missed optimization,
+  never wrong; the whitelist can widen later with proof. Verified against the real Nunjucks pipeline
+  (`| upper | sqlString` refuses, `| sqlString` qualifies) + unit tests.
 - **Session-dependent query SQL (pre-existing Phase-1 property, not a Phase-2 regression).** A materialized
   broad table is a snapshot built once under the *refresh job's* identity. If a query's SQL embeds an implicit
   per-user/session predicate that is NOT a declared parameter (`SESSION_USER`, `CURRENT_USER`, a context

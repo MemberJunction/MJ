@@ -149,6 +149,45 @@ function renderVariantsForParam(
 }
 
 /**
+ * A distinctive sentinel value per parameter type for the value-passthrough guard, chosen so its verbatim
+ * appearance in a rendered query is proof the value survived template rendering unchanged (extremely
+ * unlikely to occur coincidentally). Booleans/dates use a plain value that a SQL-formatting filter will
+ * typically coerce (`true`→`1`, a reformatted date) — which the guard then treats as non-passthrough.
+ */
+function passthroughSentinel(type: QueryParamType): unknown {
+    switch (type) {
+        case 'string': return '__mjPassthruZQX9__';
+        case 'number': return 305419896; // 0x12345678 — distinctive, unlikely to appear coincidentally
+        case 'date': return '2019-03-14';
+        case 'boolean': return true;
+        case 'array': return ['__mjPassthruAZQX9__', '__mjPassthruBZQX9__'];
+    }
+}
+
+/**
+ * Phase-2 value-passthrough guard (plan §9). A proven `RowFilter` is only safe to inject at read time if
+ * the template renders the parameter's value UNCHANGED into the predicate literal — because the read path
+ * binds the caller's **raw** value. If the template transforms it (`{{ x | upper | sqlString }}`, a custom
+ * filter) the materialized read would filter on a different value than the live query → silently wrong rows.
+ *
+ * We render the query with a distinctive sentinel and require it to appear VERBATIM in the rendered SQL.
+ * If it doesn't (a value transform, or a type coercion we can't verify), the parameter is refused. This is
+ * **conservative by design** (§10 refuse-under-uncertainty): a coerced-but-faithful value (e.g. a boolean
+ * rendered as `1`) refuses too, leaving the query live-only — a missed optimization, never wrong.
+ */
+function isValuePassthrough(param: QueryParamDef, held: Record<string, unknown>, render: VariantRenderer): boolean {
+    const sentinel = passthroughSentinel(param.Type);
+    let rendered: string;
+    try {
+        rendered = render({ ...held, [param.Name]: sentinel });
+    } catch {
+        return false; // cannot render the sentinel → cannot prove passthrough → refuse
+    }
+    const parts = Array.isArray(sentinel) ? sentinel : [sentinel];
+    return parts.every((part) => rendered.includes(String(part)));
+}
+
+/**
  * Verifies a single parameter's role by rendering its variants and running the AST oracle. `held` is the
  * shared base value map (all params at their stable values) — computed ONCE by the caller and reused, since
  * the baseline is identical for every parameter being probed (renderVariantsForParam overrides just the one
@@ -159,7 +198,16 @@ function verifyOneParam(param: QueryParamDef, held: Record<string, unknown>, dia
     if (variants == null) {
         return { role: 'Unbounded', reason: `parameter "${param.Name}" produced a template error while probing — cannot verify; refusing under uncertainty` };
     }
-    return verifyParamRole(variants, dialect);
+    const verdict = verifyParamRole(variants, dialect);
+    // Value-passthrough guard: a proven row filter is only injectable if the raw value survives rendering
+    // into the predicate literal. A transforming template would make the materialized read diverge from live.
+    if (verdict.role === 'RowFilter' && !isValuePassthrough(param, held, render)) {
+        return {
+            role: 'Unbounded',
+            reason: `parameter "${param.Name}" filters on "${verdict.filterColumn ?? '?'}" but the template transforms its value before the predicate literal (the raw value does not survive rendering) — a materialized read would filter on a different value than the live query; refusing (query stays live-only)`,
+        };
+    }
+    return verdict;
 }
 
 /**

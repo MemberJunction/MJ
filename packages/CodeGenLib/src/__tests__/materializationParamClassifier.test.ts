@@ -61,6 +61,35 @@ describe('classifyQueryParameters', () => {
         expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
     });
 
+    it('value-TRANSFORMING filter (e.g. | upper) is REFUSED — read-time raw binding would diverge from live', () => {
+        // The template upper-cases the value before the predicate: the live query filters on UPPER(value),
+        // but the read path binds the caller's RAW value → the materialized read would return different rows.
+        // The passthrough guard must refuse this (query stays live-only), even though it is structurally a
+        // clean top-level WHERE row filter.
+        const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
+        const render: VariantRenderer = (v) => `SELECT ID, Status FROM Orders WHERE Status = '${String(v['status']).toUpperCase()}'`;
+        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+        expect(r.perParam[0].verdict.role).toBe('Unbounded');                 // guard overrides RowFilter → Unbounded
+        expect(r.perParam[0].verdict.reason).toMatch(/does not survive|transforms its value/i);
+        expect(r.qualification.qualifies).toBe(false);
+        expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
+    });
+
+    it('a value-PRESERVING filter still qualifies — the passthrough guard does not over-refuse the common case', () => {
+        // Both string (quote-only) and numeric (identity) row filters render the value verbatim, so the
+        // sentinel survives → still RowFilterBroad. Confirms the guard is targeted, not blanket.
+        const strR = classifyQueryParameters({
+            queryName: 'Q', params: [{ Name: 's', Type: 'string' }], outputColumns: ['ID', 'Status'], dialect: tsql,
+            render: (v) => `SELECT ID, Status FROM Orders WHERE Status = ${lit(v['s'])}`, allowRowFilterBroad: true,
+        });
+        expect(strR.qualification.paramMode).toBe('RowFilterBroad');
+        const numR = classifyQueryParameters({
+            queryName: 'Q', params: [{ Name: 'c', Type: 'number' }], outputColumns: ['ID', 'ChapterID'], dialect: tsql,
+            render: (v) => `SELECT ID, ChapterID FROM Orders WHERE ChapterID = ${lit(v['c'])}`, allowRowFilterBroad: true,
+        });
+        expect(numR.qualification.paramMode).toBe('RowFilterBroad');
+    });
+
     it('numeric row-filter → RowFilterBroad on that column', () => {
         const params: QueryParamDef[] = [{ Name: 'chapterId', Type: 'number' }];
         const render: VariantRenderer = (v) => `SELECT ID, ChapterID FROM Orders WHERE ChapterID = ${lit(v['chapterId'])}`;
