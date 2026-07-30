@@ -282,6 +282,85 @@ for (const field of this.Fields) {
 }
 ```
 
+#### 2.5 Query Execution Field Filtering
+
+**File:** `packages/MJCoreEntitiesServer/src/custom/MJQueryEntityServer.server.ts`
+
+`MJQueryEntityServer` extracts entities and fields from SQL via a 5-stage pipeline (parse → resolve → enrich → merge → sync) and stores them in `MJ: Query Fields` and `MJ: Query Entities`. However, query execution currently has **no entity or field permission checks** — saved queries are treated as pre-approved artifacts, and ad-hoc queries are only validated for SQL safety (no mutations), not entity/field access.
+
+Field-level security must be enforced on query results:
+
+```typescript
+// After query execution, before returning results to the caller,
+// strip columns the user cannot read based on field permissions.
+// Use the extracted Query Fields → EntityField mapping to determine
+// which result columns map to restricted entity fields.
+const restrictedFields = queryFields.filter(qf => {
+    const entityField = qf.resolvedEntityField;
+    if (entityField?.HasFieldPermissions) {
+        return !entityField.GetUserFieldPermissions(userInfo).CanRead;
+    }
+    return false;
+});
+
+// Remove restricted columns from each result row
+for (const row of results) {
+    for (const rf of restrictedFields) {
+        delete row[rf.outputColumnName];
+    }
+}
+```
+
+**Open question:** Should we block query execution entirely if it references restricted fields, or silently filter the columns from results? Options:
+
+- **Option A: Filter columns from results (recommended).** The query runs but restricted columns are stripped from the output. This is consistent with how RunView handles it and avoids breaking queries that reference both restricted and unrestricted fields. The user sees everything they're allowed to see.
+- **Option B: Block execution.** Return an error listing which fields the user cannot access. More secure but potentially disruptive — a query with 20 columns would fail entirely if 1 column is restricted, even though the user could see the other 19.
+- **Option C: Hybrid.** Block for ad-hoc queries (user is actively writing SQL referencing restricted fields), filter for saved queries (pre-approved artifacts that may have been created by an admin).
+
+#### 2.6 Local Cache Manager Field-Level Security
+
+**Files:**
+- `packages/MJCore/src/generic/localCacheManager.ts` (~1400 lines)
+- `packages/MJCore/src/generic/providerBase.ts` (PreRunView/PostRunView hooks)
+
+The Local Cache Manager stores **all columns** for a given RunView result. When a RunView executes:
+
+1. `PreRunView` intentionally **widens** `params.Fields` to all entity fields
+2. The full result set (all columns) is cached under a fingerprint that excludes `Fields`
+3. On cache hit, `ProjectRowsToFields()` filters the cached superset down to the caller's requested fields
+
+This means the cache is **column-agnostic by design** — one cache entry serves requests for different field subsets. RLS is part of the cache fingerprint (different users get separate entries for different row filters), but there is **no field-level filtering on cache read**.
+
+**Security risk:** If user A (unrestricted) warms the cache and user B (field-restricted) hits that same cache entry, user B sees all columns before `ProjectRowsToFields()` filters to their requested fields. Since the caller's `Fields` parameter is unrelated to security, this is a bypass.
+
+**Fix — field-level projection on cache read:**
+
+The field permission filter must be applied **after cache retrieval and before returning results**, regardless of whether it's a cache hit or miss. This should happen in `PostRunView` (or a new step) where the user context is available:
+
+```typescript
+// In PostRunView, after ProjectRowsToFields for the caller's requested Fields,
+// apply a second projection pass for field-level security.
+// This runs on BOTH cache hits and cache misses.
+const userAllowedFields = entityInfo.Fields
+    .filter(f => !f.HasFieldPermissions || f.GetUserFieldPermissions(userInfo).CanRead)
+    .map(f => f.Name);
+
+results = ProjectRowsToFields(results, userAllowedFields);
+```
+
+**Alternative approach — include field permissions in cache fingerprint:**
+
+Add a hash of the user's field-level restrictions to the cache key so users with different field access get separate cache entries. This is how RLS is handled today. The tradeoff is reduced cache reuse (more entries per entity), but it avoids the post-read filtering step.
+
+```typescript
+// Extend fingerprint to include field permission hash
+// e.g., "EntityName|Filter|OrderBy|...|rls:<hash>|flp:<hash>"
+const fieldPermHash = computeFieldPermissionHash(entityInfo, userInfo);
+fingerprint += `|flp:${fieldPermHash}`;
+```
+
+**Recommendation:** Post-read projection (first approach) is simpler, consistent with how `Fields` projection already works, and doesn't fragment the cache. The cache stores the universal superset; security filtering happens at read time.
+
 ---
 
 ### Phase 3: Skip Integration
@@ -366,6 +445,10 @@ Add to the existing security test suite (`packages/TestingFramework/integration-
 - Entity Save rejects updates to restricted fields
 - API/GraphQL responses don't contain restricted fields
 - Encryption + field permissions interact correctly (encrypted + restricted = never returned)
+- Saved query results strip restricted columns
+- Ad-hoc query results strip restricted columns
+- Cache hit by restricted user does not leak columns cached by unrestricted user
+- Cache miss + cache hit return identical field sets for same user
 
 ### Skip Integration Tests
 
@@ -387,6 +470,10 @@ Add to the existing security test suite (`packages/TestingFramework/integration-
 
 5. **Audit trail?** — Should we log when field-level security blocks access? **Recommendation: Yes, at debug level, using the existing MJ logging infrastructure.**
 
+6. **Query field filtering vs. blocking?** — When a saved or ad-hoc query references a restricted field, should we silently strip the column from results (Option A), block execution entirely (Option B), or use a hybrid approach where ad-hoc queries are blocked but saved queries are filtered (Option C)? **Recommendation: Option A (filter) for consistency with RunView behavior, but Option C is worth discussing.**
+
+7. **Cache fingerprint vs. post-read projection?** — Should field-level restrictions be part of the cache key (separate entries per permission profile, like RLS) or should we project/filter on cache read (single cached superset, filter at read time)? **Recommendation: Post-read projection — simpler, doesn't fragment cache, consistent with existing `ProjectRowsToFields()` pattern.**
+
 ---
 
 ## Estimated Scope
@@ -394,7 +481,7 @@ Add to the existing security test suite (`packages/TestingFramework/integration-
 | Phase | Packages Affected | Manual Work | CodeGen Handles |
 |-------|------------------|-------------|-----------------|
 | Phase 1: Schema & Metadata | MJCore, migrations | Migration DDL, `EntityFieldPermissionInfo` class, wiring into `EntityFieldInfo` + metadata loading | Entity/EntityField registration, base view, SPs, TS entity class, Zod, GraphQL, Angular form, `__mj` columns, FK indexes |
-| Phase 2: Server Enforcement | MJCore, MJServer | RunView field filtering, MapFieldNamesToCodeNames, BaseEntity Save/Load guards | — |
+| Phase 2: Server Enforcement | MJCore, MJServer, MJCoreEntitiesServer | RunView field filtering, MapFieldNamesToCodeNames, BaseEntity Save/Load guards, Query execution field filtering, Local Cache Manager post-read projection | — |
 | Phase 3: Skip Integration | Skip-Brain agents/core | Schema metadata filtering for LLM prompts | — |
 | Phase 4: Admin UI | Angular Explorer | Field permission management UI, PermissionDomain registration | Base CRUD form (via CodeGen) |
 
