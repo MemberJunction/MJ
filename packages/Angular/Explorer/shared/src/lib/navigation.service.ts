@@ -665,6 +665,37 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * Switch to an app's LANDING page — its default nav item in its BASE
+   * state (drifted section params cleared, reset force-delivered so the
+   * dashboard actually returns to its landing even if its state diverged).
+   * The origin crumb's APP segment uses this: classic breadcrumb semantics,
+   * each level goes to that level's home.
+   */
+  async SwitchToAppHome(appId: string): Promise<void> {
+    const app = this.appManager.GetAllApps().find(a => UUIDsEqual(a.ID, appId));
+    if (!app) {
+      return;
+    }
+    const navItems = await app.GetNavItems();
+    const home = navItems.find(i => i.isDefault) ?? navItems[0];
+    await this.SwitchToApp(appId, home?.Label);
+    const tabId = this.workspaceManager.GetActiveTabId();
+    if (!tabId) {
+      return;
+    }
+    const tab = this.workspaceManager.GetTab(tabId);
+    const current = (tab?.configuration?.['queryParams'] || {}) as Record<string, string>;
+    const clear: Record<string, string | null> = {};
+    for (const key of Object.keys(current)) {
+      clear[key] = null;
+    }
+    if (Object.keys(clear).length > 0) {
+      this.applyQueryParamsToTab(tabId, clear);
+    }
+    this.NotifyQueryParamsChanged(tabId, {}, true);
+  }
+
+  /**
    * Take the user back to where they were when a record was opened (the
    * origin crumb's click path). Fidelity ladder:
    * 1. The exact source tab, if it's still open — reactivate it with all its

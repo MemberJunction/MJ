@@ -52,63 +52,20 @@
   background: var(--mj-bg-page);
 }
 
-/* Origin crumb bar: provenance of the ACTIVE record — one click back to the
-   page it was opened from. Sits above the records tab strip. */
-.records-origin-bar {
-  display: flex;
-  align-items: center;
+/* Pane layout with an origin crumb as the FIRST element: the crumb keeps
+   its fixed 32px (component host); the content sibling flex-fills. The
+   height override neutralizes inline height:100% that cached wrapper
+   elements carry from earlier renders (CSS !important beats inline). */
+mj-tab-container .lm_items > div > mj-record-origin-crumb,
+.direct-content-container > mj-record-origin-crumb {
   flex-shrink: 0;
-  height: 32px;
-  padding: 0 8px;
-  background: var(--mj-bg-surface-sunken);
-  border-bottom: 1px solid var(--mj-border-default);
 }
 
-.origin-crumb {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 3px 8px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  font-size: 12px;
-  font-family: inherit;
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.origin-crumb:hover {
-  background: var(--mj-bg-surface-hover);
-  color: var(--mj-text-primary);
-}
-
-.origin-crumb i {
-  font-size: 11px;
-}
-
-.origin-crumb .origin-sep {
-  color: var(--mj-text-muted);
-}
-
-.origin-crumb .origin-app,
-.origin-crumb .origin-page {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.origin-crumb .origin-page {
-  font-weight: 500;
-}
-
-/* Provenance-only origin (no return target): plain label, no affordance */
-.origin-static {
-  padding: 3px 8px;
-  font-size: 12px;
-  color: var(--mj-text-muted);
+mj-tab-container .lm_items > div > *:not(mj-record-origin-crumb),
+.direct-content-container > *:not(mj-record-origin-crumb) {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto !important;
 }
 
 /* Defense against visibility punch-through: `visibility: visible` on a
@@ -349,6 +306,29 @@ mj-tab-container .lm_header .lm_tab {
   position: relative !important;
   z-index: 1 !important;
   margin-right: 1px !important;
+}
+
+/* Pipe separators between INACTIVE tabs (browser-tab pattern): a short
+   centered divider on each tab's right edge establishes separation without
+   boxing every tab. Suppressed around the ACTIVE tab (its raised card has
+   real edges), around the hovered tab, and after the last tab. */
+mj-tab-container .lm_header .lm_tab::after {
+  content: '' !important;
+  position: absolute !important;
+  right: -1px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 1px !important;
+  height: 16px !important;
+  background: var(--mj-border-strong) !important;
+}
+
+mj-tab-container .lm_header .lm_tab.lm_active::after,
+mj-tab-container .lm_header .lm_tab:has(+ .lm_tab.lm_active)::after,
+mj-tab-container .lm_header .lm_tab:hover::after,
+mj-tab-container .lm_header .lm_tab:has(+ .lm_tab:hover)::after,
+mj-tab-container .lm_header .lm_tab:last-child::after {
+  content: none !important;
 }
 
 /* Type-icon slot (Matt's tab design, 2026-07-29): every tab leads with its

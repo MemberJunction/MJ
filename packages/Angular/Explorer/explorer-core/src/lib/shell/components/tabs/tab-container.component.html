@@ -19,32 +19,9 @@
        layout survives visibility flips; shown only while the active tab is
        a record. Native GL tab bar = record tabs, drag-to-split included. -->
   @if (RecordsStyleActive) {
+    <!-- Origin crumbs are PANE-LEVEL now (first element inside each record
+         pane — see RecordOriginCrumbComponent); the region needs no bar. -->
     <div class="records-region" [class.region-hidden]="!ShowRecordsRegion">
-      <!-- Origin crumb: where the ACTIVE record was opened from, one click
-           back to that exact page (source tab reactivated with state intact).
-           Provenance, not ancestry — records have no canonical parent. -->
-      @if (ActiveRecordOrigin; as origin) {
-        <div class="records-origin-bar">
-          @if (OriginClickable) {
-            <button type="button" class="origin-crumb" (click)="OnOriginCrumbClick()" title="Back to where you opened this record">
-              <i class="fa-solid fa-arrow-left"></i>
-              @if (origin.sourceLabel) {
-                <span class="origin-page">{{ origin.sourceLabel }}</span>
-              } @else {
-                <span class="origin-app">{{ origin.sourceAppName }}</span>
-                @if (origin.sourceNavLabel) {
-                  <span class="origin-sep">›</span>
-                  <span class="origin-page">{{ origin.sourceNavLabel }}</span>
-                }
-              }
-            </button>
-          } @else {
-            <!-- Provenance only — no return target (e.g. opened by an agent),
-                 so no arrow and no click affordance -->
-            <span class="origin-static">From {{ origin.sourceLabel }}</span>
-          }
-        </div>
-      }
       <div #recordsGlContainer class="records-gl-container"></div>
     </div>
   }

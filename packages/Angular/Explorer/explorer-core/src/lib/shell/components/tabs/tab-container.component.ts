@@ -28,8 +28,9 @@ import {
   LayoutNode
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, RecordSourceContext, RecordSourceHasReturnTarget, SafeDetectChanges } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
+import { RecordOriginCrumbComponent } from '../record-open/record-origin-crumb.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager, CachedComponentInfo } from './component-cache-manager';
@@ -83,6 +84,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
   // Track component references for cleanup (legacy - keep for backward compat during transition)
   private componentRefs = new Map<string, ComponentRef<BaseResourceComponent>>();
+  /** Pane-level origin crumbs, one per record pane (see RecordOriginCrumbComponent) */
+  private originCrumbRefs = new Map<string, ComponentRef<RecordOriginCrumbComponent>>();
 
   // Guard against concurrent loadTabContent calls for the same tab.
   // When a tab's content changes while active, both the reload path (workspace config subscription)
@@ -139,20 +142,6 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   /** True while the RECORDS region is the visible surface (active tab is a record) */
   public ShowRecordsRegion = false;
 
-  /**
-   * Origin of the ACTIVE record tab — where the user was when they opened it.
-   * Drives the origin crumb ("← App › Page") at the top of the records
-   * region; clicking it returns to that page. Null when the active tab isn't
-   * a record or its origin wasn't captured. Kept as state (updated in
-   * syncRecordsRegion, not a getter) so zoneless CD flushes exactly when it
-   * changes.
-   */
-  public ActiveRecordOrigin: RecordSourceContext | null = null;
-
-  /** Crumb is a button only when the origin has somewhere to return to */
-  public get OriginClickable(): boolean {
-    return RecordSourceHasReturnTarget(this.ActiveRecordOrigin);
-  }
 
   /**
    * A tab belongs to the records REGION (not the main workspace layout).
@@ -210,21 +199,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.syncRecordsTabs(recordTabs);
     }
 
-    // Origin crumb tracks the ACTIVE record tab — recompute on every
-    // emission (switching between two record tabs changes the origin while
-    // `showing` stays true, so this can't ride the visibility flip alone).
-    const origin = showing && activeTab ? GetRecordSourceContext(activeTab.configuration) : null;
-    const originChanged =
-      (origin === null) !== (this.ActiveRecordOrigin === null) ||
-      origin?.sourceTabId !== this.ActiveRecordOrigin?.sourceTabId ||
-      origin?.sourceAppId !== this.ActiveRecordOrigin?.sourceAppId ||
-      origin?.sourceNavLabel !== this.ActiveRecordOrigin?.sourceNavLabel ||
-      origin?.sourceLabel !== this.ActiveRecordOrigin?.sourceLabel;
-    if (originChanged) {
-      this.ActiveRecordOrigin = origin;
-    }
-
-    if (showing !== this.ShowRecordsRegion || originChanged) {
+    if (showing !== this.ShowRecordsRegion) {
       this.ShowRecordsRegion = showing;
       // Flush NOW — the visibility class must land in this pass, not
       // whenever the next unrelated emission happens to run CD.
@@ -266,20 +241,10 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           appColor: app?.GetColor() || DEFAULT_APP_COLOR,
           typeIcon: this.resolveTabTypeIcon(tab)
         });
+        // Origin can change on re-open re-capture — keep the pane crumb live
+        this.updateOriginCrumb(tab);
       }
     });
-  }
-
-  /**
-   * Origin crumb clicked — take the user back to the page they were on when
-   * they opened the active record. NavigationService owns the fidelity
-   * ladder (exact source tab if still open, app + nav label otherwise).
-   */
-  public async OnOriginCrumbClick(): Promise<void> {
-    const origin = this.ActiveRecordOrigin;
-    if (origin) {
-      await this.navigationService.ReturnToRecordSource(origin);
-    }
   }
 
   /** Focus a records-region tab without feeding back into SetActiveTab loops */
@@ -981,8 +946,11 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         cacheDiscriminator
       );
 
+      // Record panes lead with their origin crumb
+      this.ensureRecordOriginCrumb(activeTab, container);
+
       // Reattach the cached wrapper element to single-resource container
-      cached.wrapperElement.style.height = "100%"; // Ensure full height
+      // (sizing via the pane-layout CSS: crumb fixed, content flex-fills)
       container.appendChild(cached.wrapperElement);
 
       // Store reference and identity for cleanup/detachment
@@ -1091,13 +1059,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.handleResourceCloseRequested(activeTab.id, instance);
     };
 
+    // Record panes lead with their origin crumb
+    this.ensureRecordOriginCrumb(activeTab, container);
+
     // Get the native element and append to container
+    // (sizing via the pane-layout CSS: crumb fixed, content flex-fills)
     const nativeElement = (componentRef.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
     container.appendChild(nativeElement);
-    // now make sure that the container's direct child is 100% height
-    if (container.children?.length > 0) {
-      (container.children[0] as any).style.height = "100%";
-    }
 
     // Cache the component for reuse when switching between nav items within the same app.
     // Without this, every nav switch creates a brand new component from scratch.
@@ -1498,6 +1466,10 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // Clear any existing content from the container (important for tab reuse)
       glContainer.element.innerHTML = '';
 
+      // Record panes lead with their origin crumb — BEFORE content attaches
+      // (fresh or cached), so it is always the pane's first element.
+      this.ensureRecordOriginCrumb(tab, glContainer.element);
+
       // Get driver class for cache lookup (resolves to actual component class name)
       const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
       // Discriminate distinct "new record" tabs of different entities (all have empty
@@ -1893,7 +1865,55 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    * Cleanup a tab's component
    * Detaches from DOM but keeps in cache for potential reuse
    */
+  /**
+   * Ensure a record pane's FIRST element is its origin crumb (Matt's
+   * pane-level placement — correct in splits, docked panes, and
+   * single-resource, unlike the old region-level bar). Recreated on every
+   * content attach: the pane container is cleared/re-homed on loads,
+   * cache reattaches, and promote/demote moves.
+   */
+  private ensureRecordOriginCrumb(tab: WorkspaceTab, containerEl: HTMLElement): void {
+    this.destroyOriginCrumb(tab.id);
+    // The single-resource container is REUSED across tabs — sweep any crumb
+    // element a previous tab left behind before (maybe) adding ours.
+    containerEl.querySelectorAll('mj-record-origin-crumb').forEach(e => e.remove());
+    if (!this.RecordsStyleActive || !IsRecordsTabConfiguration(tab.configuration)) {
+      return;
+    }
+    const origin = GetRecordSourceContext(tab.configuration);
+    if (!origin) {
+      return; // No captured origin (deep link, history re-open) — no crumb.
+    }
+    const ref = createComponent(RecordOriginCrumbComponent, {
+      environmentInjector: this.environmentInjector
+    });
+    ref.setInput('Origin', origin);
+    this.appRef.attachView(ref.hostView);
+    const el = (ref.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
+    containerEl.insertBefore(el, containerEl.firstChild);
+    this.originCrumbRefs.set(tab.id, ref);
+  }
+
+  /** Refresh a pane crumb's origin after a config change (re-open re-capture) */
+  private updateOriginCrumb(tab: WorkspaceTab): void {
+    const ref = this.originCrumbRefs.get(tab.id);
+    if (ref) {
+      ref.setInput('Origin', GetRecordSourceContext(tab.configuration));
+    }
+  }
+
+  private destroyOriginCrumb(tabId: string): void {
+    const ref = this.originCrumbRefs.get(tabId);
+    if (ref) {
+      ref.destroy();
+      this.originCrumbRefs.delete(tabId);
+    }
+  }
+
   private cleanupTabComponent(tabId: string): void {
+    // The pane crumb belongs to the pane, not the cached component — always
+    // destroyed here; the next attach recreates it in the new pane.
+    this.destroyOriginCrumb(tabId);
     // First, try to detach from cache (preserves component for reuse)
     const cachedInfo = this.cacheManager.findAndDetachByTabId(tabId);
 
@@ -2000,6 +2020,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         }
         this.layoutManager.UpdateTabStyle(tab.id, styleUpdate);
         void this.upgradeNavTabIcon(tab, this.layoutManager);
+        this.updateOriginCrumb(tab);
       }
     });
 
