@@ -43,7 +43,8 @@ import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
-import { buildContentHashPrefetchFilter } from './prefetchFilter.js';
+import { RecordMapBatch } from './RecordMapBatch.js';
+import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
 import { serializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue, foldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
 import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
@@ -241,6 +242,32 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return raw;
         }
         return ceiling;
+    }
+
+    /**
+     * Hard ceiling on the record-map keyset page size. Each page is one round trip that materializes
+     * this many rows in memory; past 50k the per-page cost stops amortizing and starts risking the
+     * response-size limits of the transport.
+     */
+    public static readonly RECORD_MAP_PAGE_SIZE_CEILING = 50_000;
+
+    /**
+     * Page size for the keyset walk over MJ: Company Integration Record Maps (see LoadAllRecordMaps).
+     * Read from MJ_INTEGRATION_RECORD_MAP_PAGE_SIZE at class-init and clamped to
+     * [1, RECORD_MAP_PAGE_SIZE_CEILING]; defaults to 10,000.
+     */
+    public static readonly RecordMapPageSize = IntegrationEngine.computeRecordMapPageSize();
+
+    /** Reads + clamps the record-map page size from env; logs once when a configured value is clamped. */
+    private static computeRecordMapPageSize(): number {
+        const ceiling = IntegrationEngine.RECORD_MAP_PAGE_SIZE_CEILING;
+        const raw = parseInt(process.env.MJ_INTEGRATION_RECORD_MAP_PAGE_SIZE ?? '', 10);
+        if (!Number.isFinite(raw) || raw <= 0) return 10_000;
+        if (raw > ceiling) {
+            LogStatusEx({ message: `[IntegrationEngine] MJ_INTEGRATION_RECORD_MAP_PAGE_SIZE=${raw} exceeds the maximum ${ceiling} — clamped to ${ceiling}.` });
+            return ceiling;
+        }
+        return raw;
     }
 
     private readonly fieldMappingEngine = new FieldMappingEngine();
@@ -2321,20 +2348,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             );
         }
 
-        // Load existing record maps to know which records already exist externally
-        const mapResult = await rv.RunView<{ EntityRecordID: string; ExternalSystemRecordID: string }>({
-            EntityName: 'MJ: Company Integration Record Maps',
-            ExtraFilter: `CompanyIntegrationID='${companyIntegration.ID}' AND EntityID='${entityMap.EntityID}'`,
-            Fields: ['EntityRecordID', 'ExternalSystemRecordID'],
-            ResultType: 'simple',
-            BypassCache: true, // sync decisions must reflect committed record-map state, not a stale cache
-        }, contextUser);
+        // Load existing record maps to know which records already exist externally.
+        // Paged: an unpaged read is silently capped at the entity's UserViewMaxRows (1000 by
+        // default), and a truncated map here makes already-synced records look brand new — so
+        // the push would re-CREATE them externally as duplicates.
+        const allMaps = await this.LoadAllRecordMaps(companyIntegration.ID, entityMap.EntityID, contextUser);
+        if (!allMaps.Complete) {
+            // Refuse rather than push a partial picture: with an incomplete map, every unmapped
+            // record reads as "not yet in the external system" and gets created a second time.
+            throw new Error(
+                `Cannot push ${entityMap.Entity}: failed to load the existing record map ` +
+                `(${allMaps.Error ?? 'unknown error'}). Refusing to push — an incomplete map would ` +
+                `re-create already-synced records as duplicates in the external system.`
+            );
+        }
 
         const existingMaps = new Map<string, string>();
-        if (mapResult.Success) {
-            for (const m of mapResult.Results) {
-                existingMaps.set(m.EntityRecordID, m.ExternalSystemRecordID);
-            }
+        for (const m of allMaps.Rows) {
+            existingMaps.set(m.EntityRecordID, m.ExternalSystemRecordID);
         }
 
         const md = this.ProviderToUse;
@@ -2681,20 +2712,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         logger?: SyncLogger
     ): Promise<void> {
-        const rv = new RunView();
-        const mapResult = await rv.RunView<{ EntityRecordID: string; ExternalSystemRecordID: string }>({
-            EntityName: 'MJ: Company Integration Record Maps',
-            ExtraFilter:
-                `CompanyIntegrationID='${companyIntegration.ID}' ` +
-                `AND EntityID='${entityMap.EntityID}'`,
-            Fields: ['EntityRecordID', 'ExternalSystemRecordID'],
-            ResultType: 'simple',
-            BypassCache: true, // orphan-sweep compares against committed record-map state
-        }, contextUser);
+        // Paged: an unpaged read is silently capped at the entity's UserViewMaxRows (1000 by
+        // default). A tenant with 5,000 orphans would clear 1,000 per run and the operator would
+        // see a clean run every time — the truncation was invisible, which is the actual bug.
+        const allMaps = await this.LoadAllRecordMaps(companyIntegration.ID, entityMap.EntityID, contextUser);
 
-        if (!mapResult.Success) return;
+        if (!allMaps.Complete) {
+            // Deleting against a partial map is the dangerous direction: rows we simply failed to
+            // read are indistinguishable from rows the external system dropped. Skip the sweep and
+            // say so, rather than archiving live records on incomplete evidence.
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.ID,
+                'ORPHAN_SWEEP_SKIPPED',
+                `Delete-detection was skipped for ${entityMap.Entity}: the record map could not be read completely ` +
+                `(${allMaps.Error ?? 'unknown error'}) after ${allMaps.Rows.length} row(s). No records were deleted. ` +
+                `Deleting on a partial map would archive live records.`,
+                { rowsRead: allMaps.Rows.length },
+            );
+            return;
+        }
 
-        const orphans = mapResult.Results.filter(m => !fetchedExternalIDs.has(m.ExternalSystemRecordID));
+        const orphans = allMaps.Rows.filter(m => !fetchedExternalIDs.has(m.ExternalSystemRecordID));
         if (orphans.length === 0) return;
 
         console.log(`[IntegrationEngine] Orphan detection for ${entityMap.ExternalObjectName}: ${orphans.length} records in MJ not found in external system`);
@@ -2946,6 +2984,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const APPLY_BATCH_SIZE = 500;
         const provider = this.ProviderToUse as DatabaseProviderBase;
 
+        // One batched record-map writer for this entity map's whole apply pass. Every path that
+        // used to spend three round trips per record establishing a mapping now queues into this
+        // and the queue is flushed set-based once the batch has settled — the single largest cost
+        // in a no-change sync.
+        const recordMaps = new RecordMapBatch(
+            this.ProviderToUse,
+            companyIntegration.ID,
+            contextUser,
+            (ciID, extID, entID, recID, user) => this.SaveRecordMap(ciID, extID, entID, recID, user),
+        );
+
         for (let i = 0; i < records.length; i += APPLY_BATCH_SIZE) {
             const batch = records.slice(i, i + APPLY_BATCH_SIZE);
             const batchStartProcessed = result.RecordsProcessed;
@@ -2975,7 +3024,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     try {
                         for (const record of batch) {
                             result.RecordsProcessed++;
-                            await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds);
+                            await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
                         }
                         await provider.CommitTransaction();
                     } catch (err) {
@@ -2983,6 +3032,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         // The batch transaction rolled back; the skip-IDs collected during the failed attempt
                         // never committed. Reset and let the per-record retry re-collect only what commits.
                         reconciledSkipIds = [];
+                        // Same reasoning for the queued mappings — the records they point at were rolled
+                        // back, so writing them would leave the map referencing rows that don't exist.
+                        recordMaps.Discard();
 
                         // Roll back the in-memory counters that ApplySingleRecord bumped inside the failed batch
                         result.RecordsProcessed = batchStartProcessed;
@@ -3002,7 +3054,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         // Degrade to per-record application so the failure isolates to the poison
                         // record(s) and every good record in this batch still commits.
                         await this.applyRecordsIndividually(
-                            batch, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds
+                            batch, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps
                         );
                     }
                 } else {
@@ -3018,7 +3070,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                             // §10 — bounded inline retry for provably-transient save failures (auto-commit per
                             // record, so no transaction to manage); permanent errors throw straight to dead-letter.
                             await WithRetry(
-                                () => this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds),
+                                () => this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps),
                                 undefined,
                                 (e) => !(e instanceof SchemaNotGeneratedError) && IsRetryableError(ClassifyError(e).Code),
                                 (attempt, e, delayMs) => logger?.emit('sync.record.retry', {
@@ -3052,7 +3104,47 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 if (reconciledSkipIds.length > 0) {
                     await this.TouchLastReconciledAt(entityMap, reconciledSkipIds, contextUser, logger);
                 }
+
+                // Write the batch's record maps set-based, now that the records they point at are
+                // committed. Deliberately AFTER the transaction rather than inside it: the mapping
+                // is derived data that the next sync can re-establish by primary key, and keeping
+                // it out of the write transaction keeps that transaction as short as possible.
+                await this.FlushRecordMaps(recordMaps, entityMap, logger);
             });
+        }
+    }
+
+    /**
+     * Flushes the queued record maps and reports any that failed, per external ID.
+     *
+     * Failures here are warnings, not record errors: the record itself saved. A missing mapping
+     * degrades orphan detection until the next sync re-establishes it by primary key, which is
+     * worth telling the operator about but is not a reason to mark the record — or the run —
+     * failed. Flushing itself never throws for the same reason.
+     */
+    private async FlushRecordMaps(
+        recordMaps: RecordMapBatch,
+        entityMap: ICompanyIntegrationEntityMap,
+        logger?: SyncLogger
+    ): Promise<void> {
+        try {
+            await recordMaps.Flush();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[IntegrationEngine] Record-map flush failed for ${entityMap.ExternalObjectName}: ${msg}`);
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.Entity ?? entityMap.ID,
+                'RECORD_MAP_FLUSH_FAILED', msg, {},
+            );
+        }
+
+        for (const failure of recordMaps.TakeFailures()) {
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.Entity ?? entityMap.ID,
+                'RECORD_MAP_WRITE_FAILED',
+                `Record map not written for external ID ${failure.ExternalID}: ${failure.ErrorMessage}`,
+                { externalId: failure.ExternalID, entityId: failure.EntityID },
+            );
         }
     }
 
@@ -3125,7 +3217,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         logger: SyncLogger | undefined,
         precheckHashes: Map<string, string> | undefined,
-        reconciledSkipIds?: string[]
+        reconciledSkipIds?: string[],
+        recordMaps?: RecordMapBatch
     ): Promise<void> {
         const provider = this.ProviderToUse as DatabaseProviderBase;
 
@@ -3141,7 +3234,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     async () => {
                         await provider.BeginTransaction();
                         try {
-                            await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds);
+                            await this.ApplySingleRecord(record, companyIntegration, entityMap, result, contextUser, logger, precheckHashes, reconciledSkipIds, recordMaps);
                             await provider.CommitTransaction();
                         } catch (e) {
                             await provider.RollbackTransaction();
@@ -3208,7 +3301,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         logger?: SyncLogger,
         precheckHashes?: Map<string, string>,
-        reconciledSkipIds?: string[]
+        reconciledSkipIds?: string[],
+        recordMaps?: RecordMapBatch
     ): Promise<void> {
         logger?.emit('sync.record.decision', {
             externalId: record.ExternalRecord.ExternalID,
@@ -3227,14 +3321,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         try {
             switch (record.ChangeType) {
                 case 'Create': {
-                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
+                    const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps);
                     if (outcome === 'updated') result.RecordsUpdated++;
                     else if (outcome === 'skipped') result.RecordsSkipped++;
                     else result.RecordsCreated++;
                     break;
                 }
                 case 'Update':
-                    await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds);
+                    await this.UpdateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds, recordMaps);
                     break;
                 case 'Delete': {
                     const didDelete = await this.DeleteRecord(record, entityMap, contextUser);
@@ -3302,7 +3396,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         record: MappedRecord,
         companyIntegration: MJCompanyIntegrationEntity,
         entityMap: ICompanyIntegrationEntityMap,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        recordMaps?: RecordMapBatch
     ): Promise<'created' | 'updated' | 'skipped'> {
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
@@ -3332,8 +3427,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 const storedHash = entity.Get(CONTENT_HASH_COLUMN);
                 if (typeof storedHash === 'string' && storedHash.length > 0
                     && storedHash === computeContentHash(record.MappedFields ?? {})) {
-                    await this.SaveRecordMap(
-                        companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
+                    await this.QueueRecordMap(
+                        recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                         entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
                     );
                     return 'skipped';
@@ -3344,9 +3439,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // re-establish the possibly-cleared record map and SKIP the write — leaving __mj_UpdatedAt
             // and the integration LastSynced columns untouched, exactly like the content-hash skip path.
             this.SetEntityFields(entity, record.MappedFields);
-            if (!entity.Dirty) {
-                await this.SaveRecordMap(
-                    companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
+            if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo)) {
+                await this.QueueRecordMap(
+                    recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                     entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
                 );
                 return 'skipped';
@@ -3374,7 +3469,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // incremental sync. SaveRecordMap is an upsert keyed on (CompanyIntegration, Entity, ExternalID),
         // so this also re-establishes a map that was previously cleared.
         const entityRecordID = entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|');
-        await this.SaveRecordMap(
+        await this.QueueRecordMap(
+            recordMaps,
             companyIntegration.ID,
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
@@ -3418,11 +3514,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         result: SyncResult,
         contextUser: UserInfo,
         precheckHashes?: Map<string, string>,
-        reconciledSkipIds?: string[]
+        reconciledSkipIds?: string[],
+        recordMaps?: RecordMapBatch
     ): Promise<void> {
         if (!record.MatchedMJRecordID) {
             // No matched ID — upsert by PK (insert; or update/skip if the PK already exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
+            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
@@ -3449,8 +3546,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // (CompanyIntegration, Entity, ExternalID) — idempotent for already-mapped records, and the
                 // CreateRecord skip branches already do exactly this. MatchedMJRecordID IS the dest PK
                 // (PrimaryKeys order, '|'-joined), which is the EntityRecordID the map stores.
-                await this.SaveRecordMap(
-                    companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
+                await this.QueueRecordMap(
+                    recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                     record.MatchedMJRecordID, contextUser,
                 );
                 // The record IS still present and confirmed-unchanged on the source — but skipping
@@ -3471,32 +3568,45 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             // Matched-ID row vanished — fall back to upsert by PK (insert; or update/skip if PK exists)
-            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser);
+            const outcome = await this.CreateRecord(record, companyIntegration, entityMap, contextUser, recordMaps);
             if (outcome === 'updated') result.RecordsUpdated++;
             else if (outcome === 'skipped') result.RecordsSkipped++;
             else result.RecordsCreated++;
             return;
         }
 
+        // Set only the BUSINESS fields first, and evaluate dirtiness BEFORE the integration
+        // bookkeeping columns are stamped. This ordering is the whole point: several
+        // __mj_integration_* columns (LastSyncedAt, LastReconciledAt) are set to `new Date()`
+        // on every record, so stamping them first made `entity.Dirty` unconditionally true and
+        // the check below dead — every matched record rewrote every column on every sync,
+        // clobbering concurrent edits to untouched columns and fabricating a record-change row
+        // each time. CreateRecord's upsert branch already orders it this way; this is the same
+        // footprint-clean rule applied to the matched path.
         this.SetEntityFields(entity, record.MappedFields);
-        this.SetStandardIntegrationFields(entity, record);
 
-        // Skip unchanged records — if no field values actually changed after setting,
-        // don't write to DB. Uses MJ's built-in dirty tracking (zero custom comparison logic).
-        // Critical for connectors without server-side date filtering (e.g., YM) where every
-        // sync re-fetches all records. Without this, 50k+ records get re-written every run.
-        if (!entity.Dirty) {
+        // Skip unchanged records — if no business field values actually changed, don't write.
+        // Uses MJ's built-in dirty tracking (zero custom comparison logic). Critical for
+        // connectors without server-side date filtering (e.g., YM) where every sync re-fetches
+        // all records. Without this, 50k+ records get re-written every run.
+        if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo)) {
             result.RecordsSkipped++;
             // Re-establish the record map even when the write is skipped — see the content-hash skip
             // above for the full rationale (a key-field/PK match can land here with no map row, and
             // dropping the map silently breaks the 1:1 completeness invariant + orphan detection).
             // The entity is loaded here, so use its actual PK as the EntityRecordID. Idempotent upsert.
-            await this.SaveRecordMap(
-                companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
+            await this.QueueRecordMap(
+                recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                 entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
             );
+            // Same reasoning as the content-hash skip: the record IS confirmed present on the
+            // source, so let the batch refresh LastReconciledAt in one set-based touch rather
+            // than rewriting the row for a timestamp.
+            if (reconciledSkipIds) reconciledSkipIds.push(record.MatchedMJRecordID);
             return;
         }
+
+        this.SetStandardIntegrationFields(entity, record);
 
         // A5: Pre-write validation
         this.validateEntity(entity, record.MJEntityName);
@@ -3515,7 +3625,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // rows and orphan/delete detection silently degrades. SaveRecordMap is an upsert keyed on
         // (CompanyIntegration, Entity, ExternalID), so this is idempotent for already-mapped records.
         const entityRecordID = entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|');
-        await this.SaveRecordMap(
+        await this.QueueRecordMap(
+            recordMaps,
             companyIntegration.ID,
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
@@ -3835,6 +3946,32 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
+     * True when a row whose BUSINESS fields are unchanged still has to be written because its
+     * integration sync state is stale — it is tombstoned (the record reappeared on the source),
+     * carries a prior error/conflict note, or is not marked Active.
+     *
+     * Without this, restoring UpdateRecord's dirty check would introduce a regression: before
+     * the fix, an unchanged row was rewritten every sync (expensively) and so its tombstone /
+     * error state was cleared as a side effect. Skipping the write must not freeze that state.
+     * The cost is nil — the entity is already loaded at every call site.
+     *
+     * `.Get` on the dynamic `__mj_integration_*` columns is the sanctioned access here: these
+     * runtime-created target tables have no generated entity type, which is why the engine
+     * already `.Set()`s the very same columns in SetStandardIntegrationFields.
+     */
+    private needsSyncStateRepair(
+        entity: { Get(fieldName: string): unknown },
+        entityInfo: { Fields: Array<{ Name: string }> } | undefined
+    ): boolean {
+        if (!entityInfo) return false;
+        const has = (name: string) => entityInfo.Fields.some(f => f.Name === name);
+        if (has('__mj_integration_IsTombstoned') && entity.Get('__mj_integration_IsTombstoned') === true) return true;
+        if (has('__mj_integration_SyncMessage') && entity.Get('__mj_integration_SyncMessage') != null) return true;
+        if (has('__mj_integration_SyncStatus') && entity.Get('__mj_integration_SyncStatus') !== 'Active') return true;
+        return false;
+    }
+
+    /**
      * Sets standard integration columns (__mj_integration_*) on target entities.
      * Silently skips if the entity doesn't have these columns (e.g., __mj targets).
      */
@@ -3922,6 +4059,111 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
+     * Reads EVERY record-map row for a (CompanyIntegration, Entity) pair, in pages.
+     *
+     * A plain `RunView` with no `MaxRows` is NOT unbounded: it falls back to the entity's
+     * `UserViewMaxRows`, which defaults to 1000. Both callers of this helper (full-push
+     * "what already exists externally" and full-sync orphan detection) treat the result as
+     * the complete picture, so a silent truncation at 1000 was a data bug in both directions —
+     * duplicate creates on push, and an orphan sweep that cleared only the first 1000 while
+     * reporting a clean run.
+     *
+     * `Complete` is the honest half: paging can still fail part-way, and callers must decide
+     * what a partial read means for them rather than acting on it as if it were whole.
+     *
+     * **Keyset, not OFFSET.** `AfterKey` is used rather than `StartRow` for two independent
+     * reasons, both of which bite precisely at the volumes this helper exists for:
+     *
+     *  1. `StartRow` + `MaxRows` sets the provider's `usingPagination` flag, which forces a
+     *     `SELECT COUNT(*)` over the whole record-map view *for every page*. Paging 100k
+     *     mappings would issue 20 full counts nobody reads — reintroducing, twenty-fold, the
+     *     speculative-count cost removed elsewhere in this change. Keyset queries deliberately
+     *     do not set that flag.
+     *  2. OFFSET paging assumes the row set does not shift underneath the cursor. This table is
+     *     written by the same sync (`RecordMapBatch`), and on Postgres `ID` defaults to a RANDOM
+     *     uuid, so a concurrent insert can land *before* the cursor and shift every later page —
+     *     silently skipping rows while still reporting `Complete: true`. That is exactly the
+     *     truncation this helper exists to prevent, and the orphan sweep would archive live
+     *     records on the strength of it. Keyset seeks on the last ID seen and cannot shift.
+     */
+    private async LoadAllRecordMaps(
+        companyIntegrationID: string,
+        entityID: string,
+        contextUser: UserInfo
+    ): Promise<{ Rows: Array<{ EntityRecordID: string; ExternalSystemRecordID: string }>; Complete: boolean; Error?: string }> {
+        const PAGE_SIZE = IntegrationEngine.RecordMapPageSize;
+        // Backstop only: at the default page size this is 50M mappings for one
+        // (CompanyIntegration, Entity) pair. It exists so a provider that ignores the seek key
+        // cannot spin forever, not as a real limit anyone should reach.
+        const MAX_PAGES = 5000;
+        const filter = `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}'`;
+
+        const rv = new RunView();
+        const rows: Array<{ EntityRecordID: string; ExternalSystemRecordID: string }> = [];
+        let afterID: string | undefined;
+
+        for (let pageNo = 0; pageNo < MAX_PAGES; pageNo++) {
+            const page = await rv.RunView<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>({
+                EntityName: 'MJ: Company Integration Record Maps',
+                ExtraFilter: filter,
+                Fields: ['ID', 'EntityRecordID', 'ExternalSystemRecordID'],
+                // Keyset requires the sort to be on the PK alone; it is also what makes the seek
+                // below well-defined.
+                OrderBy: 'ID ASC',
+                AfterKey: afterID ? CompositeKey.FromID(afterID) : undefined,
+                IgnoreMaxRows: true, // the entity-level cap is exactly what we're defeating here
+                MaxRows: PAGE_SIZE,
+                ResultType: 'simple',
+                BypassCache: true, // sync decisions must reflect committed record-map state
+            }, contextUser);
+
+            if (!page.Success) {
+                return { Rows: rows, Complete: false, Error: page.ErrorMessage ?? 'RunView failed' };
+            }
+
+            rows.push(...page.Results);
+            if (page.Results.length < PAGE_SIZE) return { Rows: rows, Complete: true };
+            afterID = page.Results[page.Results.length - 1].ID;
+        }
+
+        // Fell out of the loop with full pages still coming: either a genuinely enormous map or a
+        // provider that ignored the seek key. Either way we do NOT have the complete picture, and
+        // saying so is the whole point of the Complete flag.
+        return {
+            Rows: rows,
+            Complete: false,
+            Error: `Record-map paging exceeded ${MAX_PAGES} pages (${rows.length} rows read) without reaching the end.`,
+        };
+    }
+
+    /**
+     * Records an external↔MJ mapping — batched when the apply pass supplied a writer, direct
+     * otherwise.
+     *
+     * The batched form exists because the per-record `SaveRecordMap`
+     * below costs three round trips, paid for every record the sync touches including the ones it
+     * decides not to change. The `recordMaps` parameter is optional so that callers outside the
+     * batched apply pass (and every existing test) keep the original immediate-write behaviour.
+     */
+    private async QueueRecordMap(
+        recordMaps: RecordMapBatch | undefined,
+        companyIntegrationID: string,
+        externalID: string,
+        entityID: string,
+        entityRecordID: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (recordMaps) {
+            // Queue only — the apply loop flushes after the batch transaction commits. Writing here
+            // (or auto-flushing on a full chunk) would put map rows inside a transaction that
+            // Discard() can no longer take back on rollback.
+            recordMaps.Queue({ EntityID: entityID, ExternalID: externalID, EntityRecordID: entityRecordID });
+            return;
+        }
+        await this.SaveRecordMap(companyIntegrationID, externalID, entityID, entityRecordID, contextUser);
+    }
+
+    /**
      * Creates or updates a CompanyIntegrationRecordMap entry to track the external↔MJ mapping.
      */
     private async SaveRecordMap(
@@ -3941,10 +4183,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // The prior always-NewRecord() behavior created a duplicate map row whenever a
         // record fell through to this path again (e.g. matching missed), which then made
         // every by-external-ID lookup ambiguous. Look up an existing mapping first.
+        // Quoted the same way the batched read quotes it — this is `RecordMapBatch`'s fallback path,
+        // so a value the batch would have found here must be found here too, or the fallback
+        // re-creates the very duplicate the upsert exists to prevent.
+        const quotedExternalID = md instanceof DatabaseProviderBase
+            ? quoteTextLiteral(externalID, md.Dialect)
+            : `'${externalID.replace(/'/g, "''")}'`;
         const rv = new RunView();
         const existing = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Company Integration Record Maps',
-            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID='${externalID.replace(/'/g, "''")}'`,
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}' AND ExternalSystemRecordID=${quotedExternalID}`,
             Fields: ['ID'],
             MaxRows: 1,
             ResultType: 'simple',

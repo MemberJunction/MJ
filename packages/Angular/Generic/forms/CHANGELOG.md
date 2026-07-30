@@ -1,5 +1,14 @@
 # @memberjunction/ng-forms
 
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [623dfc5]
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ng-markdown@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

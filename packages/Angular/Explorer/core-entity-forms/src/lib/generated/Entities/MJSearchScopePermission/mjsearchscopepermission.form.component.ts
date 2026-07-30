@@ -17,6 +17,7 @@ export class MJSearchScopePermissionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'permissionScope', sectionName: 'Permission Scope', isExpanded: true },
             { sectionKey: 'granteeInformation', sectionName: 'Grantee Information', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
