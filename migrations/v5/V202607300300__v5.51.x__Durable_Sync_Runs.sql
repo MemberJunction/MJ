@@ -1,5 +1,5 @@
 -- =====================================================
--- v5.50.x — Durable, owned, cross-process-cancellable sync runs
+-- v5.51.x — Durable, owned, cross-process-cancellable sync runs
 -- =====================================================
 -- CompanyIntegrationRun previously had no ownership or liveness columns, so
 -- "is this run alive?" was unanswerable from the database: cancel + progress
