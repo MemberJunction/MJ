@@ -38,11 +38,28 @@ interface GLLayoutItem {
 interface GLLayoutConfig {
   root: GLLayoutNode;
   header?: {
-    show: string;
+    // Golden Layout's Header.show is `false | Side` — false renders NO tab
+    // strip at all ("splitters only"), which is how the records region goes
+    // headerless on mobile
+    show: string | false;
     popout: boolean;
     maximise: boolean;
     close: string;
   };
+}
+
+/**
+ * Options for GoldenLayoutManager.Initialize.
+ */
+export interface GoldenLayoutInitOptions {
+  /**
+   * Render the layout with NO tab headers (Golden Layout `header.show: false`).
+   * Used by the mobile records surface, which replaces the strip with its own
+   * record bar. Header visibility is fixed at init/load time — changing it
+   * requires Destroy() + Initialize() (the mobile breakpoint-crossing rebuild
+   * does exactly that).
+   */
+  HideHeaders?: boolean;
 }
 
 interface GLResolvedLayoutConfig {
@@ -119,6 +136,8 @@ export interface LayoutChangedEvent {
 export class GoldenLayoutManager {
   private layout: GLVirtualLayout | null = null;
   private containerElement: HTMLElement | null = null;
+  /** Render all layouts headerless (see GoldenLayoutInitOptions.HideHeaders) */
+  private hideHeaders = false;
 
   /**
    * True when Golden Layout has been initialized and not yet destroyed.
@@ -188,8 +207,9 @@ export class GoldenLayoutManager {
   /**
    * Initialize Golden Layout in the specified container element
    */
-  Initialize(element: HTMLElement): void {
+  Initialize(element: HTMLElement, options?: GoldenLayoutInitOptions): void {
     this.containerElement = element;
+    this.hideHeaders = options?.HideHeaders === true;
 
     // Create layout with empty config
     const config: GLLayoutConfig = {
@@ -197,12 +217,7 @@ export class GoldenLayoutManager {
         type: 'row',
         content: []
       },
-      header: {
-        show: 'top',
-        popout: false,
-        maximise: false,
-        close: 'tab'
-      }
+      header: this.headerConfig()
     };
 
     this.layout = new VirtualLayout(
@@ -737,12 +752,22 @@ export class GoldenLayoutManager {
 
     return {
       root: sanitizedRoot as GLLayoutNode,
-      header: {
-        show: 'top',
-        popout: false,
-        maximise: false,
-        close: 'tab'
-      }
+      header: this.headerConfig()
+    };
+  }
+
+  /**
+   * The header config for every layout this manager loads — the single place
+   * the HideHeaders init option is honored (Initialize's empty config AND
+   * LoadLayout's restored config must agree, or a restore would resurrect
+   * the strip on the mobile records surface).
+   */
+  private headerConfig(): NonNullable<GLLayoutConfig['header']> {
+    return {
+      show: this.hideHeaders ? false : 'top',
+      popout: false,
+      maximise: false,
+      close: 'tab'
     };
   }
 

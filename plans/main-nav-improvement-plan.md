@@ -189,25 +189,38 @@ correctness); all findings remediated in the same commit.
   (brand-tint pill recipe vs refined raised-card vs underline), app color
   (drop / identity dot / keep bar), density (35px vs nav-pill height),
   pinned/temp vocabulary (italic+pin is invisible vocabulary).
-- **Mobile records UX (QUEUED — direction proposed 2026-07-30, mockup owed
-  before build):** records as BROWSER-STYLE MOBILE TABS. Below the
-  breakpoint: (1) kill the horizontal tab strip — one record full-screen,
-  the pane crumb stays as its header (the only wayfinding affordance on
-  mobile); (2) the Records pill moves into the mobile header (count badge)
-  and opens a BOTTOM SHEET listing open records — entity icon in app
-  color, title, ORIGIN AS SUBTITLE ("Data Explorer › MJ: Action Params"),
-  tap to open, X/swipe to close (house pattern: dashboard-mobile filter
-  sheet); (3) splits FLATTEN to a single tabset at render time WITHOUT
-  rewriting the persisted layout (workspace is cross-device — a
-  desktop-made split must survive a phone visit untouched); (4) docked
-  records join the sheet — docked/region is a desktop composition concept;
-  "Move to Workspace" hidden from the menu below the breakpoint. What
-  already survives mobile: 24px targets, tap-opens-menu on the icon slot,
-  crumb truncation, drawer entry. Phasing: correctness pass (hide strip,
-  flatten splits, pill in header — CSS + one restore guard) → the sheet →
-  gesture polish (swipe-between-records earned later). Open design calls
-  for Matt: bottom sheet vs full-screen switcher grid; what the two-segment
-  crumb collapses to at narrow widths.
+- **Mobile records UX (BUILT 2026-07-30 — pending live verification):**
+  records as BROWSER-STYLE MOBILE TABS below 768px (the shell breakpoint —
+  now a canonical constant, `EXPLORER_MOBILE_BREAKPOINT_PX` +
+  `ExplorerBreakpointService` in ng-shared). Matt's design calls: RECORD BAR
+  replaces the GL tab strip (entity icon in app color + active title +
+  count button; the strip fit ONE tab at 390px with no overflow UI);
+  BOTTOM SHEET switcher (not full-screen grid); crumb stays two-segment
+  (fits at 390px). As built: (1) records GL runs HEADERLESS on mobile
+  (`GoldenLayoutInitOptions.HideHeaders` → GL `header.show:false`, no CSS
+  hacks); (2) `mj-record-bar` + `mj-record-switcher-sheet`
+  (explorer-core/record-open) — sheet rows: icon in app color, title,
+  origin subtitle from GetRecordSourceContext, tap to activate
+  (SetActiveTab), ✕ routed through the SAME close path as the tab context
+  menu; docked records included (mobile pill badge counts them too;
+  desktop badge unchanged); (3) splits FLATTEN at render via
+  `FlattenLayoutToSingleStack` (base-application; deep-clones state) and
+  layout persistence is SUPPRESSED while mobile — persisted recordsLayout
+  untouched, desktop splits survive a phone visit (mobile tab open/close
+  degrades via the existing count-mismatch restore path); (4) breakpoint
+  crossings destroy+re-init the records GL under a `recordsRebuilding`
+  guard — CRITICAL: GL Destroy() fires TabClosed per pane and the handler
+  CloseTabs records; without the guard a crossing closes every record;
+  (5) drawer Records pill opens the sheet on mobile (was a DEAD TAP while
+  viewing a record); (6) Move to Workspace/Records hidden on mobile.
+  NEW GENERIC PRIMITIVE: `mj-bottom-sheet` in ui-components (Escape, focus
+  restore, real exit transition, `transform:none` settled state,
+  z 9998/9999) — filter-popover + list-management-dialog migration onto it
+  QUEUED as follow-up (they are the 1st/2nd hand-rolled sheets; this
+  avoided a 3rd). Tests: ng-shared 74, base-application 33 (8 flatten),
+  ui-components 362 (8 sheet), explorer-core 132 (15 new); check:ui clean.
+  REMAINING: live Playwright pass at 390px (blocked on dev-server restart —
+  Vite stale-serve gotcha); gesture polish (swipe) deferred.
 - **Origin-crumb placement — DECIDED + SHIPPED (Matt 2026-07-30, commit
   `bbd2cb642c`):** PANE-LEVEL. `mj-record-origin-crumb` (standalone) is the
   first element inside every record pane; the region-level bar is deleted

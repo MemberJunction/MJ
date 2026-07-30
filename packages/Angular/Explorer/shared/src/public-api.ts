@@ -10,6 +10,8 @@ export * from './lib/base-resource-component'
 export * from './lib/base-navigation-component';
 export * from './lib/navigation.service';
 export * from './lib/record-open-style';
+export * from './lib/record-tab-icon';
+export * from './lib/explorer-breakpoint.service';
 export * from './lib/safe-detect-changes';
 export * from './lib/navigation.interfaces';
 export * from './lib/activity.service';

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import { WorkspaceStateManager } from '@memberjunction/ng-base-application';
+import { ExplorerBreakpointService } from '@memberjunction/ng-shared';
 import { RecordsHubPillComponent } from './records-hub-pill.component';
+import { RecordSwitcherService } from './record-switcher.service';
 
 /**
  * DOM coverage for the records-style Records pill — the persistent,
@@ -137,6 +139,54 @@ describe('RecordsHubPillComponent (DOM)', () => {
       const { fixture } = render(
         [recordTab('t2', 'Widget A', 0), dockedRecordTab('t3', 'Widget B', 1)], 't3');
       expect(query(fixture, '.records-pill')?.classList.contains('active')).toBe(false);
+    });
+  });
+
+  describe('mobile (below the shell breakpoint)', () => {
+    function renderMobile(tabs: StubTab[], activeTabId: string | null) {
+      const ws = workspaceStub(tabs, activeTabId);
+      const switcher = { Open: vi.fn(), OpenRequested: of() };
+      const fixture = renderComponentFixture(RecordsHubPillComponent, {
+        imports: [RecordsHubPillComponent],
+        providers: [
+          { provide: WorkspaceStateManager, useValue: ws.stub },
+          { provide: ExplorerBreakpointService, useValue: { IsMobile: true, IsMobile$: of(true) } },
+          { provide: RecordSwitcherService, useValue: switcher }
+        ],
+        autoDetect: true
+      });
+      return { fixture, ws, switcher };
+    }
+
+    it('opens the record switcher instead of resuming — even while viewing a record', () => {
+      // Desktop, this exact click is a no-op (ViewingRecord guard). Mobile
+      // has no strip; the sheet IS the switching surface.
+      const { fixture, ws, switcher } = renderMobile(
+        [recordTab('t2', 'Widget A', 0), recordTab('t3', 'Widget B', 1)], 't2');
+      (query(fixture, '.records-pill') as HTMLElement).click();
+      expect(switcher.Open).toHaveBeenCalledTimes(1);
+      expect(ws.stub.SetActiveTab).not.toHaveBeenCalled();
+    });
+
+    it('emits Activated on open so the host drawer closes', () => {
+      const { fixture, switcher } = renderMobile([recordTab('t2', 'Widget A')], 't2');
+      let activated = 0;
+      fixture.componentInstance.Activated.subscribe(() => activated++);
+      (query(fixture, '.records-pill') as HTMLElement).click();
+      expect(switcher.Open).toHaveBeenCalled();
+      expect(activated).toBe(1);
+    });
+
+    it('badge INCLUDES docked records (must match the sheet row count)', () => {
+      const { fixture } = renderMobile(
+        [recordTab('t2', 'Widget A', 0), dockedRecordTab('t3', 'Widget B', 1)], 't2');
+      expect(query(fixture, '.records-pill-count')?.textContent?.trim()).toBe('2');
+    });
+
+    it('still a no-op with zero open records', () => {
+      const { fixture, switcher } = renderMobile([navTab('t1', 'Dashboard')], 't1');
+      fixture.componentInstance.Activate();
+      expect(switcher.Open).not.toHaveBeenCalled();
     });
   });
 });

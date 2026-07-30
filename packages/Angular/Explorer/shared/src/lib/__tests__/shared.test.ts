@@ -55,11 +55,15 @@ vi.mock('@memberjunction/core-entities', () => ({
   },
 }));
 
+const globalObjectStore: Record<string, unknown> = {};
 vi.mock('@memberjunction/global', () => ({
   MJGlobal: { Instance: { GetEventListener: vi.fn(() => ({ subscribe: vi.fn() })) } },
   MJEventType: { LoggedIn: 'LoggedIn', ComponentEvent: 'ComponentEvent' },
   ConvertMarkdownStringToHtmlList: vi.fn((type: string, text: string) => `<${type}>${text}</${type}>`),
   InvokeManualResize: vi.fn(),
+  // record-open-style.ts keeps its style state on the global object store
+  // (Vite chunk-duplication guard) — the mock needs a working store
+  GetGlobalObjectStore: vi.fn(() => globalObjectStore),
 }));
 
 vi.mock('@memberjunction/ai-engine-base', () => ({
@@ -171,7 +175,9 @@ describe('TitleService', () => {
   beforeEach(async () => {
     const mod = await import('../title.service');
     const { Title } = await import('@angular/platform-browser');
-    service = new mod.TitleService(new Title(document));
+    // node environment — Angular's Title only reads/writes document.title
+    const fakeDocument = { title: '' } as Document;
+    service = new mod.TitleService(new Title(fakeDocument));
   });
 
   it('should have default base title of MemberJunction', () => {
@@ -254,7 +260,9 @@ describe('SharedService resource type mapping', () => {
     const svc = new SharedService(mjNotif as never, injector as never);
 
     expect(svc.mapResourceTypeNameToRouteSegment('Records')).toBe('record');
-    expect(svc.mapResourceTypeNameToRouteSegment('MJ: User Views')).toBe('view');
+    // ResourceType record NAMES are unprefixed ('User Views' in the v5
+    // baseline) — the 'MJ: ' prefix belongs to entity names, not resource types
+    expect(svc.mapResourceTypeNameToRouteSegment('User Views')).toBe('view');
     expect(svc.mapResourceTypeNameToRouteSegment('Dashboards')).toBe('dashboard');
     expect(svc.mapResourceTypeNameToRouteSegment('Reports')).toBe('report');
     expect(svc.mapResourceTypeNameToRouteSegment('Search Results')).toBe('search');

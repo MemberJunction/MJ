@@ -22,8 +22,32 @@
     <!-- Origin crumbs are PANE-LEVEL now (first element inside each record
          pane — see RecordOriginCrumbComponent); the region needs no bar. -->
     <div class="records-region" [class.region-hidden]="!ShowRecordsRegion">
+      <!-- MOBILE: the GL tab strip is unusable at phone widths (one tab
+           fits, no overflow UI) — the record bar replaces it and opens the
+           record switcher sheet. The GL itself runs headerless (HideHeaders). -->
+      @if (IsMobileRecords) {
+        <mj-record-bar
+          [Title]="RecordBarTitle"
+          [Icon]="RecordBarIcon"
+          [Color]="RecordBarColor"
+          [Count]="OpenRecordCount"
+          (SwitcherRequested)="OpenRecordSwitcher()">
+        </mj-record-bar>
+      }
       <div #recordsGlContainer class="records-gl-container"></div>
     </div>
+
+    <!-- MOBILE record switcher: bottom sheet listing ALL open records
+         (region + docked). Fixed-position — DOM location here is
+         visual-neutral; living in tab-container keeps close routing on the
+         same path as the tab context menu. -->
+    <mj-record-switcher-sheet
+      [Entries]="SwitcherEntries"
+      [Visible]="RecordSwitcherVisible"
+      (VisibleChange)="OnSwitcherVisibleChange($event)"
+      (ActivateRequested)="OnSwitcherActivate($event)"
+      (CloseRequested)="OnSwitcherClose($event)">
+    </mj-record-switcher-sheet>
   }
 
   <!-- Context Menu (only relevant in multi-tab mode). Real buttons with
