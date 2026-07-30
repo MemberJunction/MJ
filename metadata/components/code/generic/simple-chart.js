@@ -37,19 +37,46 @@ function SimpleChart({
   const [error, setError] = React.useState(null);
   const [entityInfo, setEntityInfo] = React.useState(null);
 
-  // Modern color palette - balanced saturation for polished dashboards
-  const defaultColors = [
-    '#4a90d9', // Steel blue
-    '#6abf69', // Soft green
-    '#f0a030', // Warm amber
-    '#e8665d', // Soft red
-    '#9270ca', // Soft purple
-    '#45b5b5', // Teal
-    '#e87040', // Soft coral
-    '#5c7cfa', // Periwinkle
-    '#8cc63f', // Olive green
-    '#d66ba0'  // Dusty rose
-  ];
+  // Theme tokens. Previous hardcoded values are kept as fallbacks for a host that
+  // renders this component without styles.
+  const themeColors = styles?.colors || {};
+  const surfaceColor = themeColors.background || '#fff';
+  const surfaceAltColor = themeColors.surface || '#f5f5f5';
+  const mutedColor = themeColors.textSecondary || '#666';
+  const subtleColor = themeColors.textTertiary || '#999';
+  const inverseColor = themeColors.textInverse || '#fff';
+  const gridColor = themeColors.borderLight || themeColors.border || '#f0f0f0';
+  const borderColor = themeColors.border || '#d9d9d9';
+  const errorColor = themeColors.error || '#ff4d4f';
+
+  // Translucent version of a themed color, for area fills. Without this the fill
+  // stays blue while the series line follows the theme.
+  const withAlpha = (color, alpha) => {
+    if (typeof color !== 'string') return `rgba(24, 144, 255, ${alpha})`;
+    const hex = color.trim().replace('#', '');
+    const full = hex.length === 3 ? hex.split('').map(ch => ch + ch).join('') : hex;
+    if (!/^[0-9a-fA-F]{6}$/.test(full)) return color;
+    const int = parseInt(full, 16);
+    return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
+  };
+
+  // Series colors come from the theme's chart palette, which is also where the host
+  // resolves an organization default or a user-requested palette. The literal list is
+  // only the last-resort fallback; an explicit `colors` prop still wins over both.
+  const defaultColors = (styles?.chartPalette && styles.chartPalette.length > 0)
+    ? styles.chartPalette
+    : [
+        '#4a90d9', // Steel blue
+        '#6abf69', // Soft green
+        '#f0a030', // Warm amber
+        '#e8665d', // Soft red
+        '#9270ca', // Soft purple
+        '#45b5b5', // Teal
+        '#e87040', // Soft coral
+        '#5c7cfa', // Periwinkle
+        '#8cc63f', // Olive green
+        '#d66ba0'  // Dusty rose
+      ];
 
   // Load entity metadata
   React.useEffect(() => {
@@ -410,10 +437,10 @@ function SimpleChart({
               backgroundColor: isPieOrDoughnut
                 ? (colors || defaultColors).slice(0, processData.values.length)
                 : isLineOrArea
-                  ? 'rgba(24, 144, 255, 0.2)'
+                  ? withAlpha((colors || defaultColors)[0], 0.2)
                   : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar
               borderColor: isPieOrDoughnut
-                ? '#fff'
+                ? surfaceColor
                 : isLineOrArea
                   ? (colors || defaultColors)[0]
                   : (colors || defaultColors).slice(0, processData.values.length),
@@ -422,7 +449,7 @@ function SimpleChart({
               fill: actualChartType === 'area',
               tension: isLineOrArea ? 0.35 : undefined,
               pointRadius: isLineOrArea ? 4 : undefined,
-              pointBackgroundColor: isLineOrArea ? '#fff' : undefined,
+              pointBackgroundColor: isLineOrArea ? surfaceColor : undefined,
               pointBorderWidth: isLineOrArea ? 2 : undefined,
               pointHoverRadius: isLineOrArea ? 7 : undefined
             }]
@@ -455,7 +482,7 @@ function SimpleChart({
           arc: {
             hoverOffset: 6,
             hoverBorderWidth: 2,
-            hoverBorderColor: '#fff'
+            hoverBorderColor: surfaceColor
           },
           line: {
             hoverBorderWidth: 4
@@ -463,7 +490,7 @@ function SimpleChart({
           point: {
             hoverRadius: 7,
             hoverBorderWidth: 2,
-            hoverBackgroundColor: '#fff'
+            hoverBackgroundColor: surfaceColor
           }
         },
         onHover: (event, activeElements) => {
@@ -568,10 +595,12 @@ function SimpleChart({
           datalabels: showDataLabels ? {
             display: true,
             formatter: (value) => formatValue(value),
-            color: isPieOrDoughnut ? '#fff' : '#666'
+            color: isPieOrDoughnut ? inverseColor : mutedColor
           } : undefined,
           tooltip: {
-            backgroundColor: 'rgba(30, 30, 30, 0.9)',
+            backgroundColor: withAlpha(themeColors.text || '#1e1e1e', 0.9),
+            titleColor: surfaceColor,
+            bodyColor: surfaceColor,
             titleFont: {
               size: 13,
               weight: 600
@@ -614,7 +643,7 @@ function SimpleChart({
           stacked: isStacked,
           border: { display: false },
           grid: {
-            color: '#f0f0f0',
+            color: gridColor,
             drawTicks: false
           },
           ticks: {
@@ -746,11 +775,11 @@ function SimpleChart({
         justifyContent: 'center', 
         alignItems: 'center', 
         height: height,
-        color: '#ff4d4f',
+        color: errorColor,
         padding: '20px'
       }}>
         <div>Error rendering chart</div>
-        <div style={{ fontSize: '12px', marginTop: '8px', color: '#999' }}>{error}</div>
+        <div style={{ fontSize: '12px', marginTop: '8px', color: subtleColor }}>{error}</div>
       </div>
     );
   }
@@ -763,8 +792,8 @@ function SimpleChart({
         justifyContent: 'center', 
         alignItems: 'center', 
         height: height,
-        color: '#999',
-        backgroundColor: '#f5f5f5',
+        color: subtleColor,
+        backgroundColor: surfaceAltColor,
         borderRadius: '4px'
       }}>
         No data available to display
@@ -782,8 +811,8 @@ function SimpleChart({
             style={{
               padding: '4px 8px',
               fontSize: '12px',
-              backgroundColor: '#fff',
-              border: '1px solid #d9d9d9',
+              backgroundColor: surfaceColor,
+              border: `1px solid ${borderColor}`,
               borderRadius: '4px',
               cursor: 'pointer',
               display: 'flex',

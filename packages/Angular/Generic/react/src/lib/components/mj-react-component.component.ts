@@ -18,7 +18,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject, BaseEventArgs } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject, BaseEventArgs, StyleOverrides } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import {
@@ -29,6 +29,7 @@ import {
   ResolvedComponents,
   SetupStyles,
   BuildStylesFromTheme,
+  ApplyStyleOverrides,
   wrapWithLibraryThemeProviders,
   ComponentRegistryService,
   resolveUserStateScope,
@@ -223,9 +224,10 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     this._styles = value;
   }
   get styles(): Partial<ComponentStyles> {
-    // An explicitly-provided styles input always wins.
+    // An explicitly-provided styles input always wins — but user-requested overrides
+    // still layer on top, since they represent an explicit request rather than a theme.
     if (this._styles) {
-      return this._styles;
+      return ApplyStyleOverrides(this._styles as ComponentStyles, this.styleOverrides);
     }
     // Otherwise bridge the host's live MJ theme (--mj-* tokens) into ComponentStyles
     // so generated components inherit the active theme — including dark mode and
@@ -239,7 +241,18 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
         console.log(`MJReactComponent: Bridged styles from live theme (key="${key}")`);
       }
     }
-    return this._themeStyles;
+    // Applied outside the theme memo so the spec's overrides survive a theme flip
+    // (the memo caches the theme, not the request).
+    return ApplyStyleOverrides(this._themeStyles, this.styleOverrides);
+  }
+
+  /**
+   * Explicitly user-requested styling from the spec being rendered, resolved above
+   * the theme. Reads the resolved spec when available (registry components resolve
+   * asynchronously) and falls back to the spec passed in.
+   */
+  private get styleOverrides(): StyleOverrides | undefined {
+    return this.resolvedComponentSpec?.styleOverrides ?? this._component?.styleOverrides;
   }
 
   /**

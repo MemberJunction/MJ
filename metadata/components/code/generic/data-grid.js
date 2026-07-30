@@ -76,49 +76,77 @@ function DataGrid({
     }
   };
   
-  // Color mapping for common status values (darker for better contrast with white text)
-  const statusColorMap = {
-    // Green colors for positive states
-    active: '#389e0d',      // darker green
-    approved: '#52c41a',    // green
-    complete: '#237804',    // dark green
-    completed: '#135200',   // very dark green
-    success: '#3f6600',     // olive green
-    successful: '#5b8c00',  // light olive
-    enabled: '#7cb305',     // lime
-    published: '#a0d911',   // light lime
-    
-    // Red colors for negative states
-    inactive: '#cf1322',    // darker red
-    rejected: '#f5222d',    // red
-    failed: '#a8071a',      // dark red
-    error: '#820014',       // very dark red
-    disabled: '#ff4d4f',    // light red
-    cancelled: '#ff7875',   // salmon
-    canceled: '#ff9c9c',    // light salmon
-    terminated: '#873800',  // burnt orange
-    expired: '#ad4e00',     // dark orange
-    deprecated: '#d4380d',  // rust orange
-    
-    // Yellow/Orange for pending states
-    pending: '#d48806',     // darker orange
-    paused: '#fa8c16',      // orange
-    temporary: '#faad14',   // gold
-    draft: '#d4b106',       // dark gold
-    review: '#ad8b00',      // darker gold
-    waiting: '#ffc53d',     // light gold
-    
-    // Blue for informational states
-    processing: '#096dd9',  // darker blue
-    running: '#1890ff',     // blue
-    inprogress: '#0050b3',  // dark blue
-    'in progress': '#003a8c', // very dark blue
-    'in-progress': '#40a9ff' // light blue
+  // Theme tokens, with the previous hardcoded values kept as fallbacks for a host
+  // that renders this component without styles.
+  const themeColors = styles?.colors || {};
+
+  // Shifts a hex color toward black (negative) or white (positive) by `pct`.
+  const shade = (hex, pct) => {
+    if (typeof hex !== 'string') return hex;
+    const raw = hex.trim().replace('#', '');
+    const full = raw.length === 3 ? raw.split('').map(ch => ch + ch).join('') : raw;
+    if (!/^[0-9a-fA-F]{6}$/.test(full)) return hex;
+    const int = parseInt(full, 16);
+    const mix = (channel) => {
+      const target = pct < 0 ? 0 : 255;
+      const moved = channel + ((target - channel) * Math.abs(pct)) / 100;
+      return Math.max(0, Math.min(255, Math.round(moved)));
+    };
+    const out = [(int >> 16) & 255, (int >> 8) & 255, int & 255].map(mix);
+    return `#${out.map(v => v.toString(16).padStart(2, '0')).join('')}`;
   };
-  
-  // 50 distinct colors for value lists (excluding colors used in statusColorMap)
-  // These are carefully selected to be visually distinct from each other
-  const fallbackColors = [
+
+  // Value pills render as antd <Tag color={hex}>, which puts WHITE text on a custom
+  // color. A theme whose status colors are light would therefore produce white-on-light
+  // and unreadable pills, so every pill color is darkened until it can carry white text.
+  const darkenForWhiteText = (hex) => {
+    let current = hex;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const raw = current.trim().replace('#', '');
+      const full = raw.length === 3 ? raw.split('').map(ch => ch + ch).join('') : raw;
+      if (!/^[0-9a-fA-F]{6}$/.test(full)) return current;
+      const int = parseInt(full, 16);
+      const [r, g, b] = [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+      // Perceived luminance (ITU-R BT.601), good enough to decide "too light for white".
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      if (luminance <= 0.5) return current;
+      current = shade(current, -20);
+    }
+    return current;
+  };
+
+  // Status families. Each family's hue now comes from the theme, while the shade ramp
+  // keeps values inside a family distinguishable the way the original palette did.
+  const statusFamilies = [
+    { token: 'success', fallback: '#389e0d', statuses: ['active', 'approved', 'complete', 'completed', 'success', 'successful', 'enabled', 'published'] },
+    { token: 'error', fallback: '#cf1322', statuses: ['inactive', 'rejected', 'failed', 'error', 'disabled', 'cancelled', 'canceled'] },
+    { token: 'warning', fallback: '#d48806', statuses: ['terminated', 'expired', 'deprecated', 'pending', 'paused', 'temporary', 'draft', 'review', 'waiting'] },
+    { token: 'info', fallback: '#096dd9', statuses: ['processing', 'running', 'inprogress', 'in progress', 'in-progress'] }
+  ];
+
+  // Only a parseable hex base can be shaded. A theme expressing a status as a named
+  // CSS color ('lime') or rgb() would otherwise pass through unshaded, collapsing a
+  // whole family to one color AND skipping the readability check.
+  const asHex = (color) =>
+    (typeof color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color.trim()))
+      ? color.trim()
+      : null;
+
+  const statusColorMap = {};
+  statusFamilies.forEach(family => {
+    const base = asHex(themeColors[family.token]) || family.fallback;
+    const span = Math.max(1, family.statuses.length - 1);
+    family.statuses.forEach((name, index) => {
+      // -35% (darkest) through +15% (lightest) across the family.
+      const pct = -35 + Math.round((50 * index) / span);
+      statusColorMap[name] = darkenForWhiteText(shade(base, pct));
+    });
+  });
+
+  // Categorical colors for arbitrary value lists. The theme's chart palette is exactly
+  // this — distinct series colors — and is also where the host resolves an organization
+  // default or a user-requested palette. The literal list stays as the fallback.
+  const builtInFallbackColors = [
     '#722ed1', // purple
     '#9254de', // light purple
     '#531dab', // dark purple
@@ -179,6 +207,10 @@ function DataGrid({
     '#b8860b', // dark goldenrod
     '#ff6347'  // tomato
   ];
+
+  const fallbackColors = (styles?.chartPalette && styles.chartPalette.length > 0)
+    ? styles.chartPalette.map(darkenForWhiteText)
+    : builtInFallbackColors;
   
   // Get color for a value in a value list - ensures unique colors for all values
   const getValueColor = (value, possibleValues) => {

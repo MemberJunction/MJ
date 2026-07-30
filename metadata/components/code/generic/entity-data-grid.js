@@ -33,6 +33,51 @@ function EntityDataGrid({
   // Get DataGrid component from registry
   const { DataGrid } = components;
 
+  // Theme tokens, with the previous hardcoded values kept as fallbacks for a host
+  // that renders this component without styles.
+  const themeColors = styles?.colors || {};
+  const textColor = themeColors.text || '#262626';
+  const bodyColor = themeColors.textSecondary || '#595959';
+  const mutedColor = themeColors.textTertiary || '#8c8c8c';
+  const disabledColor = themeColors.textTertiary || '#bfbfbf';
+  const surfaceColor = themeColors.background || '#fff';
+  const surfaceAltColor = themeColors.surface || '#fafafa';
+  const surfaceMutedColor = themeColors.surfaceHover || '#f5f5f5';
+  const borderColor = themeColors.border || '#d9d9d9';
+  const borderLightColor = themeColors.borderLight || '#f0f0f0';
+  const primaryColor = themeColors.primary || '#1890ff';
+  const errorColor = themeColors.error || '#ff4d4f';
+  const errorStrongColor = themeColors.error || '#cf1322';
+  const errorSurfaceColor = themeColors.errorLight || '#fff2f0';
+  const successColor = themeColors.success || '#389e0d';
+  const successSurfaceColor = themeColors.successLight || '#f6ffed';
+  const successBorderColor = themeColors.success || '#b7eb8f';
+  const warningColor = themeColors.warning || '#d48806';
+  const warningStrongColor = themeColors.warning || '#d46b08';
+  const warningTextColor = themeColors.warning || '#8c6c00';
+  const warningSurfaceColor = themeColors.warningLight || '#fffbe6';
+  const warningSurfaceAltColor = themeColors.warningLight || '#fff7e6';
+  const warningBorderColor = themeColors.warning || '#ffe58f';
+  const warningBorderAltColor = themeColors.warning || '#ffd591';
+  const infoColor = themeColors.info || '#096dd9';
+  const infoStrongColor = themeColors.info || '#0050b3';
+  const infoSurfaceColor = themeColors.infoLight || '#e6f7ff';
+  const infoBorderColor = themeColors.info || '#91d5ff';
+  // Translucent version of a themed color. Appending hex alpha to the token directly
+  // would break on any theme that expresses background as rgb() or a named color.
+  const withAlpha = (color, alpha, fallback) => {
+    if (typeof color !== 'string') return fallback;
+    const hex = color.trim().replace('#', '');
+    const full = hex.length === 3 ? hex.split('').map(ch => ch + ch).join('') : hex;
+    if (!/^[0-9a-fA-F]{6}$/.test(full)) return fallback;
+    const int = parseInt(full, 16);
+    return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
+  };
+  const scrimColor = withAlpha(themeColors.background, 0.85, 'rgba(255, 255, 255, 0.85)');
+  const overlayColor = withAlpha(themeColors.background, 0.7, 'rgba(255, 255, 255, 0.7)');
+  const shadowColor = themeColors.shadowLarge || 'rgba(0,0,0,0.15)';
+  const shadowSoftColor = themeColors.shadowMedium || 'rgba(0,0,0,0.1)';
+
   // State management for adaptive caching
   const [data, setData] = React.useState(null); // Current page data for display
   const [allDataCache, setAllDataCache] = React.useState(null); // Full cache mode: all records
@@ -635,14 +680,14 @@ function EntityDataGrid({
     return (
       <div style={{
         padding: '24px',
-        border: '1px solid #ff4d4f',
+        border: `1px solid ${errorColor}`,
         borderRadius: '4px',
-        backgroundColor: '#fff2f0',
+        backgroundColor: errorSurfaceColor,
         textAlign: 'center'
       }}>
         <div style={{
           fontSize: '48px',
-          color: '#ff4d4f',
+          color: errorColor,
           marginBottom: '16px'
         }}>
           ⚠️
@@ -650,14 +695,14 @@ function EntityDataGrid({
         <div style={{
           fontSize: '16px',
           fontWeight: 600,
-          color: '#cf1322',
+          color: errorStrongColor,
           marginBottom: '8px'
         }}>
           Unable to Load Data
         </div>
         <div style={{
           fontSize: '14px',
-          color: '#595959',
+          color: bodyColor,
           marginBottom: '4px'
         }}>
           {error}
@@ -665,10 +710,10 @@ function EntityDataGrid({
         {extraFilter && (
           <div style={{
             fontSize: '12px',
-            color: '#8c8c8c',
+            color: mutedColor,
             marginTop: '8px',
             fontFamily: 'monospace',
-            backgroundColor: '#fafafa',
+            backgroundColor: surfaceAltColor,
             padding: '8px',
             borderRadius: '4px',
             display: 'inline-block'
@@ -681,7 +726,7 @@ function EntityDataGrid({
             onClick={handleRefresh}
             style={{
               padding: '8px 16px',
-              backgroundColor: '#1890ff',
+              backgroundColor: primaryColor,
               color: 'white',
               border: 'none',
               borderRadius: '4px',
@@ -703,7 +748,7 @@ function EntityDataGrid({
       <div style={{
         padding: '60px 24px',
         textAlign: 'center',
-        color: '#595959'
+        color: bodyColor
       }}>
         <div style={{
           fontSize: '48px',
@@ -730,10 +775,10 @@ function EntityDataGrid({
     return (
       <div style={{
         padding: '24px',
-        border: '1px solid #ff4d4f',
+        border: `1px solid ${errorColor}`,
         borderRadius: '4px',
-        backgroundColor: '#fff2f0',
-        color: '#cf1322',
+        backgroundColor: errorSurfaceColor,
+        color: errorStrongColor,
         textAlign: 'center'
       }}>
         Error: DataGrid component not found. Please ensure DataGrid is properly registered.
@@ -749,11 +794,11 @@ function EntityDataGrid({
         <div style={{
           marginBottom: '12px',
           padding: '8px 12px',
-          backgroundColor: cacheMode === 'full' ? '#f6ffed' : '#fff7e6',
-          border: `1px solid ${cacheMode === 'full' ? '#b7eb8f' : '#ffd591'}`,
+          backgroundColor: cacheMode === 'full' ? successSurfaceColor : warningSurfaceAltColor,
+          border: `1px solid ${cacheMode === 'full' ? successBorderColor : warningBorderAltColor}`,
           borderRadius: '4px',
           fontSize: '13px',
-          color: cacheMode === 'full' ? '#389e0d' : '#d48806',
+          color: cacheMode === 'full' ? successColor : warningColor,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
@@ -788,15 +833,15 @@ function EntityDataGrid({
         <div style={{
           marginBottom: '12px',
           padding: '12px 16px',
-          backgroundColor: '#fffbe6',
-          border: '1px solid #ffe58f',
+          backgroundColor: warningSurfaceColor,
+          border: `1px solid ${warningBorderColor}`,
           borderRadius: '4px',
           fontSize: '14px'
         }}>
-          <div style={{ fontWeight: 600, color: '#d46b08', marginBottom: '4px' }}>
+          <div style={{ fontWeight: 600, color: warningStrongColor, marginBottom: '4px' }}>
             ⚠️ Viewing Partial Results
           </div>
-          <div style={{ color: '#8c6c00' }}>
+          <div style={{ color: warningTextColor }}>
             Loading {totalRecords?.toLocaleString()} records in paginated mode. Sorting and text search operate on current page only. For full-dataset operations, use 'extraFilter' to reduce total records or increase 'maxCachedRows'.
           </div>
         </div>
@@ -807,8 +852,8 @@ function EntityDataGrid({
         <div style={{
           marginBottom: '12px',
           padding: '12px 16px',
-          backgroundColor: '#e6f7ff',
-          border: '1px solid #91d5ff',
+          backgroundColor: infoSurfaceColor,
+          border: `1px solid ${infoBorderColor}`,
           borderRadius: '4px',
           fontSize: '14px',
           display: 'flex',
@@ -816,10 +861,10 @@ function EntityDataGrid({
           alignItems: 'center'
         }}>
           <div>
-            <div style={{ fontWeight: 600, color: '#0050b3', marginBottom: '4px' }}>
+            <div style={{ fontWeight: 600, color: infoStrongColor, marginBottom: '4px' }}>
               🔍 Searching {searchableData.length.toLocaleString()} of {totalRecords?.toLocaleString()} records
             </div>
-            <div style={{ color: '#096dd9' }}>
+            <div style={{ color: infoColor }}>
               Text search filters cached data only. Some matches may not be visible.
               Component designers can increase 'maxCachedRows' or use 'extraFilter' for complete database-level search.
             </div>
@@ -832,7 +877,7 @@ function EntityDataGrid({
               border: 'none',
               cursor: 'pointer',
               fontSize: '16px',
-              color: '#096dd9'
+              color: infoColor
             }}
           >
             ✕
@@ -872,7 +917,7 @@ function EntityDataGrid({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(255, 255, 255, 0.7)',
+            backgroundColor: overlayColor,
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
@@ -880,10 +925,10 @@ function EntityDataGrid({
           }}>
             <div style={{
               padding: '16px 24px',
-              backgroundColor: '#fff',
-              border: '1px solid #d9d9d9',
+              backgroundColor: surfaceColor,
+              border: `1px solid ${borderColor}`,
               borderRadius: '4px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              boxShadow: `0 2px 8px ${shadowColor}`,
               display: 'flex',
               alignItems: 'center',
               gap: '12px'
@@ -891,12 +936,12 @@ function EntityDataGrid({
               <div style={{
                 width: '20px',
                 height: '20px',
-                border: '3px solid #f0f0f0',
-                borderTop: '3px solid #1890ff',
+                border: `3px solid ${borderLightColor}`,
+                borderTop: `3px solid ${primaryColor}`,
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite'
               }} />
-              <span style={{ fontSize: '14px', color: '#595959' }}>Sorting...</span>
+              <span style={{ fontSize: '14px', color: bodyColor }}>Sorting...</span>
             </div>
           </div>
         )}
@@ -917,10 +962,10 @@ function EntityDataGrid({
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '12px 0',
-        borderTop: '1px solid #f0f0f0'
+        borderTop: `1px solid ${borderLightColor}`
       }}>
         {/* Pagination info */}
-        <div style={{ fontSize: '14px', color: '#595959' }}>
+        <div style={{ fontSize: '14px', color: bodyColor }}>
           {totalRecords != null ? (
             <span>
               {paginationInfo.startRecord}-{paginationInfo.endRecord} of {totalRecords.toLocaleString()} {entityName || 'records'}
@@ -937,13 +982,13 @@ function EntityDataGrid({
           {/* Page size selector */}
           {showPageSizeChanger && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '14px', color: '#595959' }}>Show:</span>
+              <span style={{ fontSize: '14px', color: bodyColor }}>Show:</span>
               <select
                 value={currentPageSize}
                 onChange={(e) => handlePageSizeChange(Number(e.target.value))}
                 style={{
                   padding: '4px 8px',
-                  border: '1px solid #d9d9d9',
+                  border: `1px solid ${borderColor}`,
                   borderRadius: '4px',
                   fontSize: '14px',
                   cursor: 'pointer'
@@ -964,22 +1009,22 @@ function EntityDataGrid({
             disabled={!paginationInfo.hasPrevious || loading}
             style={{
               padding: '6px 12px',
-              backgroundColor: paginationInfo.hasPrevious && !loading ? '#fff' : '#f5f5f5',
-              border: '1px solid #d9d9d9',
+              backgroundColor: paginationInfo.hasPrevious && !loading ? surfaceColor : surfaceMutedColor,
+              border: `1px solid ${borderColor}`,
               borderRadius: '4px',
               cursor: paginationInfo.hasPrevious && !loading ? 'pointer' : 'not-allowed',
               fontSize: '14px',
-              color: paginationInfo.hasPrevious && !loading ? '#262626' : '#bfbfbf'
+              color: paginationInfo.hasPrevious && !loading ? textColor : disabledColor
             }}
           >
             ← Previous
           </button>
 
           {/* Page indicator */}
-          <span style={{ fontSize: '14px', color: '#262626', fontWeight: 500 }}>
+          <span style={{ fontSize: '14px', color: textColor, fontWeight: 500 }}>
             Page {currentPage}
             {paginationInfo.totalPages != null && (
-              <span style={{ color: '#8c8c8c' }}> of {paginationInfo.totalPages}</span>
+              <span style={{ color: mutedColor }}> of {paginationInfo.totalPages}</span>
             )}
           </span>
 
@@ -989,12 +1034,12 @@ function EntityDataGrid({
             disabled={!paginationInfo.hasNext || loading}
             style={{
               padding: '6px 12px',
-              backgroundColor: paginationInfo.hasNext && !loading ? '#fff' : '#f5f5f5',
-              border: '1px solid #d9d9d9',
+              backgroundColor: paginationInfo.hasNext && !loading ? surfaceColor : surfaceMutedColor,
+              border: `1px solid ${borderColor}`,
               borderRadius: '4px',
               cursor: paginationInfo.hasNext && !loading ? 'pointer' : 'not-allowed',
               fontSize: '14px',
-              color: paginationInfo.hasNext && !loading ? '#262626' : '#bfbfbf'
+              color: paginationInfo.hasNext && !loading ? textColor : disabledColor
             }}
           >
             Next →
@@ -1010,7 +1055,7 @@ function EntityDataGrid({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          backgroundColor: scrimColor,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -1019,12 +1064,12 @@ function EntityDataGrid({
         }}>
           <div style={{
             padding: '16px 32px',
-            backgroundColor: '#fff',
-            border: '1px solid #d9d9d9',
+            backgroundColor: surfaceColor,
+            border: `1px solid ${borderColor}`,
             borderRadius: '4px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            boxShadow: `0 2px 8px ${shadowSoftColor}`,
             fontSize: '14px',
-            color: '#595959'
+            color: bodyColor
           }}>
             ⏳ Loading page {currentPage}...
           </div>

@@ -19,6 +19,21 @@ function SingleRecordView({
   savedUserSettings,
   onSaveUserSettings
 }) {
+  // Theme tokens, with the previous hardcoded values kept as fallbacks for a host
+  // that renders this component without styles.
+  const colors = styles?.colors || {};
+  const textColor = colors.text || '#333';
+  const labelColor = colors.textSecondary || '#666';
+  const mutedColor = colors.textTertiary || '#999';
+  const inverseColor = colors.textInverse || '#fff';
+  const borderColor = colors.border || '#d9d9d9';
+  const borderLightColor = colors.borderLight || '#f0f0f0';
+  const surfaceColor = colors.background || '#fff';
+  const primaryColor = colors.primary || '#3B82F6';
+  const warningSurfaceColor = colors.warningLight || '#fffbe6';
+  const warningBorderColor = colors.warning || '#ffe58f';
+  const shadowColor = colors.shadow || 'rgba(0,0,0,0.05)';
+
   const [entityInfo, setEntityInfo] = React.useState(null);
 
   // Get OpenRecordButton component from registry if needed
@@ -116,8 +131,8 @@ function SingleRecordView({
           <button
             style={{
               padding: '8px 16px',
-              backgroundColor: '#3B82F6',
-              color: '#fff',
+              backgroundColor: primaryColor,
+              color: inverseColor,
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -151,7 +166,7 @@ function SingleRecordView({
   // Format value based on field type
   const formatValue = (value, fieldInfo) => {
     if (value == null || value === '') {
-      return showEmptyFields ? <span style={{ color: '#999', fontStyle: 'italic' }}>Empty</span> : null;
+      return showEmptyFields ? <span style={{ color: mutedColor, fontStyle: 'italic' }}>Empty</span> : null;
     }
     
     // Handle different field types
@@ -284,10 +299,10 @@ function SingleRecordView({
     };
     
     const highlightStyle = isHighlighted ? {
-      backgroundColor: '#fffbe6',
+      backgroundColor: warningSurfaceColor,
       padding: '4px 8px',
       borderRadius: '4px',
-      border: '1px solid #ffe58f'
+      border: `1px solid ${warningBorderColor}`
     } : {};
     
     if (layout === 'list' 
@@ -304,7 +319,7 @@ function SingleRecordView({
           {showLabels && (
             <div style={{ 
               fontWeight: 500, 
-              color: '#666', 
+              color: labelColor, 
               fontSize: '12px',
               marginBottom: '4px',
               textTransform: 'uppercase'
@@ -314,7 +329,7 @@ function SingleRecordView({
           )}
           <div style={{ 
             fontSize: '14px', 
-            color: '#333',
+            color: textColor,
             ...fieldStyle
           }}>
             {formattedValue || '-'}
@@ -333,7 +348,7 @@ function SingleRecordView({
           {showLabels && (
             <td style={{ 
               fontWeight: 500, 
-              color: '#666', 
+              color: labelColor, 
               fontSize: '14px',
               padding: '8px',
               width: labelWidth,
@@ -344,7 +359,7 @@ function SingleRecordView({
           )}
           <td style={{ 
             fontSize: '14px', 
-            color: '#333',
+            color: textColor,
             padding: '8px',
             ...fieldStyle
           }}>
@@ -368,7 +383,7 @@ function SingleRecordView({
           {showLabels && (
             <span style={{ 
               fontWeight: 500, 
-              color: '#666', 
+              color: labelColor, 
               fontSize: '12px',
               marginRight: '4px'
             }}>
@@ -377,7 +392,7 @@ function SingleRecordView({
           )}
           <span style={{ 
             fontSize: '14px', 
-            color: '#333',
+            color: textColor,
             ...fieldStyle
           }}>
             {formattedValue || '-'}
@@ -395,7 +410,7 @@ function SingleRecordView({
       <div style={{ 
         padding: '20px', 
         textAlign: 'center', 
-        color: '#999' 
+        color: mutedColor 
       }}>
         No record to display
       </div>
@@ -408,15 +423,15 @@ function SingleRecordView({
   if (layout === 'card') {
     return (
       <div style={{
-        border: '1px solid #d9d9d9',
+        border: `1px solid ${borderColor}`,
         borderRadius: '8px',
         padding: '16px',
-        backgroundColor: '#fff',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+        backgroundColor: surfaceColor,
+        boxShadow: `0 2px 4px ${shadowColor}`
       }}>
         {displayFields.map(renderField)}
         {allowOpenRecord && WrappedOpenRecordButton && (
-          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f0f0f0' }}>
+          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: `1px solid ${borderLightColor}` }}>
             <WrappedOpenRecordButton
               record={record}
               entityName={entityName}

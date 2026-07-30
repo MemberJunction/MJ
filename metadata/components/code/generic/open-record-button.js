@@ -15,6 +15,17 @@ function OpenRecordButton({
   savedUserSettings,
   onSaveUserSettings
 }) {
+  // Theme tokens, with the previous hardcoded values as fallbacks for a host that
+  // renders this component without styles.
+  const colors = styles?.colors || {};
+  const primaryColor = colors.primary || '#3B82F6';
+  const primaryHoverColor = colors.primaryHover || '#2563EB';
+  const linkColor = colors.link || colors.primary || '#1890ff';
+  const linkHoverColor = colors.linkHover || colors.primaryHover || '#40a9ff';
+  const inverseColor = colors.textInverse || '#fff';
+  const subtleHoverColor = colors.surfaceHover || colors.primaryLight || '#f0f5ff';
+  const shadowColor = colors.shadowMedium || 'rgba(0,0,0,0.1)';
+
   // State for button interaction
   const [isHovered, setIsHovered] = React.useState(false);
   const [primaryKeyFields, setPrimaryKeyFields] = React.useState([]);
@@ -143,23 +154,23 @@ function OpenRecordButton({
     // Variant styles
     const variantStyles = {
       primary: {
-        backgroundColor: '#1890ff',
-        color: '#fff',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        backgroundColor: primaryColor,
+        color: inverseColor,
+        boxShadow: `0 2px 4px ${shadowColor}`
       },
       default: {
-        backgroundColor: '#3B82F6',
-        color: '#fff',
+        backgroundColor: primaryColor,
+        color: inverseColor,
         border: 'none'
       },
       text: {
         backgroundColor: 'transparent',
-        color: '#1890ff',
+        color: linkColor,
         padding: '2px 4px'
       },
       link: {
         backgroundColor: 'transparent',
-        color: '#1890ff',
+        color: linkColor,
         textDecoration: 'underline',
         padding: '0'
       }
@@ -178,16 +189,16 @@ function OpenRecordButton({
     
     const hoverStyles = {
       primary: {
-        backgroundColor: '#40a9ff'
+        backgroundColor: primaryHoverColor
       },
       default: {
-        backgroundColor: '#2563EB'
+        backgroundColor: primaryHoverColor
       },
       text: {
-        backgroundColor: '#f0f5ff'
+        backgroundColor: subtleHoverColor
       },
       link: {
-        color: '#40a9ff'
+        color: linkHoverColor
       }
     };
     

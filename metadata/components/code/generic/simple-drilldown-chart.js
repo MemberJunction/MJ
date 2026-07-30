@@ -23,6 +23,20 @@ function SimpleDrilldownChart({
   savedUserSettings,
   onSaveUserSettings
 }) {
+  // Theme tokens, with the previous hardcoded values kept as fallbacks for a host
+  // that renders this component without styles.
+  const colors = styles?.colors || {};
+  const textColor = colors.text || '#333';
+  const mutedColor = colors.textSecondary || '#666';
+  const borderColor = colors.border || '#d9d9d9';
+  const surfaceColor = colors.background || '#fff';
+  const surfaceAltColor = colors.surface || '#fafafa';
+  const primaryColor = colors.primary || '#1890ff';
+  const primaryLightColor = colors.primaryLight || '#f0f5ff';
+  const successColor = colors.success || '#52c41a';
+  const errorColor = colors.error || '#ff4d4f';
+  const accentColor = colors.info || colors.secondary || '#722ed1';
+
   // State for drill-down
   const [selectedSegment, setSelectedSegment] = React.useState(null);
   const [showGrid, setShowGrid] = React.useState(false);
@@ -112,7 +126,7 @@ function SimpleDrilldownChart({
       {/* Chart Section */}
       <div style={{ 
         width: '100%',
-        border: selectedSegment ? '2px solid #1890ff' : 'none',
+        border: selectedSegment ? `2px solid ${primaryColor}` : 'none',
         borderRadius: '8px',
         padding: selectedSegment ? '2px' : '0',
         transition: 'all 0.3s ease'
@@ -142,36 +156,36 @@ function SimpleDrilldownChart({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '12px 16px',
-          backgroundColor: '#f0f5ff',
-          borderLeft: '4px solid #1890ff',
+          backgroundColor: primaryLightColor,
+          borderLeft: `4px solid ${primaryColor}`,
           marginTop: '16px',
           borderRadius: '4px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <div>
-              <strong style={{ color: '#333' }}>Selected:</strong>{' '}
-              <span style={{ color: '#1890ff', fontWeight: 600 }}>
+              <strong style={{ color: textColor }}>Selected:</strong>{' '}
+              <span style={{ color: primaryColor, fontWeight: 600 }}>
                 {selectedSegment.label}
               </span>
             </div>
             <div>
-              <strong style={{ color: '#333' }}>Value:</strong>{' '}
-              <span style={{ color: '#52c41a', fontWeight: 600 }}>
+              <strong style={{ color: textColor }}>Value:</strong>{' '}
+              <span style={{ color: successColor, fontWeight: 600 }}>
                 {typeof selectedSegment.value === 'number' 
                   ? selectedSegment.value.toLocaleString()
                   : selectedSegment.value}
               </span>
             </div>
             <div>
-              <strong style={{ color: '#333' }}>Records:</strong>{' '}
-              <span style={{ color: '#666', fontWeight: 600 }}>
+              <strong style={{ color: textColor }}>Records:</strong>{' '}
+              <span style={{ color: mutedColor, fontWeight: 600 }}>
                 {selectedSegment.records?.length || 0}
               </span>
             </div>
             {selectedSegment.percentage != null && (
               <div>
-                <strong style={{ color: '#333' }}>Percentage:</strong>{' '}
-                <span style={{ color: '#722ed1', fontWeight: 600 }}>
+                <strong style={{ color: textColor }}>Percentage:</strong>{' '}
+                <span style={{ color: accentColor, fontWeight: 600 }}>
                   {selectedSegment.percentage?.toFixed(1)}%
                 </span>
               </div>
@@ -181,21 +195,21 @@ function SimpleDrilldownChart({
             onClick={handleClearSelection}
             style={{
               padding: '6px 12px',
-              backgroundColor: '#fff',
-              border: '1px solid #d9d9d9',
+              backgroundColor: surfaceColor,
+              border: `1px solid ${borderColor}`,
               borderRadius: '4px',
               cursor: 'pointer',
               fontSize: '14px',
-              color: '#333',
+              color: textColor,
               transition: 'all 0.3s'
             }}
             onMouseEnter={(e) => {
-              e.target.style.borderColor = '#1890ff';
-              e.target.style.color = '#1890ff';
+              e.target.style.borderColor = primaryColor;
+              e.target.style.color = primaryColor;
             }}
             onMouseLeave={(e) => {
-              e.target.style.borderColor = '#d9d9d9';
-              e.target.style.color = '#333';
+              e.target.style.borderColor = borderColor;
+              e.target.style.color = textColor;
             }}
           >
             ✕ Clear Selection
@@ -215,7 +229,7 @@ function SimpleDrilldownChart({
             flex: showSingleRecordView && selectedRecord ? '1 1 60%' : '1',
             height: drilldownHeight,
             overflow: 'auto',
-            border: '1px solid #d9d9d9',
+            border: `1px solid ${borderColor}`,
             borderRadius: '4px',
             animation: 'slideDown 0.3s ease'
           }}>
@@ -241,7 +255,7 @@ function SimpleDrilldownChart({
               <div style={{ 
                 padding: '20px', 
                 textAlign: 'center',
-                color: '#ff4d4f'
+                color: errorColor
               }}>
                 Error: DataGrid component not found. Please ensure DataGrid is properly registered.
               </div>
@@ -254,10 +268,10 @@ function SimpleDrilldownChart({
               flex: '1 1 40%',
               height: drilldownHeight,
               overflow: 'auto',
-              border: '1px solid #d9d9d9',
+              border: `1px solid ${borderColor}`,
               borderRadius: '4px',
               padding: '16px',
-              backgroundColor: '#fafafa',
+              backgroundColor: surfaceAltColor,
               animation: 'slideIn 0.3s ease'
             }}>
               <SingleRecordView

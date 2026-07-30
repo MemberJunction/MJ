@@ -80,6 +80,23 @@ function DataExportPanel({
     setSelectedColumns(validateColumns(columns));
   }, [columns]);
   
+  // Theme tokens, with the previous hardcoded values kept as fallbacks for a host
+  // that renders this component without styles.
+  const themeColors = styles?.colors || {};
+  const surfaceColor = themeColors.background || '#ffffff';
+  const surfaceAltColor = themeColors.surface || '#F9FAFB';
+  const surfaceHoverColor = themeColors.surfaceHover || '#F3F4F6';
+  const borderColor = themeColors.border || '#E5E7EB';
+  const borderLightColor = themeColors.borderLight || '#F3F4F6';
+  const controlBorderColor = themeColors.border || '#D1D5DB';
+  const mutedColor = themeColors.textSecondary || '#6B7280';
+  const dividerColor = themeColors.border || '#E5E7EB';
+  const successColor = themeColors.success || '#10B981';
+  const successStrongColor = themeColors.success || '#059669';
+  const errorColor = themeColors.error || '#DC2626';
+  const shadowColor = themeColors.shadowMedium || 'rgba(0, 0, 0, 0.1)';
+  const scrimColor = themeColors.shadowLarge || 'rgba(0, 0, 0, 0.5)';
+
   // Merge default styles with custom styles
   const panelStyles = {
     container: {
@@ -108,9 +125,9 @@ function DataExportPanel({
       right: 0,
       marginTop: '4px',
       backgroundColor: 'white',
-      border: '1px solid #E5E7EB',
+      border: `1px solid ${borderColor}`,
       borderRadius: '8px',
-      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+      boxShadow: `0 4px 6px ${shadowColor}`,
       zIndex: 1000,
       minWidth: '200px',
       ...customStyles.dropdown
@@ -123,7 +140,7 @@ function DataExportPanel({
       gap: '10px',
       fontSize: '14px',
       transition: 'background-color 0.15s',
-      borderBottom: '1px solid #F3F4F6',
+      borderBottom: `1px solid ${borderLightColor}`,
       ...customStyles.dropdownItem
     },
     progressBar: {
@@ -132,7 +149,7 @@ function DataExportPanel({
       left: 0,
       right: 0,
       height: '3px',
-      backgroundColor: '#E5E7EB',
+      backgroundColor: dividerColor,
       borderRadius: '0 0 6px 6px',
       overflow: 'hidden',
       ...customStyles.progressBar
@@ -400,7 +417,7 @@ function DataExportPanel({
             scale: 2,
             logging: false,
             useCORS: true,
-            backgroundColor: '#ffffff',
+            backgroundColor: surfaceColor,
             windowWidth: exportHtmlElement.scrollWidth,
             windowHeight: exportHtmlElement.scrollHeight,
             ignoreElements: (element) => {
@@ -924,7 +941,7 @@ function DataExportPanel({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: scrimColor,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -951,7 +968,7 @@ function DataExportPanel({
                 borderRadius: '4px',
                 transition: 'background-color 0.15s'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = surfaceHoverColor}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                 <input
                   type="checkbox"
@@ -973,7 +990,7 @@ function DataExportPanel({
               onClick={() => setShowColumnSelector(false)}
               style={{
                 padding: '8px 16px',
-                border: '1px solid #D1D5DB',
+                border: `1px solid ${controlBorderColor}`,
                 borderRadius: '6px',
                 backgroundColor: 'white',
                 cursor: 'pointer'
@@ -1014,7 +1031,7 @@ function DataExportPanel({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: scrimColor,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1037,7 +1054,7 @@ function DataExportPanel({
           <div style={{
             flex: 1,
             overflow: 'auto',
-            border: '1px solid #E5E7EB',
+            border: `1px solid ${borderColor}`,
             borderRadius: '6px',
             padding: '10px',
             marginBottom: '16px'
@@ -1049,7 +1066,7 @@ function DataExportPanel({
                     {headers.map((header, idx) => (
                       <th key={idx} style={{
                         padding: '8px',
-                        borderBottom: '2px solid #E5E7EB',
+                        borderBottom: `2px solid ${borderColor}`,
                         textAlign: 'left',
                         fontWeight: '600'
                       }}>
@@ -1065,7 +1082,7 @@ function DataExportPanel({
                     {row.map((cell, cellIdx) => (
                       <td key={cellIdx} style={{
                         padding: '8px',
-                        borderBottom: '1px solid #F3F4F6'
+                        borderBottom: `1px solid ${borderLightColor}`
                       }}>
                         {cell}
                       </td>
@@ -1075,7 +1092,7 @@ function DataExportPanel({
               </tbody>
             </table>
             {rows.length > 10 && (
-              <p style={{ textAlign: 'center', color: '#6B7280', marginTop: '10px' }}>
+              <p style={{ textAlign: 'center', color: mutedColor, marginTop: '10px' }}>
                 ... and {rows.length - 10} more rows
               </p>
             )}
@@ -1089,7 +1106,7 @@ function DataExportPanel({
               }}
               style={{
                 padding: '8px 16px',
-                border: '1px solid #D1D5DB',
+                border: `1px solid ${controlBorderColor}`,
                 borderRadius: '6px',
                 backgroundColor: 'white',
                 cursor: 'pointer'
@@ -1230,7 +1247,7 @@ function DataExportPanel({
             <div
               style={{
                 ...panelStyles.dropdownItem,
-                backgroundColor: '#F9FAFB'
+                backgroundColor: surfaceAltColor
               }}
               onClick={() => {
                 setShowColumnSelector(true);
@@ -1246,10 +1263,10 @@ function DataExportPanel({
             <div
               style={panelStyles.dropdownItem}
               onClick={() => handleExport('csv')}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = surfaceHoverColor}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
-              <i className="fa-solid fa-file-csv" style={{ width: '16px', color: '#10B981' }}></i>
+              <i className="fa-solid fa-file-csv" style={{ width: '16px', color: successColor }}></i>
               <span>Export as CSV</span>
             </div>
           )}
@@ -1258,10 +1275,10 @@ function DataExportPanel({
             <div
               style={panelStyles.dropdownItem}
               onClick={() => handleExport('excel')}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = surfaceHoverColor}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
-              <i className="fa-solid fa-file-excel" style={{ width: '16px', color: '#059669' }}></i>
+              <i className="fa-solid fa-file-excel" style={{ width: '16px', color: successStrongColor }}></i>
               <span>Export as Excel</span>
             </div>
           )}
@@ -1273,10 +1290,10 @@ function DataExportPanel({
                 borderBottom: 'none'
               }}
               onClick={() => handleExport('pdf')}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = surfaceHoverColor}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
-              <i className="fa-solid fa-file-pdf" style={{ width: '16px', color: '#DC2626' }}></i>
+              <i className="fa-solid fa-file-pdf" style={{ width: '16px', color: errorColor }}></i>
               <span>Export as PDF</span>
             </div>
           )}

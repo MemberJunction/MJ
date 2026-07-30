@@ -3,7 +3,7 @@
  * @module @memberjunction/react-runtime/utilities
  */
 
-import { ComponentStyles } from '@memberjunction/interactive-component-types';
+import { ComponentStyles, StyleOverrides } from '@memberjunction/interactive-component-types';
 
 /**
  * Creates the default component styles for Skip components
@@ -125,6 +125,18 @@ export function SetupStyles(): ComponentStyles {
       '#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0',
       '#00BCD4', '#F44336', '#8BC34A', '#FF5722', '#3F51B5',
     ],
+    // Default sequential (single-hue) intensity ramp, light-to-dark, for heatmaps
+    // and density shading. Overridden per-theme from `--mj-viz-seq-*`.
+    sequentialScale: [
+      '#E3F2FD', '#BBDEFB', '#90CAF9', '#42A5F5', '#2196F3', '#1976D2', '#0D47A1',
+    ],
+    // Default diverging ramp for measures with a meaningful midpoint.
+    // Overridden per-theme from `--mj-viz-div-*`.
+    divergingScale: {
+      low: '#F44336',
+      mid: '#EEEEEE',
+      high: '#4CAF50',
+    },
   }
 }
 
@@ -173,6 +185,9 @@ const THEME_COLOR_TOKEN_MAP: Record<string, string> = {
 /** Number of `--mj-viz-N` categorical tokens the bridge probes for `chartPalette`. */
 const VIZ_TOKEN_COUNT = 10;
 
+/** Number of `--mj-viz-seq-N` tokens the bridge probes for `sequentialScale`. */
+const VIZ_SEQ_TOKEN_COUNT = 7;
+
 /**
  * Reads the live MJ theme (`--mj-*` custom properties on the document root) and
  * layers it over `SetupStyles()`, producing a `ComponentStyles` that follows the
@@ -216,5 +231,65 @@ export function BuildStylesFromTheme(root?: Element): ComponentStyles {
     base.chartPalette = palette;
   }
 
+  const sequential: string[] = [];
+  for (let i = 1; i <= VIZ_SEQ_TOKEN_COUNT; i++) {
+    const value = read(`--mj-viz-seq-${i}`);
+    if (value) {
+      sequential.push(value);
+    }
+  }
+  // A ramp needs at least two stops to interpolate; a single resolved token is
+  // treated as an incomplete theme and left on the default.
+  if (sequential.length > 1) {
+    base.sequentialScale = sequential;
+  }
+
+  // Endpoints are required for a diverging scale to mean anything; `mid` is
+  // optional, so only the low/high pair gates the swap.
+  const divLow = read('--mj-viz-div-low');
+  const divHigh = read('--mj-viz-div-high');
+  if (divLow && divHigh) {
+    const divMid = read('--mj-viz-div-mid');
+    base.divergingScale = divMid ? { low: divLow, mid: divMid, high: divHigh } : { low: divLow, high: divHigh };
+  }
+
   return base;
+}
+
+/**
+ * Layers explicitly user-requested styling (`ComponentSpec.styleOverrides`) over
+ * theme-resolved styles, producing the `styles` a component actually receives.
+ *
+ * This is what lets "make the charts blue" be honored without a color literal ever
+ * entering generated code: the request is carried as spec data and resolved here,
+ * above the org theme, so the component keeps reading `styles.chartPalette` and
+ * friends. Only visualization slots are merged — the override contract deliberately
+ * has no background/text/border slots, since those cannot be flipped for dark mode
+ * without derived per-mode variants.
+ *
+ * Returns `base` unchanged when there are no overrides, and never mutates `base`.
+ *
+ * @param base theme-resolved styles (from `BuildStylesFromTheme()` or `SetupStyles()`)
+ * @param overrides the spec's `styleOverrides`, if any
+ */
+export function ApplyStyleOverrides(base: ComponentStyles, overrides?: StyleOverrides): ComponentStyles {
+  if (!overrides) {
+    return base;
+  }
+
+  const hasChartPalette = Array.isArray(overrides.chartPalette) && overrides.chartPalette.length > 0;
+  // A ramp needs at least two stops to interpolate between.
+  const hasSequential = Array.isArray(overrides.sequentialScale) && overrides.sequentialScale.length > 1;
+  const hasDiverging = !!overrides.divergingScale?.low && !!overrides.divergingScale?.high;
+
+  if (!hasChartPalette && !hasSequential && !hasDiverging) {
+    return base;
+  }
+
+  return {
+    ...base,
+    ...(hasChartPalette ? { chartPalette: overrides.chartPalette } : {}),
+    ...(hasSequential ? { sequentialScale: overrides.sequentialScale } : {}),
+    ...(hasDiverging ? { divergingScale: overrides.divergingScale } : {}),
+  };
 }
