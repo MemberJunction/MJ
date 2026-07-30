@@ -175,27 +175,35 @@ export class MaterializationRefresher {
         const createShadow = surrogateColumn
             ? `CREATE TABLE ${obj(shadow)} AS SELECT ${surrogateExpr} AS "${surrogateColumn}", src.* FROM (${sourceSelect}) AS src`
             : `CREATE TABLE ${obj(shadow)} AS SELECT * FROM (${sourceSelect}) AS src`;
-        const statements = [
+        // CREATE TABLE AS carries no constraints, so restore the surrogate's UNIQUE index the query case relies
+        // on: PG's `INSERT … ON CONFLICT (surrogate)` (the Incremental upsert) REQUIRES a unique index on the
+        // conflict target — without it every rebuild would break the next incremental pass. Unnamed → PG
+        // auto-generates a collision-free name (avoids the 63-char identifier-truncation trap). Restored INSIDE
+        // the swap transaction below so a partial swap can never leave the canonical table un-indexed. (Base-view
+        // case has no surrogate + never runs incremental — nothing to add.)
+        const swapIndexLine = surrogateColumn
+            ? `  CREATE UNIQUE INDEX ON ${obj(tableName)} ("${surrogateColumn}");\n`
+            : '';
+        return [
             // 1) Build a fresh shadow (CASCADE clears any leftover shadow + transient view dependency).
             `DROP TABLE IF EXISTS ${obj(shadow)} CASCADE`,
             createShadow,
-            // 2) Atomic repoint — readers immediately see the freshly-built shadow.
+            // 2) Interim repoint — readers immediately see the freshly-built shadow while we swap.
             `CREATE OR REPLACE VIEW ${obj(viewName)} AS SELECT * FROM ${obj(shadow)}`,
-            // 3) Drop the stale table, rename the shadow into the canonical name, repoint the view back
-            //    (keeps the canonical `materialized_<name>` name stable for migration-reuse detection, §12).
-            `DROP TABLE IF EXISTS ${obj(tableName)} CASCADE`,
-            `ALTER TABLE ${obj(shadow)} RENAME TO "${tableName}"`,
-            `CREATE OR REPLACE VIEW ${obj(viewName)} AS SELECT * FROM ${obj(tableName)}`,
+            // 3) ATOMIC swap in a SINGLE transaction (PG DDL is transactional) — drop the stale table, rename
+            //    the shadow into the canonical name (kept stable for migration-reuse detection, §12), repoint
+            //    the view back, and restore the surrogate index. Wrapping matches the SQL Server path's
+            //    crash-atomicity: a mid-swap failure (lock timeout on RENAME, disk pressure on the index)
+            //    rolls the ENTIRE swap back, leaving the OLD snapshot fully intact. Without the transaction, a
+            //    failure after the DROP would destroy the old table and leave the entity pointing at a
+            //    half-built/absent one (the exact gap the dirty-group path already guards with BEGIN/COMMIT).
+            `BEGIN;\n` +
+                `  DROP TABLE IF EXISTS ${obj(tableName)} CASCADE;\n` +
+                `  ALTER TABLE ${obj(shadow)} RENAME TO "${tableName}";\n` +
+                `  CREATE OR REPLACE VIEW ${obj(viewName)} AS SELECT * FROM ${obj(tableName)};\n` +
+                swapIndexLine +
+                `COMMIT;`,
         ];
-        // 4) CREATE TABLE AS carries no constraints, so restore the surrogate's UNIQUE index the query case
-        //    relies on: PG's `INSERT … ON CONFLICT (surrogate)` (the Incremental upsert) REQUIRES a unique
-        //    index on the conflict target — without it every rebuild would break the next incremental pass.
-        //    Unnamed → PG auto-generates a collision-free name (avoids the 63-char identifier-truncation trap).
-        //    (Base-view case has no surrogate + never runs incremental — nothing to add.)
-        if (surrogateColumn) {
-            statements.push(`CREATE UNIQUE INDEX ON ${obj(tableName)} ("${surrogateColumn}")`);
-        }
-        return statements;
     }
 
     /**
@@ -930,10 +938,19 @@ export class MaterializationRefresher {
 
         const postStatements = isPostgres
             ? [
+                  // Interim repoint — readers see the freshly-populated shadow while we swap.
                   `CREATE OR REPLACE VIEW ${obj(viewName)} AS SELECT * FROM ${obj(shadow)}`,
-                  `DROP TABLE IF EXISTS ${obj(tableName)} CASCADE`,
-                  `ALTER TABLE ${obj(shadow)} RENAME TO "${escId(tableName)}"`,
-                  `CREATE OR REPLACE VIEW ${obj(viewName)} AS SELECT * FROM ${obj(tableName)}`,
+                  // ATOMIC swap in a SINGLE transaction (PG DDL is transactional) — drop the stale table,
+                  // rename the shadow into the canonical name, repoint the view back, restore the surrogate
+                  // index. Parity with the SQL Server branch's crash-atomicity and buildFullRebuildStatementsPostgreSQL:
+                  // a mid-swap failure rolls the ENTIRE swap back, leaving the OLD snapshot intact rather than
+                  // destroyed. The surrogate index is restored inside the tran (unnamed → PG auto-names).
+                  `BEGIN;\n` +
+                      `  DROP TABLE IF EXISTS ${obj(tableName)} CASCADE;\n` +
+                      `  ALTER TABLE ${obj(shadow)} RENAME TO "${escId(tableName)}";\n` +
+                      `  CREATE OR REPLACE VIEW ${obj(viewName)} AS SELECT * FROM ${obj(tableName)};\n` +
+                      (surrogateColumn ? `  CREATE UNIQUE INDEX ON ${obj(tableName)} (${q(surrogateColumn)});\n` : '') +
+                      `COMMIT;`,
               ]
             : [
                   // SET XACT_ABORT ON so a mid-swap error rolls the transaction back instead of leaving it
@@ -950,10 +967,6 @@ export class MaterializationRefresher {
                       (surrogateColumn ? `  CREATE UNIQUE INDEX [UQ_MJ_Materialized_Surrogate] ON ${obj(tableName)} (${q(surrogateColumn)});\n` : '') +
                       `COMMIT TRANSACTION;`,
               ];
-        // PG: restore the surrogate UNIQUE index post-swap (unnamed → PG auto-names; parity with SS above).
-        if (isPostgres && surrogateColumn) {
-            postStatements.push(`CREATE UNIQUE INDEX ON ${obj(tableName)} (${q(surrogateColumn)})`);
-        }
 
         return { preStatements, insertBatches, postStatements };
     }
