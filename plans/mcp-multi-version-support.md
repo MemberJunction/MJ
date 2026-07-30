@@ -7,6 +7,29 @@ per external server row — and structured so a future revision is a dependency 
 
 Status: **plan / not started**
 Branch: `claude/mcp-multi-version-support-h0sh0h`
+Target: **6.0**
+
+---
+
+## 0. Key decisions remaining
+
+Seven open calls, each one gating a phase below. Nothing here blocks *writing* the code — they all
+change what we ship or what we break, so they want an answer before the corresponding phase merges.
+Ordered by how early they bind.
+
+| # | Decision | Options | Recommendation | Gates |
+|---|---|---|---|---|
+| **D1** | **Legacy serving model** — do we keep our sessionful `streamableTransports` map behind `isLegacyRequest()`, or hand 2025-era traffic to the SDK's per-request stateless fallback? | `sessionful` / `stateless` | Ship `sessionful` as the default so the upgrade is a behavioral no-op; document `stateless`; flip the default in the next minor. | Phase 2 |
+| **D2** | **`/mcp/sse` lifetime** — legacy HTTP+SSE is deprecated by the spec and has no v2 server transport. How long do we carry it? | one minor w/ warning / immediate removal / indefinite | One minor release behind `protocol.legacy.sse.enabled` (default `true`) with a deprecation warning on connect, then default `false`. This is the *only* reason `@modelcontextprotocol/sdk@^1` stays installed. | Phase 3 |
+| **D3** | **`WebSocket` transport** — v2 ships no `WebSocketClientTransport`, and `'WebSocket'` is a live value in `MCPTransportType` and the DB CHECK constraint. | deprecate / port ~80 lines locally | Deprecate — it was never in the MCP spec's transport set. **Needs a data check first**: is any `MJ: MCP Servers` row actually using it? If yes, port. | Phase 5 |
+| **D4** | **Default era posture for new deployments** — does a fresh install answer `both` or `modern` only? | `both` / `modern` | `both` for 6.0. Revisit once the ecosystem's client mix is known. | Phase 0 |
+| **D5** | **Per-request auth cost** — statelessness means every modern request re-authenticates. `TokenValidator` + `GetAPIKeyEngine` are cached, but this is unmeasured. | measure then decide | Benchmark before Phase 2 merges; if the cached path is not cheap enough, add a short-TTL validated-token cache keyed on the token hash. | Phase 2 |
+| **D6** | **CIMD adoption** — DCR is deprecated in favor of Client ID Metadata Documents but remains functional. | now / follow-up | Follow-up after 6.0. Note the deprecation in the OAuth proxy README so integrators are not surprised. | Phase 6 |
+| **D7** | **Extensions scope for 6.0** — MRTR, Tasks, and `subscriptions/listen` are all opt-in and all genuinely useful to us (mid-call confirmation on `Delete_*` tools; `Run_Agent` as a task; cross-instance `tools/list_changed`). | in 6.0 / follow-up | Follow-up. Phases 0–6 + 8 are the 6.0 scope; Phase 7 lands after. | Phase 7 |
+
+Two of these have a factual answer we can just go get rather than debate — **D3** (query the
+`MCPServer` table for `TransportType = 'WebSocket'`) and **D5** (benchmark the auth path). Doing that
+first collapses the list to five judgment calls.
 
 ---
 
@@ -104,7 +127,7 @@ plus `ConnectOptions.prior` (cached era verdict, zero round trips) and
 - **No `WebSocketClientTransport`.** Our `'WebSocket'` value in `MCPTransportType` and in the DB CHECK
   constraint has no v2 backing.
 
-Both are addressed in §4.3 and §4.6.
+Both are addressed in Phase 3 and Phase 5 below, and both are open decisions — see D2 and D3 in §0.
 
 ---
 
@@ -309,16 +332,8 @@ Phases 0–6 + 8 are one release. Phase 7 is a follow-up.
 
 ## 7. Open questions
 
-1. **Is any deployment using `TransportType = 'WebSocket'`?** Decides Phase 5.
-2. **How long do we carry `/mcp/sse`?** Recommendation is one minor release with a warning, off by
-   default in the next.
-3. **Do we keep the sessionful legacy path at all**, or go straight to the SDK's stateless fallback?
-   Sessionful preserves current behavior exactly; stateless is less code and matches where the spec is
-   going. Recommendation: ship with `sessionful` as the default, `stateless` documented, flip in the
-   next minor.
-4. **Should modern-era serving be per-request-authenticated?** Statelessness means every request
-   re-authenticates. Our `TokenValidator` + `GetAPIKeyEngine` are cached, but this should be measured
-   before we default to modern-only.
+See **§0 — Key decisions remaining** at the top. D1–D7 are the live list; this section is kept as an
+anchor for inbound links.
 
 ## 8. References
 
