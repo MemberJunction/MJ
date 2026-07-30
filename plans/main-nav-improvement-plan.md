@@ -189,6 +189,25 @@ correctness); all findings remediated in the same commit.
   (brand-tint pill recipe vs refined raised-card vs underline), app color
   (drop / identity dot / keep bar), density (35px vs nav-pill height),
   pinned/temp vocabulary (italic+pin is invisible vocabulary).
+- **Mobile records UX (QUEUED — direction proposed 2026-07-30, mockup owed
+  before build):** records as BROWSER-STYLE MOBILE TABS. Below the
+  breakpoint: (1) kill the horizontal tab strip — one record full-screen,
+  the pane crumb stays as its header (the only wayfinding affordance on
+  mobile); (2) the Records pill moves into the mobile header (count badge)
+  and opens a BOTTOM SHEET listing open records — entity icon in app
+  color, title, ORIGIN AS SUBTITLE ("Data Explorer › MJ: Action Params"),
+  tap to open, X/swipe to close (house pattern: dashboard-mobile filter
+  sheet); (3) splits FLATTEN to a single tabset at render time WITHOUT
+  rewriting the persisted layout (workspace is cross-device — a
+  desktop-made split must survive a phone visit untouched); (4) docked
+  records join the sheet — docked/region is a desktop composition concept;
+  "Move to Workspace" hidden from the menu below the breakpoint. What
+  already survives mobile: 24px targets, tap-opens-menu on the icon slot,
+  crumb truncation, drawer entry. Phasing: correctness pass (hide strip,
+  flatten splits, pill in header — CSS + one restore guard) → the sheet →
+  gesture polish (swipe-between-records earned later). Open design calls
+  for Matt: bottom sheet vs full-screen switcher grid; what the two-segment
+  crumb collapses to at narrow widths.
 - **Origin-crumb placement — DECIDED + SHIPPED (Matt 2026-07-30, commit
   `bbd2cb642c`):** PANE-LEVEL. `mj-record-origin-crumb` (standalone) is the
   first element inside every record pane; the region-level bar is deleted

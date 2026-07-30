@@ -19,6 +19,8 @@
  * the same value. Module-level state (not a service) because the style is a
  * per-deployment constant, not per-component state.
  */
+import { GetGlobalObjectStore } from '@memberjunction/global';
+
 export type RecordOpenStyle = 'records' | 'classic';
 
 /**
@@ -150,19 +152,31 @@ export function GetRecordSourceContext(configuration: Record<string, unknown> | 
   return context;
 }
 
-let currentStyle: RecordOpenStyle = 'records';
+/**
+ * The resolved style lives in the GLOBAL OBJECT STORE, not a module-level
+ * variable: ESBuild/Vite code-splitting can duplicate this module across
+ * chunks, and a lazy chunk's copy would silently keep the default while the
+ * shell wrote 'classic' into another copy — the exact split-brain the
+ * BaseSingleton rule exists to prevent. The store guarantees one value per
+ * page regardless of how many module copies load.
+ */
+const RECORD_OPEN_STYLE_STORE_KEY = '__mj_record_open_style';
+
+function styleStore(): Record<string, RecordOpenStyle | undefined> {
+  return GetGlobalObjectStore() as Record<string, RecordOpenStyle | undefined>;
+}
 
 /** Set by the shell once instance config resolves. Idempotent. */
 export function SetRecordOpenStyle(style: RecordOpenStyle): void {
-  currentStyle = style;
+  styleStore()[RECORD_OPEN_STYLE_STORE_KEY] = style;
 }
 
 /** The deployment's record-open style ('records' unless configured 'classic') */
 export function GetRecordOpenStyle(): RecordOpenStyle {
-  return currentStyle;
+  return styleStore()[RECORD_OPEN_STYLE_STORE_KEY] ?? 'records';
 }
 
 /** True when records-as-tabs is active (the 'records' style) */
 export function IsRecordTabsStyle(): boolean {
-  return currentStyle === 'records';
+  return GetRecordOpenStyle() === 'records';
 }

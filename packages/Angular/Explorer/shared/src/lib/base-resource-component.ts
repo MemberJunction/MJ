@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
-import { Subject } from "rxjs";
+import { Subject, Subscription } from "rxjs";
 import { filter, takeUntil } from "rxjs/operators";
 import { BaseEntity } from "@memberjunction/core";
 import { BaseNavigationComponent } from "./base-navigation-component";
@@ -31,6 +31,19 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * If not set, falls back to Data.Configuration.tabId.
      */
     @Input() ParentTabId: string | null = null;
+
+    /**
+     * Tab id this component was RE-HOMED to by a cache reattach. The
+     * component cache keys on driver+record+app — NOT tab id — so a cached
+     * component can be reattached to a different tab than it was born under.
+     * Without rebinding, its query-param subscription listens to the DEAD
+     * birth tab forever and every delivery to the live tab is lost (the
+     * "crumb lands on the dashboard root after promote/demote" bug).
+     */
+    private reboundTabId: string | null = null;
+
+    /** Handle for the reactive param subscription so RebindTabId can replace it */
+    private reactiveParamSub: Subscription | null = null;
 
     public get Data(): ResourceData {
         return this._data;
@@ -194,7 +207,8 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         if (!tabId) {
             return; // No tab scope (e.g. embedded usage) — nothing to observe.
         }
-        this.navigationService.ObserveTabQueryParams(tabId)
+        this.reactiveParamSub?.unsubscribe();
+        this.reactiveParamSub = this.navigationService.ObserveTabQueryParams(tabId)
             .pipe(takeUntil(this.destroy$))
             .subscribe(params => this.deliverQueryParams(params));
     }
@@ -217,7 +231,10 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         // Don't fire an initial no-op: a component entered without deep-link params has
         // nothing to apply. Leave _lastDeliveredParamsKey null so the first real params
         // (whenever they arrive) are still treated as the deep-link entry.
-        if (isInitial && Object.keys(params).length === 0) {
+        // FORCED empties bypass this too: an explicit reset (SwitchToAppHome
+        // returning a drifted dashboard to its landing) must reach
+        // OnQueryParamsChanged even when nothing was ever delivered.
+        if (isInitial && Object.keys(params).length === 0 && !force) {
             return;
         }
         this._lastDeliveredParamsKey = key;
@@ -250,7 +267,23 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * wrappers for child dashboards), then falls back to Data.Configuration.tabId.
      */
     public getTabId(): string {
-        return this.ParentTabId || this.Data?.Configuration?.['tabId'] as string || '';
+        return this.ParentTabId || this.reboundTabId || this.Data?.Configuration?.['tabId'] as string || '';
+    }
+
+    /**
+     * Re-home this component to a different tab (cache reattach across tab
+     * ids). Replaces the reactive param subscription with one bound to the
+     * new tab and resets the duplicate-delivery key so the new tab's
+     * CURRENT params apply as a fresh mount would — the replay-on-subscribe
+     * delivers them immediately.
+     */
+    public RebindTabId(tabId: string): void {
+        if (this.getTabId() === tabId) {
+            return;
+        }
+        this.reboundTabId = tabId;
+        this._lastDeliveredParamsKey = null;
+        this.setupInitialParamDelivery();
     }
 
     private getQueryParamUpdateGuard(): TabQueryParamUpdateGuard {

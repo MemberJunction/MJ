@@ -735,6 +735,10 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   }
 
   ngOnDestroy(): void {
+    // Pane crumbs are appRef-attached views — destroy them or they stay in
+    // every CD pass after the container is gone (logout/tenant teardown).
+    this.originCrumbRefs.forEach(ref => ref.destroy());
+    this.originCrumbRefs.clear();
     this.subscriptions.forEach(sub => sub.unsubscribe());
 
     // Tear down the records region's layout
@@ -948,6 +952,10 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       // Record panes lead with their origin crumb
       this.ensureRecordOriginCrumb(activeTab, container);
+
+      // Re-home the component's tab binding (see loadTabContent's cached
+      // branch — same cross-tab reattach hazard).
+      (cached.componentRef.instance as BaseResourceComponent).RebindTabId(activeTab.id);
 
       // Reattach the cached wrapper element to single-resource container
       // (sizing via the pane-layout CSS: crumb fixed, content flex-fills)
@@ -1497,6 +1505,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           cacheDiscriminator
         );
 
+        // RE-HOME the component's tab binding: the cache keys on
+        // driver+record+app, so this component may have been born under a
+        // DIFFERENT tab id — without the rebind its query-param
+        // subscription listens to the dead tab forever and deliveries to
+        // this tab are lost.
+        (cached.componentRef.instance as BaseResourceComponent).RebindTabId(tabId);
+
         // Keep legacy componentRefs map updated
         this.componentRefs.set(tabId, cached.componentRef);
 
@@ -1894,11 +1909,26 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     this.originCrumbRefs.set(tab.id, ref);
   }
 
-  /** Refresh a pane crumb's origin after a config change (re-open re-capture) */
+  /**
+   * Refresh a pane crumb's origin after a config change (re-open
+   * re-capture). Also handles the CREATE case: a record first opened
+   * WITHOUT an origin (deep link, history recreate) whose re-open just
+   * captured one — the pane is already attached, so ensureRecordOriginCrumb
+   * never runs again; build the crumb into the live pane here.
+   */
   private updateOriginCrumb(tab: WorkspaceTab): void {
     const ref = this.originCrumbRefs.get(tab.id);
+    const origin = GetRecordSourceContext(tab.configuration);
     if (ref) {
-      ref.setInput('Origin', GetRecordSourceContext(tab.configuration));
+      ref.setInput('Origin', origin);
+      return;
+    }
+    if (origin && this.RecordsStyleActive && IsRecordsTabConfiguration(tab.configuration)) {
+      const paneEl = this.recordsLayoutManager.GetContainer(tab.id)?.element
+        ?? this.layoutManager.GetContainer(tab.id)?.element;
+      if (paneEl && paneEl.childElementCount > 0) {
+        this.ensureRecordOriginCrumb(tab, paneEl);
+      }
     }
   }
 
@@ -2058,27 +2088,31 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       first?.focus();
     });
 
-    // Close menu when clicking outside - use setTimeout to avoid immediate trigger
+    // Close menu when clicking outside - use setTimeout to avoid immediate trigger.
+    // CAPTURE phase: bubble-phase closers are blind to clicks whose
+    // propagation something stopped (the origin crumb stops its clicks so
+    // GL pane-focus can't stomp navigation) — the menu stayed open when the
+    // outside click landed on such an element.
     setTimeout(() => {
       const clickHandler = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
         if (!target.closest('.context-menu')) {
           this.hideContextMenu();
-          document.removeEventListener('click', clickHandler);
-          document.removeEventListener('keydown', keyHandler);
+          document.removeEventListener('click', clickHandler, true);
+          document.removeEventListener('keydown', keyHandler, true);
         }
       };
 
       const keyHandler = (event: KeyboardEvent) => {
         if (event.key === 'Escape') {
           this.hideContextMenu();
-          document.removeEventListener('click', clickHandler);
-          document.removeEventListener('keydown', keyHandler);
+          document.removeEventListener('click', clickHandler, true);
+          document.removeEventListener('keydown', keyHandler, true);
         }
       };
 
-      document.addEventListener('click', clickHandler);
-      document.addEventListener('keydown', keyHandler);
+      document.addEventListener('click', clickHandler, true);
+      document.addEventListener('keydown', keyHandler, true);
     }, 0);
   }
 

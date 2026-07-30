@@ -448,13 +448,23 @@ export class GoldenLayoutManager {
     element.style.overflow = 'hidden';
     element.style.padding = '0';
 
-    // Temporary placeholder content
-    element.innerHTML = `
-      <h2>${state?.title || 'Tab Content'}</h2>
-      <p>Tab ID: ${state?.tabId || 'unknown'}</p>
-      <p>Route: ${state?.route || 'none'}</p>
-      <p>App ID: ${state?.appId || 'none'}</p>
-    `;
+    // Temporary placeholder content. textContent, never innerHTML — the
+    // title is USER DATA (entity display names) and round-trips through
+    // persisted layout state; interpolating it as markup is an injection
+    // vector on layout restore.
+    element.replaceChildren();
+    const heading = document.createElement('h2');
+    heading.textContent = state?.title || 'Tab Content';
+    element.appendChild(heading);
+    for (const line of [
+      `Tab ID: ${state?.tabId || 'unknown'}`,
+      `Route: ${state?.route || 'none'}`,
+      `App ID: ${state?.appId || 'none'}`
+    ]) {
+      const para = document.createElement('p');
+      para.textContent = line;
+      element.appendChild(para);
+    }
 
     if (state?.tabId) {
       this.containerMap.set(state.tabId, container);
@@ -562,6 +572,12 @@ export class GoldenLayoutManager {
 
     // Handle pin icon
     if (state.isPinned) {
+      // Keep the accessible name tracking the (mutable) title, like the
+      // close button and type slot do.
+      const existingPin = tabElement.querySelector('.pin-icon');
+      if (existingPin) {
+        existingPin.setAttribute('aria-label', `Unpin ${state.title}`);
+      }
       // Add pin icon if not present
       if (!tabElement.querySelector('.pin-icon')) {
         const pinIcon = document.createElement('i');
@@ -671,8 +687,16 @@ export class GoldenLayoutManager {
   /**
    * Refresh styles for all tabs (after drag/drop)
    */
+  private refreshAllTabStylesTimer: ReturnType<typeof setTimeout> | null = null;
+
   private refreshAllTabStyles(): void {
-    setTimeout(() => {
+    // COALESCED: stateChanged fires in bursts (drags emit dozens) — one
+    // trailing pass instead of a queued pass per event.
+    if (this.refreshAllTabStylesTimer !== null) {
+      clearTimeout(this.refreshAllTabStylesTimer);
+    }
+    this.refreshAllTabStylesTimer = setTimeout(() => {
+      this.refreshAllTabStylesTimer = null;
       this.containerMap.forEach((container, tabId) => {
         const state = container.state as unknown as TabComponentState;
         if (state) {

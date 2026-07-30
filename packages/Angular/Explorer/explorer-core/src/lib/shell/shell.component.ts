@@ -2256,13 +2256,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.userMenuVisible = !this.userMenuVisible;
 
     if (this.userMenuVisible) {
-      // Close menu when clicking outside
+      // Close menu when clicking outside. CAPTURE phase so clicks whose
+      // bubbling something stopped (e.g. the origin crumb's GL-focus
+      // stoppers) still dismiss the menu.
       const closeHandler = () => {
         this.userMenuVisible = false;
-        document.removeEventListener('click', closeHandler);
+        document.removeEventListener('click', closeHandler, true);
       };
       setTimeout(() => {
-        document.addEventListener('click', closeHandler);
+        document.addEventListener('click', closeHandler, true);
       }, 0);
     }
   }

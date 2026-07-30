@@ -1017,10 +1017,18 @@ export class NavigationService implements OnDestroy {
     entityName: string,
     options?: NavigationOptions
   ): string {
-    const appId = this.getDefaultApplicationId();
-    const appColor = this.getDefaultAppColor();
+    // Records style: new-record tabs are RECORD tabs and get the same
+    // treatment as OpenEntityRecord — assigned to the ACTIVE app, always a
+    // new tab, nav pins preserved, origin captured. Without the forceNew,
+    // the non-forced OpenTab consumed the user's nav page as the
+    // replaceable temp tab and CONVERTED it into a records-region tab —
+    // silently destroying the page they were on.
+    const tabsMode = IsRecordTabsStyle();
+    const activeApp = this.appManager.GetActiveApp();
+    const appId = tabsMode && activeApp ? activeApp.ID : this.getDefaultApplicationId();
+    const appColor = tabsMode && activeApp ? activeApp.GetColor() : this.getDefaultAppColor();
 
-    let forceNew = this.shouldForceNewTab(options);
+    let forceNew = tabsMode || this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -1030,20 +1038,29 @@ export class NavigationService implements OnDestroy {
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
         recordId: '',        // Empty recordId indicates new record
         isNew: true,         // Flag to indicate this is a new record
-        NewRecordValues: options?.newRecordValues  // Pass through initial values if provided
+        NewRecordValues: options?.newRecordValues,  // Pass through initial values if provided
+        ...this.resolveSourceContext(options)
       },
       ResourceRecordId: '',  // Empty for new records
-      IsPinned: options?.pinTab || false
+      IsPinned: options?.pinTab || false,
+      PreservePinState: tabsMode
     };
 
     // Handle transition from single-resource mode
     forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
+    let tabId: string;
     if (forceNew) {
-      return this.workspaceManager.OpenTabForced(request, appColor);
+      tabId = this.workspaceManager.OpenTabForced(request, appColor);
     } else {
-      return this.workspaceManager.OpenTab(request, appColor);
+      tabId = this.workspaceManager.OpenTab(request, appColor);
     }
+
+    if (tabsMode) {
+      this.assertRecordActivation(tabId);
+    }
+
+    return tabId;
   }
 
   /**
