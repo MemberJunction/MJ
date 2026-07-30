@@ -271,13 +271,7 @@ export async function getRunSteps(runId: string, user: UserInfo): Promise<StepRo
     return requireRows(r, `step read for run ${runId}`);
 }
 
-/**
- * The AIPromptRun rows a run's ROLLUP-BEARING steps produced (fresh), ordered oldest-first.
- *
- * Scoped to ROLLUP_BEARING_STEP_TYPES because this feeds the token-reconciliation checks
- * (sumPromptRunTokens vs AIAgentRun.TotalTokensUsed). Teardown deliberately uses the wider
- * PROMPT_RUN_BEARING_STEP_TYPES — it must reach every prompt run, not just the counted ones.
- */
+/** The projection of an AIPromptRun row these checks read. */
 export interface PromptRunRow {
     ID: string;
     ModelID: string | null;
@@ -288,6 +282,13 @@ export interface PromptRunRow {
     Status: string;
 }
 
+/**
+ * The AIPromptRun rows a run's ROLLUP-BEARING steps produced (fresh), ordered oldest-first.
+ *
+ * Scoped to ROLLUP_BEARING_STEP_TYPES because this feeds the token-reconciliation checks
+ * (sumPromptRunTokens vs AIAgentRun.TotalTokensUsed). Teardown deliberately uses the wider
+ * PROMPT_RUN_BEARING_STEP_TYPES — it must reach every prompt run, not just the counted ones.
+ */
 export async function getPromptRuns(runId: string, user: UserInfo): Promise<PromptRunRow[]> {
     // Reached through the run's steps — AIPromptRun has no AgentRunID (see promptRunIdsFromSteps).
     // A run that made no model call legitimately has none.
