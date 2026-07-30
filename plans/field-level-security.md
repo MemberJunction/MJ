@@ -2,7 +2,7 @@
 
 ## Background
 
-A Nimble client (NATA) asked how MJ and Skip handle row-level and column-level security, specifically for keeping compensation, donor giving, and personnel data from being broadly reportable when Salesforce is the system of record. MJ currently supports entity-level CRUD permissions and row-level security (RLS) via SQL filter templates, but has **no field-level access control**. The only field-level feature today is encryption-at-rest (Encrypt/AllowDecryptInAPI), which obfuscates data but doesn't control visibility per role.
+A client asked how MJ and Skip handle row-level and column-level security, specifically for keeping sensitive data (e.g. compensation, donor giving, personnel records) from being broadly reportable. MJ currently supports entity-level CRUD permissions and row-level security (RLS) via SQL filter templates, but has **no field-level access control**. The only field-level feature today is encryption-at-rest (Encrypt/AllowDecryptInAPI), which obfuscates data but doesn't control visibility per role.
 
 This plan adds role-based field-level security to MemberJunction, building on the existing entity permission and unified permission infrastructure.
 
@@ -231,9 +231,14 @@ const allowedFields = entityInfo.Fields.filter(f => {
 
 This ensures restricted fields never appear in the SQL SELECT — the data never leaves the database.
 
-#### 2.2 MapFieldNamesToCodeNames Enhancement
+#### 2.2 Single-Record Resolver Field Filtering
 
-In `ResolverBase.MapFieldNamesToCodeNames()` (~line 70), add field permission filtering alongside the existing encryption filtering. Strip any field the user cannot read:
+**File:** `packages/MJServer/src/generic/ResolverBase.ts`
+**CodeGen template:** `packages/CodeGenLib/src/Misc/graphql_server_codegen.ts` (~lines 504-528)
+
+The single-record GraphQL resolver (e.g., `Account(ID: ...)`) is a separate code path from RunView. It builds raw SQL (`SELECT * FROM {baseView} WHERE {pk} {RLS}`) and does **not** go through RunView's field selection logic. Both the regular entity path and the external data source path (`LoadExternalRecordByKey()`, lines 209-223) pass results through `MapFieldNamesToCodeNames()` before returning.
+
+Field-level security must be enforced in `MapFieldNamesToCodeNames()` (~line 70), alongside the existing encryption filtering. Strip any field the user cannot read:
 
 ```typescript
 // Existing: filter encrypted fields
@@ -244,7 +249,7 @@ if (!fieldInfo.GetUserFieldPermissions(currentUser).CanRead) {
 }
 ```
 
-This is a defense-in-depth layer — RunView filtering prevents the data from being queried, but MapFieldNamesToCodeNames catches any code path that bypasses RunView (e.g., direct entity loads).
+This covers **all** GraphQL return paths — single-record resolvers, RunView results, and any other code path that calls `MapFieldNamesToCodeNames()`. It acts as the defense-in-depth layer: RunView filtering (2.1) prevents restricted data from being queried in the first place, while this catches the single-record path and any other code path that bypasses RunView.
 
 #### 2.3 BaseEntity Save Protection
 
@@ -472,7 +477,9 @@ Add to the existing security test suite (`packages/TestingFramework/integration-
 
 6. **Query field filtering vs. blocking?** — When a saved or ad-hoc query references a restricted field, should we silently strip the column from results (Option A), block execution entirely (Option B), or use a hybrid approach where ad-hoc queries are blocked but saved queries are filtered (Option C)? **Recommendation: Option A (filter) for consistency with RunView behavior, but Option C is worth discussing.**
 
-7. **Cache fingerprint vs. post-read projection?** — Should field-level restrictions be part of the cache key (separate entries per permission profile, like RLS) or should we project/filter on cache read (single cached superset, filter at read time)? **Recommendation: Post-read projection — simpler, doesn't fragment cache, consistent with existing `ProjectRowsToFields()` pattern.**
+7. **Unrestritable fields?** — Should certain fields be exempt from field-level security restrictions (e.g., primary keys, `__mj_` system columns, foreign keys needed for joins)? Restricting a PK would break entity loading, relationships, and caching. **Recommendation: Defer — worth discussing but not a blocker for initial implementation. Could enforce via validation on EntityFieldPermission save (reject records targeting PK fields) or handle at the aggregation level (always return CanRead=true for PKs).**
+
+8. **Cache fingerprint vs. post-read projection?** — Should field-level restrictions be part of the cache key (separate entries per permission profile, like RLS) or should we project/filter on cache read (single cached superset, filter at read time)? **Recommendation: Post-read projection — simpler, doesn't fragment cache, consistent with existing `ProjectRowsToFields()` pattern.**
 
 ---
 
