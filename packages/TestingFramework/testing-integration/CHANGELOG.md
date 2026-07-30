@@ -1,5 +1,32 @@
 # @memberjunction/testing-integration
 
+## 5.50.0
+
+### Patch Changes
+
+- fab223d: fix(testing): fail loudly when a server-transport integration bundle resolves a rebound client provider, and make the ai-verify persistence poll truthful + tunable (#3251)
+  - `IntegrationTestDriver` now aborts a `server`-transport bundle with a clear, harness-attributed `Error` if the resolved provider is not a Database provider (i.e. a client-transport bundle rebound the process-global provider earlier in the process), instead of silently running the bundle over the wire. This enforces the previously prose-only suite-ordering invariant.
+  - `ai-verify.ts`'s `fetchById` bounded poll no longer asserts "fire-and-forget write never landed" (which claimed data loss that did not occur); it states the actual bound it waited and names the new `MJ_IT_FETCH_POLL_MS` env knob (default 12000ms) so loaded boxes can widen the window.
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/server-bootstrap-lite@5.50.0
+  - @memberjunction/testing-engine@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/testing-engine-base@5.50.0
+  - @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes
