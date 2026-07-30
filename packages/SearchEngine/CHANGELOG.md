@@ -1,5 +1,64 @@
 # @memberjunction/search-engine
 
+## 5.50.0
+
+### Minor Changes
+
+- 0686d52: Add content cleaning, adaptive-boundary and paged segmentation, and chunk-aware external search mapping — all from PR review feedback.
+
+  **Cleaning is now its own plug-in stage** (`@memberjunction/ai-segmentation`). Segmenting dirty content produces well-bounded garbage: navigation, sidebars, cookie banners, and advertising usually outweigh the article, and because that chrome repeats across every page of a site it yields many near-identical chunks that crowd out real answers.
+  - `BaseContentCleaner` — resolved through the class factory like segmenters, via `ResolveContentCleaner` / `SuggestCleanerKey`.
+  - `HtmlContentCleaner` (`Html`) — CSS-selector-driven extraction. `IncludeSelectors` is the high-leverage knob: naming the element that holds the content discards everything else without enumerating what to drop. `ExcludeSelectors` handles what survives inside it. An invalid selector is skipped rather than failing the clean, and if cleaning would remove everything the original is returned with a warning.
+  - `PlainTextContentCleaner` (`PlainText`) — whitespace normalization and truncation, preserving the paragraph breaks segmenters use as boundaries.
+
+  **`AdaptiveBoundarySegmenter` (`AdaptiveBoundary`)** targets a size and closes on the nearest natural break, escalating through boundary quality: paragraph → sentence → word → hard ceiling. Segment sizes vary on purpose — a slightly short segment ending at a paragraph beats an exactly-sized one ending mid-clause. It also declines to split when the whole text is only modestly over target, avoiding one full chunk plus a context-free runt. `TargetTokens` should be sized to your **queries**, not to the embedding model's context window, which is an upper bound rather than a goal.
+
+  **`PagedContentSegmenter` (`PagedContent`)** emits one segment per page of a paginated source via the new `SegmentationParams.Pages`, preserving `PageNumber` for citation-grade provenance. A page may carry text, a rendered-page media reference, or both — the both case is what allows embedding a PDF page _as an image_ (preserving tables and charts that text extraction flattens) while its text rides along for lexical search. Pages carrying media are never merged, so their provenance stays true.
+
+  **`@memberjunction/search-engine`** gains `ExternalHitMapper`, a shared field mapping now used by all four external providers (Azure AI Search, Elasticsearch, OpenSearch, Typesense) instead of four inline copies. It resolves snippets from `description` and `transcript` in addition to the conventional `content`/`body`/`text`, so a media chunk returns readable text rather than an empty snippet, and recovers chunk provenance (`chunkId`, `modality`, `startMs`/`endMs`, `pageNumber`) into the result's `RawMetadata` — which is what lets a hit deep-link to a moment in a recording or a page in a PDF. Field names are matched across camelCase, PascalCase, and snake_case, and numeric strings are coerced, since external indexes are populated outside MJ.
+
+  Also fixes `BaseSegmenter` rejecting a params object that carried only `Pages`.
+
+- c7b6710: Make Scoped Search dimensions enforceable so a dimension can carry an access decision rather than being a narrowing convenience any caller — including an LLM writing a tool call — could author. `SearchScope.SearchContextConfig` documented `dimensions[]`, `inheritanceMode` and `strictValidation` but no runtime code read any of it.
+
+  A `restricts: true` dimension is now server-derived: a caller-supplied value is discarded, not merged, and the attempt is recorded in provenance. Values are grammar-checked, `freetext` is prohibited in filter positions, and every interpolated value is escaped automatically for its lane's dialect (SQL / OData / JSON / Typesense / path), keyed off the existing `IndexType`. `narrowingOf` is a lattice meet, so a caller may narrow a server bound but never widen it.
+
+  A Skill becomes a search principal alongside an Agent, and scope grants gain a time window plus a tenant key. `RequiredMetadataKeys` catches a filter that rendered _partially_ — the case no other guard can see, where an optional clause vanishes because its dimension was absent or discarded and the lane silently searches wider than intended. Supersession (`advisory` + ordered rules) composes by subtraction and fails soft, deliberately outside the boundary. `ExplainScope()` reports what a search would be able to reach without running one, and the same structure is written to `SearchExecutionLog.ScopeDecisionJSON`.
+
+  Fixes four security bugs, two live on `next`: the result-cache key omitted `ScopeIDs` and `SearchContext` (cross-tenant result leak within the 30s TTL); six provider call sites silently dropped a filter whose rendered value had the wrong shape and then queried unfiltered; a restricting template that rendered to nothing was indistinguishable from one never authored; and `inheritanceMode` was itself declared-and-unread.
+
+  Additive throughout — a scope with no declaration behaves exactly as before, and no existing filter template needs an edit.
+
+### Patch Changes
+
+- 764d6f6: Fix three client-reported issues (search coverage, Configure App dialog, default-app provisioning):
+  - **C3 — Search coverage:** decouple the per-entity fetch depth from the global `topK` budget in both `EntitySearchProvider` and `FullTextSearchProvider` (new tunable `PerEntityFetchDepth`, default 15), so multi-entity searches no longer starve individual entities of results. Also lower `MIN_TERM_LENGTH` from 3 to 2 across the engine and both providers so short queries (e.g. "US", "AI") are searchable.
+  - **F1 — Configure App dialog glitch:** the `[(ShowDialog)]` setter now emits `ShowDialogChange`, so the app-switcher's flag round-trips correctly; the dialog resets its app lists on open/close and reloads the user's applications on a deferred microtask (avoids `ExpressionChangedAfterItHasBeenCheckedError`). Removed the redundant double-drive in the app switcher.
+  - **F2 — Default-app provisioning (`Status = 'Active'` filter):** the JWT new-user provisioning path selected default applications with `DefaultForNewUser` but **without** the `Status = 'Active'` check that the client self-heal path already applied, so an inactive app flagged `DefaultForNewUser` could be provisioned onto new users there. Both paths now use a single shared selector, `UserInfoEngine.GetDefaultApplicationsForNewUser`, which filters to Active + `DefaultForNewUser` in `DefaultSequence` order — eliminating the drift.
+
+- 408e4bf: Use `UUIDsEqual` instead of `===` when matching rendered constraints to their scope rows in `SearchEngine.buildLaneExplanations` (external-index, entity and storage-account lanes).
+
+  PostgreSQL returns UUIDs lowercased where SQL Server returns them uppercased, so on a case mismatch the `find` returned `undefined` and the lane reported `RenderedFilter: null` — `ExplainScope` telling an admin a lane carries no filter when it does. Silent, and a wrong answer from the one feature whose purpose is answering that question. Also unbreaks the `Unit Tests` job on `next`, where the repo's `UUIDCompliance` gate flagged the three comparisons.
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes
