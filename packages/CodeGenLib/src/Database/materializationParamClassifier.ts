@@ -155,12 +155,18 @@ function renderVariantsForParam(
  * typically coerce (`true`→`1`, a reformatted date) — which the guard then treats as non-passthrough.
  */
 function passthroughSentinel(type: QueryParamType): unknown {
+    // The string/array sentinels deliberately combine features the common value-transforming filters would
+    // alter, so the verbatim-contains check catches them: leading/trailing + interior WHITESPACE (trim,
+    // ltrim, rtrim, collapse), MIXED CASE (upper, lower, capitalize, title), and SEPARATORS (replace, split).
+    // No single-quote (which sqlString escapes → would false-refuse an identity render). A pathological
+    // custom filter that happens to be identity on this exact value could still slip through — the guard is
+    // conservative best-effort, not a proof; documented in plan §9.
     switch (type) {
-        case 'string': return '__mjPassthruZQX9__';
+        case 'string': return '  Mj_Pt zQ9x_Kw  ';
         case 'number': return 305419896; // 0x12345678 — distinctive, unlikely to appear coincidentally
         case 'date': return '2019-03-14';
         case 'boolean': return true;
-        case 'array': return ['__mjPassthruAZQX9__', '__mjPassthruBZQX9__'];
+        case 'array': return ['  Mj_PtA zQ9x  ', '  Mj_PtB zQ9x  '];
     }
 }
 

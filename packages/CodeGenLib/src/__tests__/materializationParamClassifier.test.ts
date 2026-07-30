@@ -75,6 +75,16 @@ describe('classifyQueryParameters', () => {
         expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
     });
 
+    it('a whitespace-TRIMMING filter (| trim) is also refused — a padded raw value would diverge from live', () => {
+        // Live trims (`' active '` → `'active'`); the read path binds the raw padded value → wrong rows.
+        // The sentinel carries leading/trailing whitespace so trim changes it → guard refuses.
+        const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
+        const render: VariantRenderer = (v) => `SELECT ID, Status FROM Orders WHERE Status = '${String(v['status']).trim()}'`;
+        const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+        expect(r.perParam[0].verdict.role).toBe('Unbounded');
+        expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
+    });
+
     it('a value-PRESERVING filter still qualifies — the passthrough guard does not over-refuse the common case', () => {
         // Both string (quote-only) and numeric (identity) row filters render the value verbatim, so the
         // sentinel survives → still RowFilterBroad. Confirms the guard is targeted, not blanket.
