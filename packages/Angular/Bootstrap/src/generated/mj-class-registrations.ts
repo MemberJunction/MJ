@@ -27,7 +27,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (409 classes)
+// @memberjunction/core-entities (410 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -99,6 +99,7 @@ import {
     MJAISkillActionEntity,
     MJAISkillEntity,
     MJAISkillPermissionEntity,
+    MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
@@ -797,6 +798,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAISkillActionEntity,
     MJAISkillEntity,
     MJAISkillPermissionEntity,
+    MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
