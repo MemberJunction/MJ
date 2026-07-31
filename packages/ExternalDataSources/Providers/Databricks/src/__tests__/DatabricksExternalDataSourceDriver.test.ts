@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { MJGlobal } from '@memberjunction/global';
 import type { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
-import type { ExternalViewParams, ExternalQueryParameter } from '@memberjunction/external-data-sources';
+import { BaseExternalDataSourceDriver, type ExternalViewParams, type ExternalQueryParameter } from '@memberjunction/external-data-sources';
 import { DatabricksExternalDataSourceDriver } from '../DatabricksExternalDataSourceDriver';
 
 // Databricks can't be run locally (it needs a live SQL warehouse), so we unit-test the pure dialect
@@ -16,6 +17,7 @@ interface ExecCall {
 }
 interface FakeRec {
   calls: ExecCall[];
+  sessionInits: Array<Record<string, unknown> | undefined>;
   sessionsClosed: number;
   opsClosed: number;
   clientClosed: number;
@@ -23,19 +25,20 @@ interface FakeRec {
 type RowsFn = (statement: string) => Array<Record<string, unknown>>;
 
 function makeRec(): FakeRec {
-  return { calls: [], sessionsClosed: 0, opsClosed: 0, clientClosed: 0 };
+  return { calls: [], sessionInits: [], sessionsClosed: 0, opsClosed: 0, clientClosed: 0 };
 }
 
-function makeFakeClient(rows: RowsFn, rec: FakeRec, opts?: { fetchThrows?: boolean }): unknown {
+function makeFakeClient(rows: RowsFn, rec: FakeRec, opts?: { fetchThrows?: boolean; fetchThrowsOn?: (stmt: string) => boolean }): unknown {
   return {
-    async openSession() {
+    async openSession(sessionInit?: Record<string, unknown>) {
+      rec.sessionInits.push(sessionInit);
       return {
         async executeStatement(statement: string, options?: { runAsync?: boolean; namedParameters?: Record<string, unknown> }) {
           rec.calls.push({ statement, namedParameters: options?.namedParameters, runAsync: options?.runAsync });
           const data = rows(statement);
           return {
             async fetchAll() {
-              if (opts?.fetchThrows) {
+              if (opts?.fetchThrows || opts?.fetchThrowsOn?.(statement)) {
                 throw new Error('boom during fetch');
               }
               return data;
@@ -281,6 +284,40 @@ describe('DatabricksExternalDataSourceDriver — execute path (fake DBSQLClient)
     expect(rec.calls.length).toBe(1);
   });
 
+  // A CodeGen-imported entity yields a bare `schema.object` reference (no catalog). Every read session must
+  // therefore set the source's Unity Catalog catalog + schema as defaults, else the ref resolves against the
+  // warehouse's default catalog (e.g. `workspace`) and fails. Both the data-SELECT and COUNT sessions get it.
+  it('RunView: anchors every session to the source catalog/schema (initialCatalog/initialSchema)', async () => {
+    const d = new TestableDatabricksDriver();
+    const rec = makeRec();
+    d.seedClient('ds1', Promise.resolve(makeFakeClient(() => [{ id: 1 }], rec)));
+    await d.RunView(ds({ DefaultDatabase: 'samples' }), { objectName: 'region', maxRows: 5 });
+    expect(rec.sessionInits.length).toBe(2); // data SELECT + COUNT
+    for (const init of rec.sessionInits) {
+      expect(init).toEqual({ initialCatalog: 'samples', initialSchema: 'analytics' });
+    }
+  });
+
+  it('LoadSingle / RunNativeQuery also anchor the session to the source catalog', async () => {
+    const d = new TestableDatabricksDriver();
+    const rec = makeRec();
+    d.seedClient('ds1', Promise.resolve(makeFakeClient(() => [{ id: 1 }], rec)));
+    await d.LoadSingle(ds({ DefaultDatabase: 'samples' }), 'region', [{ name: 'id', value: 1 }]);
+    await d.RunNativeQuery(ds({ DefaultDatabase: 'samples' }), 'SELECT 1 FROM t', undefined);
+    expect(rec.sessionInits).toEqual([
+      { initialCatalog: 'samples', initialSchema: 'analytics' },
+      { initialCatalog: 'samples', initialSchema: 'analytics' },
+    ]);
+  });
+
+  it('TestConnection surfaces a clear config error (missing serverHostname/httpPath) as a failed result', async () => {
+    const d = new TestableDatabricksDriver();
+    // No ConnectionConfig at all -> createClient's guard must fire before any SDK/credential work.
+    const res = await d.TestConnection(ds({ ID: 'no-config' }));
+    expect(res.success).toBe(false);
+    expect(res.message).toMatch(/serverHostname.*httpPath|ConnectionConfig/i);
+  });
+
   it('LoadSingle: binds the PK via :pk0 named parameters and returns the first row', async () => {
     const d = new TestableDatabricksDriver();
     const rec = makeRec();
@@ -368,5 +405,81 @@ describe('DatabricksExternalDataSourceDriver — connection identity guard (H1 c
     expect(d.clientFor('s')).toBeUndefined();
     await Promise.resolve();
     expect(closed).toEqual([1]);
+  });
+});
+
+describe('DatabricksExternalDataSourceDriver — IntrospectSchema (Unity Catalog information_schema)', () => {
+  // Route each information_schema query to its fixture rows by matching the statement.
+  const introspectionRows: RowsFn = (stmt) => {
+    if (/\.tables\b/.test(stmt)) {
+      return [{ table_name: 'orders', table_type: 'MANAGED' }, { table_name: 'customers', table_type: 'VIEW' }];
+    }
+    if (/\.columns\b/.test(stmt) && /full_data_type/.test(stmt)) {
+      return [
+        { table_name: 'orders', column_name: 'id', full_data_type: 'bigint', is_nullable: 'NO' },
+        { table_name: 'orders', column_name: 'customer_id', full_data_type: 'bigint', is_nullable: 'YES' },
+        { table_name: 'customers', column_name: 'id', full_data_type: 'bigint', is_nullable: 'NO' },
+        { table_name: 'customers', column_name: 'name', full_data_type: 'string', is_nullable: 'YES' },
+      ];
+    }
+    if (/'PRIMARY KEY'/.test(stmt)) {
+      return [{ table_name: 'orders', column_name: 'id' }, { table_name: 'customers', column_name: 'id' }];
+    }
+    if (/'FOREIGN KEY'/.test(stmt)) {
+      return [{ constraint_name: 'fk_orders_customer', table_name: 'orders', column_name: 'customer_id', referenced_schema: 'sales', referenced_table: 'customers', referenced_column: 'id' }];
+    }
+    return [];
+  };
+
+  it('assembles objects, column types/nullability, PK flags, and FK relationships', async () => {
+    const d = new TestableDatabricksDriver();
+    const rec = makeRec();
+    d.seedClient('ds1', Promise.resolve(makeFakeClient(introspectionRows, rec)));
+
+    const schema = await d.IntrospectSchema(ds({ DefaultDatabase: 'main', DefaultSchema: 'sales' }), 'sales');
+    expect(schema.Database).toBe('main');
+
+    const orders = schema.Objects.find((o) => o.Name === 'orders');
+    const customers = schema.Objects.find((o) => o.Name === 'customers');
+    expect(orders?.ObjectType).toBe('table');   // MANAGED -> table
+    expect(customers?.ObjectType).toBe('view');  // VIEW -> view
+    expect(orders?.Schema).toBe('sales');
+
+    const id = orders?.Columns.find((c) => c.Name === 'id');
+    const custId = orders?.Columns.find((c) => c.Name === 'customer_id');
+    expect(id).toMatchObject({ NativeType: 'bigint', Nullable: false, IsPrimaryKey: true });
+    expect(custId).toMatchObject({ Nullable: true, IsPrimaryKey: false });
+
+    // The informational FK became one relationship on `orders`, composite-key-aware.
+    expect(orders?.Relationships).toEqual([
+      { Name: 'fk_orders_customer', ReferencedObject: 'customers', ReferencedSchema: 'sales', Columns: [{ Column: 'customer_id', ReferencedColumn: 'id' }] },
+    ]);
+    expect(customers?.Relationships).toBeUndefined(); // no FK originates from customers
+    // The introspection queries are fully-qualified against `main`.information_schema.
+    expect(rec.calls.some((c) => c.statement.includes('`main`.information_schema.tables'))).toBe(true);
+  });
+
+  it('is best-effort on constraints: PK/FK query failure yields objects with no PK/relationships (never guessed)', async () => {
+    const d = new TestableDatabricksDriver();
+    const rec = makeRec();
+    // Fail ONLY the constraint queries; tables/columns still succeed.
+    const throwOnConstraints = (stmt: string) => /table_constraints/.test(stmt);
+    d.seedClient('ds1', Promise.resolve(makeFakeClient(introspectionRows, rec, { fetchThrowsOn: throwOnConstraints })));
+
+    const schema = await d.IntrospectSchema(ds({ DefaultDatabase: 'main', DefaultSchema: 'sales' }), 'sales');
+    const orders = schema.Objects.find((o) => o.Name === 'orders');
+    expect(orders).toBeDefined();
+    expect(orders?.Columns.every((c) => c.IsPrimaryKey === false)).toBe(true); // no PK guessed
+    expect(orders?.Relationships).toBeUndefined();                             // no relationships guessed
+  });
+});
+
+describe('DatabricksExternalDataSourceDriver — ClassFactory registration (deterministic, credential-free)', () => {
+  it('resolves the DatabricksExternalDriver key via MJGlobal.ClassFactory to the driver class', () => {
+    const inst = MJGlobal.Instance.ClassFactory.CreateInstance<BaseExternalDataSourceDriver>(
+      BaseExternalDataSourceDriver,
+      'DatabricksExternalDriver',
+    );
+    expect(inst).toBeInstanceOf(DatabricksExternalDataSourceDriver);
   });
 });

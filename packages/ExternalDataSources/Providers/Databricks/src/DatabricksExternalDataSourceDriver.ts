@@ -33,6 +33,8 @@ type DatabricksConnectOptions = Parameters<DBSQLClient['connect']>[0];
 type DatabricksSession = Awaited<ReturnType<DBSQLClient['openSession']>>;
 /** Named-parameter bind map for `:name` markers. Our values are the read-time PK / native-query scalars. */
 type DatabricksNamedParameters = Record<string, ExternalQueryParameter['value']>;
+/** `openSession` request options — we use `initialCatalog`/`initialSchema` to anchor bare object names. */
+type DatabricksSessionInit = NonNullable<Parameters<DBSQLClient['openSession']>[0]>;
 
 /**
  * Memoized loader for the optional `@databricks/sql` peer dependency (CLAUDE.md rule #8, category 2).
@@ -193,14 +195,16 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
   /**
    * Execute a statement on a short-lived session opened from the cached client (opened + closed per call so
    * concurrent reads don't serialize on one session). Named markers (`:name`) bind via `namedParameters` —
-   * never string-interpolated. The operation + session are always closed, even on a fetch error.
+   * never string-interpolated. `sessionInit` sets the session's Unity Catalog defaults (see
+   * {@link sessionInitFor}). The operation + session are always closed, even on a fetch error.
    */
   private async execute<TRow extends ExternalRow = ExternalRow>(
     client: DatabricksClient,
     statement: string,
     namedParameters?: DatabricksNamedParameters,
+    sessionInit?: DatabricksSessionInit,
   ): Promise<TRow[]> {
-    const session: DatabricksSession = await client.openSession();
+    const session: DatabricksSession = await client.openSession(sessionInit);
     try {
       const operation = await session.executeStatement(statement, { runAsync: true, ...(namedParameters ? { namedParameters } : {}) });
       try {
@@ -235,8 +239,9 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
       return await this.withConnectionRetry(dataSource, async () => {
         const client = await this.getConnection(dataSource, contextUser);
         const target = this.qualifyObject(dataSource, params.objectName);
-        const rows = await this.execute<TRow>(client, this.buildSelectSql(target, params));
-        const totalRowCount = await this.maybeCount(client, target, params);
+        const sessionInit = this.sessionInitFor(dataSource);
+        const rows = await this.execute<TRow>(client, this.buildSelectSql(target, params), undefined, sessionInit);
+        const totalRowCount = await this.maybeCount(client, target, params, sessionInit);
         return { success: true, rows: this.normalizeRows(rows), totalRowCount, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
@@ -255,7 +260,7 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
       const target = this.qualifyObject(dataSource, objectName);
       // Named markers (:pk0, :pk1, …) bound via namedParameters — parity with the base's placeholder contract.
       const { clause, named } = this.buildPrimaryKeyNamed(primaryKeys);
-      const rows = await this.execute<TRow>(client, `SELECT * FROM ${target} WHERE ${clause} LIMIT 1`, named);
+      const rows = await this.execute<TRow>(client, `SELECT * FROM ${target} WHERE ${clause} LIMIT 1`, named, this.sessionInitFor(dataSource));
       return this.normalizeRows(rows)[0] ?? null;
     });
   }
@@ -276,7 +281,8 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
         const named: DatabricksNamedParameters | undefined = params?.length
           ? Object.fromEntries(params.map((p) => [p.name, p.value]))
           : undefined;
-        const rows = await this.execute<TRow>(client, queryText, named);
+        // Anchor bare references in the native query to the source's catalog/schema (fully-qualified refs still win).
+        const rows = await this.execute<TRow>(client, queryText, named, this.sessionInitFor(dataSource));
         return { success: true, rows: this.normalizeRows(rows), rowCount: rows.length, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
@@ -448,11 +454,11 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
     return { clause, named };
   }
 
-  private async maybeCount(client: DatabricksClient, target: string, params: ExternalViewParams): Promise<number | undefined> {
+  private async maybeCount(client: DatabricksClient, target: string, params: ExternalViewParams, sessionInit?: DatabricksSessionInit): Promise<number | undefined> {
     if (params.maxRows == null) {
       return undefined;
     }
-    const rows = await this.execute<Record<string, unknown>>(client, this.buildCountSql(target, params));
+    const rows = await this.execute<Record<string, unknown>>(client, this.buildCountSql(target, params), undefined, sessionInit);
     const first = rows[0] ?? {};
     // The COUNT(*) alias is `cnt` (see base buildCountSql); Databricks returns it lowercase.
     const val = first.cnt ?? first.CNT ?? Object.values(first)[0];
@@ -463,6 +469,25 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
   private resolveCatalog(dataSource: MJExternalDataSourceEntity): string | undefined {
     const config = this.parseConnectionConfig<DatabricksConnectionConfig>(dataSource);
     return config.catalog ?? dataSource.DefaultDatabase ?? undefined;
+  }
+
+  /**
+   * Unity Catalog defaults for a read session so a bare schema-qualified object name (`schema.object`, which
+   * a CodeGen-imported entity produces via {@link ResolveObjectName}) resolves against THIS source's catalog +
+   * schema — not the warehouse's default catalog (often `workspace`/`hive_metastore`, where the object doesn't
+   * exist). A fully-qualified `catalog.schema.object` reference still wins over these defaults. Introspection
+   * queries don't need this (they fully-qualify `<catalog>.information_schema`), so only the read paths use it.
+   */
+  private sessionInitFor(dataSource: MJExternalDataSourceEntity): DatabricksSessionInit {
+    const init: DatabricksSessionInit = {};
+    const catalog = this.resolveCatalog(dataSource);
+    if (catalog) {
+      init.initialCatalog = catalog;
+    }
+    if (dataSource.DefaultSchema) {
+      init.initialSchema = dataSource.DefaultSchema;
+    }
+    return init;
   }
 
   /** `<catalog>.information_schema` when a catalog is known, else the session-catalog `information_schema`. */

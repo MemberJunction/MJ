@@ -114,6 +114,16 @@ describe.runIf(RUN && sdkAvailable && hasCreds)('DatabricksExternalDataSourceDri
     expect(Number(res.rows[0].r_regionkey)).toBe(3);
   });
 
+  // The real CodeGen path: a BARE object name (no catalog) must resolve against the source's DefaultDatabase
+  // (catalog) + DefaultSchema via the session's initialCatalog/initialSchema — NOT the warehouse default
+  // catalog. Without that, this read fails with TABLE_OR_VIEW_NOT_FOUND.
+  it('RunView resolves a bare object name via the session catalog (initialCatalog/initialSchema)', async () => {
+    const res = await driver.RunView(dataSource, { objectName: 'region', fields: ['r_regionkey', 'r_name'], orderBy: 'r_regionkey' });
+    expect(res.success).toBe(true);
+    expect(res.rows).toHaveLength(5);
+    expect(String(res.rows[0].r_name)).toBe('AFRICA');
+  });
+
   it('RunView paging: LIMIT/OFFSET returns a deterministic window + total count', async () => {
     const res = await driver.RunView(dataSource, { objectName: region, orderBy: 'r_regionkey', maxRows: 2, offset: 1 });
     expect(res.success).toBe(true);
