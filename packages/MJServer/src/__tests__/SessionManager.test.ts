@@ -40,6 +40,21 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
+// --- Partial mock: control ONLY UserCache.GetSystemUser (the scoped-anonymous elevation seam,
+//     issue #3371); everything else in the data provider stays real ---
+const getSystemUserMock = vi.fn<[], UserInfo | undefined>();
+vi.mock('@memberjunction/sqlserver-dataprovider', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    return {
+        ...actual,
+        UserCache: {
+            get Instance() {
+                return { GetSystemUser: getSystemUserMock };
+            },
+        },
+    };
+});
+
 import { SessionManager, SessionAuthorizationError } from '../agentSessions/SessionManager.js';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
@@ -94,6 +109,8 @@ beforeEach(() => {
     hostSessionClosedMock.mockResolvedValue(undefined);
     runViewMock.mockReset();
     runViewMock.mockResolvedValue({ Success: true, Results: [] });
+    getSystemUserMock.mockReset();
+    getSystemUserMock.mockReturnValue(undefined);
 });
 
 describe('SessionManager.CreateSession', () => {
@@ -243,6 +260,51 @@ describe('SessionManager.CloseSession', () => {
 
         expect(ok).toBe(true);
         expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-6', 'prompt-run-6', user, provider, true, 'run-step-6');
+    });
+
+    it('finalizes as the SYSTEM user when a scoped anonymous owner closes their session (issue #3371)', async () => {
+        const systemUser = { ID: 'system-1', Email: 'system@system.org' } as unknown as UserInfo;
+        getSystemUserMock.mockReturnValue(systemUser);
+        const anonUser = {
+            ID: 'anon-1',
+            Email: 'anonymous@magic-link.local',
+            IsMagicLinkAnonymous: true,
+            MagicLinkScope: { ResourceID: 'res-1' },
+        } as unknown as UserInfo;
+        const session = makeSessionEntity({
+            ID: 'session-anon',
+            Status: 'Active',
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-9', promptRunID: 'prompt-run-9' }),
+        });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSession('session-anon', anonUser, provider);
+
+        expect(ok).toBe(true);
+        // The session-close writes themselves stay on the caller — only finalize elevates.
+        expect(session.Status).toBe('Closed');
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-9', 'prompt-run-9', systemUser, provider, true, null);
+    });
+
+    it('FAILS CLOSED — finalizes as the anonymous caller when no system user is available', async () => {
+        getSystemUserMock.mockReturnValue(undefined);
+        const anonUser = {
+            ID: 'anon-1',
+            IsMagicLinkAnonymous: true,
+            MagicLinkScope: { ResourceID: 'res-1' },
+        } as unknown as UserInfo;
+        const session = makeSessionEntity({
+            ID: 'session-anon-2',
+            Status: 'Active',
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-10', promptRunID: null }),
+        });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        await mgr.CloseSession('session-anon-2', anonUser, provider);
+
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-10', null, anonUser, provider, true, null);
     });
 
     it('does not finalize when the session config has no run ids (target only)', async () => {

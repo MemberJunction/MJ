@@ -131,8 +131,24 @@ vi.mock('../util.js', () => ({
     GetReadWriteProvider: () => currentProvider,
 }));
 
+// --- Partial mock: control ONLY UserCache.GetSystemUser (the scoped-anonymous elevation seam,
+//     issue #3371); everything else in the data provider stays real ---
+const getSystemUserMock = vi.fn<[], UserInfo | undefined>();
+vi.mock('@memberjunction/sqlserver-dataprovider', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    return {
+        ...actual,
+        UserCache: {
+            get Instance() {
+                return { GetSystemUser: getSystemUserMock };
+            },
+        },
+    };
+});
+
 import { RealtimeClientSessionResolver } from '../resolvers/RealtimeClientSessionResolver.js';
 import type { AppContext } from '../types.js';
+import type { UserInfo } from '@memberjunction/core';
 
 const USER = { ID: 'user-1', Email: 'tester@example.com' };
 
@@ -221,6 +237,8 @@ beforeEach(() => {
     createSessionMock.mockReset();
     closeSessionMock.mockClear();
     heartbeatMock.mockClear();
+    getSystemUserMock.mockReset();
+    getSystemUserMock.mockReturnValue(undefined);
     agentsMock.mockReturnValue([{ ID: 'co-agent-1', Name: 'Realtime Co-Agent' }]);
     agentTypesMock.mockReturnValue([]);
 });
@@ -2670,5 +2688,210 @@ describe('RealtimeClientSessionResolver — app awareness (applicationId / appCo
 
         const relayArg = executeRelayedToolMock.mock.calls[0][0] as { AllowedAgents?: Array<{ agentId: string }> };
         expect(relayArg.AllowedAgents?.map(a => a.agentId)).toEqual(['skip-1']);
+    });
+});
+
+describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3371)', () => {
+    /** A scoped anonymous magic-link caller (no widget context) — the elevation-eligible shape. */
+    const ANON_USER = {
+        ID: 'anon-1',
+        Email: 'anonymous@magic-link.local',
+        IsMagicLinkAnonymous: true,
+        MagicLinkScope: { ResourceID: 'scope-res-1' },
+    };
+    const SYSTEM_USER = { ID: 'system-1', Email: 'system@system.org' } as UserInfo;
+
+    /** Resolver whose caller is the scoped anonymous visitor. */
+    function makeAnonResolver(): RealtimeClientSessionResolver {
+        const resolver = new RealtimeClientSessionResolver();
+        (resolver as unknown as { GetUserFromPayload: () => unknown }).GetUserFromPayload = () => ANON_USER;
+        return resolver;
+    }
+
+    /** The provider's GetEntityObject spy, typed for call-args assertions. */
+    function getEntityObjectSpy(): ReturnType<typeof vi.fn> {
+        return (currentProvider as { GetEntityObject: ReturnType<typeof vi.fn> }).GetEntityObject;
+    }
+
+    beforeEach(() => {
+        getSystemUserMock.mockReturnValue(SYSTEM_USER);
+    });
+
+    it('dispatches the relayed tool as the SYSTEM user while the ownership gate stays on the caller', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: 'anon-1' }));
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+        const resolver = makeAnonResolver();
+
+        const out = await resolver.ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub(),
+        );
+
+        expect(out).toBe('{"ok":true}');
+        // The session load (ownership gate) ran as the CALLER…
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agent Sessions', ANON_USER);
+        // …the delegated dispatch ran as the SYSTEM user…
+        expect(executeRelayedToolMock.mock.calls[0][1]).toBe(SYSTEM_USER);
+        // …and the heartbeat (a session write the anon role holds) stayed on the caller.
+        expect(heartbeatMock).toHaveBeenCalledWith('session-1', ANON_USER, currentProvider);
+    });
+
+    it('still rejects a non-owned session for a scoped anonymous caller before any elevated work', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: 'someone-else' }));
+        const resolver = makeAnonResolver();
+
+        await expect(
+            resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub()),
+        ).rejects.toThrow(/do not own/i);
+        expect(executeRelayedToolMock).not.toHaveBeenCalled();
+    });
+
+    it('dispatches as the caller unchanged for a normal authenticated user', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity());
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        expect(executeRelayedToolMock.mock.calls[0][1]).toBe(USER);
+        expect(getSystemUserMock).not.toHaveBeenCalled();
+    });
+
+    it('FAILS CLOSED — dispatches as the anonymous caller when no system user is available', async () => {
+        getSystemUserMock.mockReturnValue(undefined);
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: 'anon-1' }));
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+        const resolver = makeAnonResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        expect(executeRelayedToolMock.mock.calls[0][1]).toBe(ANON_USER);
+    });
+
+    it('accumulates relayed usage onto the prompt run under the SYSTEM user', async () => {
+        const session = makeSessionEntity({
+            UserID: 'anon-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+        });
+        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', TokensPrompt: null, TokensCompletion: null, TokensUsed: null });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Prompt Runs' ? promptRun : session)),
+        };
+        const resolver = makeAnonResolver();
+
+        const ok = await resolver.RelayRealtimeUsage('session-1', 100, 25, makeCtx());
+
+        expect(ok).toBe(true);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agent Sessions', ANON_USER);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Prompt Runs', SYSTEM_USER);
+        expect(promptRun.Save).toHaveBeenCalled();
+    });
+
+    it('mirrors the transcript turn onto the prompt run as SYSTEM while the Conversation Detail stays the caller', async () => {
+        const session = makeSessionEntity({
+            UserID: 'anon-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+        });
+        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', Messages: null });
+        const detail = makeSessionEntity({ ID: 'detail-1' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => {
+                if (name === 'MJ: AI Prompt Runs') return promptRun;
+                if (name === 'MJ: Conversation Details') return detail;
+                return session;
+            }),
+        };
+        const resolver = makeAnonResolver();
+
+        const ok = await resolver.RelayRealtimeTranscript('session-1', 'User', 'hello there', makeCtx());
+
+        expect(ok).toBe(true);
+        // The visible chat turn is written as the CALLER (the anon role holds Conversation Details)…
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
+        // …the co-agent prompt-run mirror is written as the SYSTEM user.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Prompt Runs', SYSTEM_USER);
+        expect(promptRun.Save).toHaveBeenCalled();
+    });
+
+    it('records the co-agent tool turn (RelayRealtimeToolTurn) under the SYSTEM user', async () => {
+        const session = makeSessionEntity({
+            UserID: 'anon-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+        });
+        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', Messages: null });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Prompt Runs' ? promptRun : session)),
+        };
+        const resolver = makeAnonResolver();
+
+        const ok = await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{"url":"x"}');
+
+        expect(ok).toBe(true);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Prompt Runs', SYSTEM_USER);
+    });
+
+    it('prepares the session with observability under the SYSTEM user while UserID stays the visitor', async () => {
+        hasPermissionMock.mockResolvedValue(true);
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: 'anon-1' }));
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-anon', UserID: 'anon-1' }));
+        prepareClientSessionMock.mockResolvedValue({
+            Success: true,
+            ClientConfig: {
+                Provider: 'openai',
+                Model: 'gpt-realtime',
+                EphemeralToken: 'ek_abc',
+                ExpiresAt: '2026-01-01T00:00:00Z',
+                SessionConfig: {},
+            },
+        });
+        const resolver = makeAnonResolver();
+
+        await resolver.StartRealtimeClientSession('target-1', makeCtx());
+
+        // CanRun stays gated on the CALLER — elevation never widens who can start a session.
+        expect(hasPermissionMock).toHaveBeenCalledWith('target-1', ANON_USER, 'run');
+        const [prepInput, prepUser] = prepareClientSessionMock.mock.calls[0] as [
+            { UserID?: string }, unknown,
+        ];
+        // Observability creation runs as the SYSTEM user…
+        expect(prepUser).toBe(SYSTEM_USER);
+        // …but run attribution + memory scope stay the visitor's.
+        expect(prepInput.UserID).toBe('anon-1');
+    });
+
+    it('junction-links delegated artifacts under the SYSTEM user and stamps the hidden anchor with the SESSION owner', async () => {
+        const session = makeSessionEntity({ UserID: 'anon-1' });
+        const junctions: FakeSession[] = [];
+        const anchors: FakeSession[] = [];
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => {
+                if (name === 'MJ: Conversation Detail Artifacts') {
+                    const junction = makeSessionEntity({ ID: `junction-${junctions.length + 1}` });
+                    junctions.push(junction);
+                    return junction;
+                }
+                if (name === 'MJ: Conversation Details') {
+                    const anchor = makeSessionEntity({ ID: 'anchor-detail-1' });
+                    anchors.push(anchor);
+                    return anchor;
+                }
+                return session;
+            }),
+            RunView: vi.fn(async () => ({ Success: true, Results: [] })),
+        };
+        executeRelayedToolMock.mockResolvedValue({
+            ResultJson: '{"ok":true}',
+            Success: true,
+            Artifacts: [{ ArtifactID: 'a-1', ArtifactVersionID: 'av-1', Name: 'Report' }],
+        });
+        const resolver = makeAnonResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        // The junction write (an entity the anon role does NOT hold) runs as the SYSTEM user.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Detail Artifacts', SYSTEM_USER);
+        expect(junctions).toHaveLength(1);
+        // The hidden anchor is attributed to the SESSION owner, not the elevated principal.
+        expect(anchors).toHaveLength(1);
+        expect(anchors[0].UserID).toBe('anon-1');
     });
 });

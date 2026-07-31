@@ -60,7 +60,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
-import { resolveWidgetGuestRunContext } from '../realtimeWidget/widgetGuestElevation.js';
+import { resolveWidgetGuestRunContext, resolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -495,6 +495,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
         const config = this.readSessionConfig(session);
 
+        // SCOPED-ANONYMOUS ELEVATION (issue #3371): once ownership is proven above, the delegated
+        // run + its AI-run-entity writes execute as the system user for a scoped anonymous caller
+        // (the caller's role deliberately holds no grants on the run entities). The agent authority
+        // is unaffected — targetAgentID comes from the session config, CanRun-gated at start.
+        const runUser = resolveScopedAnonymousRunUser(contextUser);
+        if (runUser !== contextUser) {
+            LogStatus(
+                `ExecuteRealtimeSessionTool: dispatching relayed tool '${toolName}' for session ${agentSessionId} ` +
+                    'under the system user (scoped-anonymous caller).',
+            );
+        }
         const { ResultJson, PausedRunID, Artifacts } = await this.clientSessionService.ExecuteRelayedTool(
             {
                 AgentSessionID: agentSessionId,
@@ -509,7 +520,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // Resume a previously-paused delegated run (if any) with the user's answer.
                 ResumeRunID: config.pendingFeedbackRunID,
             },
-            contextUser,
+            runUser,
             provider,
         );
 
@@ -519,7 +530,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
         // Junction-link any artifacts the delegated run produced into the session's conversation
         // history (best-effort) — so chat, session review, and resume carryover can all see them.
-        await this.linkDelegatedArtifactsToConversation(session, Artifacts, contextUser, provider);
+        // Runs as `runUser`: the junction entity is not among an anonymous caller's relay grants.
+        await this.linkDelegatedArtifactsToConversation(session, Artifacts, runUser, provider);
 
         await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
         return ResultJson;
@@ -625,6 +637,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
         // Mirror the turn onto the co-agent's long-lived prompt run so its Messages capture the full
         // conversation (run-viewer observability parity). Best-effort — never fails the transcript relay.
+        // The prompt-run write runs as the scoped-anonymous elevated user (issue #3371) — the visible
+        // Conversation Detail above deliberately stays on the caller.
         const promptRunID = this.readPromptRunID(session);
         if (promptRunID) {
             await this.clientSessionService.AppendPromptRunMessage(
@@ -632,7 +646,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 this.mapTranscriptRoleToChatRole(role),
                 text,
                 replacesPrevious ?? false,
-                contextUser,
+                resolveScopedAnonymousRunUser(contextUser),
                 provider,
             );
         }
@@ -815,7 +829,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             'assistant',
             this.formatToolTurn(toolName, argsJson, resultJson),
             false,
-            contextUser,
+            resolveScopedAnonymousRunUser(contextUser),
             provider,
         );
     }
@@ -913,7 +927,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
         // Delegate to the service so usage writes share the per-run serialization with transcript-message
         // appends — otherwise the frequent usage save clobbers freshly-appended Messages (and vice-versa).
-        return this.clientSessionService.AccumulatePromptRunUsage(promptRunID, inputDelta, outputDelta, contextUser, provider);
+        // Runs as the scoped-anonymous elevated user (issue #3371) — the caller's role holds no prompt-run grants.
+        return this.clientSessionService.AccumulatePromptRunUsage(
+            promptRunID, inputDelta, outputDelta, resolveScopedAnonymousRunUser(contextUser), provider,
+        );
     }
 
     /** Clamps a relayed token delta: negative / non-finite values become 0. */
@@ -1584,7 +1601,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 ApplicationID: applicationId,
                 AppContext: appContext,
             },
-            contextUser,
+            // SCOPED-ANONYMOUS ELEVATION (issue #3371): the prepare creates the co-agent
+            // observability AIAgentRun/AIPromptRun/run-step, which a scoped anonymous caller's role
+            // deliberately cannot write. `UserID` above stays the CALLER's id, so run attribution
+            // and memory scope remain the visitor's. Authorization (CanRun, runtime overrides)
+            // already ran on the caller in StartRealtimeClientSession.
+            resolveScopedAnonymousRunUser(contextUser),
             provider,
         );
 
@@ -2190,7 +2212,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         detail.HiddenToUser = true;
         detail.Message = 'Artifacts produced during a realtime session (system anchor).';
         detail.AgentSessionID = session.ID;
-        detail.UserID = contextUser.ID;
+        // Attribute the anchor to the SESSION owner, not the (possibly elevated) writer — identical
+        // for every non-elevated caller, whose ownership of the session is already proven.
+        detail.UserID = session.UserID;
         if (await detail.Save()) {
             return detail.ID;
         }

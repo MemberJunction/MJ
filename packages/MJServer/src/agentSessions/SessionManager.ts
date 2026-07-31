@@ -8,6 +8,7 @@ import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import { GetHostInstanceID } from './HostInstance.js';
 import { writeReturningVisitorRecap } from './ReturningVisitorRecap.js';
+import { resolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -230,10 +231,14 @@ export class SessionManager {
             return;
         }
         try {
+            // SCOPED-ANONYMOUS ELEVATION (issue #3371): the runs were CREATED under the system user
+            // for a scoped anonymous session, so an owner-initiated (or error) close must finalize
+            // under it too — the caller's role holds no grants on the AI run entities. Janitor and
+            // shutdown sweeps already close as the system user and pass through unchanged.
             await new RealtimeClientSessionService().FinalizeCoAgentRun(
                 config.coAgentRunID ?? null,
                 config.promptRunID ?? null,
-                contextUser,
+                resolveScopedAnonymousRunUser(contextUser),
                 provider,
                 true,
                 config.coAgentRunStepID ?? null,
