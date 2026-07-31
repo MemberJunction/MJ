@@ -119,7 +119,10 @@ export class GetEntityDetailsAction extends BaseAction {
                 const result = await rv.RunView({
                     EntityName: entity.Name,
                     MaxRows: sampleRowCount,
-                    ResultType: 'simple'
+                    ResultType: 'simple',
+                    // We deliberately fetch only a SAMPLE but report the entity's true row
+                    // count. A capped, non-paginated read otherwise reports the sample size.
+                    ReturnTotalRowCount: true
                 }, params.ContextUser);
 
                 if (!result.Success) {

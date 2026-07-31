@@ -107,6 +107,13 @@ export type RunViewGenericParams = {
    * happens. Propagated to `RunViewParams.BypassCache`.
    */
   bypassCache?: boolean;
+  /**
+   * When true, the provider computes the TRUE total row count for the query and
+   * returns it in `TotalRowCount`, even when the returned rows are capped by
+   * `maxRows`. Without it, a capped, non-paginated read reports the number of rows
+   * actually returned. Propagated to `RunViewParams.ReturnTotalRowCount`.
+   */
+  returnTotalRowCount?: boolean;
 };
 
 

@@ -82,7 +82,10 @@ export class GetRecordsAction extends BaseAction {
             const runViewParams: any = {
                 EntityName: entityName,
                 MaxRows: maxRows,
-                ResultType: 'simple'
+                ResultType: 'simple',
+                // The caller asked for "showing N of M total" — that M is only computed when
+                // requested. A capped, non-paginated read otherwise reports M = N.
+                ReturnTotalRowCount: !!includeCount
             };
 
             // Add filter if provided

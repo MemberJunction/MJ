@@ -405,7 +405,9 @@ export class ComponentRegistryAPIServer {
       const result = await rv.RunView({
         EntityName: 'MJ: Components',
         ExtraFilter: this.getComponentFilter(),
-        MaxRows: 1
+        // count_only: the health payload reports a COUNT and never touches the rows.
+        // A `MaxRows: 1` read would report a componentCount of 1.
+        ResultType: 'count_only'
       });
       
       res.json({

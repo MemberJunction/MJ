@@ -927,7 +927,11 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     ],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
                     OrderBy: '__mj_CreatedAt DESC',
-                    MaxRows: this.executionHistoryPageSize
+                    MaxRows: this.executionHistoryPageSize,
+                    // This is the FIRST page of a paged history; the UI shows the total run
+                    // count alongside it. A capped, non-paginated read otherwise reports
+                    // TotalRowCount = the page size.
+                    ReturnTotalRowCount: true
                 },
                 // Agent permissions (to determine open-to-everyone state)
                 {

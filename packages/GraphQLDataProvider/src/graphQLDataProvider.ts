@@ -882,6 +882,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // (server caching enabled) is unchanged.
                 if (params.BypassCache !== undefined)
                     innerParams.BypassCache = params.BypassCache;
+                // ReturnTotalRowCount asks the server for the TRUE total count of the underlying
+                // query even when the rows come back capped by MaxRows. Needed by KPI/badge
+                // callers that show "N items" while rendering only a page. Only forwarded when
+                // explicitly set, so default behavior is unchanged.
+                if (params.ReturnTotalRowCount !== undefined)
+                    innerParams.ReturnTotalRowCount = params.ReturnTotalRowCount;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1053,6 +1059,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
                     if (param.BypassCache !== undefined) {
                         innerParam.BypassCache = param.BypassCache;
+                    }
+                    if (param.ReturnTotalRowCount !== undefined) {
+                        innerParam.ReturnTotalRowCount = param.ReturnTotalRowCount;
                     }
 
                     if (!dynamicView) {

@@ -1197,6 +1197,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             Fields: ['__mj_UpdatedAt'],
             OrderBy: '__mj_UpdatedAt DESC',
             MaxRows: 1,
+            // We want ONE row (the latest) but the TRUE count of all of them. Without this
+            // opt-in a capped, non-paginated read reports TotalRowCount = rows returned = 1.
+            ReturnTotalRowCount: true,
         }));
         const allQueries = [
             ...erdQueries,
@@ -1544,7 +1547,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             Fields: ['__mj_UpdatedAt'],
             OrderBy: '__mj_UpdatedAt DESC',
             ResultType: 'simple',
-            MaxRows: 1
+            MaxRows: 1,
+            // Latest row + TRUE count of all rows — see the batch query in loadData().
+            ReturnTotalRowCount: true
         });
 
         if (result.Success) {
