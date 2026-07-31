@@ -9,72 +9,127 @@
  * When ClassFactory.GetRegistrationAsync() or CreateInstanceAsync() cannot find a
  * registration synchronously, the registered lazy loader builds the compound key and
  * looks it up here to dynamically import the chunk containing the class.
+ *
+ * Every entry carries an explicit `chunkId` — the dynamic import specifier — because many
+ * compound keys share one chunk and the registry must be able to tell those chunks apart.
+ * Do NOT collapse these into a shared helper that returns a closure: closures built by the
+ * same helper are indistinguishable by identity-adjacent means (e.g. Function.toString()),
+ * which silently merges all chunks into one.
  */
-
-/** Helper to create a loader that all entries in a feature share. */
-function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {
-  return () => importFn().then(() => {});
-}
 
 // --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
-const loadNgDashboardsActionsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/actions-dashboards.module'));
+const loadNgDashboardsActionsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/actions-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./ai-dashboards.module (17 entries) ---
-const loadNgDashboardsAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
+const loadNgDashboardsAiDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/ai-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
-const loadNgDashboardsCommunicationDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/communication-dashboards.module'));
+const loadNgDashboardsCommunicationDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/communication-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/communication-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (3 entries) ---
-const loadNgDashboardsComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
+const loadNgDashboardsComponentStudioDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/component-studio-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./core-dashboards.module (34 entries) ---
-const loadNgDashboardsCoreDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/core-dashboards.module'));
+const loadNgDashboardsCoreDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./credentials-dashboards.module (6 entries) ---
-const loadNgDashboardsCredentialsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/credentials-dashboards.module'));
+const loadNgDashboardsCredentialsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/credentials-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/credentials-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./data-explorer-dashboards.module (2 entries) ---
-const loadNgDashboardsDataExplorerDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/data-explorer-dashboards.module'));
+const loadNgDashboardsDataExplorerDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/data-explorer-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/data-explorer-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./integration.module (6 entries) ---
-const loadNgDashboardsIntegrationModule = featureLoader(() => import('@memberjunction/ng-dashboards/integration.module'));
+const loadNgDashboardsIntegrationModule = {
+  chunkId: '@memberjunction/ng-dashboards/integration.module',
+  load: () => import('@memberjunction/ng-dashboards/integration.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./lists-dashboards.module (5 entries) ---
-const loadNgDashboardsListsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/lists-dashboards.module'));
+const loadNgDashboardsListsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/lists-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/lists-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./mcp.module (2 entries) ---
-const loadNgDashboardsMcpModule = featureLoader(() => import('@memberjunction/ng-dashboards/mcp.module'));
+const loadNgDashboardsMcpModule = {
+  chunkId: '@memberjunction/ng-dashboards/mcp.module',
+  load: () => import('@memberjunction/ng-dashboards/mcp.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./module (3 entries) ---
-const loadNgDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/module'));
+const loadNgDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/module',
+  load: () => import('@memberjunction/ng-dashboards/module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (3 entries) ---
-const loadNgDashboardsPredictiveStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module'));
+const loadNgDashboardsPredictiveStudioDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/predictive-studio-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./routines-dashboards.module (1 entries) ---
-const loadNgDashboardsRoutinesDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/routines-dashboards.module'));
+const loadNgDashboardsRoutinesDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/routines-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/routines-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
-const loadNgDashboardsSchedulingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/scheduling-dashboards.module'));
+const loadNgDashboardsSchedulingDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/scheduling-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/scheduling-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./testing-dashboards.module (6 entries) ---
-const loadNgDashboardsTestingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/testing-dashboards.module'));
+const loadNgDashboardsTestingDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/testing-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/testing-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-explorer-settings → ./settings.module (6 entries) ---
-const loadNgExplorerSettingsSettingsModule = featureLoader(() => import('@memberjunction/ng-explorer-settings/settings.module'));
+const loadNgExplorerSettingsSettingsModule = {
+  chunkId: '@memberjunction/ng-explorer-settings/settings.module',
+  load: () => import('@memberjunction/ng-explorer-settings/settings.module').then(() => {})
+};
 
 // --- @memberjunction/ng-file-storage → ./file-storage.module (1 entries) ---
-const loadNgFileStorageFileStorageModule = featureLoader(() => import('@memberjunction/ng-file-storage/file-storage.module'));
+const loadNgFileStorageFileStorageModule = {
+  chunkId: '@memberjunction/ng-file-storage/file-storage.module',
+  load: () => import('@memberjunction/ng-file-storage/file-storage.module').then(() => {})
+};
 
 // --- @memberjunction/ng-react → . (1 entries) ---
-const loadNgReact = featureLoader(() => import('@memberjunction/ng-react'));
+const loadNgReact = {
+  chunkId: '@memberjunction/ng-react',
+  load: () => import('@memberjunction/ng-react').then(() => {})
+};
 
 /**
- * Complete mapping of compound keys (BaseClassName::Key) to lazy-loading functions.
+ * Complete mapping of compound keys (BaseClassName::Key) to their chunk descriptor.
  * Covers all @RegisterClass decorated classes in lazy-loaded packages.
  */
-export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
+export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => Promise<void> }> = {
   // @memberjunction/ng-dashboards → ./actions-dashboards.module
   'BaseResourceComponent::ActionExplorerResource': loadNgDashboardsActionsDashboardsModule,
   'BaseResourceComponent::ActionsCodeResource': loadNgDashboardsActionsDashboardsModule,
