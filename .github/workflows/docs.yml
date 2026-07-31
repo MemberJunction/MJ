@@ -19,6 +19,7 @@ on:
       - 'CONTRIBUTING.md'
       - 'metadata/README.md'
       - '.claude/skills/**'
+      - 'releases/**'
 
   workflow_dispatch:
 

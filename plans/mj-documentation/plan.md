@@ -87,5 +87,5 @@ Implementation becomes possible the day the LTS branch exists; nothing to do bef
 
 1. Analytics — Plausible / GoatCounter / nothing? (Nothing is the current state.)
 2. Branded OG image for social cards (`docs-site/public/og-image.png`) — needs a designed asset.
-3. A "What's new" page aggregating recent release notes — small lift, deferred.
+3. ~~A "What's new" page aggregating recent release notes~~ **Resolved 2026-07-31:** release notes live as `releases/v*.md` in the repo (written by the `/notes` skill, which previously wrote to throwaway `tmp/`), auto-rendered at `/releases/` with a newest-first index. The build engineer's Teams post becomes optional; the file is the publication.
 4. Should the `training` repo be revived and linked from Getting Started? If not, archive it.
