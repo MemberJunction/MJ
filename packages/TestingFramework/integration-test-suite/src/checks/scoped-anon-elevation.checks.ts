@@ -82,15 +82,21 @@ async function buildAgentRunFixture(user: UserInfo, agentID: string): Promise<MJ
     return run;
 }
 
-/** Best-effort fixture cleanup under the system user — logged, never thrown. */
+/**
+ * Best-effort fixture cleanup — logged, never thrown.
+ *
+ * @param cleanupUser The principal to delete under: normally the system user, but callers on an
+ * anomalous path may pass whichever principal created the row, so cleanup never depends on the
+ * system user being resolvable.
+ */
 async function deleteFixture(
     entityName: 'MJ: AI Agent Runs' | 'MJ: AI Prompt Runs',
     id: string,
-    sys: UserInfo,
+    cleanupUser: UserInfo,
 ): Promise<void> {
     try {
         const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-        const record = await md.GetEntityObject<MJAIAgentRunEntity | MJAIPromptRunEntity>(entityName, sys);
+        const record = await md.GetEntityObject<MJAIAgentRunEntity | MJAIPromptRunEntity>(entityName, cleanupUser);
         if (await record.Load(id) && !(await record.Delete())) {
             console.warn(`  ⚠ scoped-anon-elevation: fixture Delete failed for ${entityName} ${id}: `
                 + `${record.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -126,11 +132,9 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
             const { saved, message } = await attemptDeniedSave(run);
             if (saved) {
                 // Premise broken — this deployment grants an anonymous, role-less principal Create on
-                // the AI run entities. Clean the accidental row up before failing loudly.
-                const sys = systemUser();
-                if (sys) {
-                    await deleteFixture('MJ: AI Agent Runs', run.ID, sys);
-                }
+                // the AI run entities. Clean the accidental row up before failing loudly, falling back
+                // to the principal that just created it so an unresolvable system user can't strand it.
+                await deleteFixture('MJ: AI Agent Runs', run.ID, systemUser() ?? anon);
                 Assert(false, 'a zero-role scoped anonymous principal was ALLOWED to create an MJ: AI Agent Runs row — '
                     + 'the permission premise behind scoped-anonymous elevation (issue #3371) does not hold here');
             }

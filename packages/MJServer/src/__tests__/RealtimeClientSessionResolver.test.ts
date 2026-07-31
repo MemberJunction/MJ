@@ -2702,6 +2702,9 @@ describe('RealtimeClientSessionResolver — app awareness (applicationId / appCo
             }),
         );
         executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+        // The union is CanRun-gated against the caller before dispatch — grant it here so this test
+        // covers the pass-through, not the gate (which has its own describe block).
+        hasPermissionMock.mockResolvedValue(true);
         const resolver = makeResolver();
 
         await resolver.ExecuteRealtimeSessionTool(
@@ -2755,6 +2758,19 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(executeRelayedToolMock.mock.calls[0][1]).toBe(SYSTEM_USER);
         // …and the heartbeat (a session write the anon role holds) stayed on the caller.
         expect(heartbeatMock).toHaveBeenCalledWith('session-1', ANON_USER, currentProvider);
+    });
+
+    it('attributes the delegated run to the VISITOR even though it executes as the system user', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity({ UserID: 'anon-1' }));
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+        const resolver = makeAnonResolver();
+
+        await resolver.ExecuteRealtimeSessionTool('session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub());
+
+        // Executes as system (the run entities are outside the anon role)…
+        expect(executeRelayedToolMock.mock.calls[0][1]).toBe(SYSTEM_USER);
+        // …but the run row and its context-memory scope stay the visitor's.
+        expect(executeRelayedToolMock.mock.calls[0][0].AttributionUserID).toBe('anon-1');
     });
 
     it('still rejects a non-owned session for a scoped anonymous caller before any elevated work', async () => {
@@ -2981,5 +2997,98 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', USER);
         expect((storeRecordingMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(USER);
         expect(getSystemUserMock).not.toHaveBeenCalled();
+    });
+});
+
+describe('RealtimeClientSessionResolver — colleague authorization (allowedAgents)', () => {
+    /** A two-colleague session config: the lead plus a restricted and an open colleague. */
+    function makeMultiTargetSession(userID: string): FakeSession {
+        return makeSessionEntity({
+            UserID: userID,
+            Config_: JSON.stringify({
+                targetAgentID: 'target-1',
+                allowedAgents: [
+                    { agentId: 'colleague-open', label: 'Open Colleague' },
+                    { agentId: 'colleague-restricted', label: 'Restricted Colleague' },
+                ],
+            }),
+        });
+    }
+
+    /** CanRun: everything except `colleague-restricted`. */
+    function grantAllExceptRestricted(): void {
+        hasPermissionMock.mockImplementation((...args: unknown[]) =>
+            Promise.resolve(args[0] !== 'colleague-restricted'),
+        );
+    }
+
+    /** The `AllowedAgents` union the resolver actually handed to the delegation layer. */
+    function dispatchedAgentIDs(): string[] {
+        const input = executeRelayedToolMock.mock.calls[0][0] as { AllowedAgents?: { agentId: string }[] };
+        return (input.AllowedAgents ?? []).map((a) => a.agentId);
+    }
+
+    beforeEach(() => {
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+        getSystemUserMock.mockReturnValue({ ID: 'system-1', Email: 'system@system.org' } as UserInfo);
+    });
+
+    it('drops colleagues the AUTHENTICATED caller cannot run', async () => {
+        currentProvider = makeProvider(() => makeMultiTargetSession('user-1'));
+        grantAllExceptRestricted();
+
+        await makeResolver().ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub(),
+        );
+
+        expect(dispatchedAgentIDs()).toEqual(['colleague-open']);
+    });
+
+    it('gates the union against the CALLER, not the elevated system user (issue #3371)', async () => {
+        const anonUser = {
+            ID: 'anon-1',
+            Email: 'anonymous@magic-link.local',
+            IsMagicLinkAnonymous: true,
+            MagicLinkScope: { ResourceID: 'scope-res-1' },
+        };
+        currentProvider = makeProvider(() => makeMultiTargetSession('anon-1'));
+        grantAllExceptRestricted();
+        const resolver = new RealtimeClientSessionResolver();
+        (resolver as unknown as { GetUserFromPayload: () => unknown }).GetUserFromPayload = () => anonUser;
+
+        await resolver.ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub(),
+        );
+
+        // Elevation must never widen agent authority: the restricted colleague is still gone…
+        expect(dispatchedAgentIDs()).toEqual(['colleague-open']);
+        // …and every CanRun verdict was asked about the visitor, never the system user.
+        for (const call of hasPermissionMock.mock.calls) {
+            expect((call as unknown[])[1]).toBe(anonUser);
+        }
+    });
+
+    it('excludes every colleague when the caller can run none of them', async () => {
+        currentProvider = makeProvider(() => makeMultiTargetSession('user-1'));
+        hasPermissionMock.mockResolvedValue(false);
+
+        await makeResolver().ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub(),
+        );
+
+        expect(dispatchedAgentIDs()).toEqual([]);
+    });
+
+    it('passes a single-target session through with no permission checks', async () => {
+        currentProvider = makeProvider(() => makeSessionEntity());
+        hasPermissionMock.mockResolvedValue(true);
+
+        await makeResolver().ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'invoke-target-agent', '{}', makeCtx(), makePubSub(),
+        );
+
+        const input = executeRelayedToolMock.mock.calls[0][0] as { AllowedAgents?: unknown };
+        expect(input.AllowedAgents).toBeUndefined();
+        expect(hasPermissionMock).not.toHaveBeenCalled();
     });
 });

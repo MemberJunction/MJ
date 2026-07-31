@@ -497,8 +497,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
         // SCOPED-ANONYMOUS ELEVATION (issue #3371): once ownership is proven above, the delegated
         // run + its AI-run-entity writes execute as the system user for a scoped anonymous caller
-        // (the caller's role deliberately holds no grants on the run entities). The agent authority
-        // is unaffected — targetAgentID comes from the session config, CanRun-gated at start.
+        // (the caller's role deliberately holds no grants on the run entities). The lead
+        // targetAgentID comes from the session config and was CanRun-gated at start; the colleague
+        // union is gated just below, against the CALLER, so elevation never widens agent authority.
         const runUser = resolveScopedAnonymousRunUser(contextUser);
         if (runUser !== contextUser) {
             LogStatus(
@@ -512,7 +513,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 TargetAgentID: config.targetAgentID,
                 // Multi-target (Move 4): the session's persisted allowed-agent union — a model-named
                 // colleague in the call is validated against this; absent ⇒ single-target behavior.
-                AllowedAgents: config.allowedAgents,
+                AllowedAgents: await this.filterAllowedAgentsByCanRun(config.allowedAgents, contextUser),
+                // Attribution follows the VISITOR even when `runUser` is elevated: the delegated run
+                // row and its context-memory scope must stay the person's, not the system user's.
+                AttributionUserID: contextUser.ID,
                 // Nest the delegated target-agent run under the co-agent observability run (when present).
                 ParentRunID: config.coAgentRunID,
                 Call: { CallID: callId, ToolName: toolName, Arguments: argsJson },
@@ -1145,6 +1149,39 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 `Not authorized: you are not permitted to run the target agent ${targetAgentId}`,
             );
         }
+    }
+
+    /**
+     * Narrows a session's colleague union (`allowedAgents`) to the agents the CALLER may run.
+     *
+     * {@link assertCanRunTarget} gates the LEAD target at session start, but the union it travels
+     * with was never gated at all — a model-named colleague resolves straight to a delegated run.
+     * That was survivable while the run carried the caller's own identity, because base-agent
+     * re-checks `CanRun` against `contextUser`. Once the run user is elevated for a scoped anonymous
+     * caller (issue #3371) that check sees the SYSTEM user, so this is the only remaining place the
+     * caller's own authority is applied to a colleague. It therefore runs for EVERY caller, elevated
+     * or not — the authorization identity must never depend on the elevation decision.
+     *
+     * `HasPermission` reads AIEngineBase's in-memory caches (no DB round trip) and already fails
+     * closed on error, so an unresolvable agent drops OUT of the union rather than becoming runnable.
+     * A filtered-out colleague is not an error: the delegation layer reports it as "not available in
+     * this session" and lists what remains, which is the same answer the model gets for a typo.
+     *
+     * @param allowedAgents The session's persisted colleague union (absent/empty ⇒ single-target).
+     * @param contextUser The ORIGINAL caller — never the elevated run user.
+     * @returns The subset the caller may run, preserving order.
+     */
+    private async filterAllowedAgentsByCanRun(
+        allowedAgents: RealtimeAllowedAgent[] | undefined,
+        contextUser: UserInfo,
+    ): Promise<RealtimeAllowedAgent[] | undefined> {
+        if (!allowedAgents || allowedAgents.length === 0) {
+            return allowedAgents;
+        }
+        const verdicts = await Promise.all(
+            allowedAgents.map((a) => AIAgentPermissionHelper.HasPermission(a.agentId, contextUser, 'run')),
+        );
+        return allowedAgents.filter((_, i) => verdicts[i]);
     }
 
     /**
