@@ -115,10 +115,10 @@ function highestLevel(a: SearchScopePermissionLevel, b: SearchScopePermissionLev
  *
  * Rather than have such a consumer project its model into `SearchScopePermission` as derived
  * per-user rows — which works, but creates permission state that can drift from its source —
- * it can register a subclass:
+ * it subclasses {@link SearchScopePermissionResolver} and registers against this base:
  *
  * ```ts
- * @RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY, 10)
+ * @RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY)
  * export class MyResolver extends SearchScopePermissionResolver {
  *     public override async ResolveEffectivePermission(input: ResolvePermissionInput) {
  *         const stock = await super.ResolveEffectivePermission(input);
@@ -128,10 +128,17 @@ function highestLevel(a: SearchScopePermissionLevel, b: SearchScopePermissionLev
  * }
  * ```
  *
- * Register against {@link SEARCH_SCOPE_PERMISSION_RESOLVER_KEY} with a priority above 0, which is
- * what MJ's own registration uses. Highest priority wins, so no consumer has to fork the search
- * path. Subclassing `SearchScopePermissionResolver` rather than this base is the usual choice — it
- * keeps MJ's resolution order and lets the override compose with it, as above.
+ * **Do not pass a priority.** Subclassing the stock resolver is what orders the registration, and
+ * it does so more reliably than a number can. `ClassFactory.Register` treats an omitted priority as
+ * "one higher than the highest already registered for this (base, key)" — and a subclass cannot be
+ * defined without its parent module having loaded first, so MJ's own registration always runs
+ * before the consumer's and the consumer always lands above it. Extending the concrete resolver
+ * therefore *guarantees* the ordering as a side effect of the language.
+ *
+ * A hardcoded priority forfeits that guarantee. Two independent consumers that both pick the same
+ * number collide, `Register` warns, and resolution silently degrades to whichever happened to be
+ * registered last — a load-order bug wearing the costume of a configuration value. The priority
+ * argument exists for cases where subclassing is genuinely impossible; this is not one of them.
  *
  * **Failure posture.** `SearchEngine` treats a resolver throw as DENIED, never as allowed. An
  * override that cannot reach its own store must not accidentally open a scope.
@@ -144,8 +151,9 @@ export abstract class SearchScopePermissionResolverBase {
  * The ClassFactory key every SearchScope permission resolver registers under.
  *
  * There is exactly one resolver per deployment — a consumer REPLACES the policy rather than
- * selecting among several — so a single shared key with priority ordering is the right shape, and
- * it keeps the registry free of the keyless-registration warning.
+ * selecting among several — so a single shared key is the right shape, and it keeps the registry
+ * free of the keyless-registration warning. Ordering within the key comes from subclassing rather
+ * than from a number; see {@link SearchScopePermissionResolverBase}.
  */
 export const SEARCH_SCOPE_PERMISSION_RESOLVER_KEY = 'SearchScopePermissionResolver';
 

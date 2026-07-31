@@ -1,5 +1,5 @@
 ---
-"@memberjunction/search-engine": minor
+"@memberjunction/search-engine": patch
 "@memberjunction/server": patch
 "@memberjunction/core-actions": patch
 ---
@@ -13,17 +13,17 @@ A consumer whose entitlements are neither a user nor an MJ Role has no row that 
 This adds the seam that was missing:
 
 - **`SearchScopePermissionResolverBase`** — the abstract contract registrations bind to.
-- **`SEARCH_SCOPE_PERMISSION_RESOLVER_KEY`** — the ClassFactory key. There is exactly one resolver per deployment (a consumer *replaces* the policy rather than selecting among several), so a single shared key with priority ordering is the right shape, and it keeps the registry free of the keyless-registration warning.
+- **`SEARCH_SCOPE_PERMISSION_RESOLVER_KEY`** — the ClassFactory key. There is exactly one resolver per deployment (a consumer *replaces* the policy rather than selecting among several), so a single shared key is the right shape, and it keeps the registry free of the keyless-registration warning.
 - **`GetSearchScopePermissionResolver()`** — returns the highest-priority registration, falling back to MJ's own.
 
 **Every path that authorizes a scope now goes through the seam**, not just `SearchEngine`. This matters more than it sounds: a seam honoured on some paths and not others is worse than no seam, because the resulting behaviour is inconsistent rather than merely absent — the same grant authorizes a search issued one way and silently denies it issued another. The five call sites are `SearchEngine.searchOneScope`, `SearchKnowledgeResolver` (both the single-scope check and the visible-scope-list filter), `SearchKnowledgeStreamResolver`, and the `__Scoped_Search` core action. The last is the agent-facing path, so an override that did not reach it would be invisible to exactly the callers most likely to need it.
 
 Resolution happens per call rather than being cached at module load. A registration made during application startup would otherwise be missed depending on import order — a failure mode that presents as "my resolver works in tests but not in the server", which is expensive to diagnose. The class is stateless and construction is trivial, so there is nothing to gain by caching.
 
-The intended shape for an override is to compose with the stock resolver rather than replace its logic:
+The intended shape for an override is to subclass the stock resolver and compose with it, **passing no priority**:
 
 ```ts
-@RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY, 10)
+@RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY)
 export class MyResolver extends SearchScopePermissionResolver {
     public override async ResolveEffectivePermission(input: ResolvePermissionInput) {
         const stock = await super.ResolveEffectivePermission(input);
@@ -32,6 +32,10 @@ export class MyResolver extends SearchScopePermissionResolver {
     }
 }
 ```
+
+Subclassing is what orders the registration, and it does so more reliably than a number can. `ClassFactory.Register` treats an omitted priority as *one higher than the highest already registered for this (base, key)*, and a subclass cannot be defined without its parent module having loaded first — so MJ's registration always runs before the consumer's, and the consumer always lands above it. The ordering is a side effect of the language rather than a convention anyone has to remember.
+
+A hardcoded priority forfeits that. Two consumers that pick the same number collide, `Register` warns, and resolution degrades to whichever was registered last — a load-order bug wearing the costume of a configuration value. The priority argument stays for cases where subclassing is genuinely impossible.
 
 **Nothing changes for existing consumers.** MJ's resolver registers itself as the default, so behaviour is identical when nothing else is registered. `DefaultSearchScopePermissionResolver` is retained and still exported so existing imports keep compiling; it is marked `@deprecated` because it always yields MJ's own implementation and therefore bypasses any registered override.
 

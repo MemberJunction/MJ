@@ -63,8 +63,11 @@ describe('SearchScopePermissionResolver — replaceable seam', () => {
         expect(GetSearchScopePermissionResolver()).toBeDefined();
     });
 
-    it('honours a registered override', () => {
-        @RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY, 10)
+    it('honours a registered override, with NO priority passed', () => {
+        // No priority argument anywhere in this suite, deliberately: an omitted priority resolves to
+        // one higher than the highest already registered for this (base, key), so a registration
+        // that runs later always wins. See the ordering test below for the mechanism.
+        @RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY)
         class AlwaysAllow extends SearchScopePermissionResolverBase {
             public async ResolveEffectivePermission(): Promise<EffectivePermission> {
                 return {
@@ -97,7 +100,7 @@ describe('SearchScopePermissionResolver — replaceable seam', () => {
         }
 
         MJGlobal.Instance.ClassFactory.Register(
-            SearchScopePermissionResolverBase, LateRegistration, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY, 999,
+            SearchScopePermissionResolverBase, LateRegistration, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY,
         );
 
         const after = GetSearchScopePermissionResolver();
@@ -117,7 +120,11 @@ describe('SearchScopePermissionResolver — replaceable seam', () => {
 
         class Composing extends SearchScopePermissionResolver {
             public constructor(private readonly stock: EffectivePermission) { super(); }
-            public override async ResolveEffectivePermission(): Promise<EffectivePermission> {
+            // Takes the input even though this double ignores it: the point of this test is to
+            // demonstrate the shape a real override has, and a real override receives the input.
+            public override async ResolveEffectivePermission(
+                _input: ResolvePermissionInput,
+            ): Promise<EffectivePermission> {
                 if (this.stock.Allowed) return this.stock;
                 return {
                     Allowed: true, Level: 'Read', Source: 'DirectGrant',
@@ -141,12 +148,50 @@ describe('SearchScopePermissionResolver — replaceable seam', () => {
     });
 
     it('binds registrations to the base contract, so a subclass of the stock resolver also qualifies', () => {
-        @RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY, 30)
+        @RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY)
         class ExtendsStock extends SearchScopePermissionResolver {}
 
         const resolved = GetSearchScopePermissionResolver();
         expect(resolved).toBeInstanceOf(ExtendsStock);
         expect(resolved).toBeInstanceOf(SearchScopePermissionResolverBase);
         expect(resolved).toBeInstanceOf(SearchScopePermissionResolver);
+    });
+
+    /**
+     * The property the "pass no priority" guidance rests on.
+     *
+     * `ClassFactory.Register` treats an omitted priority as one higher than the highest already
+     * registered for this (base, key). Since a subclass cannot be defined without its parent module
+     * having loaded — and therefore its parent's decorator having run — a consumer subclassing the
+     * stock resolver is guaranteed to register afterwards, and therefore above it. That is what
+     * makes a hardcoded priority unnecessary, and the reason to avoid one: two consumers picking the
+     * same number collide, `Register` warns, and the winner degrades to whichever ran last.
+     */
+    it('ORDERING: an omitted priority lands above every earlier registration, MJ\'s own included', () => {
+        const factory = MJGlobal.Instance.ClassFactory;
+        const before = factory.GetAllRegistrations(
+            SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY);
+        const highestBefore = Math.max(...before.map(r => r.Priority));
+
+        // Two registrations in sequence, neither passing a priority.
+        @RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY)
+        class First extends SearchScopePermissionResolver {}
+        @RegisterClass(SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY)
+        class Second extends SearchScopePermissionResolver {}
+
+        const after = factory.GetAllRegistrations(
+            SearchScopePermissionResolverBase, SEARCH_SCOPE_PERMISSION_RESOLVER_KEY);
+        const priorityOf = (cls: unknown) => after.find(r => r.SubClass === cls)?.Priority;
+
+        // Each auto-assigned priority is strictly above what preceded it...
+        expect(priorityOf(First)).toBeGreaterThan(highestBefore);
+        expect(priorityOf(Second)).toBeGreaterThan(priorityOf(First) as number);
+        // ...and the later of the two is what actually resolves.
+        expect(GetSearchScopePermissionResolver()).toBeInstanceOf(Second);
+
+        // Non-vacuity: MJ's own registration really was in the bucket being outranked, so this is
+        // measuring the increment rather than an empty starting state.
+        expect(before.some(r => r.SubClass === SearchScopePermissionResolver)).toBe(true);
+        expect(highestBefore).toBeGreaterThan(0);
     });
 });
