@@ -1458,6 +1458,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private getConfigOverrides(config: RunConfiguration): {
         maxConcurrency?: number; rateLimitTokensPerSec?: number; rateLimitBurst?: number; discoveryTimeBudgetMs?: number;
+        fetchTimeoutMs?: number;
     } {
         try {
             const raw = config.companyIntegration.Configuration;
@@ -1469,6 +1470,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 rateLimitTokensPerSec: typeof p.rateLimitTokensPerSec === 'number' && p.rateLimitTokensPerSec > 0 ? p.rateLimitTokensPerSec : undefined,
                 rateLimitBurst: num(p.rateLimitBurst),
                 discoveryTimeBudgetMs: num(p.discoveryTimeBudgetMs),
+                fetchTimeoutMs: num(p.fetchTimeoutMs),
             };
         } catch { return {}; }
     }
@@ -1695,6 +1697,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const customKeyAgg = new Map<string, CustomKeyAccumulator>();
         let customKeyTotalRecords = 0;
 
+        // Per-page fetch timeout, resolved ONCE per entity map. A connector that fans out one request
+        // per parent does N requests inside a single FetchChanges call, so its page time scales with
+        // BatchSize and with however much concurrency the adaptive controller currently allows — the
+        // fixed 30s default punished exactly those connectors. Deployment config wins over the
+        // connector's own declared default, which wins over the framework default.
+        const fetchTimeoutMs =
+            this.getConfigOverrides(config).fetchTimeoutMs
+            ?? config.connector.FetchChangesTimeoutMs
+            ?? DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs;
+
         while (hasMore) {
             if (abortSignal?.aborted) {
                 console.log(`[IntegrationEngine] Sync cancelled for ${entityMap.ExternalObjectName} after ${recordsInMap} records — saving watermark`);
@@ -1748,7 +1760,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 batch = await WithRetry(
                     () => WithTimeout(
                         config.connector.FetchChanges(ctx),
-                        DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs,
+                        fetchTimeoutMs,
                         `FetchChanges(${entityMap.ExternalObjectName})`,
                     ),
                     undefined,
