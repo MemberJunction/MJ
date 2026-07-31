@@ -15,7 +15,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     private _lastDeliveredParamsKey: string | null = null;
     protected destroy$ = new Subject<void>();
     protected navigationService = inject(NavigationService);
-    private changeDetectorRef = inject(ChangeDetectorRef);
+    private changeDetectorRef = inject(ChangeDetectorRef, { optional: true });
 
     /**
      * Tab ID for query param notification scoping. Set by resource wrappers
@@ -303,7 +303,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * any LATER async state change that must reach the DOM outside those signals.
      */
     protected RefreshView(): void {
-        this.changeDetectorRef.markForCheck();
+        this.changeDetectorRef?.markForCheck();
     }
 
 
