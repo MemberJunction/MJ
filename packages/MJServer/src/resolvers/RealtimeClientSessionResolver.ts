@@ -705,13 +705,18 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return { Success: false, ErrorMessage: 'Recording consent was not granted.' };
         }
 
+        // SCOPED-ANONYMOUS ELEVATION (issue #3371): past the ownership + consent gates, the store is
+        // server-side plumbing over entities (MJ: AI Agents read, MJ: Files, the file-session link)
+        // the caller's narrow relay role deliberately does not hold. Attribution flows through the
+        // session link, so nothing here depends on the caller's identity.
+        const runUser = resolveScopedAnonymousRunUser(contextUser);
         try {
-            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
+            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', runUser);
             if (!(await agent.Load(session.AgentID))) {
                 return { Success: false, ErrorMessage: `Co-agent ${session.AgentID} for the session could not be loaded.` };
             }
 
-            const accountID = await resolveRecordingStorageAccountID(agent, contextUser, provider);
+            const accountID = await resolveRecordingStorageAccountID(agent, runUser, provider);
             if (!accountID) {
                 return { Success: false, ErrorMessage: 'No recording storage account is configured for this agent.' };
             }
@@ -728,7 +733,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 StartedAt: session.RecordingStartedAt ?? new Date(),
                 StorageAccountID: accountID,
                 SessionID: agentSessionId,
-                ContextUser: contextUser,
+                ContextUser: runUser,
                 Provider: provider,
                 // Sanitized capture-time waveform peaks → persisted as a peaks.json sidecar.
                 Peaks: this.sanitizePeaks(peaks),
@@ -736,7 +741,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
             // Canonical consolidated file written — drop the crash-recovery shards (best-effort).
             if (fileID) {
-                await deleteRealtimeRecordingSegments(agentSessionId, accountID, contextUser);
+                await deleteRealtimeRecordingSegments(agentSessionId, accountID, runUser);
             }
 
             return {
@@ -776,11 +781,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         try {
             const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
             const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
-            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
+            // Scoped-anonymous elevation (issue #3371) — same rationale as UploadRealtimeRecording.
+            const runUser = resolveScopedAnonymousRunUser(contextUser);
+            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', runUser);
             if (!(await agent.Load(session.AgentID))) {
                 return false;
             }
-            const accountID = await resolveRecordingStorageAccountID(agent, contextUser, provider);
+            const accountID = await resolveRecordingStorageAccountID(agent, runUser, provider);
             if (!accountID) {
                 return false;
             }
@@ -794,7 +801,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 Audio: buffer,
                 MimeType: mimeType,
                 StorageAccountID: accountID,
-                ContextUser: contextUser,
+                ContextUser: runUser,
             });
         } catch (error) {
             LogError(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment failed for session ${agentSessionId}: ${error instanceof Error ? error.message : String(error)}`);

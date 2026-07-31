@@ -81,6 +81,16 @@ vi.mock('@memberjunction/aiengine', () => ({
 const prepareClientSessionMock = vi.fn();
 const executeRelayedToolMock = vi.fn();
 const cancelInFlightMock = vi.fn((_agentSessionID: string, _callID?: string): number => 0);
+// Recording-store helpers (module-level exports of ai-agents) — mocked so the recording mutations'
+// identity threading is observable without touching MJStorage. vi.hoisted because the factory below
+// references them as PLAIN properties (evaluated when the factory runs, unlike the deferred
+// class-property/getter references above).
+const { resolveStorageMock, storeRecordingMock, writeSegmentMock, deleteSegmentsMock } = vi.hoisted(() => ({
+    resolveStorageMock: vi.fn(async (): Promise<string | null> => 'storage-acct-1'),
+    storeRecordingMock: vi.fn(async (): Promise<string | null> => 'file-1'),
+    writeSegmentMock: vi.fn(async (): Promise<boolean> => true),
+    deleteSegmentsMock: vi.fn(async (): Promise<number> => 0),
+}));
 const onChannelStateSaveMock = vi.fn(
     async (_agentSessionID: string, _channelName: string, stateJson: string): Promise<string> => stateJson,
 );
@@ -110,6 +120,10 @@ vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
                 return { OnChannelStateSave: onChannelStateSaveMock };
             },
         },
+        resolveRecordingStorageAccountID: resolveStorageMock,
+        storeRealtimeRecording: storeRecordingMock,
+        writeRealtimeRecordingSegment: writeSegmentMock,
+        deleteRealtimeRecordingSegments: deleteSegmentsMock,
     };
 });
 
@@ -239,6 +253,14 @@ beforeEach(() => {
     heartbeatMock.mockClear();
     getSystemUserMock.mockReset();
     getSystemUserMock.mockReturnValue(undefined);
+    resolveStorageMock.mockReset();
+    resolveStorageMock.mockResolvedValue('storage-acct-1');
+    storeRecordingMock.mockReset();
+    storeRecordingMock.mockResolvedValue('file-1');
+    writeSegmentMock.mockReset();
+    writeSegmentMock.mockResolvedValue(true);
+    deleteSegmentsMock.mockReset();
+    deleteSegmentsMock.mockResolvedValue(0);
     agentsMock.mockReturnValue([{ ID: 'co-agent-1', Name: 'Realtime Co-Agent' }]);
     agentTypesMock.mockReturnValue([]);
 });
@@ -2893,5 +2915,71 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         // The hidden anchor is attributed to the SESSION owner, not the elevated principal.
         expect(anchors).toHaveLength(1);
         expect(anchors[0].UserID).toBe('anon-1');
+    });
+
+    /** Provider routing the session (ownership) and the co-agent (recording storage resolution). */
+    function makeRecordingProvider(): unknown {
+        const session = makeSessionEntity({ UserID: 'anon-1' });
+        const agent = makeSessionEntity({ ID: 'co-agent-1' });
+        return {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : session)),
+        };
+    }
+    const AUDIO_B64 = Buffer.from('abc').toString('base64');
+
+    it('stores the consolidated recording under the SYSTEM user (ownership + consent stay caller-gated)', async () => {
+        currentProvider = makeRecordingProvider();
+        const resolver = makeAnonResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
+
+        expect(result.Success).toBe(true);
+        // Ownership ran as the CALLER; the agent read (an entity the anon role does not hold) as SYSTEM.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agent Sessions', ANON_USER);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', SYSTEM_USER);
+        // Storage-account resolution, the MJ: Files write, and the shard cleanup all run as SYSTEM.
+        expect(resolveStorageMock.mock.calls[0][1]).toBe(SYSTEM_USER);
+        expect((storeRecordingMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(SYSTEM_USER);
+        expect(deleteSegmentsMock).toHaveBeenCalledWith('session-1', 'storage-acct-1', SYSTEM_USER);
+    });
+
+    it('still refuses a consent-less recording upload BEFORE any elevated work', async () => {
+        currentProvider = makeRecordingProvider();
+        const resolver = makeAnonResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, false);
+
+        expect(result.Success).toBe(false);
+        expect(storeRecordingMock).not.toHaveBeenCalled();
+    });
+
+    it('stores a crash-recovery recording segment under the SYSTEM user', async () => {
+        currentProvider = makeRecordingProvider();
+        const resolver = makeAnonResolver();
+
+        const ok = await resolver.UploadRealtimeRecordingSegment('session-1', 0, AUDIO_B64, 'audio/wav', makeCtx());
+
+        expect(ok).toBe(true);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agent Sessions', ANON_USER);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', SYSTEM_USER);
+        expect((writeSegmentMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(SYSTEM_USER);
+    });
+
+    it('recording writes stay entirely on the caller for a normal authenticated user', async () => {
+        currentProvider = makeRecordingProvider();
+        // A named caller owning the session (the recording provider stamps UserID 'anon-1', so re-stamp).
+        const session = makeSessionEntity({ UserID: 'user-1' });
+        const agent = makeSessionEntity({ ID: 'co-agent-1' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: AI Agents' ? agent : session)),
+        };
+        const resolver = makeResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
+
+        expect(result.Success).toBe(true);
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Agents', USER);
+        expect((storeRecordingMock.mock.calls[0][0] as { ContextUser: unknown }).ContextUser).toBe(USER);
+        expect(getSystemUserMock).not.toHaveBeenCalled();
     });
 });
