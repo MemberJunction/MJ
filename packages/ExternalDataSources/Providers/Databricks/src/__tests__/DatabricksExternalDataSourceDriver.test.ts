@@ -171,25 +171,36 @@ describe('DatabricksExternalDataSourceDriver — read-only screen (:name normali
   it('still rejects a write even with a :name marker (normalization must not mask writes)', () => {
     expect(() => d.screen('DELETE FROM trips WHERE pickup_zip = :zip')).toThrow(/read-only|write/i);
   });
+  // Regression: the `:name` neutralizer must NOT clobber the second colon of a `::` type cast — a naive
+  // /:name/ replace turns `col::int` into `col:1`, which the fail-closed screen then rejects as unparseable.
+  it('allows a Databricks `::` type cast in a native read (must not be corrupted by :name normalization)', () => {
+    expect(() => d.screen('SELECT trip_distance::int AS d FROM samples.nyctaxi.trips WHERE pickup_zip = :zip')).not.toThrow();
+  });
 });
 
 describe('DatabricksExternalDataSourceDriver — isAuthError (credential-rotation self-heal)', () => {
   const d = new TestableDatabricksDriver();
 
-  it('recognizes HTTP 401/403 status (string and numeric)', () => {
+  it('recognizes HTTP 401 (authentication) — string and numeric', () => {
     expect(d.authErr({ statusCode: 401 })).toBe(true);
-    expect(d.authErr({ status: '403' })).toBe(true);
+    expect(d.authErr({ status: '401' })).toBe(true);
   });
 
-  it('recognizes Databricks auth message phrases', () => {
+  it('recognizes Databricks authentication message phrases', () => {
     expect(d.authErr(new Error('Invalid access token'))).toBe(true);
     expect(d.authErr(new Error('token expired'))).toBe(true);
-    expect(d.authErr(new Error('PERMISSION_DENIED: user lacks CAN_USE'))).toBe(true);
     expect(d.authErr(new Error('invalid_client'))).toBe(true); // OAuth M2M bad clientId/secret
   });
 
   it('still honors the base auth signals (inherited)', () => {
     expect(d.authErr(new Error('authentication failed'))).toBe(true);
+  });
+
+  // Authorization != authentication: a reconnect can't fix insufficient privilege, so classifying
+  // these as auth errors would waste a retry AND evict the shared client for other users. Must be false.
+  it('does NOT treat 403 / PERMISSION_DENIED (authorization) as an auth error', () => {
+    expect(d.authErr({ statusCode: 403 })).toBe(false);
+    expect(d.authErr(new Error('PERMISSION_DENIED: user lacks CAN_USE on warehouse'))).toBe(false);
   });
 
   it('returns false for non-auth errors (must NOT evict+retry a normal query error)', () => {

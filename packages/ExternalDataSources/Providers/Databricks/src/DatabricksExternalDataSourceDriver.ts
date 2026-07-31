@@ -82,6 +82,15 @@ interface DatabricksCredentialValues extends Record<string, string> {
 export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourceDriver<DatabricksClient> {
   // Cache the in-flight CONNECT promise (not the resolved client) so concurrent first-requests share one
   // client instead of each building one and leaking all but the last (the cold-start race).
+  //
+  // DESIGN NOTE — single cached client (vs. Snowflake's generic-pool): Databricks SQL is stateless
+  // Thrift-over-HTTPS — each statement opens a short-lived session and makes independent HTTP requests, so
+  // there is no long-lived TCP socket to go stale on idle. A warehouse that auto-suspends is transparently
+  // resumed by the SDK's own retry (retriesTimeout defaults to 15 min), so the SAME cached client keeps
+  // working across a suspend/resume without a pool. `withConnectionRetry` still evicts + reconnects on an
+  // auth error (rotated/expired credential). The residual gap — a client wedged into a permanently-broken
+  // NON-auth state — would require a process restart; given the stateless-HTTP model that's a rare,
+  // accepted trade-off rather than the per-idle-timeout concern a pooled TCP driver faces.
   private clients = new Map<string, Promise<DatabricksClient>>();
 
   protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<DatabricksClient> {
@@ -158,7 +167,12 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
   /**
    * Databricks auth failures carry phrases/status the base {@link isAuthError} (PG/MySQL/SQL Server/Oracle)
    * doesn't recognize. Without this override {@link withConnectionRetry} never self-heals a rotated PAT or an
-   * expired OAuth token. Match the HTTP 401 signature and the stable Databricks auth message phrases.
+   * expired OAuth token. Match ONLY genuine AUTHENTICATION signals — HTTP 401 and the stable Databricks
+   * bad-credential phrases. Deliberately NOT 403 / PERMISSION_DENIED: those are AUTHORIZATION failures
+   * (valid credential, insufficient privilege) that a reconnect can't fix — retrying them just wastes a
+   * round-trip and needlessly evicts the shared client for other users. This mirrors the base's documented
+   * choice to drop the false-positive-prone 'password'/'permission denied' substrings. ('unauthorized' is
+   * likewise left to the base, which already matches the 'authoriz' substring.)
    */
   protected isAuthError(e: unknown): boolean {
     if (super.isAuthError(e)) {
@@ -169,13 +183,10 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
     const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
     return (
       status === '401' ||
-      status === '403' ||
       msg.includes('invalid access token') ||
       msg.includes('token is expired') ||
       msg.includes('token expired') ||
-      msg.includes('unauthorized') ||
-      msg.includes('permission_denied') ||
-      msg.includes('invalid_client') // OAuth M2M bad clientId/secret
+      msg.includes('invalid_client') // OAuth M2M bad clientId/secret — re-resolving a rotated secret can fix it
     );
   }
 
@@ -412,13 +423,19 @@ export class DatabricksExternalDataSourceDriver extends BaseSqlExternalDataSourc
   }
 
   /**
-   * Databricks native queries are screened with the ANSI grammar, which can't parse `:name` named-parameter
-   * markers — neutralize them for STRUCTURE analysis ONLY (the original SQL + named binds still execute).
-   * `:name` is only ever a bind marker in our usage (Spark SQL uses `.`/`[]` for member access, not `:`),
-   * so this never turns a write into a read. Backtick identifiers are handled by the ansi grammar's quoting.
+   * Neutralize `:name` named-parameter markers to a literal `1` for STRUCTURE analysis ONLY (the original
+   * SQL + named binds still execute). The ANSI/PostgreSQL screen grammar happens to accept `:name`, but we
+   * still neutralize as belt-and-suspenders against any grammar edge case, matching the base's hook intent.
+   *
+   * The `(?<!:)` negative lookbehind is important: it skips the SECOND colon of a Databricks `::` type cast
+   * (`col::int`), which the ANSI grammar parses fine — without it, `col::int` → `col:1` and the fail-closed
+   * screen would wrongly reject a legitimate cast. `:name` is only ever a bind marker in our usage (Spark
+   * SQL uses `.`/`[]` for member access), so this never turns a write into a read. (Casts to Databricks-only
+   * type names, e.g. `col::string`, are still rejected by the ANSI grammar regardless — use `CAST(... AS ...)`
+   * in native queries for those; that's an inherent limitation of the shared ANSI read-only screen.)
    */
   protected normalizeForReadOnlyParse(sql: string): string {
-    return sql.replace(/:[A-Za-z_][A-Za-z0-9_]*/g, '1');
+    return sql.replace(/(?<!:):[A-Za-z_][A-Za-z0-9_]*/g, '1');
   }
 
   // ---- helpers -------------------------------------------------------------
