@@ -106,10 +106,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Memoized throwaway instances used only to read a resource's display name,
-   * keyed by driver class. `null` marks a driver that cannot be instantiated
-   * outside a view — see `resolveDisplayNameProvider`.
+   * keyed by driver class. Holds the in-flight PROMISE, not the resolved value, so
+   * the N tabs a workspace restore resolves concurrently share one attempt. A
+   * promise resolving to `null` marks a driver that cannot be instantiated outside
+   * a view — see `resolveDisplayNameProvider`.
    */
-  private displayNameProviders = new Map<string, BaseResourceComponent | null>();
+  private displayNameProviders = new Map<string, Promise<BaseResourceComponent | null>>();
 
   constructor(
     private layoutManager: GoldenLayoutManager,
@@ -396,6 +398,10 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       ref.destroy();
     });
     this.componentRefs.clear();
+
+    // These instances were built outside any view, so Angular will never call their
+    // ngOnDestroy — drop our references so nothing they hold outlives the shell.
+    this.displayNameProviders.clear();
   }
 
   /**
@@ -1215,49 +1221,58 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    * Resolve — and memoize per driver class — the throwaway component instance
    * used to read a resource's display name without loading the full component.
    *
-   * Instantiating a `BaseResourceComponent` outside a real view is inherently
-   * partial: the subclass's `inject()` field initializers resolve against the
-   * *environment* injector, which by design cannot supply node-injector-only
-   * tokens (`ElementRef`, `ChangeDetectorRef`, `ViewContainerRef`) or
-   * component-scoped providers. Drivers that need one of those throw NG0201
-   * here and always will, so the outcome — instance or failure — is cached and
-   * the failure reported once per driver class.
-   *
-   * Caching matters beyond tidiness: this runs on every tab add and every tab
-   * reload, and the uncached version logged one NG0201 per call. In
-   * run-20260730T200139Z that produced 50,153 console errors, whose retained
-   * Playwright argument handles consumed 6.5 GB of the test runner's heap and
-   * OOM-killed the suite two tests from the end.
+   * Memoizes the PROMISE, and registers it BEFORE the first `await`, because
+   * callers are fire-and-forget: a workspace restore runs a synchronous
+   * `sortedTabs.forEach(tab => this.createTab(tab))`, so every tab enters here
+   * before any of them could have written a resolved value. Caching the value
+   * instead of the promise would still instantiate once per restored tab.
    *
    * @returns the instance, or `null` when this driver cannot provide a name.
    */
-  private async resolveDisplayNameProvider(driverClass: string): Promise<BaseResourceComponent | null> {
-    const cached = this.displayNameProviders.get(driverClass);
-    if (cached !== undefined) {
-      return cached;
+  private resolveDisplayNameProvider(driverClass: string): Promise<BaseResourceComponent | null> {
+    let pending = this.displayNameProviders.get(driverClass);
+    if (!pending) {
+      pending = this.buildDisplayNameProvider(driverClass);
+      this.displayNameProviders.set(driverClass, pending);
     }
+    return pending;
+  }
 
+  /**
+   * Instantiate a driver's `BaseResourceComponent` outside any view.
+   *
+   * This is inherently partial: the subclass's `inject()` field initializers
+   * resolve against the *environment* injector, which by design cannot supply
+   * node-injector-only tokens (`ElementRef`, `ChangeDetectorRef`,
+   * `ViewContainerRef`) or component-scoped providers. Drivers that need one of
+   * those throw NG0201 here and always will, so that failure stays memoized and
+   * is reported once per driver class — uncached it fired on every tab add and
+   * every tab reload, producing 50k console errors in one regression run.
+   *
+   * "Not registered" is NOT memoized: a lazy chunk may register the class later,
+   * and `ClassFactory` already caches its own null and invalidates it on
+   * `Register()`.
+   */
+  private async buildDisplayNameProvider(driverClass: string): Promise<BaseResourceComponent | null> {
     const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
       BaseResourceComponent,
       driverClass
     );
     if (!resourceReg) {
-      this.displayNameProviders.set(driverClass, null);
+      this.displayNameProviders.delete(driverClass);
       return null;
     }
 
     try {
-      const instance = runInInjectionContext(
+      return runInInjectionContext(
         this.environmentInjector,
         () => new resourceReg.SubClass() as BaseResourceComponent
       );
-      this.displayNameProviders.set(driverClass, instance);
-      return instance;
     } catch (error) {
-      this.displayNameProviders.set(driverClass, null);
-      // First line only, and never the Error object itself: passing an Error to
-      // console.* makes the browser retain it (and, under Playwright, a handle
-      // to it) with its full stack attached.
+      // console.warn (not LogError) deliberately: the message must stay a plain
+      // string. Passing an Error to console.* makes the browser retain it — and,
+      // under Playwright, a handle to it — with its full stack attached, which is
+      // what turned the error flood into 6.5 GB of retained heap.
       const reason = error instanceof Error ? error.message.split('\n')[0] : String(error);
       console.warn(
         `[TabContainer] Resource driver "${driverClass}" cannot be instantiated outside a view (${reason}) — ` +

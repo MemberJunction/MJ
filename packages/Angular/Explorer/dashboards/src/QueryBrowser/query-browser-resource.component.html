@@ -94,18 +94,23 @@
     </div>
   </div>
 
-  <!-- Resize Handle.
-       role/aria are load-bearing, not decoration: without a role this was a bare
-       <div> whose only handler was (mousedown) — which compiles to an
-       addEventListener, NOT an onclick attribute — so it appeared in no
-       accessibility tree and in no automation's element list. A 6px unlabeled
-       target is then unreachable by anything that isn't estimating pixels. -->
+  <!-- Resize Handle. A separator WITHOUT tabindex is a static (decorative) separator per
+       ARIA, so the action-phrased label would announce a control that can't be operated:
+       tabindex + the keydown handler + aria-value* are what make it a real widget. Before
+       this it was a bare <div> whose only handler was (mousedown) — an addEventListener,
+       not an onclick attribute — so a 6px unlabeled target appeared in no accessibility
+       tree and in no automation's element list. -->
   <div class="resize-handle"
     role="separator"
     aria-orientation="vertical"
     aria-label="Resize query list panel"
+    tabindex="0"
+    [attr.aria-valuenow]="PanelWidth"
+    [attr.aria-valuemin]="MinPanelWidth"
+    [attr.aria-valuemax]="MaxPanelWidth"
     [class.active]="IsResizing"
-    (mousedown)="onResizeStart($event)">
+    (mousedown)="onResizeStart($event)"
+    (keydown)="onResizeKeydown($event)">
     <div class="resize-handle-grip"></div>
   </div>
 

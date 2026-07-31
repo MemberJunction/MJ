@@ -3147,33 +3147,39 @@ export class AIPromptRunner {
         // reads as a failover from a failed attempt that never happened (515 such
         // lines, and zero real failovers, in one regression run). Key off the
         // real-failure list instead.
-        const vendorName = candidate.vendorName || 'default';
-        const attemptArgs = [{
-          promptId: prompt.ID,
-          modelId: candidate.model.ID,
-          model: candidate.model.Name,
-          vendorId: candidate.vendorId,
-          vendor: candidate.vendorName,
-          candidatePosition: i + 1,
-          candidateCount: allCandidates.length,
-          priorFailures: failoverAttempts.length,
-          skippedForCredentials
-        }];
-        if (failoverAttempts.length > 0) {
-          LogStatusEx({
-            message: `🔄 Failover after ${failoverAttempts.length} failed attempt(s) — trying candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName}`,
-            category: 'AI',
-            additionalArgs: attemptArgs
-          });
-        } else if (skippedForCredentials > 0) {
-          // First real attempt, but earlier candidates were skipped for missing
-          // credentials. State that plainly (and quietly) rather than implying a retry.
-          LogStatusEx({
-            message: `Using candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName} — skipped ${skippedForCredentials} higher-priority candidate(s) with no credentials configured`,
-            category: 'AI',
-            verboseOnly: true,
-            additionalArgs: attemptArgs
-          });
+        //
+        // Nothing is logged on the happy path (no prior failures, nothing skipped), so
+        // build the banner and its args only when one of the two branches will fire —
+        // this runs on every attempt of every prompt run.
+        if (failoverAttempts.length > 0 || skippedForCredentials > 0) {
+          const vendorName = candidate.vendorName || 'default';
+          const attemptArgs = [{
+            promptId: prompt.ID,
+            modelId: candidate.model.ID,
+            model: candidate.model.Name,
+            vendorId: candidate.vendorId,
+            vendor: candidate.vendorName,
+            candidatePosition: i + 1,
+            candidateCount: allCandidates.length,
+            priorFailures: failoverAttempts.length,
+            skippedForCredentials
+          }];
+          if (failoverAttempts.length > 0) {
+            LogStatusEx({
+              message: `🔄 Failover after ${failoverAttempts.length} failed attempt(s) — trying candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName}`,
+              category: 'AI',
+              additionalArgs: attemptArgs
+            });
+          } else {
+            // First real attempt, but earlier candidates were skipped for missing
+            // credentials. State that plainly (and quietly) rather than implying a retry.
+            LogStatusEx({
+              message: `Using candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName} — skipped ${skippedForCredentials} higher-priority candidate(s) with no credentials configured`,
+              category: 'AI',
+              verboseOnly: true,
+              additionalArgs: attemptArgs
+            });
+          }
         }
 
         // Execute the model with this candidate

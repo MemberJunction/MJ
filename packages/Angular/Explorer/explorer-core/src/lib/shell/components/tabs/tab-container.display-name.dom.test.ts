@@ -169,4 +169,48 @@ describe('TabContainerComponent display-name provider resolution', () => {
         expect(await resolve(component, 'NoSuchDriverAnywhere')).toBeNull();
         expect(warn).not.toHaveBeenCalled();
     });
+
+    /**
+     * The serialised loops above cannot catch the scenario the memoization exists for.
+     * Callers are fire-and-forget (`createTab` calls `updateTabDisplayName` unawaited,
+     * and a workspace restore is a synchronous `forEach` over every restored tab), so
+     * on restore all N tabs enter resolution before any of them has a resolved value
+     * to cache. Memoizing the value rather than the promise still instantiated — and
+     * still warned — once per tab.
+     */
+    it('instantiates once even when every tab asks concurrently', async () => {
+        const component = makeComponent();
+        const results = await Promise.all(
+            Array.from({ length: 50 }, () => resolve(component, 'TestBrokenDriver'))
+        );
+
+        expect(results.every((r) => r === null)).toBe(true);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(constructions.filter((c) => c === 'broken')).toHaveLength(1);
+    });
+
+    it('shares one instance across concurrent askers for a working driver', async () => {
+        const component = makeComponent();
+        const results = await Promise.all(
+            Array.from({ length: 50 }, () => resolve(component, 'TestWorkingDriver'))
+        );
+
+        expect(constructions.filter((c) => c === 'working')).toHaveLength(1);
+        expect(new Set(results).size).toBe(1);
+    });
+
+    /**
+     * "Not registered" is a transient outcome — a lazy chunk may register the class
+     * later, and a one-off chunk-load failure must not permanently disable display
+     * names for that driver. Only the instantiation failure (NG0201) is deterministic
+     * enough to memoize.
+     */
+    it('re-asks ClassFactory for a driver that was not registered yet', async () => {
+        const component = makeComponent();
+        expect(await resolve(component, 'TestLateDriver')).toBeNull();
+
+        MJGlobal.Instance.ClassFactory.Register(BaseResourceComponent, WorkingDriver, 'TestLateDriver');
+
+        expect(await resolve(component, 'TestLateDriver')).not.toBeNull();
+    });
 });

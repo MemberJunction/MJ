@@ -824,14 +824,18 @@ export class ResolverBase {
       // Map onto COPIES, never in place. `FieldMapper.MapFields` renames keys by
       // mutating (`obj[mapped] = obj[k]; delete obj[k]`), and these rows are the
       // provider's own result objects — which the server cache holds BY REFERENCE.
-      // Mapping them in place therefore rewrote `__mj_CreatedAt` to the transport
-      // alias `_mj__CreatedAt` inside the live cache, so every later read served
-      // from that cache handed the client transport-shaped rows and blew up in
-      // `BaseEntity.SetMany` with "Field _mj__CreatedAt does not exist on <Entity>".
-      // Because the cache is process-wide, one GraphQL response poisoned it for
-      // every request and every worker at once. `ArrayFilterEncryptedFieldsForAPI`
-      // mutates too, so it must also see the copies — otherwise it strips encrypted
-      // values out of the cached rows. (FileResolver already maps a spread copy.)
+      // Mapping them in place rewrote `__mj_CreatedAt` to the transport alias
+      // `_mj__CreatedAt` inside the live cache, and because that cache is
+      // process-wide, one GraphQL response made every later read hand the client
+      // transport-shaped rows that `BaseEntity.SetMany` rejects.
+      // `ArrayFilterEncryptedFieldsForAPI` mutates too, so it must also see the
+      // copies. (FileResolver already maps a spread copy.)
+      //
+      // `{ ...r }` is a SHALLOW copy — safe because the only post-map mutators
+      // rename top-level keys and redact scalar fields. Any future in-place
+      // mutation of a NESTED value would still reach the cached row; the durable
+      // fix is defensive copying at the cache boundary (see
+      // plans/local-cache-defensive-copy.md).
       const mapper = new FieldMapper();
       if (result?.Success && result.Results?.length) {
         result.Results = result.Results.map(r => mapper.MapFields({ ...r }));

@@ -619,18 +619,16 @@
           <!-- Table body -->
           <div class="detail-table-body">
             @for (em of DetailFilteredMaps; track em.ID) {
-              <!-- role/tabindex/keydown are required, not cosmetic: this row is the
-                   ONLY way to open the field-mapping editor, and as a bare <div> with
-                   (click) it had no accessible role and no keyboard path (Angular's
-                   (click) is an addEventListener, not an onclick attribute, so nothing
-                   reading the a11y tree could find it either). -->
+              <!-- The row is the only way to open the field-mapping editor, so it needs a
+                   role and a keyboard path. TODO: the row also contains a checkbox and a
+                   button, which makes role="button" an ARIA structural violation — the real
+                   fix is a dedicated open button (the .map-edit-hint chevron). -->
               <div class="detail-map-row" [class.sync-disabled]="!em.SyncEnabled"
                    role="button"
                    tabindex="0"
                    [attr.aria-label]="'Open field mapping for ' + em.Entity"
                    (click)="OnEntityMapClick(em)"
-                   (keydown.enter)="OnEntityMapClick(em)"
-                   (keydown.space)="OnEntityMapClick(em); $event.preventDefault()">
+                   (keydown)="OnEntityMapRowKeydown($event, em)">
                 <span class="dt-col-toggle" (click)="$event.stopPropagation()">
                   <label class="toggle-switch" [title]="em.SyncEnabled ? 'Sync enabled' : 'Sync disabled'">
                     <input type="checkbox"

@@ -6,8 +6,10 @@ import { NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { SearchService } from '@memberjunction/ng-search';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
+import { MentionSuggestion } from '@memberjunction/ng-composer';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { OmnibarPaletteComponent } from './omnibar-palette.component';
+import { OmnibarProvider } from './omnibar-provider';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 
 /**
@@ -40,14 +42,35 @@ const APPS = [
   { ID: 'app-admin', Name: 'Admin', Description: 'MemberJunction Administration', Icon: '', Color: '', GetNavItems: () => Promise.resolve([]) },
 ];
 
-/** Records SwitchToApp calls so we can assert a stale row never navigates. */
-function fakeNavigation(): { svc: NavigationService; switched: string[] } {
+/** Records navigation calls so we can assert exactly what a given activation reached. */
+function fakeNavigation(): { svc: NavigationService; switched: string[]; searched: string[] } {
   const switched: string[] = [];
-  const svc = { SwitchToApp: (appId: string) => { switched.push(appId); return Promise.resolve(); } } as unknown as NavigationService;
-  return { svc, switched };
+  const searched: string[] = [];
+  const svc = {
+    SwitchToApp: (appId: string) => { switched.push(appId); return Promise.resolve(); },
+    OpenSearch: (query: string) => { searched.push(query); },
+  } as unknown as NavigationService;
+  return { svc, switched, searched };
 }
 
 const settle = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** A default-mode provider whose every fetch rejects (backend down / RunView error). */
+class FailingProvider extends OmnibarProvider {
+  public readonly TriggerChar = '';
+  public readonly Key = 'test-failing';
+  public readonly ModeLabel = 'Global Search';
+  public async GetSuggestions(): Promise<MentionSuggestion[]> {
+    throw new Error('backend down');
+  }
+  public override async EmptyStateSuggestions(): Promise<MentionSuggestion[]> {
+    throw new Error('backend down');
+  }
+}
+
+/** Typed access to the one private the failure spec has to reach. */
+const withPrivates = (c: OmnibarPaletteComponent) =>
+  c as unknown as { defaultProvider: OmnibarProvider | null };
 
 const PROVIDERS = () => [
   { provide: NavigationService, useValue: {} },
@@ -124,6 +147,10 @@ describe('OmnibarPaletteComponent (DOM)', () => {
    * answered the new query, and Enter executed row 0 of it — navigating somewhere the
    * user never asked for (observed: an `MJ: Applications` record page instead of the
    * Admin app).
+   *
+   * Two invariants keep that shut: a mode change clears `Rows`, and keyboard selection
+   * only ever targets RENDERED rows (recents are selectable exclusively in the
+   * empty-query state, which is the only state that renders them).
    */
   describe('stale result invalidation', () => {
     const renderWithApps = (nav: NavigationService) =>
@@ -139,13 +166,6 @@ describe('OmnibarPaletteComponent (DOM)', () => {
         ],
       });
 
-    it('a freshly opened palette is not pending (first Enter must not be refused)', () => {
-      const fixture = render();
-      fixture.componentInstance.Open();
-      fixture.detectChanges(false);
-      expect(fixture.componentInstance.ResultsArePending).toBe(false);
-    });
-
     it("settles once the seeded '/' mode's app suggestions arrive", async () => {
       const { svc } = fakeNavigation();
       const fixture = renderWithApps(svc);
@@ -153,7 +173,7 @@ describe('OmnibarPaletteComponent (DOM)', () => {
       await settle(250);
       fixture.detectChanges(false);
       expect(fixture.componentInstance.Rows.length).toBe(APPS.length);
-      expect(fixture.componentInstance.ResultsArePending).toBe(false);
+      expect(fixture.componentInstance.IsLoading).toBe(false);
     });
 
     it('clears the previous mode\'s rows the moment the query switches modes', async () => {
@@ -170,23 +190,64 @@ describe('OmnibarPaletteComponent (DOM)', () => {
       // The Go-to-App list must NOT survive into Global Search mode.
       expect(fixture.componentInstance.ActiveTriggerChar).toBe('');
       expect(fixture.componentInstance.Rows.length).toBe(0);
-      expect(fixture.componentInstance.ResultsArePending).toBe(true);
     });
 
-    it('refuses to execute a row that belongs to a superseded query', async () => {
+    /**
+     * The actual T153 mechanism: with `Rows` empty mid-query, `selectableRows` used to
+     * fall back to `RecentRows` — which render ONLY in the empty-query state, so Enter
+     * executed a row that was nowhere on screen.
+     */
+    it('never offers recent rows for keyboard selection once a query is typed', async () => {
+      const { svc, switched, searched } = fakeNavigation();
+      const fixture = renderWithApps(svc);
+      fixture.componentInstance.Open('/');
+      await settle(250);
+      // Recents are populated from the '/' provider's empty state.
+      expect(fixture.componentInstance.RecentRows.length).toBeGreaterThan(0);
+
+      fixture.componentInstance.OnQueryChange('Admin');
+      expect(fixture.componentInstance.Rows.length).toBe(0);
+      expect(fixture.componentInstance.HasOptions).toBe(false);
+
+      // Enter falls through to the full-search escape hatch, NOT to an off-screen recent.
+      fixture.componentInstance.OnInputKeydown(
+        new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }),
+      );
+      expect(switched).toEqual([]);
+      expect(searched).toEqual(['Admin']);
+    });
+
+    it('recents ARE selectable in the empty-query state that renders them', async () => {
+      const { svc } = fakeNavigation();
+      const fixture = renderWithApps(svc);
+      fixture.componentInstance.Open();
+      await settle(250);
+      fixture.detectChanges(false);
+      expect(fixture.componentInstance.Query).toBe('');
+      expect(fixture.componentInstance.RecentRows.length).toBeGreaterThan(0);
+      expect(fixture.componentInstance.HasOptions).toBe(true);
+    });
+
+    /**
+     * C2 regression: the old `ResultsArePending` guard in `Execute` refused a click on a
+     * row the user could see for the full debounce window after every keystroke, because
+     * same-mode typing deliberately keeps the previous rows on screen.
+     */
+    it('executes a visible row immediately, without awaiting the debounce', async () => {
       const { svc, switched } = fakeNavigation();
       const fixture = renderWithApps(svc);
       fixture.componentInstance.Open('/');
       await settle(250);
-      const staleRow = fixture.componentInstance.Rows[0];
-      expect(staleRow).toBeDefined();
+      const row = fixture.componentInstance.Rows[0];
+      expect(row).toBeDefined();
 
-      fixture.componentInstance.OnQueryChange('Admin');
-      fixture.componentInstance.Execute(staleRow.Suggestion);
+      // Same-mode extension: rows stay rendered while the next fetch is in flight.
+      fixture.componentInstance.OnQueryChange('/Ad');
+      expect(fixture.componentInstance.Rows.length).toBeGreaterThan(0);
 
-      // Nothing navigated: the row answered '/' , not 'Admin'.
-      expect(switched).toEqual([]);
-      expect(fixture.componentInstance.IsOpen).toBe(true);
+      fixture.componentInstance.Execute(row.Suggestion);
+      expect(switched.length).toBe(1);
+      expect(fixture.componentInstance.IsOpen).toBe(false);
     });
 
     it('executes normally once the current query has settled', async () => {
@@ -197,6 +258,23 @@ describe('OmnibarPaletteComponent (DOM)', () => {
       const row = fixture.componentInstance.Rows[0];
       fixture.componentInstance.Execute(row.Suggestion);
       expect(switched.length).toBe(1);
+    });
+
+    /**
+     * M4: a rejected provider call must still settle the generation. It used to leave
+     * `IsLoading` true for the rest of the session and surface as an unhandled rejection.
+     */
+    it('settles and clears the spinner when the provider rejects', async () => {
+      const fixture = render();
+      fixture.componentInstance.Open();
+      // Swap in the failing provider, then drive a real query through it.
+      withPrivates(fixture.componentInstance).defaultProvider = new FailingProvider();
+      fixture.componentInstance.OnQueryChange('anything');
+      await settle(400);
+      fixture.detectChanges(false);
+
+      expect(fixture.componentInstance.IsLoading).toBe(false);
+      expect(fixture.componentInstance.Rows).toEqual([]);
     });
     /**
      * The regression agent reported that "'/Admin' matched records instead of

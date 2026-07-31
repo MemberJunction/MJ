@@ -252,22 +252,24 @@ export class AIDashboardsModule {}
 
 // ─── Tree-shaking prevention (MODULE SCOPE — do not move into a constructor) ───
 //
-// These calls MUST run when this file is EVALUATED, not when the NgModule class is
-// instantiated. `tab-container` resolves a resource through
-// `ClassFactory.GetRegistrationAsync(BaseResourceComponent, driverClass)` and then
-// builds it with `createComponent(reg.SubClass)` — it never instantiates this
-// NgModule, so a constructor here NEVER runs on the lazy path.
+// These MUST run on file EVALUATION, not NgModule instantiation: the lazy resource
+// path builds components with `createComponent(reg.SubClass)` and never instantiates
+// this NgModule, so a constructor loader never runs.
 //
-// That mattered because Angular compiles `declarations` into `ɵɵsetNgModuleScope`,
-// which is `ngJitMode`-guarded and stripped from production builds. Once that call
-// is gone, a component whose ONLY remaining reference is this module's metadata has
-// no live reference at all and ESBuild drops it from the lazy chunk — so its
-// `@RegisterClass` decorator never executes and the driver class resolves to
-// nothing. `FeaturePipelinesResource` failed exactly this way: the nav item routed,
-// the chunk loaded, and the class was simply absent from the bundle.
+// A module-scope call is also the only reference that survives a production build.
+// `declarations` compiles to `ɵɵsetNgModuleScope`, which is `ngJitMode`-guarded and
+// stripped, leaving a component referenced ONLY by module metadata with no live
+// reference for ESBuild to keep. See PR #3380 for the `FeaturePipelinesResource` case.
 //
-// Calling the loaders at module scope keeps a real reference from evaluated code,
-// which both defeats tree-shaking and guarantees registration on chunk evaluation.
+// These calls are belt-and-braces, NOT the primary guarantee. Every @RegisterClass
+// component below is also in the eager `mj-class-registrations` manifest, which
+// `@memberjunction/ng-bootstrap` re-exports from its public API and publishes with
+// `sideEffects: true` (see its `scripts/fix-dist-package.js`) precisely so a bare
+// import runs the decorators. That manifest — populated by exporting the component
+// from this package's `public-api.ts` — is what actually fixed FeaturePipelines.
+// So `sideEffects: false` on THIS package is not a live hazard: nothing load-bearing
+// depends on this file being evaluated. Keep the calls as a second line of defense
+// for anything that lands here before it lands in the manifest.
 LoadTagsResource();
 LoadClusterVisualizationResource();
 LoadVisualizeResource();

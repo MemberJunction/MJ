@@ -248,7 +248,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     this.SeesOpen = !this.SeesOpen;
   }
 
-  public CloseSees(): void {
+  private closeSees(): void {
     if (this.SeesOpen) {
       this.SeesOpen = false;
     }
@@ -266,7 +266,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     this.ExportOpen = !this.ExportOpen;
   }
 
-  public CloseExport(): void {
+  private closeExport(): void {
     if (this.ExportOpen) {
       this.ExportOpen = false;
     }
@@ -278,13 +278,13 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
    * ⚠️ Do NOT add a second `@HostListener('document:click')` here. Angular keys host
    * listeners by event name, so a second declaration for the same event silently
    * replaces the first (no build error, no warning). That had already happened:
-   * `CloseSees` and `CloseExport` each declared one, so only the latter registered
+   * `closeSees` and `closeExport` each declared one, so only the latter registered
    * and the Sees dropdown never closed on an outside click.
    */
   @HostListener('document:click')
   public CloseOpenPopovers(): void {
-    this.CloseSees();
-    this.CloseExport();
+    this.closeSees();
+    this.closeExport();
   }
 
   /** Download the board as one self-contained HTML document. */
