@@ -10227,7 +10227,7 @@
   {
     "fields": {
       "Name": "Claude Opus 4.1",
-      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. DEPRECATION ANNOUNCED 2026-06-05: claude-opus-4-1-20250805 retires August 5, 2026 (9 days after this report). RECOMMENDED REPLACEMENT UPDATED 2026-07-24: migrate to claude-opus-5 (this report added it) rather than claude-opus-4-8 — Opus 5 is now the current Opus flagship at the same $5/$25 per-1M pricing as 4.8 and is Anthropic's official post-4.1 migration target. Source: https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-4-8-to-claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/model-deprecations",
+      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. DEPRECATION ANNOUNCED 2026-06-05: claude-opus-4-1-20250805 retires August 5, 2026 — which falls 5 days after the 2026-07-31 research window and therefore INSIDE the v5.51.0 support window. IsActive remains true because the retirement has not yet occurred; flip it to false in the first weekly report dated on/after 2026-08-05, matching the Grok 4 and Mistral summer-2026 precedent of deactivating only once retired. RECOMMENDED REPLACEMENT UPDATED 2026-07-24: migrate to claude-opus-5 (this report added it) rather than claude-opus-4-8 — Opus 5 is now the current Opus flagship at the same $5/$25 per-1M pricing as 4.8 and is Anthropic's official post-4.1 migration target. Source: https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-4-8-to-claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/model-deprecations",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 19,
       "IsActive": true,
@@ -10381,8 +10381,8 @@
       "ID": "2C5EA224-85A1-4D09-ABA6-0D52F2E6AFBB"
     },
     "sync": {
-      "lastModified": "2026-07-28T16:46:11.192Z",
-      "checksum": "e4b509781f1ec4e12c486ec1d4c3f9140bc81a0d4a24913aae889df5e2125f14"
+      "lastModified": "2026-07-31T18:53:05.729Z",
+      "checksum": "92ceff0c8c41770e3db4d8f46bb763a74f509af882c0540ba27de758507a68d3"
     }
   },
   {
@@ -20863,6 +20863,145 @@
     "sync": {
       "lastModified": "2026-07-28T16:46:11.314Z",
       "checksum": "7563c8b942af0270b73a3feaeded535c18730d28c5aafe16f7b08c3adc883696"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.7 Flash",
+      "PowerRank": 15,
+      "Description": "Alibaba Cloud's Flash-tier model in the Qwen 3.7 series, released 2026-07-27 at endpoint qwen3.7-flash. A vision-language reasoning model built for multimodal agents, visual coding, search, and computer/UI interaction, with claimed strengths in object recognition and spatial understanding. 1M token context window, 65,536 max output tokens. Positioned as the low-cost speed tier of the 3.7 family at $0.03/$0.13 per 1M tokens — roughly an order of magnitude cheaper than Qwen 3.7 Plus while retaining the series' vision and reasoning capability. OpenAI-compatible Chat Completions API via DashScope; also listed on OpenRouter as qwen/qwen3.7-flash on 2026-07-29. Direct successor to Qwen 3.6 Flash.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 1,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Qwen 3.6 Flash"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "2926848B-E03B-40EE-BF3C-E280512605DD"
+          },
+          "sync": {
+            "lastModified": "2026-07-31T18:53:06.437Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.7-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "978C2CA5-72A6-4B20-8A7F-28F6FA7EE8D0"
+          },
+          "sync": {
+            "lastModified": "2026-07-31T18:53:06.457Z",
+            "checksum": "b10afee1a51e9d69eacbbde54f3ca60a91c844e8d07560059c1202760655fa26"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.7-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "16E7375F-BC8B-47A9-8A54-182C6FE97FC6"
+          },
+          "sync": {
+            "lastModified": "2026-07-31T18:53:06.479Z",
+            "checksum": "8e9e082c6ba899b3a616a814d62ab15f3988bc4a2b1645b39234628a5bdbded0"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-07-27T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.03,
+            "OutputPricePerUnit": 0.13,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.7 Flash launch pricing on Alibaba Cloud DashScope as of the 2026-07-27 release: $0.03/1M input, $0.13/1M output — the cheapest entry in the Qwen 3.7 family and ~8x cheaper on input than Qwen 3.6 Flash. Sources: https://openrouter.ai/qwen/qwen3.7-flash ; https://www.orcarouter.ai/blog/what-is-qwen-3-7-flash",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "72CB7EB6-B867-4F5F-8B44-2CAB1F289697"
+          },
+          "sync": {
+            "lastModified": "2026-07-31T18:53:06.514Z",
+            "checksum": "28930df81de6195b49fef4d1a5e9d7f500a69bbec67421f9d61db0d509bae309"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-07-29T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.03,
+            "OutputPricePerUnit": 0.13,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.7 Flash on OpenRouter (passthrough pricing), listed 2026-07-29. Source: https://openrouter.ai/qwen/qwen3.7-flash",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "159312C2-3EAF-4114-98A8-E51471BE08EA"
+          },
+          "sync": {
+            "lastModified": "2026-07-31T18:53:06.530Z",
+            "checksum": "eedf9cb7b3f346f16792d2a2d836d22d68b16ffc1dcf85ddc184ad51a9afadfb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9D32D553-218B-4610-8F36-835AA5964F39"
+    },
+    "sync": {
+      "lastModified": "2026-07-31T18:53:06.281Z",
+      "checksum": "44335a233fb0fb335593efa45b401ea4d90a8100894e3dbdffec1afcafdaf3f9"
     }
   }
 ]

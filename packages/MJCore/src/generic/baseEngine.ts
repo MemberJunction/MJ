@@ -1520,16 +1520,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             connectionString = (provider as ProviderBase).InstanceConnectionString;
         }
 
-        // Generate the same fingerprint that would be used when loading this data
-        const params: RunViewParams = {
-            EntityName: config.EntityName,
-            ExtraFilter: config.Filter || '',
-            OrderBy: config.OrderBy || '',
-            ResultType: 'entity_object',
-            MaxRows: -1,
-            StartRow: 0
-        };
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, connectionString);
+        // Use the shared builder so the fingerprint matches what LoadSingleEntityConfig
+        // and RegisterCacheChangeCallbacks produce — prevents silent cache-slot mismatches
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+            this.BuildRunViewParamsForConfig(config),
+            connectionString
+        );
 
         // Build CompositeKey from the entity's primary key fields
         const key = entity.PrimaryKey;
@@ -1731,6 +1727,27 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Builds the RunViewParams for an engine config. Used by LoadSingleEntityConfig,
+     * LoadMultipleEntityConfigs, RegisterCacheChangeCallbacks, and syncLocalCacheForConfig
+     * to ensure the fingerprint-affecting params (EntityName, ExtraFilter, OrderBy,
+     * IgnoreMaxRows) are always consistent — preventing cache key mismatches that break
+     * cross-server invalidation via Redis pub/sub and local cache upsert/remove operations.
+     */
+    protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
+        return {
+            EntityName: config.EntityName,
+            ResultType: config.ResultType || this.EngineDefaultResultType,
+            ExtraFilter: config.Filter,
+            OrderBy: config.OrderBy,
+            IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
+            _fromEngine: true,   // Mark as engine-initiated to avoid false positive telemetry warnings
+            CacheLocal: config.CacheLocal,
+            CacheLocalTTL: config.CacheLocalTTL,
+            BypassCache: bypassCache
+        } as RunViewParams;
+    }
+
+    /**
      * Handles the process of loading a single config of type 'entity'.
      * @param config
      * @param contextUser
@@ -1745,17 +1762,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const generation = this.beginConfigRefresh(config.PropertyName);
         const p = this.RunViewProviderToUse;
         const rv = new RunView(p);
-        const result = await rv.RunView({
-            EntityName: config.EntityName,
-            ResultType: config.ResultType || this.EngineDefaultResultType,
-            ExtraFilter: config.Filter,
-            OrderBy: config.OrderBy,
-            IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
-            _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
-            CacheLocal: config.CacheLocal,
-            CacheLocalTTL: config.CacheLocalTTL,
-            BypassCache: bypassCache
-        }, contextUser);
+        const result = await rv.RunView(this.BuildRunViewParamsForConfig(config, bypassCache), contextUser);
 
         // A newer full refresh superseded us while we awaited — drop this (staler) snapshot
         // rather than clobber the newer one. The newer refresh owns the assignment, the
@@ -1871,19 +1878,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (configs && configs.length > 0) {
             const p = this.RunViewProviderToUse;
             const rv = new RunView(p);
-            const viewConfigs = configs.map(c => {
-                return <RunViewParams>{
-                    EntityName: c.EntityName,
-                    ResultType: c.ResultType || this.EngineDefaultResultType,
-                    ExtraFilter: c.Filter,
-                    OrderBy: c.OrderBy,
-                    IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
-                    _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
-                    CacheLocal: c.CacheLocal,
-                    CacheLocalTTL: c.CacheLocalTTL,
-                    BypassCache: bypassCache
-                };
-            });
+            const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
             const results = await rv.RunViews(viewConfigs, contextUser);
 
             // Process results and record entity loads for redundancy detection
@@ -2008,12 +2003,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
         for (const config of entityConfigs) {
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-                {
-                    EntityName: config.EntityName,
-                    ExtraFilter: config.Filter,
-                    OrderBy: config.OrderBy,
-                    ResultType: 'entity_object',
-                } as RunViewParams,
+                this.BuildRunViewParamsForConfig(config),
                 connectionPrefix
             );
 

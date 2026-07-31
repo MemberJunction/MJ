@@ -591,7 +591,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (101 classes)
+// @memberjunction/ng-dashboards (102 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -639,6 +639,7 @@ import {
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
     EventMonitorComponent,
+    FeaturePipelinesResourceComponent,
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     HomeApplication,
@@ -1269,6 +1270,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
     EventMonitorComponent,
+    FeaturePipelinesResourceComponent,
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     HomeApplication,
