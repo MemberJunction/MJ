@@ -64,7 +64,7 @@ import {
     LaneExplanation,
     EntitlementExplanation,
 } from './ScopeExplanation';
-import { DefaultSearchScopePermissionResolver } from '../permissions/SearchScopePermissionResolver';
+import { GetSearchScopePermissionResolver } from '../permissions/SearchScopePermissionResolver';
 
 /**
  * Collects lane problems keyed by the lane's **row ID** instead of throwing.
@@ -966,7 +966,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 this.loadPrincipal<MJAIAgentEntity>('MJ: AI Agents', input.AIAgentID, contextUser),
                 this.loadPrincipal<MJAISkillEntity>('MJ: AI Skills', input.AISkillID, contextUser),
             ]);
-            const permission = await DefaultSearchScopePermissionResolver.ResolveEffectivePermission({
+            const permission = await GetSearchScopePermissionResolver().ResolveEffectivePermission({
                 User: contextUser,
                 SearchScopeID: scopeID,
                 Agent: agent,
