@@ -40,6 +40,28 @@ const MANAGED_AGENT_BASE_PROMPT =
     'You are a MemberJunction realtime co-agent. The effective system prompt for each session is ' +
     'supplied at conversation start via the prompt override; this base prompt is a placeholder.';
 
+/**
+ * The per-session overrides the MANAGED agent must allow, in the SDK's camelCase shape.
+ *
+ * ElevenLabs DROPS any `conversation_config_override` field the agent has not explicitly enabled,
+ * so every override the driver sends has to be declared here first — this is what
+ * {@link ElevenLabsRealtime.buildAgentBody} WRITES onto a managed agent.
+ *
+ * Adding an override here is only HALF the job: {@link ElevenLabsRealtime.OverridesSatisfied}
+ * must require it too, or an already-deployed agent still matches on tools, is never re-PATCHed,
+ * and silently drops the new override forever — precisely the defect behind issue #3374. The two
+ * halves are pinned together by the round-trip test "considers an agent this driver just
+ * provisioned already satisfied".
+ *
+ * Returned fresh per call so no caller can mutate the shared definition.
+ */
+function buildRequiredOverrideEnablement(): ElevenLabs.ConversationConfigClientOverrideConfigInput {
+    return {
+        agent: { prompt: { prompt: true } },
+        tts: { voiceId: true },
+    };
+}
+
 // ── Tool-parameter schema sanitization (ElevenLabs client-tool validator quirks) ──
 
 /**
@@ -207,14 +229,16 @@ interface NativeWebSocketLike {
  * strategy** ({@link ensureAgent}):
  * - `params.Model` starting with `agent_` → used VERBATIM as a deployment-managed agent id.
  * - any other value → the NAME of the driver-managed agent: find-by-name; create-if-missing
- *   (with the session's client-tool set and the prompt-override enablement that lets each
- *   session supply its own system prompt); PATCH when the order-insensitive tool fingerprint
- *   differs or the prompt override is not enabled. Results are instance-cached per name+tools.
+ *   (with the session's client-tool set and the override enablement that lets each session
+ *   supply its own system prompt and voice); PATCH when the order-insensitive tool fingerprint
+ *   differs or any required override is not enabled. Results are instance-cached per name+tools.
  *
- * **Per-session prompt authority** stays with MJ: the managed agent stores only a placeholder
- * prompt and explicitly enables `conversation_config_override.agent.prompt.prompt`; every
- * session (server-bridged or client-direct) sends the real system prompt in its
- * `conversation_initiation_client_data` frame.
+ * **Per-session prompt AND voice authority** stays with MJ: the managed agent stores only a
+ * placeholder prompt and explicitly enables the overrides in
+ * {@link buildRequiredOverrideEnablement} (`agent.prompt.prompt` + `tts.voice_id`); every
+ * session (server-bridged or client-direct) sends the real system prompt — and its voice, when
+ * one is configured — in its `conversation_initiation_client_data` frame. The voice is a
+ * per-session override, so sessions with different voices still share ONE managed agent.
  *
  * **Topologies:**
  * - Server-bridged ({@link StartSession}): the driver opens the conversation websocket itself
@@ -263,7 +287,10 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             OnClose: (code, reason) => session.HandleTransportClose(code, reason),
         });
         session.AttachSocket(socket);
-        session.SendInitiation(params.SystemPrompt, params.InitialContext);
+        session.SendInitiation(
+            ElevenLabsRealtime.BuildSessionOverrides(params.SystemPrompt, params.Config),
+            params.InitialContext
+        );
         await session.WaitForMetadata();
         return session;
     }
@@ -294,10 +321,59 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             ExpiresAt: new Date(Date.now() + ELEVENLABS_SIGNED_URL_TTL_MS).toISOString(),
             SessionConfig: {
                 agentId,
-                overrides: { agent: { prompt: { prompt: params.SystemPrompt } } },
+                overrides: ElevenLabsRealtime.BuildSessionOverrides(params.SystemPrompt, params.Config),
                 config: params.Config ?? {},
             },
         };
+    }
+
+    /**
+     * Builds the RAW-WIRE `conversation_config_override` for one session: the server-authored
+     * system prompt, plus the per-session TTS voice when the config bag carries one.
+     *
+     * **Mind the casing split.** This object is forwarded VERBATIM onto the conversation
+     * websocket (by this driver server-bridged, by the `'elevenlabs'` client driver
+     * client-direct), so it is snake_case — `tts.voice_id`. The matching ENABLEMENT in
+     * {@link buildRequiredOverrideEnablement} goes out through the SDK's serializer instead and
+     * is therefore camelCase — `tts.voiceId`. `agent.prompt.prompt` reads the same in both,
+     * which is why the split only becomes visible with the voice override.
+     *
+     * The `tts` key is omitted ENTIRELY when no voice is configured, so a voice-less session is
+     * byte-for-byte the frame it was before per-session voice existed.
+     *
+     * @param systemPrompt The per-session system prompt (the standing prompt override).
+     * @param config The session's open config bag (`realtime.voice.providers.elevenlabs` merged in).
+     * @returns The wire-shaped override object.
+     */
+    public static BuildSessionOverrides(systemPrompt: string, config?: JSONObject): JSONObject {
+        const overrides: JSONObject = { agent: { prompt: { prompt: systemPrompt } } };
+        const voiceId = ElevenLabsRealtime.ResolveVoiceID(config);
+        if (voiceId) {
+            overrides['tts'] = { voice_id: voiceId };
+        }
+        return overrides;
+    }
+
+    /**
+     * Reads the DRIVER-NEUTRAL `voice` key out of the session's config bag — the same key the
+     * AssemblyAI and Inworld realtime drivers read, so a persona's configured voice is authored
+     * identically whichever provider ends up speaking it. Reached in practice via the effective
+     * config's per-provider bag, `realtime.voice.providers.elevenlabs.voice`.
+     *
+     * A missing, blank, or non-string value yields `undefined` so the override is omitted rather
+     * than sent empty (ElevenLabs would reject an empty `voice_id`, killing the whole session
+     * over a misconfigured persona).
+     *
+     * @param config The session's open config bag.
+     * @returns The trimmed ElevenLabs voice id, or `undefined` when none is configured.
+     */
+    public static ResolveVoiceID(config?: JSONObject): string | undefined {
+        const voice = config?.['voice'];
+        if (typeof voice !== 'string') {
+            return undefined;
+        }
+        const trimmed = voice.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
     }
 
     // ── Managed-agent strategy ─────────────────────────────────────────────────
@@ -308,8 +384,9 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * - A verbatim agent id (`agent_…`) is returned as-is — the deployment owns that agent's
      *   configuration (including its tool set and override enablement).
      * - Anything else is the MANAGED agent name: find-by-name → create-if-missing → PATCH when
-     *   the order-insensitive client-tool fingerprint differs or the per-session prompt
-     *   override is not enabled. The resolution is instance-cached per name + fingerprint.
+     *   the order-insensitive client-tool fingerprint differs or any required per-session
+     *   override is not enabled. The resolution is instance-cached per name + fingerprint —
+     *   deliberately NOT per voice, which is a per-session override rather than agent state.
      */
     protected async ensureAgent(params: RealtimeSessionParams): Promise<string> {
         const model = params.Model;
@@ -343,7 +420,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         const remoteFingerprint = ElevenLabsRealtime.ToolSetFingerprint(
             ElevenLabsRealtime.ExtractClientTools(detail)
         );
-        if (remoteFingerprint !== fingerprint || !ElevenLabsRealtime.PromptOverrideEnabled(detail)) {
+        if (remoteFingerprint !== fingerprint || !ElevenLabsRealtime.OverridesSatisfied(detail)) {
             await this.updateAgent(existing.agentId, this.buildAgentBody(name, tools, config));
         }
         return existing.agentId;
@@ -353,8 +430,8 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * Builds the create/update body for the managed agent: the placeholder base prompt, the
      * session tool set mapped to inline CLIENT tools (`expects_response: true` so the agent
      * blocks on — and then speaks — each result; max response timeout because MJ client tools
-     * delegate to long-running agents), and the platform-settings enablement of the
-     * per-session `agent.prompt.prompt` override.
+     * delegate to long-running agents), and the platform-settings enablement of every
+     * per-session override the driver sends ({@link buildRequiredOverrideEnablement}).
      *
      * `params.Config.llm` (when a string) selects the agent's underlying LLM; all other
      * provider-level agent settings are deployment concerns (use a verbatim agent id for full
@@ -377,9 +454,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             name,
             conversationConfig: { agent: { prompt } },
             platformSettings: {
-                overrides: {
-                    conversationConfigOverride: { agent: { prompt: { prompt: true } } },
-                },
+                overrides: { conversationConfigOverride: buildRequiredOverrideEnablement() },
             },
         };
     }
@@ -421,9 +496,39 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         return clientTools;
     }
 
-    /** Whether the agent's platform settings enable the per-session system-prompt override. */
+    /**
+     * Whether the agent's platform settings enable the per-session system-prompt override.
+     *
+     * @deprecated This is only ONE of the overrides the driver requires, so a `true` here does
+     * NOT mean the agent is up to date — an agent predating per-session voice passes this while
+     * still dropping the voice. Retained for API compatibility only; the ensure flow uses
+     * {@link ElevenLabsRealtime.OverridesSatisfied}, and so should any caller.
+     */
     public static PromptOverrideEnabled(agent: ElevenLabs.GetAgentResponseModel): boolean {
         return agent.platformSettings?.overrides?.conversationConfigOverride?.agent?.prompt?.prompt === true;
+    }
+
+    /**
+     * Whether the agent's platform settings enable EVERY per-session override this driver sends
+     * — the drift condition the ensure flow repairs. Checking the whole required set (rather
+     * than the prompt override alone) is what lets an agent provisioned by an older MJ version
+     * pick up a newly-added override: it still matches on tools, so the enablement gap is the
+     * only signal that it needs a PATCH.
+     *
+     * **This is the READ half of the contract {@link buildRequiredOverrideEnablement} WRITES.**
+     * The two are deliberately spelled out separately rather than derived from one another: the
+     * write side is the SDK's `…Input` shape and this reads the `…Output` shape, so a generic
+     * walker over either would have to erase both types and lose exactly the compile-time
+     * checking that catches a mistake here. They are kept honest instead by the round-trip test
+     * "considers an agent this driver just provisioned already satisfied" — add an override to
+     * one half only and that test fails (as a permanent re-PATCH loop).
+     *
+     * @param agent The agent configuration as fetched from the REST API.
+     * @returns `true` when every required override is enabled.
+     */
+    public static OverridesSatisfied(agent: ElevenLabs.GetAgentResponseModel): boolean {
+        const overrides = agent.platformSettings?.overrides?.conversationConfigOverride;
+        return overrides?.agent?.prompt?.prompt === true && overrides?.tts?.voiceId === true;
     }
 
     /**
@@ -603,17 +708,24 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
     }
 
     /**
-     * Sends the `conversation_initiation_client_data` frame carrying the per-session system
-     * prompt as the `agent.prompt.prompt` override (which the managed agent's platform
-     * settings enable). `initialContext`, when provided, is held back and injected as a
-     * native `contextual_update` once the metadata confirms the session — ElevenLabs has no
-     * pre-turn history-seeding channel, so prior context rides the contextual-update lane.
+     * Sends the `conversation_initiation_client_data` frame carrying the session's overrides
+     * (the per-session system prompt, and the voice when one is configured), which the managed
+     * agent's platform settings enable. The override object is built by
+     * {@link ElevenLabsRealtime.BuildSessionOverrides} and passed in already wire-shaped, so
+     * this server-bridged path and the client-direct mint cannot drift apart.
+     *
+     * `initialContext`, when provided, is held back and injected as a native
+     * `contextual_update` once the metadata confirms the session — ElevenLabs has no pre-turn
+     * history-seeding channel, so prior context rides the contextual-update lane.
+     *
+     * @param overrides The wire-shaped `conversation_config_override` for this session.
+     * @param initialContext Optional prior context to inject once the session is confirmed.
      */
-    public SendInitiation(systemPrompt: string, initialContext?: string): void {
+    public SendInitiation(overrides: JSONObject, initialContext?: string): void {
         this.pendingInitialContext = initialContext && initialContext.trim().length > 0 ? initialContext : null;
         this.sendFrame({
             type: 'conversation_initiation_client_data',
-            conversation_config_override: { agent: { prompt: { prompt: systemPrompt } } },
+            conversation_config_override: overrides,
         });
     }
 

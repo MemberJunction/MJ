@@ -30,7 +30,7 @@ interface ParsedFrame {
     type?: string;
     user_audio_chunk?: string;
     text?: string;
-    conversation_config_override?: { agent?: { prompt?: { prompt?: string } } };
+    conversation_config_override?: { agent?: { prompt?: { prompt?: string } }; tts?: { voice_id?: string } };
     tool_call_id?: string;
     result?: unknown;
     is_error?: boolean;
@@ -52,12 +52,17 @@ class FakeSocket implements ElevenLabsRealtimeSocket {
     }
 }
 
-/** Builds a full agent detail the way the REST API would return it. */
+/**
+ * Builds a full agent detail the way the REST API would return it. By DEFAULT the agent enables
+ * every override the driver requires, i.e. it is already up to date and must not be PATCHed;
+ * individual `…OverrideEnabled` flags opt into the drifted shapes the ensure flow has to repair.
+ */
 function makeAgentDetail(opts: {
     agentId: string;
     name: string;
     tools?: RealtimeToolDefinition[];
     promptOverrideEnabled?: boolean;
+    voiceOverrideEnabled?: boolean;
 }): ElevenLabs.GetAgentResponseModel {
     return {
         agentId: opts.agentId,
@@ -74,6 +79,7 @@ function makeAgentDetail(opts: {
             overrides: {
                 conversationConfigOverride: {
                     agent: { prompt: { prompt: opts.promptOverrideEnabled ?? true } },
+                    tts: { voiceId: opts.voiceOverrideEnabled ?? true },
                 },
             },
         },
@@ -135,6 +141,42 @@ class TestElevenLabsRealtime extends ElevenLabsRealtime {
     public Emit(event: ElevenLabsServerEvent): void {
         this.LastConnectArgs?.OnMessage(event);
     }
+}
+
+/**
+ * The override object for a session with NO voice configured — i.e. exactly what the driver
+ * sent before per-session voice existed. Assertions build on this so the voice delta is the
+ * only thing visible in each test.
+ */
+function promptOnlyOverrides(prompt = 'You are the session voice.'): Record<string, unknown> {
+    return { agent: { prompt: { prompt } } };
+}
+
+/** Every `true` leaf in a nested override-enablement object, as a key path. */
+function enabledLeafPaths(node: unknown, prefix: string[] = []): string[][] {
+    if (node === null || typeof node !== 'object') {
+        return [];
+    }
+    const paths: string[][] = [];
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+        if (value === true) {
+            paths.push([...prefix, key]);
+        } else if (value !== null && typeof value === 'object') {
+            paths.push(...enabledLeafPaths(value, [...prefix, key]));
+        }
+    }
+    return paths;
+}
+
+/** Deep copy of an enablement object with the leaf at `path` turned off. */
+function withLeafDisabled(source: object, path: string[]): Record<string, unknown> {
+    const clone = JSON.parse(JSON.stringify(source)) as Record<string, unknown>;
+    let cursor = clone;
+    for (const key of path.slice(0, -1)) {
+        cursor = cursor[key] as Record<string, unknown>;
+    }
+    cursor[path[path.length - 1]] = false;
+    return clone;
 }
 
 /** Builds the minimal session params; callers override per test. */
@@ -228,8 +270,10 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.CreateBodies).toHaveLength(1);
         const body = driver.CreateBodies[0];
         expect(body.name).toBe('MJ Realtime Co-Agent');
-        // the per-session system-prompt override is explicitly ENABLED
+        // the per-session system-prompt AND voice overrides are explicitly ENABLED (ElevenLabs
+        // drops any override the agent has not allowed, so both must be declared up front)
         expect(body.platformSettings?.overrides?.conversationConfigOverride?.agent?.prompt?.prompt).toBe(true);
+        expect(body.platformSettings?.overrides?.conversationConfigOverride?.tts?.voiceId).toBe(true);
         // the stored prompt is a placeholder, never a session prompt
         expect(body.conversationConfig.agent?.prompt?.prompt).toContain('placeholder');
         // tools ride as inline CLIENT tools that block on (and then speak) their results
@@ -280,6 +324,83 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.UpdateCalls).toHaveLength(1);
         expect(driver.UpdateCalls[0].agentId).toBe('agent_existing_7');
         expect(driver.UpdateCalls[0].body.conversationConfig?.agent?.prompt?.tools).toHaveLength(1);
+    });
+
+    /**
+     * Regression guard for issue #3374. Every agent provisioned BEFORE per-session voice shipped
+     * enables the prompt override and nothing else. Because the drift check used to test only the
+     * prompt override, such an agent matched on tools + prompt and was never PATCHed — so enabling
+     * `tts.voiceId` in the create/update body alone would have been a silent no-op on every
+     * existing deployment, and the voice sent with each session would be dropped by the platform.
+     */
+    it('PATCHes an agent provisioned BEFORE per-session voice (prompt override on, voice override missing)', async () => {
+        driver.Agents = [
+            makeAgentDetail({
+                agentId: 'agent_existing_7',
+                name: 'MJ Realtime Co-Agent',
+                tools: [WEATHER_TOOL],
+                voiceOverrideEnabled: false,
+            }),
+        ];
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(driver.UpdateCalls).toHaveLength(1);
+        const enabled = driver.UpdateCalls[0].body.platformSettings?.overrides?.conversationConfigOverride;
+        expect(enabled?.tts?.voiceId).toBe(true);
+        expect(enabled?.agent?.prompt?.prompt).toBe(true); // the prompt override is not lost in the repair
+    });
+
+    /**
+     * Pins the two halves of the override contract together: whatever `buildAgentBody` WRITES
+     * must satisfy the `OverridesSatisfied` drift check that READS it. Enable an override on
+     * one side only and this fails — as a create-then-PATCH-forever loop on every session,
+     * which is the loud version of the silent bug in #3374.
+     */
+    it('considers an agent this driver just provisioned already satisfied (no PATCH loop)', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        const written = driver.CreateBodies[0].platformSettings?.overrides?.conversationConfigOverride;
+        expect(written).toBeDefined();
+
+        // serve that exact enablement back as a pre-existing agent
+        const second = new TestElevenLabsRealtime('fake-api-key');
+        const provisioned = makeAgentDetail({ agentId: 'agent_x', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+        provisioned.platformSettings = { overrides: { conversationConfigOverride: written } };
+        second.Agents = [provisioned];
+
+        await second.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(second.UpdateCalls).toEqual([]);
+    });
+
+    /**
+     * The #3374 guard, generalised. For EVERY override `buildAgentBody` writes, an agent missing
+     * just that one must be repaired — otherwise the write side can declare an override the drift
+     * check does not require, and already-deployed agents silently drop it forever (exactly the
+     * original defect, which enabled `tts.voiceId` on new agents while never repairing old ones).
+     *
+     * Driven off what the driver actually wrote, so a newly-added override is covered
+     * automatically: add one to the enablement without teaching `OverridesSatisfied` about it and
+     * this fails.
+     */
+    it('repairs an agent missing ANY single required override', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        const written = driver.CreateBodies[0].platformSettings?.overrides?.conversationConfigOverride;
+        const paths = enabledLeafPaths(written);
+        expect(paths.length).toBeGreaterThan(1); // prompt + voice at minimum
+
+        for (const path of paths) {
+            const fresh = new TestElevenLabsRealtime('fake-api-key');
+            const stale = makeAgentDetail({ agentId: 'agent_x', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+            stale.platformSettings = {
+                overrides: { conversationConfigOverride: withLeafDisabled(written ?? {}, path) },
+            };
+            fresh.Agents = [stale];
+
+            await fresh.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+            expect(fresh.UpdateCalls, `override '${path.join('.')}' is written but never required`).toHaveLength(1);
+        }
     });
 
     it('PATCHes the managed agent when the prompt override is not enabled', async () => {
@@ -371,6 +492,77 @@ describe('ElevenLabsRealtime client-direct (CreateClientSession)', () => {
             overrides: { agent: { prompt: { prompt: 'You are the session voice.' } } },
             config: { voiceHint: 'warm' },
         });
+    });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Per-session voice (issue #3374)                                    */
+/* ------------------------------------------------------------------ */
+
+describe('ElevenLabsRealtime per-session voice', () => {
+    let driver: TestElevenLabsRealtime;
+
+    beforeEach(() => {
+        driver = new TestElevenLabsRealtime('fake-api-key');
+    });
+
+    it('carries the configured voice as a RAW-WIRE tts.voice_id override alongside the prompt', async () => {
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { voice: '21m00Tcm4TlvDq8ikWAM' } }));
+
+        expect(cfg.SessionConfig['overrides']).toEqual({
+            ...promptOnlyOverrides(),
+            // snake_case: this object is forwarded VERBATIM onto the websocket by the client
+            // driver, never through the SDK's camelCase serializer
+            tts: { voice_id: '21m00Tcm4TlvDq8ikWAM' },
+        });
+    });
+
+    it('leaves a voice-less session byte-for-byte as it was before per-session voice existed', async () => {
+        const cfg = await driver.CreateClientSession(makeParams());
+
+        expect(cfg.SessionConfig['overrides']).toEqual(promptOnlyOverrides());
+    });
+
+    it('reads the DRIVER-NEUTRAL `voice` key, the same one AssemblyAI and Inworld read', async () => {
+        // `voiceId` is NOT the contract — a bag carrying only it must not silently half-work
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { voiceId: 'ignored_key' } }));
+
+        expect(cfg.SessionConfig['overrides']).toEqual(promptOnlyOverrides());
+    });
+
+    it.each([
+        ['a blank string', '   '],
+        ['an empty string', ''],
+        ['a non-string', 42],
+        ['null', null],
+    ])('omits the tts override entirely when the voice is %s', async (_label, voice) => {
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { voice } }));
+
+        expect(cfg.SessionConfig['overrides']).toEqual(promptOnlyOverrides());
+    });
+
+    it('trims a padded voice id', async () => {
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { voice: '  voice_abc  ' } }));
+
+        expect(cfg.SessionConfig['overrides']).toEqual({ ...promptOnlyOverrides(), tts: { voice_id: 'voice_abc' } });
+    });
+
+    it('sends the SAME voice override on the server-bridged initiation frame (topology parity)', async () => {
+        await startSession(driver, { Config: { voice: 'voice_abc' } });
+
+        expect(driver.Socket.SentFrames()[0]).toEqual({
+            type: 'conversation_initiation_client_data',
+            conversation_config_override: { ...promptOnlyOverrides(), tts: { voice_id: 'voice_abc' } },
+        });
+    });
+
+    it('does not vary the MANAGED AGENT by voice — voice is per-session, so one agent is shared', async () => {
+        await driver.CreateClientSession(makeParams({ Config: { voice: 'voice_a' } }));
+        await driver.CreateClientSession(makeParams({ Config: { voice: 'voice_b' } }));
+
+        // one ensure, one agent: a per-session override must never fan out managed agents
+        expect(driver.ListCalls).toHaveLength(1);
+        expect(driver.CreateBodies).toHaveLength(1);
     });
 });
 
