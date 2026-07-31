@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T111 - Lists Browse View Mode Toggle",
+    "Description": "Exercises the three distinct render branches (table/card/hierarchy) of lists-browse-resource driven by mj-view-toggle, including the category-grouped hierarchy tree — a Lists-specific multi-layout switch.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo and select the Lists application; the default 'Lists' (Browse) section opens. In the toolbar there is a view toggle offering table, card, and hierarchy layouts. Switch between at least two of these modes. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Success is that toggling the view mode visibly changes how the lists are laid out — e.g. a row/column table with Name/Entity/Items/Owner columns vs. a grid of cards vs. a folder-grouped hierarchy tree. (If the user has no lists, the 'No Lists Yet' empty state is a valid render.)",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Lists browse section renders lists (in table, card, or hierarchy form) OR a valid 'No Lists Yet' empty state",
+        "Activating a different view-toggle option changes the layout — the table columns, card grid, and hierarchy folder tree are visually distinct from one another",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,lists"
+  },
+  "primaryKey": {
+    "ID": "F011EE33-C0AD-4DAB-B979-2B858BAB655C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.591Z",
+    "checksum": "da03764228609bff36d37db9a4755b36c58d95255a1861c688554d4110609db4"
+  }
+}

@@ -1,0 +1,190 @@
+{
+  "TestId": "26CDFEE2-7B0A-4260-9DEC-5B2D56418C81",
+  "AppBuildHash": "454f1c42c7ee-dirty:3dd8345bcce2d83a",
+  "AppVersion": "",
+  "GoalHash": "db1eca30",
+  "RecordedAt": "2026-07-23T05:20:17.360Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I am currently on the AI application's Overview page. My next step is to navigate to the MCP section as per the goal.",
+      "UrlBefore": "http://localhost:4200/app/ai",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "MCP",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[6]",
+          "BoundingBox": {
+            "XMin": 785,
+            "YMin": 4,
+            "XMax": 876,
+            "YMax": 56
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "I have successfully navigated to the MCP section and the Servers tab is active. Now I will click the 'Add Server' button to open the dialog and proceed with testing the transport-dependent field swap.",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add Server",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1139,
+            "YMin": 89,
+            "XMax": 1256,
+            "YMax": 123
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "The 'Add MCP Server' dialog is open. Currently, 'Transport Type' is set to 'Streamable HTTP', and the 'Server URL' field is visible. I will now change the 'Transport Type' to 'Standard I/O' to verify ",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Streamable HTTP\nServer-Sent Events\nStandard I/O\nWebSocket",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/div[1]/div[1]/div[2]/div[3]/select[1]",
+          "BoundingBox": {
+            "XMin": 360,
+            "YMin": 339,
+            "XMax": 920,
+            "YMax": 377
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "The 'Add MCP Server' dialog is open. Currently, 'Transport Type' is set to 'Streamable HTTP', and the 'Server URL' field is visible. I will now change the 'Transport Type' to 'Standard I/O' to verify ",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "keypress",
+        "Key": "ArrowDown"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The 'Add MCP Server' dialog is open. Currently, 'Transport Type' is set to 'Streamable HTTP', and the 'Server URL' field is visible. I will now change the 'Transport Type' to 'Standard I/O' to verify ",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "keypress",
+        "Key": "ArrowDown"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The 'Add MCP Server' dialog is open. Currently, 'Transport Type' is set to 'Streamable HTTP', and the 'Server URL' field is visible. I will now change the 'Transport Type' to 'Standard I/O' to verify ",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I have successfully verified that changing the 'Transport Type' to 'Standard I/O' reveals the 'Command' field. Now, I will change it back to an HTTP-based transport, specifically 'WebSocket', to confi",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Streamable HTTP\nServer-Sent Events\nStandard I/O\nWebSocket",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/div[1]/div[1]/div[2]/div[3]/select[1]",
+          "BoundingBox": {
+            "XMin": 360,
+            "YMin": 339,
+            "XMax": 920,
+            "YMax": 377
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "I have successfully verified that changing the 'Transport Type' to 'Standard I/O' reveals the 'Command' field. Now, I will change it back to an HTTP-based transport, specifically 'WebSocket', to confi",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "keypress",
+        "Key": "ArrowDown"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I have successfully verified that changing the 'Transport Type' to 'Standard I/O' reveals the 'Command' field. Now, I will change it back to an HTTP-based transport, specifically 'WebSocket', to confi",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/ai/MCP",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

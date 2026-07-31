@@ -1,0 +1,50 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T152 - User-Menu Items",
+    "Description": "Opens the top-right user avatar menu, then exercises its items (theme toggle light/dark, About dialog, and finally Sign Out) in one run, verifying each via checkpoints. Sign Out runs last because it ends the session. Consolidates old T373, T376, T380.",
+    "InputDefinition": {
+      "goal": "You are logged in at http://localhost:4200. Click the user avatar button in the TOP-RIGHT corner of the header to open the user menu. Then perform these sub-actions IN ORDER, and as you complete each set \"checkpointReached\" to the exact checkpoint name shown: (1) theme-toggle — find the theme toggle row in the user menu (a sun/moon switch with a label like 'Theme' or 'Dark Mode') and click it to flip the theme, confirming the entire application visibly re-skins (light interface switches to a dark background with light text, or vice-versa) and the toggle reflects the new state, then click it again to flip back; (2) about-dialog — reopen the user menu if needed, confirm it shows a header with your user name/email plus menu items, then click the 'About' item and confirm an About dialog opens showing MemberJunction information such as a version number (you do NOT need to do anything inside the dialog — close it); (3) sign-out — reopen the user menu and click the 'Sign Out' (logout) item, confirming the app tears down the session and returns to the sign-in / login screen (an auth prompt or login button appears); you do NOT need to log back in. Do sign-out LAST, since it ends the session. Keep going until all sub-actions are done. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "theme-toggle", "instruction": "flip the theme light/dark from the user menu", "visualCriteria": ["The user avatar menu opens and shows a theme toggle control (sun/moon switch), clicking it visibly changes the app's color scheme (light<->dark) across the header and page background, and the toggle switch position/icon updates to reflect the newly applied theme"] },
+        { "name": "about-dialog", "instruction": "open the About dialog from the user menu", "visualCriteria": ["The user avatar menu displays a user identity header (name and/or email) plus menu items including an 'About' item, and clicking 'About' opens a dialog with MemberJunction/version information"] },
+        { "name": "sign-out", "instruction": "sign out and land on the login screen", "visualCriteria": ["Clicking the 'Sign Out' / logout item leaves the authenticated Explorer shell (header/tabs no longer shown) and presents a login / sign-in screen or auth prompt"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,shell"
+  },
+  "primaryKey": { "ID": "A0DB3774-6E97-4D27-9685-B598B3423811" }
+}

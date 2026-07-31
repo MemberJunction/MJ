@@ -14,6 +14,7 @@ import { BaseJudge } from './BaseJudge.js';
 import { JudgeContext, JudgeVerdict } from '../types/judge.js';
 import { JudgePromptRequest, JudgePromptResponse } from '../types/controller.js';
 import { DEFAULT_JUDGE_PROMPT } from '../prompts/default-judge.js';
+import { evaluateRubric, CriterionVerdict } from './rubric.js';
 
 /**
  * Callback type for executing judge prompts.
@@ -57,11 +58,20 @@ export class LLMJudge extends BaseJudge {
         const request = new JudgePromptRequest();
         request.Goal = context.Goal;
         request.CurrentScreenshot = context.CurrentScreenshot;
-        request.ScreenshotHistory = context.ScreenshotHistory;
+        // Current-frame-only by default (CU-D5): "is the goal visibly done?"
+        // almost always needs only the current frame, and re-uploading the full
+        // image history every judge call is the dominant judge cost. The textual
+        // step summary (URLs + per-action OK/FAIL + page-state) carries the
+        // progression the history images used to. (Deferred: re-add history
+        // conditionally for Impossible-leaning verdicts.)
+        request.ScreenshotHistory = [];
         request.StepNumber = context.StepNumber;
         request.MaxSteps = context.MaxSteps;
         request.StepSummary = this.buildStepSummary(context);
         request.CurrentUrl = context.CurrentUrl;
+        request.Diagnostics = context.CurrentDiagnosticsDigest || undefined;
+        request.ValidationCriteria = context.ValidationCriteria;
+        request.Signal = context.Signal;
         return request;
     }
 
@@ -98,13 +108,14 @@ export class LLMJudge extends BaseJudge {
 
         try {
             const parsed = JSON.parse(jsonStr) as JudgeParsedResponse;
-            return this.CreateVerdict(
+            const verdict = this.CreateVerdict(
                 parsed.done ?? false,
                 typeof parsed.confidence === 'number' ? parsed.confidence : 0,
                 parsed.reason ?? 'No reason provided',
                 parsed.feedback ?? '',
                 parsed.impossible ?? false,
             );
+            return this.applyRubric(verdict, parsed.criteria);
         } catch {
             return this.CreateVerdict(
                 false,
@@ -113,6 +124,38 @@ export class LLMJudge extends BaseJudge {
                 'Judge could not evaluate — response was malformed JSON',
             );
         }
+    }
+
+    /**
+     * When the judge returned per-criterion rubric verdicts (CU-D1), override
+     * the scalar Done/Confidence with the binary rubric derivation: Done =
+     * all-criteria-met, Confidence = coverage, Reason lists any unmet criteria.
+     * A missing/empty `criteria` array leaves the scalar verdict untouched
+     * (no rubric was supplied, or the judge didn't return one).
+     */
+    private applyRubric(
+        verdict: JudgeVerdict,
+        rawCriteria: JudgeParsedResponse['criteria']
+    ): JudgeVerdict {
+        if (!Array.isArray(rawCriteria) || rawCriteria.length === 0) {
+            return verdict;
+        }
+        const criteria: CriterionVerdict[] = rawCriteria.map(c => ({
+            criterion: String(c.criterion ?? ''),
+            met: c.met === true,
+            evidence: String(c.evidence ?? ''),
+        }));
+        const rubric = evaluateRubric(criteria);
+        verdict.CriteriaVerdicts = criteria;
+        // Impossible stays the model's call; the rubric governs Done/coverage.
+        if (!verdict.Impossible) {
+            verdict.Done = rubric.done;
+        }
+        verdict.Confidence = rubric.coverage;
+        verdict.Reason = rubric.done
+            ? `All ${rubric.total} criteria met. ${verdict.Reason}`.trim()
+            : `${rubric.metCount}/${rubric.total} criteria met; unmet: ${rubric.unmet.join('; ')}`;
+        return verdict;
     }
 
     /**
@@ -126,11 +169,32 @@ export class LLMJudge extends BaseJudge {
             const actions = step.ActionsRequested
                 .map(a => a.Type)
                 .join(', ');
+            // Per-action OK/FAIL so the judge sees which actions actually landed (CU-D5).
+            const results = step.ActionResults
+                .map(r => r.Success ? 'OK' : `FAIL:${r.Error ?? 'unknown'}`)
+                .join(', ');
+            const resultNote = results ? ` → [${results}]` : '';
+            // Post-action URL (CU-A8) + page-state (CU-A1/A2) so a half-rendered
+            // page is distinguishable from a broken one.
+            const url = this.compactUrl(step.UrlAfter || step.Url);
+            const urlNote = url ? ` [${url}]` : '';
+            const pageState = step.SettleReason === 'budget' ? ' [page still loading]' : '';
             const errorNote = step.Error
                 ? ` [ERROR: ${step.Error.Message}]`
                 : '';
-            return `Step ${step.StepNumber}: ${step.ControllerReasoning || 'No reasoning'} → Actions: [${actions}]${errorNote}`;
+            return `Step ${step.StepNumber}${urlNote}: ${step.ControllerReasoning || 'No reasoning'} → Actions: [${actions}]${resultNote}${pageState}${errorNote}`;
         }).join('\n');
+    }
+
+    /** Compact URL (path + query, origin dropped) for the judge step summary (CU-D5). */
+    private compactUrl(url: string): string {
+        if (!url) return '';
+        try {
+            const u = new URL(url);
+            return `${u.pathname}${u.search}`;
+        } catch {
+            return url;
+        }
     }
 
     /**
@@ -161,4 +225,6 @@ interface JudgeParsedResponse {
     confidence?: number;
     reason?: string;
     feedback?: string;
+    /** Per-criterion rubric verdicts (CU-D1), when a rubric was supplied. */
+    criteria?: Array<{ criterion?: string; met?: boolean; evidence?: string }>;
 }

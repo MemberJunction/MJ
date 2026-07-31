@@ -10,9 +10,11 @@
  * - OnStagnation: only when heuristics detect potential stuckness
  */
 
-import { BrowserAction, ActionExecutionResult } from './browser.js';
+import { BrowserAction, ActionExecutionResult, BrowserDiagnosticEvent, InteractiveElement } from './browser.js';
+import type { CriterionVerdict } from '../judge/rubric.js';
 import { ToolCallRecord } from './tools.js';
 import { ComputerUseError } from './errors.js';
+import { SettleReason } from './app-profile.js';
 
 // ─── Judge Context ─────────────────────────────────────────
 /**
@@ -25,6 +27,13 @@ export class JudgeContext {
     public Goal: string = '';
     /** Current screenshot as base64 PNG */
     public CurrentScreenshot: string = '';
+    /**
+     * Perceptual (dHash) fingerprint of the current screenshot (CU-F6). Lets the
+     * heuristic judge detect stagnation across near-identical frames — including
+     * animated spinners, which byte-equality never catches — without re-decoding
+     * the PNG (the engine computes the hash once at capture). '' when unavailable.
+     */
+    public CurrentScreenshotHash: string = '';
     /** Recent screenshots as base64 PNGs (bounded by ScreenshotHistoryDepth) */
     public ScreenshotHistory: string[] = [];
     /** History of all steps executed so far */
@@ -37,6 +46,35 @@ export class JudgeContext {
     public CurrentUrl: string = '';
     /** Whether the controller explicitly requested this judgement evaluation. */
     public ControllerRequestedJudgement: boolean = false;
+    /**
+     * Compact digest of the current step's browser diagnostics (CU-A7) — console
+     * errors, failed requests, crashes. Lets the judge explain an infrastructure
+     * state (blank page = `ChunkLoadError`) instead of hallucinating a reason. '' when clean.
+     */
+    public CurrentDiagnosticsDigest: string = '';
+
+    /**
+     * Validation-criteria rubric for this run (CU-D1) — the test's authored
+     * pass criteria. When present, the judge returns a per-criterion verdict and
+     * `Done` is derived as all-criteria-met. Empty → the judge uses its scalar
+     * assessment of the goal.
+     */
+    public ValidationCriteria?: string[];
+
+    /**
+     * Whether this run is a checkpoint tour (CU-D8). Tours are scored by latching
+     * sections as the trajectory passes through them, so the judge is the ONLY way
+     * a visual criterion can ever latch. The navigation-shape heuristics
+     * (stuck-frame, URL loop) must therefore not preempt the LLM judge here — see
+     * {@link HeuristicJudge}.
+     */
+    public IsCheckpointTour: boolean = false;
+
+    /**
+     * Cancellation signal (CU-B8), passed through to the judge prompt request so
+     * an in-flight judge LLM call aborts promptly when the run is stopped.
+     */
+    public Signal?: AbortSignal;
 }
 
 // ─── Judge Verdict ─────────────────────────────────────────
@@ -60,6 +98,13 @@ export class JudgeVerdict {
     public Reason: string = '';
     /** Suggested next action for the Controller (optional guidance) */
     public SuggestedNextAction?: string;
+    /**
+     * Per-criterion verdicts when the run supplied a validation-criteria rubric
+     * (CU-D1). When present, `Done` is derived as all-criteria-met and the
+     * evidence strings feed triage + CU-C5 postcondition distillation. Empty
+     * when no rubric was supplied (the scalar verdict stands).
+     */
+    public CriteriaVerdicts?: CriterionVerdict[];
 }
 
 // ─── Judge Frequency ───────────────────────────────────────
@@ -112,6 +157,13 @@ export class StepRecord {
     public StepNumber: number = 0;
     /** Screenshot captured at the start of this step (base64 PNG) */
     public Screenshot: string = '';
+    /**
+     * Perceptual (dHash) fingerprint of this step's screenshot (CU-F6).
+     * 16-char hex, or '' when the frame could not be hashed. Shared signal for
+     * loop/stagnation detection, screenshot dedupe, judge-call gating, and
+     * failure classification. App-agnostic — derived from pixels only.
+     */
+    public ScreenshotHash: string = '';
     /** The controller's reasoning for this step */
     public ControllerReasoning: string = '';
     /** Browser actions the controller requested */
@@ -122,10 +174,71 @@ export class StepRecord {
     public ToolCalls: ToolCallRecord[] = [];
     /** Judge verdict (if the judge was consulted this step) */
     public JudgeVerdict?: JudgeVerdict;
+    /**
+     * Whether the controller explicitly requested judgement this step (CU-B3).
+     * Such a step is a deliberate "am I done?" checkpoint, not a stuck/misconfigured
+     * empty step — the main loop must not count it toward the empty-step abort.
+     */
+    public RequestedJudgement: boolean = false;
+    /**
+     * The tour checkpoint (CU-D8) the controller reported reaching this step, if
+     * any — telemetry, and the trigger for a scoped judge call this step.
+     */
+    public CheckpointReached?: string;
     /** Total duration of this step in milliseconds */
     public DurationMs: number = 0;
     /** Error that occurred during this step (if applicable) */
     public Error?: ComputerUseError;
-    /** URL of the page at the start of this step */
+    /**
+     * URL of the page at the START of this step (before this step's actions ran).
+     * Retained as `Url` for back-compat; prefer `UrlBefore`/`UrlAfter`.
+     */
     public Url: string = '';
+
+    // ─── CU-A8: before/after URLs ──────────────────────────
+    /** URL at the start of the step (== `Url`). */
+    public UrlBefore: string = '';
+    /** URL after this step's actions executed. Use this for loop detection and judge context. */
+    public UrlAfter: string = '';
+
+    // ─── CU-F1: split-phase timings (ms), for "app slow vs LLM slow vs agent lost" ───
+    /** Wall-clock epoch (ms) when this step began. */
+    public StartedAt: number = 0;
+    /** Time spent waiting for the page to settle before perceiving (engine-side; not agent reasoning). */
+    public SettleMs: number = 0;
+    /** Why the settle loop stopped waiting this step (CU-A1/A2) — e.g. 'beacon-ready', 'stable', 'budget'. */
+    public SettleReason: SettleReason = 'none';
+    /** Browser diagnostics captured during this step (console errors, failed requests, crashes) — CU-A7. */
+    public Diagnostics: BrowserDiagnosticEvent[] = [];
+    /**
+     * Interactive elements the extractor found this step when element grounding
+     * is on (CU-A4) — role/name/selector/bbox for each. Empty when grounding is
+     * off. The raw material that makes ClickElement/TypeIntoElement traces
+     * replayable and self-healable (CU-C1).
+     */
+    public InteractiveElements: InteractiveElement[] = [];
+    /**
+     * Set when a multi-action batch stopped before running every requested action
+     * (CU-B5) — e.g. "executed 3/5 actions, stopped: url-changed". Surfaced to the
+     * next step's summary so the controller knows exactly what did NOT run.
+     */
+    public BatchStopReason?: string;
+    /** Controller self-tracked state emitted this step (CU-E2): outcome eval, durable memory, plan checklist. */
+    public Evaluation?: string;
+    public Memory?: string;
+    public Plan?: string;
+    /** Time spent capturing (and hashing) the screenshot. */
+    public ScreenshotMs: number = 0;
+    /** Time spent in the controller LLM call. */
+    public LlmMs: number = 0;
+    /** Time spent executing this step's browser actions + tool calls. */
+    public ActionMs: number = 0;
+    /** Time spent in the judge (heuristic + LLM) this step. */
+    public JudgeMs: number = 0;
+
+    // ─── CU-F2: correlation IDs (opaque strings; populated by Layer 2) ───
+    /** Correlation id for the controller LLM invocation (e.g. an MJ AIPromptRun ID). */
+    public ControllerPromptRunId?: string;
+    /** Correlation id for the judge LLM invocation, when the judge ran this step. */
+    public JudgePromptRunId?: string;
 }

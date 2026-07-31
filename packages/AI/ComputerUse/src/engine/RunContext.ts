@@ -15,7 +15,11 @@
  */
 
 import { RunComputerUseParams } from '../types/params.js';
-import { StepRecord } from '../types/judge.js';
+import { StepRecord, JudgeVerdict } from '../types/judge.js';
+import type { InteractiveElement } from '../types/browser.js';
+import type { CheckpointLatch } from './checkpoint.js';
+import { summarizeOlderSteps, DEFAULT_MAX_VERBATIM_STEPS } from './step-digest.js';
+import { distillActionError } from './action-error.js';
 
 export class RunContext {
     /** Immutable reference to the original run parameters */
@@ -29,6 +33,39 @@ export class RunContext {
 
     /** Judge feedback from the previous step (injected into the next controller prompt) */
     public LastJudgeFeedback?: string;
+
+    /** Engine-computed loop evidence, injected into the next controller prompt (CU-B1). */
+    public LoopEvidence?: string;
+
+    /** Compact diagnostics digest from the previous step, injected into the next controller prompt (CU-A7). */
+    public LastDiagnosticsDigest?: string;
+
+    /** How many identity-provider detours the watchdog has recovered this run (CU-B7). */
+    public AuthDetourCount: number = 0;
+
+    /** Previous step's extracted interactive elements, for the "new since last step" diff (CU-A4). */
+    public LastInteractiveElements?: InteractiveElement[];
+
+    /** Controller's durable memory + plan from the previous step, echoed into the next prompt (CU-E2). */
+    public LastMemory?: string;
+    public LastPlan?: string;
+
+    /**
+     * Perceptual hash of the screenshot the judge last evaluated (CU-G5).
+     * Used to skip re-judging an unchanged visible state.
+     */
+    public LastJudgedHash?: string;
+
+    /** The last judge verdict, reused when the state is unchanged (CU-G5). */
+    public LastJudgeVerdict?: JudgeVerdict;
+
+    /**
+     * Sticky per-checkpoint latch state for a checkpoint tour (CU-D8), keyed by
+     * checkpoint name. Empty for non-tour runs. Once a checkpoint latches met it
+     * stays met, so a run is scored on every section it reached, not just the
+     * final frame.
+     */
+    public CheckpointState: Map<string, CheckpointLatch> = new Map();
 
     /** Run start timestamp (for total duration calculation) */
     public readonly StartTime: number;
@@ -103,24 +140,39 @@ export class RunContext {
     public BuildStepSummary(): string {
         if (this.StepHistory.length === 0) return '';
 
-        return this.StepHistory
-            .map(step => this.formatStepSummary(step))
-            .join('\n');
+        // Compaction (CU-E4): keep the most recent N steps verbatim; collapse
+        // older ones into a one-line digest so the summary stays bounded on long
+        // runs (the per-path counts keep the loop signal alive after a step
+        // scrolls out of the verbatim window).
+        const total = this.StepHistory.length;
+        if (total <= DEFAULT_MAX_VERBATIM_STEPS) {
+            return this.StepHistory.map(step => this.formatStepSummary(step)).join('\n');
+        }
+        const splitAt = total - DEFAULT_MAX_VERBATIM_STEPS;
+        const digest = summarizeOlderSteps(this.StepHistory.slice(0, splitAt));
+        const recent = this.StepHistory.slice(splitAt).map(step => this.formatStepSummary(step));
+        return [digest, ...recent].join('\n');
     }
 
     /**
      * Format a single step into a human-readable summary line.
      */
     private formatStepSummary(step: StepRecord): string {
+        // Include the step's URL (CU-E1) so the controller can see navigation
+        // history in-context — "you have been on /app/x 4 times" becomes a
+        // lookup, the prompt-side complement to engine loop detection (CU-B1).
+        const url = this.compactUrl(step.UrlAfter || step.Url);
         const parts: string[] = [
-            `Step ${step.StepNumber}: ${step.ControllerReasoning || 'No reasoning'}`,
+            `Step ${step.StepNumber}${url ? ` [${url}]` : ''}: ${step.ControllerReasoning || 'No reasoning'}`,
         ];
 
         // Browser actions
         if (step.ActionsRequested.length > 0) {
             const actions = step.ActionsRequested.map(a => a.Type).join(', ');
+            // Distilled, not raw: a Playwright call log dumped verbatim buries the
+            // only actionable fact (something covered the target) in ~15 lines.
             const results = step.ActionResults
-                .map(r => r.Success ? 'OK' : `FAIL: ${r.Error ?? 'unknown'}`)
+                .map(r => r.Success ? 'OK' : `FAIL: ${distillActionError(r.Error)}`)
                 .join(', ');
             parts.push(`Actions: [${actions}] → [${results}]`);
         }
@@ -133,11 +185,28 @@ export class RunContext {
             parts.push(`Tool ${tc.ToolName}: ${resultText}`);
         }
 
+        // Batch stop note (CU-B5): tell the controller exactly what did NOT run
+        // when a multi-action batch halted early, so it can re-issue the rest.
+        if (step.BatchStopReason) {
+            parts.push(`[BATCH: ${step.BatchStopReason}]`);
+        }
+
         if (step.Error) {
             parts.push(`[ERROR: ${step.Error.Message}]`);
         }
 
         return parts.join(' | ');
+    }
+
+    /** Compact URL for the step summary — path + query, origin dropped for brevity (CU-E1). */
+    private compactUrl(url: string): string {
+        if (!url) return '';
+        try {
+            const u = new URL(url);
+            return `${u.pathname}${u.search}`;
+        } catch {
+            return url;
+        }
     }
 
     /**

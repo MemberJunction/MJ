@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext } from '../utils/variable-substitution.js';
+import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext, findUnresolvedPlaceholders } from '../utils/variable-substitution.js';
 
 describe('buildVariableValuesFromContext', () => {
     it('returns empty when there is no context and no relevant env vars', () => {
@@ -201,5 +201,34 @@ describe('composeApplicationContext', () => {
             '## Test-specific Notes\n\nreal content'
         );
         expect(composeApplicationContext('real content', '\t\n', {})).toBe('real content');
+    });
+});
+
+describe('findUnresolvedPlaceholders (CU-F7)', () => {
+    it('returns [] for a fully-resolved string', () => {
+        expect(findUnresolvedPlaceholders('http://localhost:4200/app')).toEqual([]);
+    });
+
+    it('returns [] for undefined/empty', () => {
+        expect(findUnresolvedPlaceholders(undefined)).toEqual([]);
+        expect(findUnresolvedPlaceholders('')).toEqual([]);
+    });
+
+    it('finds a single unresolved placeholder', () => {
+        expect(findUnresolvedPlaceholders('{{baseUrl}}/dashboard')).toEqual(['baseUrl']);
+    });
+
+    it('finds multiple distinct placeholders and de-dupes', () => {
+        const out = findUnresolvedPlaceholders('{{scheme}}://{{host}}/{{host}}');
+        expect(out.sort()).toEqual(['host', 'scheme']);
+    });
+
+    it('matches the substitution grammar (whitespace, dots, hyphens)', () => {
+        expect(findUnresolvedPlaceholders('{{ base.url-v2 }}')).toEqual(['base.url-v2']);
+    });
+
+    it('agrees with substituteVariables: a provided key leaves nothing unresolved', () => {
+        const resolved = substituteVariables({ u: '{{baseUrl}}/x' }, { baseUrl: 'http://h' });
+        expect(findUnresolvedPlaceholders((resolved as { u: string }).u)).toEqual([]);
     });
 });

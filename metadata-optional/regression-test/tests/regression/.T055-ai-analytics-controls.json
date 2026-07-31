@@ -1,0 +1,51 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T055 - AI Analytics Controls",
+    "Description": "Opens the AI Analytics screen once, then walks its interactive controls (section switching, time-range chips, compare toggle, Model Performance leaderboard controls), verifying each via checkpoints. Consolidates old T122, T123, T124, T125.",
+    "InputDefinition": {
+      "goal": "Open the AI application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), then open the Analytics section. This shared setup is done ONCE. Then exercise these controls IN ORDER, and as you finish each set \"checkpointReached\" to the exact checkpoint name shown: (1) section-switching — using the left navigation rail (Executive Summary, Prompt Runs, Agent Runs, Model Performance, Cost & Budget, Error Analysis, Usage Patterns), click at least two different sections (e.g. Executive Summary then Cost & Budget) and confirm the content area swaps to each section's view while the outer chrome stays put; (2) time-range-chips — on a data section, locate the time-range chips (24h / 7d / 30d / 90d), click a different chip than the active one, and confirm it becomes active and the content refreshes (or shows a valid empty state); (3) compare-toggle — on a section whose toolbar has a 'Compare' button (code-compare icon), click it to turn comparison mode on and click again to turn it off, confirming its selected/pressed state toggles; (4) model-performance-controls — select the 'Model Performance' section, and using its Sort By selector (By Cost / By Latency / By Usage) and Vendor filter, change Sort By and/or pick a Vendor and confirm the leaderboard updates (or shows a valid empty state). Keep going until every control has been exercised. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 65,
+      "checkpoints": [
+        { "name": "section-switching", "instruction": "left-rail section switching swaps content", "visualCriteria": ["A left navigation rail with multiple analytics section labels is visible, and selecting a different section (e.g. Cost & Budget, Model Performance) swaps the main content area to that section's view without a full page reload"] },
+        { "name": "time-range-chips", "instruction": "time-range chip changes active range and refreshes", "visualCriteria": ["A row of time-range chips is visible with one active, and clicking a different chip moves the active state to it and the content refreshes/responds to the new range (or shows a valid empty state)"] },
+        { "name": "compare-toggle", "instruction": "Compare toggle changes pressed state", "visualCriteria": ["A 'Compare' toggle button is present in an analytics section's toolbar, and clicking it toggles its selected/pressed state (and toggling again releases it) with the view reflecting comparison mode"] },
+        { "name": "model-performance-controls", "instruction": "Model Performance Sort By + Vendor controls update leaderboard", "visualCriteria": ["The Model Performance section renders with section-specific Sort By and Vendor controls, and changing Sort By and/or Vendor updates the leaderboard contents/order (or shows a valid empty state)"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 65,
+      "maxExecutionTime": 780000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,ai"
+  },
+  "primaryKey": { "ID": "902B51C8-8CB3-4EEE-ABCD-D156C89BBED1" }
+}

@@ -27,32 +27,28 @@ import {
     AudioCaptureChunk,
     AccessibilityNode,
     ElementInfo,
-    BoundingBox,
+    InteractiveElement,
     KeyModifier,
+    ContextSeed,
 } from '../types/browser.js';
 import { ClassifyConnectEndpoint } from './connect-endpoint.js';
-
-/**
- * Shape of a node returned by Playwright's `page.accessibility.snapshot()`.
- * Only the fields we map are declared. As of Playwright 1.58 the
- * `accessibility` namespace remains at runtime but is no longer in the public
- * `.d.ts`, so we declare a precise local view rather than reach for `any`.
- */
-interface PlaywrightAXNode {
-    role: string;
-    name: string;
-    value?: string | number;
-    children?: PlaywrightAXNode[];
-}
-
-/**
- * Typed view of the (now untyped-in-d.ts) `page.accessibility` namespace.
- * Lets us call `snapshot()` without `any` while staying resilient to the
- * field having been dropped from the published types.
- */
-interface PlaywrightAccessibilityNamespace {
-    snapshot(): Promise<PlaywrightAXNode | null>;
-}
+import {
+    getVisibleText,
+    getSelectionText,
+    getTitle,
+    waitForLoadState,
+    getAccessibilitySnapshot,
+    queryElement,
+} from './page-perception.js';
+import {
+    extractInteractiveElements,
+    clickInteractiveElement,
+    typeIntoInteractiveElement,
+} from './element-extraction.js';
+// CU-A7 ambiguous-selector narrowing, shared with SharedContextBrowserAdapter.
+import { resolveActionLocator } from './selector-resolution.js';
+// CU-G4 warm-seed in-page storage helpers, shared with SharedContextBrowserAdapter (RI-C4.1).
+import { StorageSnapshot, captureStorageInPage, restoreStorageInPage } from './page-storage.js';
 
 /**
  * Minimal shape of a CDP `Page.screencastFrame` event payload — only the
@@ -245,6 +241,7 @@ function inPageAudioCaptureAgent(): void {
 /** Source string of {@link inPageAudioCaptureAgent}, the form Playwright `addInitScript`/`evaluate` accept. */
 const AUDIO_CAPTURE_AGENT_SOURCE = `(${inPageAudioCaptureAgent.toString()})()`;
 
+
 export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private browser: Browser | null = null;
     private context: BrowserContext | null = null;
@@ -432,128 +429,75 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
      * screenshot. Returns '' when no page is open (guarded, never throws on
      * a closed adapter).
      */
+    // The perception surface is shared with SharedContextBrowserAdapter via
+    // page-perception.ts (CU-A3) — both adapters delegate to one implementation
+    // so the suite adapter can't silently inherit no-ops, and the two can't drift.
+
     public override async GetVisibleText(): Promise<string> {
-        if (!this.page) {
-            return '';
-        }
-        return this.page.innerText('body');
+        return getVisibleText(this.page);
     }
 
-    /**
-     * Read the page's current text selection via `page.evaluate(window.getSelection())`. Returns '' when
-     * no page is open or nothing is selected (guarded, never throws on a closed adapter) — the copy-out
-     * source for the remote-browser human clipboard path.
-     */
     public override async GetSelectionText(): Promise<string> {
-        if (!this.page) {
-            return '';
-        }
-        return this.page.evaluate(() => window.getSelection()?.toString() ?? '');
+        return getSelectionText(this.page);
     }
 
-    /**
-     * Return the current page title. Returns '' when no page is open (guarded,
-     * never throws on a closed adapter).
-     */
     public override async GetTitle(): Promise<string> {
-        if (!this.page) {
-            return '';
-        }
-        return this.page.title();
+        return getTitle(this.page);
     }
 
-    /**
-     * Wait until the page reaches the given load state. No-op when no page is
-     * open (guarded, never throws on a closed adapter).
-     */
     public override async WaitForLoadState(
         state: 'load' | 'domcontentloaded' | 'networkidle'
     ): Promise<void> {
-        if (!this.page) {
+        return waitForLoadState(this.page, state);
+    }
+
+    public override async GetAccessibilitySnapshot(): Promise<AccessibilityNode | null> {
+        return getAccessibilitySnapshot(this.page);
+    }
+
+    public override async QueryElement(selector: string): Promise<ElementInfo> {
+        return queryElement(this.page, selector, this.config.ActionTimeoutMs);
+    }
+
+    /** Last extracted element list, cached so ClickElement/TypeIntoElement can resolve an index (CU-A4). */
+    private lastInteractiveElements: InteractiveElement[] = [];
+
+    public override async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
+        this.lastInteractiveElements = await extractInteractiveElements(this.page);
+        return this.lastInteractiveElements;
+    }
+
+    /** Resolve an index against the last extracted list, or throw a clear error. */
+    private resolveElementByIndex(index: number): InteractiveElement {
+        const element = this.lastInteractiveElements.find(e => e.Index === index);
+        if (!element) {
+            throw new Error(`No interactive element at index ${index} (list has ${this.lastInteractiveElements.length}; re-extract before acting)`);
+        }
+        return element;
+    }
+
+    // ─── Failure Artifacts (CU-F4) ─────────────────────────
+
+    public override async StartTracing(): Promise<void> {
+        if (!this.context) {
             return;
         }
-        await this.page.waitForLoadState(state);
+        // DOM snapshots + screenshots so the trace viewer can replay the run;
+        // sources omitted (they bloat the zip with app source, of little use here).
+        await this.context.tracing.start({ screenshots: true, snapshots: true });
     }
 
-    /**
-     * Capture the page's accessibility tree, mapped recursively into our own
-     * {@link AccessibilityNode} type. Returns `null` when no page is open or
-     * Playwright produces no snapshot (e.g. a blank page).
-     */
-    public override async GetAccessibilitySnapshot(): Promise<AccessibilityNode | null> {
-        if (!this.page) {
-            return null;
+    public override async StopTracing(path: string): Promise<boolean> {
+        if (!this.context) {
+            return false;
         }
-        // `page.accessibility` exists at runtime but was dropped from Playwright's
-        // public types in 1.58; bridge to it through a precise typed view.
-        const accessibility = (this.page as unknown as { accessibility: PlaywrightAccessibilityNamespace }).accessibility;
-        const root = await accessibility.snapshot();
-        return root ? this.mapAccessibilityNode(root) : null;
-    }
-
-    /**
-     * Recursively map a Playwright accessibility snapshot node into our own
-     * {@link AccessibilityNode}. Null-safe on every field; omits empty children.
-     */
-    private mapAccessibilityNode(node: PlaywrightAXNode): AccessibilityNode {
-        const mapped = new AccessibilityNode();
-        mapped.Role = node.role ?? '';
-        mapped.Name = node.name ?? '';
-        if (node.value !== undefined) {
-            mapped.Value = String(node.value);
-        }
-        if (node.children && node.children.length > 0) {
-            mapped.Children = node.children.map(child => this.mapAccessibilityNode(child));
-        }
-        return mapped;
-    }
-
-    /**
-     * Introspect a single element via `page.locator(selector)`. Reports
-     * existence (`count() > 0`), visibility, inner text, and bounding box.
-     * Never throws on a missing element — returns `Exists:false` instead.
-     * Bounded by the configured action timeout where Playwright supports it.
-     */
-    public override async QueryElement(selector: string): Promise<ElementInfo> {
-        const info = new ElementInfo();
-        if (!this.page) {
-            return info;
-        }
-
         try {
-            const locator = this.page.locator(selector);
-            const count = await locator.count();
-            if (count === 0) {
-                return info; // Exists:false, Visible:false, Text:''
-            }
-
-            info.Exists = true;
-            // Scope subsequent reads to the first match for stability.
-            const first = locator.first();
-            info.Visible = await first.isVisible();
-
-            // innerText can throw on detached/hidden nodes — guard it.
-            try {
-                info.Text = await first.innerText({ timeout: this.config.ActionTimeoutMs });
-            } catch {
-                info.Text = '';
-            }
-
-            const box = await first.boundingBox();
-            if (box) {
-                const bb = new BoundingBox();
-                bb.XMin = box.x;
-                bb.YMin = box.y;
-                bb.XMax = box.x + box.width;
-                bb.YMax = box.y + box.height;
-                info.BoundingBox = bb;
-            }
+            await this.context.tracing.stop({ path });
+            return true;
         } catch {
-            // Any failure (invalid selector, navigation race) → treat as absent.
-            return new ElementInfo();
+            // Tracing wasn't started, or the write failed — no artifact to retain.
+            return false;
         }
-
-        return info;
     }
 
     // ─── Screencast (CDP live viewport feed) ───────────────
@@ -783,12 +727,15 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         const page = this.page!;
 
         switch (action.Type) {
-            case 'Click':
+            case 'Click': {
                 if (action.Selector) {
                     // Selector path: click the matched element directly; the
                     // X/Y/BoundingBox coordinates are ignored when a selector
                     // is supplied. Modifiers (e.g. Shift-click) ride along.
-                    await page.click(action.Selector, {
+                    // Ambiguous selectors are narrowed first (CU-A7) — strict
+                    // mode would otherwise throw on a multi-match.
+                    const target = await resolveActionLocator(page, action.Selector);
+                    await target.click({
                         button: action.Button,
                         clickCount: action.ClickCount,
                         timeout: this.config.ActionTimeoutMs,
@@ -798,16 +745,40 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                     await this.executeClick(page, action);
                 }
                 break;
+            }
 
-            case 'Type':
+            case 'Type': {
                 if (action.Selector) {
                     // Selector path: focus the matched element, then type so that
                     // keystroke events (and any input handlers) fire naturally.
-                    await page.locator(action.Selector).focus({ timeout: this.config.ActionTimeoutMs });
+                    const target = await resolveActionLocator(page, action.Selector);
+                    await target.focus({ timeout: this.config.ActionTimeoutMs });
                     await page.keyboard.type(action.Text);
                 } else {
                     await page.keyboard.type(action.Text);
                 }
+                break;
+            }
+
+            case 'ClickElement':
+                // Element-grounded click (CU-A4): resolve the index to the extracted
+                // element and click its locator with actionability auto-wait.
+                await clickInteractiveElement(
+                    page,
+                    this.resolveElementByIndex(action.Index),
+                    { clickCount: action.ClickCount, button: action.Button, modifiers: action.Modifiers },
+                    this.config.ActionTimeoutMs
+                );
+                break;
+
+            case 'TypeIntoElement':
+                await typeIntoInteractiveElement(
+                    page,
+                    this.resolveElementByIndex(action.Index),
+                    action.Text,
+                    action.PressEnter,
+                    this.config.ActionTimeoutMs
+                );
                 break;
 
             case 'Keypress':
@@ -840,15 +811,23 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 await page.mouse.up({ button: action.Button });
                 break;
 
-            case 'Scroll':
+            case 'Scroll': {
                 if (action.Selector) {
                     // Selector path: bring the matched element into view; the
                     // delta scroll is ignored when a selector is supplied.
-                    await page.locator(action.Selector).scrollIntoViewIfNeeded({ timeout: this.config.ActionTimeoutMs });
+                    const target = await resolveActionLocator(page, action.Selector);
+                    await target.scrollIntoViewIfNeeded({ timeout: this.config.ActionTimeoutMs });
                 } else {
+                    // CU-A8: a wheel event lands wherever the pointer is, so move
+                    // it over the requested point first — that's what lets an open
+                    // dropdown or inner scroll pane be scrolled instead of the page.
+                    if (action.X !== undefined && action.Y !== undefined) {
+                        await page.mouse.move(action.X, action.Y);
+                    }
                     await page.mouse.wheel(action.DeltaX, action.DeltaY);
                 }
                 break;
+            }
 
             case 'Wait':
                 if (action.Selector) {
@@ -1148,6 +1127,39 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 }
             }, entries);
         }
+    }
+
+    // ─── Warm-Seed Context Storage (CU-G4) ─────────────────
+
+    public override async CaptureContextSeed(origin: string): Promise<ContextSeed | null> {
+        this.requirePage();
+        try {
+            const snap = await this.page!.evaluate(captureStorageInPage);
+            const seed = new ContextSeed();
+            seed.Origin = origin;
+            seed.LocalStorage = snap.localStorage;
+            if (snap.databases.length > 0) {
+                seed.IndexedDB = { Databases: snap.databases };
+            }
+            return seed;
+        } catch {
+            return null;   // capture is best-effort; a failure just means no seed
+        }
+    }
+
+    public override async SeedContext(seed: ContextSeed): Promise<void> {
+        this.requirePage();
+        const snap: StorageSnapshot = {
+            localStorage: seed.LocalStorage ?? [],
+            databases: seed.IndexedDB?.Databases ?? [],
+        };
+        if (snap.localStorage.length === 0 && snap.databases.length === 0) {
+            return;
+        }
+        // addInitScript so the restore runs BEFORE the app's scripts on the next
+        // navigation to the seed origin — the app then finds a warm cache instead
+        // of cold-booting it. Restore is cold-boot-safe (deletes a DB on failure).
+        await this.page!.addInitScript(restoreStorageInPage, snap);
     }
 
     // ─── State ─────────────────────────────────────────────

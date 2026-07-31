@@ -1,0 +1,1728 @@
+{
+  "fields": {
+    "Name": "MJ Explorer Regression Suite",
+    "Description": "Full-stack E2E regression suite for MJ Explorer. Uses Computer Use (LLM-driven browser automation) to validate login, navigation, CRUD, and core application workflows. P0 tests are release-blocking.",
+    "Status": "Active",
+    "Configuration": {
+      "applicationContext": "@file:context/mjexplorer-context.md",
+      "computerUse": {
+        "elementGrounding": true,
+        "generation": {
+          "temperature": 0
+        }
+      }
+    }
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T001 - Login Smoke",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "8CED55DE-3FC4-414F-BEEA-49F808314738"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T002 - Data Explorer Open Entity Record",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "4D5E881A-695C-4475-A6B9-ACCCC23F6504"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T003 - Navigation and Tab Management",
+          "Sequence": 3,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "FC37C61E-0376-4D78-A7E5-001324629924"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T004 - Run a Saved Query",
+          "Sequence": 4,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "CF48D403-CB4A-420E-AB18-0425B5B8DE53"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T005 - Handle Invalid Navigation Gracefully",
+          "Sequence": 5,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "21827900-DD61-4E9C-B620-2136BBB3C1C3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T006 - Session Persistence Reload Page",
+          "Sequence": 6,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BC060582-22FA-450A-9A52-7B379324A2EC"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T007 - Data Explorer Search Members",
+          "Sequence": 7,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "451B84F3-3272-463F-83B0-795BD9ACFEEC"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T008 - Data Explorer Filter Memberships by Status",
+          "Sequence": 8,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "0F46DF68-AF3F-42C0-B06D-78876474ECB2"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T009 - Data Explorer Sort Members",
+          "Sequence": 9,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A85F49DB-4CDF-4BFA-9C2D-FF8265162347"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T010 - Data Explorer Paginate Members",
+          "Sequence": 10,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3081F4A9-5513-4445-A797-7DF14C1BC22D"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T011 - Entity Form Create Event",
+          "Sequence": 11,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E6A156C4-2ED8-4D86-B698-4B3917A447D2"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T012 - Entity Form Related Records Member",
+          "Sequence": 12,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B23EB0E8-574B-4BB7-8DB2-434A8E59EDB7"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T013 - Entity Form Delete Record",
+          "Sequence": 13,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B99F9179-AC65-4596-8836-9455C81D22F5"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T014 - Query Required Parameters",
+          "Sequence": 14,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1C2C171A-1ECD-472D-9788-06CECCF6C2D3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T015 - Query Result Entity Link",
+          "Sequence": 15,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B515F04F-1A8F-4277-B455-14B02FB4FEA6"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T016 - Create New Dashboard",
+          "Sequence": 16,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "7B17920A-6D2E-44EC-A676-4F913DEE26DD"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T017 - AI App Section Tour",
+          "Sequence": 17,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C834C21D-4260-4C82-8085-7A0161FF61E1"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T018 - Admin App Section Tour",
+          "Sequence": 18,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "2A58E325-BD35-4A56-9D21-F8B3585E46E1"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T019 - Communication Templates",
+          "Sequence": 19,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "988C6BE7-6391-450B-A0EB-31724BC32329"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T020 - Integrations Overview",
+          "Sequence": 20,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "98002E82-F9FC-45DC-B921-1FE34AFF1232"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T021 - Lists Create and Populate",
+          "Sequence": 21,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "4D42A0A9-9492-4583-8883-6D13098DD63A"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T022 - Global Search Member",
+          "Sequence": 22,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C4C7C723-5261-4EA3-8845-428BB8E083D9"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T023 - Search No Results Handling",
+          "Sequence": 23,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "712C6A74-7B70-4F40-A026-DBAE1723B4BB"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T024 - Toggle Event Boolean and Save",
+          "Sequence": 24,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3381A967-7C28-4069-9535-DF2A9356C01C"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T025 - Discard Unsaved Edit",
+          "Sequence": 25,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "511FEF13-7BA6-46D4-981B-32DE95DDCFC7"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T026 - Required Field Validation Error",
+          "Sequence": 26,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "259D798B-3BCF-40F4-ACC3-A4BB67FF5044"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T027 - Events Edit Workflow",
+          "Sequence": 27,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E2C855D9-D3CF-4081-9E80-E4DA9A177CB2"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T028 - Favorite a Record",
+          "Sequence": 28,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6F7E0C26-F9C3-46DC-AEF0-8D53536FD018"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T029 - View Record Tags",
+          "Sequence": 29,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "4DE2AE82-3A8F-4E91-A535-6A3443D591CA"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T030 - Add Record to List",
+          "Sequence": 30,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E66A5A73-3760-459C-B7B6-57AC6F407146"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T031 - Foreign Key Link Navigation",
+          "Sequence": 31,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1E8287AC-3466-4341-840B-81B307702551"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T032 - AI Agent Run Timeline Steps",
+          "Sequence": 32,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E5DCAE42-308F-4EE4-9C11-B1410FFCC7AC"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T033 - AI Agent Run Visualization Tab",
+          "Sequence": 33,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "FB277B43-DC7A-4BF5-B159-2CA43E9A3217"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T034 - Grid Advanced Filter Panel",
+          "Sequence": 34,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "94998D57-269E-419E-92EC-2A106C36D592"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T035 - Products Configure-View Panel",
+          "Sequence": 35,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "80F503DD-25A4-4964-A273-7A3078B68E12"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T036 - Products Grid-Toolbar Actions",
+          "Sequence": 36,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BB118316-2E4B-4925-B1EB-787609D5C99F"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T037 - AI Prompt Record Loads",
+          "Sequence": 37,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B54C32C0-EC9D-4461-AC80-254F2BCD6114"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T038 - Products View Toolbar",
+          "Sequence": 38,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "574E9781-0294-4DAB-9AF1-5E76557D13D3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T039 - Event Registrations FK Field Search",
+          "Sequence": 39,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9E8C6526-31F4-4E8C-89AD-EC4559FBCC9A"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T040 - Members Form Section and Toolbar Controls",
+          "Sequence": 40,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C1E8253B-AE9B-49DF-BD57-F4C8F3B2FFB2"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T041 - Entity Form Edit-Mode Dirty Field Banner",
+          "Sequence": 41,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "EBE8D5A4-41E0-4D67-B7E3-3A6BF384F3A9"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T042 - Events Record Change History Drawer",
+          "Sequence": 42,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D67BCE4B-2B49-4E00-B62B-D6C46B3A81A2"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T043 - Entity Form Code/Rich-Text Field Editor Rendering",
+          "Sequence": 43,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "20A3E7B2-A688-4038-AD5D-05708A27061B"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T044 - Entity Form Email and URL Field Link Rendering",
+          "Sequence": 44,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E565C846-C6AD-47DD-A520-16A7CF20F118"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T045 - Query Left-Panel Navigation",
+          "Sequence": 45,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "174FDB67-32AD-476C-AC6B-DD5FE940B6B9"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T046 - Query Viewer Interactions",
+          "Sequence": 46,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "CFB0E815-D83D-484F-8426-62F1AF8C68DD"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T047 - Query Create/Edit Drawer",
+          "Sequence": 47,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "4DDD79FE-97CA-4C65-B86C-2D5C2A8D8AC2"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T048 - Dashboard Browser List Controls",
+          "Sequence": 48,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "951DE514-D867-457C-BE2E-1C25FE236B63"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T049 - Dashboard Rename Persist Round Trip",
+          "Sequence": 49,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "ABF57E85-479F-4BD9-B61E-5B58BDAE2188"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T050 - Dashboard Delete With Confirmation",
+          "Sequence": 50,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6AA923DB-1959-4DA0-A5AE-EDFD2895F5F4"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T051 - Dashboard View-Toolbar Actions",
+          "Sequence": 51,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C746ED90-356E-41D4-8D7B-FD7C9FBBBCC0"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T052 - Dashboard Category Create Dialog",
+          "Sequence": 52,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E806C070-AA2A-40C8-9B03-82A468C4F9E8"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T053 - AI Agents Browser View and Filter",
+          "Sequence": 53,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "66E9ADF7-2A3E-47F3-B9E2-435930CDA6BC"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T054 - AI Prompts List and Detail",
+          "Sequence": 54,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BD0B4F6E-66FB-4F5A-9CD3-12205621AF03"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T055 - AI Analytics Controls",
+          "Sequence": 55,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "78770F76-CE99-4A89-AD77-27C6DDCC4322"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T056 - AI Agent Requests Approve Reject Dialog",
+          "Sequence": 56,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1C4A1DCF-B53D-4F7C-8BED-990EC7E67836"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T057 - AI Configuration",
+          "Sequence": 57,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9C0EFB2D-C319-40EE-A7EE-DF5875C75A0E"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T058 - Actions Overview KPI Cards and Card Navigation",
+          "Sequence": 58,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "919BA59F-1776-4460-A67C-C5FD3779ABA0"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T059 - Actions Explorer List Controls",
+          "Sequence": 59,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BA02FD53-77DC-4D27-9147-F94033982E7B"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T060 - Actions Explorer Creation Slide-Ins",
+          "Sequence": 60,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B203FA91-0184-4334-9C29-672F52B5BD0D"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T061 - Run Action Test Harness Dialog",
+          "Sequence": 61,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B21A9AC4-E56E-410F-93AE-1EB605E6F1B0"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T062 - Actions Execution Monitor",
+          "Sequence": 62,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "26A12422-8F1B-484A-ABCE-C5EEA833D2AF"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T063 - Action Detail Custom Form Parameters and Code Accordions",
+          "Sequence": 63,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9BE3CC60-BBA4-4376-8A08-44F19A5EB4C7"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T064 - MCP Servers Tab",
+          "Sequence": 64,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BE10260C-ADFA-4F0D-A24E-6530DB266D17"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T065 - MCP Test Tool Wizard Steps",
+          "Sequence": 65,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "105D30C9-9297-48F9-A75A-D5C6B557436C"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T066 - MCP Tools Display Controls",
+          "Sequence": 66,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E11F3DED-D80B-4C5D-AAF9-FFEF5CA4CDA3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T067 - Prediction Trust Gate Workspace",
+          "Sequence": 67,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3DC30E39-9D50-4B02-8518-74E7E1447865"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T068 - PS Model-Dev-Agent Copilot",
+          "Sequence": 68,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6C861B10-DDFF-4C6B-9BE1-C754DA233449"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T069 - PS Studio-Door Workbench Tour",
+          "Sequence": 69,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "96332E3B-8A9C-4778-A789-7CC1C679AF31"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T070 - PS Models-Door Tour",
+          "Sequence": 70,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "5732F8A7-8CB4-43B3-A18A-B388E01B90C5"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T071 - Testing Runs Tab",
+          "Sequence": 71,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "DD609A60-148B-4A7D-B393-2E74E4359025"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T072 - Testing Review Tab",
+          "Sequence": 72,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D6684C45-A56C-437F-8972-3831483A5B19"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T073 - Testing Analytics and Explorer Tour",
+          "Sequence": 73,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "EA57B3E2-72C8-48B3-A574-C4D121CA253A"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T074 - Admin API Keys Section",
+          "Sequence": 74,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E848E0A8-5915-4A4A-91F5-15EF1F9F86FC"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T075 - Admin App Roles",
+          "Sequence": 75,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "5168B393-2D56-46D4-BFA2-9C6C1648D404"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T076 - Admin Users Section",
+          "Sequence": 76,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C8FD991D-27FB-4D99-A87E-F4769A35B19B"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T077 - Roles System-Role Edit Protection",
+          "Sequence": 77,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "75E3ECCC-8CBB-40F8-83FB-FCD60D638B7C"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T078 - Admin ERD Viewer",
+          "Sequence": 78,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9CD55993-48CF-49F9-8EF1-E7AF15E60E24"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T079 - Admin Database Designer",
+          "Sequence": 79,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "DEBE31FF-3C53-44B8-85FB-C02C30C7CF1B"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T080 - Admin System Diagnostics",
+          "Sequence": 80,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9019F111-6A79-479B-8A17-BA94E260407A"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T081 - Admin Developer Tools",
+          "Sequence": 81,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "555074A3-B1E0-4675-BCEF-D30E5CA598B3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T082 - Permissions User Access",
+          "Sequence": 82,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "35FE9F22-AA33-4FE7-817A-07AF93158B8F"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T083 - Permissions Resource Access",
+          "Sequence": 83,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6E1A4748-A979-4833-AB05-4BE130573490"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T084 - Permissions Audit Log",
+          "Sequence": 84,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "8C80927D-85AA-4609-8218-8D4324585AC3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T085 - Credentials Overview",
+          "Sequence": 85,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "665A3154-B2A9-44FA-AAA0-BF978CC47E21"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T086 - Credentials List",
+          "Sequence": 86,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "97FC1DC2-BB55-437F-BC36-28379C1AF99D"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T087 - Credential Types Master-Detail Schema",
+          "Sequence": 87,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3D441194-6130-45DA-9EC6-2377C3C31EDB"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T088 - Credential Categories Hierarchical Tree",
+          "Sequence": 88,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A6DAB865-7FF4-473D-9191-EC39B41D6FAA"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T089 - Credentials Audit Log",
+          "Sequence": 89,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F31F0BF0-FFD3-4FDC-90A5-6114DD252E1E"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T090 - Send Message And User Bubble Render",
+          "Sequence": 90,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "EFD52C65-4BDC-4065-ACC3-E1A453A6AC81"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T091 - Agent Mention Autocomplete",
+          "Sequence": 91,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "ED1A5DC0-073E-4A4B-AC60-9EB1320D600D"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T092 - Conversation List Search Filter",
+          "Sequence": 92,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "92CF8A35-824E-42AD-A157-6417FCD452D7"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T093 - Rename Conversation Persists",
+          "Sequence": 93,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1EC1822F-C813-43CE-931F-7E31078DBA89"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T094 - Delete Conversation",
+          "Sequence": 94,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "78F63E66-99A6-43A0-9DC0-3E120935F8F5"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T095 - Pin And Unpin Conversation",
+          "Sequence": 95,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "314B1297-AC54-41F0-AB57-088C5FE4B75D"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T096 - Conversation Selection Mode Bulk Bar",
+          "Sequence": 96,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "DE53EE6B-11FC-42F2-830C-DB0F296FA7DD"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T097 - Conversation Folder Grouping",
+          "Sequence": 97,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "5BB1310D-1D8D-43E7-A08C-9F17E61C9CF4"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T098 - Chat Global Search Panel",
+          "Sequence": 98,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "2ECB8D30-3D69-4D1B-9698-735DCFED0365"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T099 - Chat Secondary Chrome Tabs",
+          "Sequence": 99,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "439F1F58-0483-4C8C-BC3A-1CAD00FF0EBB"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T100 - Message Actions On AI Message",
+          "Sequence": 100,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "115DCADE-DE51-47D3-812A-D9F8FD7AE303"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T101 - Classify Pipeline Run and Monitor",
+          "Sequence": 101,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "85FCF3B2-AF29-4292-8738-357EF27A4B0D"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T102 - Knowledge Hub Tags",
+          "Sequence": 102,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "FCF4F3A9-0308-4189-A7CE-94A8C54D906E"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T103 - Knowledge Hub Visualize",
+          "Sequence": 103,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A5B9ED21-E2E4-448E-91AA-DDF0607B647C"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T104 - Knowledge Hub Duplicates",
+          "Sequence": 104,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1B309666-399D-4134-954A-2534F672B514"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T105 - Knowledge Hub Feature Pipelines",
+          "Sequence": 105,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "72B101ED-3F07-4612-9E34-18403EB0DCF1"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T106 - Knowledge Hub Analytics",
+          "Sequence": 106,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "5238D7D6-871F-4F52-8311-AE0246E64BD3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T107 - Knowledge Hub Vectors",
+          "Sequence": 107,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C12EAD91-94C1-45CC-93D0-F3896D1D75E0"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T108 - Knowledge Hub Configuration",
+          "Sequence": 108,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6692559C-E3D4-4D44-B183-D81ECE3BF5BA"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T109 - Lists Operations Set Operation",
+          "Sequence": 109,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "CD9BEC2E-94D5-4D82-A6DE-C75149BC4FC8"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T110 - Lists Category Master Detail",
+          "Sequence": 110,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "8CCBF402-9AA2-4DE0-888E-4973907B7EE8"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T111 - Lists Browse View Mode Toggle",
+          "Sequence": 111,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A01CB0FB-1580-438B-9128-24ABD8BD6DEE"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T112 - Lists Browse Context Menu",
+          "Sequence": 112,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "28AF1718-32F9-44F2-8554-9C16C2C7B796"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T113 - List Create Entity Picker Search",
+          "Sequence": 113,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A8D848CF-8147-45B8-B4D6-C720B584B5C0"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T114 - List Category Create Validation",
+          "Sequence": 114,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "650C1E8F-715A-4113-BEE7-FC6365AE1F5D"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T115 - Home Add-Pin Panel",
+          "Sequence": 115,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "113DA4D1-19E2-4D8C-844E-49F37C7218FD"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T116 - Home App Card Click Navigation",
+          "Sequence": 116,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D4F69BCF-E566-4D5D-820A-DD3FAC5C83D8"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T117 - Home Quick Access Sidebar Toggle",
+          "Sequence": 117,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "83A8ED55-C798-435B-A43E-120F3C692479"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T118 - File Browser Listing Controls",
+          "Sequence": 118,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "AE87FA26-0709-43FC-BD67-A96E2E3AE1C9"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T119 - Integrations Connections Card Grid",
+          "Sequence": 119,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3B7F965F-D908-4AD4-8995-27E876219CC8"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T120 - Integrations Connection Detail View",
+          "Sequence": 120,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D51E6063-0562-4D7F-81E5-3AE7832E9A61"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T121 - Integrations Activity",
+          "Sequence": 121,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D37666D5-6105-4179-87A0-3A1CB4DB3807"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T122 - Integrations Schedule Type Config Editor",
+          "Sequence": 122,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C4FFF671-EFE1-4483-B30B-69CC6FFE25DB"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T123 - Communication New Message",
+          "Sequence": 123,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "75EB192B-6774-4F68-A075-8E5A9784CFDB"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T124 - Message Logs Filter And Search",
+          "Sequence": 124,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F17CE4FD-E451-4545-945E-733A33B1B968"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T125 - Communication Templates Tour",
+          "Sequence": 125,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F0B200BE-DEE6-4C55-BCD3-3CC30402837A"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T126 - Communication Analytics Tour",
+          "Sequence": 126,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F05CCB02-79F0-4C72-82E9-A0583AE79837"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T127 - Scheduling Dashboard",
+          "Sequence": 127,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "8CEEF792-4D2B-48B9-A331-85B4771B065B"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T128 - Scheduling Jobs",
+          "Sequence": 128,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "ECDE1D8D-B295-4B39-834A-EA0906692BD8"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T129 - Scheduling Activity",
+          "Sequence": 129,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F370429D-15B9-479E-9C4F-D3F7F6ABA877"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T130 - Routines New Routine Editor",
+          "Sequence": 130,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "4FD5326E-C291-48FB-86E9-E82A57FE80EC"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T131 - Routines List Surface",
+          "Sequence": 131,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "675E82A4-0F2C-4397-A60F-11A785732B47"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T132 - Search Bulk Operations List",
+          "Sequence": 132,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1646B558-8C3B-4157-89F8-FC5413F1BA44"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T133 - Bulk Ops Editor Authoring",
+          "Sequence": 133,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6512B4D5-B355-47CB-B9D4-1764102BF383"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T134 - Dry-Run Preview Flow",
+          "Sequence": 134,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C1632B0F-DE18-4D36-9630-DD36B35E7122"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T135 - Run History Detail Drill-In",
+          "Sequence": 135,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "7C906C26-56A9-4E45-8A27-336CF8357238"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T136 - Version Labels List Controls",
+          "Sequence": 136,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9A8D7B21-FB9C-4FDB-9BD5-DA79E409229D"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T137 - Create Label Wizard Multi-Step Flow",
+          "Sequence": 137,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "323CE45C-059F-4F1D-B703-2E142B81E928"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T138 - Diff Viewer",
+          "Sequence": 138,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "59467947-91F2-4D8F-B782-919A3818D8FE"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T139 - Restore History Filter and Expand Detail",
+          "Sequence": 139,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "4B1F0FBB-E519-43CB-AE9B-C3C0F260B8A6"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T140 - Dependency Graph",
+          "Sequence": 140,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "99C8A555-55AE-4D16-819B-B2DF60D0FE08"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T141 - Archiving Configuration Tab",
+          "Sequence": 141,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "24002629-5F3D-4379-B773-18C7EB649065"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T142 - Archive Run Detail Drawer",
+          "Sequence": 142,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B676FF46-E729-4F55-AF52-2818FB60E363"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T143 - Realtime Playback Activation",
+          "Sequence": 143,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1905DB31-6DB8-4DCF-A0A1-FBBEC1582D50"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T144 - Component Browser List Controls",
+          "Sequence": 144,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "AE4A26AC-A74E-4046-B04A-DC2980E5467B"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T145 - Component Run Live Preview",
+          "Sequence": 145,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "0AE99C8B-B051-44CA-A027-EBD447ACBF9F"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T146 - New Component Dialog",
+          "Sequence": 146,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "8138976F-C4F8-45FD-B494-CDDC5C1BF7DC"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T147 - Component Editor Tabs Code View",
+          "Sequence": 147,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C0645A24-3E58-4A36-9651-B0020B6ED026"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T148 - Form Builder Center Pane",
+          "Sequence": 148,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "80689E3C-F3C3-4B3C-A5C6-A1D466DE0A84"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T149 - Form Builder New Form Entity Picker",
+          "Sequence": 149,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3A1F37A2-82C4-4F56-AA9C-4400BC1CEE4B"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T150 - Form Builder Versions Panel And Diff",
+          "Sequence": 150,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D82935D2-0D7D-4EA7-9AB3-392B6C807096"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T151 - Form Builder Forms List Tree View Toggle",
+          "Sequence": 151,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "CD435260-2F14-41D0-BDA7-C723CBF104AF"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T152 - User-Menu Items",
+          "Sequence": 152,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "EAC7A7D0-EFBA-4938-976A-FC026611AE88"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T153 - Command Palette",
+          "Sequence": 153,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1280BEDC-DD02-4A45-B1C2-6B0F93466686"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T154 - Tab Management (Global)",
+          "Sequence": 154,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "53B8FFA9-7CB7-480D-86AE-5A680F2F6548"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T155 - Deep Link App URL Navigation",
+          "Sequence": 155,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "DF3361FE-72B9-41D5-A0D0-FCE5FDEB8DB2"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "71428DF0-78F4-4775-95E5-A52D2B4602D1"
+  }
+}

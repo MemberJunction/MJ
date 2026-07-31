@@ -77,24 +77,45 @@ const { sql, connect } = require('./lib/db.cjs');
         }
     }
 
-    // 3. Pin every Active application to the user.
-    // MJAPI's autoCreateNewUsers (CreateUserApplicationRecords:true) only pins
-    // apps where DefaultForNewUser=1 (~8 of 20 apps), leaving Admin/AI/etc.
-    // hidden behind the configure modal. We pin the rest here.
+    // 3. Pin the test-relevant applications active; deactivate the rest.
+    // RI-E1: deep-linking a test straight to `/app/<slug>` requires that app to be
+    // IsActive=1 in the user's UserApplication (else the route pops the app-access
+    // dialog instead of loading). Now that tests carry `startUrl` deep links
+    // (metadata-optional/.../tests/regression/.T*.json), they no longer hunt the
+    // app switcher, so the earlier trim-to-8 (which existed only because a long
+    // switcher dropdown clipped its bottom entry for the LLM agent) is obsolete for
+    // deep-linked tests. Pin every app the suite targets so its deep links resolve.
+    // The few remaining switcher-navigation tests (Section 1, kept on bare starts)
+    // navigate to top-of-list apps, so a longer dropdown doesn't strand them.
+    // Apps not listed are set IsActive=0 (moved to the Configure "Available" list) —
+    // an FK-safe UPDATE, no deletes.
+    const TEST_APPS = [
+        'Home', 'Data Explorer', 'AI', 'Admin', 'Integrations', 'Communication', 'Lists', 'AssociationDemo',
+        // RI-E1 deep-link targets (were IsActive=0 before, stranding /app/<slug> navigations):
+        'Testing', 'Knowledge Hub', 'Actions', 'Permissions', 'Scheduling', 'Predictive Studio',
+        'Routines', 'Version History', 'Component Studio', 'Bulk Operations', 'Chat',
+    ];
+    const appList = TEST_APPS.map(n => `'${n.replace(/'/g, "''")}'`).join(', ');
     const appPin = await pool.request()
         .input('userId', sql.UniqueIdentifier, userId)
         .query(`
             INSERT INTO __mj.UserApplication (UserID, ApplicationID, Sequence, IsActive)
             SELECT @userId, a.ID, a.DefaultSequence, 1
             FROM __mj.Application a
-            WHERE a.Status = 'Active'
+            WHERE a.Status = 'Active' AND a.Name IN (${appList})
               AND NOT EXISTS (
                   SELECT 1 FROM __mj.UserApplication ua
                   WHERE ua.UserID = @userId AND ua.ApplicationID = a.ID
               );
-            SELECT @@ROWCOUNT AS pinned;
+            UPDATE ua SET ua.IsActive = 1
+            FROM __mj.UserApplication ua JOIN __mj.Application a ON ua.ApplicationID = a.ID
+            WHERE ua.UserID = @userId AND a.Name IN (${appList});
+            UPDATE ua SET ua.IsActive = 0
+            FROM __mj.UserApplication ua JOIN __mj.Application a ON ua.ApplicationID = a.ID
+            WHERE ua.UserID = @userId AND a.Name NOT IN (${appList});
+            SELECT (SELECT COUNT(*) FROM __mj.UserApplication ua WHERE ua.UserID = @userId AND ua.IsActive = 1) AS pinned;
         `);
-    console.log(`  Pinned ${appPin.recordset[0].pinned} applications to user`);
+    console.log(`  Pinned ${appPin.recordset[0].pinned} test-relevant applications to user (others deactivated)`);
 
     // 4. Make every entity within those apps visible.
     // Without UserApplicationEntity rows, the user's app navigation shows the

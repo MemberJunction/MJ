@@ -11,6 +11,7 @@
 
 import { JudgeVerdict, StepRecord } from './judge.js';
 import { ComputerUseError } from './errors.js';
+import type { ReplayInfo } from './trace.js';
 
 // Re-export StepRecord for convenience — it's defined in judge.ts
 // because the judge needs it in JudgeContext, but consumers often
@@ -25,6 +26,7 @@ export { StepRecord } from './judge.js';
  * - 'Failed':          Judge confirmed the goal was NOT met after best effort
  * - 'Impossible':      Judge determined the goal cannot be accomplished (e.g., missing permissions, non-existent page)
  * - 'MaxStepsReached': Hit step limit without judge confirmation either way
+ * - 'TimeBudgetExceeded': Hit the agent-time budget (MaxExecutionTimeMs, excluding settle) — gracefully expired with a forced final judge (CU-B4)
  * - 'Error':           Infrastructure or runtime error (browser crash, LLM failure, etc.)
  * - 'Cancelled':       Externally cancelled via engine.Stop()
  */
@@ -33,8 +35,20 @@ export type ComputerUseStatus =
     | 'Failed'
     | 'Impossible'
     | 'MaxStepsReached'
+    | 'TimeBudgetExceeded'
     | 'Error'
     | 'Cancelled';
+
+/**
+ * Machine-readable failure reason (CU-B1/B7/F5). A finer-grained classification
+ * than {@link ComputerUseStatus} — grows as the engine and classifier learn to
+ * name more classes.
+ * - `'LoopDetected'` — the engine terminated a run stuck repeating a state (CU-B1).
+ * - `'AuthDetour'`   — the run bounced to an identity provider more times than
+ *   the watchdog's cap allowed (CU-B7): an infrastructure/session fault, not an
+ *   agent failure.
+ */
+export type ComputerUseFailureReason = 'LoopDetected' | 'AuthDetour';
 
 // ─── Run Result ────────────────────────────────────────────
 /**
@@ -71,6 +85,48 @@ export class ComputerUseResult {
     /** The last judge verdict (if the judge was consulted) */
     public FinalJudgeVerdict?: JudgeVerdict;
 
+    /**
+     * Machine-readable reason for a non-success terminal state, when the engine
+     * can name one (CU-B1). Distinct from the coarse {@link Status}: e.g. a
+     * `Failed` run may carry `'LoopDetected'`. Consumed by the failure
+     * classifier (CU-F5) and the retry policy (which can decline to retry known
+     * classes). Extended as more classes are detected.
+     */
+    public FailureReason?: ComputerUseFailureReason;
+
+    /**
+     * How many times the run bounced to an identity provider and was recovered
+     * by the auth-detour watchdog (CU-B7). 0 on runs that never detoured. A
+     * per-run infrastructure-health signal: a non-zero count on an otherwise
+     * successful run still flags a flaky session, and it's the count that
+     * decides the `AuthDetour` termination.
+     */
+    public AuthDetourCount: number = 0;
+
+    /**
+     * Filesystem path to the forensic trace written for this run (CU-F4), set
+     * only when tracing was requested (via {@link RunComputerUseParams.TracePath})
+     * AND a trace file was actually written. Undefined otherwise. The caller
+     * decides whether to keep it (e.g. retain-on-failure) or delete it.
+     */
+    public TracePath?: string;
+
     /** Error details (populated when Status is 'Error') */
     public Error?: ComputerUseError;
+
+    /**
+     * Replay telemetry (CU-C2/C3), set only when the run executed on the replay
+     * tier via {@link ComputerUseEngine.Replay}. Undefined for LLM-tier runs.
+     * Carries per-step hit/healed/diverged outcomes for the UI-drift report.
+     */
+    public Replay?: ReplayInfo;
+
+    /**
+     * Compact structured memo of why a non-passing run failed (CU-B6), set only
+     * on non-`Completed` terminals. The driver's retry policy feeds it back as
+     * {@link RunComputerUseParams.PreviousAttemptSummary} so a retry is
+     * non-blind ("previous attempt failed because X; avoid Y"). Undefined on a
+     * clean pass.
+     */
+    public FailureMemo?: string;
 }

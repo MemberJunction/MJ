@@ -12,6 +12,14 @@ import { OutputFormatter } from '../utils/output-formatter';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 
 /** Result of comparing a single test across two suite runs */
+/**
+ * How a test changed between two runs (DR-D8 adds `flaky`).
+ * `flaky` = the test still passes but now only ON RETRY where it used to pass
+ * clean (stable-pass → flaky-pass) — an early warning, deliberately distinct
+ * from `unchanged` and NOT counted as a regression (doesn't flip the exit code).
+ */
+export type ComparisonChange = 'regression' | 'improvement' | 'unchanged' | 'new' | 'removed' | 'flaky';
+
 interface TestComparison {
     TestID: string;
     TestName: string;
@@ -22,7 +30,31 @@ interface TestComparison {
     ScoreDelta: number | null;
     PreviousDurationS: number | null;
     CurrentDurationS: number | null;
-    Change: 'regression' | 'improvement' | 'unchanged' | 'new' | 'removed';
+    Change: ComparisonChange;
+}
+
+/**
+ * Classify how one test changed between two runs (DR-D8). Pure + exported so the
+ * retry-aware logic — especially the stable-pass → flaky-pass early warning —
+ * is unit-testable without the DB or the CLI. A real regression / improvement
+ * always wins over the flaky signal; flaky only upgrades what would otherwise be
+ * `unchanged`.
+ */
+export function classifyChange(
+    prev: { Status: string; Score: number | null; Flaky?: boolean } | undefined,
+    curr: { Status: string; Score: number | null; Flaky?: boolean } | undefined
+): ComparisonChange {
+    if (!prev) return 'new';
+    if (!curr) return 'removed';
+    const scoreDelta = (prev.Score != null && curr.Score != null) ? curr.Score - prev.Score : null;
+    if (prev.Status === 'Passed' && curr.Status !== 'Passed') return 'regression';
+    if (prev.Status !== 'Passed' && curr.Status === 'Passed') return 'improvement';
+    if (scoreDelta != null && scoreDelta < -0.1) return 'regression';
+    if (scoreDelta != null && scoreDelta > 0.1) return 'improvement';
+    // Both passed with a stable score, but the current run needed a retry where
+    // the previous was clean → flakiness regressed in. Surface it, don't bury it.
+    if (curr.Status === 'Passed' && curr.Flaky === true && prev.Flaky !== true) return 'flaky';
+    return 'unchanged';
 }
 
 /** Aggregate comparison result */
@@ -38,6 +70,8 @@ interface ComparisonResult {
     Unchanged: number;
     NewTests: number;
     RemovedTests: number;
+    /** Stable-pass → flaky-pass early warnings (DR-D8). Not counted as regressions. */
+    Flaky: number;
     Tests: TestComparison[];
 }
 
@@ -56,6 +90,10 @@ interface TestRunSummary {
     Status: string;
     Score: number | null;
     DurationSeconds: number | null;
+    /** Passed only on retry (DR-D8). Sourced from results.json; undefined in DB mode until the schema column lands. */
+    Flaky?: boolean;
+    /** Normalized failure category (DR-D2/D8), for reporting tallies. */
+    FailureCategory?: string;
 }
 
 /**
@@ -379,6 +417,8 @@ export class CompareCommand {
                 status?: string;
                 score?: number | null;
                 durationMs?: number | null;
+                flaky?: boolean;
+                failureCategory?: string;
             }>;
         };
 
@@ -398,6 +438,8 @@ export class CompareCommand {
                 Status: t.status ?? 'Unknown',
                 Score: typeof t.score === 'number' ? t.score : null,
                 DurationSeconds: typeof t.durationMs === 'number' ? t.durationMs / 1000 : null,
+                Flaky: t.flaky === true,
+                FailureCategory: t.failureCategory,
             })),
         };
     }
@@ -425,22 +467,9 @@ export class CompareCommand {
             const currStatus = curr?.Status ?? null;
             const scoreDelta = (prevScore != null && currScore != null) ? currScore - prevScore : null;
 
-            let change: TestComparison['Change'];
-            if (!prev) {
-                change = 'new';
-            } else if (!curr) {
-                change = 'removed';
-            } else if (prevStatus === 'Passed' && currStatus !== 'Passed') {
-                change = 'regression';
-            } else if (prevStatus !== 'Passed' && currStatus === 'Passed') {
-                change = 'improvement';
-            } else if (scoreDelta != null && scoreDelta < -0.1) {
-                change = 'regression';
-            } else if (scoreDelta != null && scoreDelta > 0.1) {
-                change = 'improvement';
-            } else {
-                change = 'unchanged';
-            }
+            // DR-D8: retry-aware classification (adds the stable-pass → flaky-pass
+            // early warning). Extracted so it's unit-testable in isolation.
+            const change = classifyChange(prev, curr);
 
             comparisons.push({
                 TestID: testId,
@@ -456,7 +485,7 @@ export class CompareCommand {
             });
         }
 
-        const order: Record<string, number> = { regression: 0, improvement: 1, new: 2, removed: 3, unchanged: 4 };
+        const order: Record<ComparisonChange, number> = { regression: 0, flaky: 1, improvement: 2, new: 3, removed: 4, unchanged: 5 };
         comparisons.sort((a, b) => order[a.Change] - order[b.Change]);
 
         return {
@@ -471,6 +500,7 @@ export class CompareCommand {
             Unchanged: comparisons.filter(c => c.Change === 'unchanged').length,
             NewTests: comparisons.filter(c => c.Change === 'new').length,
             RemovedTests: comparisons.filter(c => c.Change === 'removed').length,
+            Flaky: comparisons.filter(c => c.Change === 'flaky').length,
             Tests: comparisons,
         };
     }
@@ -520,11 +550,23 @@ export class CompareCommand {
             lines.push('## Summary');
             lines.push('');
             lines.push(`- **Regressions**: ${result.Regressions}`);
+            if (result.Flaky > 0) lines.push(`- **Newly flaky (passed on retry)**: ${result.Flaky}`);
             lines.push(`- **Improvements**: ${result.Improvements}`);
             lines.push(`- **Unchanged**: ${result.Unchanged}`);
             if (result.NewTests > 0) lines.push(`- **New tests**: ${result.NewTests}`);
             if (result.RemovedTests > 0) lines.push(`- **Removed tests**: ${result.RemovedTests}`);
             lines.push('');
+
+            if (result.Flaky > 0) {
+                lines.push('## Newly Flaky (early warning — passed only on retry)');
+                lines.push('');
+                lines.push('| Test | Previous | Current |');
+                lines.push('|------|----------|---------|');
+                for (const t of tests.filter(t => t.Change === 'flaky')) {
+                    lines.push(`| ${t.TestName} | stable pass | flaky pass |`);
+                }
+                lines.push('');
+            }
 
             if (result.Regressions > 0) {
                 lines.push('## Regressions');
@@ -580,13 +622,14 @@ export class CompareCommand {
             lines.push(`  Current:  ${result.CurrentDate} (${result.CurrentRunId.substring(0, 8)})`);
             lines.push('');
             lines.push(`  Regressions:  ${result.Regressions}${hasRegressions ? ' ⚠️' : ''}`);
+            if (result.Flaky > 0) lines.push(`  Newly flaky:  ${result.Flaky} ≈`);
             lines.push(`  Improvements: ${result.Improvements}`);
             lines.push(`  Unchanged:    ${result.Unchanged}`);
             lines.push('');
 
             for (const t of tests) {
                 if (diffOnly && t.Change === 'unchanged') continue;
-                const icon = t.Change === 'regression' ? '▼' : t.Change === 'improvement' ? '▲' : t.Change === 'new' ? '+' : t.Change === 'removed' ? '-' : ' ';
+                const icon = t.Change === 'regression' ? '▼' : t.Change === 'improvement' ? '▲' : t.Change === 'flaky' ? '≈' : t.Change === 'new' ? '+' : t.Change === 'removed' ? '-' : ' ';
                 const prev = t.PreviousScore != null ? `${(t.PreviousScore * 100).toFixed(0)}%` : '  -';
                 const curr = t.CurrentScore != null ? `${(t.CurrentScore * 100).toFixed(0)}%` : '  -';
                 const delta = t.ScoreDelta != null ? `${t.ScoreDelta > 0 ? '+' : ''}${(t.ScoreDelta * 100).toFixed(0)}%` : '   -';

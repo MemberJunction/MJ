@@ -3,15 +3,25 @@ import { HeuristicJudge } from '../judge/HeuristicJudge.js';
 import { JudgeContext, StepRecord } from '../types/judge.js';
 import { ComputerUseError } from '../types/errors.js';
 
+// Stuck detection now compares shared perceptual hashes (CU-F6/B2), not raw
+// base64 strings. Two distinct 16-hex fingerprints > 3 bits apart read as
+// "different"; identical fingerprints read as "unchanged".
+const HASH_SAME = 'aaaaaaaaaaaaaaaa';
+const HASH_A = '1111111111111111';
+const HASH_B = '2222222222222222';
+const HASH_C = '4444444444444444';
+
 function createContext(overrides: Partial<JudgeContext> = {}): JudgeContext {
     const ctx = new JudgeContext();
     ctx.Goal = overrides.Goal ?? 'test goal';
     ctx.CurrentScreenshot = overrides.CurrentScreenshot ?? '';
+    ctx.CurrentScreenshotHash = overrides.CurrentScreenshotHash ?? '';
     ctx.ScreenshotHistory = overrides.ScreenshotHistory ?? [];
     ctx.StepHistory = overrides.StepHistory ?? [];
     ctx.StepNumber = overrides.StepNumber ?? 1;
     ctx.MaxSteps = overrides.MaxSteps ?? 30;
     ctx.CurrentUrl = overrides.CurrentUrl ?? 'https://example.com';
+    ctx.IsCheckpointTour = overrides.IsCheckpointTour ?? false;
     return ctx;
 }
 
@@ -19,6 +29,9 @@ function createStep(overrides: Partial<StepRecord> = {}): StepRecord {
     const step = new StepRecord();
     step.StepNumber = overrides.StepNumber ?? 1;
     step.Url = overrides.Url ?? '';
+    step.UrlBefore = overrides.UrlBefore ?? step.Url;
+    step.UrlAfter = overrides.UrlAfter ?? step.Url;
+    step.ScreenshotHash = overrides.ScreenshotHash ?? '';
     step.ControllerReasoning = overrides.ControllerReasoning ?? '';
     step.ActionsRequested = overrides.ActionsRequested ?? [];
     step.ActionResults = overrides.ActionResults ?? [];
@@ -26,6 +39,11 @@ function createStep(overrides: Partial<StepRecord> = {}): StepRecord {
     step.Error = overrides.Error;
     step.DurationMs = overrides.DurationMs ?? 100;
     return step;
+}
+
+/** Build a StepHistory of steps carrying the given screenshot fingerprints. */
+function stepsWithHashes(hashes: string[]): StepRecord[] {
+    return hashes.map((h, i) => createStep({ StepNumber: i + 1, ScreenshotHash: h }));
 }
 
 describe('HeuristicJudge', () => {
@@ -64,13 +82,12 @@ describe('HeuristicJudge', () => {
         });
     });
 
-    describe('detectStuckState — via Evaluate', () => {
-        it('should detect stuck state when N consecutive screenshots are identical (default threshold 3)', async () => {
+    describe('detectStuckState — via Evaluate (perceptual-hash based, CU-B2)', () => {
+        it('should detect stuck state when N consecutive frames are visually unchanged (default threshold 3)', async () => {
             const judge = new HeuristicJudge();
-            // ScreenshotHistory + CurrentScreenshot need to have 3 identical at the tail
             const ctx = createContext({
-                ScreenshotHistory: ['same_screenshot', 'same_screenshot'],
-                CurrentScreenshot: 'same_screenshot',
+                StepHistory: stepsWithHashes([HASH_SAME, HASH_SAME]),
+                CurrentScreenshotHash: HASH_SAME,
             });
 
             const verdict = await judge.Evaluate(ctx);
@@ -80,26 +97,37 @@ describe('HeuristicJudge', () => {
             expect(verdict.Feedback).toBeTruthy();
         });
 
-        it('should not detect stuck state when screenshots differ', async () => {
+        it('feedback is loading-aware and does NOT tell the agent to navigate away (contradiction fix)', async () => {
             const judge = new HeuristicJudge();
             const ctx = createContext({
-                ScreenshotHistory: ['screenshot_1', 'screenshot_2'],
-                CurrentScreenshot: 'screenshot_3',
+                StepHistory: stepsWithHashes([HASH_SAME, HASH_SAME]),
+                CurrentScreenshotHash: HASH_SAME,
             });
 
             const verdict = await judge.Evaluate(ctx);
-            // Should be inconclusive, not stuck
+            expect(verdict.Feedback.toLowerCase()).toContain('keep waiting');
+            expect(verdict.Feedback.toLowerCase()).toContain('do not navigate away');
+        });
+
+        it('should not detect stuck state when frames differ', async () => {
+            const judge = new HeuristicJudge();
+            const ctx = createContext({
+                StepHistory: stepsWithHashes([HASH_A, HASH_B]),
+                CurrentScreenshotHash: HASH_C,
+            });
+
+            const verdict = await judge.Evaluate(ctx);
             expect(verdict.Confidence).toBe(0);
         });
 
-        it('should not detect stuck state when fewer than threshold screenshots exist', async () => {
+        it('should not detect stuck state when fewer than threshold frames exist', async () => {
             const judge = new HeuristicJudge();
             const ctx = createContext({
-                ScreenshotHistory: ['same'],
-                CurrentScreenshot: 'same',
+                StepHistory: stepsWithHashes([HASH_SAME]),
+                CurrentScreenshotHash: HASH_SAME,
             });
 
-            // Only 2 identical, but threshold is 3
+            // Only 2 unchanged, but threshold is 3
             const verdict = await judge.Evaluate(ctx);
             expect(verdict.Confidence).toBe(0);
         });
@@ -107,8 +135,8 @@ describe('HeuristicJudge', () => {
         it('should respect custom stagnation threshold', async () => {
             const judge = new HeuristicJudge(2); // threshold of 2
             const ctx = createContext({
-                ScreenshotHistory: ['same'],
-                CurrentScreenshot: 'same',
+                StepHistory: stepsWithHashes([HASH_SAME]),
+                CurrentScreenshotHash: HASH_SAME,
             });
 
             const verdict = await judge.Evaluate(ctx);
@@ -116,38 +144,38 @@ describe('HeuristicJudge', () => {
             expect(verdict.Reason).toContain('stuck');
         });
 
-        it('should ignore empty screenshots in stuck detection', async () => {
+        it('should ignore frames with no hash in stuck detection', async () => {
             const judge = new HeuristicJudge();
             const ctx = createContext({
-                ScreenshotHistory: ['', '', ''],
-                CurrentScreenshot: '',
+                StepHistory: stepsWithHashes(['', '', '']),
+                CurrentScreenshotHash: '',
             });
 
-            // Empty strings are filtered out
+            // Empty hashes are filtered out — nothing to compare
             const verdict = await judge.Evaluate(ctx);
-            expect(verdict.Confidence).toBe(0); // inconclusive, not stuck
+            expect(verdict.Confidence).toBe(0);
         });
 
-        it('should detect stuck state with all identical among many different screenshots', async () => {
+        it('should detect stuck state with all unchanged among many differing frames', async () => {
             const judge = new HeuristicJudge(3);
             const ctx = createContext({
-                ScreenshotHistory: ['a', 'b', 'c', 'stuck', 'stuck'],
-                CurrentScreenshot: 'stuck',
+                StepHistory: stepsWithHashes([HASH_A, HASH_B, HASH_C, HASH_SAME, HASH_SAME]),
+                CurrentScreenshotHash: HASH_SAME,
             });
 
             const verdict = await judge.Evaluate(ctx);
             expect(verdict.Confidence).toBe(0.8);
         });
 
-        it('should NOT detect stuck when only the last 2 of 3 needed are identical', async () => {
+        it('should NOT detect stuck when only the last 2 of 3 needed are unchanged', async () => {
             const judge = new HeuristicJudge(3);
             const ctx = createContext({
-                ScreenshotHistory: ['different', 'same'],
-                CurrentScreenshot: 'same',
+                StepHistory: stepsWithHashes([HASH_A, HASH_SAME]),
+                CurrentScreenshotHash: HASH_SAME,
             });
 
             const verdict = await judge.Evaluate(ctx);
-            // last 3 are ['different', 'same', 'same'] — not all identical
+            // last 3 are [HASH_A, HASH_SAME, HASH_SAME] — not all unchanged
             expect(verdict.Confidence).toBe(0);
         });
     });
@@ -320,16 +348,16 @@ describe('HeuristicJudge', () => {
         it('should prioritize stuck detection over loop detection', async () => {
             const judge = new HeuristicJudge(3, 3);
             const err = new ComputerUseError('LLMError', 'err');
+            // Also visually stuck (same fingerprint) AND looping AND erroring.
             const steps = [
-                createStep({ Url: 'https://a.com', Error: err }),
-                createStep({ Url: 'https://b.com', Error: err }),
-                createStep({ Url: 'https://a.com', Error: err }),
-                createStep({ Url: 'https://b.com', Error: err }),
+                createStep({ Url: 'https://a.com', ScreenshotHash: HASH_SAME, Error: err }),
+                createStep({ Url: 'https://b.com', ScreenshotHash: HASH_SAME, Error: err }),
+                createStep({ Url: 'https://a.com', ScreenshotHash: HASH_SAME, Error: err }),
+                createStep({ Url: 'https://b.com', ScreenshotHash: HASH_SAME, Error: err }),
             ];
             const ctx = createContext({
                 StepHistory: steps,
-                ScreenshotHistory: ['same', 'same'],
-                CurrentScreenshot: 'same',
+                CurrentScreenshotHash: HASH_SAME,
             });
 
             const verdict = await judge.Evaluate(ctx);
@@ -356,6 +384,70 @@ describe('HeuristicJudge', () => {
             const verdict = await judge.Evaluate(ctx);
             // Loop detection runs before error detection
             expect(verdict.Reason).toContain('loop');
+        });
+    });
+    describe('Evaluate — checkpoint tour suppression (CU-D8)', () => {
+        it('does not preempt with a stuck verdict on a checkpoint tour', async () => {
+            const judge = new HeuristicJudge();
+            const ctx = createContext({
+                StepHistory: stepsWithHashes([HASH_SAME, HASH_SAME]),
+                CurrentScreenshotHash: HASH_SAME,
+                IsCheckpointTour: true,
+            });
+
+            const verdict = await judge.Evaluate(ctx);
+            // Inconclusive → HybridJudge goes on to invoke the LLM judge, which is
+            // the only thing that can latch a tour's visual criteria.
+            expect(verdict.Confidence).toBe(0);
+            expect(verdict.Reason).toContain('inconclusive');
+        });
+
+        it('does not preempt with a navigation-loop verdict on a checkpoint tour', async () => {
+            const judge = new HeuristicJudge();
+            const steps = [
+                createStep({ Url: 'https://a.com' }),
+                createStep({ Url: 'https://b.com' }),
+                createStep({ Url: 'https://a.com' }),
+                createStep({ Url: 'https://b.com' }),
+            ];
+            const ctx = createContext({
+                StepHistory: steps,
+                CurrentScreenshotHash: HASH_A,
+                IsCheckpointTour: true,
+            });
+
+            const verdict = await judge.Evaluate(ctx);
+            expect(verdict.Confidence).toBe(0);
+        });
+
+        it('still preempts on repeated hard errors during a checkpoint tour', async () => {
+            const judge = new HeuristicJudge();
+            const err = new ComputerUseError('LLMError', 'boom');
+            const ctx = createContext({
+                StepHistory: [
+                    createStep({ StepNumber: 1, Error: err }),
+                    createStep({ StepNumber: 2, Error: err }),
+                    createStep({ StepNumber: 3, Error: err }),
+                ],
+                CurrentScreenshotHash: HASH_A,
+                IsCheckpointTour: true,
+            });
+
+            const verdict = await judge.Evaluate(ctx);
+            expect(verdict.Confidence).toBeGreaterThan(0);
+            expect(verdict.Reason).toContain('consecutive step errors');
+        });
+
+        it('still preempts with stuck/loop verdicts when NOT a tour', async () => {
+            const judge = new HeuristicJudge();
+            const ctx = createContext({
+                StepHistory: stepsWithHashes([HASH_SAME, HASH_SAME]),
+                CurrentScreenshotHash: HASH_SAME,
+                IsCheckpointTour: false,
+            });
+
+            const verdict = await judge.Evaluate(ctx);
+            expect(verdict.Reason).toContain('stuck');
         });
     });
 });

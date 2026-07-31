@@ -1,0 +1,185 @@
+{
+  "TestId": "F0078046-8E43-4487-878C-99CB6B1D08F0",
+  "AppBuildHash": "454f1c42c7ee-dirty:3dd8345bcce2d83a",
+  "AppVersion": "",
+  "GoalHash": "b4e5c599",
+  "RecordedAt": "2026-07-23T05:29:14.585Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I will click the application switcher dropdown next to the logo to begin the process of switching to the 'Actions' application.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 122,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dropdown is open, and 'Actions' is visible in the list. I will click on 'Actions' to switch to that application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Actions",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[2]/div[1]/div[7]",
+          "BoundingBox": {
+            "XMin": 63,
+            "YMin": 315,
+            "XMax": 282,
+            "YMax": 358
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/actions/Overview"
+      }
+    },
+    {
+      "Instruction": "I have successfully switched to the 'Actions' application. Now I need to navigate to the 'Explorer' section as per the goal.",
+      "UrlBefore": "http://localhost:4200/app/actions/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Explorer",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 321,
+            "YMin": 13,
+            "XMax": 440,
+            "YMax": 47
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/actions/Overview"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/actions/Explorer"
+      }
+    },
+    {
+      "Instruction": "I have navigated to the Action Explorer. Now I will click the 'New Action' button in the header to open the creation panel.",
+      "UrlBefore": "http://localhost:4200/app/actions/Explorer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Action",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-action-explorer[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1136,
+            "YMin": 101,
+            "XMax": 1256,
+            "YMax": 134
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/actions/Explorer"
+      }
+    },
+    {
+      "Instruction": "I have opened the 'New Action' panel. Now I will select 'Custom Action' and click 'Create Action' without entering a name to trigger the validation error as requested.",
+      "UrlBefore": "http://localhost:4200/app/actions/Explorer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Custom Action\nWrite your own action code with full control",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-action-explorer[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-new-action-panel[1]/div[1]/div[1]/div[2]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 944,
+            "YMin": 133,
+            "XMax": 1396,
+            "YMax": 209
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/actions/Explorer"
+      }
+    },
+    {
+      "Instruction": "I have opened the 'New Action' panel. Now I will select 'Custom Action' and click 'Create Action' without entering a name to trigger the validation error as requested.",
+      "UrlBefore": "http://localhost:4200/app/actions/Explorer",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Create Action",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-action-explorer[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-new-action-panel[1]/div[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 944,
+            "YMin": 660,
+            "XMax": 1102,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/actions/Explorer",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

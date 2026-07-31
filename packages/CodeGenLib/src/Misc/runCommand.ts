@@ -49,7 +49,6 @@ export class RunCommandsBase {
     try {
       let output = '';
       let startTime = new Date();
-      let bErrors: boolean = false;
       const commandName = command.command;
       const absPath = path.resolve(currentWorkingDirectory, command.workingDirectory);
 
@@ -74,13 +73,14 @@ export class RunCommandsBase {
         });
 
         cp.stderr?.on('data', (data) => {
-          const elapsedTime = new Date().getTime() - startTime.getTime();
-          const message: string = data.toString();
-          output += message
-          if (message.toUpperCase().indexOf('ERROR') >= 0) {
-            console.error(`COMMAND: "${command.command}" FAILED: ${elapsedTime/1000} seconds`);
-            bErrors = true;
-          }
+          // Capture stderr into the combined output for diagnostics, but do NOT infer
+          // failure from its content. Well-behaved tools routinely print the word "error"
+          // to stderr in benign contexts (deprecation notices, diagnostic text, stack-trace
+          // headers) while still exiting 0 — e.g. MemberJunction's own ClassFactory
+          // "no registration … so this becomes a hard error." fallback diagnostic that
+          // `mj codegen manifest` emits during an MJAPI `npm run build`. Success is decided
+          // solely by the process exit code below (non-zero rejects; zero resolves success).
+          output += data.toString();
         });
 
         cp.on('error', (error) => {
@@ -97,7 +97,7 @@ export class RunCommandsBase {
             logStatus(`COMMAND: "${command.command}" COMPLETED SUCCESSFULLY: ${elapsedTime/1000} seconds`);
             resolve({ output: output,
                       error: null!,
-                      success: !bErrors,
+                      success: true,
                       elapsedTime: elapsedTime
                     });
           } else {
@@ -113,14 +113,16 @@ export class RunCommandsBase {
             const elapsedTime = new Date().getTime() - startTime.getTime();
             if (!cp.killed) {
               treeKill(cp.pid!);
-              console.error(`COMMAND: "${command.command}" COMPLETED ${bErrors ? ' - FAILED' : ' - SUCCESS'} IN ${elapsedTime / 1000} seconds`);
+              logStatus(`COMMAND: "${command.command}" REACHED ITS TIMEOUT AND WAS KILLED (by design) AFTER ${elapsedTime / 1000} seconds`);
               output += `Process killed after ${timeout} ms`;
             }
 
+            // A timeout is an intended stop for long-lived commands (e.g. `npm start`
+            // with an explicit timeout): the process launched fine, so report success.
             resolve({
               output: output,
               error: null!,
-              success: !bErrors,
+              success: true,
               elapsedTime: elapsedTime,
             });
           }, timeout);

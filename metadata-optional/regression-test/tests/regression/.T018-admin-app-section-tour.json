@@ -1,0 +1,58 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T018 - Admin App Section Tour",
+    "Description": "Opens the Admin application once via the app switcher, then walks its sections (Users, Roles, Permissions, ERD, Database Designer, Diagnostics, SQL Logging, Apps, API Keys, GraphQL Console, Class Registry), verifying each renders via checkpoints. Consolidates old T034-T041, T047-T049.",
+    "InputDefinition": {
+      "goal": "Switch to the Admin application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box). Then walk these sections IN ORDER, opening the parent section and its left sub-navigation entry for each, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) admin-users — Identity & Access > Users, a grid of user records; (2) admin-roles — Identity & Access > Roles, a grid of role records (UI, Integration, Developer); (3) admin-permissions — Identity & Access > Permissions, the entity permissions matrix/grid; (4) admin-erd — Data & Schema > ERD, the interactive entity-relationship diagram with entity boxes and relationship lines; (5) admin-database-designer — Data & Schema > Database Designer view; (6) admin-diagnostics — Monitoring > Diagnostics, the system health view with status indicators; (7) admin-sql-logging — Monitoring > SQL Logging (a rendered log view OR a graceful access-denied/permission message is acceptable); (8) admin-apps — Identity & Access > Apps, the application management grid; (9) admin-api-keys — Identity & Access > API Keys, a list/grid or valid empty-state; (10) admin-graphql-console — Developer Tools > GraphQL Console, a query editor/console pane; (11) admin-class-registry — Developer Tools > Class Registry, a list/tree of registered classes or valid empty-state. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 110,
+      "checkpoints": [
+        { "name": "admin-users", "instruction": "Identity & Access > Users grid", "visualCriteria": ["The Admin app is active with Identity & Access open and Users selected, showing a grid of user records with multiple rows"] },
+        { "name": "admin-roles", "instruction": "Identity & Access > Roles grid", "visualCriteria": ["The Roles sub-section shows a grid of role records with multiple rows (role names such as UI, Integration, or Developer appear)"] },
+        { "name": "admin-permissions", "instruction": "Identity & Access > Permissions matrix", "visualCriteria": ["The Permissions sub-section renders a matrix or grid of entities with permission columns/settings"] },
+        { "name": "admin-erd", "instruction": "Data & Schema > ERD diagram", "visualCriteria": ["The ERD sub-section renders an interactive entity-relationship diagram with multiple entity boxes and relationship lines connecting them"] },
+        { "name": "admin-database-designer", "instruction": "Data & Schema > Database Designer", "visualCriteria": ["The Database Designer sub-section renders its expected widgets/controls or a valid empty state"] },
+        { "name": "admin-diagnostics", "instruction": "Monitoring > Diagnostics", "visualCriteria": ["The Diagnostics sub-section renders a system diagnostics/health view with status indicators such as health checks or status badges"] },
+        { "name": "admin-sql-logging", "instruction": "Monitoring > SQL Logging", "visualCriteria": ["The SQL Logging sub-section either renders its log view (table or valid empty/disabled state) OR shows a graceful access-denied/insufficient-permissions message — not a crash or blank screen"] },
+        { "name": "admin-apps", "instruction": "Identity & Access > Apps grid", "visualCriteria": ["The Apps sub-section renders the application management grid with multiple application rows"] },
+        { "name": "admin-api-keys", "instruction": "Identity & Access > API Keys", "visualCriteria": ["The API Keys sub-section renders a list/grid of API key entries or a valid empty-state"] },
+        { "name": "admin-graphql-console", "instruction": "Developer Tools > GraphQL Console", "visualCriteria": ["The GraphQL Console sub-section renders a query editor/console pane (with a run button or results/schema panel, or a valid empty editor)"] },
+        { "name": "admin-class-registry", "instruction": "Developer Tools > Class Registry", "visualCriteria": ["The Class Registry sub-section renders the inspector with a list/tree of registered classes or a valid empty-state"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 110,
+      "maxExecutionTime": 1320000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,admin"
+  },
+  "primaryKey": { "ID": "41E69E45-1506-4838-97FC-22CA4870D05F" }
+}

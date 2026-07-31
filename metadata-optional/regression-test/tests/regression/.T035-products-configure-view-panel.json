@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T035 - Products Configure-View Panel",
+    "Description": "Opens the Products entity grid once, then walks its Configure View panel sections (Columns management, per-column Format editor, Smart Filter mode, Add Aggregate dialog, aggregate summary), verifying each via checkpoints. Consolidates old T066, T067, T077, T079, T080.",
+    "InputDefinition": {
+      "goal": "Open the 'Products' entity grid — navigate to http://localhost:4200/app/data-explorer/Data?entity=Products (or type 'Products' in the LEFT sidebar 'Search entities...' box and click the exact match). Wait for the grid to load. Then open Configure View (the sliders / 'Configure view settings' icon in the grid toolbar) and walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) products-grid — the Products grid finishes loading with rows or a valid empty state; (2) columns-management — on the Configure View 'Columns' tab, the column-management UI shows 'Visible Columns' and 'Hidden Columns' lists; (3) column-format-editor — still on the Columns tab, click a column's paintbrush 'Format column' button to open the format-editor sub-panel (Format Type dropdown, alignment/style controls, live Preview); (4) smart-filter — switch to the 'Filters' tab, choose 'Smart Filter', and confirm the natural-language description textarea plus example chips render; (5) add-aggregate-dialog — switch to the 'Aggregates' tab and click 'Add Aggregate' to open the aggregate setup dialog (function + field + display-type choices); (6) aggregate-summary — complete the aggregate (e.g. a count or sum on a column) and confirm an aggregate result/summary value is shown. Keep going until every section has been visited. You do NOT need to save any configuration. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200/app/data-explorer/Data?entity=Products",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "products-grid", "instruction": "open the Products entity grid", "assertions": [ { "kind": "url", "urlPattern": "/app/data-explorer/Data" } ], "visualCriteria": ["The Products entity grid is loaded, showing data rows or a valid empty state"] },
+        { "name": "columns-management", "instruction": "Configure View > Columns tab shows column lists", "visualCriteria": ["The Configure View 'Columns' tab renders the column-management UI with 'Visible Columns' and 'Hidden Columns' lists"] },
+        { "name": "column-format-editor", "instruction": "open a column's Format editor", "visualCriteria": ["Clicking a column's paintbrush button opens the format-editor sub-panel with a Format Type selector, alignment/style controls, and a live Preview section"] },
+        { "name": "smart-filter", "instruction": "Filters tab > Smart Filter mode", "visualCriteria": ["Selecting 'Smart Filter' on the Filters tab reveals a natural-language description textarea plus example prompt chips"] },
+        { "name": "add-aggregate-dialog", "instruction": "Aggregates tab > Add Aggregate dialog", "visualCriteria": ["Clicking 'Add Aggregate' opens an aggregate setup dialog offering an aggregate function, a field choice, and a display-type option"] },
+        { "name": "aggregate-summary", "instruction": "configure an aggregate and see its result", "visualCriteria": ["An aggregate is configured and an aggregate result/summary value (a count/sum/average) is displayed, with no error"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,data-explorer"
+  },
+  "primaryKey": { "ID": "115485D2-F921-4ADB-A592-BBF4C994CFF0" }
+}

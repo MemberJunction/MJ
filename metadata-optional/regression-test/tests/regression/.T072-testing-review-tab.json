@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T072 - Testing Review Tab",
+    "Description": "Opens the Testing app Review tab once, then exercises the human review queue (submission write-path and queue/history view toggle) in one run, verifying each via checkpoints. Consolidates old T169, T170.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, choose 'Testing', then click the 'Review' tab. Then perform these sub-actions IN ORDER, and as you complete each set \"checkpointReached\" to the exact checkpoint name shown: (1) review-queue-submission — the Human Review view shows a KPI summary row and a Review Queue; if pending accordion items exist, expand one, pick a Rating number, click a correctness button (Correct or Incorrect), optionally type a note, then click Submit and confirm the item is accepted (it leaves the queue or shows a submitted state); if the queue is empty, confirming the 'All caught up!' empty state renders correctly is also success; (2) review-history-toggle — near the top there is a view toggle with 'Review Queue' and 'History' buttons; click 'History' and confirm the content switches to the reviewed/history view, then click 'Review Queue' to switch back (each view shows content or a valid empty state). Keep going until both sub-actions are done. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200/app/testing",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "review-queue-submission", "instruction": "reach Review tab; submit a review or confirm empty-state", "assertions": [ { "kind": "url", "urlPattern": "/app/testing" } ], "visualCriteria": ["The Review tab shows a KPI summary row and a Review Queue; if items exist, expanding one reveals a rating scale, correctness buttons, and a notes field and Submit removes/updates the item once a rating/correctness is chosen; if empty, the 'All caught up!' empty-state renders cleanly"] },
+        { "name": "review-history-toggle", "instruction": "toggle between Review Queue and History views", "visualCriteria": ["The Review tab shows a Review Queue / History view toggle; clicking History switches to the history view and clicking Review Queue switches back, each rendering its content or a valid empty state"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,testing"
+  },
+  "primaryKey": { "ID": "927BDE37-0813-4EE9-A7C4-B24117F0A6CD" }
+}

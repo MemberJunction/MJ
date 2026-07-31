@@ -13,6 +13,8 @@
 export type BrowserAction =
     | ClickAction
     | TypeAction
+    | ClickElementAction
+    | TypeIntoElementAction
     | KeypressAction
     | KeyDownAction
     | KeyUpAction
@@ -72,6 +74,41 @@ export class TypeAction {
      * focused element (existing behavior).
      */
     public Selector?: string;
+}
+
+/**
+ * Click an interactive element by its index in the current step's serialized
+ * element list (CU-A4). The engine resolves the index → the element the
+ * extractor found → a locator-based click with Playwright's native actionability
+ * auto-wait — eliminating the LLM's coordinate-estimation error. `Index` refers
+ * to the `[N]` markers in the element list rendered into this step's prompt.
+ */
+export class ClickElementAction {
+    public readonly Type = 'ClickElement' as const;
+    /** Index of the target in the current step's interactive-element list. */
+    public Index: number = 0;
+    /** Number of clicks (1 = single, 2 = double). */
+    public ClickCount: number = 1;
+    /** Mouse button to use. */
+    public Button: 'left' | 'right' | 'middle' = 'left';
+    /** Optional keyboard modifiers held during the click. */
+    public Modifiers?: KeyModifier[];
+}
+
+/**
+ * Type text into an interactive element by its index in the current step's
+ * serialized element list (CU-A4). The engine resolves the index → the element
+ * → a locator-based fill with actionability auto-wait. `Index` refers to the
+ * `[N]` markers in the element list rendered into this step's prompt.
+ */
+export class TypeIntoElementAction {
+    public readonly Type = 'TypeIntoElement' as const;
+    /** Index of the target field in the current step's interactive-element list. */
+    public Index: number = 0;
+    /** Text to type into the resolved element. */
+    public Text: string = '';
+    /** When true, press Enter after typing (submit-on-enter fields). */
+    public PressEnter: boolean = false;
 }
 
 export class KeypressAction {
@@ -159,6 +196,17 @@ export class ScrollAction {
      * existing delta scroll is used.
      */
     public Selector?: string;
+    /**
+     * Optional point (in the 1000x1000 action space) to scroll AT. A wheel event
+     * is dispatched wherever the mouse currently is, so without this a delta
+     * scroll always hits the main document — an open dropdown, dialog, or any
+     * inner `overflow-y: auto` pane can never be scrolled (CU-A8). When set, the
+     * adapter moves the pointer over the point first so the wheel targets the
+     * scrollable container under it. Ignored when `Selector` is set.
+     */
+    public X?: number;
+    /** Companion to {@link X}; both must be supplied for point-scrolling to apply. */
+    public Y?: number;
 }
 
 export class WaitAction {
@@ -342,6 +390,53 @@ export class ElementInfo {
     public BoundingBox?: BoundingBox;
 }
 
+// ─── Interactive Element (CU-A4 element-grounded perception) ──
+/**
+ * One interactive element discovered by the adapter's extractor for a step —
+ * the unit of element-grounded perception (CU-A4). The extractor assigns a
+ * stable per-snapshot {@link Index}; the controller references it in a
+ * {@link ClickElementAction}/{@link TypeIntoElementAction}, and the engine
+ * resolves index → this element → a locator action with actionability auto-wait.
+ * Also recorded (role/name/selector/bbox) onto the StepRecord as the raw
+ * material that makes recorded traces replayable and self-healable.
+ *
+ * App-agnostic: the extractor derives all of this from the a11y tree + a generic
+ * interactivity probe; nothing here names any specific app.
+ */
+export class InteractiveElement {
+    /** Stable per-snapshot index the controller uses to target this element. */
+    public Index: number = 0;
+    /** ARIA/semantic role (e.g. 'button', 'link', 'textbox', 'checkbox'). */
+    public Role: string = '';
+    /** Accessible name / label / visible text (trimmed, may be empty). */
+    public Name: string = '';
+    /** A selector the adapter can act on to re-resolve this element. */
+    public Selector: string = '';
+    /** Current value for inputs (e.g. '' → rendered as "(empty)"), when applicable. */
+    public Value?: string;
+    /** The element's bounding box in viewport pixels, when available. */
+    public BoundingBox?: BoundingBox;
+    /** True when the element is a scrollable container (rendered with a |SCROLL| marker). */
+    public Scrollable: boolean = false;
+    /** True when the element is disabled/non-interactive. */
+    public Disabled: boolean = false;
+}
+
+// ─── Browser Diagnostics ───────────────────────────────────
+/**
+ * Diagnostic event captured from the browser (console errors/warnings, network
+ * failures, page errors, crashes). Adapters that capture diagnostics push these
+ * into an internal buffer and expose them via `GetDiagnostics()` (which drains
+ * the buffer). Timestamped at capture so events can be bucketed per step (CU-A7).
+ */
+export interface BrowserDiagnosticEvent {
+    timestamp: string;
+    type: 'console' | 'pageerror' | 'requestfailed' | 'crash';
+    level?: string;
+    message: string;
+    url?: string;
+}
+
 // ─── Action Execution Result ───────────────────────────────
 export class ActionExecutionResult {
     public Success: boolean = false;
@@ -388,6 +483,14 @@ export class BrowserConfig {
     public InitialLocalStorage?: LocalStorageOriginState[];
 
     /**
+     * A warm-seed snapshot (CU-G4) restored into the context after launch —
+     * localStorage + IndexedDB captured once post-login so the app doesn't
+     * cold-boot its metadata cache from the server every test. Restored
+     * best-effort; a failure falls back to a cold boot (never corruption).
+     */
+    public ContextSeed?: ContextSeed;
+
+    /**
      * Attach to an already-running browser instead of launching one.
      * Auto-detects the connect method from the URL scheme:
      *   - `http(s)://…`  → Chrome DevTools Protocol (`chromium.connectOverCDP`),
@@ -430,6 +533,53 @@ export class LocalStorageOriginState {
     public Origin: string = '';
     /** Key-value pairs to inject into localStorage for this origin */
     public Entries: { name: string; value: string }[] = [];
+}
+
+// ─── Context Seed (CU-G4 warm-seed) ────────────────────────
+/**
+ * A snapshot of an origin's client-side storage — localStorage + IndexedDB —
+ * captured once (e.g. post-login, after the app has warmed its metadata cache)
+ * and restored into a fresh context so it doesn't cold-boot that cache from the
+ * server on every test (the largest self-inflicted load multiplier per CU-G4).
+ *
+ * App-agnostic and exactly analogous to Playwright's `storageState`, extended to
+ * IndexedDB (where SPA metadata caches live). The adapter knows only HOW to
+ * capture/restore generic storage; WHAT to seed is the opaque snapshot the
+ * caller supplies. Restore is best-effort and cold-boot-safe: a restore failure
+ * must leave the context to refetch, never corrupt a half-populated cache.
+ */
+export class ContextSeed {
+    /** Full origin the snapshot belongs to (protocol + host + port). */
+    public Origin: string = '';
+    /** localStorage key-value pairs (optional). */
+    public LocalStorage?: { name: string; value: string }[];
+    /** IndexedDB snapshot (optional) — the heavy SPA metadata cache. */
+    public IndexedDB?: ContextSeedIndexedDB;
+}
+
+/** A serializable snapshot of an origin's IndexedDB databases. */
+export class ContextSeedIndexedDB {
+    public Databases: IndexedDBDatabase[] = [];
+}
+
+export class IndexedDBDatabase {
+    public Name: string = '';
+    public Version: number = 1;
+    public Stores: IndexedDBStore[] = [];
+}
+
+export class IndexedDBStore {
+    public Name: string = '';
+    /** The store's key path (null = out-of-line keys). */
+    public KeyPath: string | string[] | null = null;
+    public AutoIncrement: boolean = false;
+    public Records: IndexedDBRecord[] = [];
+}
+
+export class IndexedDBRecord {
+    /** Present only for out-of-line keys (KeyPath === null). */
+    public Key?: unknown;
+    public Value: unknown;
 }
 
 // ─── Navigation Decision ───────────────────────────────────

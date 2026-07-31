@@ -56,5 +56,20 @@ describe('Templates/base-types exports', () => {
     it('should have a FindTemplate method', () => {
       expect(typeof TemplateEngineBase.prototype.FindTemplate).toBe('function');
     });
+
+    it('cache getters return empty arrays before a successful Config — never NPE', () => {
+      // Regression test for the AI Prompt form crash: when the Template_Metadata
+      // dataset fails to load, `_Metadata` was undefined and the getters threw
+      // "Cannot read properties of undefined (reading 'TemplateContents')",
+      // crashing every consumer (the AI Prompt form failed to load entirely).
+      // The getters must degrade to empty arrays instead.
+      const engine = new TemplateEngineBase();
+      expect(() => engine.TemplateContents).not.toThrow();
+      expect(engine.TemplateContents).toEqual([]);
+      expect(engine.Templates).toEqual([]);
+      expect(engine.TemplateContentTypes).toEqual([]);
+      expect(engine.TemplateCategories).toEqual([]);
+      expect(engine.TemplateParams).toEqual([]);
+    });
   });
 });

@@ -85,6 +85,23 @@ That should work.`;
             expect(result.RequestJudgement).toBe(false);
         });
 
+        it('should parse checkpointReached when present (CU-D8) and leave it undefined otherwise', () => {
+            const withSignal = ResponseParser.ParseControllerResponse(
+                JSON.stringify({ reasoning: 'arrived', actions: [], checkpointReached: 'agents-list' })
+            );
+            expect(withSignal.CheckpointReached).toBe('agents-list');
+
+            const without = ResponseParser.ParseControllerResponse(
+                JSON.stringify({ reasoning: 'working', actions: [] })
+            );
+            expect(without.CheckpointReached).toBeUndefined();
+
+            const nullSignal = ResponseParser.ParseControllerResponse(
+                JSON.stringify({ reasoning: 'working', actions: [], checkpointReached: null })
+            );
+            expect(nullSignal.CheckpointReached).toBeUndefined();
+        });
+
         it('should default reasoning to empty string when not in JSON', () => {
             const input = JSON.stringify({ actions: [] });
             const result = ResponseParser.ParseControllerResponse(input);
@@ -159,6 +176,107 @@ That should work.`;
                 expect(actions[0].Button).toBe('middle');
                 expect(actions[0].ClickCount).toBe(3);
             }
+        });
+
+        it('should parse Selector + Modifiers on Click (CU-A6)', () => {
+            const actions = parseActions([
+                { Type: 'Click', Selector: 'button:has-text("Save")', Modifiers: ['Shift', 'ControlOrMeta'] },
+            ]);
+            expect(actions).toHaveLength(1);
+            if (actions[0].Type === 'Click') {
+                expect(actions[0].Selector).toBe('button:has-text("Save")');
+                expect(actions[0].Modifiers).toEqual(['Shift', 'ControlOrMeta']);
+            }
+        });
+
+        it('should parse Selector on Type/Scroll/Wait and normalize modifier aliases (CU-A6)', () => {
+            const [type, scroll, wait, keypress] = parseActions([
+                { Type: 'Type', Selector: 'input[name="email"]', Text: 'a@b.com' },
+                { Type: 'Scroll', selector: 'tr:has-text("Total")' },
+                { Type: 'Wait', Selector: '.record-form' },
+                { Type: 'Keypress', Key: 'a', modifiers: ['ctrl', 'cmd'] },
+            ]);
+            if (type.Type === 'Type') expect(type.Selector).toBe('input[name="email"]');
+            if (scroll.Type === 'Scroll') expect(scroll.Selector).toBe('tr:has-text("Total")');
+            if (wait.Type === 'Wait') expect(wait.Selector).toBe('.record-form');
+            // 'ctrl' -> Control, 'cmd' -> Meta (alias normalization)
+            if (keypress.Type === 'Keypress') expect(keypress.Modifiers).toEqual(['Control', 'Meta']);
+        });
+
+        it('should parse a scroll-at point from either casing (CU-A8)', () => {
+            const [upper, lower] = parseActions([
+                { Type: 'Scroll', X: 130, Y: 500, DeltaY: 300 },
+                { Type: 'Scroll', x: 40, y: 60, deltaY: -200 },
+            ]);
+            if (upper.Type === 'Scroll') {
+                expect(upper.X).toBe(130);
+                expect(upper.Y).toBe(500);
+                expect(upper.DeltaY).toBe(300);
+            }
+            if (lower.Type === 'Scroll') {
+                expect(lower.X).toBe(40);
+                expect(lower.Y).toBe(60);
+            }
+        });
+
+        it('should ignore a half-specified scroll point rather than scrolling at the page corner (CU-A8)', () => {
+            // A lone axis cannot identify a point; defaulting the other to 0 would
+            // silently wheel at the top-left corner instead of the intended pane.
+            const [onlyX, onlyY, neither] = parseActions([
+                { Type: 'Scroll', X: 130, DeltaY: 300 },
+                { Type: 'Scroll', Y: 500, DeltaY: 300 },
+                { Type: 'Scroll', DeltaY: 300 },
+            ]);
+            for (const a of [onlyX, onlyY, neither]) {
+                if (a.Type === 'Scroll') {
+                    expect(a.X).toBeUndefined();
+                    expect(a.Y).toBeUndefined();
+                }
+            }
+        });
+
+        it('should accept a scroll point at the origin (CU-A8)', () => {
+            // 0 is a legitimate coordinate — the guard must test for presence, not truthiness.
+            const [action] = parseActions([{ Type: 'Scroll', X: 0, Y: 0, DeltaY: 100 }]);
+            if (action.Type === 'Scroll') {
+                expect(action.X).toBe(0);
+                expect(action.Y).toBe(0);
+            }
+        });
+
+        it('should leave Selector/Modifiers undefined when absent or empty/invalid (CU-A6)', () => {
+            const [plainClick, blankSelector] = parseActions([
+                { Type: 'Click', X: 1, Y: 2 },
+                { Type: 'Click', X: 1, Y: 2, Selector: '   ', Modifiers: ['bogus'] },
+            ]);
+            if (plainClick.Type === 'Click') {
+                expect(plainClick.Selector).toBeUndefined();
+                expect(plainClick.Modifiers).toBeUndefined();
+            }
+            if (blankSelector.Type === 'Click') {
+                expect(blankSelector.Selector).toBeUndefined();
+                expect(blankSelector.Modifiers).toBeUndefined();
+            }
+        });
+
+        it('should parse self-tracked state: evaluation/memory/plan (CU-E2)', () => {
+            const input = JSON.stringify({
+                reasoning: 'r', actions: [],
+                evaluation: 'the field filled',
+                memory: 'user id is 42',
+                plan: ['1.[x] open', '2.[>] search'],
+            });
+            const res = ResponseParser.ParseControllerResponse(input);
+            expect(res.Evaluation).toBe('the field filled');
+            expect(res.Memory).toBe('user id is 42');
+            expect(res.Plan).toBe('1.[x] open\n2.[>] search'); // array joined by newlines
+        });
+
+        it('should leave E2 state undefined when absent or blank', () => {
+            const res = ResponseParser.ParseControllerResponse(JSON.stringify({ reasoning: 'r', actions: [], memory: '  ' }));
+            expect(res.Evaluation).toBeUndefined();
+            expect(res.Memory).toBeUndefined();
+            expect(res.Plan).toBeUndefined();
         });
 
         it('should default Click button to left when unrecognized', () => {

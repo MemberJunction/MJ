@@ -20,7 +20,8 @@
   "dependencies": {
     "@memberjunction/global": "5.50.0",
     "@memberjunction/core": "5.50.0",
-    "@memberjunction/ai": "5.50.0"
+    "@memberjunction/ai": "5.50.0",
+    "pngjs": "^3.4.0"
   },
   "peerDependencies": {
     "playwright": ">=1.40.0"

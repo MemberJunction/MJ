@@ -1,0 +1,205 @@
+{
+  "TestId": "10D759E9-8F8F-44FF-85DE-3FC54C2972FB",
+  "AppBuildHash": "454f1c42c7ee-dirty:3dd8345bcce2d83a",
+  "AppVersion": "",
+  "GoalHash": "089325cf",
+  "RecordedAt": "2026-07-23T05:33:55.856Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "The application is already set to 'Scheduling'. I will now navigate to the 'Jobs' section by clicking the 'Jobs' link in the top navigation bar.",
+      "UrlBefore": "http://localhost:4200/app/scheduling",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Jobs",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 334,
+            "YMin": 13,
+            "XMax": 421,
+            "YMax": 47
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/scheduling"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/scheduling/Jobs"
+      }
+    },
+    {
+      "Instruction": "I am currently in the 'Jobs' section of the 'Scheduling' application. I see several job cards. I will click the 'Pause' button on the 'Agent Memory Manager - Every 15 Minutes' job card (which is curre",
+      "UrlBefore": "http://localhost:4200/app/scheduling/Jobs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Pause",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-scheduling-jobs-resource[1]/app-scheduling-jobs[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[2]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 461,
+            "YMin": 576,
+            "XMax": 541,
+            "YMax": 610
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/scheduling/Jobs"
+      }
+    },
+    {
+      "Instruction": "I am in the 'Jobs' section of the 'Scheduling' application. I see the 'Agent Memory Manager - Every 15 Minutes' job is currently 'Active' and has a 'Pause' button. I will click the 'Pause' button (ind",
+      "UrlBefore": "http://localhost:4200/app/scheduling/Jobs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Pause",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-scheduling-jobs-resource[1]/app-scheduling-jobs[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[2]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 461,
+            "YMin": 574,
+            "XMax": 541,
+            "YMax": 608
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/scheduling/Jobs"
+      }
+    },
+    {
+      "Instruction": "The previous attempt to click 'Pause' on the 'Agent Memory Manager' job did not result in a visible state change (the status chip is still 'Active' and the button still says 'Pause'). I will follow th",
+      "UrlBefore": "http://localhost:4200/app/scheduling/Jobs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Pause",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-scheduling-jobs-resource[1]/app-scheduling-jobs[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[2]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 461,
+            "YMin": 574,
+            "XMax": 541,
+            "YMax": 608
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/scheduling/Jobs"
+      }
+    },
+    {
+      "Instruction": "I have clicked the 'Pause' button on the 'Agent Memory Manager' job multiple times without a visible state change. I will now click the 'Refresh' button as suggested in the feedback to see if the stat",
+      "UrlBefore": "http://localhost:4200/app/scheduling/Jobs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Refresh",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-scheduling-jobs-resource[1]/app-scheduling-jobs[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/mj-refresh-button[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1044,
+            "YMin": 101,
+            "XMax": 1141,
+            "YMax": 134
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/scheduling/Jobs"
+      }
+    },
+    {
+      "Instruction": "The 'Agent Memory Manager' job is now in the 'Paused' state with a 'Resume' button, confirming the previous 'Pause' action was successful after a refresh. I will now click 'Resume' to toggle it back t",
+      "UrlBefore": "http://localhost:4200/app/scheduling/Jobs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Resume",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-scheduling-jobs-resource[1]/app-scheduling-jobs[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[2]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 461,
+            "YMin": 576,
+            "XMax": 556,
+            "YMax": 610
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/scheduling/Jobs"
+      }
+    },
+    {
+      "Instruction": "I have successfully paused the 'Agent Memory Manager' job, as evidenced by the 'Paused' status chip and the button relabeling to 'Resume'. I previously clicked 'Resume' to toggle it back, but the UI h",
+      "UrlBefore": "http://localhost:4200/app/scheduling/Jobs",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Resume",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-scheduling-jobs-resource[1]/app-scheduling-jobs[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[2]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 461,
+            "YMin": 574,
+            "XMax": 556,
+            "YMax": 608
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/scheduling/Jobs"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/scheduling/Jobs",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

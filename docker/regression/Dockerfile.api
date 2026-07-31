@@ -3,7 +3,19 @@
 # is handled by the db-setup container which must complete before this starts.
 #
 # Health endpoint: /healthcheck (exposed by MJServer)
+#
+# Layer order (DR-C1): package manifests → npm ci (BuildKit-cached) → sources →
+# codegen overlay → build → data/config. A source edit no longer invalidates
+# the dependency install.
 
+# ─── Manifests-only stage (see Dockerfile.db-setup for the rationale) ───────
+FROM node:24-slim AS manifests
+WORKDIR /m
+COPY packages/ ./packages/
+RUN find packages -type f ! -name package.json ! -path '*/bin/*' -delete \
+    && find packages -type d -empty -delete
+
+# ─── Stage 1: Build ─────────────────────────────────────────────────────────
 FROM node:24-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential python3 \
@@ -11,13 +23,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 
 WORKDIR /app
 
+# Dependencies first: root manifests + the package.json skeleton, then a
+# cache-mounted reproducible install keyed only on manifest content.
 COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+COPY --from=manifests /m/packages/ ./packages/
+RUN --mount=type=cache,target=/root/.npm npm ci
+
+# Sources after install (COPY merges over the skeleton; nested node_modules
+# created by npm ci are preserved).
 COPY packages/ ./packages/
-COPY metadata/ ./metadata/
-COPY migrations/ ./migrations/
 
 # Overlay codegen output produced by the form-generator service (see
-# docker/regression/gen-forms.sh). `npm run regression:build` invokes
+# docker/regression/gen-forms.sh). `mj test regression build` invokes
 # gen-forms before this build whenever .docker-generated/ is missing, so
 # these COPYs always have real content. Required so MJAPI's build can
 # compile the GraphQL resolvers that reference AssociationDemo entity
@@ -26,9 +43,17 @@ COPY migrations/ ./migrations/
 COPY docker/regression/.docker-generated/GeneratedEntities/ ./packages/GeneratedEntities/src/generated/
 COPY docker/regression/.docker-generated/MJAPI-generated/ ./packages/MJAPI/src/generated/
 
-RUN npm install
+# metadata/ BEFORE the compile: @memberjunction/computer-use's build
+# (scripts/generate-prompt-parts.mjs, since commit 3080b58da6) reads
+# metadata/prompts/templates/computer-use/_includes/ at build time, so the
+# templates must exist before build:api (matches Dockerfile.test-runner).
+COPY metadata/ ./metadata/
 
 RUN npm run build:api
+
+# migrations after the compile (not a build input). Rides into the runtime
+# stage via the whole-tree COPY --from below.
+COPY migrations/ ./migrations/
 
 # ─── Runtime ───────────────────────────────────────────────────────────────
 FROM node:24-slim

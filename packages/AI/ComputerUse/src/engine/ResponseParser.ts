@@ -20,6 +20,8 @@ import {
     BoundingBox,
     ClickAction,
     TypeAction,
+    ClickElementAction,
+    TypeIntoElementAction,
     KeypressAction,
     KeyDownAction,
     KeyUpAction,
@@ -31,6 +33,7 @@ import {
     RefreshAction,
     DragAction,
 } from '../types/browser.js';
+import type { KeyModifier } from '../types/browser.js';
 
 /** Shape of the raw JSON we expect from the controller LLM */
 interface RawControllerResponse {
@@ -38,6 +41,10 @@ interface RawControllerResponse {
     actions?: RawAction[];
     toolCalls?: RawToolCall[];
     requestJudgement?: boolean;
+    checkpointReached?: unknown;
+    evaluation?: unknown;
+    memory?: unknown;
+    plan?: unknown;
 }
 
 interface RawAction {
@@ -72,6 +79,11 @@ export class ResponseParser {
             response.Actions = ResponseParser.parseActions(parsed.actions ?? []);
             response.ToolCalls = ResponseParser.parseToolCalls(parsed.toolCalls ?? []);
             response.RequestJudgement = parsed.requestJudgement ?? false;
+            response.CheckpointReached = ResponseParser.toStateString(parsed.checkpointReached);   // tour signal (CU-D8)
+            // Self-tracked agent state (CU-E2) — optional, tolerant of absence.
+            response.Evaluation = ResponseParser.toStateString(parsed.evaluation);
+            response.Memory = ResponseParser.toStateString(parsed.memory);
+            response.Plan = ResponseParser.toStateString(parsed.plan);
         } catch {
             response.Reasoning = `JSON parse error on: ${jsonStr.slice(0, 200)}`;
         }
@@ -112,18 +124,39 @@ export class ResponseParser {
                 action.BoundingBox = ResponseParser.parseBoundingBox(raw.BoundingBox ?? raw.boundingBox);
                 action.Button = ResponseParser.toClickButton(raw.Button ?? raw.button);
                 action.ClickCount = ResponseParser.toNumber(raw.ClickCount ?? raw.clickCount, 1);
+                action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
+                action.Modifiers = ResponseParser.toKeyModifiers(raw.Modifiers ?? raw.modifiers);
                 return action;
             }
 
             case 'Type': {
                 const action = new TypeAction();
                 action.Text = String(raw.Text ?? raw.text ?? '');
+                action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
+                return action;
+            }
+
+            case 'ClickElement': {
+                const action = new ClickElementAction();
+                action.Index = ResponseParser.toNumber(raw.Index ?? raw.index, -1);
+                action.ClickCount = ResponseParser.toNumber(raw.ClickCount ?? raw.clickCount, 1);
+                action.Button = ResponseParser.toClickButton(raw.Button ?? raw.button);
+                action.Modifiers = ResponseParser.toKeyModifiers(raw.Modifiers ?? raw.modifiers);
+                return action;
+            }
+
+            case 'TypeIntoElement': {
+                const action = new TypeIntoElementAction();
+                action.Index = ResponseParser.toNumber(raw.Index ?? raw.index, -1);
+                action.Text = String(raw.Text ?? raw.text ?? '');
+                action.PressEnter = (raw.PressEnter ?? raw.pressEnter) === true;
                 return action;
             }
 
             case 'Keypress': {
                 const action = new KeypressAction();
                 action.Key = String(raw.Key ?? raw.key ?? '');
+                action.Modifiers = ResponseParser.toKeyModifiers(raw.Modifiers ?? raw.modifiers);
                 return action;
             }
 
@@ -143,6 +176,16 @@ export class ResponseParser {
                 const action = new ScrollAction();
                 action.DeltaY = ResponseParser.toNumber(raw.DeltaY ?? raw.deltaY, 0);
                 action.DeltaX = ResponseParser.toNumber(raw.DeltaX ?? raw.deltaX, 0);
+                action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
+                // CU-A8: optional scroll-at point. Only carried when BOTH axes are
+                // present — a lone X (or Y) can't identify a point, and silently
+                // defaulting the other to 0 would scroll at the page corner.
+                const scrollX = raw.X ?? raw.x;
+                const scrollY = raw.Y ?? raw.y;
+                if (scrollX !== undefined && scrollX !== null && scrollY !== undefined && scrollY !== null) {
+                    action.X = ResponseParser.toNumber(scrollX, 0);
+                    action.Y = ResponseParser.toNumber(scrollY, 0);
+                }
                 return action;
             }
 
@@ -152,6 +195,7 @@ export class ResponseParser {
                     raw.DurationMs ?? raw.durationMs ?? raw.ms,
                     1000
                 );
+                action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
                 return action;
             }
 
@@ -255,6 +299,66 @@ export class ResponseParser {
         if (value === 'right') return 'right';
         if (value === 'middle') return 'middle';
         return 'left';
+    }
+
+    /**
+     * Coerce a self-tracked-state value (CU-E2) into a trimmed non-empty string,
+     * or undefined. Tolerant: a string is used as-is; an array is joined by
+     * newlines (a checklist); any other object is JSON-stringified.
+     */
+    private static toStateString(value: unknown): string | undefined {
+        if (value == null) return undefined;
+        let text: string;
+        if (typeof value === 'string') {
+            text = value;
+        } else if (Array.isArray(value)) {
+            text = value.map(v => (typeof v === 'string' ? v : JSON.stringify(v))).join('\n');
+        } else {
+            text = JSON.stringify(value);
+        }
+        const trimmed = text.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+    }
+
+    /** Coerce a raw selector value into a trimmed non-empty string, or undefined (CU-A6). */
+    private static toSelector(value: unknown): string | undefined {
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed.length > 0) {
+                return trimmed;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Coerce a raw modifiers value into a `KeyModifier[]`, or undefined (CU-A6).
+     * Accepts an array or a single string; keeps only recognized modifier names
+     * (case-insensitively normalized to the canonical spelling).
+     */
+    private static toKeyModifiers(value: unknown): KeyModifier[] | undefined {
+        const raw = Array.isArray(value) ? value : (value != null ? [value] : []);
+        const canonical: Record<string, KeyModifier> = {
+            shift: 'Shift',
+            control: 'Control',
+            ctrl: 'Control',
+            alt: 'Alt',
+            option: 'Alt',
+            meta: 'Meta',
+            cmd: 'Meta',
+            command: 'Meta',
+            controlormeta: 'ControlOrMeta',
+        };
+        const modifiers: KeyModifier[] = [];
+        for (const entry of raw) {
+            if (typeof entry === 'string') {
+                const mapped = canonical[entry.trim().toLowerCase()];
+                if (mapped && !modifiers.includes(mapped)) {
+                    modifiers.push(mapped);
+                }
+            }
+        }
+        return modifiers.length > 0 ? modifiers : undefined;
     }
 
     /**

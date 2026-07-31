@@ -108,6 +108,24 @@ export class MJRunComputerUseParams extends RunComputerUseParams {
      * runs are only linked to the run (via AgentRunId), not nested under a step.
      */
     public AgentRunStepID?: string;
+
+    /**
+     * Whether to persist each step's screenshot as an `MJ: AI Prompt Run Medias`
+     * row (base64 PNG) during the run (CU-G1). Defaults to `true` (prior
+     * behavior) when undefined. Set `false` for high-volume regression runs to
+     * stop writing tens of GB of base64 into the SQL Server serving the app
+     * under test — a direct contributor to mid-run render degradation.
+     * Screenshots remain in the in-memory step history / run result regardless.
+     */
+    public PersistStepMedia?: boolean;
+
+    /**
+     * Per-test controller generation overrides (CU-E6) threaded into the
+     * controller `AIPromptParams` — `temperature` (rides `additionalParameters`)
+     * and `effortLevel` (1–100). The determinism knobs for pinned regression
+     * runs (e.g. `temperature: 0`). Judge generation is unaffected.
+     */
+    public ControllerGeneration?: { temperature?: number; effortLevel?: number };
 }
 
 // ─── MJ Domain Auth Binding ──────────────────────────────────

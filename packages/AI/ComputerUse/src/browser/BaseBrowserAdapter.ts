@@ -23,20 +23,14 @@ import {
     AudioCaptureChunk,
     AccessibilityNode,
     ElementInfo,
+    InteractiveElement,
+    BrowserDiagnosticEvent,
+    ContextSeed,
 } from '../types/browser.js';
 
-/**
- * Diagnostic event captured from the browser (console messages, network
- * failures, page errors). Adapters that capture diagnostics push
- * events into an internal buffer and expose them via GetDiagnostics().
- */
-export interface BrowserDiagnosticEvent {
-    timestamp: string;
-    type: 'console' | 'pageerror' | 'requestfailed' | 'crash';
-    level?: string;
-    message: string;
-    url?: string;
-}
+// Re-exported for back-compat: the type now lives in types/browser.ts (CU-A7)
+// so StepRecord and other pure types can carry it without importing an adapter.
+export type { BrowserDiagnosticEvent } from '../types/browser.js';
 
 export abstract class BaseBrowserAdapter {
     // ─── Lifecycle ─────────────────────────────────────────
@@ -163,6 +157,22 @@ export abstract class BaseBrowserAdapter {
     public async QueryElement(_selector: string): Promise<ElementInfo> {
         // No-op default — adapters with a live page override this.
         return new ElementInfo();
+    }
+
+    /**
+     * Extract the page's interactive elements (buttons/links/inputs/ARIA roles/
+     * click affordances) as a stable indexed list for element-grounded
+     * perception (CU-A4). The returned indices are what a subsequent
+     * `ClickElement`/`TypeIntoElement` action resolves against, so an adapter
+     * that implements this MUST cache the result to resolve those actions.
+     *
+     * Default returns an empty list so adapters without a live DOM don't break —
+     * element grounding then simply has nothing to offer and the engine falls
+     * back to coordinate actions. Adapters backed by a real page override this.
+     */
+    public async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
+        // No-op default — adapters with a live page override this.
+        return [];
     }
 
     // ─── Screencast (CDP live viewport feed) ───────────────
@@ -329,6 +339,38 @@ export abstract class BaseBrowserAdapter {
         // No-op by default — adapters that share context across tests override this.
     }
 
+    // ─── Warm-Seed Context Storage (CU-G4) ─────────────────
+
+    /**
+     * Capture a snapshot of the given origin's client-side storage (localStorage
+     * + IndexedDB) for later restore into a fresh context — the warm-seed that
+     * kills the per-test cold-boot metadata refetch (CU-G4). The caller (driver)
+     * captures once post-login and reuses the seed across contexts.
+     *
+     * Default returns `null` (nothing to capture) so adapters without a live
+     * page don't break — additive and non-throwing. Adapters backed by a real
+     * page (e.g. Playwright) override this.
+     *
+     * @param _origin - Origin (protocol + host + port) to snapshot.
+     */
+    public async CaptureContextSeed(_origin: string): Promise<ContextSeed | null> {
+        // No-op default — adapters with a live page override this.
+        return null;
+    }
+
+    /**
+     * Restore a previously-captured {@link ContextSeed} into the current context
+     * BEFORE the app boots (CU-G4). Best-effort and cold-boot-safe by contract:
+     * any failure must leave the context to refetch from the server, never a
+     * half-populated (corrupt) cache.
+     *
+     * Default is a no-op resolve so adapters that can't seed don't break —
+     * additive and non-throwing. Adapters backed by a real page override this.
+     */
+    public async SeedContext(_seed: ContextSeed): Promise<void> {
+        // No-op default — adapters with a live page override this.
+    }
+
     // ─── Diagnostics ──────────────────────────────────────
 
     /**
@@ -338,6 +380,35 @@ export abstract class BaseBrowserAdapter {
      */
     public GetDiagnostics(): BrowserDiagnosticEvent[] {
         return [];
+    }
+
+    // ─── Failure Artifacts (CU-F4) ─────────────────────────
+
+    /**
+     * Begin recording a forensic trace of the session (DOM snapshots +
+     * screenshots + network + console) for later offline inspection.
+     *
+     * Default implementation is a no-op resolve so adapters that can't produce a
+     * trace (or non-CDP backends) don't break — additive and non-throwing.
+     * Adapters backed by a real browser context (e.g. Playwright) override this
+     * to call `context.tracing.start(...)`. The caller decides *whether* to
+     * capture (and whether to keep the result); the adapter only knows *how*.
+     */
+    public async StartTracing(): Promise<void> {
+        // No-op default — adapters with a traceable context override this.
+    }
+
+    /**
+     * Stop a trace started via {@link StartTracing}, writing it to `path`.
+     * Returns `true` iff a trace file was actually written (so the caller can
+     * decide whether there's an artifact to retain or discard). Default
+     * implementation returns `false` — nothing was traced. Never throws.
+     *
+     * @param path - Filesystem path to write the trace to (e.g. a `.zip`).
+     */
+    public async StopTracing(_path: string): Promise<boolean> {
+        // No-op default — no trace was in progress on this adapter.
+        return false;
     }
 
     // ─── Utilities ─────────────────────────────────────────

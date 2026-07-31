@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T038 - Products View Toolbar",
+    "Description": "Opens the Products entity grid in Data Explorer once, then walks the view-toolbar sections (Cards renderer, saved-view select, create saved view, Timeline renderer, open-view-in-tab, reset-to-default) verifying each via checkpoints. Consolidates old T074, T075, T076, T081, T082, T084.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box) and go to Data Explorer, then its Data section. Open the 'Products' entity via the LEFT sidebar 'Search entities...' box (type 'Products', click the exact match) and wait for the records grid to render. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) cards-view — open the view-type switcher dropdown in the view toolbar (a button showing the current type like 'Grid' with a chevron) and choose 'Cards' so the records re-render as a card grid; (2) view-selector-select — open the saved-view selector (layer-group icon labeled with the current view name or '(Default)'), confirm the Views panel lists at least a '(Default)' option, and click it to apply; (3) create-saved-view — open the saved-view selector again, click 'New View' in the panel footer, enter a unique name such as 'CU Grid Test 4821', and confirm the new view is created and becomes the active view (its name shows on the selector or under 'My Views'); (4) timeline-view — open the view-type switcher again and, if 'Timeline' is offered, select it and confirm a chronological timeline layout (if Timeline is not offered, selecting another type such as Cards and seeing the view re-render is acceptable); (5) view-open-in-tab — open the saved-view selector and use the 'Open in Tab' action (external-link / up-right-from-square icon) on a listed view, confirming the view opens as its own workspace tab; (6) reset-view — make a change that marks the view modified (click a column header to sort, or type into the 'Filter records...' box), then open the saved-view selector and click 'Reset to Default', confirming the view reverts and the modified indicator clears. Keep going until every section has been visited.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "cards-view", "instruction": "switch the view type to Cards on the Products grid", "assertions": [ { "kind": "url", "urlPattern": "/app/data-explorer/Data" } ], "visualCriteria": ["The view-type switcher lists more than one type including 'Cards', and after selecting Cards the records re-render as a card grid instead of the tabular AG-Grid (or a valid empty-state for that view)"] },
+        { "name": "view-selector-select", "instruction": "open the saved-view selector and apply the (Default) view", "visualCriteria": ["Clicking the saved-view selector opens a Views panel listing at least a '(Default)' entry, and selecting a view applies it — a check indicator appears on the chosen view and the grid reloads (or a valid empty-state renders)"] },
+        { "name": "create-saved-view", "instruction": "create a new saved view via 'New View' and confirm it becomes active", "visualCriteria": ["A create/quick-save dialog with an editable view-name field appears after clicking 'New View', and after saving the newly named view becomes the selected view (name shown on the selector button) or appears under 'My Views'"] },
+        { "name": "timeline-view", "instruction": "switch the view type to Timeline (or an alternate type) and confirm re-render", "visualCriteria": ["The view-type switcher lists multiple types; if 'Timeline' is offered, selecting it renders a chronological timeline layout — otherwise an alternate type (e.g. Cards) is selectable and the view re-renders, or a valid empty-state shows"] },
+        { "name": "view-open-in-tab", "instruction": "open a saved view in its own tab via the Open-in-Tab action", "visualCriteria": ["An 'Open in Tab' control (external-link icon) is available for a view in the selector, and activating it opens the view as its own tab/resource showing the entity's records (or a valid empty-state)"] },
+        { "name": "reset-view", "instruction": "modify the view (sort/filter) then Reset to Default and confirm revert", "visualCriteria": ["After a sort or filter change the saved-view selector shows a modified indicator (unsaved-changes dot), and clicking 'Reset to Default' reverts the grid to the default view and the modified indicator clears"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,data-explorer"
+  },
+  "primaryKey": { "ID": "FCAA1742-03EC-40AC-815E-EAF8A0A0425A" }
+}

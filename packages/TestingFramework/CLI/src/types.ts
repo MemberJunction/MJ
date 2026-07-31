@@ -93,6 +93,35 @@ export interface SuiteFlags extends CommonFlags {
      * Recommended: 3 (statistical minimum), 5 (more reliable detection).
      */
     flakyCheck?: number;
+    /**
+     * Retry a FAILED test up to N extra times before accepting the failure
+     * (pass-if-any-attempt-passes). 0 (default) disables retries. A test that
+     * fails then passes is reported as flaky. Useful for non-deterministic
+     * (LLM-driven) suites where transient failures should not fail the run.
+     */
+    maxRetries?: number;
+    /**
+     * Restrict the run to specific tests by NAME (comma-separated). Resolved to
+     * IDs against the engine and applied as selectedTestIds — used by
+     * `rerun-failures` and ad-hoc selection. Unresolved names warn (non-fatal).
+     */
+    tests?: string;
+    /**
+     * Suite wall-clock budget in SECONDS (DR-D4). Once elapsed, dispatch of new
+     * tests stops and the run finalizes gracefully with partial results. Overrides
+     * TestSuite.MaxExecutionTimeMS; unset ⇒ that column (or unbounded).
+     */
+    maxSuiteDuration?: number;
+    /**
+     * Enable the circuit breaker (DR-D7): abort a doomed run early on a window of
+     * environment-class failures or a total failure cap. Default off.
+     */
+    circuitBreaker?: boolean;
+    /**
+     * Total-failure cap for the circuit breaker (any category). Default
+     * max(10, 25% of the suite). Only meaningful with --circuit-breaker.
+     */
+    maxFailures?: number;
 }
 
 /**
@@ -120,24 +149,25 @@ export interface ValidateFlags extends CommonFlags {
 }
 
 /**
- * Flags for report command
+ * Flags for report command (DR-G6). Produces a per-run aggregate + cross-run trend.
  */
 export interface ReportFlags extends CommonFlags {
+    /** Restrict to the named test suite (matched against the suite-run's denormalized Suite name). */
     suite?: string;
-    test?: string;
-    from?: string;
-    to?: string;
-    includeCosts?: boolean;
-    includeTrends?: boolean;
+    /** Report on this specific suite-run ID instead of the latest run. */
+    baseline?: string;
 }
 
 /**
- * Flags for history command
+ * Flags for history command (DR-G6). Produces per-test duration/flake history.
  */
 export interface HistoryFlags extends CommonFlags {
-    recent?: number;
-    from?: string;
-    status?: string;
+    /** Restrict to a single test by name. */
+    test?: string;
+    /** Restrict to runs belonging to the named suite. */
+    suite?: string;
+    /** Max recent test-run records to analyze (newest-first). Default 50. */
+    limit?: number;
 }
 
 /**

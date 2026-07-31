@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T116 - Home App Card Click Navigation",
+    "Description": "Exercises onAppClick() → NavigationService.SwitchToApp(app.ID) from the app-card grid — a distinct navigation entry point from the application-switcher dropdown covered elsewhere.",
+    "InputDefinition": {
+      "goal": "You are already logged in at http://localhost:4200. Go to the Home landing page (Home icon/logo or application switcher dropdown). Scroll to the 'My Applications' section and click one of the application cards (each shows an app icon, name, description, and a few nav-item chips). Verify that clicking the CARD navigates into that application — the workspace should switch to that app's view (a new/updated tab, the app's sections in the left nav, etc.), not just highlight the card. Success is that the app opens after clicking its card. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Clicking an application card in the 'My Applications' grid navigates into that application (its content/sections load)",
+        "The destination reflects the app that was clicked (title/sections match the chosen card)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,home"
+  },
+  "primaryKey": {
+    "ID": "105FD41D-201B-4E3C-BAA2-B7C4BD703690"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.800Z",
+    "checksum": "253a57add4a5b5d4b0011f614cf396357d425fc167e5fe10055bf30d110f247a"
+  }
+}

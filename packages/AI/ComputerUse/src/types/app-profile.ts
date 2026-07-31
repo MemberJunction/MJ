@@ -1,0 +1,133 @@
+/**
+ * Application profile — the layering-contract seam for app-specific signals
+ * (CU-A1/A2). `@memberjunction/computer-use` stays application-agnostic: it
+ * knows only how to *poll what the profile names*, never any specific app's
+ * selectors, routes, or marker text. Layer 2 (the driver / suite metadata)
+ * supplies the concrete values for the app under test — mirroring how
+ * Playwright's storageState / waitForFunction carry app specifics as data.
+ *
+ * All fields are optional; a run with no profile uses the engine's app-neutral
+ * defaults and still works (zero-config).
+ */
+
+/** Settle-loop tuning (CU-A1). All values have engine defaults. */
+export class SettleConfig {
+    /** Hard cap on the whole settle loop before we give up and perceive anyway. */
+    public MaxWaitMs: number = 30_000;
+    /** Interval between settle polls (marker / beacon / hash checks). */
+    public PollMs: number = 750;
+    /** Cap on the `networkidle` fast path (it can hang on long-poll/websocket apps). */
+    public NetworkIdleCapMs: number = 4_000;
+    /**
+     * Adaptive floor — always wait at least this long before the first
+     * perception, even if the page looks settled. 0 disables the floor.
+     */
+    public MinWaitMs: number = 0;
+}
+
+/**
+ * App-specific readiness/busy signals the settle loop consults. The engine
+ * merges {@link BusyMarkers} with its own app-neutral defaults
+ * (`[aria-busy="true"]`, `[role="progressbar"]`); the profile only *adds* to
+ * them. {@link ReadinessBeacon}, when present, is polled first and wins over
+ * all heuristics.
+ */
+export class AppProfile {
+    /**
+     * Additional CSS selectors that indicate the app is still busy/loading
+     * (e.g. an app's own spinner class). Merged with the engine's app-neutral
+     * defaults — never replaces them.
+     */
+    public BusyMarkers: string[] = [];
+
+    /**
+     * Optional readiness beacon: a CSS selector the settle loop polls FIRST,
+     * before any heuristic (CU-A2). When it matches, the page is declared
+     * ready. Apps that can *declare* readiness — e.g. by setting a `data-*`
+     * attribute on `<html>` when their active route finishes loading and
+     * clearing it on navigation, then naming that attribute's selector here —
+     * get deterministic, zero-cost readiness. Apps without a beacon fall back
+     * to the heuristics.
+     */
+    public ReadinessBeacon?: string;
+
+    /** Settle tuning; engine defaults apply when omitted. */
+    public Settle?: SettleConfig;
+
+    /** Loop-detection tuning (CU-B1); engine defaults apply when omitted. */
+    public Loop?: LoopConfig;
+
+    /**
+     * Auth-detour watchdog config (CU-B7); omitted → the watchdog is off. The
+     * engine stays app-agnostic — it only knows how to recognize the identity
+     * providers the profile names, never any specific one.
+     */
+    public Auth?: AuthDetourConfig;
+}
+
+/**
+ * Auth-detour watchdog tuning (CU-B7). When a run's session is invalidated
+ * mid-flight the page bounces to an identity provider (Auth0, Entra, Okta…);
+ * the agent would then burn ~10 steps re-consenting and the heuristics would
+ * mislabel it a navigation loop. The watchdog recognizes the bounce, recovers
+ * generically (re-apply auth + re-navigate to the start URL) without charging
+ * the agent a step or its time, and after {@link MaxDetours} bounces terminates
+ * the run as an infrastructure `AuthDetour` rather than grading the agent on it.
+ *
+ * App-specific (which identity providers this app uses), so it lives on the
+ * profile — the engine ships no provider list of its own.
+ */
+export class AuthDetourConfig {
+    /**
+     * Case-insensitive substrings identifying an identity-provider bounce,
+     * matched against the full current URL (e.g. `'auth0.com'`,
+     * `'login.microsoftonline.com'`, `'/u/consent'`). Empty → watchdog disabled.
+     */
+    public IdentityProviderPatterns: string[] = [];
+
+    /**
+     * Terminate the run as `Failed`/`AuthDetour` once this many detours have
+     * occurred in a single run (default 2). The first detours are recovered;
+     * exceeding the cap means recovery isn't holding — an environment fault, not
+     * an agent failure.
+     */
+    public MaxDetours: number = 2;
+}
+
+/** Loop-detection tuning (CU-B1). All values have engine defaults. */
+export class LoopConfig {
+    /**
+     * Query-param names that are volatile (per-visit tokens, timestamps, etc.)
+     * and must be stripped from the URL before it forms part of a state
+     * signature — otherwise every visit looks "new" and loops hide. App-specific,
+     * so it lives on the profile. The URL hash fragment is always stripped.
+     */
+    public VolatileParams: string[] = [];
+    /** Terminate the run once a loop has tripped this many times (default 3). */
+    public TerminateAfterTrips: number = 3;
+    /** A state signature seen this many times counts as a loop trip (default 3). */
+    public StateRepeatThreshold: number = 3;
+}
+
+/**
+ * Why the settle loop stopped waiting — recorded per step so controller/judge
+ * (and the CU-F5 classifier) can tell "waited then rendered" from "waited then
+ * gave up" (a candidate stall).
+ *
+ * - `beacon-ready`   — the declared readiness beacon appeared.
+ * - `marker-cleared` — all busy markers cleared and the frame was hash-stable.
+ * - `stable`         — no markers configured; the frame went hash-stable.
+ * - `networkidle`    — settled on the networkidle fast path (no further polling needed).
+ * - `budget`         — the settle budget expired while still busy/unstable (candidate stall).
+ * - `none`           — settle was effectively skipped (no page / disabled).
+ */
+export type SettleReason =
+    | 'beacon-ready'
+    | 'marker-cleared'
+    | 'stable'
+    | 'networkidle'
+    | 'budget'
+    | 'none';
+
+/** The engine's app-neutral busy markers, always checked regardless of profile. */
+export const DEFAULT_BUSY_MARKERS: readonly string[] = ['[aria-busy="true"]', '[role="progressbar"]'];

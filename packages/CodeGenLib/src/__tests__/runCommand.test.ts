@@ -119,5 +119,25 @@ describe('RunCommandsBase', () => {
                 expect(error).toBeDefined();
             }
         });
+
+        it('reports success on exit-0 even when the command prints "error" to stderr', async () => {
+            // Regression guard: a clean exit (code 0) must be reported as success even if
+            // the command writes the word "error" to stderr. Well-behaved tools emit benign
+            // "error" text on stderr (deprecation notices, diagnostic text, stack-trace
+            // headers) — e.g. MJ's ClassFactory "…so this becomes a hard error." fallback
+            // that `mj codegen manifest` prints during MJAPI's `npm run build`. Previously a
+            // substring-"ERROR" stderr scan flipped this to success:false, which made
+            // `mj codegen` exit 1 and broke the Docker db-setup / MJAPI-boot pipelines.
+            const command = {
+                command: 'sh',
+                args: ['-c', "'echo benign-error-text 1>&2; exit 0'"],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 0
+            };
+            const result = await runner.runCommand(command);
+            expect(result.success).toBe(true);
+            expect(result.output).toContain('benign-error-text');
+        });
     });
 });

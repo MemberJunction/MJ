@@ -1,0 +1,179 @@
+{
+  "TestId": "A7B930DE-6862-4160-AC7A-F8D0D70EC8C1",
+  "AppBuildHash": "454f1c42c7ee-dirty:3dd8345bcce2d83a",
+  "AppVersion": "",
+  "GoalHash": "14144965",
+  "RecordedAt": "2026-07-23T05:09:01.660Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "The 'Events' grid is already open. I will click the first row to open its preview, then I will click 'Open Full Record' to access the editable form.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Events",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "row",
+          "Name": "Dairy Farm Partnership Strategies",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[3]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/div[2]/ag-grid-angular[1]/div[3]/div[1]/div[2]/div[3]/div[1]/div[2]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 50,
+            "YMin": 328,
+            "XMax": 250,
+            "YMax": 368
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Events"
+      }
+    },
+    {
+      "Instruction": "The preview pane for the 'Dairy Farm Partnership Strategies' event is open. I will now click 'Open Full Record' to proceed to the editable form as per the plan.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Events",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[3]/mj-entity-record-detail-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 906,
+            "YMin": 664,
+            "XMax": 1265,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Events"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/record/Events/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The record is currently in read-only mode. I need to click the 'Edit this Record' (pencil icon) button to make the fields editable so I can change the 'Location' field.",
+      "UrlBefore": "http://localhost:4200/app/home/record/Events/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Edit this Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-associationdemoevent-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 16,
+            "YMin": 82,
+            "XMax": 65,
+            "YMax": 115
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/record/Events/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The record is in edit mode. I will now change the 'Location' field to 'Temporary Edit 204' as specified in the goal.",
+      "UrlBefore": "http://localhost:4200/app/home/record/Events/ID%7C{uuid}",
+      "Action": {
+        "Method": "type",
+        "Text": "Temporary Edit 204",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-associationdemoevent-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/div[1]/mj-collapsible-panel[1]/div[1]/div[2]/div[1]/mj-form-field[6]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 445,
+            "YMin": 459,
+            "XMax": 1027,
+            "YMax": 486
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/record/Events/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The 'Location' field has been updated to 'Temporary Edit 204' as seen in the screenshot. Now I need to discard the changes using the 'Discard' button in the editing banner.",
+      "UrlBefore": "http://localhost:4200/app/home/record/Events/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Discard Changes",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-associationdemoevent-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 1156,
+            "YMin": 76,
+            "XMax": 1264,
+            "YMax": 109
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/record/Events/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "A confirmation dialog 'Discard Changes?' has appeared after I clicked the 'Discard' button. I will now click the 'Discard Changes' button within this dialog to confirm the abandonment of the edit.",
+      "UrlBefore": "http://localhost:4200/app/home/record/Events/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Discard Changes",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-associationdemoevent-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[2]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 385,
+            "YMin": 422,
+            "XMax": 554,
+            "YMax": 455
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/record/Events/ID%7C{uuid}"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/home/record/Events/ID%7C{uuid}",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T108 - Knowledge Hub Configuration",
+    "Description": "Opens the Knowledge Hub Configuration screen once, then walks its inner settings sections (section nav + vector-setup stepper, thresholds edit with unsaved save bar, search-scopes master/detail manager), verifying each via checkpoints. Consolidates old T265, T266, T267.",
+    "InputDefinition": {
+      "goal": "Switch to the Knowledge Hub app (application switcher dropdown next to the logo) and click 'Configuration' in the left nav (fa-cogs icon). Then walk these inner settings sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) kh-config-nav — confirm the default section renders in the inner settings rail (Pipeline, Vector Database, Full-Text Indexes, Embedding Models, Thresholds, Search Scopes, etc.), then click 'Vector Database' and confirm it shows the 3-step setup progress (Providers / Embedding Model / Vector Indexes) with a completion count, then click another section (e.g. Pipeline) and confirm the inner content swaps while the outer header stays; (2) kh-thresholds-edit — open the 'Thresholds' section (range sliders: Duplicate Absolute Match, Duplicate Potential Match, Search Relevance, Autotag Confidence with live percentage labels), change one slider and confirm its percentage label updates AND an 'Unsaved changes' indicator plus a Save/Reset save bar appears, then click 'Reset' and confirm the unsaved-changes state clears (do NOT persist a save); (3) kh-search-scopes — open the 'Search Scopes' section (scope list on the left with a '+ New' button, detail area on the right), click an existing scope (or '+ New' for a draft) and confirm the detail area shows a tab strip (Definition / Providers / External Indexes / Entities / Storage / Permissions) with the Definition form (Name, Icon, Description, Status), then click across a couple of tabs and confirm the detail content changes (if no scopes exist, seeing the empty-state plus the New control is success). Keep going until every section has been exercised. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "kh-config-nav", "instruction": "navigate config sections + vector setup stepper", "visualCriteria": ["The Configuration screen loads with an inner settings rail that swaps inner content when a different section is clicked, and the Vector Database section shows the 3-step setup progress (Providers / Embedding Model / Vector Indexes) with a step completion count"] },
+        { "name": "kh-thresholds-edit", "instruction": "edit a threshold slider and reset the unsaved bar", "visualCriteria": ["The Thresholds section renders sliders with live percentage labels; changing a slider updates its label and surfaces an 'Unsaved changes' badge with a Save/Reset bar, and clicking Reset clears the unsaved state"] },
+        { "name": "kh-search-scopes", "instruction": "open the search-scopes master/detail manager", "visualCriteria": ["The Search Scopes section shows a scope list with a New control and a detail area; selecting (or creating) a scope reveals the Definition form plus a tab strip and switching tabs changes the detail content (a valid no-scopes empty state is acceptable)"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,knowledge-hub"
+  },
+  "primaryKey": { "ID": "FFF8945C-7170-4034-B305-1AA34B954A3B" }
+}

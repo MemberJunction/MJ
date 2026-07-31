@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T049 - Dashboard Rename Persist Round Trip",
+    "Description": "Exercises the edit-mode header with editingName/editingDescription inputs and the saveDashboard() persist-then-back-to-view code path, then verifies persistence in the list — distinct from create (T105) which only asserts creation, and from generic form field editing.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, open Data Explorer, then the Dashboards section. Create a new dashboard using the 'New' button (choose Dashboard) — it opens directly in edit mode with an editable name input at the top. Change the dashboard name to something distinctive like 'CU Test Rename', then click Save. After it returns to view mode, go back to the dashboard list and confirm the renamed dashboard appears with the new name. Success is the edited name persisting and showing in the list. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Edit mode shows an editable dashboard name input (and a description input) with Save and Cancel buttons",
+        "After typing a new name and clicking Save, the view returns to view mode without error",
+        "Returning to the dashboard list shows the dashboard listed under the new name (the rename persisted)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "8C022461-C144-4190-9FB7-F056A1D21E2C"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:56.956Z",
+    "checksum": "b4d5aa38dd9c0f8ff5f5adb30bc6eab3a8dedc558224163e42e5434a244f5235"
+  }
+}

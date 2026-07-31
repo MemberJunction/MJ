@@ -146,3 +146,21 @@ export function substituteVariables<T>(obj: T, values: Record<string, unknown>):
 
     return walk(obj) as T;
 }
+
+/**
+ * Return the distinct `{{key}}` placeholder names still present in a string
+ * after substitution (CU-F7). A non-empty result means variables the string
+ * referenced were never provided — the caller can fail fast with the missing
+ * keys instead of letting the literal `{{key}}` flow into a URL/goal and
+ * surface later as a mysterious navigation error.
+ */
+export function findUnresolvedPlaceholders(value: string | undefined): string[] {
+    if (!value) {
+        return [];
+    }
+    const keys = new Set<string>();
+    for (const match of value.matchAll(EMBEDDED)) {
+        keys.add(match[1]);
+    }
+    return [...keys];
+}

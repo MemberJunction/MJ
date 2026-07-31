@@ -39,6 +39,7 @@ import { HybridJudge } from '../judge/HybridJudge.js';
 import { ToolProvider } from '../tools/ToolProvider.js';
 import { ResponseParser } from './ResponseParser.js';
 import { RunContext } from './RunContext.js';
+import { computePerceptualHash, hashesSimilar } from '../utils/perceptual-hash.js';
 
 import { RunComputerUseParams, ModelConfig } from '../types/params.js';
 import { ComputerUseResult } from '../types/results.js';
@@ -51,19 +52,61 @@ import {
     NavigateAction,
     ClickAction,
     ScrollAction,
+    ElementInfo,
+    InteractiveElement,
 } from '../types/browser.js';
 import type { BrowserAction } from '../types/browser.js';
 import { ComputerUseAuthConfig } from '../types/auth.js';
+import { SettleConfig, DEFAULT_BUSY_MARKERS, LoopConfig } from '../types/app-profile.js';
+import type { SettleReason } from '../types/app-profile.js';
+import { resolveSettleExit } from './settle-decision.js';
+import { computeStateSignature, detectLoop, stateRepeatThresholdFor } from './loop-detection.js';
+import { evaluateAuthDetour } from './auth-detour.js';
+import { CancellationError, abortableDelay } from './cancellation.js';
+import { serializeInteractiveElements } from './element-serializer.js';
+import { evaluateBatchStop, DEFAULT_MAX_ACTIONS_PER_BATCH } from './batch-control.js';
+import { gateImpossibleVerdict, DEFAULT_IMPOSSIBLE_QUORUM } from './terminal-verdict.js';
+import { formatDiagnosticsDigest } from './diagnostics-digest.js';
+import { traceUrlMatches } from './trace-url.js';
+import {
+    planReplayActions,
+    evaluatePrecondition,
+    evaluatePostcondition,
+    targetSelector,
+} from './replay-step.js';
+import type { GuardResult } from './replay-step.js';
+import { reresolveTarget, shouldAcceptHeal, isSelectorHealable } from './heal-decision.js';
+import { executeGoalPostconditions } from './postcondition.js';
+import { evaluatePreludeLanding } from './prelude.js';
+import { makeJudgeCacheKey, JudgeVerdictCache } from './judge-cache.js';
+import { timeBudgetExpiryReason } from './time-budget.js';
+import {
+    isCheckpointRun,
+    latchDeterministic,
+    latchVisualFromVerdict,
+    unlatchedVisualCriteria,
+    allCheckpointsMet,
+    countMetCheckpoints,
+    synthesizeCheckpointVerdict,
+    findCheckpoint,
+    checkpointVisualCriteria,
+} from './checkpoint.js';
+import { hashGoal } from './trace-recorder.js';
+import { buildFailureMemo } from './failure-memo.js';
+import type { ComputerUseFailureReason } from '../types/results.js';
+import { ComputerUseTrace, ReplayInfo, ReplayStepResult, TraceStep, TraceAction, TraceTarget } from '../types/trace.js';
 import {
     JudgeContext,
     JudgeVerdict,
     StepRecord,
     EveryStepFrequency,
+    OnStagnationFrequency,
 } from '../types/judge.js';
 import type { JudgeFrequency } from '../types/judge.js';
 import {
     ControllerPromptRequest,
     ControllerPromptResponse,
+    ControllerCheckpointInfo,
     JudgePromptRequest,
     JudgePromptResponse,
 } from '../types/controller.js';
@@ -80,8 +123,14 @@ export class ComputerUseEngine {
     protected authHandler: AuthHandler;
     protected toolProvider: ToolProvider;
 
-    /** Whether Stop() has been called — checked at the top of each step */
+    /** Whether Stop() has been called — checked at the top of each step and at
+     *  the finer-grained checkpoints inside a step (CU-B8). */
     protected cancelled: boolean = false;
+
+    /** Aborted by Stop() (CU-B8) so in-flight LLM calls and settle/backoff
+     *  delays return promptly instead of holding a worker slot to step's end.
+     *  Recreated per Run() so a reused engine instance starts un-aborted. */
+    private abortController: AbortController = new AbortController();
 
     /** Whether this engine owns its browser adapter lifecycle (Launch/Close) */
     private _ownsAdapter: boolean = true;
@@ -116,6 +165,7 @@ export class ComputerUseEngine {
      */
     public async Run(params: RunComputerUseParams): Promise<ComputerUseResult> {
         this.cancelled = false;
+        this.abortController = new AbortController();
         this.activeParams = params;
         const context = new RunContext(params);
 
@@ -126,22 +176,65 @@ export class ComputerUseEngine {
         this.log(`  JudgeModel: ${params.JudgeModel ? `${params.JudgeModel.Vendor}:${params.JudgeModel.Model}` : '(not set — will use executeJudgePrompt override or heuristics only)'}`);
         this.log(`  Tools: ${params.Tools?.length ?? 0} registered`);
 
+        let result: ComputerUseResult | undefined;
         try {
             this.initializeComponents(params);
             await this.launchBrowser(params);
             this.log('Browser launched');
+            await this.applyContextSeed(params);
+            await this.startTracingIfRequested(params);
             await this.runGlobalAuthCallback();
             await this.navigateToStartUrl(params, context);
             if (params.StartUrl) {
                 this.log(`Navigated to start URL: ${context.CurrentUrl}`);
             }
-            return await this.executeMainLoop(context);
+            await this.runPrelude(context);
+            result = await this.executeMainLoop(context);
+            return result;
         } catch (error) {
             this.logError('Run failed with error', error);
-            return this.buildErrorResult(context, error);
+            result = this.buildErrorResult(context, error);
+            return result;
         } finally {
+            // Stop the trace (if any) BEFORE the context closes, stamping the
+            // path on the result so the caller can retain-or-discard (CU-F4).
+            await this.stopTracingIfRequested(params, result);
             await this.closeBrowser();
             this.log('Browser closed');
+        }
+    }
+
+    /** Start a forensic trace when the caller requested one via TracePath (CU-F4). Best-effort. */
+    private async startTracingIfRequested(params: RunComputerUseParams): Promise<void> {
+        if (!params.TracePath) {
+            return;
+        }
+        try {
+            await this.browserAdapter.StartTracing();
+        } catch (error) {
+            this.logError('Failed to start tracing (continuing without a trace)', error);
+        }
+    }
+
+    /**
+     * Stop a trace started for this run and, if a file was written, stamp its
+     * path on the result. The caller (driver) owns the retain-or-discard policy
+     * (CU-F4) — the engine only produces the artifact. Best-effort: never throws.
+     */
+    private async stopTracingIfRequested(
+        params: RunComputerUseParams,
+        result: ComputerUseResult | undefined
+    ): Promise<void> {
+        if (!params.TracePath) {
+            return;
+        }
+        try {
+            const wrote = await this.browserAdapter.StopTracing(params.TracePath);
+            if (wrote && result) {
+                result.TracePath = params.TracePath;
+            }
+        } catch (error) {
+            this.logError('Failed to stop tracing', error);
         }
     }
 
@@ -156,12 +249,90 @@ export class ComputerUseEngine {
     }
 
     /**
-     * Request cancellation of a running run.
-     * The engine checks this flag at the top of each step.
-     * Cancellation is cooperative — the current step will finish.
+     * Inject a shared judge-verdict cache (CU-C5.3). When set, the engine reuses
+     * a cached verdict for an identical (goal, URL, visible-state) key instead of
+     * calling the LLM judge — the cross-attempt generalization of CU-G5's
+     * within-run gating. The driver owns the instance so verdicts survive attempt
+     * boundaries; unset → no cross-attempt caching (behavior unchanged).
+     */
+    public SetJudgeCache(cache: JudgeVerdictCache): void {
+        this.judgeCache = cache;
+    }
+    private judgeCache?: JudgeVerdictCache;
+
+    /**
+     * Request cancellation of a running run. Cooperative: sets the flag the
+     * engine's checkpoints observe AND aborts the shared signal so in-flight LLM
+     * calls and settle/backoff delays return promptly (CU-B8). The run unwinds
+     * to a `Cancelled` result within seconds — at the next checkpoint — rather
+     * than running the current step to completion.
      */
     public Stop(): void {
         this.cancelled = true;
+        this.abortController.abort();
+    }
+
+    /**
+     * Cooperative-cancellation checkpoint (CU-B8): throw {@link CancellationError}
+     * if the run has been stopped. Placed after each long await (settle, LLM,
+     * actions, judge) so the step unwinds promptly; the main loop maps the throw
+     * to a single clean `Cancelled` status.
+     */
+    private ensureNotCancelled(): void {
+        if (this.cancelled) {
+            throw new CancellationError();
+        }
+    }
+
+    /**
+     * Replay a recorded trace deterministically (CU-C2) — the flagship execution
+     * tier. Same browser lifecycle as {@link Run}, but each step is driven by the
+     * recorded trajectory instead of an LLM: settle → precondition (bounded wait
+     * for the target; **fail the step on timeout — never proceed anyway**) →
+     * locator-based action with Playwright auto-wait → postcondition assert.
+     * Replay steps consume ZERO LLM budget and run at Playwright speed.
+     *
+     * Fail-fast: the first step that can't be satisfied consults the heal seam
+     * ({@link healReplayStep}, a no-op at this layer until CU-C3) and, if it
+     * can't heal, ends the run `Failed` with the divergence recorded on
+     * {@link ComputerUseResult.Replay}. All-steps-hit ends `Completed`. Never
+     * throws — errors return in the result, exactly like {@link Run}.
+     */
+    public async Replay(trace: ComputerUseTrace, params: RunComputerUseParams): Promise<ComputerUseResult> {
+        this.cancelled = false;
+        this.abortController = new AbortController();
+        this.activeParams = params;
+        const context = new RunContext(params);
+        const replay = new ReplayInfo();
+
+        this.log(`Replay starting — Test ${trace.TestId}, ${trace.Steps.length} recorded steps`);
+
+        let result: ComputerUseResult | undefined;
+        try {
+            this.initializeComponents(params);
+            await this.launchBrowser(params);
+            await this.applyContextSeed(params);
+            await this.startTracingIfRequested(params);
+            await this.runGlobalAuthCallback();
+            await this.navigateToStartUrl(params, context);
+            result = await this.executeReplayLoop(trace, context, replay);
+            return result;
+        } catch (error) {
+            if (error instanceof CancellationError) {
+                this.log('Replay cancelled mid-step (CU-B8) — returning Cancelled');
+                result = this.buildResult(context, 'Cancelled', false);
+                result.Replay = replay;
+                return result;
+            }
+            this.logError('Replay failed with error', error);
+            result = this.buildErrorResult(context, error);
+            result.Replay = replay;
+            return result;
+        } finally {
+            await this.stopTracingIfRequested(params, result);
+            await this.closeBrowser();
+            this.log('Browser closed');
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -197,11 +368,29 @@ export class ComputerUseEngine {
     }
 
     /**
+     * Focused LLM disambiguation seam for a heal (CU-C3, leg 1b). Called ONLY
+     * when the deterministic role+name re-resolution is ambiguous (multiple
+     * candidates) or failed. A subclass with an LLM controller overrides this to
+     * ask a cheap model "given these elements + this instruction, which index is
+     * the intended target?" and return `{ index, confidence }`. The base layer
+     * has no model, so it returns confidence 0 (no disambiguation) — heal then
+     * only succeeds on the deterministic path.
+     */
+    protected async healTargetViaLLM(_request: {
+        instruction: string;
+        goal: string;
+        elements: InteractiveElement[];
+        recorded: TraceTarget;
+    }): Promise<{ index?: number; confidence: number }> {
+        return { confidence: 0 };
+    }
+
+    /**
      * Hook: called after each step completes.
      * Override for logging, persistence, or real-time monitoring.
      */
     protected onStepComplete(_step: StepRecord, _params: RunComputerUseParams): void {
-        
+
     }
 
     /**
@@ -256,7 +445,13 @@ export class ComputerUseEngine {
      * the judge and the engine.
      */
     private initializeJudge(params: RunComputerUseParams): void {
-        const heuristicJudge = new HeuristicJudge();
+        // Wire the OnStagnation threshold through to the heuristic judge (CU-B2).
+        // Previously this parsed config was dropped on the floor and the judge
+        // always used its default threshold.
+        const frequency = params.JudgeFrequency;
+        const heuristicJudge = frequency instanceof OnStagnationFrequency
+            ? new HeuristicJudge(frequency.StagnationThreshold)
+            : new HeuristicJudge();
         const llmJudge = new LLMJudge(
             (request) => this.executeJudgePrompt(request),
             params.JudgePrompt
@@ -285,6 +480,26 @@ export class ComputerUseEngine {
         this.populateInitialLocalStorage(config, params);
 
         await this.browserAdapter.Launch(config);
+    }
+
+    /**
+     * Restore a warm-seed snapshot (CU-G4) into the freshly-launched context,
+     * before navigation, so the app doesn't cold-boot its metadata cache. The
+     * adapter's SeedContext is best-effort and cold-boot-safe; this wrapper only
+     * skips it when no seed was supplied and never lets a seed failure abort the
+     * run.
+     */
+    private async applyContextSeed(params: RunComputerUseParams): Promise<void> {
+        const seed = params.ContextSeed;
+        if (!seed) {
+            return;
+        }
+        try {
+            this.log(`Restoring warm-seed context snapshot for ${seed.Origin} (CU-G4)`);
+            await this.browserAdapter.SeedContext(seed);
+        } catch (error) {
+            this.logError('Context seed restore failed (falling back to a cold boot)', error);
+        }
     }
 
     /**
@@ -337,8 +552,13 @@ export class ComputerUseEngine {
             // cache from this test deadlocks the next test's app boot.
             // Auth tokens in localStorage are preserved so the next test
             // doesn't have to re-login.
+            //
+            // EXCEPTION (CU-G3): when the context is ephemeral (destroyed right
+            // after this run, not recycled), the scrub is pure waste — it
+            // re-navigates to the app origin, triggering another full app boot,
+            // in a context that's about to be thrown away. Skip it.
             const startUrl = this.activeParams?.StartUrl;
-            if (startUrl) {
+            if (startUrl && !this.activeParams?.EphemeralContext) {
                 try {
                     const origin = new URL(startUrl).origin;
                     await this.browserAdapter.ResetStatePreservingAuth(origin);
@@ -400,6 +620,65 @@ export class ComputerUseEngine {
         context.CurrentUrl = this.browserAdapter.CurrentUrl;
     }
 
+    // ─── Deterministic Prelude (CU-C6) ─────────────────────
+
+    /**
+     * Run the scripted deterministic prelude (CU-C6) before the agentic loop:
+     * execute each recorded action straight through the adapter (nav guard +
+     * auth via {@link executeSingleBrowserAction}), zero LLM. Then verify it
+     * reached the declared landing. Best-effort: a landing miss is logged as a
+     * warning and the run proceeds (the agentic loop + judge can still recover);
+     * the driver inspects the log to decide policy. Never throws.
+     */
+    private async runPrelude(context: RunContext): Promise<void> {
+        const prelude = context.Params.Prelude;
+        if (!prelude || prelude.Actions.length === 0) {
+            return;
+        }
+        this.log(`Running deterministic prelude — ${prelude.Actions.length} scripted actions (zero LLM, CU-C6)`);
+        try {
+            for (const action of prelude.Actions) {
+                this.ensureNotCancelled();
+                const result = await this.executeSingleBrowserAction(action, context);
+                if (!result.Success) {
+                    this.logError(`Prelude action ${action.Type} failed: ${result.Error ?? 'unknown'}`);
+                }
+            }
+            context.CurrentUrl = this.browserAdapter.CurrentUrl;
+            await this.verifyPreludeLanding(prelude, context);
+        } catch (error) {
+            if (error instanceof CancellationError) {
+                throw error;
+            }
+            this.logError('Prelude execution failed (continuing to the agentic loop)', error);
+        }
+    }
+
+    /** Verify the prelude reached its declared landing (selector visible / URL matched). */
+    private async verifyPreludeLanding(
+        prelude: NonNullable<RunComputerUseParams['Prelude']>,
+        context: RunContext
+    ): Promise<void> {
+        const hasSelector = prelude.ExpectSelector !== undefined;
+        const hasUrl = prelude.ExpectUrlPattern !== undefined;
+        if (!hasSelector && !hasUrl) {
+            return;
+        }
+        const volatile = context.Params.AppProfile?.Loop?.VolatileParams ?? [];
+        const selectorVisible = hasSelector
+            ? await this.waitForTargetVisible(prelude.ExpectSelector!, ComputerUseEngine.REPLAY_PRECONDITION_TIMEOUT_MS)
+            : false;
+        const urlMatched = hasUrl
+            ? traceUrlMatches(prelude.ExpectUrlPattern!, this.browserAdapter.CurrentUrl, volatile)
+            : false;
+        const landing = evaluatePreludeLanding({ hasSelector, selectorVisible, hasUrl, urlMatched });
+        if (!landing.landed) {
+            this.logError(`Prelude landing check failed — ${landing.reason} (agent will start from the current page; CU-C6)`);
+        } else {
+            this.log('Prelude landed as expected (CU-C6)');
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════
     // MAIN LOOP
     // ═══════════════════════════════════════════════════════════
@@ -418,25 +697,121 @@ export class ComputerUseEngine {
     /** Max consecutive steps with 0 actions before the engine aborts */
     private static readonly MAX_CONSECUTIVE_EMPTY_STEPS = 3;
 
+    private static readonly MAX_CONSECUTIVE_JUDGE_DISAGREEMENTS = 3;
+
     private async executeMainLoop(context: RunContext): Promise<ComputerUseResult> {
+        this.warnOnCheckpointMisconfig(context);
         let lastVerdict: JudgeVerdict | undefined;
         let consecutiveEmptySteps = 0;
+        let consecutiveJudgeDisagreements = 0;
+        // Cumulative engine-side settle wait, excluded from the agent-time budget
+        // so a slow app doesn't consume the agent's reasoning time (CU-B4/A1).
+        let cumulativeSettleMs = 0;
+        // Loop detection (CU-B1): per-step state signatures + an escalating trip counter.
+        const loopCfg = context.Params.AppProfile?.Loop ?? new LoopConfig();
+        const stateRepeatThreshold = this.effectiveStateRepeatThreshold(context, loopCfg);
+        // A multi-section tour alternates hub→section→hub→section, which IS a 2-state
+        // cycle — so the cycle arm needs the same tolerance as the repeat arm, or it
+        // fires on the tour's normal shape (T038 died at step 12 of 90 that way).
+        const cycleRepeatThreshold = stateRepeatThreshold > loopCfg.StateRepeatThreshold ? 3 : 2;
+        const stateSignatures: string[] = [];
+        let loopTrips = 0;
+        // Terminal-verdict guard (CU-D6): concurring Impossible verdicts needed before we accept one.
+        let impossibleCount = 0;
 
         for (let stepNumber = 1; stepNumber <= context.Params.MaxSteps; stepNumber++) {
             // Check cancellation
             if (this.cancelled) {
-                return this.buildResult(context, 'Cancelled', false, lastVerdict);
+                return this.buildResult(context, 'Cancelled', false, this.terminalVerdict(context, lastVerdict));
             }
 
-            // Execute one step
-            const step = await this.executeSingleStep(context, stepNumber);
+            // Auth-detour watchdog (CU-B7): if the session was invalidated and
+            // the page bounced to an identity provider, recover it here —
+            // BEFORE perceiving — so the step runs against the recovered app,
+            // not the login page. No step and no agent-time is charged for the
+            // detour (recovery time is accounted as settle). After MaxDetours
+            // the recovery clearly isn't holding, so we terminate as an
+            // infrastructure AuthDetour instead of grading the agent on it.
+            const authResult = await this.handleAuthDetour(context, stepNumber, lastVerdict);
+            if (authResult.result) {
+                return authResult.result;
+            }
+            cumulativeSettleMs += authResult.recoveryMs;
+
+            // Time budget (CU-B4): never START a step past budget. Two bounds —
+            // agent-time (settle excluded) AND a wall-clock ceiling that expires a
+            // settle-heavy run HERE, gracefully, instead of letting it blow past
+            // into the TestEngine watchdog (which abandons it as an unscored infra
+            // Error). Graceful expiry runs one forced final judge so the run is
+            // scored on the real end-state, not zeroed (pairs with CU-D4).
+            const budgetExpiry = this.timeBudgetExpiry(context, cumulativeSettleMs);
+            if (budgetExpiry) {
+                this.log(`Time budget exceeded — ${budgetExpiry} — before step ${stepNumber}; expiring gracefully`);
+                const verdict = await this.finalVerdictOnTermination(context, stepNumber, lastVerdict);
+                const result = this.buildResult(context, 'TimeBudgetExceeded', false, verdict);
+                this.onRunComplete(result);
+                return result;
+            }
+
+            // Execute one step. A Stop() mid-step unwinds as a CancellationError
+            // (CU-B8) — catch it here and return a single clean Cancelled result
+            // rather than letting it surface as an infrastructure Error.
+            let step: StepRecord;
+            try {
+                step = await this.executeSingleStep(context, stepNumber);
+            } catch (error) {
+                if (error instanceof CancellationError) {
+                    this.log('Run cancelled mid-step (CU-B8) — returning Cancelled');
+                    return this.buildResult(context, 'Cancelled', false, this.terminalVerdict(context, lastVerdict));
+                }
+                throw error;
+            }
+            cumulativeSettleMs += step.SettleMs;
             context.AddStep(step);
             this.onStepComplete(step, context.Params);
 
-            // Track consecutive steps with no actions and no tool calls
-            if (step.ActionsRequested.length === 0 && step.ToolCalls.length === 0) {
+            // Checkpoint tour (CU-D8): latch sections whose deterministic
+            // assertions (free, every step) or this step's visual-criteria judge
+            // verdict now hold. When every checkpoint is met, the tour is complete
+            // — scored on the synthesized latch verdict, not a single end-state judge.
+            if (isCheckpointRun(context.Params.Checkpoints)) {
+                const metBefore = countMetCheckpoints(context.Params.Checkpoints, context.CheckpointState);
+                this.updateCheckpointLatches(context, step);
+                if (step.JudgeVerdict) {
+                    latchVisualFromVerdict(context.Params.Checkpoints, context.CheckpointState, step.JudgeVerdict, stepNumber);
+                }
+                // A newly-latched checkpoint IS progress, so the loop detectors
+                // must start over (CU-D8 × CU-B1). Without this, a tour dies on
+                // its own script: the detectors define a loop as revisiting a
+                // state "with no progress", but they only perceive pixels + URL,
+                // and a tour legitimately returns to prior states (open→cancel,
+                // "click History then click Review Queue to switch back"). Tests
+                // were being killed as LoopDetected several steps AFTER the judge
+                // had confirmed a section complete.
+                const metAfter = countMetCheckpoints(context.Params.Checkpoints, context.CheckpointState);
+                if (metAfter > metBefore) {
+                    stateSignatures.length = 0;
+                    loopTrips = 0;
+                    context.LoopEvidence = undefined;
+                    this.log(`Step ${stepNumber} — checkpoint progress (${metBefore} → ${metAfter}); loop detection reset (CU-D8)`);
+                }
+                if (allCheckpointsMet(context.Params.Checkpoints, context.CheckpointState)) {
+                    const verdict = synthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
+                    this.log(`Step ${stepNumber} — all ${context.Params.Checkpoints.length} checkpoints reached; completing (CU-D8)`);
+                    const result = this.buildResult(context, 'Completed', true, verdict);
+                    this.onRunComplete(result);
+                    return result;
+                }
+            }
+
+            // Track consecutive steps where the controller produced NOTHING to do.
+            // A step that requested judgement (a deliberate "am I done?" checkpoint)
+            // or that errored is NOT a misconfigured/stuck empty step, so it must
+            // not count toward the "controller produced no actions" abort (CU-B3).
+            const producedNothing = step.ActionsRequested.length === 0 && step.ToolCalls.length === 0;
+            if (producedNothing && !step.RequestedJudgement && !step.CheckpointReached && !step.Error) {
                 consecutiveEmptySteps++;
-                const abortResult = this.buildEmptyStepAbortResult(consecutiveEmptySteps, context, lastVerdict);
+                const abortResult = this.buildEmptyStepAbortResult(consecutiveEmptySteps, context, this.terminalVerdict(context, lastVerdict));
                 if (abortResult) return abortResult;
             } else {
                 consecutiveEmptySteps = 0;
@@ -447,28 +822,351 @@ export class ComputerUseEngine {
                 lastVerdict = step.JudgeVerdict;
                 context.LastJudgeFeedback = step.JudgeVerdict.Feedback;
 
-                // If the judge says done, we're done
-                if (step.JudgeVerdict.Done) {
-                    const result = this.buildResult(context, 'Completed', true, lastVerdict);
+                // Judge-driven termination is bypassed in a checkpoint tour (CU-D8):
+                // the judge scores only unlatched visual criteria (latched in the
+                // checkpoint block above), so its Done/Impossible describe those
+                // criteria, NOT the whole tour — completion is decided by the latch
+                // check above.
+                if (!isCheckpointRun(context.Params.Checkpoints)) {
+                    // If the judge says done, we're done
+                    if (step.JudgeVerdict.Done) {
+                        const result = this.buildResult(context, 'Completed', true, lastVerdict);
+                        this.onRunComplete(result);
+                        return result;
+                    }
+
+                    // Impossible guard (CU-D6): don't end on a single sample. Require a
+                    // quorum of concurring Impossible verdicts across ≥2 steps, and never
+                    // accept Impossible while the page is still loading (settle gave up as
+                    // 'budget') — a boot screen is not evidence the goal is impossible.
+                    const impossibleGate = gateImpossibleVerdict({
+                        impossible: step.JudgeVerdict.Impossible,
+                        pageLoading: step.SettleReason === 'budget',
+                        priorCount: impossibleCount,
+                        quorum: DEFAULT_IMPOSSIBLE_QUORUM,
+                    });
+                    impossibleCount = impossibleGate.newCount;
+                    if (impossibleGate.suppressed) {
+                        this.log(`Step ${stepNumber} — judge said impossible but the page is still loading; not accepting it (CU-D6)`);
+                    } else if (step.JudgeVerdict.Impossible && !impossibleGate.accept) {
+                        this.log(`Step ${stepNumber} — impossible verdict ${impossibleCount}/${DEFAULT_IMPOSSIBLE_QUORUM}; need a concurring verdict before ending (CU-D6)`);
+                    } else if (impossibleGate.accept) {
+                        this.log(`Step ${stepNumber} — goal confirmed impossible (${impossibleCount} concurring verdicts): ${step.JudgeVerdict.Reason}`);
+                        const result = this.buildResult(context, 'Impossible', false, lastVerdict);
+                        this.onRunComplete(result);
+                        return result;
+                    }
+                }
+            }
+
+            // If the controller keeps parking on "I'm done / it's blocked" (no
+            // actions, requested judgement) but the judge keeps disagreeing, that
+            // is a genuine, truthful Failed outcome — not an infrastructure Error
+            // and not worth burning the rest of the step budget (CU-B3).
+            if (!isCheckpointRun(context.Params.Checkpoints) &&
+                producedNothing && step.RequestedJudgement && step.JudgeVerdict &&
+                !step.JudgeVerdict.Done && !step.JudgeVerdict.Impossible) {
+                consecutiveJudgeDisagreements++;
+                if (consecutiveJudgeDisagreements >= ComputerUseEngine.MAX_CONSECUTIVE_JUDGE_DISAGREEMENTS) {
+                    this.log(`Step ${stepNumber} — controller declared completion ${consecutiveJudgeDisagreements}× but the judge disagreed each time; ending as Failed (CU-B3)`);
+                    const result = this.buildResult(context, 'Failed', false, lastVerdict);
                     this.onRunComplete(result);
                     return result;
                 }
+            } else {
+                consecutiveJudgeDisagreements = 0;
+            }
 
-                // If the judge says the goal is impossible, stop immediately
-                if (step.JudgeVerdict.Impossible) {
-                    this.log(`Step ${stepNumber} — judge determined the goal is impossible: ${step.JudgeVerdict.Reason}`);
-                    const result = this.buildResult(context, 'Impossible', false, lastVerdict);
-                    this.onRunComplete(result);
-                    return result;
+            // Loop detection (CU-B1): every step, free. Suppressed while the page
+            // is still booting (settle gave up as 'budget') — waiting on a boot
+            // screen is correct recovery, not a loop (the CU-B2 contradiction fix).
+            if (step.SettleReason !== 'budget') {
+                const signature = computeStateSignature(step.UrlAfter, step.ScreenshotHash, loopCfg.VolatileParams);
+                stateSignatures.push(signature);
+                const loop = detectLoop(stateSignatures, stateRepeatThreshold, cycleRepeatThreshold);
+                if (loop) {
+                    loopTrips++;
+                    if (loopTrips >= loopCfg.TerminateAfterTrips) {
+                        // A truthful early verdict beats 20 more wasted steps.
+                        this.log(`Step ${stepNumber} — loop persisted ${loopTrips} trips (${loop.kind}); terminating as Failed/LoopDetected (CU-B1)`);
+                        const verdict = await this.finalVerdictOnTermination(context, stepNumber, lastVerdict);
+                        const result = this.buildResult(context, 'Failed', false, verdict, 'LoopDetected');
+                        this.onRunComplete(result);
+                        return result;
+                    }
+                    // Earlier trips: inject engine-computed evidence into the next prompt.
+                    context.LoopEvidence = loop.detail;
+                    this.log(`Step ${stepNumber} — loop trip ${loopTrips}/${loopCfg.TerminateAfterTrips} (${loop.kind}): ${loop.detail}`);
+                } else {
+                    // Progress made — clear loop state so stale evidence doesn't linger.
+                    loopTrips = 0;
+                    context.LoopEvidence = undefined;
                 }
             }
         }
 
-        // Exhausted all steps without completion
+        // Exhausted all steps without completion. Force a fresh final judge so
+        // the verdict reflects the true end-state (it may be up to a few steps
+        // stale) and the run is scored on evidence (CU-B4.3 / CU-D4).
         this.log(`Run exhausted all ${context.Params.MaxSteps} steps without completion`);
-        const result = this.buildResult(context, 'MaxStepsReached', false, lastVerdict);
+        const finalVerdict = await this.finalVerdictOnTermination(context, context.Params.MaxSteps, lastVerdict);
+        const result = this.buildResult(context, 'MaxStepsReached', false, finalVerdict);
         this.onRunComplete(result);
         return result;
+    }
+
+    /**
+     * How many times one page state may recur before it counts as a loop trip.
+     *
+     * Scales with how many distinct things the goal asks for — checkpoints for a
+     * tour, validation criteria otherwise — because revisiting a state is a
+     * STRUCTURAL consequence of a multi-part goal, not evidence of being stuck:
+     *
+     *  - Tours are hub-and-spoke. Walking N sections means returning to the same hub
+     *    up to N times, so at the base threshold of 3 the hub ALONE trips the
+     *    detector on any tour of 4+ sections (T045/T102/T115/T120 died at steps
+     *    13/10/20/29 of budgets of 45/65/90/65).
+     *  - Multi-criteria goals do the same thing without being tours. "Clicking a
+     *    metric card navigates to a different view" means go-and-come-back (T058),
+     *    and "clearing the filter RESTORES the fuller list" (T124) asks the agent to
+     *    return to an earlier state *as the pass condition* — the detector cannot
+     *    tell that apart from spinning.
+     *
+     * So the allowance is one revisit per requested item plus the base tolerance,
+     * which makes the step and time budgets the real backstop — what they are for.
+     * `TerminateAfterTrips` is deliberately left alone so a genuinely wedged run
+     * still ends early instead of burning its whole budget.
+     */
+    private effectiveStateRepeatThreshold(context: RunContext, loopCfg: LoopConfig): number {
+        const checkpointCount = isCheckpointRun(context.Params.Checkpoints)
+            ? context.Params.Checkpoints.length
+            : 0;
+        const criteriaCount = context.Params.ValidationCriteria?.length ?? 0;
+        const requestedParts = Math.max(checkpointCount, criteriaCount);
+        const allowance = stateRepeatThresholdFor(loopCfg.StateRepeatThreshold, requestedParts);
+        if (allowance !== loopCfg.StateRepeatThreshold) {
+            this.log(
+                `Goal has ${requestedParts} requested part(s) (${checkpointCount ? 'checkpoints' : 'criteria'}): ` +
+                `loop state-repeat threshold ${loopCfg.StateRepeatThreshold} → ${allowance} ` +
+                `(revisiting a state is structural in a multi-part goal)`
+            );
+        }
+        return allowance;
+    }
+
+    /**
+     * Why the run must expire now (CU-B4), or null when within budget. Delegates
+     * to the pure {@link timeBudgetExpiryReason}: agent-time (settle excluded, so
+     * a slow-to-render app doesn't burn reasoning budget) OR a wall-clock ceiling
+     * (total elapsed, so a settle-heavy run expires gracefully here instead of
+     * being abandoned by the TestEngine watchdog). Returns null when no budget is
+     * configured.
+     */
+    private timeBudgetExpiry(context: RunContext, cumulativeSettleMs: number): string | null {
+        return timeBudgetExpiryReason(context.ElapsedMs, cumulativeSettleMs, context.Params.MaxExecutionTimeMs);
+    }
+
+    // ─── Checkpoint Tour (CU-D8) ───────────────────────────
+
+    /**
+     * One-time setup warnings for a checkpoint tour, so a silently-never-latching
+     * tour is surfaced rather than mysterious: `visible`/`absent` assertions need
+     * the extracted element list (ElementGrounding), and a checkpoint declaring no
+     * checks at all latches vacuously.
+     */
+    private warnOnCheckpointMisconfig(context: RunContext): void {
+        if (!isCheckpointRun(context.Params.Checkpoints)) {
+            return;
+        }
+        const grounding = context.Params.ElementGrounding === true;
+        for (const cp of context.Params.Checkpoints) {
+            const asserts = cp.Assertions ?? [];
+            const visual = cp.VisualCriteria ?? [];
+            if (asserts.length === 0 && visual.length === 0) {
+                this.log(`WARNING: checkpoint "${cp.Name}" declares no assertions or visual criteria — it latches vacuously (CU-D8)`);
+            }
+            if (!grounding && asserts.some(a => a.Kind === 'visible' || a.Kind === 'absent')) {
+                this.log(`WARNING: checkpoint "${cp.Name}" has visible/absent assertions but ElementGrounding is off — those never latch; use url assertions or enable ElementGrounding (CU-D8)`);
+            }
+        }
+    }
+
+    /**
+     * Latch tour checkpoints whose deterministic assertions hold against the
+     * step's end-state. Free (no LLM) — safe to call every step. `url` assertions
+     * always evaluate; `visible`/`absent` need the extracted element list (present
+     * only with {@link RunComputerUseParams.ElementGrounding}). Visual criteria
+     * latch separately, from the judge verdict.
+     */
+    private updateCheckpointLatches(context: RunContext, step: StepRecord): void {
+        const checkpoints = context.Params.Checkpoints ?? [];
+        const volatileParams = context.Params.AppProfile?.Loop?.VolatileParams ?? [];
+        const elements = step.InteractiveElements;
+        // Both URLs are states the run genuinely passed through this step. Latching
+        // the BEFORE url too matters on the replay tier, where one step can carry
+        // the whole transition between two tour sections (A → B): scoring only the
+        // after-url would silently never satisfy section A.
+        const urls = [step.UrlBefore, step.UrlAfter].filter(Boolean);
+        if (urls.length === 0) {
+            urls.push(context.CurrentUrl);
+        }
+        for (const url of new Set(urls)) {
+            latchDeterministic(checkpoints, context.CheckpointState, { url, elements, volatileParams }, step.StepNumber);
+        }
+    }
+
+    /**
+     * The criteria the judge should evaluate this call.
+     *
+     * In a checkpoint tour (CU-D8): when the controller signaled a specific
+     * checkpoint this step (Phase B), scope to THAT checkpoint's not-yet-latched
+     * visual criteria — verified against the frame it's actually on, with no
+     * cross-contamination from other sections. Otherwise (a scheduled/cadence
+     * call, the safety net) use the union of all not-yet-latched visual criteria.
+     * Empty ⇒ the judge is skipped, so a pure-deterministic tour costs zero judge
+     * calls. Non-tour runs use the authored {@link RunComputerUseParams.ValidationCriteria}.
+     */
+    private activeJudgeCriteria(context: RunContext, signaledCheckpoint?: string): string[] | undefined {
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            const scoped = signaledCheckpoint
+                ? checkpointVisualCriteria(context.Params.Checkpoints, context.CheckpointState, signaledCheckpoint)
+                : unlatchedVisualCriteria(context.Params.Checkpoints, context.CheckpointState);
+            return scoped.length > 0 ? scoped : undefined;
+        }
+        return context.Params.ValidationCriteria;
+    }
+
+    /**
+     * Verdict for a non-completion terminal (MaxSteps/TimeBudget/Loop). A
+     * checkpoint tour is scored on its latch state — synthesize it (no LLM);
+     * otherwise force a fresh final judge so the verdict reflects the true
+     * end-state (CU-B4.3 / CU-D4).
+     */
+    private async finalVerdictOnTermination(
+        context: RunContext,
+        stepNumber: number,
+        lastVerdict?: JudgeVerdict
+    ): Promise<JudgeVerdict | undefined> {
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            return synthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
+        }
+        return this.forceFinalJudge(context, stepNumber, lastVerdict);
+    }
+
+    /**
+     * Score a partial checkpoint tour from its latches on an abrupt terminal
+     * (Cancelled, empty-step abort) so the run isn't zeroed as "no verdict";
+     * otherwise pass the given verdict through unchanged.
+     */
+    private terminalVerdict(context: RunContext, fallback?: JudgeVerdict): JudgeVerdict | undefined {
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            return synthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
+        }
+        return fallback;
+    }
+
+    /**
+     * Run one forced judge evaluation of the current end-state, used on graceful
+     * budget expiry (step or time) so the run is scored on a fresh verdict
+     * rather than a stale/absent one (CU-B4.3 / CU-D4). Never throws — falls
+     * back to the prior verdict on any failure or when no judge is configured.
+     */
+    private async forceFinalJudge(
+        context: RunContext,
+        stepNumber: number,
+        lastVerdict?: JudgeVerdict
+    ): Promise<JudgeVerdict | undefined> {
+        try {
+            const lastStep = context.StepHistory[context.StepHistory.length - 1];
+            // If the last step already judged the final frame, that verdict IS
+            // fresh — don't pay for a redundant re-judge of the same state.
+            if (lastStep?.JudgeVerdict) {
+                return lastStep.JudgeVerdict;
+            }
+            const verdict = await this.evaluateJudge(context, stepNumber, true, lastStep?.ScreenshotHash ?? '', context.LastDiagnosticsDigest ?? '');
+            return verdict ?? lastVerdict;
+        } catch (error) {
+            this.logError('Forced final judge evaluation failed', error);
+            return lastVerdict;
+        }
+    }
+
+    /**
+     * Auth-detour watchdog (CU-B7). Runs at the top of each step, before
+     * perception. If the current URL matches an identity-provider pattern from
+     * the {@link AppProfile}, the session was invalidated mid-run and the page
+     * bounced to login. We recover generically (re-apply auth + re-navigate to
+     * the start URL) so the step then perceives the recovered app — the agent
+     * never sees the login page and burns no steps re-consenting. After
+     * `MaxDetours` detours in one run the recovery clearly isn't holding, so we
+     * terminate the run as an infrastructure `AuthDetour` (a counted, alarmable
+     * signal) rather than grade the agent on a harness/session fault.
+     *
+     * Returns `{ result?, recoveryMs }`. A set `result` means the run
+     * terminated (MaxDetours exceeded) and the caller must return it.
+     * `recoveryMs` is the wall time spent recovering, which the caller folds
+     * into cumulative settle so the detour is excluded from the agent-time
+     * budget. A no-op (no profile / no patterns / URL clean) returns
+     * `{ recoveryMs: 0 }`.
+     */
+    private async handleAuthDetour(
+        context: RunContext,
+        stepNumber: number,
+        lastVerdict: JudgeVerdict | undefined
+    ): Promise<{ result?: ComputerUseResult; recoveryMs: number }> {
+        const authCfg = context.Params.AppProfile?.Auth;
+        if (!authCfg || authCfg.IdentityProviderPatterns.length === 0) {
+            return { recoveryMs: 0 };
+        }
+
+        const currentUrl = this.browserAdapter.CurrentUrl;
+        const decision = evaluateAuthDetour(
+            currentUrl,
+            authCfg.IdentityProviderPatterns,
+            context.AuthDetourCount,
+            authCfg.MaxDetours
+        );
+        if (!decision.isDetour) {
+            return { recoveryMs: 0 };
+        }
+
+        context.AuthDetourCount++;
+
+        if (decision.shouldTerminate) {
+            this.logError(`Step ${stepNumber} — auth detour #${context.AuthDetourCount} to ${currentUrl}; exceeded MaxDetours (${authCfg.MaxDetours}). Terminating as Failed/AuthDetour — an infrastructure/session fault, not an agent failure (CU-B7)`);
+            const verdict = await this.forceFinalJudge(context, stepNumber, lastVerdict);
+            const result = this.buildResult(context, 'Failed', false, verdict, 'AuthDetour');
+            this.onRunComplete(result);
+            return { result, recoveryMs: 0 };
+        }
+
+        this.log(`Step ${stepNumber} — auth detour #${context.AuthDetourCount} detected (${currentUrl}); recovering (re-apply auth + navigate to start URL), not charging the agent (CU-B7)`);
+        const recoveryMs = await this.recoverFromAuthDetour(context);
+        return { recoveryMs };
+    }
+
+    /**
+     * Recover from an auth detour by re-applying the run's configured auth and
+     * re-navigating to the start URL. Reuses the same generic primitives the
+     * engine uses at launch — it holds no app- or provider-specific knowledge.
+     * `ResetDomain` clears the "already applied" guard so header/cookie auth is
+     * genuinely re-applied for the start domain. Best-effort: never throws (a
+     * failed recovery just leaves the login page up, and the next detour will
+     * escalate toward the MaxDetours terminate). Returns the elapsed ms.
+     */
+    private async recoverFromAuthDetour(context: RunContext): Promise<number> {
+        const start = performance.now();
+        try {
+            const startUrl = context.Params.StartUrl;
+            if (startUrl) {
+                this.authHandler.ResetDomain(NavigationGuard.ExtractDomain(startUrl));
+            }
+            await this.runGlobalAuthCallback();
+            await this.navigateToStartUrl(context.Params, context);
+        } catch (error) {
+            this.logError('Auth-detour recovery failed (leaving current page for the next detour check)', error);
+        }
+        return performance.now() - start;
     }
 
     /**
@@ -496,6 +1194,480 @@ export class ComputerUseEngine {
     }
 
     // ═══════════════════════════════════════════════════════════
+    // REPLAY (CU-C2)
+    // ═══════════════════════════════════════════════════════════
+
+    /** Bounded wait for a replay step's target to become attached+visible. */
+    private static readonly REPLAY_PRECONDITION_TIMEOUT_MS = 12_000;
+    /** Poll interval while waiting for a replay target. */
+    private static readonly REPLAY_POLL_MS = 250;
+
+    /**
+     * Drive the recorded steps in order. Stops fail-fast on the first
+     * unrecovered divergence; otherwise ends when every step hit/healed.
+     */
+    private async executeReplayLoop(
+        trace: ComputerUseTrace,
+        context: RunContext,
+        replay: ReplayInfo
+    ): Promise<ComputerUseResult> {
+        const volatile = context.Params.AppProfile?.Loop?.VolatileParams ?? [];
+        const values = context.Params.VariableValues ?? {};
+
+        for (let i = 0; i < trace.Steps.length; i++) {
+            this.ensureNotCancelled();
+            const { result: stepResult, step } = await this.replayOneStep(trace, i, context, volatile, values);
+            replay.Steps.push(stepResult);
+            context.AddStep(step);
+            this.onStepComplete(step, context.Params);
+
+            // Checkpoint tour (CU-D8) on the replay tier: latch sections as the
+            // replayed trajectory passes through them. Free, and REQUIRED here —
+            // a tour's earlier sections are only on screen mid-trajectory, so
+            // latching solely at the end-state would never satisfy them.
+            if (isCheckpointRun(context.Params.Checkpoints)) {
+                this.updateCheckpointLatches(context, step);
+            }
+
+            if (stepResult.Outcome === 'diverged') {
+                replay.Diverged++;
+                replay.AllStepsSucceeded = false;
+                return this.buildReplayResult(context, replay, false, `diverged at step ${i + 1}: ${stepResult.Detail}`);
+            }
+            if (stepResult.Outcome === 'healed') {
+                replay.Healed++;
+            }
+        }
+
+        replay.AllStepsSucceeded = true;
+
+        // CU-C5: deterministic fail-fast on the distilled goal postconditions —
+        // free, and a cheap gate before paying for the judge. All steps hitting
+        // is necessary but not sufficient; the end-state must also satisfy the
+        // goal. A miss short-circuits to Failed so the driver falls back to LLM.
+        if (trace.GoalPostconditions.length > 0) {
+            const gp = await this.scoreGoalPostconditions(trace, volatile);
+            if (!gp.passed) {
+                return this.buildReplayResult(context, replay, false, `goal postconditions failed: ${gp.detail}`);
+            }
+            this.log(`Replay — all ${trace.GoalPostconditions.length} goal postconditions met (CU-C5)`);
+        }
+
+        // Judge the replayed end-state for goal-completion parity with the LLM
+        // tier — but ONLY when a validation rubric was supplied. The judge scores
+        // the goal AGAINST ValidationCriteria, and this is exactly the path (MJ
+        // regression) where the driver returns a 'Completed' replay directly with
+        // no LLM leg, so the goal-completion oracle needs a verdict or the test
+        // auto-fails ("no judge verdict available"). Standalone/mechanics callers
+        // supply no rubric — they keep the deterministic steps-hit result and pay
+        // no judge/LLM cost (nor a settle on a profile-less run). A replay passes
+        // iff the judge confirms the goal; a not-Done/absent verdict returns Failed
+        // so the driver falls back to the LLM tier.
+        // Checkpoint tour (CU-D8): scored on the latch state, NOT a scalar goal
+        // verdict. Sections latched deterministically during the trajectory above;
+        // any still-pending VISUAL criteria get one end-state judge call (skipped
+        // entirely when everything already latched — a URL-anchored tour replays
+        // for free). The synthesized verdict is always returned, so the scoring
+        // oracle can never see "no judge verdict available". Strict by design: the
+        // replay passes iff EVERY checkpoint is met; a partial tour returns Failed
+        // so the driver falls back to the LLM tier rather than false-passing.
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            return await this.buildReplayCheckpointResult(context, replay, trace.Steps.length);
+        }
+
+        if (context.Params.ValidationCriteria && context.Params.ValidationCriteria.length > 0) {
+            const verdict = await this.judgeReplayEndState(context, trace.Steps.length);
+            const goalMet = verdict?.Done === true;
+            return this.buildReplayResult(
+                context,
+                replay,
+                goalMet,
+                goalMet
+                    ? 'all steps hit — goal confirmed by judge'
+                    : `all steps hit but goal not confirmed by judge${verdict ? `: ${verdict.Reason}` : ' (no verdict)'}`,
+                verdict
+            );
+        }
+        return this.buildReplayResult(context, replay, true, 'all steps hit');
+    }
+
+    /**
+     * Execute the trace's distilled goal postconditions against the current
+     * end-state (CU-C5) — deterministic, no LLM. Extracts the final element list
+     * once; a probe failure yields an empty list (postconditions then fail
+     * honestly rather than falsely passing).
+     */
+    private async scoreGoalPostconditions(
+        trace: ComputerUseTrace,
+        volatile: string[]
+    ): Promise<{ passed: boolean; detail: string }> {
+        let elements: InteractiveElement[] = [];
+        try {
+            elements = await this.browserAdapter.ExtractInteractiveElements();
+        } catch {
+            /* empty list → presence postconditions fail honestly */
+        }
+        const { passed, results } = executeGoalPostconditions(trace.GoalPostconditions, {
+            url: this.browserAdapter.CurrentUrl,
+            elements,
+            volatileParams: volatile,
+        });
+        const failed = results.filter(r => !r.met).map(r => r.detail).join('; ');
+        return { passed, detail: failed || 'all met' };
+    }
+
+    /**
+     * Score a fully-replayed checkpoint tour (CU-D8) from its latch state.
+     *
+     * Sections were latched deterministically as the trajectory replayed. Any
+     * checkpoint whose VISUAL criteria are still pending gets one end-state judge
+     * call — `activeJudgeCriteria` narrows that call to exactly those criteria, and
+     * the call is skipped altogether when nothing is pending (a URL-anchored tour
+     * therefore replays with zero LLM cost). The synthesized verdict is ALWAYS
+     * returned so the goal-completion oracle can never fall through to "no judge
+     * verdict available".
+     *
+     * Strict: passes iff every checkpoint is met. A partial tour returns Failed, so
+     * the driver falls back to the LLM tier instead of false-passing — the same
+     * conservative contract the scalar-rubric path uses.
+     */
+    private async buildReplayCheckpointResult(
+        context: RunContext,
+        replay: ReplayInfo,
+        stepNumber: number
+    ): Promise<ComputerUseResult> {
+        const checkpoints = context.Params.Checkpoints ?? [];
+        const pendingVisual = unlatchedVisualCriteria(checkpoints, context.CheckpointState);
+        if (pendingVisual.length > 0) {
+            const verdict = await this.judgeReplayEndState(context, stepNumber);
+            if (verdict) {
+                latchVisualFromVerdict(checkpoints, context.CheckpointState, verdict, stepNumber);
+            }
+        } else {
+            this.log(`Replay — all checkpoint sections latched deterministically; no judge call needed (CU-D8)`);
+        }
+
+        const verdict = synthesizeCheckpointVerdict(checkpoints, context.CheckpointState);
+        const allMet = allCheckpointsMet(checkpoints, context.CheckpointState);
+        return this.buildReplayResult(
+            context,
+            replay,
+            allMet,
+            allMet
+                ? `all steps hit — ${verdict.Reason}`
+                : `all steps hit but the tour is incomplete: ${verdict.Reason}`,
+            verdict
+        );
+    }
+
+    /**
+     * Judge the fully-replayed end-state so a 'Completed' replay carries the goal
+     * verdict the scoring oracle needs (Option 1 — parity with the LLM tier). The
+     * driver returns a Completed replay directly with no LLM leg, so the verdict
+     * has to originate here. Per-step screenshots are captured PRE-action, so this
+     * settles and captures a FRESH final frame, judged against the same
+     * ValidationCriteria the LLM path uses. Never throws — a judge failure yields
+     * undefined and the caller treats the end-state as goal-not-confirmed.
+     */
+    private async judgeReplayEndState(
+        context: RunContext,
+        stepNumber: number
+    ): Promise<JudgeVerdict | undefined> {
+        try {
+            await this.settleBeforePerception(context);
+            const screenshot = await this.captureScreenshot(context);
+            context.AddScreenshot(screenshot);
+            context.CurrentUrl = this.browserAdapter.CurrentUrl;
+            return await this.evaluateJudge(context, stepNumber, true, computePerceptualHash(screenshot), '');
+        } catch (error) {
+            this.logError('Replay end-state judge evaluation failed', error);
+            return undefined;
+        }
+    }
+
+    /**
+     * Replay one recorded step: settle → screenshot (observability) →
+     * precondition → action(s) → postcondition. Any guard/action failure routes
+     * through {@link divergeOrHeal}. Returns the per-step outcome + a StepRecord
+     * so the storyboard/telemetry look the same as an LLM-tier run.
+     */
+    private async replayOneStep(
+        trace: ComputerUseTrace,
+        index: number,
+        context: RunContext,
+        volatile: string[],
+        values: Record<string, string>
+    ): Promise<{ result: ReplayStepResult; step: StepRecord }> {
+        const traceStep = trace.Steps[index];
+        const result = new ReplayStepResult();
+        result.StepIndex = index;
+        result.Instruction = traceStep.Instruction;
+
+        const step = new StepRecord();
+        step.StepNumber = index + 1;
+        step.StartedAt = Date.now();
+
+        const settle = await this.settleBeforePerception(context);
+        step.SettleMs = settle.ms;
+        step.SettleReason = settle.reason;
+        this.ensureNotCancelled();
+
+        const screenshot = await this.captureScreenshot(context);
+        step.Screenshot = screenshot;
+        step.ScreenshotHash = computePerceptualHash(screenshot);
+        step.UrlBefore = this.browserAdapter.CurrentUrl;
+        step.Url = step.UrlBefore;
+        step.UrlAfter = step.UrlBefore;
+        step.ControllerReasoning = `[replay] ${traceStep.Instruction}`;
+        context.CurrentUrl = step.UrlBefore;
+
+        const pre = await this.replayPrecondition(traceStep, volatile);
+        if (!pre.pass) {
+            return this.divergeOrHeal(trace, index, context, step, result, `precondition — ${pre.reason}`);
+        }
+
+        const actions = planReplayActions(traceStep, values);
+        if (actions.length === 0) {
+            return this.divergeOrHeal(trace, index, context, step, result, 'no replayable action (missing recorded selector)');
+        }
+        step.ActionsRequested = actions;
+        step.ActionResults = [];
+        const actionStart = performance.now();
+        for (const action of actions) {
+            this.ensureNotCancelled();
+            const r = await this.executeSingleBrowserAction(action, context);
+            step.ActionResults.push(r);
+            if (!r.Success) {
+                step.ActionMs = performance.now() - actionStart;
+                return this.divergeOrHeal(trace, index, context, step, result, `action ${action.Type} failed — ${r.Error ?? 'unknown'}`);
+            }
+        }
+        step.ActionMs = performance.now() - actionStart;
+        step.UrlAfter = this.browserAdapter.CurrentUrl;
+        context.CurrentUrl = step.UrlAfter;
+
+        const post = await this.replayPostcondition(traceStep, volatile);
+        if (!post.pass) {
+            return this.divergeOrHeal(trace, index, context, step, result, `postcondition — ${post.reason}`);
+        }
+
+        result.Outcome = 'hit';
+        result.Detail = 'ok';
+        return { result, step };
+    }
+
+    /**
+     * A replay step failed a guard/action. Consult the heal seam (CU-C3, a no-op
+     * at this layer): a successful heal has already executed the corrected action
+     * and updated `step`, so mark `healed`; otherwise mark `diverged`.
+     */
+    private async divergeOrHeal(
+        trace: ComputerUseTrace,
+        index: number,
+        context: RunContext,
+        step: StepRecord,
+        result: ReplayStepResult,
+        reason: string
+    ): Promise<{ result: ReplayStepResult; step: StepRecord }> {
+        const healed = await this.healReplayStep(trace, index, context, step, reason);
+        if (healed) {
+            result.Outcome = 'healed';
+            result.Detail = `healed after: ${reason}`;
+            step.UrlAfter = this.browserAdapter.CurrentUrl;
+            context.CurrentUrl = step.UrlAfter;
+        } else {
+            result.Outcome = 'diverged';
+            result.Detail = reason;
+            this.log(`Replay step ${index + 1} diverged — ${reason}`);
+        }
+        return { result, step };
+    }
+
+    /**
+     * Self-heal a diverged replay step (CU-C3) — leg 1 of the ladder. Only
+     * SELECTOR drift is healable here: re-resolve the recorded target's role+name
+     * against a fresh element list (deterministic, no LLM), escalating an
+     * ambiguous case to the {@link healTargetViaLLM} seam. mabl's gate applies —
+     * a low-confidence match fails rather than guesses. On a confident match it
+     * executes the corrected action, verifies the postcondition still holds, and
+     * rewrites the trace step's selector in place (cache rewrite), returning
+     * true. Flow drift (a failed postcondition) is NOT selector-healable — it
+     * returns false so the run falls back to the LLM tier (leg 2, re-derivation,
+     * owned by the driver's retry policy).
+     */
+    protected async healReplayStep(
+        trace: ComputerUseTrace,
+        stepIndex: number,
+        context: RunContext,
+        step: StepRecord,
+        reason: string
+    ): Promise<boolean> {
+        const traceStep = trace.Steps[stepIndex];
+        const recorded = traceStep.Action.Target;
+        if (!recorded || !isSelectorHealable(reason)) {
+            return false;   // navigate/keypress (no target) or flow drift → re-derive territory
+        }
+
+        let elements: InteractiveElement[];
+        try {
+            elements = await this.browserAdapter.ExtractInteractiveElements();
+        } catch {
+            return false;
+        }
+        if (elements.length === 0) {
+            return false;
+        }
+
+        const resolution = await this.resolveHealSelector(traceStep, context, recorded, elements);
+        if (!resolution || !shouldAcceptHeal(resolution.confidence) || !resolution.selector) {
+            this.log(`Replay step ${stepIndex + 1} heal declined — ${resolution?.reason ?? 'no candidate'} (a wrong cached click is worse than a slow one)`);
+            return false;
+        }
+
+        const executed = await this.executeHealedAction(traceStep, resolution.selector, context, step);
+        if (!executed) {
+            return false;
+        }
+
+        const volatile = context.Params.AppProfile?.Loop?.VolatileParams ?? [];
+        const post = await this.replayPostcondition(traceStep, volatile);
+        if (!post.pass) {
+            return false;
+        }
+
+        // Cache rewrite: persist the healed selector into the trace step in place.
+        if (traceStep.Action.Target) {
+            traceStep.Action.Target.Selector = resolution.selector;
+        }
+        this.log(`Replay step ${stepIndex + 1} healed — re-resolved target (${resolution.reason}); trace rewritten`);
+        return true;
+    }
+
+    /**
+     * Resolve the healed selector: deterministic role+name re-resolution first,
+     * escalating an ambiguous/failed match to the focused LLM seam.
+     */
+    private async resolveHealSelector(
+        traceStep: TraceStep,
+        context: RunContext,
+        recorded: TraceTarget,
+        elements: InteractiveElement[]
+    ): Promise<{ selector?: string; confidence: number; reason: string } | undefined> {
+        const deterministic = reresolveTarget(recorded, elements);
+        if (shouldAcceptHeal(deterministic.confidence)) {
+            return deterministic;
+        }
+        const llm = await this.healTargetViaLLM({
+            instruction: traceStep.Instruction,
+            goal: context.Params.Goal,
+            elements,
+            recorded,
+        });
+        if (llm.index !== undefined && shouldAcceptHeal(llm.confidence)) {
+            const el = elements.find(e => e.Index === llm.index);
+            if (el) {
+                return { selector: el.Selector, confidence: llm.confidence, reason: 'LLM disambiguation' };
+            }
+        }
+        return deterministic;   // best available (below the gate) — caller declines it
+    }
+
+    /** Execute the corrected action (recorded action with the healed selector). */
+    private async executeHealedAction(
+        traceStep: TraceStep,
+        selector: string,
+        context: RunContext,
+        step: StepRecord
+    ): Promise<boolean> {
+        const healedAction = Object.assign(new TraceAction(), traceStep.Action);
+        healedAction.Target = Object.assign(new TraceTarget(), traceStep.Action.Target ?? {}, { Selector: selector });
+        const healedStep = Object.assign(new TraceStep(), traceStep, { Action: healedAction });
+
+        const actions = planReplayActions(healedStep, context.Params.VariableValues ?? {});
+        if (actions.length === 0) {
+            return false;
+        }
+        step.ActionsRequested = actions;
+        step.ActionResults = [];
+        for (const action of actions) {
+            this.ensureNotCancelled();
+            const r = await this.executeSingleBrowserAction(action, context);
+            step.ActionResults.push(r);
+            if (!r.Success) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Evaluate a replay step's precondition against the live page (bounded wait). */
+    private async replayPrecondition(traceStep: TraceStep, volatile: string[]): Promise<GuardResult> {
+        const pre = traceStep.Precondition;
+        const urlMatched = pre.UrlPattern
+            ? traceUrlMatches(pre.UrlPattern, this.browserAdapter.CurrentUrl, volatile)
+            : true;
+        const sel = targetSelector(traceStep);
+        const targetChecked = pre.WaitForTarget && sel !== undefined;
+        let targetVisible = false;
+        if (targetChecked && sel) {
+            // Bound the wait by the configured action timeout (the plan's 10–15s),
+            // falling back to the engine default when no BrowserConfig is set.
+            const timeoutMs = this.activeParams?.BrowserConfig?.ActionTimeoutMs
+                ?? ComputerUseEngine.REPLAY_PRECONDITION_TIMEOUT_MS;
+            targetVisible = await this.waitForTargetVisible(sel, timeoutMs);
+        }
+        return evaluatePrecondition(pre, { urlMatched, targetVisible, targetChecked });
+    }
+
+    /** Evaluate a replay step's postcondition against the live page. */
+    private async replayPostcondition(traceStep: TraceStep, volatile: string[]): Promise<GuardResult> {
+        const post = traceStep.Postcondition;
+        if (!post) {
+            return { pass: true, reason: 'no postcondition recorded' };
+        }
+        const urlMatched = post.UrlPattern
+            ? traceUrlMatches(post.UrlPattern, this.browserAdapter.CurrentUrl, volatile)
+            : true;
+        const sel = post.ExpectVisible?.Selector;
+        const expectChecked = sel !== undefined;
+        let expectVisibleOk = false;
+        if (expectChecked && sel) {
+            const info = await this.safeQuery(sel);
+            expectVisibleOk = info.Exists && info.Visible;
+        }
+        return evaluatePostcondition(post, { urlMatched, expectVisibleOk, expectChecked });
+    }
+
+    /** Poll for an element to become attached + visible, bounded by `timeoutMs`. */
+    private async waitForTargetVisible(selector: string, timeoutMs: number): Promise<boolean> {
+        const start = performance.now();
+        while (performance.now() - start < timeoutMs) {
+            this.ensureNotCancelled();
+            const info = await this.safeQuery(selector);
+            if (info.Exists && info.Visible) {
+                return true;
+            }
+            await this.delay(ComputerUseEngine.REPLAY_POLL_MS);
+        }
+        return false;
+    }
+
+    /** Build the terminal replay result and stamp the {@link ReplayInfo}. */
+    private buildReplayResult(
+        context: RunContext,
+        replay: ReplayInfo,
+        success: boolean,
+        note: string,
+        verdict?: JudgeVerdict
+    ): ComputerUseResult {
+        const result = this.buildResult(context, success ? 'Completed' : 'Failed', success, verdict);
+        result.Replay = replay;
+        this.log(`Replay ${result.Status}: ${note} (${replay.Steps.length} steps, ${replay.Healed} healed, ${replay.Diverged} diverged)`);
+        this.onRunComplete(result);
+        return result;
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // SINGLE STEP EXECUTION
     // ═══════════════════════════════════════════════════════════
 
@@ -519,52 +1691,172 @@ export class ComputerUseEngine {
         const stepStart = performance.now();
         const step = new StepRecord();
         step.StepNumber = stepNumber;
-        step.Url = this.browserAdapter.CurrentUrl;
+        step.StartedAt = Date.now();
+        step.UrlBefore = this.browserAdapter.CurrentUrl;
+        step.Url = step.UrlBefore;        // back-compat alias for UrlBefore
+        step.UrlAfter = step.UrlBefore;   // updated after actions run (CU-A8)
 
         try {
-            // 1. Capture screenshot
             this.log(`Step ${stepNumber}/${context.Params.MaxSteps}`);
+
+            // 1. Settle: wait for the page to actually finish rendering after the
+            //    previous step's actions before we perceive (CU-A1/A2). Adaptive —
+            //    networkidle fast path, then a poll loop over the readiness beacon,
+            //    busy markers, and perceptual-hash stability. Timed separately
+            //    (SettleMs) so agent-time accounting can exclude environment wait
+            //    (CU-F1/B4). Converts wasted LLM round-trips on a slow load into
+            //    free engine polling.
+            const settle = await this.settleBeforePerception(context);
+            step.SettleMs = settle.ms;
+            step.SettleReason = settle.reason;
+            if (settle.reason === 'budget') {
+                this.log(`Step ${stepNumber} — settle budget expired after ${Math.round(settle.ms)}ms (page still busy/unstable)`);
+            } else {
+                this.log(`Step ${stepNumber} — page settled in ${Math.round(settle.ms)}ms (${settle.reason})`);
+            }
+
+            // Cancellation checkpoint (CU-B8): a Stop() during settle already
+            // broke the poll delay — bail before paying for screenshot + LLM.
+            this.ensureNotCancelled();
+
+            // 2. Capture screenshot + perceptual hash (CU-F6)
+            const screenshotStart = performance.now();
             const screenshot = await this.captureScreenshot(context);
             step.Screenshot = screenshot;
+            step.ScreenshotHash = computePerceptualHash(screenshot);
+            step.ScreenshotMs = performance.now() - screenshotStart;
             this.log(`Step ${stepNumber} — screenshot captured (${Math.round(screenshot.length / 1024)}KB base64)`);
 
-            // 2. Build controller request
-            const request = this.buildControllerRequest(context, stepNumber);
+            // 2b. Element-grounded perception (CU-A4): extract the interactive
+            //     elements, record them on the step (raw material for replayable
+            //     traces), and serialize an indexed list for the controller so it
+            //     can act by index instead of estimating coordinates.
+            const elementList = await this.perceiveInteractiveElements(context, step);
 
-            // 3. Call controller LLM
+            // 3. Build controller request + call controller LLM (timed — CU-F1)
+            const request = this.buildControllerRequest(context, stepNumber);
+            request.InteractiveElements = elementList;
+            const llmStart = performance.now();
             const response = await this.executeControllerWithRetry(request);
+            step.LlmMs = performance.now() - llmStart;
             step.ControllerReasoning = response.Reasoning;
             step.ActionsRequested = response.Actions;
 
-            // Track if controller requested immediate judgement
+            // Self-tracked agent state (CU-E2): record it, and carry Memory/Plan
+            // forward so the next prompt echoes them (history stays self-describing).
+            step.Evaluation = response.Evaluation;
+            step.Memory = response.Memory;
+            step.Plan = response.Plan;
+            if (response.Memory !== undefined) context.LastMemory = response.Memory;
+            if (response.Plan !== undefined) context.LastPlan = response.Plan;
+
+            // A step that asks for judgement is a deliberate checkpoint, not an
+            // empty/stuck step — record it so the main loop's empty-step abort
+            // does not misfire (CU-B3).
             const controllerRequestedJudgement = response.RequestJudgement ?? false;
+            step.RequestedJudgement = controllerRequestedJudgement;
             if (controllerRequestedJudgement) {
                 this.log(`Step ${stepNumber} — controller requested immediate judgement evaluation`);
             }
 
-            // 4. Log response details
+            // Tour checkpoint signal (CU-D8 Phase B): the controller names a
+            // section it reached. Honored only when it resolves to a DECLARED
+            // checkpoint with PENDING visual criteria — then it forces a judge this
+            // step scoped to that section, verified on the frame the controller
+            // signaled on (the step-start frame the judge also evaluates).
+            step.CheckpointReached = response.CheckpointReached;
+            let signaledCheckpoint: string | undefined;
+            if (isCheckpointRun(context.Params.Checkpoints) && response.CheckpointReached) {
+                const name = response.CheckpointReached;
+                if (!findCheckpoint(context.Params.Checkpoints, name)) {
+                    this.log(`Step ${stepNumber} — controller signaled unknown checkpoint "${name}" (ignored)`);
+                } else if (checkpointVisualCriteria(context.Params.Checkpoints, context.CheckpointState, name).length > 0) {
+                    signaledCheckpoint = name;
+                    this.log(`Step ${stepNumber} — controller reached checkpoint "${name}"; forcing scoped judge (CU-D8)`);
+                }
+            }
+
             this.logControllerResponse(stepNumber, response);
 
-            // 5. Execute tool calls, browser actions, and update URL
-            await this.executeStepActions(response, context, step, stepNumber);
+            // Cancellation checkpoint (CU-B8): if Stop() aborted the controller
+            // call, don't execute its (now-stale, possibly empty) actions.
+            this.ensureNotCancelled();
 
-            // 6. Evaluate judge (always evaluate if controller requested it, otherwise check frequency)
-            if (controllerRequestedJudgement || this.shouldEvaluateJudge(stepNumber, context.Params)) {
+            // 4. Execute tool calls + browser actions (timed — CU-F1); record post-action URL (CU-A8)
+            const actionStart = performance.now();
+            await this.executeStepActions(response, context, step, stepNumber);
+            step.ActionMs = performance.now() - actionStart;
+            step.UrlAfter = this.browserAdapter.CurrentUrl;
+
+            // 4b. Drain this step's browser diagnostics (CU-A7). GetDiagnostics()
+            //     clears the buffer, so each step gets exactly its own events.
+            //     A compact digest goes to the judge (this step) and the next
+            //     controller prompt so a blank/broken page becomes explainable
+            //     (ChunkLoadError, POST /graphql 500) instead of guessed at.
+            step.Diagnostics = this.browserAdapter.GetDiagnostics();
+            const diagnosticsDigest = formatDiagnosticsDigest(step.Diagnostics);
+            context.LastDiagnosticsDigest = diagnosticsDigest || undefined;
+            if (diagnosticsDigest) {
+                this.log(`Step ${stepNumber} — browser diagnostics: ${diagnosticsDigest.replace(/\n/g, ' | ')}`);
+            }
+
+            // 5. Evaluate judge. Gate (CU-G5): if the controller did not explicitly
+            //    request judgement and the visible state is unchanged since the last
+            //    judged step (same perceptual hash) with a non-terminal prior verdict,
+            //    skip the (expensive) re-judge — nothing changed, the prior verdict
+            //    still stands. This kills the ~12 redundant "still stuck" judge calls
+            //    on a stalled/looping run.
+            const scheduledJudge = this.shouldEvaluateJudge(stepNumber, context.Params);
+            const stateUnchanged =
+                context.LastJudgedHash !== undefined &&
+                step.ScreenshotHash !== '' &&
+                hashesSimilar(context.LastJudgedHash, step.ScreenshotHash) &&
+                context.LastJudgeVerdict !== undefined &&
+                !context.LastJudgeVerdict.Done &&
+                !context.LastJudgeVerdict.Impossible;
+            // Checkpoint tour (CU-D8): the judge only scores unlatched VISUAL
+            // criteria. When every remaining checkpoint is deterministic-only,
+            // activeJudgeCriteria is undefined → skip the judge entirely (a
+            // pure-URL tour costs zero judge calls).
+            const checkpointJudgeGate =
+                !isCheckpointRun(context.Params.Checkpoints) || this.activeJudgeCriteria(context, signaledCheckpoint) !== undefined;
+            // A controller checkpoint signal forces a judge this step (like an
+            // explicit judgement request), bypassing the unchanged-state skip.
+            const runJudge = checkpointJudgeGate &&
+                (controllerRequestedJudgement || signaledCheckpoint !== undefined || (scheduledJudge && !stateUnchanged));
+
+            if (scheduledJudge && stateUnchanged && !controllerRequestedJudgement) {
+                this.log(`Step ${stepNumber} — skipping judge: visible state unchanged since last judged step (CU-G5)`);
+            }
+
+            if (runJudge) {
+                // Cancellation checkpoint (CU-B8): don't start a judge LLM call
+                // for a run that's already been stopped.
+                this.ensureNotCancelled();
                 if (controllerRequestedJudgement) {
                     this.log(`Step ${stepNumber} — evaluating judge (controller request)`);
                 }
-                step.JudgeVerdict = await this.evaluateJudge(context, stepNumber, controllerRequestedJudgement);
+                const judgeStart = performance.now();
+                step.JudgeVerdict = await this.evaluateJudge(context, stepNumber, controllerRequestedJudgement, step.ScreenshotHash, diagnosticsDigest, signaledCheckpoint);
+                step.JudgeMs = performance.now() - judgeStart;
+                context.LastJudgedHash = step.ScreenshotHash;
+                context.LastJudgeVerdict = step.JudgeVerdict;
                 if (step.JudgeVerdict) {
                     this.log(`Step ${stepNumber} — judge verdict: Done=${step.JudgeVerdict.Done}, Impossible=${step.JudgeVerdict.Impossible}, Confidence=${step.JudgeVerdict.Confidence}, Reason: ${step.JudgeVerdict.Reason}`);
                 }
             }
         } catch (error) {
+            // Cancellation is control flow, not a step failure — let it unwind to
+            // the main loop, which maps it to a clean Cancelled status (CU-B8).
+            if (error instanceof CancellationError) {
+                throw error;
+            }
             step.Error = this.wrapError(error, stepNumber);
             this.logError(`Step ${stepNumber} — step failed`, error);
         }
 
         step.DurationMs = performance.now() - stepStart;
-        this.log(`Step ${stepNumber} — completed in ${Math.round(step.DurationMs)}ms`);
+        this.log(`Step ${stepNumber} — completed in ${Math.round(step.DurationMs)}ms (settle ${Math.round(step.SettleMs)}ms · llm ${Math.round(step.LlmMs)}ms · action ${Math.round(step.ActionMs)}ms · judge ${Math.round(step.JudgeMs)}ms)`);
         return step;
     }
 
@@ -630,7 +1922,7 @@ export class ComputerUseEngine {
         const scaledActions = this.scaleActionsToViewport(response.Actions);
 
         // Execute browser actions
-        step.ActionResults = await this.executeBrowserActions(scaledActions, context);
+        step.ActionResults = await this.executeBrowserActions(scaledActions, context, step);
         const failedActions = step.ActionResults.filter(r => !r.Success);
         if (failedActions.length > 0) {
             for (const failed of failedActions) {
@@ -645,15 +1937,158 @@ export class ComputerUseEngine {
     // ─── Screenshot Capture ─────────────────────────────────
 
     private async captureScreenshot(context: RunContext): Promise<string> {
-        // Wait before capturing to let the page render after actions
-        const delayMs = context.Params.ScreenshotDelayMs;
-        if (delayMs > 0) {
-            await new Promise<void>(resolve => setTimeout(resolve, delayMs));
-        }
-
+        // The settle delay is owned and timed by executeSingleStep (SettleMs)
+        // so it is not conflated with capture time; here we only capture.
         const screenshot = await this.browserAdapter.CaptureScreenshot();
         context.AddScreenshot(screenshot);
         return screenshot;
+    }
+
+    // ─── Element-Grounded Perception (CU-A4) ───────────────
+
+    /**
+     * When element grounding is enabled, extract the page's interactive elements,
+     * record them on the step (raw material for replayable traces), and return
+     * the serialized indexed list for the controller prompt (with `*` markers on
+     * elements new since the previous step). Returns undefined when grounding is
+     * off or nothing was found — the controller then works in coordinate mode.
+     * Never throws: an extractor failure degrades to coordinate mode.
+     */
+    private async perceiveInteractiveElements(
+        context: RunContext,
+        step: StepRecord
+    ): Promise<string | undefined> {
+        if (!context.Params.ElementGrounding) {
+            return undefined;
+        }
+        try {
+            const elements = await this.browserAdapter.ExtractInteractiveElements();
+            step.InteractiveElements = elements;
+            const serialized = serializeInteractiveElements(elements, context.LastInteractiveElements);
+            context.LastInteractiveElements = elements;
+            if (elements.length > 0) {
+                this.log(`Step ${step.StepNumber} — element grounding: ${elements.length} interactive elements`);
+            }
+            return elements.length > 0 ? serialized : undefined;
+        } catch (error) {
+            this.logError('Interactive-element extraction failed (falling back to coordinate mode)', error);
+            return undefined;
+        }
+    }
+
+    // ─── Settle Loop (CU-A1/A2) ────────────────────────────
+
+    /**
+     * Wait for the page to finish rendering before we perceive it. Adaptive:
+     * a `networkidle` fast path, then a poll loop that consults (in priority
+     * order) the app's readiness beacon, its busy markers, and perceptual-hash
+     * stability. Returns the elapsed ms and the reason it stopped.
+     *
+     * The engine is app-agnostic: beacon and extra busy markers come from the
+     * {@link AppProfile} the caller supplies; the engine only adds its own
+     * app-neutral markers and knows how to poll. A probe failure degrades to
+     * "keep waiting until budget"; the only throw is a {@link CancellationError}
+     * when the run is stopped mid-settle (CU-B8), which unwinds to Cancelled.
+     */
+    private async settleBeforePerception(context: RunContext): Promise<{ ms: number; reason: SettleReason }> {
+        const start = performance.now();
+        if (!this.browserAdapter?.IsOpen) {
+            return { ms: 0, reason: 'none' };
+        }
+
+        const profile = context.Params.AppProfile;
+        const cfg = profile?.Settle ?? new SettleConfig();
+        const markers = [...DEFAULT_BUSY_MARKERS, ...(profile?.BusyMarkers ?? [])];
+        const beacon = profile?.ReadinessBeacon;
+        // Floor: a profile governs its own MinWaitMs; without one, preserve the
+        // legacy ScreenshotDelayMs as the minimum wait so behavior is unchanged.
+        const floorMs = profile ? cfg.MinWaitMs : context.Params.ScreenshotDelayMs;
+
+        // Fast path: networkidle, capped (it can hang on long-poll / websocket
+        // apps like GraphQL subscriptions, so it must never be the sole signal).
+        const networkIdle = await this.raceWithTimeout(
+            this.browserAdapter.WaitForLoadState('networkidle'),
+            cfg.NetworkIdleCapMs
+        );
+
+        let lastHash = '';
+        let sawBusy = false;
+
+        while (performance.now() - start < cfg.MaxWaitMs) {
+            // Cancellation checkpoint (CU-B8): Stop() makes the poll delay below
+            // resolve instantly, so without this the loop would busy-spin until
+            // MaxWaitMs. Throw to unwind straight to a Cancelled result.
+            this.ensureNotCancelled();
+
+            // 1. Readiness beacon (CU-A2) — the declared, deterministic signal.
+            const beaconPresent = beacon ? (await this.safeQuery(beacon)).Exists : false;
+            // 2. Busy markers — any present-and-visible marker means still loading.
+            const busy = await this.anyMarkerBusy(markers);
+            if (busy) {
+                sawBusy = true;
+            }
+            // 3. Perceptual-hash stability — two consecutive similar frames.
+            const hash = computePerceptualHash(await this.browserAdapter.CaptureScreenshot());
+            const hashStable = lastHash !== '' && hash !== '' && hashesSimilar(lastHash, hash);
+            lastHash = hash;
+
+            const reason = resolveSettleExit({
+                beaconDeclared: beacon !== undefined,
+                beaconPresent,
+                busy,
+                hashStable,
+                sawBusy,
+                networkIdle,
+                elapsedMs: performance.now() - start,
+                floorMs,
+            });
+            if (reason) {
+                return { ms: performance.now() - start, reason };
+            }
+
+            await this.delay(cfg.PollMs);
+        }
+
+        return { ms: performance.now() - start, reason: 'budget' };
+    }
+
+    /** QueryElement that never throws — an errored probe reports "absent". */
+    private async safeQuery(selector: string): Promise<ElementInfo> {
+        try {
+            return await this.browserAdapter.QueryElement(selector);
+        } catch {
+            return new ElementInfo();
+        }
+    }
+
+    /** True when any of the given selectors matches a visible element. */
+    private async anyMarkerBusy(markers: string[]): Promise<boolean> {
+        for (const marker of markers) {
+            const info = await this.safeQuery(marker);
+            if (info.Exists && info.Visible) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Resolve when `p` settles or `ms` elapses; returns true iff `p` won the race. */
+    private async raceWithTimeout(p: Promise<unknown>, ms: number): Promise<boolean> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), ms); });
+        const completed = p.then(() => true).catch(() => true);
+        const won = await Promise.race([completed, timeout]);
+        if (timer) {
+            clearTimeout(timer);
+        }
+        return won;
+    }
+
+    private delay(ms: number): Promise<void> {
+        // Abortable (CU-B8): a cancelled run's pending settle poll / retry
+        // backoff resolves early instead of holding the worker slot; the caller's
+        // next ensureNotCancelled() checkpoint turns that into a clean Cancelled.
+        return abortableDelay(ms, this.abortController.signal);
     }
 
     // ─── Coordinate Scaling ────────────────────────────────
@@ -682,6 +2117,10 @@ export class ComputerUseEngine {
                 scaled.Button = action.Button;
                 scaled.ClickCount = action.ClickCount;
                 scaled.BoundingBox = this.scaleBoundingBox(action.BoundingBox, scaleX, scaleY);
+                // Pass through the DOM-targeting fields (CU-A6): when Selector is
+                // set the adapter ignores X/Y, and Modifiers apply on both paths.
+                scaled.Selector = action.Selector;
+                scaled.Modifiers = action.Modifiers;
                 return scaled;
             }
 
@@ -689,6 +2128,12 @@ export class ComputerUseEngine {
                 const scaled = new ScrollAction();
                 scaled.DeltaX = Math.round(action.DeltaX * scaleX);
                 scaled.DeltaY = Math.round(action.DeltaY * scaleY);
+                scaled.Selector = action.Selector;   // CU-A6: preserve scroll-into-view target
+                // CU-A8: the scroll-at point scales like a click coordinate.
+                if (action.X !== undefined && action.Y !== undefined) {
+                    scaled.X = Math.round(action.X * scaleX);
+                    scaled.Y = Math.round(action.Y * scaleY);
+                }
                 return scaled;
             }
 
@@ -735,6 +2180,14 @@ export class ComputerUseEngine {
         request.StepNumber = stepNumber;
         request.MaxSteps = context.Params.MaxSteps;
         request.CurrentUrl = context.CurrentUrl;
+        request.Hints = context.Params.Hints;   // per-test UI hints (CU-E5)
+        request.PreviousAttemptSummary = context.Params.PreviousAttemptSummary;   // non-blind retry (CU-B6)
+        request.CurrentDate = new Date().toISOString().slice(0, 10);   // current date (CU-E3)
+        request.Memory = context.LastMemory;   // echo self-tracked state (CU-E2)
+        request.Plan = context.LastPlan;
+        // Thread the cancellation signal so an in-flight controller call aborts
+        // promptly on Stop() (CU-B8); consumed by Layer 2, not template data.
+        request.Signal = this.abortController.signal;
 
         // Include tool definitions if any tools are registered
         if (this.toolProvider.HasTools) {
@@ -744,6 +2197,16 @@ export class ComputerUseEngine {
         // Inject judge feedback from the previous step
         if (context.LastJudgeFeedback) {
             request.JudgeFeedback = context.LastJudgeFeedback;
+        }
+
+        // Inject loop evidence when the engine has detected a repeated state (CU-B1)
+        if (context.LoopEvidence) {
+            request.LoopEvidence = context.LoopEvidence;
+        }
+
+        // Inject the previous step's browser-diagnostics digest (CU-A7)
+        if (context.LastDiagnosticsDigest) {
+            request.Diagnostics = context.LastDiagnosticsDigest;
         }
 
         // Inject FormLogin credentials if configured for this domain
@@ -764,6 +2227,17 @@ export class ComputerUseEngine {
             request.ApplicationContext = context.Params.ApplicationContext;
         }
 
+        // Tour checkpoints (CU-D8 Phase B): expose name + instruction so the
+        // controller can signal `checkpointReached` as it passes each section.
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            request.Checkpoints = context.Params.Checkpoints.map(cp => {
+                const info = new ControllerCheckpointInfo();
+                info.Name = cp.Name;
+                info.Instruction = cp.Instruction;
+                return info;
+            });
+        }
+
         return request;
     }
 
@@ -775,25 +2249,95 @@ export class ComputerUseEngine {
      * If the LLM returns unparseable output, we retry once with
      * stricter format instructions appended.
      */
+    private static readonly CONTROLLER_MAX_ATTEMPTS = 3;
+
+    /**
+     * Call the controller with bounded retry for transient failures (CU-B3).
+     *
+     * The controller LLM is nondeterministic and, under host/provider load,
+     * transiently fails (rate limits, transport errors) or returns an
+     * unparseable response. Previously this method retried nothing — a single
+     * hiccup produced an empty step, and three in a row killed the run as an
+     * infrastructure 'Error' precisely when the environment was worst. Now:
+     *  - a thrown transport/rate-limit error is retried with exponential
+     *    backoff + jitter;
+     *  - an empty response whose reasoning matches a transient/parse signature
+     *    is retried (a fresh sample may parse);
+     *  - a genuine, well-formed empty response (e.g. a config error, or an
+     *    intentional judgement request) is returned immediately — retrying it
+     *    would not help.
+     */
     private async executeControllerWithRetry(
         request: ControllerPromptRequest
     ): Promise<ControllerPromptResponse> {
-        const response = await this.executeControllerPrompt(request);
+        const maxAttempts = ComputerUseEngine.CONTROLLER_MAX_ATTEMPTS;
+        let lastResponse: ControllerPromptResponse | undefined;
+        let lastError: unknown;
 
-        // If we got actions or tool calls, the parse succeeded
-        if (response.Actions.length > 0 || response.ToolCalls.length > 0) {
-            return response;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            // Cancellation checkpoint (CU-B8): don't retry a controller call for a
+            // run that's been stopped — the aborted signal makes the call return
+            // fast, and this unwinds before another (pointless) attempt.
+            this.ensureNotCancelled();
+            try {
+                const response = await this.executeControllerPrompt(request);
+
+                // Actionable (or a deliberate judgement request) → success.
+                if (response.Actions.length > 0 || response.ToolCalls.length > 0 || (response.RequestJudgement ?? false)) {
+                    return response;
+                }
+
+                lastResponse = response;
+                if (attempt === maxAttempts || !this.isTransientControllerResponse(response)) {
+                    return response;
+                }
+                this.log(`Controller returned a transient/unparseable response (attempt ${attempt}/${maxAttempts}); retrying after backoff`);
+            } catch (error) {
+                lastError = error;
+                this.logError(`Controller call threw (attempt ${attempt}/${maxAttempts})`, error);
+                if (attempt === maxAttempts) {
+                    break;
+                }
+            }
+            await this.backoffDelay(attempt);
         }
 
-        // If reasoning suggests a parse failure, retry once
-        if (response.Reasoning.includes('parse error') ||
-            response.Reasoning.includes('Failed to extract JSON')) {
-            // Second attempt — the response already has a raw response,
-            // try re-parsing it before giving up
-            return response;
+        if (lastResponse) {
+            return lastResponse;
         }
-
+        // Every attempt threw — surface the failure as a controller response so
+        // the step records it (rather than throwing out of the loop, which the
+        // caller's try/catch would then log as a generic step error).
+        const response = new ControllerPromptResponse();
+        response.Reasoning = `Controller call failed after ${maxAttempts} attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`;
+        response.RawResponse = response.Reasoning;
         return response;
+    }
+
+    /**
+     * True for an empty controller response worth retrying — a transient LLM
+     * failure or an unparseable payload. A missing-model configuration error is
+     * NOT transient and returns false (retrying cannot fix configuration).
+     */
+    private isTransientControllerResponse(response: ControllerPromptResponse): boolean {
+        const reasoning = response.Reasoning ?? '';
+        if (reasoning.includes('No controller model configured')) {
+            return false;
+        }
+        return (
+            reasoning.includes('LLM call failed') ||
+            reasoning.includes('parse error') ||
+            reasoning.includes('Failed to extract JSON') ||
+            reasoning.includes('timeout') ||
+            reasoning.includes('rate limit')
+        );
+    }
+
+    /** Exponential backoff (250ms, 500ms, …) with jitter, bounded by attempt. */
+    private async backoffDelay(attempt: number): Promise<void> {
+        const base = 250 * Math.pow(2, attempt - 1);
+        const jitter = Math.random() * 100;
+        await new Promise<void>(resolve => setTimeout(resolve, base + jitter));
     }
 
     // ─── Tool Call Execution ────────────────────────────────
@@ -827,13 +2371,40 @@ export class ComputerUseEngine {
      */
     private async executeBrowserActions(
         actions: BrowserAction[],
-        context: RunContext
+        context: RunContext,
+        step: StepRecord
     ): Promise<ActionExecutionResult[]> {
         const results: ActionExecutionResult[] = [];
+        const maxActions = context.Params.MaxActionsPerStep ?? DEFAULT_MAX_ACTIONS_PER_BATCH;
 
         for (const action of actions) {
+            // Cancellation checkpoint (CU-B8): stop between actions so a Stop()
+            // during a multi-action step releases the slot without running the rest.
+            this.ensureNotCancelled();
+
+            const urlBefore = this.browserAdapter.CurrentUrl;
             const result = await this.executeSingleBrowserAction(action, context);
             results.push(result);
+
+            // Batch guards (CU-B5): after each action decide whether the rest of
+            // the batch should still run. Stops on a failed action (so a queued
+            // Type can't fire into the wrong place), a mid-batch route change, a
+            // page-changing action, or the per-step cap. Partial results are kept
+            // and the reason is surfaced to the next step's summary.
+            const urlChanged = this.browserAdapter.CurrentUrl !== urlBefore;
+            const stop = evaluateBatchStop({
+                actionType: action.Type,
+                success: result.Success,
+                urlChanged,
+                executedCount: results.length,
+                maxActions,
+            });
+            if (stop && results.length < actions.length) {
+                const skipped = actions.length - results.length;
+                step.BatchStopReason = `executed ${results.length}/${actions.length} actions, stopped: ${stop}`;
+                this.log(`Step ${step.StepNumber} — ${step.BatchStopReason} (${skipped} not run)`);
+                break;
+            }
         }
 
         return results;
@@ -936,19 +2507,51 @@ export class ComputerUseEngine {
     private async evaluateJudge(
         context: RunContext,
         stepNumber: number,
-        controllerRequestedJudgement: boolean = false
+        controllerRequestedJudgement: boolean = false,
+        currentScreenshotHash: string = '',
+        currentDiagnosticsDigest: string = '',
+        signaledCheckpoint?: string
     ): Promise<JudgeVerdict> {
+        // Cross-attempt judge cache (CU-C5.3): an identical (goal, URL, state)
+        // returns the prior verdict — most valuably, a cached Impossible
+        // short-circuits a retry. Only when a shared cache is injected and the
+        // frame hashed (an unstable key would poison the cache).
+        const cacheKey = this.judgeCache && currentScreenshotHash
+            ? makeJudgeCacheKey(
+                hashGoal(context.Params.Goal),
+                context.CurrentUrl,
+                currentScreenshotHash,
+                context.Params.AppProfile?.Loop?.VolatileParams ?? []
+            )
+            : undefined;
+        if (cacheKey) {
+            const cached = this.judgeCache!.get(cacheKey);
+            if (cached) {
+                this.log(`Step ${stepNumber} — judge verdict served from the cross-attempt cache (CU-C5)`);
+                return cached;
+            }
+        }
+
         const judgeContext = new JudgeContext();
         judgeContext.Goal = context.Params.Goal;
         judgeContext.CurrentScreenshot = context.CurrentScreenshot;
+        judgeContext.CurrentScreenshotHash = currentScreenshotHash;
         judgeContext.ScreenshotHistory = context.ScreenshotHistory;
         judgeContext.StepHistory = context.StepHistory;
         judgeContext.StepNumber = stepNumber;
         judgeContext.MaxSteps = context.Params.MaxSteps;
         judgeContext.CurrentUrl = context.CurrentUrl;
         judgeContext.ControllerRequestedJudgement = controllerRequestedJudgement;
+        judgeContext.CurrentDiagnosticsDigest = currentDiagnosticsDigest;
+        judgeContext.ValidationCriteria = this.activeJudgeCriteria(context, signaledCheckpoint);   // rubric judging (CU-D1); tour visual criteria (CU-D8)
+        judgeContext.IsCheckpointTour = isCheckpointRun(context.Params.Checkpoints);   // suppress navigation-shape heuristics on a tour (CU-D8)
+        judgeContext.Signal = this.abortController.signal;   // abort in-flight judge call on Stop() (CU-B8)
 
-        return this.judge.Evaluate(judgeContext);
+        const verdict = await this.judge.Evaluate(judgeContext);
+        if (cacheKey) {
+            this.judgeCache!.set(cacheKey, verdict);
+        }
+        return verdict;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1201,10 +2804,18 @@ export class ComputerUseEngine {
 
         // Application context first — it's the most general signal, sets the
         // stage before per-step/per-tool-specific guidance.
+        sections.push(this.renderCurrentDateSection(request.CurrentDate));
         sections.push(this.renderApplicationContextSection(request.ApplicationContext));
+        sections.push(this.renderPreviousAttemptSection(request.PreviousAttemptSummary));
+        sections.push(this.renderCheckpointsSection(request.Checkpoints));
+        sections.push(this.renderHintsSection(request.Hints));
         sections.push(this.renderToolDefinitionsSection(request.ToolDefinitions));
         sections.push(this.renderFormLoginSection(request.FormLoginCredentials));
+        sections.push(this.renderAgentStateSection(request.Memory, request.Plan));
         sections.push(this.renderJudgeFeedbackSection(request.JudgeFeedback));
+        sections.push(this.renderLoopEvidenceSection(request.LoopEvidence));
+        sections.push(this.renderDiagnosticsSection(request.Diagnostics));
+        sections.push(this.renderInteractiveElementsSection(request.InteractiveElements));
         sections.push(this.renderPreviousStepsSection(request.PreviousStepSummary));
 
         return sections.filter(Boolean).join('\n\n');
@@ -1213,6 +2824,36 @@ export class ComputerUseEngine {
     private renderApplicationContextSection(context: string | undefined): string {
         if (!context || !context.trim()) return '';
         return `## Application Context\nYou are testing the application described below. Use this context to navigate efficiently — do NOT waste steps rediscovering these facts.\n\n${context.trim()}`;
+    }
+
+    private renderHintsSection(hints: string[] | undefined): string {
+        if (!hints || hints.length === 0) return '';
+        const list = hints.map(h => `- ${h}`).join('\n');
+        return `## Hints\nThe following hints about this task's UI may save you steps:\n${list}`;
+    }
+
+    private renderCheckpointsSection(checkpoints: ControllerCheckpointInfo[] | undefined): string {
+        if (!checkpoints || checkpoints.length === 0) return '';
+        const list = checkpoints.map(cp => `- **${cp.Name}**${cp.Instruction ? ` — ${cp.Instruction}` : ''}`).join('\n');
+        return `## Checkpoints (this is a multi-section tour)\nWork through these sections in order. As soon as you arrive at one, set \`checkpointReached\` to its **exact name** (from the list) in your response — this lets the section be verified on the frame you're on. Keep going until every section is done.\n${list}`;
+    }
+
+    private renderPreviousAttemptSection(summary: string | undefined): string {
+        if (!summary || !summary.trim()) return '';
+        return `## Previous Attempt (learn from it)\nA prior attempt at this exact goal failed:\n${summary.trim()}\nDo NOT repeat the approach that failed — try a different element, route, or strategy.`;
+    }
+
+    private renderCurrentDateSection(currentDate: string | undefined): string {
+        if (!currentDate) return '';
+        return `## Current Date\nToday is ${currentDate}. Use this for any relative-date reasoning; do not guess the date.`;
+    }
+
+    private renderAgentStateSection(memory: string | undefined, plan: string | undefined): string {
+        const parts: string[] = [];
+        if (memory) parts.push(`Memory (your durable notes):\n${memory}`);
+        if (plan) parts.push(`Plan (your checklist — update the current item):\n${plan}`);
+        if (parts.length === 0) return '';
+        return `## Your Tracked State (from the previous step)\n${parts.join('\n\n')}`;
     }
 
     private renderToolDefinitionsSection(tools: ControllerPromptRequest['ToolDefinitions']): string {
@@ -1237,6 +2878,24 @@ export class ComputerUseEngine {
         return `## Feedback from Previous Evaluation\n${feedback}\nTake this feedback into account when planning your next actions.`;
     }
 
+    private renderLoopEvidenceSection(evidence: string | undefined): string {
+        if (!evidence) return '';
+
+        return `## ⚠️ Loop Detected\n${evidence}\nYou appear to be repeating actions without making progress. Do NOT repeat the same navigation or clicks. Try a DIFFERENT approach — a different element, a different route, or request judgement if you believe the goal is genuinely blocked.`;
+    }
+
+    private renderDiagnosticsSection(diagnostics: string | undefined): string {
+        if (!diagnostics) return '';
+
+        return `## Browser Diagnostics (previous step)\nThe browser reported the following errors, which may explain a blank, broken, or unexpected page:\n${diagnostics}\nFactor these in — e.g. a failed script/chunk load or a failed API request means the page did not render, not that you clicked the wrong thing.`;
+    }
+
+    private renderInteractiveElementsSection(elementList: string | undefined): string {
+        if (!elementList) return '';
+
+        return `## Interactive Elements (this page)\nEach line is \`[index] role "name"\`. A \`*\` marks an element new since the previous step; \`|SCROLL|\` marks a scrollable container.\n${elementList}\n**Prefer targeting these by index** — \`{ "Type": "ClickElement", "Index": 12 }\` or \`{ "Type": "TypeIntoElement", "Index": 13, "Text": "…" }\` — over estimating coordinates. Index targeting waits for the element and clicks it precisely. Fall back to coordinate Click only for elements not in this list (e.g. canvas/custom-rendered surfaces).`;
+    }
+
     private renderPreviousStepsSection(summary: string | undefined): string {
         if (!summary) return '';
 
@@ -1249,12 +2908,29 @@ export class ComputerUseEngine {
     private renderJudgePrompt(request: JudgePromptRequest): string {
         const template = this.getActiveParams()?.JudgePrompt ?? DEFAULT_JUDGE_PROMPT;
 
-        return template
+        const rendered = template
             .replace(/\{\{goal\}\}/g, request.Goal)
             .replace(/\{\{stepNumber\}\}/g, String(request.StepNumber))
             .replace(/\{\{maxSteps\}\}/g, String(request.MaxSteps))
             .replace(/\{\{currentUrl\}\}/g, request.CurrentUrl)
             .replace(/\{\{stepSummary\}\}/g, request.StepSummary);
+
+        const sections = [rendered];
+
+        // Rubric (CU-D1): when the run supplied validation criteria, ask the judge
+        // for a binary per-criterion verdict. Done is then derived as
+        // all-criteria-met (the generic prompt has no {{criteria}} slot).
+        if (request.ValidationCriteria && request.ValidationCriteria.length > 0) {
+            const list = request.ValidationCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
+            sections.push(`## Validation Criteria\nEvaluate the end-state against EACH criterion below. In your JSON response, include a "criteria" array of \`{ "criterion": "<text>", "met": true|false, "evidence": "<what you observed>" }\` — one entry per criterion. The goal is "done" only when EVERY criterion is met.\n${list}`);
+        }
+
+        // Append the current step's browser-diagnostics digest (CU-A7) so the
+        // judge can explain an infrastructure state instead of guessing.
+        if (request.Diagnostics) {
+            sections.push(`## Browser Diagnostics (current step)\nThe browser reported the following errors this step — use them to explain the visible state instead of guessing:\n${request.Diagnostics}`);
+        }
+        return sections.join('\n\n');
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1268,7 +2944,8 @@ export class ComputerUseEngine {
         context: RunContext,
         status: ComputerUseResult['Status'],
         success: boolean,
-        lastVerdict?: JudgeVerdict
+        lastVerdict?: JudgeVerdict,
+        failureReason?: ComputerUseFailureReason
     ): ComputerUseResult {
         const result = new ComputerUseResult();
         result.Status = status;
@@ -1279,6 +2956,27 @@ export class ComputerUseEngine {
         result.FinalUrl = context.CurrentUrl;
         result.FinalScreenshot = context.CurrentScreenshot;
         result.FinalJudgeVerdict = lastVerdict;
+        result.AuthDetourCount = context.AuthDetourCount;
+        if (failureReason) {
+            result.FailureReason = failureReason;
+        }
+        // Non-blind-retry memo (CU-B6): on any non-passing terminal, distill a
+        // compact "why it failed / what to avoid" the driver's retry policy can
+        // feed back as PreviousAttemptSummary.
+        if (!success) {
+            const memo = buildFailureMemo({
+                status,
+                failureReason,
+                finalUrl: result.FinalUrl,
+                recentUrls: context.StepHistory.slice(-4).map(s => s.UrlAfter || s.Url),
+                judgeReason: lastVerdict?.Reason,
+                judgeFeedback: lastVerdict?.Feedback,
+                loopEvidence: context.LoopEvidence,
+            });
+            if (memo) {
+                result.FailureMemo = memo;
+            }
+        }
         return result;
     }
 

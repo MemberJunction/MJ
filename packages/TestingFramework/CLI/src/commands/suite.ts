@@ -14,12 +14,38 @@ import { parseVariableFlags } from '../utils/variable-parser';
 import { loadOraclesModule } from '../utils/oracle-module-loader';
 import { loadCheckModules } from '../utils/check-module-loader';
 import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
+import { IncrementalResultsSink } from '../utils/incremental-results';
+import * as path from 'node:path';
 
 /**
  * Suite command - Execute a test suite
  */
 export class SuiteCommand {
     private spinner = new SpinnerManager();
+
+    /**
+     * DR-D5: on external termination (docker stop → SIGTERM, Ctrl-C → SIGINT) or
+     * an uncaught crash, flush a terminal partial snapshot before exiting so the
+     * run dir reflects reality — status `Cancelled`/`Crashed` with counts-so-far —
+     * instead of leaving a stale `Running` partial forever. Writes are synchronous
+     * (writeFileSync/rename) so they complete inside the handler. We do NOT attempt
+     * an async DB finalize of the TestSuiteRun here — a signal handler can't
+     * reliably await it; the file snapshot is the reliable crash-safety artifact.
+     */
+    private installCrashHandlers(sink: IncrementalResultsSink): void {
+        const onSignal = (signal: NodeJS.Signals, code: number) => {
+            sink.finalize('Cancelled');
+            console.error(`\n${signal} received — flushed ${sink.completedCount} completed test(s) to results.partial.json. Exiting.`);
+            process.exit(code);
+        };
+        process.once('SIGTERM', () => onSignal('SIGTERM', 143));
+        process.once('SIGINT', () => onSignal('SIGINT', 130));
+        process.once('uncaughtException', (err) => {
+            sink.finalize('Crashed');
+            console.error('Uncaught exception — flushed partial results before exit:', err);
+            process.exit(1);
+        });
+    }
 
     /**
      * Execute the suite command
@@ -136,9 +162,50 @@ export class SuiteCommand {
                 process.exit(1);
             }
 
+            // DR-F4: restrict the run to specific tests by NAME (rerun-failures /
+            // ad-hoc selection). Resolve names → IDs against the engine; the engine
+            // filters on selectedTestIds. Unresolved names warn (non-fatal); an
+            // all-miss is fatal (the caller expected those tests to run).
+            let selectedTestIds: string[] | undefined;
+            if (flags.tests && flags.tests.trim()) {
+                const names = flags.tests.split(',').map(s => s.trim()).filter(Boolean);
+                const ids: string[] = [];
+                const missing: string[] = [];
+                for (const nm of names) {
+                    const t = engine.GetTestByName(nm);
+                    if (t) ids.push(t.ID);
+                    else missing.push(nm);
+                }
+                if (missing.length > 0) {
+                    console.warn(`Warning: ${missing.length} --tests name(s) not found and skipped: ${missing.join(', ')}`);
+                }
+                if (ids.length === 0) {
+                    console.error(OutputFormatter.formatError(`None of the --tests names resolved to a known test: ${names.join(', ')}`));
+                    process.exit(1);
+                }
+                selectedTestIds = ids;
+                console.log(`Restricting run to ${ids.length} selected test(s) via --tests.`);
+            }
+
             // Parse variables from --var flags
             // Note: Suite variables apply to all tests - type conversion happens per-test
             const variables = parseVariableFlags(flags.var);
+
+            // DR-D5: persist results incrementally next to --output so a crash /
+            // OOM / `docker stop` preserves every completed test (results.json is
+            // otherwise written only at the very end). No-op when --output is unset.
+            const resultsSink = IncrementalResultsSink.forOutput(flags.output, suite.Name);
+            if (resultsSink) {
+                this.installCrashHandlers(resultsSink);
+            }
+
+            // DR-D3: the DR-G4 supervisor writes health-state.json into the same
+            // run directory as --output. Point the engine's admission gate at it
+            // so a degrading host can shed/pause dispatch. Absent --output ⇒ no
+            // admission control (ad-hoc console runs proceed at full concurrency).
+            const healthStatePath = flags.output
+                ? path.join(path.dirname(path.resolve(flags.output)), 'health-state.json')
+                : undefined;
 
             // Execute suite
             const flakyMsg = flags.flakyCheck && flags.flakyCheck > 1
@@ -158,10 +225,30 @@ export class SuiteCommand {
                 delayBetweenTests: flags.delay,
                 parallel: integrationSerial ? false : flags.parallel,
                 maxParallel: integrationSerial ? 1 : flags.maxParallel,
+                maxRetries: flags.maxRetries,
+                // DR-D9: forward failFast — config-loader set it but it was never
+                // passed to the engine, so the knob did nothing.
+                failFast: flags.failFast,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
+                onTestComplete: resultsSink?.onTestComplete,
+                onTestStart: resultsSink?.onTestStart,
+                selectedTestIds,
+                healthStatePath,
+                maxSuiteDurationMs: flags.maxSuiteDuration != null ? flags.maxSuiteDuration * 1000 : undefined,
+                circuitBreaker: flags.circuitBreaker ? { enabled: true, maxFailures: flags.maxFailures } : undefined,
+                // DR-D9: forward the (previously dead) --sequence flag. "1,3,5" →
+                // run only the tests at those suite positions (engine-supported).
+                sequence: flags.sequence
+                    ? flags.sequence.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !Number.isNaN(n))
+                    : undefined,
             }, contextUser);
 
             this.spinner.stop();
+            // DR-D5/D7: stamp the partial terminal — Cancelled if the breaker aborted.
+            if (result.aborted) {
+                console.error(`\n⚠️  Suite aborted early: ${result.abortReason ?? 'circuit breaker tripped'}`);
+            }
+            resultsSink?.finalize(result.aborted ? 'Cancelled' : 'Completed');
 
             // If --flaky-check was used, compute per-test variance and report flaky tests.
             // The engine returns multiple results per test (one per iteration); we group by

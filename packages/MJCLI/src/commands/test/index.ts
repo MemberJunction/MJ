@@ -19,7 +19,8 @@ export default class Test extends Command {
     this.log('  mj test suite <suite-id>        - Execute a test suite');
     this.log('  mj test list                    - List available tests');
     this.log('  mj test validate                - Validate test definitions');
-    this.log('  mj test history                 - View test execution history');
+    this.log('  mj test history                 - Per-test duration/flake history across runs');
+    this.log('  mj test report                  - Per-run aggregate report (pass rate, duration, trend)');
     this.log('  mj test compare                 - Compare test runs for regressions');
     this.log('');
     this.log('Legacy commands (file-based evals):');

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T090 - Send Message And User Bubble Render",
+    "Description": "Exercises the full message-send round-trip (message-input onTextSubmitted -> conversation create -> message-list render + in-progress AI time-pill) — the primary write path of the chat feature.",
+    "InputDefinition": {
+      "goal": "Open the application switcher, choose 'Chat', wait for the workspace, and start a new conversation. Type a short message such as 'Hello, what can you help me with?' into the composer at the bottom and press Enter (or click the send button). Confirm the message is accepted: your typed text appears as a user message bubble in the conversation thread, and the app shows it is working on a response (a processing/typing indicator, a spinning status on the message, or an AI response beginning to appear). Seeing your message posted and the app begin processing is success — you do NOT need to wait for the full agent answer. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The typed message posts and appears as a user message bubble in the thread",
+        "After sending, a processing/typing/working indicator or an AI response starting to render is visible",
+        "The composer clears or is disabled while processing (message was consumed, not left in the input)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,chat"
+  },
+  "primaryKey": {
+    "ID": "D6987F75-C212-452D-8705-EAD07DBBE88B"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:00.949Z",
+    "checksum": "3f18b0f57e67d0ab4caa0a5c666e68506c5938066fda727259a9f6e1b06ae296"
+  }
+}

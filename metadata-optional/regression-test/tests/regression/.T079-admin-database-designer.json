@@ -1,0 +1,110 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T079 - Admin Database Designer",
+    "Description": "Opens the Admin application's Database Designer once, then walks its bespoke surfaces (entity-search filter, column sort, New Entity wizard, live SQL preview, Edit Entity modify panel), verifying each via checkpoints. Consolidates old T197–T201.",
+    "InputDefinition": {
+      "goal": "Do the shared setup ONCE: in MJ Explorer, switch to the Admin application via the application switcher dropdown next to the logo, open 'Data & Schema', and open the Database Designer. Wait for the entity table (columns Entity Name, Schema, Table, Owner, Created) to load. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) designer-entity-search — type a partial term into the 'Search by name, table, or schema...' box and confirm the rows narrow to matches and the count line updates (or a 'No entities match ...' zero-state with a 'Clear search' button appears); (2) designer-column-sort — click a sortable column header such as 'Entity Name' or 'Schema' and confirm the row order changes with an up/down chevron indicator, then click the SAME header again and confirm the sort direction flips (if there are no entity rows, confirming the sortable headers are present OR the documented 'No entities yet' zero-state renders is acceptable); (3) new-entity-wizard — click the '+ New Entity' button (top-right) and confirm a slide-over panel titled 'New Entity' opens with a step indicator (Basics, Fields, Relationships, Review) and the Basics form (Entity Name, Table Name, Schema, Description) alongside a preview pane; (4) wizard-live-sql-preview — in that Basics step type an Entity Name such as 'Regression Test Widget' and confirm the preview pane on the right UPDATES (derives/shows a table name or DDL/SQL preview, and the Table Name field auto-populates with an 'auto' badge) — do NOT submit the wizard; then close/cancel it; (5) edit-entity-panel — click the 'Edit' (pen icon) button on any entity row and confirm an 'Edit Entity' slide-over opens showing the entity name and schema.table path with 'Fields' / 'Review Changes' / 'Apply Changes' tabs, a fields grid, and a preview pane, then switch to the 'Review Changes' tab and confirm the content updates — do NOT apply any schema changes. If there are no entity rows at all (the 'No entities yet' zero-state), confirming that zero-state plus the '+ New Entity' affordance is acceptable for this section. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 65,
+      "checkpoints": [
+        {
+          "name": "designer-entity-search",
+          "instruction": "search narrows the entity table",
+          "visualCriteria": [
+            "Database Designer renders an entity table with a name/table/schema search box, and typing in it narrows the rows to matches and updates the count line, OR shows a valid 'No entities match' zero-state"
+          ]
+        },
+        {
+          "name": "designer-column-sort",
+          "instruction": "column header sort reorders rows and flips",
+          "visualCriteria": [
+            "Clicking a column header reorders the rows and shows an up/down chevron sort indicator, and clicking the same header again flips ascending/descending"
+          ]
+        },
+        {
+          "name": "new-entity-wizard",
+          "instruction": "New Entity wizard slide-over opens",
+          "visualCriteria": [
+            "Clicking '+ New Entity' opens a 'New Entity' slide-over wizard with a step indicator and a Basics step rendering its form fields (Entity Name, Table Name, Schema, Description) alongside a preview pane"
+          ]
+        },
+        {
+          "name": "wizard-live-sql-preview",
+          "instruction": "preview pane reacts to typed Entity Name",
+          "visualCriteria": [
+            "Typing an Entity Name in the wizard's Basics step updates the live preview pane and/or auto-derives the Table Name (with an 'auto' badge), demonstrating the preview reacts to input"
+          ]
+        },
+        {
+          "name": "edit-entity-panel",
+          "instruction": "Edit Entity modify panel with tabs",
+          "visualCriteria": [
+            "Clicking Edit on an entity row opens an 'Edit Entity' slide-over showing the entity name and schema.table path with Fields / Review Changes / Apply Changes tabs, a fields grid and a preview pane, and switching tabs updates the content"
+          ]
+        }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 65,
+      "maxExecutionTime": 780000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200"
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "url-match": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "8A1677B6-CCBC-422D-B8F4-934A33460040"
+  }
+}

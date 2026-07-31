@@ -129,7 +129,31 @@ export interface TestRunOptions {
    * If undefined, the test's own RepeatCount is used.
    */
   repeatCountOverride?: number;
+
+  /**
+   * Number of extra attempts to retry a FAILED test before accepting the failure
+   * (pass-if-any-attempt-passes). 0 (default) disables retries.
+   *
+   * For non-deterministic targets (e.g. LLM-driven Computer Use tests) a test can
+   * fail transiently — a timeout, a navigation loop, or the agent giving up — yet
+   * pass cleanly on a re-run. Retrying absorbs that variance so the suite result
+   * reflects genuine failures, not one-off flakes. A test that fails then passes is
+   * marked `flaky` (see {@link TestRunResult.flaky}) so flakiness stays visible and
+   * is never silently masked.
+   *
+   * Only applies to single-execution tests; RepeatCount tests are not retried.
+   */
+  maxRetries?: number;
 }
+
+/**
+ * Dispatch ordering for the parallel work queue (DR-D1).
+ * - `suite` — original suite sequence (historical behavior; default).
+ * - `longest-first` — LPT scheduling: dispatch highest mean-duration tests first
+ *   so the long pole starts at t=0 and short tests backfill the tail. Requires
+ *   duration history (DR-G6); without it, degrades to `suite`.
+ */
+export type SeedOrder = 'suite' | 'longest-first';
 
 /**
  * Options for running a test suite
@@ -139,6 +163,22 @@ export interface SuiteRunOptions extends TestRunOptions {
    * Run tests in parallel
    */
   parallel?: boolean;
+
+  /**
+   * Order tests come off the shared parallel work queue (DR-D1). Does not
+   * change each test's reporting `sequence` (always its suite position) — only
+   * dispatch order. Default `suite`.
+   */
+  seedOrder?: SeedOrder;
+
+  /**
+   * Path to the DR-G4 supervisor's `health-state.json` (DR-D3). When set, the
+   * parallel work queue consults it before each dispatch: sheds workers when the
+   * host is `degraded`, pauses when `critical`. Absent (or file missing) ⇒ no
+   * admission control — the run proceeds at full concurrency. Typically derived
+   * from the `--output` run directory by the CLI.
+   */
+  healthStatePath?: string;
 
   /**
    * Stop on first failure
@@ -179,6 +219,63 @@ export interface SuiteRunOptions extends TestRunOptions {
    * when tests perform repeated logins from the same IP.
    */
   delayBetweenTests?: number;
+
+  /**
+   * Fired the moment each test resolves its final result (after any retries),
+   * in whichever worker ran it (DR-D5). The suite runner uses this to persist
+   * results incrementally — one JSONL line per attempt + an atomic partial
+   * snapshot — so a crashed or OOM-killed run preserves every completed test
+   * instead of losing everything (results.json is otherwise written once at the
+   * very end). Must be cheap and non-throwing; the engine invokes it inline in
+   * the worker loop and swallows any error it throws.
+   */
+  onTestComplete?: (result: TestRunResult) => void;
+
+  /**
+   * Fired when a worker DISPATCHES a test — before execution, once per test
+   * (not per retry) (DR-D4 heartbeat). Lets the sink record in-flight tests so
+   * `status` can show what each worker is running and surface a test that never
+   * completes (a wedged worker) instead of it being invisible. Cheap + non-throwing.
+   */
+  onTestStart?: (info: TestStartInfo) => void;
+
+  /**
+   * Suite wall-clock budget in ms (DR-D4, `--max-suite-duration`). Once elapsed,
+   * the runner stops dispatching NEW tests and finalizes gracefully with partial
+   * results; the in-flight test still finishes. Falls back to
+   * `TestSuite.MaxExecutionTimeMS` when unset; no budget ⇒ unbounded (historical).
+   */
+  maxSuiteDurationMs?: number;
+
+  /**
+   * Suite circuit breaker (DR-D7). Aborts a doomed run early instead of burning
+   * hours: a sliding window of environment-class failures (degrading host) or a
+   * plain failure cap (broken deploy). Opt-in — omitted/`enabled:false` ⇒ off
+   * (default). Recommended on for CI.
+   */
+  circuitBreaker?: CircuitBreakerOptions;
+}
+
+/** Circuit-breaker configuration passed through {@link SuiteRunOptions} (DR-D7). */
+export interface CircuitBreakerOptions {
+  /** Master switch. Default false (off). */
+  enabled?: boolean;
+  /** Sliding-window size for the environment tier. Default 10. */
+  windowSize?: number;
+  /** Fraction of the window that must be env-class failures to trip. Default 0.6. */
+  envFailureThreshold?: number;
+  /** Total failures (any category) that trip the run. Default max(10, ceil(0.25 × suiteSize)). */
+  maxFailures?: number;
+}
+
+/** Heartbeat payload emitted when a worker picks up a test (DR-D4). */
+export interface TestStartInfo {
+  testId: string;
+  testName: string;
+  /** Zero-based worker index (undefined for sequential runs). */
+  workerIndex?: number;
+  /** ISO timestamp the worker began this test. */
+  startedAt: string;
 }
 
 /**
@@ -209,11 +306,79 @@ export interface OracleResult {
    * Additional details (oracle-specific)
    */
   details?: unknown;
+
+  /**
+   * When true, this oracle is *advisory*: its result is reported and scored for
+   * diagnostics but does NOT gate the test's Passed/Failed status (CU-D3). Used
+   * for efficiency/quality signals (e.g. step-count) that shouldn't fail an
+   * otherwise-successful run. Drivers set this from the oracle's config; absent
+   * or false means the oracle gates as normal.
+   */
+  advisory?: boolean;
 }
 
 /**
  * Result from running a single test
  */
+/**
+ * Lightweight record of a single retry attempt that was superseded by a later
+ * one (CU-F3). Carries just enough to diagnose *why* an earlier attempt failed
+ * — flakiness is the suite's #1 signal — while deliberately omitting heavy
+ * payloads (screenshots, oracle results) so retaining attempt history does not
+ * reintroduce a per-run memory ramp.
+ */
+export interface PriorAttemptSummary {
+  /** 1-based attempt number. */
+  attempt: number;
+  /** Terminal status of this superseded attempt. */
+  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Timeout';
+  /** Score this attempt achieved. */
+  score: number;
+  /** How long this attempt ran, in ms. */
+  durationMs: number;
+  /** Error/diagnostic message from this attempt, if any. */
+  errorMessage?: string;
+  /**
+   * Normalized failure category of this superseded attempt (RI-D2), when it was
+   * classified. Lets the next attempt and reporting see *what kind* of failure
+   * preceded it without retaining the full result.
+   */
+  failureCategory?: FailureCategory;
+  /**
+   * The driver's non-blind retry memo for this attempt (RI-D2) — a short,
+   * payload-free "here's what went wrong last time" the driver can feed to the
+   * next attempt (as `PreviousAttemptSummary`) so attempt 2+ isn't a blind
+   * re-roll. Present only when the driver produced one.
+   */
+  failureMemo?: string;
+}
+
+/**
+ * Normalized failure taxonomy the retry scheduler keys policy on (DR-D2).
+ * Drivers may emit their own free-form `failureClass`; the engine normalizes it
+ * (or regex-classifies the judge/error message as a stopgap) into one of these:
+ * - `timeout`     — the run exceeded its time budget.
+ * - `nav-loop`    — the agent looped / repeated the same action or page.
+ * - `blank-page`  — a blank/empty/non-rendering page (a.k.a. stuck-page).
+ * - `app-error`   — deterministic app fault: 500, uncaught exception, missing
+ *                   bundle/key, empty dataset. Retrying is pure waste → 0 retries.
+ * - `auth-detour` — an unexpected login/auth redirect (usually transient).
+ * - `assertion`   — an oracle/assertion said the output was wrong.
+ * - `impossible`  — the target judged the task infeasible / gave up → 0 retries.
+ * - `infra`       — network/connection/browser-crash below the app.
+ * - `unknown`     — could not be classified.
+ */
+export type FailureCategory =
+  | 'timeout'
+  | 'nav-loop'
+  | 'blank-page'
+  | 'app-error'
+  | 'auth-detour'
+  | 'assertion'
+  | 'impossible'
+  | 'infra'
+  | 'unknown';
+
 export interface TestRunResult {
   /**
    * Test Run ID
@@ -309,9 +474,89 @@ export interface TestRunResult {
   sequence?: number;
 
   /**
+   * Total number of attempts made for this test, including the first.
+   * 1 when no retry occurred; >1 when retried (see {@link TestRunOptions.maxRetries}).
+   */
+  attempts?: number;
+
+  /**
+   * True when the test FAILED at least once but ultimately PASSED on a retry.
+   * The final `status` is `Passed`, but `flaky` flags that it was non-deterministic
+   * — so reports can surface it and genuine app flakiness is never silently masked.
+   */
+  flaky?: boolean;
+
+  /**
    * Resolved variables that were used for this test run
    */
   resolvedVariables?: ResolvedTestVariables;
+
+  /**
+   * Lightweight summaries of each FAILED attempt that preceded the final
+   * result, oldest first (CU-F3). Present only when the test was retried.
+   * Preserves *why* earlier attempts failed so flakiness is diagnosable — the
+   * final `result` object no longer silently discards attempt 1's failure.
+   */
+  priorAttempts?: PriorAttemptSummary[];
+
+  /**
+   * Zero-based index of the parallel worker that ran this test (DR-D5).
+   * Undefined for sequential runs. Enables per-worker swimlane timelines and
+   * "poisoned worker" analysis in reporting (DR-G2).
+   */
+  workerIndex?: number;
+
+  /**
+   * Normalized failure classification (DR-D2), present only for non-passing
+   * results. Sourced from the driver's `failureClass` when it sets one, else
+   * regex-classified from the judge/error message. The retry scheduler keys
+   * policy on it (`impossible`/`app-error` → 0 retries); reporting and `compare`
+   * tally by it. See {@link FailureCategory}.
+   */
+  failureCategory?: FailureCategory;
+
+  /**
+   * The driver's non-blind retry memo for a non-passing result (RI-D2), surfaced
+   * from the engine (e.g. Computer Use's `ComputerUseResult.FailureMemo`). Copied
+   * into each {@link PriorAttemptSummary} so `runWithRetries` can feed it forward
+   * to the next attempt. Absent on success or when the driver produced none.
+   */
+  failureMemo?: string;
+
+  /**
+   * Execution-tier label a tiered driver reports (RI-C1) — e.g. Computer Use's
+   * `'replay'` / `'replay-with-heal'` / `'llm'`. The tier that PRODUCED this
+   * result: a replay that diverged and fell back reports `'llm'`. Reporting
+   * segments tier mix / replay share by it. Absent for single-tier drivers.
+   */
+  tier?: string;
+
+  /**
+   * Replay telemetry (RI-C1/RI-D4), present whenever a replay was ATTEMPTED —
+   * so the drift signal (`diverged` > 0) survives even a green LLM-fallback
+   * result. Absent on pure-LLM runs. See {@link ReplayTelemetry}.
+   */
+  replay?: ReplayTelemetry;
+}
+
+/**
+ * Compact per-attempt replay outcome a tiered driver may surface (RI-C1/RI-D4).
+ * Mirrors the engine's replay counts so the report's replay-health panel and the
+ * "is replay lying to us?" check can be computed without the full step list.
+ */
+export interface ReplayTelemetry {
+  /** The replay sub-tier the run dispatched into. */
+  tier: 'replay' | 'replay-with-heal';
+  /** Number of trace steps replayed. */
+  steps: number;
+  /** Steps that self-healed (recorded target drifted, re-resolved). */
+  healed: number;
+  /** Steps that diverged (replay+heal failed) — the UI-drift signal. */
+  diverged: number;
+  /** Whether every step hit or healed (no unrecovered divergence). */
+  allStepsSucceeded: boolean;
+  /** Whether a divergence forced an in-attempt fall back to the LLM tier. */
+  fellBackToLlm: boolean;
 }
 
 /**
@@ -347,6 +592,12 @@ export interface TestSuiteRunResult {
    * Tests that failed
    */
   failedTests: number;
+
+  /**
+   * Tests that passed only after a retry (failed at least once first).
+   * A subset of `passedTests` — surfaces flakiness without masking it.
+   */
+  flakyTests?: number;
 
   /**
    * Total tests
@@ -387,6 +638,16 @@ export interface TestSuiteRunResult {
    * Resolved variables that were provided at suite run level
    */
   resolvedVariables?: ResolvedTestVariables;
+
+  /**
+   * True when the run was cut short by the circuit breaker (DR-D7) rather than
+   * dispatching every test. `status` is `Cancelled`; `abortReason` explains why.
+   * Lets the CLI exit with a distinct code (DR-F2) and reports say so.
+   */
+  aborted?: boolean;
+
+  /** Human-readable reason for an aborted run (DR-D7). */
+  abortReason?: string;
 }
 
 /**

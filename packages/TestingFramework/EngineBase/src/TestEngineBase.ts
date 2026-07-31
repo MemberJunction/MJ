@@ -9,7 +9,7 @@ import {
     IMetadataProvider,
     UserInfo
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import {
     MJTestTypeEntity,
     MJTestEntity,
@@ -219,22 +219,29 @@ export class TestEngineBase extends BaseEngine<TestEngineBase> {
      * @returns 
      */
     public GetTestsForSuite(suiteId: string): MJTestEntity[] {
-        const suiteTests = this._testSuiteTests.filter(t => UUIDsEqual(t.SuiteID, suiteId));
+        // DR-D9: index once (O(n)) so membership lookup and the sort comparator
+        // are O(1) each. The previous version called GetTestByID (a linear scan)
+        // inside the loop AND ran two `suiteTests.find()` per sort comparison —
+        // O(n²·log n) overall for a large suite.
+        const testById = new Map<string, MJTestEntity>();
+        for (const t of this._tests) {
+            testById.set(NormalizeUUID(t.ID), t);
+        }
+        const seqByTestId = new Map<string, number>();
         const tests: MJTestEntity[] = [];
-        for (const st of suiteTests) {
-            const test = this.GetTestByID(st.TestID);
+        for (const st of this._testSuiteTests) {
+            if (!UUIDsEqual(st.SuiteID, suiteId)) {
+                continue;
+            }
+            seqByTestId.set(NormalizeUUID(st.TestID), st.Sequence);
+            const test = testById.get(NormalizeUUID(st.TestID));
             if (test) {
                 tests.push(test);
             }
         }
-        return tests.sort((a, b) => {
-            const aSuiteTest = suiteTests.find(st => UUIDsEqual(st.TestID, a.ID));
-            const bSuiteTest = suiteTests.find(st => UUIDsEqual(st.TestID, b.ID));
-            if (aSuiteTest && bSuiteTest) {
-                return aSuiteTest.Sequence - bSuiteTest.Sequence;
-            }
-            return 0;
-        });
+        return tests.sort(
+            (a, b) => (seqByTestId.get(NormalizeUUID(a.ID)) ?? 0) - (seqByTestId.get(NormalizeUUID(b.ID)) ?? 0)
+        );
     }
 
     /**

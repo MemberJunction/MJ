@@ -16,6 +16,7 @@
 
 import { BaseJudge } from './BaseJudge.js';
 import { JudgeContext, JudgeVerdict, StepRecord } from '../types/judge.js';
+import { hashesSimilar } from '../utils/perceptual-hash.js';
 
 /** Default number of consecutive identical states before declaring stagnation */
 const DEFAULT_STAGNATION_THRESHOLD = 3;
@@ -42,15 +43,28 @@ export class HeuristicJudge extends BaseJudge {
     }
 
     public override async Evaluate(context: JudgeContext): Promise<JudgeVerdict> {
-        // Check stuck state (identical screenshots)
-        const stuckVerdict = this.detectStuckState(context);
-        if (stuckVerdict) return stuckVerdict;
+        // Navigation-shape checks (stuck frame, URL loop) describe HOW the run is
+        // moving, not whether a criterion is satisfied — so in a checkpoint tour
+        // (CU-D8) they must not answer on the judge's behalf. HybridJudge takes any
+        // confidence > 0 as final and skips the LLM, and the LLM judge is the only
+        // thing that can latch a tour's visual criteria: a tour that tripped these
+        // could never latch another section, no matter what it actually did on
+        // screen. Both signals are false-positive-prone on a tour anyway — a
+        // section can latch with no visible frame change, and tours are scripted to
+        // revisit URLs (open→cancel, A→B→A). The engine still surfaces its own loop
+        // evidence to the controller (CU-B1), so nothing is silently dropped.
+        if (!context.IsCheckpointTour) {
+            // Check stuck state (identical screenshots)
+            const stuckVerdict = this.detectStuckState(context);
+            if (stuckVerdict) return stuckVerdict;
 
-        // Check navigation loops (cycling URLs)
-        const loopVerdict = this.detectNavigationLoop(context.StepHistory);
-        if (loopVerdict) return loopVerdict;
+            // Check navigation loops (cycling URLs)
+            const loopVerdict = this.detectNavigationLoop(context.StepHistory);
+            if (loopVerdict) return loopVerdict;
+        }
 
-        // Check repeated errors
+        // Repeated hard errors are a genuine systemic failure in any run shape,
+        // tour included — this one still preempts.
         const errorVerdict = this.detectRepeatedErrors(context.StepHistory);
         if (errorVerdict) return errorVerdict;
 
@@ -63,27 +77,40 @@ export class HeuristicJudge extends BaseJudge {
     }
 
     /**
-     * Detect if the page is stuck by comparing recent screenshots.
-     * N consecutive identical base64 strings = stuck.
+     * Detect if the page is stuck by comparing recent screenshot fingerprints.
+     * N consecutive perceptually-similar frames = stuck.
+     *
+     * Uses the shared dHash (CU-F6) rather than raw base64 equality: byte
+     * equality is defeated by any animated spinner (every frame differs
+     * byte-wise), so it silently MISSED genuine stalls behind a spinning
+     * loader. dHash treats spinner frames as "unchanged", so a page frozen on a
+     * loader is now correctly detected.
+     *
+     * The feedback is deliberately loading-aware and does NOT command the agent
+     * to navigate away (the previous wording did, directly contradicting the
+     * judge doctrine that waiting on a loading screen is correct). Whether the
+     * static screen is a boot screen vs a genuine dead-end is resolved by the
+     * LLM judge / settle signals — this heuristic only flags "nothing changed".
      */
     private detectStuckState(context: JudgeContext): JudgeVerdict | null {
-        const screenshots = [
-            ...context.ScreenshotHistory,
-            context.CurrentScreenshot,
-        ].filter(s => s.length > 0);
+        const hashes = [
+            ...context.StepHistory.map(s => s.ScreenshotHash),
+            context.CurrentScreenshotHash,
+        ].filter(h => h.length > 0);
 
-        if (screenshots.length < this.stagnationThreshold) return null;
+        if (hashes.length < this.stagnationThreshold) return null;
 
-        // Check if the last N screenshots are identical
-        const recent = screenshots.slice(-this.stagnationThreshold);
-        const allIdentical = recent.every(s => s === recent[0]);
+        // Are the last N fingerprints all visually the same as the most recent?
+        const recent = hashes.slice(-this.stagnationThreshold);
+        const latest = recent[recent.length - 1];
+        const allSimilar = recent.every(h => hashesSimilar(h, latest));
 
-        if (allIdentical) {
+        if (allSimilar) {
             return this.CreateVerdict(
                 false,
                 0.8,
-                `Page appears stuck: ${this.stagnationThreshold} consecutive identical screenshots`,
-                'The page has not changed. Try a different action — click somewhere else, scroll, or navigate to a different URL.',
+                `Page appears stuck: ${this.stagnationThreshold} consecutive visually-unchanged screenshots`,
+                'The page has not visibly changed. If it is still loading/booting, keep waiting (Wait) or reload — do NOT navigate away. If it is not loading and you are genuinely stuck, try a different action to make progress.',
             );
         }
 
@@ -97,7 +124,10 @@ export class HeuristicJudge extends BaseJudge {
     private detectNavigationLoop(steps: StepRecord[]): JudgeVerdict | null {
         if (steps.length < MIN_STEPS_FOR_LOOP_DETECTION) return null;
 
-        const urls = steps.map(s => s.Url).filter(u => u.length > 0);
+        // Prefer the post-action URL (CU-A8) — it reflects where the step
+        // actually landed, not where it started (which lagged navigation by one
+        // step and skewed loop detection). Falls back to Url for older records.
+        const urls = steps.map(s => s.UrlAfter || s.Url).filter(u => u.length > 0);
         if (urls.length < MIN_STEPS_FOR_LOOP_DETECTION) return null;
 
         // Check for cycle of length 2 (A→B→A→B)

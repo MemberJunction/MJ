@@ -11,6 +11,8 @@ export * from './types/auth.js';
 export * from './types/params.js';
 export * from './types/results.js';
 export * from './types/controller.js';
+export * from './types/app-profile.js';
+export * from './types/trace.js';
 
 // ─── Browser Adapter Exports ───────────────────────────────
 export * from './browser/BaseBrowserAdapter.js';
@@ -18,6 +20,7 @@ export * from './browser/PlaywrightBrowserAdapter.js';
 export * from './browser/SharedContextBrowserAdapter.js';
 export * from './browser/HeadlessBrowserEngine.js';
 export * from './browser/NavigationGuard.js';
+export * from './browser/selector-resolution.js';
 export * from './browser/connect-endpoint.js';
 
 // ─── Auth Exports ──────────────────────────────────────────
@@ -37,6 +40,20 @@ export * from './prompts/default-controller.js';
 export * from './engine/RunContext.js';
 export * from './engine/ResponseParser.js';
 export * from './engine/ComputerUseEngine.js';
+export * from './engine/trace-url.js';
+export * from './engine/trace-recorder.js';
+export * from './engine/trace-keying.js';
+export * from './engine/replay-step.js';
+export * from './engine/heal-decision.js';
+export * from './engine/postcondition.js';
+export * from './engine/checkpoint.js';
+export * from './engine/judge-cache.js';
+export * from './engine/prelude.js';
+export * from './engine/trace-diff.js';
+export * from './engine/failure-memo.js';
 
 // ─── Tool Exports ──────────────────────────────────────────
 export * from './tools/ToolProvider.js';
+
+// ─── Utility Exports ───────────────────────────────────────
+export * from './utils/perceptual-hash.js';

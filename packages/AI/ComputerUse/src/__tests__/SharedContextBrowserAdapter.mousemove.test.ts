@@ -23,6 +23,8 @@ interface MockPage {
     isClosed: ReturnType<typeof vi.fn>;
     on: ReturnType<typeof vi.fn>;
     mouse: MockMouse;
+    accessibility: { snapshot: ReturnType<typeof vi.fn> };
+    locator: ReturnType<typeof vi.fn>;
 }
 interface MockContext {
     newPage: ReturnType<typeof vi.fn>;
@@ -47,6 +49,8 @@ beforeEach(() => {
             down: vi.fn().mockResolvedValue(undefined),
             up: vi.fn().mockResolvedValue(undefined),
         },
+        accessibility: { snapshot: vi.fn().mockResolvedValue({ role: 'WebArea', name: 'Test', children: [] }) },
+        locator: vi.fn().mockReturnValue({ count: vi.fn().mockResolvedValue(0) }),
     };
     context = {
         newPage: vi.fn().mockResolvedValue(page),
@@ -76,21 +80,27 @@ describe('SharedContextBrowserAdapter — MouseMove action', () => {
     });
 });
 
-describe('SharedContextBrowserAdapter — base perception defaults (unchanged, non-throwing)', () => {
-    it('GetAccessibilitySnapshot returns null (inherited base default)', async () => {
+describe('SharedContextBrowserAdapter — perception (delegates to shared helpers, CU-A3)', () => {
+    it('GetAccessibilitySnapshot maps the real page snapshot (no longer the base no-op null)', async () => {
         const adapter = await launchedAdapter();
-        await expect(adapter.GetAccessibilitySnapshot()).resolves.toBeNull();
+        const snapshot = await adapter.GetAccessibilitySnapshot();
+        // Proves SCBA now runs real perception (page.accessibility.snapshot),
+        // not the inherited base no-op that always returned null pre-CU-A3.
+        expect(snapshot).not.toBeNull();
+        expect(snapshot?.Role).toBe('WebArea');
+        expect(page.accessibility.snapshot).toHaveBeenCalledTimes(1);
     });
 
-    it('QueryElement returns not-found defaults (inherited base default)', async () => {
+    it('QueryElement runs page.locator (absent element → Exists:false via real query, not a no-op)', async () => {
         const adapter = await launchedAdapter();
         const info = await adapter.QueryElement('#x');
+        expect(page.locator).toHaveBeenCalledWith('#x');
         expect(info.Exists).toBe(false);
         expect(info.Visible).toBe(false);
         expect(info.Text).toBe('');
     });
 
-    it('StartScreencast resolves as a no-op (inherited base default)', async () => {
+    it('StartScreencast resolves as a no-op (screencast is a live-view feature SCBA does not provide)', async () => {
         const adapter = await launchedAdapter();
         const frames: unknown[] = [];
         await expect(adapter.StartScreencast(f => frames.push(f))).resolves.toBeUndefined();

@@ -74,7 +74,28 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private initialNavigationComplete = false; // Track if initial navigation has completed
 
   activeApp: BaseApplication | null = null;
-  loading = true;
+  private _loading = true;
+  /**
+   * Shell loading-screen flag. Also drives the Computer Use readiness beacon
+   * (CU-A2): when loading clears, the shell has finished loading the active
+   * route's resource, so we set `data-mj-ready="true"` on <html>; when loading
+   * is (re)raised on navigation, we clear it. The `@memberjunction/computer-use`
+   * settle loop polls that attribute as a deterministic readiness signal instead
+   * of guessing from pixels. The attribute is inert (no production semantics).
+   */
+  get loading(): boolean {
+    return this._loading;
+  }
+  set loading(value: boolean) {
+    this._loading = value;
+    if (typeof document !== 'undefined') {
+      if (value) {
+        delete document.documentElement.dataset.mjReady;
+      } else {
+        document.documentElement.dataset.mjReady = 'true';
+      }
+    }
+  }
   initialized = false;
   private waitingForFirstResource = false;
   tabBarVisible = true; // Controlled by workspace manager

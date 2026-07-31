@@ -10,7 +10,8 @@ import {
     LogError,
     LogStatusEx,
     IsVerboseLoggingEnabled,
-    BaseEntity
+    BaseEntity,
+    RunView
 } from '@memberjunction/core';
 import {
     MJTestEntity,
@@ -23,7 +24,7 @@ import {
 } from '@memberjunction/core-entities';
 import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
-import { BaseTestDriver } from '../drivers/BaseTestDriver';
+import { BaseTestDriver, DEFAULT_TEST_TIMEOUT_MS } from '../drivers/BaseTestDriver';
 import { IOracle } from '../oracles/IOracle';
 import { SchemaValidatorOracle } from '../oracles/SchemaValidatorOracle';
 import { TraceValidatorOracle } from '../oracles/TraceValidatorOracle';
@@ -35,6 +36,7 @@ import {
     SuiteRunOptions,
     DriverExecutionResult,
     TestRunResult,
+    PriorAttemptSummary,
     TestSuiteRunResult,
     TestLogMessage,
     ResolvedTestVariables,
@@ -47,6 +49,21 @@ import {
     getMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
+import { runWithRetries, RetryPolicy, isRetriableFailure } from './retry';
+import { RetryBudget, buildSuiteRetryPolicy, computeSuiteRetryBudget, computeInfraReserve, fixedRetries } from './retry-policy';
+import { classifyFailure } from './failure-classifier';
+import { WorkItem, seedWorkItems, drainQueue } from './work-queue';
+import { AdmissionController, readHealthState } from './admission';
+import { resolveWatchdogMs, withWatchdog } from './watchdog';
+import { CircuitBreaker, defaultMaxFailures } from './circuit-breaker';
+import * as fs from 'node:fs';
+
+/**
+ * How many of a test's most recent runs are inspected to decide whether it is a
+ * chronic failure (no pass in the window ⇒ forfeits agent-class retries). Small
+ * enough that a genuinely fixed test regains retries within a few runs.
+ */
+const CHRONIC_FAILURE_LOOKBACK_RUNS = 3;
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -87,6 +104,30 @@ export class TestEngine extends BaseSingleton<TestEngine> {
      * key prevents one suite run's fixtures from leaking into another.
      */
     private _suiteFixtures = new Map<string, SuiteFixtureContext>();
+
+    /**
+     * Per-suite-run retry policy inputs (DR-D2), keyed by SuiteRunID. The shared
+     * {@link RetryBudget} caps total extra attempts across ALL tests/workers of
+     * the run at ceil(0.15 × suiteSize); `requestedMax` is the operator's
+     * per-test ceiling. Set in `RunSuite`, removed in its `finally` (same
+     * lifecycle as `_suiteFixtures`), so each run gets a fresh budget.
+     */
+    private _suiteRetry = new Map<string, { budget: RetryBudget; requestedMax: number; chronicTestIds: ReadonlySet<string> }>();
+
+    /**
+     * Per-suite-run circuit breaker (DR-D7), keyed by SuiteRunID. Present only
+     * when `options.circuitBreaker.enabled`. Fed every final outcome via
+     * `finalizeTestResult`; the dispatch gate polls its `tripped` state to abort
+     * a doomed run. Same lifecycle as `_suiteFixtures` / `_suiteRetry`.
+     */
+    private _suiteBreaker = new Map<string, CircuitBreaker>();
+
+    /**
+     * SuiteRunIDs whose `failFast` has tripped (DR-D9) — set on the first hard
+     * failure when `options.failFast` is on, polled by the dispatch gate to drain
+     * the run. `failFast` used to be declared but never read.
+     */
+    private _suiteFailFast = new Set<string>();
 
     /**
      * Get singleton instance
@@ -353,9 +394,59 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // best-effort (it logs and never rethrows, so cleanup can't fail the suite).
             const fixtures: SuiteFixtureContext = { SuiteRunID: suiteRun.ID, Data: {}, CreatedRecords: [] };
             this._suiteFixtures.set(suiteRun.ID, fixtures);
+
+            // DR-D2: one shared retry budget for the whole run. ceil(0.15 × N)
+            // total extra attempts across every test/worker, so a degraded host
+            // can't trigger a retry storm (the recheck burned 34 retries on 44
+            // tests). Deterministic failures additionally get 0 retries by class.
+            // A share is reserved for infrastructure failures so agent-class failures
+            // can't drain the pool before an auth-detour is even seen, and tests with
+            // no recent pass forfeit their agent-class retry (a re-roll of a
+            // known-bad outcome buys nothing).
+            const retryBudget = computeSuiteRetryBudget(tests.length);
+            const infraReserve = computeInfraReserve(retryBudget);
+            const chronicTestIds = (options.maxRetries ?? 0) > 0
+                ? await this.loadChronicallyFailingTestIds(tests.map(t => t.ID), contextUser)
+                : new Set<string>();
+            this._suiteRetry.set(suiteRun.ID, {
+                budget: new RetryBudget(retryBudget, infraReserve),
+                requestedMax: options.maxRetries ?? 0,
+                chronicTestIds,
+            });
+            if ((options.maxRetries ?? 0) > 0) {
+                this.log(`Suite retry budget: ${retryBudget} extra attempt(s) across ${tests.length} tests (max ${options.maxRetries}/test, 0 for deterministic failures; ${infraReserve} reserved for infrastructure failures)`);
+                if (chronicTestIds.size > 0) {
+                    this.log(`Retry policy: ${chronicTestIds.size} test(s) have no pass in the last ${CHRONIC_FAILURE_LOOKBACK_RUNS} run(s) — they forfeit agent-class retries`);
+                }
+            }
+
+            // DR-D4: suite wall-clock budget. Option override wins; else the
+            // TestSuite.MaxExecutionTimeMS column; else unbounded (historical).
+            const maxSuiteMs = options.maxSuiteDurationMs
+                ?? (suite.MaxExecutionTimeMS != null && suite.MaxExecutionTimeMS > 0 ? suite.MaxExecutionTimeMS : undefined);
+            const suiteDeadline = maxSuiteMs && maxSuiteMs > 0 ? startTime + maxSuiteMs : undefined;
+            if (suiteDeadline) {
+                this.log(`Suite wall-clock budget: ${Math.round(maxSuiteMs! / 1000)}s — dispatch stops after that, in-flight tests finish`);
+            }
+
+            // DR-D7: opt-in circuit breaker — abort a doomed run early rather than
+            // burning hours on a degrading host or a broken deploy.
+            const cbOpts = options.circuitBreaker;
+            if (cbOpts?.enabled) {
+                const maxFailures = cbOpts.maxFailures ?? defaultMaxFailures(tests.length);
+                this._suiteBreaker.set(suiteRun.ID, new CircuitBreaker({
+                    windowSize: cbOpts.windowSize,
+                    envFailureThreshold: cbOpts.envFailureThreshold,
+                    maxFailures,
+                }));
+                this.log(`Circuit breaker armed: abort on ${maxFailures} total failures, or an env-class failure window`);
+            }
+
             const suiteDrivers = await this.resolveSuiteDrivers(tests, contextUser);
 
             let testResults: TestRunResult[] = [];
+            let aborted = false;
+            let abortReason: string | undefined;
             try {
                 for (const driver of suiteDrivers) {
                     await driver.SetupSuite(fixtures, contextUser);
@@ -363,9 +454,17 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
                 // Execute tests — parallel or sequential
                 if (options.parallel && tests.length > 1) {
-                    testResults = await this.runTestsParallel(tests, options, contextUser, suiteRun, suiteVariablesJson, suiteContext);
+                    testResults = await this.runTestsParallel(tests, options, contextUser, suiteRun, suiteVariablesJson, suiteContext, suiteDeadline);
                 } else {
-                    testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext);
+                    testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext, suiteDeadline);
+                }
+
+                // DR-D7: capture the breaker verdict BEFORE the finally deletes it.
+                const verdict = this._suiteBreaker.get(suiteRun.ID)?.verdict;
+                if (verdict?.tripped) {
+                    aborted = true;
+                    abortReason = `Circuit breaker (${verdict.reason}): ${verdict.detail}`;
+                    this.logError(`Suite ABORTED early by circuit breaker — ${abortReason}`);
                 }
             } finally {
                 for (const driver of suiteDrivers) {
@@ -376,6 +475,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                     }
                 }
                 this._suiteFixtures.delete(suiteRun.ID);
+                this._suiteRetry.delete(suiteRun.ID);
+                this._suiteBreaker.delete(suiteRun.ID);
+                this._suiteFailFast.delete(suiteRun.ID);
                 // Update TestSuiteRun entity with results (guaranteed even on a SetupSuite throw)
                 await this.updateSuiteRun(suiteRun, testResults, startTime);
             }
@@ -383,6 +485,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // Calculate suite-level metrics
             const passedTests = testResults.filter(r => r.status === 'Passed').length;
             const failedTests = testResults.filter(r => r.status === 'Failed').length;
+            const flakyTests = testResults.filter(r => r.flaky === true).length;
             const totalScore = testResults.reduce((sum, r) => sum + r.score, 0);
             const avgScore = testResults.length > 0 ? totalScore / testResults.length : 0;
 
@@ -390,20 +493,26 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 suiteRunId: suiteRun.ID,
                 suiteId: suite.ID,
                 suiteName: suite.Name,
-                status: suiteRun.Status as 'Completed' | 'Failed' | 'Cancelled' | 'Pending' | 'Running',
+                // DR-D7: an aborted run reports as Cancelled (stopped early), with
+                // the reason surfaced so the CLI can exit distinctly (DR-F2).
+                status: aborted ? 'Cancelled' : (suiteRun.Status as 'Completed' | 'Failed' | 'Cancelled' | 'Pending' | 'Running'),
                 passedTests,
                 failedTests,
+                flakyTests,
                 totalTests: testResults.length,
                 averageScore: avgScore,
                 testResults,
                 durationMs: Date.now() - startTime,
                 totalCost: testResults.reduce((sum, r) => sum + r.totalCost, 0),
                 startedAt: suiteRun.StartedAt!,
-                completedAt: suiteRun.CompletedAt!
+                completedAt: suiteRun.CompletedAt!,
+                aborted: aborted || undefined,
+                abortReason,
             };
 
             this.log(
-                `Suite completed: ${result.status} (${passedTests}/${testResults.length} passed)`,
+                `Suite completed: ${result.status} (${passedTests}/${testResults.length} passed` +
+                    (flakyTests > 0 ? `, ${flakyTests} flaky — passed on retry` : '') + `)`,
                 options.verbose
             );
             return result;
@@ -424,32 +533,125 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         contextUser: UserInfo,
         suiteRunId: string,
         suiteVariablesJson: string | null,
-        suiteContext?: Record<string, unknown>
+        suiteContext?: Record<string, unknown>,
+        deadline?: number
     ): Promise<TestRunResult[]> {
         const testResults: TestRunResult[] = [];
         let testSequence = 1;
 
         for (const test of tests) {
+            // DR-D7/D9: a tripped circuit breaker or failFast aborts the run early.
+            if (this._suiteBreaker.get(suiteRunId)?.tripped || this._suiteFailFast.has(suiteRunId)) {
+                this.log(`Dispatch halted (breaker/failFast) — stopping after ${testResults.length}/${tests.length} tests`);
+                break;
+            }
+            // DR-D4: honor the suite wall-clock budget between tests.
+            if (deadline !== undefined && Date.now() >= deadline) {
+                this.log(`Suite wall-clock budget reached — stopping after ${testResults.length}/${tests.length} tests`);
+                break;
+            }
+
             if (testSequence > 1 && options.delayBetweenTests && options.delayBetweenTests > 0) {
                 this.log(`Waiting ${options.delayBetweenTests}ms before next test...`, options.verbose);
                 await new Promise(resolve => setTimeout(resolve, options.delayBetweenTests));
             }
 
+            options.onTestStart?.({ testId: test.ID, testName: test.Name, startedAt: new Date().toISOString() });
             try {
                 const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRunId, testSequence, suiteVariablesJson, undefined, suiteContext);
-                if (Array.isArray(result)) {
-                    testResults.push(...result);
-                } else {
-                    testResults.push(result);
+                const arr = Array.isArray(result) ? result : [result];
+                for (const r of arr) {
+                    this.finalizeTestResult(r, undefined, testSequence, options, suiteRunId);
+                    testResults.push(r);
                 }
             } catch (error) {
+                // DR-D5: synthesize + emit instead of dropping (see runQueuedItem).
                 this.logError(`Test failed in suite: ${test.Name}`, error as Error);
+                const errResult = this.synthesizeErrorResult(test, error as Error, suiteRunId, testSequence, undefined);
+                this.finalizeTestResult(errResult, undefined, testSequence, options, suiteRunId);
+                testResults.push(errResult);
             } finally {
                 testSequence++;
             }
         }
 
         return testResults;
+    }
+
+    /**
+     * Stamp cross-cutting fields onto a resolved result and fire the incremental
+     * completion hook (DR-D5). Called for every result the suite produces — the
+     * happy path, each iteration of a repeated test, and synthesized Error
+     * results — from the one worker that produced it. The hook is invoked inline
+     * (so the JSONL/partial write is ordered before the next test starts) and
+     * its throws are swallowed: a reporting-sink failure must never fail a test.
+     * @private
+     */
+    private finalizeTestResult(
+        result: TestRunResult,
+        workerIndex: number | undefined,
+        sequence: number,
+        options: SuiteRunOptions,
+        suiteRunId: string
+    ): void {
+        if (result.workerIndex === undefined && workerIndex !== undefined) {
+            result.workerIndex = workerIndex;
+        }
+        if (result.sequence === undefined) {
+            result.sequence = sequence;
+        }
+        // DR-D7: feed the final outcome to the circuit breaker (if armed).
+        this._suiteBreaker.get(suiteRunId)?.record(result);
+        // DR-D9: failFast — drain the run on the first hard (non-flaky) failure.
+        if (options.failFast && isRetriableFailure(result) && !this._suiteFailFast.has(suiteRunId)) {
+            this._suiteFailFast.add(suiteRunId);
+            this.log(`failFast: "${result.testName}" ${result.status} — stopping dispatch of remaining tests`);
+        }
+        try {
+            options.onTestComplete?.(result);
+        } catch (hookErr) {
+            this.logError('onTestComplete hook threw (ignored)', hookErr as Error);
+        }
+    }
+
+    /**
+     * Build a stand-in `Error` result for a test whose execution THREW (DR-D5).
+     * Before this, a thrown Execute was logged and dropped, so the test vanished
+     * from the totals and `compare` misread it as "removed". No TestRun row was
+     * persisted (the throw escaped `runSingleTestIteration`), so `testRunId` is
+     * empty — the result exists purely so the failure is counted and emitted.
+     * @private
+     */
+    private synthesizeErrorResult(
+        test: MJTestEntity,
+        error: Error,
+        suiteRunId: string,
+        sequence: number,
+        workerIndex: number | undefined
+    ): TestRunResult {
+        const now = new Date();
+        return {
+            testRunId: '',
+            testId: test.ID,
+            testName: test.Name,
+            status: 'Error',
+            score: 0,
+            passedChecks: 0,
+            failedChecks: 0,
+            totalChecks: 0,
+            oracleResults: [],
+            targetType: '',
+            targetLogId: '',
+            durationMs: 0,
+            totalCost: 0,
+            startedAt: now,
+            completedAt: now,
+            errorMessage: error?.message ?? String(error),
+            sequence,
+            attempts: 1,
+            flaky: false,
+            workerIndex,
+        };
     }
 
     /**
@@ -477,10 +679,14 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
-     * Run tests in parallel across multiple workers. Each worker runs its
-     * share of tests sequentially. The test driver (not the engine) manages
-     * browser resource sharing via HeadlessBrowserEngine singleton — the
-     * TestEngine only passes workerIndex so the driver can construct a key.
+     * Run tests in parallel across multiple workers (DR-D1). One shared work
+     * queue is drained by N worker loops with work stealing — whichever worker
+     * is free takes the next test — instead of the old static round-robin
+     * partition, whose makespan was set by the unluckiest worker's tail. The
+     * test driver (not the engine) manages browser resource sharing via the
+     * HeadlessBrowserEngine singleton; the TestEngine only passes workerIndex so
+     * the driver can construct its key. The 2.5 s staggered start (Auth0 login
+     * spacing) is preserved via {@link drainQueue}'s stagger.
      * @private
      */
     private async runTestsParallel(
@@ -489,56 +695,59 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         contextUser: UserInfo,
         suiteRun: MJTestSuiteRunEntity,
         suiteVariablesJson: string | null,
-        suiteContext?: Record<string, unknown>
+        suiteContext?: Record<string, unknown>,
+        deadline?: number
     ): Promise<TestRunResult[]> {
         const maxWorkers = Math.min(options.maxParallel ?? 4, tests.length);
         this.log(`Starting parallel execution: ${tests.length} tests across ${maxWorkers} workers`);
 
-        // Partition tests into worker groups (round-robin)
-        const workerGroups: Array<{ test: MJTestEntity; sequence: number }[]> = Array.from({ length: maxWorkers }, () => []);
-        tests.forEach((test, i) => {
-            workerGroups[i % maxWorkers].push({ test, sequence: i + 1 });
-        });
+        // Index tests by ID so the (id, sequence)-based queue can recover the entity.
+        const testById = new Map(tests.map(t => [t.ID, t]));
+        const items: WorkItem[] = tests.map((t, i) => ({ testId: t.ID, testName: t.Name, sequence: i + 1 }));
+        // Dispatch order (suite | longest-first). Duration history (DR-G6) isn't
+        // wired yet, so longest-first currently degrades to suite order.
+        const seeded = seedWorkItems(items, options.seedOrder ?? 'suite');
 
-        // Execute workers concurrently with staggered starts
-        const workerPromises = workerGroups.map((group, workerIndex) => {
-            // Stagger worker starts to avoid simultaneous Auth0 logins
-            const staggerMs = workerIndex * 2500;
-            return new Promise<TestRunResult[]>((resolve, reject) => {
-                setTimeout(() => {
-                    this.log(`Worker ${workerIndex + 1}/${maxWorkers} starting (${group.length} tests)`);
-                    this.executeParallelWorker(
-                        group, workerIndex, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext
-                    ).then(resolve, reject);
-                }, staggerMs);
-            });
-        });
+        // DR-D3: load-aware admission. When the CLI wired a health-state path,
+        // build a gate that sheds workers when degraded / pauses when critical.
+        const admissionController = options.healthStatePath
+            ? new AdmissionController({
+                readHealth: () => readHealthState(options.healthStatePath!, fs.readFileSync),
+                log: (msg) => this.log(msg),
+            })
+            : undefined;
 
-        const settled = await Promise.allSettled(workerPromises);
-
-        // Merge results from all workers
-        const allResults: TestRunResult[] = [];
-        for (let i = 0; i < settled.length; i++) {
-            const result = settled[i];
-            if (result.status === 'fulfilled') {
-                allResults.push(...result.value);
-            } else {
-                this.logError(`Worker ${i + 1} failed`, result.reason as Error);
+        const allResults = await drainQueue<TestRunResult>(
+            seeded,
+            maxWorkers,
+            (item, workerIndex) => this.runQueuedItem(
+                item, testById, workerIndex, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext
+            ),
+            {
+                staggerMs: 2500,
+                onWorkerStart: (wi, count) => this.log(`Worker ${wi + 1}/${count} starting`),
+                admit: admissionController ? (wi) => admissionController.admit(wi) : undefined,
+                deadline,
+                shouldAbort: () => (this._suiteBreaker.get(suiteRun.ID)?.tripped ?? false) || this._suiteFailFast.has(suiteRun.ID),
+                interDispatchDelayMs: options.delayBetweenTests,
             }
-        }
+        );
 
-        // Sort by original sequence to maintain consistent reporting
+        // Sort by original suite sequence to maintain consistent reporting.
         allResults.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
-
         return allResults;
     }
 
     /**
-     * Execute a batch of tests sequentially within a single worker.
+     * Run one queued test to its final result(s) and finalize each (DR-D1/D5).
+     * A thrown Execute is synthesized into a counted `Error` result rather than
+     * dropped (which `compare` misread as "removed"). Returns the row(s) for the
+     * shared collector.
      * @private
      */
-    private async executeParallelWorker(
-        group: Array<{ test: MJTestEntity; sequence: number }>,
+    private async runQueuedItem(
+        item: WorkItem,
+        testById: Map<string, MJTestEntity>,
         workerIndex: number,
         options: SuiteRunOptions,
         contextUser: UserInfo,
@@ -546,25 +755,31 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         suiteVariablesJson: string | null,
         suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult[]> {
-        const results: TestRunResult[] = [];
-
-        for (const { test, sequence } of group) {
-            try {
-                this.log(`[Worker ${workerIndex + 1}] Running: ${test.Name}`, options.verbose);
-                const result = await this.runTestWithSuiteVariables(
-                    test.ID, options, contextUser, suiteRunId, sequence, suiteVariablesJson, workerIndex, suiteContext
-                );
-                if (Array.isArray(result)) {
-                    results.push(...result);
-                } else {
-                    results.push(result);
-                }
-            } catch (error) {
-                this.logError(`[Worker ${workerIndex + 1}] Test failed: ${test.Name}`, error as Error);
-            }
+        const test = testById.get(item.testId);
+        if (!test) {
+            return [];
         }
-
-        return results;
+        const rows: TestRunResult[] = [];
+        // DR-D4 heartbeat: announce dispatch so the sink can track in-flight tests
+        // and a never-completing (wedged) test stays visible in `status`.
+        options.onTestStart?.({ testId: item.testId, testName: item.testName, workerIndex, startedAt: new Date().toISOString() });
+        try {
+            this.log(`[Worker ${workerIndex + 1}] Running: ${test.Name}`, options.verbose);
+            const result = await this.runTestWithSuiteVariables(
+                item.testId, options, contextUser, suiteRunId, item.sequence, suiteVariablesJson, workerIndex, suiteContext
+            );
+            const arr = Array.isArray(result) ? result : [result];
+            for (const r of arr) {
+                this.finalizeTestResult(r, workerIndex, item.sequence, options, suiteRunId);
+                rows.push(r);
+            }
+        } catch (error) {
+            this.logError(`[Worker ${workerIndex + 1}] Test failed: ${test.Name}`, error as Error);
+            const errResult = this.synthesizeErrorResult(test, error as Error, suiteRunId, item.sequence, workerIndex);
+            this.finalizeTestResult(errResult, workerIndex, item.sequence, options, suiteRunId);
+            rows.push(errResult);
+        }
+        return rows;
     }
 
     /**
@@ -597,8 +812,94 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags, suiteVariablesJson, workerIndex, suiteContext);
         }
 
-        // Single execution
-        return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags, suiteVariablesJson, workerIndex, suiteContext);
+        // Single execution, with optional retry-on-failure (pass-if-any) to absorb
+        // transient non-determinism in LLM-driven targets. A test that fails then
+        // passes is marked `flaky` so the flakiness is reported, never masked.
+        // Retries get a fresh start time so each attempt's duration is its own.
+        //
+        // DR-D2: the retry decision is a CLASSIFIED, BUDGETED policy — deterministic
+        // failures (impossible/app-error) get 0 retries, env/transient classes get
+        // the operator's ceiling, all bounded by the run's shared budget with
+        // exponential backoff. The standalone/repeat paths never reach here.
+        const retryCfg = this._suiteRetry.get(suiteRunId);
+        const policy: RetryPolicy = retryCfg
+            ? buildSuiteRetryPolicy({
+                budget: retryCfg.budget,
+                requestedMax: retryCfg.requestedMax,
+                onBudgetExhausted: (r) => this.log(`[retry] suite retry budget exhausted — accepting "${r.testName}" (${r.failureCategory ?? 'unknown'}) first-shot`),
+                isChronicFailure: () => retryCfg.chronicTestIds.has(test.ID),
+                onChronicSkipped: (r) => this.log(`[retry] no pass in the last ${CHRONIC_FAILURE_LOOKBACK_RUNS} run(s) — accepting "${r.testName}" (${r.failureCategory ?? 'unknown'}) first-shot, budget left for tests that can flip`),
+            })
+            : fixedRetries(options.maxRetries ?? 0);
+        const result = await runWithRetries(
+            (attempt, priorAttempts) => this.runSingleTestIteration(
+                test, suiteRunId, suiteTestSequence, options, contextUser,
+                attempt === 1 ? startTime : Date.now(), tags, suiteVariablesJson, workerIndex, suiteContext, priorAttempts
+            ),
+            policy,
+            (nextAttempt, last) => this.log(`[retry] "${test.Name}" was ${last.status} (${last.failureCategory ?? 'unknown'}) on attempt ${nextAttempt - 1} — retrying`)
+        );
+        if (result.flaky) {
+            this.log(`[retry] "${test.Name}" PASSED on attempt ${result.attempts} — marking flaky`);
+        }
+        return result;
+    }
+
+    /**
+     * Identify tests with no `Passed` result in their most recent runs.
+     *
+     * A retry only buys something when the outcome can plausibly flip. A test that
+     * has failed every recent run is not flaky — it is broken — so re-rolling it
+     * spends a scarce budget unit on a near-certain second failure, which is
+     * exactly how the observed run left later recoverable failures with nothing.
+     *
+     * Reads history only; never throws. On any failure (missing history, query
+     * error) it returns an empty set, which restores the previous behavior — the
+     * retry policy must never be the reason a suite cannot start.
+     */
+    private async loadChronicallyFailingTestIds(testIds: string[], contextUser: UserInfo): Promise<ReadonlySet<string>> {
+        const chronic = new Set<string>();
+        if (testIds.length === 0) {
+            return chronic;
+        }
+        try {
+            const quoted = testIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+            const rv = new RunView();
+            const result = await rv.RunView<{ TestID: string; Status: string }>({
+                EntityName: 'MJ: Test Runs',
+                Fields: ['TestID', 'Status'],
+                ExtraFilter: `TestID IN (${quoted}) AND Status IN ('Passed','Failed','Error','Timeout')`,
+                OrderBy: '__mj_CreatedAt DESC',
+                // Generous cap: the newest N per test are taken in JS below.
+                MaxRows: testIds.length * CHRONIC_FAILURE_LOOKBACK_RUNS * 4,
+                ResultType: 'simple'
+            }, contextUser);
+
+            if (!result.Success) {
+                LogError(`Retry policy: could not read test-run history (${result.ErrorMessage}); chronic-failure suppression disabled`);
+                return chronic;
+            }
+
+            // Rows arrive newest-first, so the first N per test are its latest runs.
+            const seen = new Map<string, string[]>();
+            for (const row of result.Results ?? []) {
+                const history = seen.get(row.TestID) ?? [];
+                if (history.length < CHRONIC_FAILURE_LOOKBACK_RUNS) {
+                    history.push(row.Status);
+                    seen.set(row.TestID, history);
+                }
+            }
+            for (const [testId, statuses] of seen) {
+                // Require a full window before condemning a test, so a brand-new
+                // test is never suppressed on the strength of one bad run.
+                if (statuses.length >= CHRONIC_FAILURE_LOOKBACK_RUNS && !statuses.includes('Passed')) {
+                    chronic.add(testId);
+                }
+            }
+        } catch (e) {
+            LogError(`Retry policy: chronic-failure lookup failed (${e instanceof Error ? e.message : String(e)}); suppression disabled`);
+        }
+        return chronic;
     }
 
     /**
@@ -651,7 +952,18 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
-     * Get or create test driver instance.
+     * Get or create the test driver instance for a type.
+     *
+     * ONE instance per TypeID is intentionally shared across all parallel workers
+     * (and across suites) — SetupSuite/TeardownSuite fire on this shared instance,
+     * so it must stay the same one throughout a run. Per-worker/per-run state is
+     * therefore NOT keyed here (DR-D9): drivers MUST be stateless per run and take
+     * everything they need from the per-`Execute` `DriverExecutionContext` —
+     * `workerIndex` (to key browser resources in the HeadlessBrowserEngine
+     * singleton), `fixtures`, `resolvedVariables`, `testRun`. A driver that stashes
+     * per-run data on `this` would race across concurrent workers; keying the
+     * cache by workerIndex instead would break the shared SetupSuite instance, so
+     * statelessness is the contract, not per-worker instances.
      * @private
      */
     private async getDriver(testType: MJTestTypeEntity, contextUser: UserInfo): Promise<BaseTestDriver> {
@@ -1124,7 +1436,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         tags?: string,
         suiteVariablesJson?: string | null,
         workerIndex?: number,
-        suiteContext?: Record<string, unknown>
+        suiteContext?: Record<string, unknown>,
+        priorAttempts?: PriorAttemptSummary[]
     ): Promise<TestRunResult> {
         // Get test type
         const testType = this.GetTestTypeByID(test.TypeID);
@@ -1220,18 +1533,46 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         // not throw; this catch is the safety net for a buggy/edge-case driver.
         this.log(`Executing test via ${testType.DriverClass}`, options.verbose);
         let driverResult: DriverExecutionResult;
+        // DR-D4: the engine owns a watchdog set to the driver's OWN effective
+        // timeout + grace, so a driver whose promise never settles (crashed
+        // browser, hung network) can't wedge this worker forever. On fire we
+        // synthesize a classified `infra` Error and move on; the abandoned
+        // promise is handled inside withWatchdog so a late settlement can't crash
+        // the process. (Recycling the worker's browser awaits DR-A2's grid.)
+        const watchdogMs = resolveWatchdogMs(this.computeEffectiveTimeoutMs(test));
         try {
-            driverResult = await driver.Execute({
-                test,
-                testRun,
-                contextUser,
-                options: enhancedOptions,
-                oracleRegistry: this._oracleRegistry,
-                resolvedVariables,
-                workerIndex,
-                suiteContext,
-                fixtures
-            });
+            const outcome = await withWatchdog(
+                driver.Execute({
+                    test,
+                    testRun,
+                    contextUser,
+                    options: enhancedOptions,
+                    oracleRegistry: this._oracleRegistry,
+                    resolvedVariables,
+                    workerIndex,
+                    suiteContext,
+                    fixtures,
+                    priorAttempts
+                }),
+                watchdogMs,
+                { onTimeout: () => this.logError(`Watchdog fired: ${testType.DriverClass} did not settle within ${watchdogMs}ms for "${test.Name}" — abandoning (zombie may continue in background)`) }
+            );
+            if (outcome.timedOut) {
+                driverResult = {
+                    targetType: testType.Name,
+                    targetLogId: testRun.ID,
+                    status: 'Error',
+                    score: 0,
+                    oracleResults: [],
+                    passedChecks: 0,
+                    failedChecks: 0,
+                    totalChecks: 0,
+                    errorMessage: `Watchdog fired: driver did not settle within ${watchdogMs}ms (effective timeout + grace)`,
+                    failureClass: 'infra'
+                };
+            } else {
+                driverResult = outcome.value!;
+            }
         } catch (execErr) {
             const message = (execErr as Error)?.message ?? 'Unknown error thrown from driver.Execute';
             this.logError(`Driver ${testType.DriverClass} threw from Execute — recording TestRun as Error`, execErr as Error);
@@ -1302,8 +1643,22 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             startedAt: testRun.StartedAt!,
             completedAt: testRun.CompletedAt!,
             errorMessage: driverResult.errorMessage,
+            // RI-D2: surface the driver's non-blind retry memo so the retry loop
+            // can feed it to the next attempt (fed back in as PreviousAttemptSummary).
+            failureMemo: driverResult.failureMemo,
+            // RI-C1/RI-D4: carry the execution tier + replay telemetry into the
+            // persisted result so results.json/JSONL/report can segment tier mix
+            // and surface replay hit/heal/diverge (previously only on actualOutput,
+            // which the results.json testResults array never carried).
+            tier: driverResult.tier,
+            replay: driverResult.replay,
             resolvedVariables
         };
+
+        // DR-D2: classify a non-passing result once, here, so the retry policy,
+        // the incremental JSONL, and `compare` all read the same category. Prefer
+        // the driver's own `failureClass` (CU-F5); regex-classify as a stopgap.
+        result.failureCategory = classifyFailure(result, driverResult.failureClass);
 
         // Add sequence if this is a repeated test iteration
         if (sequence && sequence > 1) {
@@ -1323,6 +1678,30 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         this.log(`Test completed: ${result.status} (Score: ${result.score})`, options.verbose);
         return result;
+    }
+
+    /**
+     * The driver's effective per-test timeout (DR-D4), mirroring
+     * `BaseTestDriver.getEffectiveTimeout`'s priority so the engine watchdog
+     * fires only AFTER the driver should have returned:
+     *   Configuration JSON `maxExecutionTime` → `Test.MaxExecutionTimeMS` → default.
+     * @private
+     */
+    private computeEffectiveTimeoutMs(test: MJTestEntity): number {
+        if (test.Configuration) {
+            try {
+                const config = JSON.parse(test.Configuration);
+                if (typeof config?.maxExecutionTime === 'number' && config.maxExecutionTime > 0) {
+                    return config.maxExecutionTime;
+                }
+            } catch {
+                /* malformed Configuration — fall through to the entity field / default */
+            }
+        }
+        if (test.MaxExecutionTimeMS != null && test.MaxExecutionTimeMS > 0) {
+            return test.MaxExecutionTimeMS;
+        }
+        return DEFAULT_TEST_TIMEOUT_MS;
     }
 
     /**

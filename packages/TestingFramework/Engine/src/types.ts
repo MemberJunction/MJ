@@ -21,6 +21,7 @@ export {
   SuiteRunOptions,
   OracleResult,
   TestRunResult,
+  PriorAttemptSummary,
   TestSuiteRunResult,
   ScoringWeights,
   ValidationResult,
@@ -40,7 +41,8 @@ export {
   ResolvedTestVariables,
   TestVariableValue,
   TestRunOutputItem,
-  SuiteFixtureContext
+  SuiteFixtureContext,
+  ReplayTelemetry
 } from '@memberjunction/testing-engine-base';
 
 // Import types we need for local interfaces
@@ -49,7 +51,9 @@ import {
   OracleResult,
   ResolvedTestVariables,
   TestRunOutputItem,
-  SuiteFixtureContext
+  SuiteFixtureContext,
+  PriorAttemptSummary,
+  ReplayTelemetry
 } from '@memberjunction/testing-engine-base';
 
 /**
@@ -124,6 +128,15 @@ export interface DriverExecutionContext {
    * fixture-dependent tests must be run via `mj test suite`.
    */
   fixtures?: SuiteFixtureContext;
+
+  /**
+   * Lightweight summaries of this test's earlier FAILED attempts, oldest first
+   * (RI-D2), threaded in by the retry loop so a retry is not a blind re-roll.
+   * A driver can read the latest attempt's `failureMemo` and feed it to its
+   * engine (Computer Use sets `params.PreviousAttemptSummary` from it). Undefined
+   * on the first attempt and for the standalone (non-retrying) path.
+   */
+  priorAttempts?: PriorAttemptSummary[];
 }
 
 /**
@@ -269,6 +282,40 @@ export interface DriverExecutionResult {
    * The engine persists each item as a TestRunOutput entity record.
    */
   outputs?: TestRunOutputItem[];
+
+  /**
+   * Optional machine-readable failure classification a driver may compute from
+   * its run signals (e.g. Computer Use's `nav-loop` / `stuck-page` / `app-error`
+   * / `assertion` — CU-F5). Free-form so each driver owns its own taxonomy; a
+   * retry scheduler keys policy on it (never retry `assertion`, retry
+   * `env-stall` after a health gate, etc.). Absent on success.
+   */
+  failureClass?: string;
+
+  /**
+   * Optional non-blind retry memo a driver may surface from its engine on a
+   * non-passing result (RI-D2) — e.g. Computer Use's `ComputerUseResult.FailureMemo`,
+   * a short "here's what went wrong last time" the engine already produces. The
+   * engine copies it onto `TestRunResult`/`PriorAttemptSummary` so the retry loop
+   * can feed it to the next attempt (`PreviousAttemptSummary`). Absent on success.
+   */
+  failureMemo?: string;
+
+  /**
+   * Optional execution-tier label a driver may report (RI-C1/RI-D4) — e.g.
+   * Computer Use's `'replay'` / `'replay-with-heal'` / `'llm'`. Free-form so each
+   * driver owns its own tiering; the report segments tier mix / replay share by
+   * it. A diverged replay that fell back to the LLM leg reports `'llm'` (the tier
+   * that produced the result). Absent for single-tier drivers.
+   */
+  tier?: string;
+
+  /**
+   * Replay telemetry (RI-C1/RI-D4) — present whenever a replay was attempted,
+   * so the drift signal survives a green LLM-fallback. Copied to
+   * {@link TestRunResult.replay}. Absent on pure-LLM runs.
+   */
+  replay?: ReplayTelemetry;
 }
 
 /**

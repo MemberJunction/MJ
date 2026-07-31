@@ -30,9 +30,16 @@ function makeConfig(overrides: Partial<BrowserConfig> = {}): BrowserConfig {
 }
 
 // A locator returned by page.locator() — only the methods the adapter uses.
+// `evaluateAll`/`nth` back the CU-A7 ambiguous-selector narrowing: the adapter
+// measures every match, then acts on the chosen one.
 interface MockLocator {
     focus: ReturnType<typeof vi.fn>;
     scrollIntoViewIfNeeded: ReturnType<typeof vi.fn>;
+    click: ReturnType<typeof vi.fn>;
+    count: ReturnType<typeof vi.fn>;
+    evaluateAll: ReturnType<typeof vi.fn>;
+    nth: ReturnType<typeof vi.fn>;
+    first: ReturnType<typeof vi.fn>;
 }
 
 interface MockMouse {
@@ -74,19 +81,41 @@ interface MockBrowser {
 }
 
 let locator: MockLocator;
+/** Locator returned by locator.nth(i) when a multi-match is narrowed. */
+let narrowed: MockLocator;
 let page: MockPage;
 let context: MockContext;
 let browser: MockBrowser;
 
 const ACTION_TIMEOUT = 4321;
 
+/** One visible match — the unambiguous default, so the adapter acts on the locator as-is. */
+const SINGLE_MATCH = [{ width: 120, height: 30 }];
+
+function makeLocator(): MockLocator {
+    return {
+        focus: vi.fn().mockResolvedValue(undefined),
+        scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
+        click: vi.fn().mockResolvedValue(undefined),
+        count: vi.fn().mockResolvedValue(SINGLE_MATCH.length),
+        evaluateAll: vi.fn().mockResolvedValue(SINGLE_MATCH),
+        nth: vi.fn(),
+        first: vi.fn(),
+    };
+}
+
+/** Point the mock at a multi-match result: count() and evaluateAll() must agree. */
+function setMatches(target: MockLocator, sizes: Array<{ width: number; height: number }>): void {
+    target.count.mockResolvedValue(sizes.length);
+    target.evaluateAll.mockImplementation(async (_fn: unknown, cap: number) => sizes.slice(0, cap));
+}
+
 beforeEach(() => {
     vi.clearAllMocks();
 
-    locator = {
-        focus: vi.fn().mockResolvedValue(undefined),
-        scrollIntoViewIfNeeded: vi.fn().mockResolvedValue(undefined),
-    };
+    narrowed = makeLocator();
+    locator = makeLocator();
+    locator.nth.mockReturnValue(narrowed);
     page = {
         close: vi.fn().mockResolvedValue(undefined),
         setDefaultNavigationTimeout: vi.fn(),
@@ -132,7 +161,7 @@ async function launchedAdapter(): Promise<PlaywrightBrowserAdapter> {
 }
 
 describe('PlaywrightBrowserAdapter selector branches — Click', () => {
-    it('clicks the matched element via page.click when Selector is set', async () => {
+    it('clicks the matched element via the resolved locator when Selector is set', async () => {
         const adapter = await launchedAdapter();
         const action = Object.assign(new ClickAction(), {
             Selector: '#submit',
@@ -145,14 +174,37 @@ describe('PlaywrightBrowserAdapter selector branches — Click', () => {
         const result = await adapter.ExecuteAction(action);
 
         expect(result.Success).toBe(true);
-        expect(page.click).toHaveBeenCalledTimes(1);
-        expect(page.click).toHaveBeenCalledWith('#submit', {
+        expect(page.locator).toHaveBeenCalledWith('#submit');
+        expect(locator.click).toHaveBeenCalledTimes(1);
+        expect(locator.click).toHaveBeenCalledWith({
             button: 'right',
             clickCount: 2,
             timeout: ACTION_TIMEOUT,
         });
+        // A single match is acted on directly — no narrowing.
+        expect(locator.nth).not.toHaveBeenCalled();
         // Coordinate path must NOT run when a selector is supplied.
         expect(page.mouse.click).not.toHaveBeenCalled();
+    });
+
+    it('narrows an ambiguous selector to the innermost match instead of throwing (CU-A7)', async () => {
+        // Regression guard for the strict-mode violations that turned into false
+        // LoopDetected failures: `div:has-text(...)` matches the whole ancestor
+        // chain, and Playwright's strict APIs reject a multi-match outright.
+        const adapter = await launchedAdapter();
+        setMatches(locator, [
+            { width: 1280, height: 720 }, // body
+            { width: 640, height: 300 }, // container
+            { width: 150, height: 20 }, // the label the controller meant
+        ]);
+        const action = Object.assign(new ClickAction(), { Selector: 'div:has-text("VISIBLE COLUMNS")' });
+
+        const result = await adapter.ExecuteAction(action);
+
+        expect(result.Success).toBe(true);
+        expect(locator.nth).toHaveBeenCalledWith(2);
+        expect(narrowed.click).toHaveBeenCalledTimes(1);
+        expect(locator.click).not.toHaveBeenCalled();
     });
 
     it('falls back to the coordinate click when Selector is absent (unchanged behavior)', async () => {
@@ -227,6 +279,36 @@ describe('PlaywrightBrowserAdapter selector branches — Scroll', () => {
         expect(result.Success).toBe(true);
         expect(page.mouse.wheel).toHaveBeenCalledWith(5, 99);
         expect(page.locator).not.toHaveBeenCalled();
+        // No point given → pointer must not be moved (page-level scroll semantics).
+        expect(page.mouse.move).not.toHaveBeenCalled();
+    });
+
+    it('moves the pointer over the point before the wheel so overlays scroll (CU-A8)', async () => {
+        // The app-switcher case: the dropdown has its own overflow-y pane, and a
+        // wheel dispatched at the default pointer position scrolls the page behind
+        // it instead — leaving items below the fold permanently unreachable.
+        const adapter = await launchedAdapter();
+        const action = Object.assign(new ScrollAction(), { X: 130, Y: 500, DeltaY: 300 });
+
+        const result = await adapter.ExecuteAction(action);
+
+        expect(result.Success).toBe(true);
+        expect(page.mouse.move).toHaveBeenCalledWith(130, 500);
+        expect(page.mouse.wheel).toHaveBeenCalledWith(0, 300);
+        // Order matters: moving after the wheel would scroll the wrong container.
+        expect(page.mouse.move.mock.invocationCallOrder[0])
+            .toBeLessThan(page.mouse.wheel.mock.invocationCallOrder[0]);
+    });
+
+    it('prefers Selector over a scroll point when both are supplied (CU-A8)', async () => {
+        const adapter = await launchedAdapter();
+        const action = Object.assign(new ScrollAction(), { Selector: '.footer', X: 10, Y: 20, DeltaY: 50 });
+
+        await adapter.ExecuteAction(action);
+
+        expect(locator.scrollIntoViewIfNeeded).toHaveBeenCalled();
+        expect(page.mouse.move).not.toHaveBeenCalled();
+        expect(page.mouse.wheel).not.toHaveBeenCalled();
     });
 });
 

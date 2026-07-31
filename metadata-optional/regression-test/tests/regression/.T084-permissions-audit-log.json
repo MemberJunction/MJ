@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T084 - Permissions Audit Log",
+    "Description": "Opens the Permissions app Audit Log once, then verifies its sections (running the timeline query to render entries, and resetting filters back to the pre-query state) via checkpoints. Consolidates old T224–T225.",
+    "InputDefinition": {
+      "goal": "Open the Permissions app via the application switcher dropdown next to the logo, then click 'Audit Log' in the left nav. Then walk these sections IN ORDER, and as you arrive at each set \"checkpointReached\" to the exact checkpoint name shown: (1) audit-timeline-query — confirm the surface starts on a 'No query yet' empty-state; optionally set a Domain filter (or leave Domain, Changed by, From, To at defaults) then click the 'Query' button; confirm it either renders an entries table with columns When, Who, Change, Domain, Entity, Record, Summary (each Change cell showing a change-type chip like Create/Update/Delete) plus an entry count, OR shows a valid 'No audit entries found' empty-state; (2) audit-reset-filters — set at least one filter (e.g. a Domain value or a From date) and click Query so results (or a no-results state) appear, then click the 'Reset' button and confirm the filters return to their defaults ('All domains', 'Any user', empty dates) AND the surface returns to the 'No query yet' empty-state (the prior results table is cleared). Keep going until both sections have been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200/app/permissions",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "audit-timeline-query", "instruction": "run the audit timeline query", "assertions": [ { "kind": "url", "urlPattern": "/app/permissions" } ], "visualCriteria": ["The Audit Log shows a 'No query yet' state before querying, and clicking 'Query' transitions to either an audit entries table (When / Who / Change / Domain / Entity / Record / Summary columns with change-type chips) plus a count, OR a valid 'No audit entries found' empty-state"] },
+        { "name": "audit-reset-filters", "instruction": "Reset clears filters and results", "visualCriteria": ["After running a query and then clicking 'Reset', the Domain / Changed-by / date filters return to their default (unset) values and the results area returns to the 'No query yet' empty-state (the prior entries table / no-results state is cleared)"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,permissions"
+  },
+  "primaryKey": { "ID": "0E8B376E-9E55-43B8-B7D8-951E15A3E258" }
+}

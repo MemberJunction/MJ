@@ -1,0 +1,105 @@
+{
+  "TestId": "2457FC01-C9E8-4598-A5BE-E2886315F249",
+  "AppBuildHash": "454f1c42c7ee-dirty:3dd8345bcce2d83a",
+  "AppVersion": "",
+  "GoalHash": "f9566850",
+  "RecordedAt": "2026-07-23T05:14:47.218Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "allowedDomains",
+    "baseUrl",
+    "authUsername",
+    "authDomains",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I am on the Routines app page. I need to open the routine editor by clicking 'New Routine'.",
+      "UrlBefore": "http://localhost:4200/app/routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Routine",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1129,
+            "YMin": 101,
+            "XMax": 1256,
+            "YMax": 134
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    },
+    {
+      "Instruction": "The 'New Routine' editor has loaded. I will now click 'Weekly' in the Frequency segmented control to observe the UI change, as per the goal.",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Weekly",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[1]/div[4]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 184,
+            "YMin": 618,
+            "XMax": 255,
+            "YMax": 647
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    },
+    {
+      "Instruction": "The 'Weekly' frequency is currently selected, showing a day and time picker. I will now click 'Advanced (cron)' to observe the UI change to a cron-expression input, which is the next step in the goal.",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Advanced (cron)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-user-routines-command-center[1]/div[1]/div[1]/mj-new-routine[1]/div[1]/section[1]/div[4]/div[1]/button[5]",
+          "BoundingBox": {
+            "XMin": 330,
+            "YMin": 465,
+            "XMax": 454,
+            "YMax": 494
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/routines/My%20Routines",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}
