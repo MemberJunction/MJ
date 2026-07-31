@@ -1520,16 +1520,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             connectionString = (provider as ProviderBase).InstanceConnectionString;
         }
 
-        // Generate the same fingerprint that would be used when loading this data
-        const params: RunViewParams = {
-            EntityName: config.EntityName,
-            ExtraFilter: config.Filter || '',
-            OrderBy: config.OrderBy || '',
-            ResultType: 'entity_object',
-            MaxRows: -1,
-            StartRow: 0
-        };
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, connectionString);
+        // Use the shared builder so the fingerprint matches what LoadSingleEntityConfig
+        // and RegisterCacheChangeCallbacks produce — prevents silent cache-slot mismatches
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+            this.BuildRunViewParamsForConfig(config),
+            connectionString
+        );
 
         // Build CompositeKey from the entity's primary key fields
         const key = entity.PrimaryKey;
@@ -1732,10 +1728,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     /**
      * Builds the RunViewParams for an engine config. Used by LoadSingleEntityConfig,
-     * LoadMultipleEntityConfigs, and RegisterCacheChangeCallbacks to ensure the
-     * fingerprint-affecting params (EntityName, ExtraFilter, OrderBy, IgnoreMaxRows)
-     * are always consistent — preventing cache key mismatches that break cross-server
-     * invalidation via Redis pub/sub.
+     * LoadMultipleEntityConfigs, RegisterCacheChangeCallbacks, and syncLocalCacheForConfig
+     * to ensure the fingerprint-affecting params (EntityName, ExtraFilter, OrderBy,
+     * IgnoreMaxRows) are always consistent — preventing cache key mismatches that break
+     * cross-server invalidation via Redis pub/sub and local cache upsert/remove operations.
      */
     protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
         return {
