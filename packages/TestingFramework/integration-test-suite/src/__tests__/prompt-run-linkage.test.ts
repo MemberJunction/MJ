@@ -16,16 +16,16 @@
  * below pin both sets deliberately: the exhaustive one that deletion must use, and the narrower
  * rollup-scoped one that token reconciliation must use.
  *
- * These tests pin that rule (`promptRunIdsFromSteps`) and pin that a failed RunView is surfaced
- * rather than swallowed (`requireRows`) — the property whose absence hid the original defect.
+ * These tests pin that rule (`PromptRunIdsFromSteps`) and pin that a failed RunView is surfaced
+ * rather than swallowed (`RequireRows`) — the property whose absence hid the original defect.
  */
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { RunViewResult } from '@memberjunction/core';
 import {
-    promptRunIdsFromSteps,
-    requireRows,
+    PromptRunIdsFromSteps,
+    RequireRows,
     PROMPT_RUN_BEARING_STEP_TYPES,
     ROLLUP_BEARING_STEP_TYPES,
 } from '../checks/agent-live-shared';
@@ -43,10 +43,10 @@ function runViewResult<T>(partial: Partial<RunViewResult<T>>): RunViewResult<T> 
     };
 }
 
-describe('promptRunIdsFromSteps', () => {
+describe('PromptRunIdsFromSteps', () => {
     it('returns the TargetLogID of every Prompt step', () => {
         expect(
-            promptRunIdsFromSteps([
+            PromptRunIdsFromSteps([
                 { StepType: 'Prompt', TargetLogID: 'pr-1' },
                 { StepType: 'Prompt', TargetLogID: 'pr-2' },
             ]),
@@ -57,7 +57,7 @@ describe('promptRunIdsFromSteps', () => {
         // Sub-Agent steps link a child AGENT RUN and Actions steps an Action Execution Log.
         // Treating those ids as prompt-run ids would delete or read the wrong rows entirely.
         expect(
-            promptRunIdsFromSteps([
+            PromptRunIdsFromSteps([
                 { StepType: 'Sub-Agent', TargetLogID: 'child-run-1' },
                 { StepType: 'Actions', TargetLogID: 'action-log-1' },
                 { StepType: 'Prompt', TargetLogID: 'pr-1' },
@@ -67,7 +67,7 @@ describe('promptRunIdsFromSteps', () => {
 
     it('drops Prompt steps with a null TargetLogID — an unlinked step yields no prompt run', () => {
         expect(
-            promptRunIdsFromSteps([
+            PromptRunIdsFromSteps([
                 { StepType: 'Prompt', TargetLogID: null },
                 { StepType: 'Prompt', TargetLogID: 'pr-1' },
             ]),
@@ -75,7 +75,7 @@ describe('promptRunIdsFromSteps', () => {
     });
 
     it('returns empty for a run with no steps rather than throwing', () => {
-        expect(promptRunIdsFromSteps([])).toEqual([]);
+        expect(PromptRunIdsFromSteps([])).toEqual([]);
     });
 
     it('includes a Compaction step — cross-turn compaction stores its AIPromptRun in TargetLogID', () => {
@@ -83,14 +83,14 @@ describe('promptRunIdsFromSteps', () => {
         // targetLogId: outcome.PromptRunId. base-agent's own rollup (:13255) treats Compaction as
         // prompt-run-bearing alongside Prompt. Missing it here means teardown deletes the step and
         // orphans the prompt run permanently.
-        expect(promptRunIdsFromSteps([{ StepType: 'Compaction', TargetLogID: 'pr-compaction' }])).toEqual(['pr-compaction']);
+        expect(PromptRunIdsFromSteps([{ StepType: 'Compaction', TargetLogID: 'pr-compaction' }])).toEqual(['pr-compaction']);
     });
 
     it('includes a Tool step — a conversation tool call stores its AIPromptRun there with NO Prompt step', () => {
         // base-agent.ts:5965 — `toolStep.TargetLogID = executed.promptRunId`, described there as
         // "one step + one prompt run: full lineage without a duplicate Prompt step for the same
         // call". Because no Prompt step is created, a Prompt-only rule cannot reach it at all.
-        expect(promptRunIdsFromSteps([{ StepType: 'Tool', TargetLogID: 'pr-tool' }])).toEqual(['pr-tool']);
+        expect(PromptRunIdsFromSteps([{ StepType: 'Tool', TargetLogID: 'pr-tool' }])).toEqual(['pr-tool']);
     });
 
     it('scoped to the rollup step types, excludes Tool but keeps Prompt and Compaction', () => {
@@ -103,9 +103,9 @@ describe('promptRunIdsFromSteps', () => {
             { StepType: 'Compaction', TargetLogID: 'pr-compaction' },
             { StepType: 'Tool', TargetLogID: 'pr-tool' },
         ];
-        expect(promptRunIdsFromSteps(steps, ROLLUP_BEARING_STEP_TYPES)).toEqual(['pr-1', 'pr-compaction']);
+        expect(PromptRunIdsFromSteps(steps, ROLLUP_BEARING_STEP_TYPES)).toEqual(['pr-1', 'pr-compaction']);
         // The full set still reaches all three, so deletion cannot orphan the Tool one.
-        expect(promptRunIdsFromSteps(steps, PROMPT_RUN_BEARING_STEP_TYPES)).toEqual(['pr-1', 'pr-compaction', 'pr-tool']);
+        expect(PromptRunIdsFromSteps(steps, PROMPT_RUN_BEARING_STEP_TYPES)).toEqual(['pr-1', 'pr-compaction', 'pr-tool']);
     });
 });
 
@@ -150,9 +150,9 @@ describe('no check filters MJ: AI Prompt Runs on AgentRunID', () => {
     });
 });
 
-describe('requireRows', () => {
+describe('RequireRows', () => {
     it('returns the rows on success', () => {
-        expect(requireRows(runViewResult({ Success: true, Results: [{ ID: 'a' }] }), 'probe')).toEqual([{ ID: 'a' }]);
+        expect(RequireRows(runViewResult({ Success: true, Results: [{ ID: 'a' }] }), 'probe')).toEqual([{ ID: 'a' }]);
     });
 
     it('throws with the provider error text when the query failed', () => {
@@ -163,13 +163,13 @@ describe('requireRows', () => {
             Results: [],
             ErrorMessage: "Invalid column name 'AgentRunID'.",
         });
-        expect(() => requireRows(failed, 'prompt-run read for run r-1')).toThrowError(
+        expect(() => RequireRows(failed, 'prompt-run read for run r-1')).toThrowError(
             /prompt-run read for run r-1 failed: Invalid column name 'AgentRunID'\./,
         );
     });
 
     it('still throws when the provider gives no error text', () => {
-        expect(() => requireRows(runViewResult({ Success: false, ErrorMessage: '' }), 'probe')).toThrowError(
+        expect(() => RequireRows(runViewResult({ Success: false, ErrorMessage: '' }), 'probe')).toThrowError(
             /probe failed: no error message returned/,
         );
     });
@@ -177,6 +177,6 @@ describe('requireRows', () => {
     it('normalizes a successful-but-undefined Results to an empty array', () => {
         const noRows = runViewResult<{ ID: string }>({ Success: true });
         noRows.Results = undefined as unknown as { ID: string }[];
-        expect(requireRows(noRows, 'probe')).toEqual([]);
+        expect(RequireRows(noRows, 'probe')).toEqual([]);
     });
 });

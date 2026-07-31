@@ -132,6 +132,16 @@ export async function runAgentOverWire(
 }
 
 /**
+ * Build a RunView bound to `provider`, falling back to the process-global provider only when none
+ * is supplied. The harness runs under a run-scoped provider (the CLI's SQL provider server-side,
+ * GraphQLDataProvider client-side), and a bare `new RunView()` reads through whichever provider
+ * happens to be global — wrong the moment more than one is alive in the process.
+ */
+function runViewFor(provider?: IMetadataProvider): RunView {
+    return provider ? RunView.FromMetadataProvider(provider) : new RunView();
+}
+
+/**
  * Resolve the run id: prefer the id the completion event carried; on a fire-and-forget reconcile
  * miss, fall back to the newest AIAgentRun matching `fallbackFilter` (an ExtraFilter). Returns
  * undefined only when neither path yields a run.
@@ -139,7 +149,8 @@ export async function runAgentOverWire(
 export async function resolveRunId(
     result: ExecuteAgentResult,
     user: UserInfo,
-    fallbackFilter?: string
+    fallbackFilter?: string,
+    provider?: IMetadataProvider
 ): Promise<string | undefined> {
     if (result.agentRun?.ID) {
         return result.agentRun.ID;
@@ -147,7 +158,7 @@ export async function resolveRunId(
     if (!fallbackFilter) {
         return undefined;
     }
-    const r = await new RunView().RunView<{ ID: string }>({
+    const r = await runViewFor(provider).RunView<{ ID: string }>({
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: fallbackFilter,
         OrderBy: '__mj_CreatedAt DESC',
@@ -168,7 +179,7 @@ export async function resolveRunId(
  * zero prompt runs and either passed vacuously or failed on an unrelated-looking assertion. A
  * check that cannot read its observables must fail loudly, naming the query that broke.
  */
-export function requireRows<T>(result: RunViewResult<T>, what: string): T[] {
+export function RequireRows<T>(result: RunViewResult<T>, what: string): T[] {
     if (!result.Success) {
         throw new Error(`${what} failed: ${result.ErrorMessage || 'no error message returned'}`);
     }
@@ -211,7 +222,7 @@ export const ROLLUP_BEARING_STEP_TYPES: readonly string[] = ['Prompt', 'Compacti
  * TargetLogID points at something else entirely — `Sub-Agent` at a child agent run, `Actions` at
  * an Action Execution Log — so treating those ids as prompt-run ids reads or deletes wrong rows.
  */
-export function promptRunIdsFromSteps(
+export function PromptRunIdsFromSteps(
     steps: Array<{ StepType: string | null; TargetLogID: string | null }>,
     stepTypes: readonly string[] = PROMPT_RUN_BEARING_STEP_TYPES
 ): string[] {
@@ -221,30 +232,31 @@ export function promptRunIdsFromSteps(
 /**
  * Resolve every AIPromptRun ID produced by the given agent runs, via their prompt-run-bearing steps.
  *
- * Callers that already hold the step rows should use `promptRunIdsFromSteps` directly rather than
+ * Callers that already hold the step rows should use `PromptRunIdsFromSteps` directly rather than
  * re-reading them. Callers that are about to DELETE the steps must call this FIRST — deleting the
  * steps destroys the only path to the prompt runs.
  */
-export async function resolvePromptRunIdsForAgentRuns(
+export async function ResolvePromptRunIdsForAgentRuns(
     agentRunIds: string[],
     user: UserInfo,
+    provider?: IMetadataProvider,
     stepTypes: readonly string[] = PROMPT_RUN_BEARING_STEP_TYPES
 ): Promise<string[]> {
     if (agentRunIds.length === 0) {
         return [];
     }
     const inList = agentRunIds.map(id => `'${id}'`).join(',');
-    // The step-type set is applied in SQL as well as in promptRunIdsFromSteps — narrowing here and
+    // The step-type set is applied in SQL as well as in PromptRunIdsFromSteps — narrowing here and
     // widening there would silently drop rows before the JS filter ever sees them.
     const typeList = stepTypes.map(t => `'${t}'`).join(',');
-    const r = await new RunView().RunView<{ StepType: string | null; TargetLogID: string | null }>({
+    const r = await runViewFor(provider).RunView<{ StepType: string | null; TargetLogID: string | null }>({
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID IN (${inList}) AND StepType IN (${typeList})`,
         Fields: ['StepType', 'TargetLogID'],
         ResultType: 'simple',
         BypassCache: true,
     }, user);
-    return promptRunIdsFromSteps(requireRows(r, `prompt-step read for agent runs ${inList}`), stepTypes);
+    return PromptRunIdsFromSteps(RequireRows(r, `prompt-step read for agent runs ${inList}`), stepTypes);
 }
 
 /** A run's steps (fresh DB read), ordered by StepNumber. */
@@ -259,8 +271,8 @@ export interface StepRow {
     OutputData: string | null;
 }
 
-export async function getRunSteps(runId: string, user: UserInfo): Promise<StepRow[]> {
-    const r = await new RunView().RunView<StepRow>({
+export async function getRunSteps(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<StepRow[]> {
+    const r = await runViewFor(provider).RunView<StepRow>({
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID='${runId}'`,
         OrderBy: 'StepNumber ASC',
@@ -268,7 +280,7 @@ export async function getRunSteps(runId: string, user: UserInfo): Promise<StepRo
         ResultType: 'simple',
         BypassCache: true,
     }, user);
-    return requireRows(r, `step read for run ${runId}`);
+    return RequireRows(r, `step read for run ${runId}`);
 }
 
 /** The projection of an AIPromptRun row these checks read. */
@@ -289,14 +301,14 @@ export interface PromptRunRow {
  * (sumPromptRunTokens vs AIAgentRun.TotalTokensUsed). Teardown deliberately uses the wider
  * PROMPT_RUN_BEARING_STEP_TYPES — it must reach every prompt run, not just the counted ones.
  */
-export async function getPromptRuns(runId: string, user: UserInfo): Promise<PromptRunRow[]> {
-    // Reached through the run's steps — AIPromptRun has no AgentRunID (see promptRunIdsFromSteps).
+export async function getPromptRuns(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<PromptRunRow[]> {
+    // Reached through the run's steps — AIPromptRun has no AgentRunID (see PromptRunIdsFromSteps).
     // A run that made no model call legitimately has none.
-    const promptRunIds = await resolvePromptRunIdsForAgentRuns([runId], user, ROLLUP_BEARING_STEP_TYPES);
+    const promptRunIds = await ResolvePromptRunIdsForAgentRuns([runId], user, provider, ROLLUP_BEARING_STEP_TYPES);
     if (promptRunIds.length === 0) {
         return [];
     }
-    const r = await new RunView().RunView<PromptRunRow>({
+    const r = await runViewFor(provider).RunView<PromptRunRow>({
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ID IN (${promptRunIds.map(id => `'${id}'`).join(',')})`,
         OrderBy: '__mj_CreatedAt ASC',
@@ -304,7 +316,7 @@ export async function getPromptRuns(runId: string, user: UserInfo): Promise<Prom
         ResultType: 'simple',
         BypassCache: true,
     }, user);
-    return requireRows(r, `prompt-run read for run ${runId}`);
+    return RequireRows(r, `prompt-run read for run ${runId}`);
 }
 
 /** Sum of TokensUsed across every AIPromptRun for a run (nulls coalesced to 0). */
@@ -352,13 +364,13 @@ export function decodeMessages(messagesJson: string | null): DecodedMessage[] {
 }
 
 /** The chat messages of a run's FIRST Prompt step (via its TargetLogID → AIPromptRun.Messages). */
-export async function firstPromptMessages(runId: string, user: UserInfo): Promise<DecodedMessage[]> {
-    const steps = await getRunSteps(runId, user);
+export async function firstPromptMessages(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<DecodedMessage[]> {
+    const steps = await getRunSteps(runId, user, provider);
     const firstPrompt = steps.find(s => s.StepType === 'Prompt' && s.TargetLogID);
     if (!firstPrompt?.TargetLogID) {
         return [];
     }
-    const r = await new RunView().RunView<{ Messages: string | null }>({
+    const r = await runViewFor(provider).RunView<{ Messages: string | null }>({
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ID='${firstPrompt.TargetLogID}'`,
         Fields: ['Messages'],
@@ -387,7 +399,7 @@ export async function deleteById(entity: string, id: string, provider: IMetadata
  * still make progress. Deletes are done through loaded entity objects on the run-scoped provider.
  */
 export async function purgeAgentRun(runId: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     // Steps first (they reference prompt runs via TargetLogID on prompt-run-bearing steps), then the run.
     const stepsResult = await rv.RunView<{ ID: string; StepType: string; TargetLogID: string | null }>({
         EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${runId}'`,
@@ -402,7 +414,7 @@ export async function purgeAgentRun(runId: string, provider: IMetadataProvider, 
     // Delete prompt runs linked through prompt-run-bearing steps (Prompt/Compaction/Tool — the full
     // set, since teardown must not orphan any). Resolved from the step rows we already
     // hold, and BEFORE the steps are deleted below — the steps are the only path to them.
-    for (const prId of promptRunIdsFromSteps(steps)) {
+    for (const prId of PromptRunIdsFromSteps(steps)) {
         await deleteById('MJ: AI Prompt Runs', prId, provider, user);
     }
     for (const s of steps) {

@@ -21,7 +21,7 @@
  */
 import { RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { resolveContextUserOrThrow, resolvePromptRunIdsForAgentRuns, requireRows } from './agent-live-shared';
+import { resolveContextUserOrThrow, ResolvePromptRunIdsForAgentRuns, RequireRows } from './agent-live-shared';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
@@ -55,7 +55,7 @@ export interface AgentStepRow {
  * Deterministic framework projection of an AI Prompt Run row.
  *
  * No AgentRunID member: that column does not exist on AIPromptRun. The owning agent run is
- * recovered through the step that invoked it — see promptRunIdsFromSteps in agent-live-shared.
+ * recovered through the step that invoked it — see PromptRunIdsFromSteps in agent-live-shared.
  */
 export interface PromptRunRow {
     ID: string;
@@ -127,7 +127,7 @@ export async function loadAgentByName(
     user: UserInfo,
     name: string
 ): Promise<MJAIAgentEntity | undefined> {
-    const r = await new RunView().RunView<MJAIAgentEntity>({
+    const r = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentEntity>({
         EntityName: 'MJ: AI Agents',
         ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
         ResultType: 'entity_object'
@@ -163,7 +163,7 @@ export function settle(ms = 1500): Promise<void> {
 
 /** Read a single run row fresh. */
 export async function readRun(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentRunRow | undefined> {
-    const r = await new RunView().RunView<AgentRunRow>({
+    const r = await RunView.FromMetadataProvider(provider).RunView<AgentRunRow>({
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ID='${runId}'`,
         Fields: ['ID', 'Status', 'FinalStep', 'FinalPayload', 'ParentRunID', 'ErrorMessage'],
@@ -172,12 +172,12 @@ export async function readRun(provider: IMetadataProvider, user: UserInfo, runId
     }, user);
     // undefined means the run genuinely is not there; a broken query throws rather than
     // impersonating an absent run and failing a later assertion for the wrong reason.
-    return requireRows(r, `run read for ${runId}`)[0];
+    return RequireRows(r, `run read for ${runId}`)[0];
 }
 
 /** Read every step of a run fresh, oldest first. */
 export async function readSteps(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentStepRow[]> {
-    const r = await new RunView().RunView<AgentStepRow>({
+    const r = await RunView.FromMetadataProvider(provider).RunView<AgentStepRow>({
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID='${runId}'`,
         Fields: ['ID', 'StepType', 'Status', 'TargetLogID', 'PayloadAtStart', 'PayloadAtEnd', 'OutputData', 'ErrorMessage', 'FinalPayloadValidationMessages'],
@@ -185,7 +185,7 @@ export async function readSteps(provider: IMetadataProvider, user: UserInfo, run
         ResultType: 'simple',
         BypassCache: true
     }, user);
-    return requireRows(r, `step read for run ${runId}`);
+    return RequireRows(r, `step read for run ${runId}`);
 }
 
 /** Read the prompt runs a given agent produced within a run tree (its raw model responses live here). */
@@ -199,16 +199,16 @@ export async function readPromptRunsForAgent(
     // The runs' prompt-run-bearing steps are the only path to their prompt runs (AIPromptRun has no
     // AgentRunID). AgentID still narrows to the agent that owns them, which is what makes this
     // "for agent" — a sub-agent's prompt runs hang off the same run tree.
-    const promptRunIds = await resolvePromptRunIdsForAgentRuns(agentRunIds, user);
+    const promptRunIds = await ResolvePromptRunIdsForAgentRuns(agentRunIds, user, provider);
     if (promptRunIds.length === 0) return [];
-    const r = await new RunView().RunView<PromptRunRow>({
+    const r = await RunView.FromMetadataProvider(provider).RunView<PromptRunRow>({
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ID IN (${promptRunIds.map((id) => `'${id}'`).join(',')}) AND AgentID='${agentId}'`,
         Fields: ['ID', 'AgentID', 'Messages', 'Result'],
         ResultType: 'simple',
         BypassCache: true
     }, user);
-    return requireRows(r, `prompt-run read for agent ${agentId}`);
+    return RequireRows(r, `prompt-run read for agent ${agentId}`);
 }
 
 /** BFS the ParentRunID tree from a root, returning every run ID (root first). Bounded to avoid cycles. */
@@ -218,7 +218,7 @@ export async function collectRunTree(provider: IMetadataProvider, user: UserInfo
     let guard = 0;
     while (frontier.length > 0 && guard++ < 12) {
         const inList = frontier.map((id) => `'${id}'`).join(',');
-        const r = await new RunView().RunView<{ ID: string }>({
+        const r = await RunView.FromMetadataProvider(provider).RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `ParentRunID IN (${inList})`,
             Fields: ['ID'],
@@ -277,7 +277,7 @@ export async function deepDeleteRunTrees(provider: IMetadataProvider, user: User
     //    rollup subset: teardown must reach every prompt run, including Compaction and Tool ones.
     let promptRunIds: string[] = [];
     try {
-        promptRunIds = await resolvePromptRunIdsForAgentRuns(ids, user);
+        promptRunIds = await ResolvePromptRunIdsForAgentRuns(ids, user, provider);
     } catch (e) {
         // Best-effort teardown: keep purging what we can reach, but never silently.
         console.error(`deepDeleteRunTrees: prompt-run resolution failed, prompt runs may leak: ${e instanceof Error ? e.message : String(e)}`);
@@ -302,7 +302,7 @@ export async function deleteMatching(
     filter: string
 ): Promise<void> {
     try {
-        const r = await new RunView().RunView<{ Delete(): Promise<boolean> }>({
+        const r = await RunView.FromMetadataProvider(provider).RunView<{ Delete(): Promise<boolean> }>({
             EntityName: entityName,
             ExtraFilter: filter,
             ResultType: 'entity_object',
