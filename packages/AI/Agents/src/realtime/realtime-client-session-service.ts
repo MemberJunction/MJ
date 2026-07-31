@@ -292,6 +292,16 @@ export interface ExecuteRelayedToolInput {
      * the SAME interactive run (e.g. confirming a Query Builder task graph).
      */
     ResumeRunID?: string;
+    /**
+     * The id of the human this delegation is FOR, threaded into the delegated run's `userId`.
+     *
+     * The relayed-tool path may execute under an ELEVATED principal (a scoped anonymous magic-link
+     * caller's role deliberately cannot write the AI run entities — issue #3371), so `contextUser`
+     * is not always the person. `userId` is what stamps `MJ: AI Agent Runs.UserID` and scopes
+     * context memory, both of which must stay the visitor's. Absent ⇒ falls back to `contextUser.ID`,
+     * which is correct for every non-elevated caller.
+     */
+    AttributionUserID?: string;
 }
 
 /**
@@ -2394,6 +2404,10 @@ export class RealtimeClientSessionService {
             agent: target,
             conversationMessages: [{ role: 'user', content: requestText }],
             contextUser,
+            // Attribution and context-memory scope follow the PERSON, not the executing principal —
+            // see `ExecuteRelayedToolInput.AttributionUserID`. Undefined ⇒ base-agent falls back to
+            // `contextUser.ID`, preserving today's behavior for every non-elevated caller.
+            userId: input.AttributionUserID,
             provider,
             cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
             parentRun: parentRun ?? undefined,
