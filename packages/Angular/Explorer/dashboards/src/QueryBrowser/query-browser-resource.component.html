@@ -94,8 +94,16 @@
     </div>
   </div>
 
-  <!-- Resize Handle -->
+  <!-- Resize Handle.
+       role/aria are load-bearing, not decoration: without a role this was a bare
+       <div> whose only handler was (mousedown) — which compiles to an
+       addEventListener, NOT an onclick attribute — so it appeared in no
+       accessibility tree and in no automation's element list. A 6px unlabeled
+       target is then unreachable by anything that isn't estimating pixels. -->
   <div class="resize-handle"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize query list panel"
     [class.active]="IsResizing"
     (mousedown)="onResizeStart($event)">
     <div class="resize-handle-grip"></div>

@@ -248,27 +248,42 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedDashboardWidgetsModule
   ]
 })
-export class AIDashboardsModule {
-    constructor() {
-        // Ensure tree-shaking prevention loaders are called
-        LoadTagsResource();
-        LoadClusterVisualizationResource();
-        LoadVisualizeResource();
-        LoadSchedulingResource();
-        LoadAnalyticsResource();
-        LoadFeaturePipelinesResource();
-        LoadAIAnalyticsResource();
-        LoadAnalyticsExecutiveSummary();
-        LoadAnalyticsPromptRuns();
-        LoadAnalyticsAgentRuns();
-        LoadAnalyticsModelPerformance();
-        LoadAnalyticsCostBudget();
-        LoadAnalyticsErrorAnalysis();
-        LoadAnalyticsUsagePatterns();
-        LoadAnalyticsRealtimeOverview();
-        LoadAnalyticsRealtimeSessions();
-        LoadRealtimeManagement();
-        LoadAnalyticsRealtimeTranscripts();
-        LoadAIOverviewHub();
-    }
-}
+export class AIDashboardsModule {}
+
+// ─── Tree-shaking prevention (MODULE SCOPE — do not move into a constructor) ───
+//
+// These calls MUST run when this file is EVALUATED, not when the NgModule class is
+// instantiated. `tab-container` resolves a resource through
+// `ClassFactory.GetRegistrationAsync(BaseResourceComponent, driverClass)` and then
+// builds it with `createComponent(reg.SubClass)` — it never instantiates this
+// NgModule, so a constructor here NEVER runs on the lazy path.
+//
+// That mattered because Angular compiles `declarations` into `ɵɵsetNgModuleScope`,
+// which is `ngJitMode`-guarded and stripped from production builds. Once that call
+// is gone, a component whose ONLY remaining reference is this module's metadata has
+// no live reference at all and ESBuild drops it from the lazy chunk — so its
+// `@RegisterClass` decorator never executes and the driver class resolves to
+// nothing. `FeaturePipelinesResource` failed exactly this way: the nav item routed,
+// the chunk loaded, and the class was simply absent from the bundle.
+//
+// Calling the loaders at module scope keeps a real reference from evaluated code,
+// which both defeats tree-shaking and guarantees registration on chunk evaluation.
+LoadTagsResource();
+LoadClusterVisualizationResource();
+LoadVisualizeResource();
+LoadSchedulingResource();
+LoadAnalyticsResource();
+LoadFeaturePipelinesResource();
+LoadAIAnalyticsResource();
+LoadAnalyticsExecutiveSummary();
+LoadAnalyticsPromptRuns();
+LoadAnalyticsAgentRuns();
+LoadAnalyticsModelPerformance();
+LoadAnalyticsCostBudget();
+LoadAnalyticsErrorAnalysis();
+LoadAnalyticsUsagePatterns();
+LoadAnalyticsRealtimeOverview();
+LoadAnalyticsRealtimeSessions();
+LoadRealtimeManagement();
+LoadAnalyticsRealtimeTranscripts();
+LoadAIOverviewHub();

@@ -2609,37 +2609,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   }
 
   /**
-   * Global keyboard shortcut handler
-   * Cmd+/ (Mac) or Ctrl+/ (Windows) opens the command palette
-   */
-  @HostListener('document:keydown', ['$event'])
-  handleGlobalKeyboardShortcuts(event: KeyboardEvent): void {
-    // Skip if user is typing in an input/textarea — EXCEPT when the omnibar is on:
-    // a modal palette is summonable from anywhere (incl. the chat composer), like
-    // Slack/Linear. The legacy path keeps the guard (its binding steals focus).
-    const target = event.target as HTMLElement;
-    const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-    if (inEditable && !this.UseOmnibar) {
-      return;
-    }
-
-    // Platform detection
-    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-    const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
-
-    // Cmd+/ or Ctrl+/ opens the palette (omnibar '/' mode when enabled, legacy otherwise)
-    if (isCtrlOrCmd && event.key === '/') {
-      event.preventDefault();
-      event.stopPropagation();
-      if (this.UseOmnibar) {
-        this.OpenOmnibar('/');
-      } else {
-        this.commandPaletteService.Open();
-      }
-    }
-  }
-
-  /**
    * Load user avatar from database, auto-sync from auth provider if needed
    */
   private async loadUserAvatar(currentUserInfo: { ID: string; FirstLast?: string; Name?: string; Email?: string }): Promise<void> {
@@ -2812,21 +2781,52 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   // UNIVERSAL SEARCH EVENT HANDLERS
   // ========================================
 
+  /**
+   * The shell's ONLY `document:keydown` listener — handles every global chord.
+   *
+   * ⚠️ Do NOT add a second `@HostListener('document:keydown')` to this component.
+   * Angular's compiler collects host listeners into an object keyed by event name,
+   * so a second declaration for the same event SILENTLY REPLACES the first — no
+   * build error, no warning, the earlier handler simply never registers. That is
+   * exactly what happened here: a separate `handleGlobalKeyboardShortcuts` owned
+   * Ctrl+/ and was overwritten by this method, so the command palette shortcut was
+   * dead for its entire life. Every new global chord belongs in this one method.
+   *
+   * - **Ctrl/Cmd+K** summons search. Omnibar on: the modal palette opens from
+   *   anywhere, even while typing (explicit chord, Slack/Linear semantics). Omnibar
+   *   off: the chord FOCUSES the inline header composite on desktop (results attach
+   *   beneath it), so keep the don't-steal-focus-mid-typing guard; on mobile (no
+   *   composite rendered) it opens the Spotlight overlay instead.
+   * - **Ctrl/Cmd+/** opens the command palette. Deliberately NOT gated on "is focus
+   *   in an input?" — it responds to exactly one chord that can never be mistaken
+   *   for ordinary typing, and focus-stealing is the expected behavior when you
+   *   summon a modal palette.
+   */
   @HostListener('document:keydown', ['$event'])
   OnGlobalKeydown(event: KeyboardEvent): void {
-      // Ctrl/Cmd+K summons search. Omnibar: the modal palette opens from anywhere,
-      // even while typing (explicit chord, Slack/Linear semantics). Legacy: the
-      // chord FOCUSES the inline header composite on desktop (results attach
-      // beneath it), so keep the don't-steal-focus-mid-typing guard; on mobile
-      // (no composite rendered) it opens the Spotlight overlay instead.
-      const target = event.target as HTMLElement;
-      const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-      if (inEditable && !this.UseOmnibar) {
-          return;
-      }
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
-      if (isCtrlOrCmd && event.key === 'k') {
+      if (!isCtrlOrCmd) {
+          return;
+      }
+
+      if (event.key === '/') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (this.UseOmnibar) {
+              this.OpenOmnibar('/');
+          } else {
+              this.commandPaletteService.Open();
+          }
+          return;
+      }
+
+      if (event.key === 'k') {
+          const target = event.target as HTMLElement;
+          const inEditable = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+          if (inEditable && !this.UseOmnibar) {
+              return;
+          }
           event.preventDefault();
           event.stopPropagation();
           this.OnHeaderSearchClick();

@@ -77,6 +77,15 @@ export {
   AnalyticsResourceComponent,
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';
+// Must stay exported: the class-registration manifest generator discovers
+// @RegisterClass components by walking this package entry point. Omitting a
+// resource here keeps it out of the eager manifest, so its driver class resolves
+// to nothing at runtime and the tab renders "This view isn't available in the
+// running build" — which is exactly what happened to Feature Pipelines.
+export {
+  FeaturePipelinesResourceComponent,
+  LoadFeaturePipelinesResource
+} from './KnowledgeHub/components/feature-pipelines/feature-pipelines-resource.component';
 
 // Archiving components
 export {

@@ -87,6 +87,14 @@ export class OmnibarPaletteComponent implements OnDestroy {
     private defaultProvider: OmnibarProvider | null = null;
     private byTrigger = new Map<string, OmnibarProvider>();
     private queryGeneration = 0;
+    /**
+     * Generation whose results {@link Rows} currently holds. When this trails
+     * {@link queryGeneration}, what's on screen answers a SUPERSEDED query — see
+     * {@link ResultsArePending}.
+     */
+    private renderedGeneration = 0;
+    /** Trigger char of the provider that produced the current {@link Rows}. */
+    private renderedTriggerChar = '';
     private debounceHandle: ReturnType<typeof setTimeout> | null = null;
     /** Element focused before the palette opened — restored on close (a11y). */
     private previousFocus: HTMLElement | null = null;
@@ -118,6 +126,20 @@ export class OmnibarPaletteComponent implements OnDestroy {
     /** Scope pills only apply to the cross-source search mode. */
     public get ShowScopes(): boolean {
         return this.ActiveTriggerChar === '' && this.EffectiveQuery.trim().length > 0;
+    }
+
+    /**
+     * True while {@link Rows} answers an older query than the one now in the input
+     * (debounce + provider round-trip still outstanding).
+     *
+     * Nothing here may be ACTED ON while this holds: activating a stale row
+     * navigates somewhere the user never asked for. Real failure seen in the
+     * regression suite — typing over a seeded '/' and pressing Enter opened an
+     * `MJ: Applications` RECORD page instead of switching to the Admin app,
+     * because `Rows` still held the previous mode's list and Enter took row 0.
+     */
+    public get ResultsArePending(): boolean {
+        return this.queryGeneration !== this.renderedGeneration;
     }
 
     /** Footer gear: close, then let the host present its settings surface. */
@@ -172,6 +194,11 @@ export class OmnibarPaletteComponent implements OnDestroy {
         this.Query = initialQuery;
         this.Rows = [];
         this.SelectedIndex = 0;
+        // Settle the generation bookkeeping to the empty row set we just installed, so
+        // a freshly-opened palette is never spuriously "pending" (which would refuse
+        // the first Enter) and the first fetch is correctly seen as a mode change.
+        this.renderedGeneration = this.queryGeneration;
+        this.renderedTriggerChar = '';
         void this.loadScopes();
         void this.loadRecents();
         if (initialQuery.length > 0) {
@@ -237,7 +264,11 @@ export class OmnibarPaletteComponent implements OnDestroy {
                 break;
             case 'Enter': {
                 event.preventDefault();
-                const row = rows[this.SelectedIndex];
+                // Never execute a row while its result set is superseded — that row
+                // answers the PREVIOUS query, so activating it navigates somewhere the
+                // user didn't ask for. Fall through to the same escape hatch used when
+                // there are no rows at all.
+                const row = this.ResultsArePending ? undefined : rows[this.SelectedIndex];
                 if (row) {
                     this.Execute(row.Suggestion);
                 } else if (this.ActiveTriggerChar === '' && this.EffectiveQuery.trim().length > 1) {
@@ -376,6 +407,13 @@ export class OmnibarPaletteComponent implements OnDestroy {
 
     /** Executes a suggestion: navigate per its payload, or re-seed for entity drill-in. */
     public Execute(suggestion: MentionSuggestion): void {
+        // Choke point for all three activation paths (input Enter, row Enter, row
+        // click). Refuse while the rendered rows answer a superseded query — see
+        // {@link ResultsArePending}. The input's Enter handler checks this too, so it
+        // can offer the full-search escape hatch instead of doing nothing.
+        if (this.ResultsArePending) {
+            return;
+        }
         const nav = GetOmnibarNavPayload(suggestion);
         if (!nav) {
             return; // foreign suggestion with no navigation — nothing to execute
@@ -493,8 +531,22 @@ export class OmnibarPaletteComponent implements OnDestroy {
         if (!provider || (query.trim().length === 0 && !isTriggerMode)) {
             this.Rows = [];
             this.IsLoading = false;
+            // "No rows" IS this generation's settled answer — stamp it, or the
+            // palette would stay permanently `ResultsArePending` and refuse Enter.
+            this.renderedGeneration = generation;
+            this.renderedTriggerChar = this.ActiveTriggerChar;
             this.cdr.markForCheck();
             return;
+        }
+
+        // A MODE change invalidates the rows outright: a different provider answers a
+        // different question, so the old list isn't a stale approximation of the new
+        // one — it's the wrong list. (Typing 'Admin' over the seeded '/' switches
+        // Go-to-App → Global Search, and the app list must not survive that.) Rows
+        // for the SAME mode are kept while the next fetch is in flight, which is
+        // conventional palette behavior and avoids flicker on every keystroke.
+        if (this.ActiveTriggerChar !== this.renderedTriggerChar) {
+            this.Rows = [];
         }
 
         const fire = () => void this.fetchSuggestions(provider, query, generation);
@@ -525,6 +577,8 @@ export class OmnibarPaletteComponent implements OnDestroy {
         this.Rows = this.toRows(suggestions);
         this.SelectedIndex = 0;
         this.IsLoading = false;
+        this.renderedGeneration = generation;
+        this.renderedTriggerChar = this.ActiveTriggerChar;
         this.cdr.markForCheck();
     }
 

@@ -104,6 +104,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   contextMenuY = 0;
   contextMenuTabId: string | null = null;
 
+  /**
+   * Memoized throwaway instances used only to read a resource's display name,
+   * keyed by driver class. `null` marks a driver that cannot be instantiated
+   * outside a view — see `resolveDisplayNameProvider`.
+   */
+  private displayNameProviders = new Map<string, BaseResourceComponent | null>();
+
   constructor(
     private layoutManager: GoldenLayoutManager,
     private workspaceManager: WorkspaceStateManager,
@@ -1183,25 +1190,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         return;
       }
 
-      // Get the resource registration to access GetResourceDisplayName without loading full component
       const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
-      const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
-        BaseResourceComponent,
-        driverClass
-      );
-
-      if (!resourceReg) {
+      const provider = await this.resolveDisplayNameProvider(driverClass);
+      if (!provider) {
+        // This driver can't supply a name — keep the tab's stored title.
         return;
       }
 
-      // Create a lightweight instance just to call GetResourceDisplayName.
-      // Must run inside an injection context because BaseResourceComponent
-      // uses inject() field initializers (e.g. NavigationService).
-      const tempInstance = runInInjectionContext(
-        this.environmentInjector,
-        () => new resourceReg.SubClass() as BaseResourceComponent
-      );
-      const displayName = await tempInstance.GetResourceDisplayName(resourceData);
+      const displayName = await provider.GetResourceDisplayName(resourceData);
 
       if (displayName && displayName !== tab.title) {
         // Update the tab title in Golden Layout
@@ -1212,6 +1208,62 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       }
     } catch (error) {
       console.error('[TabContainer.updateTabDisplayName] Error updating tab display name:', error);
+    }
+  }
+
+  /**
+   * Resolve — and memoize per driver class — the throwaway component instance
+   * used to read a resource's display name without loading the full component.
+   *
+   * Instantiating a `BaseResourceComponent` outside a real view is inherently
+   * partial: the subclass's `inject()` field initializers resolve against the
+   * *environment* injector, which by design cannot supply node-injector-only
+   * tokens (`ElementRef`, `ChangeDetectorRef`, `ViewContainerRef`) or
+   * component-scoped providers. Drivers that need one of those throw NG0201
+   * here and always will, so the outcome — instance or failure — is cached and
+   * the failure reported once per driver class.
+   *
+   * Caching matters beyond tidiness: this runs on every tab add and every tab
+   * reload, and the uncached version logged one NG0201 per call. In
+   * run-20260730T200139Z that produced 50,153 console errors, whose retained
+   * Playwright argument handles consumed 6.5 GB of the test runner's heap and
+   * OOM-killed the suite two tests from the end.
+   *
+   * @returns the instance, or `null` when this driver cannot provide a name.
+   */
+  private async resolveDisplayNameProvider(driverClass: string): Promise<BaseResourceComponent | null> {
+    const cached = this.displayNameProviders.get(driverClass);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
+      BaseResourceComponent,
+      driverClass
+    );
+    if (!resourceReg) {
+      this.displayNameProviders.set(driverClass, null);
+      return null;
+    }
+
+    try {
+      const instance = runInInjectionContext(
+        this.environmentInjector,
+        () => new resourceReg.SubClass() as BaseResourceComponent
+      );
+      this.displayNameProviders.set(driverClass, instance);
+      return instance;
+    } catch (error) {
+      this.displayNameProviders.set(driverClass, null);
+      // First line only, and never the Error object itself: passing an Error to
+      // console.* makes the browser retain it (and, under Playwright, a handle
+      // to it) with its full stack attached.
+      const reason = error instanceof Error ? error.message.split('\n')[0] : String(error);
+      console.warn(
+        `[TabContainer] Resource driver "${driverClass}" cannot be instantiated outside a view (${reason}) — ` +
+          `its tabs will keep their stored titles.`
+      );
+      return null;
     }
   }
 

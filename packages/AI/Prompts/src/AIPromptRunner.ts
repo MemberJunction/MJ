@@ -3139,20 +3139,40 @@ export class AIPromptRunner {
       }
 
       try {
-        // Log the attempt if not the first one
-        if (i > 0) {
-          const vendorName = candidate.vendorName || 'default';
+        // Log the attempt. A "🔄 retry" banner is only truthful once a PREVIOUS
+        // candidate has actually failed — `i > 0` was NOT that test. Candidates
+        // with no credentials in this environment are skipped above without ever
+        // issuing a request, so the first CALLED candidate is routinely i>0 and
+        // every single successful call logged "🔄 Trying candidate 2/315". That
+        // reads as a failover from a failed attempt that never happened (515 such
+        // lines, and zero real failovers, in one regression run). Key off the
+        // real-failure list instead.
+        const vendorName = candidate.vendorName || 'default';
+        const attemptArgs = [{
+          promptId: prompt.ID,
+          modelId: candidate.model.ID,
+          model: candidate.model.Name,
+          vendorId: candidate.vendorId,
+          vendor: candidate.vendorName,
+          candidatePosition: i + 1,
+          candidateCount: allCandidates.length,
+          priorFailures: failoverAttempts.length,
+          skippedForCredentials
+        }];
+        if (failoverAttempts.length > 0) {
           LogStatusEx({
-            message: `🔄 Trying candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName}`,
+            message: `🔄 Failover after ${failoverAttempts.length} failed attempt(s) — trying candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName}`,
             category: 'AI',
-            additionalArgs: [{
-              promptId: prompt.ID,
-              modelId: candidate.model.ID,
-              model: candidate.model.Name,
-              vendorId: candidate.vendorId,
-              vendor: candidate.vendorName,
-              attemptNumber: i + 1
-            }]
+            additionalArgs: attemptArgs
+          });
+        } else if (skippedForCredentials > 0) {
+          // First real attempt, but earlier candidates were skipped for missing
+          // credentials. State that plainly (and quietly) rather than implying a retry.
+          LogStatusEx({
+            message: `Using candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName} — skipped ${skippedForCredentials} higher-priority candidate(s) with no credentials configured`,
+            category: 'AI',
+            verboseOnly: true,
+            additionalArgs: attemptArgs
           });
         }
 
