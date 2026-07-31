@@ -1,0 +1,52 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T120 - Integrations Connection Detail View",
+    "Description": "Opens an Integrations connection detail view once, then exercises its bespoke sub-surfaces (entity-maps detail, entity-map filter, visual field-mapping editor, auto-map schema panel, create-tables panel) in one run, verifying each via checkpoints. Consolidates old T290-T292, T296, T297.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, find and open the Integrations application, open its 'Integrations' (Connections) section, and click a connection card body (the icon/name area, not the footer buttons) to open its detail view. Then perform these sub-actions IN ORDER, and as you complete each set \"checkpointReached\" to the exact checkpoint name shown: (1) connection-detail-maps — confirm the view switches from the card grid to a detail screen with a back arrow, the connection name/company header, a 'Sync Schedule' section, and an entity-maps toolbar with a map count (e.g. 'N entity maps · M active') and a filter box (if no connections exist, a clear 'No integrations yet' empty-state is acceptable); (2) entity-map-filter — type text into the 'Filter entity maps...' input that likely matches an entity/external-object name, then type text that matches nothing, and confirm the entity-map list narrows on a match and shows a 'No entity maps match your filter' message on a non-match; (3) visual-field-editor — click an entity-map row to open the visual field-mapping editor and confirm a two-column canvas renders (a 'Source Fields' column, an 'MJ Entity Fields' column, SVG connection lines/badges between them, header stats for mapped/key/required counts, and per-column 'Filter fields' inputs), then type in one field filter box and confirm its field list narrows; (4) auto-map-panel — go back to the entity-maps toolbar and click 'Auto-Map Schema', confirming an inline panel opens with a 'Target Schema' dropdown, Pull/Bidirectional/Push direction buttons, an Auto-Map action, and a close (X) button (do NOT run it); (5) create-tables-panel — click 'Create Tables' in the toolbar and confirm an inline panel opens with a search box, a 'Select All (X of Y)' checkbox, and a checkbox list of source objects (or a clear 'No source objects available' message), and typing in the search narrows the object list (do NOT click Create Tables). A clear empty-state is acceptable anywhere a connection or maps do not exist. Keep going until all sub-actions are done. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 65,
+      "checkpoints": [
+        { "name": "connection-detail-maps", "instruction": "open a connection card into its entity-maps detail view", "visualCriteria": ["Clicking a connection card opens a detail view that replaces the card grid (back arrow + connection header visible) showing a Sync Schedule section and an entity-maps area (list/table or a 'No entity maps configured' state) — or, if no connections exist, a clear empty state is shown"] },
+        { "name": "entity-map-filter", "instruction": "filter the entity maps list", "visualCriteria": ["A 'Filter entity maps...' input is present in the connection detail toolbar; typing a non-matching term produces a 'No entity maps match your filter' message (or the list visibly narrows for a matching term) — or a valid empty state is shown when the connection has no maps"] },
+        { "name": "visual-field-editor", "instruction": "open the SVG visual field-mapping editor for a map", "visualCriteria": ["Clicking an entity-map row opens a field-mapping editor with Source Fields and MJ Entity Fields columns, header stats (mapped/key/required), SVG connection lines/badges between the columns, and a per-column field filter input that narrows its field list when typed into"] },
+        { "name": "auto-map-panel", "instruction": "open the Auto-Map Schema panel (do not run it)", "visualCriteria": ["Clicking Auto-Map Schema opens a panel with a Target Schema dropdown, direction (Pull/Bidirectional/Push) buttons, an Auto-Map action, and a close/cancel control — or a valid empty state when no connection is available"] },
+        { "name": "create-tables-panel", "instruction": "open the Create Tables panel and search source objects (do not execute)", "visualCriteria": ["Clicking Create Tables opens a panel with a search box and a Select All checkbox above a source-object checkbox list (or a clear 'no source objects' message), and typing in the search narrows the source-object list when objects are present — the panel is only inspected, not executed"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 65,
+      "maxExecutionTime": 780000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,integrations"
+  },
+  "primaryKey": { "ID": "BB482345-E6E1-4C69-8D09-4C72C9C18C43" }
+}

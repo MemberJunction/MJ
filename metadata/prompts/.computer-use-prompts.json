@@ -30,7 +30,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.6 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 100
           },
@@ -188,7 +188,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.6 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 100
           },
@@ -357,7 +357,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.6 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 90
           },

@@ -21,7 +21,35 @@ SCRIPTS=/app/docker/regression/scripts
 source "$SCRIPTS/lib/entrypoint-common.sh"
 
 # Register ComputerUseTestDriver with ClassFactory before the CLI runs.
-export NODE_OPTIONS="--import /app/bootstrap.mjs"
+#
+# --max-old-space-size is PINNED, not left to Node's default. Node derives that
+# default from the cgroup limit and lands far below what the container actually
+# allows: measured 2240 MB under this service's limit. A full-suite run then
+# FATAL-OOMs mid-flight ("Reached heap limit") with most of its allowance unused —
+# observed in run-20260729T172418Z, which died at test 93 of 155 while the
+# container was only at 83% of its 14 GB.
+#
+# Sizing: this must coexist with Chromium, which is the far bigger consumer
+# (peaked at 9.3 GB across ~9 processes in that run). Keep heap + Chromium peak
+# under mem_limit — an OOM-kill of the container is WORSE than a JS heap OOM,
+# because it dies without writing results.json or a partial report.
+RUNNER_HEAP_MB="${MJ_REGRESSION_RUNNER_HEAP_MB:-4096}"
+export NODE_OPTIONS="--import /app/bootstrap.mjs --max-old-space-size=${RUNNER_HEAP_MB}"
+echo "  Node heap cap: ${RUNNER_HEAP_MB} MB (override with MJ_REGRESSION_RUNNER_HEAP_MB)"
+
+# Opt-in heap diagnostics for the runner's own JS-heap growth (separate from the
+# Chromium leak that browser rotation fixed). OFF by default: the snapshot is
+# roughly the size of the live heap (multi-GB at an 8g cap) and pauses the process
+# for tens of seconds while it writes.
+#
+# --heapsnapshot-near-heap-limit lets V8 pick the moment — it dumps just before it
+# would OOM, which is the only instant that matters for a leak that takes 100+
+# tests to manifest. Node writes it to the CWD (/app, not mounted), so the
+# post-run step below moves it into the run dir where it survives the container.
+if [ -n "${MJ_REGRESSION_HEAP_SNAPSHOT:-}" ]; then
+    export NODE_OPTIONS="$NODE_OPTIONS --heapsnapshot-near-heap-limit=1"
+    echo "  Heap snapshot: ENABLED (dumped near the ${RUNNER_HEAP_MB} MB limit → run dir)"
+fi
 
 echo ""
 echo "  MJ Regression Test Runner"
@@ -68,9 +96,9 @@ npx mj sync push --dir=metadata --include="prompts" --no-write-back 2>&1 || {
 echo ""
 
 # Test-scoped metadata (from docker/regression/test-metadata/):
-#   tags  — 3 global tags (vip, follow-up, regression-test)
-#   users — test user + roles + List Categories + Lists + User View Categories
-#           + User Views + User Notifications (nested as relatedEntities)
+#   tags          — 3 global tags (vip, follow-up, regression-test)
+#   users         — test user + roles + List Categories + Lists + User View Categories
+#                   + User Views + User Notifications (nested as relatedEntities)
 # Tags must process first so any future UserTag references resolve.
 echo "Syncing test user metadata..."
 npx mj sync push --dir=/app/test-metadata --include="tags,users" --no-write-back 2>&1 || {
@@ -84,6 +112,19 @@ echo ""
 # that reference AssociationDemo record IDs.
 echo "Ensuring test user, roles, apps, and example data via SQL..."
 node "$SCRIPTS/setup-test-user.cjs" 2>&1
+echo ""
+
+# Conversation fixture — deliberately pushed AFTER the SQL safety-net above,
+# because it resolves the test user with `@lookup:MJ: Users.Email=...`. Pushed
+# alongside `users` it would inherit that push's failure; here the user is
+# guaranteed to exist by either path. Seeds one conversation carrying a completed
+# AI message so T100 can exercise the per-message action controls (pin, thumbs
+# rating, reactions) without sending a live message and waiting on a real model
+# reply — which would mean an LLM call, its cost, and its flakiness every run.
+echo "Syncing conversation fixture..."
+npx mj sync push --dir=/app/test-metadata --include="conversations" --no-write-back 2>&1 || {
+    echo "  WARNING: Conversation fixture sync failed — T100 will see an empty chat"
+}
 echo ""
 
 # Sync test definitions + suite mapping. Tests must process before suites
@@ -265,6 +306,16 @@ npx mj test suite --name "${SUITE_NAME}" \
     "${TESTS_ARGS[@]}"
 EXIT_CODE=$?
 set -e
+
+# Rescue any heap snapshot V8 dumped. It lands in the CWD (/app), which is inside
+# the container's own filesystem — so without this move it dies with the container,
+# which is precisely the run you most wanted it from.
+if compgen -G "/app/*.heapsnapshot" > /dev/null 2>&1; then
+    mv /app/*.heapsnapshot "$RUN_DIR"/ 2>/dev/null || true
+    echo "  Heap snapshot(s) saved to test-results/${RUN_ID}/ —"
+    ls -lh "$RUN_DIR"/*.heapsnapshot 2>/dev/null | awk '{print "    "$9" ("$5")"}'
+    echo "  Open in Chrome DevTools → Memory → Load profile."
+fi
 
 # DR-G4: the health supervisor stays alive THROUGH report generation (below) so
 # its samples cover the whole run, then is stopped at the very end. It also

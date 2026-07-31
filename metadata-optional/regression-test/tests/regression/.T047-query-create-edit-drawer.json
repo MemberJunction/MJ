@@ -1,0 +1,52 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T047 - Query Create/Edit Drawer",
+    "Description": "Opens the Data Explorer Queries section once, then walks the bespoke query drawer sections (create, edit + open-full-record, name-required validation, unsaved-changes discard confirm, category-scoped new query), verifying each via checkpoints. Consolidates old T102–T105 and T109.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box), switch to Data Explorer, and open the Queries section. Then walk these sections IN ORDER, and as you arrive at each set \"checkpointReached\" to the exact checkpoint name shown: (1) create-drawer — click the '+' (New Query) icon in the query panel header to open the New Query drawer; confirm it renders Name, Category dropdown, Status dropdown, Reusable checkbox, Description, and a SQL code editor; enter a Name (e.g. 'CU Regression Test Query') and a simple SELECT into the SQL editor and click Save so the drawer closes and the new query appears (or, if create permission is absent, note the '+' being absent); (2) edit-drawer — select a query and click its edit (pencil) icon to open the Edit Query drawer; confirm it is pre-populated with the query's existing Name, SQL, Category, and Status and that an 'Open full record' link (edit-mode only) is present (you do NOT need to save); (3) name-required-validation — open the New Query drawer again, leave Name blank and attempt Save; confirm Save stays disabled (and/or a 'Name is required' hint shows) while Name is empty, then type a Name and confirm Save becomes enabled; (4) unsaved-discard-confirm — with the drawer dirty (something typed in Name), try to close via X / backdrop / Escape and confirm a discard-unsaved-changes confirmation prompt appears; (5) category-scoped-new — hover a category folder header in the tree so its per-category '+' (New query in <category>) button appears, click it, and confirm the New Query drawer opens with that folder's Category already pre-selected. If any '+'/edit control is legitimately absent due to permissions, note it and continue. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 65,
+      "checkpoints": [
+        { "name": "create-drawer", "instruction": "New Query drawer create + save", "visualCriteria": ["The New Query drawer opens with Name, Category dropdown, Status dropdown, Reusable checkbox, Description, and a SQL code editor; after entering a Name and SQL and clicking Save the drawer closes without error (the created query is selected/visible), OR the create '+' button is legitimately absent due to permissions"] },
+        { "name": "edit-drawer", "instruction": "Edit drawer pre-filled + open full record link", "visualCriteria": ["The Edit Query drawer opens pre-populated with the selected query's Name and SQL (and Category/Status) and shows an 'Open full record' link, OR the edit (pencil) icon is legitimately absent due to permissions"] },
+        { "name": "name-required-validation", "instruction": "Save disabled while Name empty", "visualCriteria": ["With the drawer's Name field empty the Save button is disabled (and/or a 'Name is required' hint shows), and after entering a Name the Save button becomes enabled"] },
+        { "name": "unsaved-discard-confirm", "instruction": "discard-changes prompt on close", "visualCriteria": ["After editing a drawer field and attempting to close (X / backdrop / Escape), a discard-unsaved-changes confirmation prompt appears instead of silently closing"] },
+        { "name": "category-scoped-new", "instruction": "per-category '+' pre-seeds Category", "visualCriteria": ["Hovering a category folder reveals a per-category '+' add button, and clicking it opens the New Query drawer with that category pre-selected in the Category selector, OR the per-category '+' is legitimately absent due to permissions"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 65,
+      "maxExecutionTime": 780000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,query"
+  },
+  "primaryKey": { "ID": "B50D12CB-A301-4000-A315-3DF2B8D52D30" }
+}

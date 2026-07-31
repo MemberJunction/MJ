@@ -11,6 +11,14 @@ The following hints about this task's UI may save you steps:
 {% endfor %}
 {% endif %}
 
+{% if checkpoints and checkpoints.length > 0 %}
+## Checkpoints (this is a multi-section tour)
+Work through these sections in order. As soon as you arrive at one, set `checkpointReached` to its **exact name** (from the list below) in your response — this verifies the section on the frame you are on. Keep going until every section is done.
+{% for cp in checkpoints %}
+- **{{ cp.Name }}**{% if cp.Instruction %} — {{ cp.Instruction }}{% endif %}
+{% endfor %}
+{% endif %}
+
 {% if previousAttemptSummary %}
 ## Previous Attempt (learn from it)
 A prior attempt at this exact goal failed:

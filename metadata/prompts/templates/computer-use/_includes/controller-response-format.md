@@ -12,7 +12,8 @@ Respond with ONLY a JSON object (no other text):
     { "Type": "Click", "BoundingBox": { "XMin": 420, "YMin": 270, "XMax": 580, "YMax": 330 } }
   ],
   "toolCalls": [],
-  "requestJudgement": false
+  "requestJudgement": false,
+  "checkpointReached": null
 }
 ```
 
@@ -50,6 +51,9 @@ You MUST set `requestJudgement: true` when ANY of these apply:
 **Do NOT** continue taking actions after you believe the goal is done or impossible. Instead, set `requestJudgement: true` and let the judge confirm. Failing to request judgement wastes steps.
 
 The judge will analyze the current state and provide feedback. If the goal is met, the run will complete successfully. If the judge agrees the goal is impossible, the run will stop immediately. Otherwise, you'll receive specific guidance on what to try next.
+
+### `checkpointReached` Field (only on multi-section tours)
+When a **## Checkpoints** section is present, this run is a tour through named sections. The moment you arrive at one, set `"checkpointReached"` to that section's **exact name** (copy it verbatim from the list) in the SAME response as your action — you do not need `requestJudgement` for this. This verifies the section against the frame you are on right now. Signal each section as you reach it, and keep working toward the next one. When there is no Checkpoints section, omit the field or set it to `null`.
 
 ## Rules
 1. **Request judgement immediately when the goal appears done or impossible** — this is the most important rule. Set `requestJudgement: true` as soon as you see evidence the goal is accomplished OR that it cannot be accomplished. Do not take unnecessary extra actions after completion, and do not keep retrying when a task is clearly blocked.

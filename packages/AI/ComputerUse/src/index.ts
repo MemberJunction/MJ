@@ -20,6 +20,7 @@ export * from './browser/PlaywrightBrowserAdapter.js';
 export * from './browser/SharedContextBrowserAdapter.js';
 export * from './browser/HeadlessBrowserEngine.js';
 export * from './browser/NavigationGuard.js';
+export * from './browser/selector-resolution.js';
 export * from './browser/connect-endpoint.js';
 
 // ─── Auth Exports ──────────────────────────────────────────
@@ -45,6 +46,7 @@ export * from './engine/trace-keying.js';
 export * from './engine/replay-step.js';
 export * from './engine/heal-decision.js';
 export * from './engine/postcondition.js';
+export * from './engine/checkpoint.js';
 export * from './engine/judge-cache.js';
 export * from './engine/prelude.js';
 export * from './engine/trace-diff.js';

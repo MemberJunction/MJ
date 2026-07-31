@@ -64,13 +64,39 @@ export function computeStateSignature(
 }
 
 /**
+ * How many times one page state may recur before it counts as a loop trip, given
+ * how many distinct things the goal asks for (`requestedParts` — checkpoints for a
+ * tour, validation criteria otherwise).
+ *
+ * Revisiting a state is a STRUCTURAL consequence of a multi-part goal, not evidence
+ * of being stuck. Tours are hub-and-spoke, so walking N sections returns to the hub
+ * up to N times; and multi-criteria goals do it too — "clearing the filter RESTORES
+ * the fuller list" asks the agent to return to an earlier state *as the pass
+ * condition*. At the base threshold of 3 those goals trip the detector on their own
+ * shape. Allowing one revisit per requested part plus the base tolerance makes the
+ * step/time budgets the real backstop, which is what they are for.
+ *
+ * `requestedParts <= 0` (a single-goal run) keeps the base threshold unchanged.
+ */
+export function stateRepeatThresholdFor(baseThreshold: number, requestedParts: number): number {
+    if (!Number.isFinite(requestedParts) || requestedParts <= 0) {
+        return baseThreshold;
+    }
+    return baseThreshold + Math.floor(requestedParts);
+}
+
+/**
  * Detect a loop in the signature history (most recent last). Empty signatures
  * are ignored. Returns the strongest signal or null.
  *
  * - repeat-state: the most-recent signature has occurred ≥ `stateRepeatThreshold` times.
  * - cycle: the tail is a repeating block of period 2..4 that repeats ≥ twice.
  */
-export function detectLoop(signatures: readonly string[], stateRepeatThreshold: number): LoopSignal | null {
+export function detectLoop(
+    signatures: readonly string[],
+    stateRepeatThreshold: number,
+    cycleRepeatThreshold: number = 2
+): LoopSignal | null {
     const sigs = signatures.filter(s => s !== '');
     if (sigs.length === 0) {
         return null;
@@ -78,28 +104,43 @@ export function detectLoop(signatures: readonly string[], stateRepeatThreshold: 
 
     // (a) repeat-state — same observable state revisited N times.
     const last = sigs[sigs.length - 1];
-    const occurrences: number[] = [];
-    signatures.forEach((s, i) => { if (s === last) occurrences.push(i + 1); });
-    if (occurrences.length >= stateRepeatThreshold) {
+    const occurrences = sigs.filter(s => s === last).length;
+    if (occurrences >= stateRepeatThreshold) {
         return {
             kind: 'repeat-state',
-            count: occurrences.length,
-            detail: `the same page state has been reached ${occurrences.length} times (steps ${occurrences.join(', ')}) with no progress`,
+            count: occurrences,
+            // Deliberately NOT reporting step numbers: the engine clears this history
+            // when a checkpoint latches, so array positions stop matching real step
+            // numbers after the first reset. Reporting them anyway put false step
+            // numbers in the controller's prompt.
+            detail: `the same page state has been reached ${occurrences} times since the last progress`,
         };
     }
 
-    // (c) cycle — the tail is [block][block] for some period 2..4.
+    // (c) cycle — the tail is the same block of `period` states repeated
+    // `cycleRepeatThreshold` times over.
+    //
+    // The repeat count is a threshold rather than a hardcoded 2 because ONE
+    // repetition of an A→B→A→B block is the normal shape of a multi-section tour:
+    // hub → section → hub → section. Tripping on that killed T038 at step 12 of a
+    // 90-step budget, right after it had latched 2 of its 6 checkpoints.
+    const repeats = Math.max(2, Math.floor(cycleRepeatThreshold));
     for (let period = 2; period <= 4; period++) {
-        if (sigs.length >= period * 2) {
-            const tail = sigs.slice(-period);
-            const prev = sigs.slice(-period * 2, -period);
-            if (tail.every((s, i) => s === prev[i])) {
-                return {
-                    kind: 'cycle',
-                    count: period,
-                    detail: `navigation is cycling through the same ${period} states repeatedly with no progress`,
-                };
-            }
+        if (sigs.length < period * repeats) {
+            continue;
+        }
+        const block = sigs.slice(-period);
+        let allMatch = true;
+        for (let r = 1; r < repeats && allMatch; r++) {
+            const prior = sigs.slice(-period * (r + 1), -period * r);
+            allMatch = block.every((s, i) => s === prior[i]);
+        }
+        if (allMatch) {
+            return {
+                kind: 'cycle',
+                count: period,
+                detail: `navigation is cycling through the same ${period} states repeatedly (${repeats}× over) with no progress`,
+            };
         }
     }
 

@@ -1,0 +1,55 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T069 - PS Studio-Door Workbench Tour",
+    "Description": "Opens the Predictive Studio 'Studio' analyst-workbench door once, then walks its internal sections (section nav, Overview entry paths, Training Pipeline DAG builder, pipeline validate, Algorithm Catalog guide-me + detail expand, Experiments kanban, Compare Runs), verifying each via checkpoints. Consolidates old T152–T159.",
+    "InputDefinition": {
+      "goal": "Do the shared setup ONCE: open the Predictive Studio app via the application switcher dropdown next to the logo (scroll the list if needed), then open the 'Studio' nav item (the analyst workbench door). The Studio door has its OWN internal left-nav grouped by Overview / Build / Run. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) studio-section-nav — click through several internal sections (e.g. Training Pipelines, Algorithm Catalog, Experiments, Compare Runs) and confirm the main content area swaps to a different panel each time (header subtitle and body change); (2) studio-overview — make the 'Overview' section active and confirm the landing renders a hero band, a KPI strip (Published / Active Experiments / Best Holdout AUC / Scored this week), three entry-path cards ('Start from data', 'Use a template', 'Ask the agent') and a Recent Activity timeline, then click an entry-path card and confirm the workbench navigates to another section; (3) training-pipelines — open 'Training Pipelines' and confirm the visual DAG builder renders (pipeline picker pills, Save/Validate/Train toolbar, a canvas of connected nodes, a right-hand inspector) OR the 'No training pipelines yet' empty state with an ask-the-agent button; (4) pipeline-validate — if a pipeline exists, select it and click 'Validate' and confirm a notification/toast reports the client-side spec check result (valid, or what's missing), OR confirm the no-pipelines empty state; (5) algorithm-catalog-guide — open 'Algorithm Catalog', confirm the algorithm card gallery renders with problem-type tags, then click a 'Guide me' scenario chip and confirm a recommendation banner appears and the cards re-rank/highlight, and 'Clear' resets it; (6) algorithm-catalog-detail — on any algorithm card click 'Details' and confirm an inline detail panel expands showing driver class / problem types / hyperparameters, and clicking again collapses it; (7) experiments-kanban — open 'Experiments' and confirm a session header with status badge, a Leaderboard strip, and a Running/Completed/Pruned kanban render, OR the 'No experiment sessions yet' empty state; (8) compare-runs — open 'Compare Runs' and confirm a session picker plus a side-by-side comparison grid with per-row BEST highlighting render, OR the 'Nothing to compare yet' empty state. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "studio-section-nav", "instruction": "internal section nav swaps panels", "visualCriteria": ["The Studio door renders an internal left-nav listing sections under Overview / Build / Run groups, and clicking different section items swaps the main panel content (distinct panels for pipelines, catalog, experiments, compare)"] },
+        { "name": "studio-overview", "instruction": "Overview hero + KPI strip + entry-path cards", "visualCriteria": ["The Overview landing shows a hero band, a KPI strip, and three entry-path cards, and clicking an entry-path card navigates the Studio to the corresponding section (Pipelines or Catalog)"] },
+        { "name": "training-pipelines", "instruction": "DAG builder or empty state", "visualCriteria": ["Either the DAG builder renders with a canvas of nodes/edges, a Save/Validate/Train toolbar, and a right-hand inspector, OR the 'No training pipelines yet' empty state with an ask-the-agent button renders"] },
+        { "name": "pipeline-validate", "instruction": "Validate surfaces a result notification", "visualCriteria": ["Clicking Validate on a selected pipeline surfaces a validation-result notification (valid, or a list of what's missing) without requiring training or saving, OR the no-pipelines empty state is shown"] },
+        { "name": "algorithm-catalog-guide", "instruction": "scenario chip re-ranks the card gallery", "visualCriteria": ["The algorithm card gallery renders with multiple cards and problem-type tags, and selecting a 'Guide me' scenario chip shows a recommendation banner and visibly re-ranks/highlights the cards, with 'Clear' resetting it"] },
+        { "name": "algorithm-catalog-detail", "instruction": "card Details expands hyperparameters", "visualCriteria": ["Clicking 'Details' on an algorithm card expands an inline detail panel with driver class / problem types / hyperparameters, and the panel toggles closed when clicked again"] },
+        { "name": "experiments-kanban", "instruction": "session header + leaderboard + kanban or empty state", "visualCriteria": ["Either a session header with a status badge, a Leaderboard strip, and a Running/Completed/Pruned kanban render, OR the 'No experiment sessions yet' empty state renders"] },
+        { "name": "compare-runs", "instruction": "side-by-side comparison grid or empty state", "visualCriteria": ["Either a session picker plus a side-by-side comparison grid with per-row BEST highlighting renders, OR the 'Nothing to compare yet' empty state renders"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,ps"
+  },
+  "primaryKey": { "ID": "6FC23A4B-28D8-421C-BE16-B080A00B329A" }
+}

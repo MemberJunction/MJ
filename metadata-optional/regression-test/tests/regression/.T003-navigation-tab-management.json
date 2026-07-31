@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T003 - Navigation and Tab Management",
+    "Description": "Verifies workspace tab navigation between Home and an open record.",
+    "InputDefinition": {
+      "goal": "Open a record: open the 'Events' (or 'Members') entity via the LEFT sidebar 'Search entities...' box, click a row, then click 'Open Full Record'. The record opens as a TAB in the top workspace bar alongside the 'Home' tab. Click the 'Home' tab to switch back to Home, then click the record's tab to switch back to the record. Verify switching between the Home tab and the record tab works and each shows its own content. (You do NOT need multiple record tabs — this verifies tab navigation between Home and an open record.) Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A record opened as a workspace tab alongside the Home tab",
+        "Switching between the Home tab and the record tab works, each showing its own content",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P0,regression"
+  },
+  "primaryKey": {
+    "ID": "8F37873C-FD30-4C2C-A875-716DCE7C9E77"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:53.659Z",
+    "checksum": "527a666a97f5b107852da344589b8d73c80645eb9b11d18acfe77fcad44c6653"
+  }
+}

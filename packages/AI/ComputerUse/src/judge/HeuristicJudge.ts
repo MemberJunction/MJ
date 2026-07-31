@@ -43,15 +43,28 @@ export class HeuristicJudge extends BaseJudge {
     }
 
     public override async Evaluate(context: JudgeContext): Promise<JudgeVerdict> {
-        // Check stuck state (identical screenshots)
-        const stuckVerdict = this.detectStuckState(context);
-        if (stuckVerdict) return stuckVerdict;
+        // Navigation-shape checks (stuck frame, URL loop) describe HOW the run is
+        // moving, not whether a criterion is satisfied — so in a checkpoint tour
+        // (CU-D8) they must not answer on the judge's behalf. HybridJudge takes any
+        // confidence > 0 as final and skips the LLM, and the LLM judge is the only
+        // thing that can latch a tour's visual criteria: a tour that tripped these
+        // could never latch another section, no matter what it actually did on
+        // screen. Both signals are false-positive-prone on a tour anyway — a
+        // section can latch with no visible frame change, and tours are scripted to
+        // revisit URLs (open→cancel, A→B→A). The engine still surfaces its own loop
+        // evidence to the controller (CU-B1), so nothing is silently dropped.
+        if (!context.IsCheckpointTour) {
+            // Check stuck state (identical screenshots)
+            const stuckVerdict = this.detectStuckState(context);
+            if (stuckVerdict) return stuckVerdict;
 
-        // Check navigation loops (cycling URLs)
-        const loopVerdict = this.detectNavigationLoop(context.StepHistory);
-        if (loopVerdict) return loopVerdict;
+            // Check navigation loops (cycling URLs)
+            const loopVerdict = this.detectNavigationLoop(context.StepHistory);
+            if (loopVerdict) return loopVerdict;
+        }
 
-        // Check repeated errors
+        // Repeated hard errors are a genuine systemic failure in any run shape,
+        // tour included — this one still preempts.
         const errorVerdict = this.detectRepeatedErrors(context.StepHistory);
         if (errorVerdict) return errorVerdict;
 

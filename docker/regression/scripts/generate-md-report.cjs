@@ -12,6 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { clusterFailures, enrichRoutesFromSteps } = require('./lib/cluster-failures.cjs');
+const { loadRunResults, partialNotice } = require('./load-run-results.cjs');
 
 const RUN_DIR = process.env.RUN_DIR;
 if (!RUN_DIR) {
@@ -35,9 +36,32 @@ function section(lines, label, fn) {
 }
 
 try {
-    const r = JSON.parse(fs.readFileSync(path.join(RUN_DIR, 'results.json'), 'utf8'));
+    // DR-D5: prefer the final results.json, but render from results.partial.json
+    // when a run crashed (e.g. runner OOM) so the completed tests still report.
+    // Partial rows carry no oracleResults/sequence — every section below is
+    // wrapped in section(), which degrades rather than aborting the report.
+    const loaded = loadRunResults(RUN_DIR);
+    if (!loaded) {
+        console.error('  WARNING: no results.json or results.partial.json, skipping markdown report');
+        process.exit(0);
+    }
+    const testResults = loaded.tests;
+    const passed = testResults.filter(t => t.status === 'Passed').length;
+    const r = loaded.partial
+        ? {
+            suiteName: loaded.suiteName,
+            status: loaded.status,
+            passedTests: passed,
+            failedTests: testResults.length - passed,
+            totalTests: testResults.length,
+            testResults,
+        }
+        : JSON.parse(fs.readFileSync(path.join(RUN_DIR, 'results.json'), 'utf8'));
     const lines = [];
-    const testResults = Array.isArray(r.testResults) ? r.testResults : [];
+    const notice = partialNotice(loaded);
+    if (notice) {
+        lines.push(`> ⚠️ ${notice}`, '');
+    }
 
     // 1. Header
     section(lines, 'header', () => {

@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T129 - Scheduling Activity",
+    "Description": "Opens the Scheduling Activity view once, then walks its controls (execution-history table with expandable row detail, time-range chips), verifying each via checkpoints. Consolidates old T319, T320.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Activity' left-nav section. This shared setup is done ONCE. Then exercise these controls IN ORDER, and as you finish each set \"checkpointReached\" to the exact checkpoint name shown: (1) activity-history — confirm the 'Execution History' table renders (Status, Job Name, Started, Duration, Error columns) typically with job-type summary cards and an 'Execution Trends' bar chart above it, then click an execution ROW to EXPAND it and confirm an inline detail area opens showing fields like Started/Completed/Duration/Status and 'Open Run Record' / 'Open Job' buttons (the 'No executions found' empty state is an acceptable pass when there are no rows); (2) time-range-chips — locate the time-range chips ('24 Hours', '7 Days', '30 Days', '90 Days'; 7 Days active by default), click a different range chip (e.g. '30 Days') and confirm it becomes the active/selected chip and the activity view reloads for that window (executions list and/or trends chart refresh; an empty state is acceptable). Keep going until both controls have been exercised. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "activity-history", "instruction": "execution history table + expandable row detail", "visualCriteria": ["The Activity section renders an Execution History table (and/or trends chart / job-type summary cards), and clicking an execution row expands an inline detail panel with Started/Completed/Status fields and Open Run Record / Open Job buttons — OR a valid 'No executions found' empty-state"] },
+        { "name": "time-range-chips", "instruction": "time-range chip changes active window", "visualCriteria": ["Time-range chips (24 Hours / 7 Days / 30 Days / 90 Days) are visible with one active, and clicking a different range makes it the active chip and the activity content refreshes for that window (rows/trends update or a valid empty-state)"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,scheduling"
+  },
+  "primaryKey": { "ID": "D3611D18-B122-440F-BD35-9D9D36A8347D" }
+}

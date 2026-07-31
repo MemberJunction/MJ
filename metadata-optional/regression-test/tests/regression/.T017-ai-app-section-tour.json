@@ -1,0 +1,54 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T017 - AI App Section Tour",
+    "Description": "Opens the AI application once via the app switcher, then walks its sections (Overview, Agents, Agent Detail, Prompts, Models, Analytics, Configuration) in one run, verifying each via checkpoints. Consolidates old T027-T033.",
+    "InputDefinition": {
+      "goal": "Open the AI application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box). Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) ai-overview — the Overview with its quick-stats strip (Active Agents, Models, Prompts, Vendors) and navigation cards; (2) ai-agents — the Agents list (a list of agents or a valid empty-state); (3) ai-agent-detail — click into an individual agent (use 'Open Full Record' if a preview appears) to view its configuration/detail form; (4) ai-prompts — the Prompts management list; (5) ai-models — the Models list; (6) ai-analytics — the Analytics view with KPIs/charts or a valid empty-state; (7) ai-configuration — the Configuration/settings section. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "ai-overview", "instruction": "AI Overview with quick-stats + nav cards", "visualCriteria": ["The AI Overview shows a quick-stats strip with labeled counts (Active Agents, Models, Prompts, Vendors) and navigation cards for AI sections"] },
+        { "name": "ai-agents", "instruction": "Agents list", "visualCriteria": ["The AI Agents section shows a list of agents or a clear empty-state message"] },
+        { "name": "ai-agent-detail", "instruction": "open an individual agent's detail form", "visualCriteria": ["An individual AI agent's detail/configuration form is displayed showing agent fields or configuration content"] },
+        { "name": "ai-prompts", "instruction": "Prompts list", "visualCriteria": ["The AI Prompts section shows a prompt management list with records or a clear empty-state message"] },
+        { "name": "ai-models", "instruction": "Models list", "visualCriteria": ["The AI Models section shows a list of models or a clear empty-state message"] },
+        { "name": "ai-analytics", "instruction": "Analytics view", "visualCriteria": ["The AI Analytics view renders with KPIs, charts, or date-range controls, or a valid empty-state"] },
+        { "name": "ai-configuration", "instruction": "Configuration section", "visualCriteria": ["The AI Configuration section renders its settings/params content or a valid empty-state"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,ai"
+  },
+  "primaryKey": { "ID": "2FAB7011-B75E-4FEB-B96C-EC6C951724DC" }
+}

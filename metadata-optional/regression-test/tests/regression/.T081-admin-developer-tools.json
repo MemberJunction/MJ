@@ -1,0 +1,55 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T081 - Admin Developer Tools",
+    "Description": "Opens the Admin app's Developer Tools section once, then walks each inspector (GraphQL Console run + entity template, Class Registry search + expand, Event Monitor controls, Lazy Loading filter, Settings Explorer scope switch, App State inspector), verifying each via checkpoints. Consolidates old T210-T217.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo and choose the Admin app, then open the 'Developer Tools' section. Then walk these inspectors IN ORDER using the left sub-navigation, and as you arrive at each set \"checkpointReached\" to the exact checkpoint name shown: (1) graphql-run-query - click 'GraphQL Console', type a minimal valid query such as `query { __typename }` into the editor (clear any placeholder first), click 'Run' (or Ctrl/Cmd+Enter), and confirm a Response pane renders JSON plus a status/duration indicator (e.g. 200 OK); (2) graphql-entity-template - reveal the History/Entities sidebar (click the 'History' toggle if needed), open the 'Entities' tab, type an entity name like 'Users' into the entity search, expand the matching entity, and click an operation button (Run view / Get by ID) to insert a query template into the editor; (3) class-registry-search - click 'Class Registry', type a broad term like 'Entity' into the search box and confirm the grouped list narrows, then type nonsense like 'zzzznotaclass' and confirm a 'No registrations match' empty state; (4) class-registry-expand - expand a base-class group header to reveal its registrations table (Key / Subclass / Priority columns, winner/shadowed badges where applicable), then collapse it again; (5) event-monitor-controls - click 'Event Monitor', confirm the status reads 'LIVE' with a captured counter, click 'Pause' (status flips to 'PAUSED', control offers 'Resume'), click 'Resume' to return to LIVE, then click 'Clear' to reset the buffered count; (6) lazy-loading-filter - click 'Lazy Loading', confirm the load-progress bar and chunk grid, then click the 'Loaded' / 'Not loaded' / 'All' filter pills and confirm which chunk cards show changes; (7) settings-explorer-scope - click 'Settings Explorer', confirm it opens on 'User Settings' with a table, click the 'Instance Configurations' tab to switch scope, then click a setting row to open its detail panel with the full key/value; (8) app-state-inspector - click 'App State', confirm a section tab-nav with a read-only JSON snapshot, then select a different section tab and confirm the section title and JSON content swap. Keep going until every inspector has been visited. Pages can take 10-30s to load in this resource-constrained environment - wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "graphql-run-query", "instruction": "run a query in the GraphQL Console and get a response", "visualCriteria": ["After typing a query into the GraphQL Console editor and clicking Run, the Response pane renders JSON output AND a status/duration indicator appears (e.g. 200 OK, a ms/size pill, or a clear error status) - the query round-tripped"] },
+        { "name": "graphql-entity-template", "instruction": "insert a query template from the Entities sidebar", "visualCriteria": ["The GraphQL Console sidebar shows an Entities tab with a searchable/filterable entity list; expanding an entity reveals operation buttons (Run view / Get by ID) and clicking one populates the query editor with a generated query template"] },
+        { "name": "class-registry-search", "instruction": "filter the Class Registry by search term", "visualCriteria": ["In Class Registry, typing a real search term visibly narrows the grouped list to matching entries, and typing a nonsense term shows a no-results / 'No registrations match' empty state"] },
+        { "name": "class-registry-expand", "instruction": "expand a class-registry group to reveal its registrations table", "visualCriteria": ["Expanding a base-class group reveals a registrations table with Key / Subclass / Priority columns (winner/shadowed badges where applicable) and the group can be collapsed again"] },
+        { "name": "event-monitor-controls", "instruction": "toggle the Event Monitor pause/resume and clear", "visualCriteria": ["The Event Monitor shows a LIVE/PAUSED status and captured-event stats; clicking Pause switches to PAUSED with a Resume control (Resume restores LIVE) and Clear resets the buffered-event count"] },
+        { "name": "lazy-loading-filter", "instruction": "filter lazy-loading chunk cards by load state", "visualCriteria": ["The Lazy Loading inspector renders a progress bar and a grid of code-split chunk cards, and clicking the Loaded / Not loaded / All filter pills changes which chunk cards are shown (or shows a valid empty state)"] },
+        { "name": "settings-explorer-scope", "instruction": "switch scope tabs and open a setting detail", "visualCriteria": ["Settings Explorer shows User Settings and Instance Configurations scope tabs; switching tabs changes the displayed settings table and clicking a setting row opens a detail panel showing the selected key's full value"] },
+        { "name": "app-state-inspector", "instruction": "switch App State section tabs to swap the JSON snapshot", "visualCriteria": ["The App State inspector shows a section tab-nav and a read-only JSON snapshot in a code editor; selecting a different section tab updates the section title and swaps the JSON content shown"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": { "ID": "422936D2-818C-418D-AB11-11901B76F0C4" }
+}

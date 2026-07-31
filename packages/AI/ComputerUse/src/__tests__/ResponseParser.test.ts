@@ -85,6 +85,23 @@ That should work.`;
             expect(result.RequestJudgement).toBe(false);
         });
 
+        it('should parse checkpointReached when present (CU-D8) and leave it undefined otherwise', () => {
+            const withSignal = ResponseParser.ParseControllerResponse(
+                JSON.stringify({ reasoning: 'arrived', actions: [], checkpointReached: 'agents-list' })
+            );
+            expect(withSignal.CheckpointReached).toBe('agents-list');
+
+            const without = ResponseParser.ParseControllerResponse(
+                JSON.stringify({ reasoning: 'working', actions: [] })
+            );
+            expect(without.CheckpointReached).toBeUndefined();
+
+            const nullSignal = ResponseParser.ParseControllerResponse(
+                JSON.stringify({ reasoning: 'working', actions: [], checkpointReached: null })
+            );
+            expect(nullSignal.CheckpointReached).toBeUndefined();
+        });
+
         it('should default reasoning to empty string when not in JSON', () => {
             const input = JSON.stringify({ actions: [] });
             const result = ResponseParser.ParseControllerResponse(input);
@@ -184,6 +201,47 @@ That should work.`;
             if (wait.Type === 'Wait') expect(wait.Selector).toBe('.record-form');
             // 'ctrl' -> Control, 'cmd' -> Meta (alias normalization)
             if (keypress.Type === 'Keypress') expect(keypress.Modifiers).toEqual(['Control', 'Meta']);
+        });
+
+        it('should parse a scroll-at point from either casing (CU-A8)', () => {
+            const [upper, lower] = parseActions([
+                { Type: 'Scroll', X: 130, Y: 500, DeltaY: 300 },
+                { Type: 'Scroll', x: 40, y: 60, deltaY: -200 },
+            ]);
+            if (upper.Type === 'Scroll') {
+                expect(upper.X).toBe(130);
+                expect(upper.Y).toBe(500);
+                expect(upper.DeltaY).toBe(300);
+            }
+            if (lower.Type === 'Scroll') {
+                expect(lower.X).toBe(40);
+                expect(lower.Y).toBe(60);
+            }
+        });
+
+        it('should ignore a half-specified scroll point rather than scrolling at the page corner (CU-A8)', () => {
+            // A lone axis cannot identify a point; defaulting the other to 0 would
+            // silently wheel at the top-left corner instead of the intended pane.
+            const [onlyX, onlyY, neither] = parseActions([
+                { Type: 'Scroll', X: 130, DeltaY: 300 },
+                { Type: 'Scroll', Y: 500, DeltaY: 300 },
+                { Type: 'Scroll', DeltaY: 300 },
+            ]);
+            for (const a of [onlyX, onlyY, neither]) {
+                if (a.Type === 'Scroll') {
+                    expect(a.X).toBeUndefined();
+                    expect(a.Y).toBeUndefined();
+                }
+            }
+        });
+
+        it('should accept a scroll point at the origin (CU-A8)', () => {
+            // 0 is a legitimate coordinate — the guard must test for presence, not truthiness.
+            const [action] = parseActions([{ Type: 'Scroll', X: 0, Y: 0, DeltaY: 100 }]);
+            if (action.Type === 'Scroll') {
+                expect(action.X).toBe(0);
+                expect(action.Y).toBe(0);
+            }
         });
 
         it('should leave Selector/Modifiers undefined when absent or empty/invalid (CU-A6)', () => {

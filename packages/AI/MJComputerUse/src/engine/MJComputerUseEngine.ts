@@ -307,6 +307,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 formLoginCredentials: request.FormLoginCredentials,
                 previousStepSummary: request.PreviousStepSummary,
                 applicationContext: request.ApplicationContext,
+                checkpoints: request.Checkpoints,
             }, request.Signal, this.controllerGeneration);
 
             if (!result.success) {

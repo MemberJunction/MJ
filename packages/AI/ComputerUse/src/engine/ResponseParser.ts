@@ -41,6 +41,7 @@ interface RawControllerResponse {
     actions?: RawAction[];
     toolCalls?: RawToolCall[];
     requestJudgement?: boolean;
+    checkpointReached?: unknown;
     evaluation?: unknown;
     memory?: unknown;
     plan?: unknown;
@@ -78,6 +79,7 @@ export class ResponseParser {
             response.Actions = ResponseParser.parseActions(parsed.actions ?? []);
             response.ToolCalls = ResponseParser.parseToolCalls(parsed.toolCalls ?? []);
             response.RequestJudgement = parsed.requestJudgement ?? false;
+            response.CheckpointReached = ResponseParser.toStateString(parsed.checkpointReached);   // tour signal (CU-D8)
             // Self-tracked agent state (CU-E2) — optional, tolerant of absence.
             response.Evaluation = ResponseParser.toStateString(parsed.evaluation);
             response.Memory = ResponseParser.toStateString(parsed.memory);
@@ -175,6 +177,15 @@ export class ResponseParser {
                 action.DeltaY = ResponseParser.toNumber(raw.DeltaY ?? raw.deltaY, 0);
                 action.DeltaX = ResponseParser.toNumber(raw.DeltaX ?? raw.deltaX, 0);
                 action.Selector = ResponseParser.toSelector(raw.Selector ?? raw.selector);
+                // CU-A8: optional scroll-at point. Only carried when BOTH axes are
+                // present — a lone X (or Y) can't identify a point, and silently
+                // defaulting the other to 0 would scroll at the page corner.
+                const scrollX = raw.X ?? raw.x;
+                const scrollY = raw.Y ?? raw.y;
+                if (scrollX !== undefined && scrollX !== null && scrollY !== undefined && scrollY !== null) {
+                    action.X = ResponseParser.toNumber(scrollX, 0);
+                    action.Y = ResponseParser.toNumber(scrollY, 0);
+                }
                 return action;
             }
 

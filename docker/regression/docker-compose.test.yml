@@ -268,6 +268,19 @@ services:
       # and MAX_RETRIES (env) actually take effect. Prerequisite for DR-D2's
       # retry-policy experimentation.
       MAX_RETRIES: "${MAX_RETRIES:-2}"
+      # Node's own heap cap for the runner process, consumed by
+      # test-runner-entrypoint.sh. Declared HERE and not merely in .env.test
+      # because --env-file only supplies compose *interpolation* values — it does
+      # not inject anything into the container, so without this line the knob
+      # physically cannot reach the entrypoint (the same trap MAX_RETRIES hit
+      # above). Raise together with MJ_REGRESSION_RUNNER_MEM_LIMIT: the heap has
+      # to coexist with Chromium (~8.5g at 3 workers), and a container OOM-kill
+      # is worse than a JS heap OOM because it dies without writing results.json.
+      MJ_REGRESSION_RUNNER_HEAP_MB: "${MJ_REGRESSION_RUNNER_HEAP_MB:-4096}"
+      # Set to 1 to dump a V8 heap snapshot just before the runner would OOM (see
+      # test-runner-entrypoint.sh). Empty = off; costs multi-GB of disk and a long
+      # write pause, so it is a deliberate diagnostic run, not a default.
+      MJ_REGRESSION_HEAP_SNAPSHOT: "${MJ_REGRESSION_HEAP_SNAPSHOT:-}"
       # Optional archive flow — when ARCHIVE_DB_DATABASE is set, the entrypoint
       # generates a transient mj.config.cjs from the ARCHIVE_DB_* vars below,
       # pulls the suite run + children, and pushes them to that destination MJ
@@ -291,6 +304,10 @@ services:
       # profile's "suite" field. Used by the BYO overlay too.
       TEST_SUITE_NAME: "${TEST_SUITE_NAME:-}"
       EXTRA_METADATA_DIRS: "${EXTRA_METADATA_DIRS:-}"
+      # Console verbosity for the Computer Use per-step stream (DR-G8):
+      # quiet | normal (default) | verbose. Console only — the test-run record,
+      # report, and diagnostics always get every message.
+      CU_LOG_LEVEL: "${CU_LOG_LEVEL:-}"
       # Variable-substitution payload for `{{baseUrl}}`, `{{authUsername}}`,
       # etc. inside test JSONs. Mode A leaves these empty; the entrypoint
       # defaults to localhost. Mode B/C/D populates them from the target
@@ -367,6 +384,19 @@ services:
       # and the DR-E1 preflight gate aborts the run.
       - ../../metadata-optional:/app/metadata-optional:ro
       - ./test-metadata:/app/test-metadata:ro
+      # Writable overlay INSIDE the :ro metadata mount, for one reason: the
+      # checked-in metadata/.mj-sync.json sets `sqlLogging.enabled: true` (release
+      # engineering needs it to generate the consolidated migration), and the
+      # logger writes MetadataSync_Push_*.sql next to the metadata it pushed.
+      # Against a :ro mount that write throws EROFS *after* the DB work, and
+      # MetadataSync treats it as a push failure and rolls the whole push back —
+      # so application, prompt, test AND suite metadata all silently reverted and
+      # every run used whatever was already in the DB. tmpfs keeps DR-B5's "the
+      # container cannot mutate the developer's metadata" guarantee while giving
+      # the logger a throwaway destination; the log is a release-time artifact and
+      # is worthless from inside an ephemeral test container.
+      - type: tmpfs
+        target: /app/metadata/sql_logging
 
 # DR-B2: named volume for the SQL Server data dir. Explicitly named so it's
 # easy to find (`docker volume ls`) and inspect, and so its lifecycle is

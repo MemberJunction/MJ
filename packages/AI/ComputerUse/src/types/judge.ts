@@ -62,6 +62,15 @@ export class JudgeContext {
     public ValidationCriteria?: string[];
 
     /**
+     * Whether this run is a checkpoint tour (CU-D8). Tours are scored by latching
+     * sections as the trajectory passes through them, so the judge is the ONLY way
+     * a visual criterion can ever latch. The navigation-shape heuristics
+     * (stuck-frame, URL loop) must therefore not preempt the LLM judge here — see
+     * {@link HeuristicJudge}.
+     */
+    public IsCheckpointTour: boolean = false;
+
+    /**
      * Cancellation signal (CU-B8), passed through to the judge prompt request so
      * an in-flight judge LLM call aborts promptly when the run is stopped.
      */
@@ -171,6 +180,11 @@ export class StepRecord {
      * empty step — the main loop must not count it toward the empty-step abort.
      */
     public RequestedJudgement: boolean = false;
+    /**
+     * The tour checkpoint (CU-D8) the controller reported reaching this step, if
+     * any — telemetry, and the trigger for a scoped judge call this step.
+     */
+    public CheckpointReached?: string;
     /** Total duration of this step in milliseconds */
     public DurationMs: number = 0;
     /** Error that occurred during this step (if applicable) */

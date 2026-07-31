@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T060 - Actions Explorer Creation Slide-Ins",
+    "Description": "Opens the Actions application's Explorer once, then walks its bespoke creation slide-ins (New Action panel with type selector + required-field validation, and the New Category panel), verifying each via checkpoints. Consolidates old T134, T135.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, switch to the 'Actions' application, and open the 'Explorer' nav item. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Then walk these creation surfaces IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) new-action-panel — click the 'New Action' button in the header (top-right, plus icon); a slide-in titled 'New Action' should appear with an Action Type selector (AI Generated vs Custom cards), a Name field, a Description field, and a Category dropdown. Select an action type, then click 'Create Action' WITHOUT filling the required Name to confirm a validation message blocks the save, then type a name and confirm the validation clears (you do NOT need to complete the create); close/cancel the panel. (2) new-category-panel — in the LEFT category tree panel click the 'new category' affordance (a '+' button in the tree header or next to a category node) and confirm a 'New Category' slide-in opens with a name input (and a parent selector); you may close/cancel it. Keep going until both are done.",
+      "startUrl": "http://localhost:4200/app/actions",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "new-action-panel", "instruction": "New Action slide-in with type selector + required-field validation", "assertions": [ { "kind": "url", "urlPattern": "/app/actions" } ], "visualCriteria": ["Clicking 'New Action' opens a slide-in with an Action Type selector, a Name field, and a Category field; selecting a type highlights it; and attempting to create with a blank required Name surfaces a validation/error message rather than silently saving"] },
+        { "name": "new-category-panel", "instruction": "New Category slide-in", "visualCriteria": ["Clicking the '+' / new-category affordance in the Explorer's left tree panel opens a New Category slide-in with at least a name input field, and it can be closed/cancelled leaving the Explorer functional"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,actions"
+  },
+  "primaryKey": { "ID": "49903BFF-7CE5-465C-BF66-2B092F92616F" }
+}

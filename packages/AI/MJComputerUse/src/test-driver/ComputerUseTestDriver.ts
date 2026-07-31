@@ -78,6 +78,9 @@ import {
     recordTrace,
     isRecordableRun,
     distillGoalPostconditions,
+    RunCheckpoint,
+    GoalPostcondition,
+    TraceTarget,
 } from '@memberjunction/computer-use';
 import type { AuthMethod, ComputerUseResult, BrowserDiagnosticEvent, ReplayTier, ReplayInfo } from '@memberjunction/computer-use';
 import { BaseBrowserAdapter } from '@memberjunction/computer-use';
@@ -92,7 +95,14 @@ import type {
     ComputerUseTestInput,
     ComputerUseExpectedOutcomes,
     ComputerUseOracleConfig,
+    CheckpointDef,
 } from './types.js';
+import {
+    shouldLogToConsole,
+    resolveConsoleLogLevel,
+    formatConsoleLine,
+    type ConsoleLogLevel,
+} from './log-importance.js';
 import { readSuiteComputerUseConfig, mergeComputerUseConfig } from './suite-config.js';
 import { loadTrace, persistCandidateTrace, traceFileName } from './trace-store.js';
 
@@ -232,6 +242,12 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             if (expected.judgeValidationCriteria && expected.judgeValidationCriteria.length > 0) {
                 runParams.ValidationCriteria = expected.judgeValidationCriteria;
             }
+            // Checkpoint tour (CU-D8): map the test's declared sections to engine
+            // checkpoints so the run is verified section-by-section, not on a single
+            // final-frame judge.
+            if (expected.checkpoints && expected.checkpoints.length > 0) {
+                runParams.Checkpoints = expected.checkpoints.map(cp => this.toRunCheckpoint(cp));
+            }
             // Per-test UI hints (CU-E5): inject after the goal in the controller prompt.
             if (input.hints && input.hints.length > 0) {
                 runParams.Hints = input.hints;
@@ -246,7 +262,11 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 runParams.TracePath = path.join(os.tmpdir(), `mj-cu-trace-${context.testRun.ID}.zip`);
             }
 
-            this.logToTestRun(context, 'info', `Executing Computer Use: goal="${input.goal}", startUrl="${input.startUrl ?? 'none'}"`);
+            // Goal text runs to several hundred chars on tour tests; truncate the
+            // console echo so the line stays scannable (the full goal is in the
+            // test record + report).
+            const goalEcho = input.goal.length > 120 ? `${input.goal.slice(0, 120)}…` : input.goal;
+            this.logToTestRun(context, 'info', `Executing Computer Use: goal="${goalEcho}", startUrl="${input.startUrl ?? 'none'}"`);
 
             // 3. Execute with timeout. The engine owns the agent-time budget
             // (CU-B4): it self-expires *gracefully* at effectiveTimeout with a
@@ -479,6 +499,72 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         return composeApplicationContext(suiteLevel, input.applicationContext, variableValues);
     }
 
+    /** Map a test's JSON checkpoint (lowercase) to an engine {@link RunCheckpoint}. */
+    private toRunCheckpoint(def: CheckpointDef): RunCheckpoint {
+        const cp = new RunCheckpoint();
+        cp.Name = def.name;
+        cp.Instruction = def.instruction;
+        if (def.assertions && def.assertions.length > 0) {
+            cp.Assertions = def.assertions.map(a => {
+                const post = new GoalPostcondition();
+                post.Kind = a.kind;
+                post.UrlPattern = a.urlPattern;
+                post.Description = a.description;
+                if (a.target) {
+                    const target = new TraceTarget();
+                    target.Role = a.target.role;
+                    target.Name = a.target.name;
+                    target.Selector = a.target.selector;
+                    post.Target = target;
+                }
+                return post;
+            });
+        }
+        if (def.visualCriteria && def.visualCriteria.length > 0) {
+            cp.VisualCriteria = def.visualCriteria;
+        }
+        return cp;
+    }
+
+    // ─── Console logging (DR-G8) ───────────────────────────
+
+    /**
+     * Filtered, test-tagged console logging (DR-G8) — overrides the base so BOTH
+     * this driver's lifecycle messages and the engine's per-step stream take one
+     * consistent path.
+     *
+     * The engine emits ~60 distinct messages per step; across 155 tests that buried
+     * the run's actual story (tier, checkpoints, verdicts, failures) in a 4.5MB /
+     * 63k-line log. `CU_LOG_LEVEL` (quiet | normal | verbose, default normal)
+     * governs the CONSOLE only — the test-run record always receives every message
+     * at its true level, so the testing UI, report, and diagnostics are unchanged.
+     * Console lines carry the test tag (`[T045]`) because parallel workers
+     * interleave their output and an untagged line is unattributable.
+     */
+    protected override logToTestRun(
+        context: DriverExecutionContext,
+        level: 'info' | 'warn' | 'error' | 'debug',
+        message: string,
+        metadata?: Record<string, unknown>
+    ): void {
+        // `this.log(msg, verboseOnly)` is the console path; invert the decision into
+        // verboseOnly so a filtered line still surfaces under MJ verbose mode.
+        const show = shouldLogToConsole(level, message, this.consoleLogLevel);
+        this.log(formatConsoleLine(context.test?.Name, message), !show);
+
+        // Record path — always, at the message's real level (never downgraded).
+        if (context.options.logCallback) {
+            context.options.logCallback(this.createLogMessage(level, message, metadata));
+        }
+    }
+
+    /** Console verbosity for this process, resolved once from `CU_LOG_LEVEL`. */
+    private get consoleLogLevel(): ConsoleLogLevel {
+        this.resolvedConsoleLogLevel ??= resolveConsoleLogLevel(process.env.CU_LOG_LEVEL);
+        return this.resolvedConsoleLogLevel;
+    }
+    private resolvedConsoleLogLevel?: ConsoleLogLevel;
+
     // ═══════════════════════════════════════════════════════════
     // ENGINE EXECUTION
     // ═══════════════════════════════════════════════════════════
@@ -581,7 +667,8 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         params.ContextUser = context.contextUser;
         params.AgentRunId = config.agentRunId;
 
-        // Wire engine logs to test run logs so they appear in the testing UI
+        // Wire engine logs to test run logs so they appear in the testing UI.
+        // Console output is filtered (DR-G8) — the record still gets everything.
         params.LogCallback = (level: 'info' | 'warn' | 'error', message: string) => {
             this.logToTestRun(context, level, message);
         };
@@ -687,18 +774,29 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         // 2× the agent budget (CU-B4). If it ever fires, the engine didn't expire
         // on its own — a real hang, correctly surfaced as a hard timeout.
         const failsafeMs = timeoutMs > 0 ? timeoutMs * ComputerUseTestDriver.TIMEOUT_FAILSAFE_MULTIPLIER : 0;
-        if (failsafeMs > 0) {
+        const armFailsafe = (): void => {
+            if (failsafeMs <= 0) {
+                return;
+            }
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
             timeoutId = setTimeout(() => {
                 timedOut = true;
                 this.logToTestRun(context, 'warn', `Stopping engine due to failsafe timeout (${failsafeMs}ms; engine did not self-expire at ${timeoutMs}ms)`);
                 engine.Stop();
             }, failsafeMs);
-        }
+        };
+        armFailsafe();
 
         try {
             // RI-C1: replay-first tier dispatch (load trace → decide tier → Replay
-            // or Run, with in-attempt LLM fallback on divergence).
-            const dispatch = await this.dispatchRun(engine, params, config, context);
+            // or Run, with in-attempt LLM fallback on divergence). The failsafe is
+            // re-armed when a stale trace forces the LLM restart, so the clean leg
+            // gets the whole failsafe window instead of whatever replay left over —
+            // otherwise a slow replay could hard-Stop the fresh run mid-flight and
+            // surface it as an unscored infra timeout rather than a graceful expiry.
+            const dispatch = await this.dispatchRun(engine, params, config, context, armFailsafe);
             const result = dispatch.result;
 
             // Collect browser diagnostics (console errors, network failures, crashes).
@@ -748,7 +846,8 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         engine: MJComputerUseEngine,
         params: MJRunComputerUseParams,
         config: ComputerUseTestConfig,
-        context: DriverExecutionContext
+        context: DriverExecutionContext,
+        onLlmRestart?: () => void
     ): Promise<{ result: ComputerUseResult; tier: ReplayTier; replayInfo?: ReplayInfo; fellBackToLlm: boolean }> {
         const trace = await loadTrace(traceFileName(context.test));
         const appBuildHash = process.env.APP_BUILD_HASH ?? '';
@@ -762,12 +861,22 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             if (replayResult.Status === 'Completed') {
                 return { result: replayResult, tier: decision.tier, replayInfo: replayResult.Replay, fellBackToLlm: false };
             }
-            // Divergence → fall back to the LLM leg in the SAME attempt.
+            // A failed replay means the committed trace no longer describes this
+            // build — a MECHANICAL staleness fact, not an agent attempt. So the LLM
+            // leg restarts CLEAN: we deliberately do NOT feed `replayResult.
+            // FailureMemo` into `PreviousAttemptSummary`. That memo narrates the
+            // dead trajectory ("all steps hit but the tour is incomplete: 1/4
+            // checkpoints reached"), and priming a fresh run with another run's
+            // partial progress made the agent behave as if work were already done
+            // that its own context had never performed. The LLM leg gets its own
+            // RunContext, its own step budget, and its own agent-time budget.
+            // The stale trace is left untouched on disk (the committed store is
+            // mounted :ro) — it is superseded by the candidate that
+            // `maybeRecordTrace` records from this leg when it comes back green.
             this.logToTestRun(context, 'warn',
-                `Replay diverged (${replayResult.Replay?.Diverged ?? 0} step(s)) — falling back to LLM in-attempt`);
-            if (replayResult.FailureMemo) {
-                params.PreviousAttemptSummary = replayResult.FailureMemo;
-            }
+                `Replay failed (${replayResult.Replay?.Diverged ?? 0} diverged step(s)) — committed trace is stale for this build; ` +
+                `restarting clean on the LLM tier and re-recording the trace`);
+            onLlmRestart?.();
             const llmResult = await engine.Run(params);
             return { result: llmResult, tier: 'llm', replayInfo: replayResult.Replay, fellBackToLlm: true };
         }
@@ -1113,24 +1222,46 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 const actionRecords = step.ActionsRequested.map(a => {
                     const rec: Record<string, unknown> = { type: a.Type };
                     switch (a.Type) {
+                        // NOTE: record every field that changes what the action DOES.
+                        // `Selector` and the Scroll point were previously omitted, which
+                        // made traces actively misleading — a selector-targeted click
+                        // serialized as a bare coordinate click at (0,0), so the trace
+                        // contradicted the model's own reasoning and looked like the
+                        // engine had dropped the selector.
                         case 'Click':
                             rec.x = a.X; rec.y = a.Y;
                             rec.button = a.Button; rec.clickCount = a.ClickCount;
+                            if (a.Selector) rec.selector = a.Selector;
                             if (a.BoundingBox) rec.bbox = { xMin: a.BoundingBox.XMin, yMin: a.BoundingBox.YMin, xMax: a.BoundingBox.XMax, yMax: a.BoundingBox.YMax };
                             break;
                         case 'Type':
                             rec.text = a.Text;
+                            if (a.Selector) rec.selector = a.Selector;
                             break;
                         case 'Scroll':
                             rec.deltaX = a.DeltaX; rec.deltaY = a.DeltaY;
+                            if (a.Selector) rec.selector = a.Selector;
+                            // CU-A8 scroll-at point: 0 is a legal coordinate, so test presence.
+                            if (a.X !== undefined && a.Y !== undefined) { rec.x = a.X; rec.y = a.Y; }
                             break;
                         case 'Wait':
                             rec.durationMs = a.DurationMs;
+                            if (a.Selector) rec.selector = a.Selector;
                             break;
                         case 'Navigate':
                             rec.url = a.Url;
                             break;
-                        case 'Keypress': case 'KeyDown': case 'KeyUp':
+                        case 'Keypress':
+                            rec.key = a.Key;
+                            // Modifiers are the whole meaning of a chord: a bare "/" and
+                            // Ctrl+"/" are different actions that serialized identically,
+                            // so a trace could not answer "was the shortcut actually sent?"
+                            // — the exact question when a keyboard-summoned surface
+                            // doesn't appear (T153 / command palette). Only Keypress
+                            // carries Modifiers; KeyDown/KeyUp hold a modifier in `Key`.
+                            if (a.Modifiers?.length) rec.modifiers = a.Modifiers;
+                            break;
+                        case 'KeyDown': case 'KeyUp':
                             rec.key = a.Key;
                             break;
                     }

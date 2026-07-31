@@ -1,0 +1,51 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T027 - Events Edit Workflow",
+    "Description": "Opens the Events entity grid once, then walks the record-editing sections (edit persists after reopen, dropdown edit, date edit, record change history), verifying each via checkpoints. Consolidates old T055–T058.",
+    "InputDefinition": {
+      "goal": "Open the 'Events' entity grid — type 'Events' in the LEFT sidebar 'Search entities...' box and click the exact 'Events' node (or navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Events). Then walk these sections IN ORDER, and as you arrive at each set \"checkpointReached\" to the exact checkpoint name shown: (1) edit-persists — click a row, click 'Open Full Record', change the 'Location' text field to 'Persisted Edit 206', click 'Save Changes' in the top banner and wait for the save to confirm, then navigate back to the grid (or reload) and reopen the SAME record; verify 'Location' still shows 'Persisted Edit 206'; (2) edit-dropdown — on an Event full record find a dropdown/picklist field (e.g. 'Event Type'), open it and select a DIFFERENT option, then click the 'Save Changes' banner and confirm the save succeeds with the field showing the new option; (3) edit-date — find a date field (e.g. 'Start Date'), change it to a different date via the picker or by typing, click 'Save Changes' and confirm the save succeeds with no error; (4) record-history — in the record toolbar (row of icons at the TOP-LEFT above the Details card) click the History control (CLOCK icon, tooltip 'N version(s) tracked') and verify the 'Record Changes History' panel opens listing change entries (action + user + time) or a clear empty state. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200/app/data-explorer/Data?entity=Events",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 65,
+      "checkpoints": [
+        { "name": "edit-persists", "instruction": "edit Location, save, reopen, confirm persisted", "assertions": [ { "kind": "url", "urlPattern": "/app/data-explorer/Data" } ], "visualCriteria": ["After editing an Event's Location to 'Persisted Edit 206', saving, and reopening the same record, the saved value 'Persisted Edit 206' is still shown — the edit persisted"] },
+        { "name": "edit-dropdown", "instruction": "change a dropdown field and save", "visualCriteria": ["A dropdown/picklist field on an Event record was changed to a different option and saved successfully — the field shows the newly selected option with no error"] },
+        { "name": "edit-date", "instruction": "change a date field and save", "visualCriteria": ["A date field on an Event record was changed (via the date picker or typing) and 'Save Changes' succeeded with no error"] },
+        { "name": "record-history", "instruction": "open Record Changes History panel", "visualCriteria": ["The 'Record Changes History' panel is open, listing the record's change entries (action + user + time) or showing a clear empty state"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 65,
+      "maxExecutionTime": 780000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,data-explorer"
+  },
+  "primaryKey": { "ID": "8246B0C2-6877-45C7-A453-32D08B28C840" }
+}

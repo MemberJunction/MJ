@@ -23,6 +23,18 @@ import { RetryPolicy } from './retry';
 /** Fraction of suite size allowed as total extra retry attempts. */
 export const SUITE_RETRY_BUDGET_FRACTION = 0.15;
 
+/**
+ * Share of the budget reserved for infrastructure failures.
+ *
+ * Without a reserve the budget is first-come-first-served, and agent-attributable
+ * failures early in the run drain it before any infrastructure failure is even
+ * seen. Observed: four `nav-loop` failures on never-passing tests consumed all 4
+ * units, then every `auth-detour` — a class the driver itself calls "an
+ * infrastructure/session fault, not an agent failure" — was accepted first-shot.
+ * Reserving a share keeps the total cap intact while guaranteeing infra can retry.
+ */
+export const SUITE_RETRY_INFRA_RESERVE_FRACTION = 0.5;
+
 /** Extra retry attempts allowed suite-wide: ceil(fraction × suiteSize), ≥0. */
 export function computeSuiteRetryBudget(suiteSize: number): number {
     if (suiteSize <= 0) {
@@ -31,22 +43,57 @@ export function computeSuiteRetryBudget(suiteSize: number): number {
     return Math.ceil(SUITE_RETRY_BUDGET_FRACTION * suiteSize);
 }
 
+/** Units of `budget` only infrastructure failures may consume. */
+export function computeInfraReserve(budget: number): number {
+    return Math.floor(Math.max(0, budget) * SUITE_RETRY_INFRA_RESERVE_FRACTION);
+}
+
+/**
+ * Failure classes that are not the agent's fault. These may draw on the reserved
+ * portion of the budget; everything else may not.
+ */
+const INFRASTRUCTURE_CATEGORIES: ReadonlySet<FailureCategory> = new Set<FailureCategory>(['auth-detour', 'infra']);
+
+/** Whether a category is infrastructure-attributable (privileged for retries). */
+export function isInfrastructureFailure(category: FailureCategory): boolean {
+    return INFRASTRUCTURE_CATEGORIES.has(category);
+}
+
 /**
  * A shared, monotonically-draining counter of extra retry attempts for a suite.
  * Every worker consults the same instance; `tryConsume` is synchronous so it's
  * race-free under the single-threaded event loop.
+ *
+ * `reserved` units are claimable only by privileged (infrastructure) callers, so
+ * agent-class failures cannot starve them. The TOTAL cap is unchanged.
  */
 export class RetryBudget {
     private _remaining: number;
-    constructor(public readonly total: number) {
+    constructor(public readonly total: number, public readonly reserved: number = 0) {
         this._remaining = Math.max(0, total);
     }
     get remaining(): number {
         return this._remaining;
     }
-    /** Consume one unit; returns false (and consumes nothing) when exhausted. */
-    tryConsume(): boolean {
-        if (this._remaining > 0) {
+    /** Reserve actually in force: never negative, never more than the total. */
+    private get effectiveReserve(): number {
+        return Math.max(0, Math.min(this.reserved, this._remainingTotal));
+    }
+    /** The total, floored at 0 (a negative total is simply an empty budget). */
+    private get _remainingTotal(): number {
+        return Math.max(0, this.total);
+    }
+    /** Units still claimable by a non-privileged caller. */
+    get remainingUnreserved(): number {
+        return Math.max(0, this._remaining - this.effectiveReserve);
+    }
+    /**
+     * Consume one unit; returns false (and consumes nothing) when the caller's
+     * share is exhausted. Privileged callers may dip into the reserve.
+     */
+    tryConsume(privileged = false): boolean {
+        const floor = privileged ? 0 : this.effectiveReserve;
+        if (this._remaining > floor) {
             this._remaining--;
             return true;
         }
@@ -112,14 +159,24 @@ export interface SuiteRetryPolicyOptions {
     rng?: () => number;
     /** Fired once when a retry is denied purely because the budget is exhausted. */
     onBudgetExhausted?: (result: TestRunResult) => void;
+    /**
+     * Whether a test has no pass in its recent history. Chronic failures are
+     * re-rolls of a known-bad outcome, so they forfeit their agent-class retry and
+     * leave the budget for tests that can actually flip. Infrastructure failures
+     * are still retried — those are the harness's fault, not the test's.
+     */
+    isChronicFailure?: (result: TestRunResult) => boolean;
+    /** Fired once when a retry is denied because the test is a chronic failure. */
+    onChronicSkipped?: (result: TestRunResult) => void;
 }
 
 /**
- * Build the suite {@link RetryPolicy}: classify → category cap → suite budget →
- * backoff. Budget is consumed only when a retry is actually granted.
+ * Build the suite {@link RetryPolicy}: classify → category cap → chronic gate →
+ * suite budget (with infra reserve) → backoff. Budget is consumed only when a
+ * retry is actually granted.
  */
 export function buildSuiteRetryPolicy(opts: SuiteRetryPolicyOptions): RetryPolicy {
-    const { budget, requestedMax, backoff, rng, onBudgetExhausted } = opts;
+    const { budget, requestedMax, backoff, rng, onBudgetExhausted, isChronicFailure, onChronicSkipped } = opts;
     return (lastResult, attemptsSoFar) => {
         const category = lastResult.failureCategory ?? 'unknown';
         const cap = maxExtraAttemptsForCategory(category, requestedMax);
@@ -127,7 +184,12 @@ export function buildSuiteRetryPolicy(opts: SuiteRetryPolicyOptions): RetryPolic
         if (extraSoFar >= cap) {
             return { retry: false };
         }
-        if (!budget.tryConsume()) {
+        const privileged = isInfrastructureFailure(category);
+        if (!privileged && isChronicFailure?.(lastResult)) {
+            onChronicSkipped?.(lastResult);
+            return { retry: false };
+        }
+        if (!budget.tryConsume(privileged)) {
             onBudgetExhausted?.(lastResult);
             return { retry: false };
         }

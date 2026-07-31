@@ -144,6 +144,19 @@ else
     echo ""
 fi
 
+# Derive ExtendedType for email/URL columns, immediately after CodeGen and BEFORE
+# anything that reads it. CodeGen normally assigns ExtendedType through an
+# LLM-assisted metadata pass, which cannot run in this stack (no AI credentials), so
+# every email/URL column is left NULL.
+#
+# Ordering is the whole point of doing it here: `LinkType` is baked into the
+# GENERATED form HTML at codegen time, not read at runtime, so seeding this after
+# form generation has no effect on rendering. Anything that regenerates the Angular
+# forms (`--profile gen-forms`) must run AFTER this to pick the values up.
+echo "Step 3d: Seeding ExtendedType for email/URL fields..."
+node "$SCRIPTS/seed-extended-field-types.cjs" 2>&1
+echo ""
+
 # Step 4: Sync application metadata (baseline migration only seeds 2 of ~20 apps)
 echo "Step 4: Syncing application metadata..."
 npx mj sync push --dir=metadata --include="applications" --no-write-back 2>&1 || {

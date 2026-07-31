@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T064 - MCP Servers Tab",
+    "Description": "Opens the AI app's MCP Servers tab once, then verifies its distinct code paths — the expandable server-card tools section and the Add Server dialog's conditional transport-type fields — via checkpoints. Consolidates old T141, T147.",
+    "InputDefinition": {
+      "goal": "Open the AI app via the application switcher dropdown next to the logo (NOT Ctrl+K), open the MCP section, and go to the Servers tab. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) server-card-expand — if any server cards are shown, click a server card header (the chevron/name area) to expand it and confirm it reveals the server's detail grid (Transport, Auth, Connections, Tools) and an 'Available Tools' section listing tools or a 'No tools discovered yet' message; if no servers are configured, a 'No MCP servers configured' empty state is acceptable; (2) add-server-transport — click 'Add Server' (or 'Add Your First Server') to open the Add MCP Server dialog, then change the 'Transport Type' dropdown and confirm the form adapts: an HTTP-based transport (Streamable HTTP / SSE / WebSocket) reveals a 'Server URL' field while 'Standard I/O' reveals a 'Command' field instead. You do NOT need to save a server. Keep going until both sections are done. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200/app/ai",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "server-card-expand", "instruction": "expand a server card to reveal its tools", "assertions": [ { "kind": "url", "urlPattern": "/app/ai" } ], "visualCriteria": ["The Servers tab shows server cards (or a valid 'No MCP servers configured' empty state); clicking a server card header expands it to show detail fields (Transport, Auth, Connections, Tools) and an 'Available Tools' section, and the expand arrow/state visibly toggles"] },
+        { "name": "add-server-transport", "instruction": "Add Server dialog conditional transport fields", "visualCriteria": ["The Add MCP Server dialog opens with Name, Description, Transport Type, and Status fields; selecting an HTTP transport (Streamable HTTP/SSE/WebSocket) shows a 'Server URL' input while selecting 'Standard I/O' shows a 'Command' input instead, and the conditional field visibly changes when the Transport Type value changes"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,mcp"
+  },
+  "primaryKey": { "ID": "D6A19751-4E9E-447D-938D-14D3C461F578" }
+}

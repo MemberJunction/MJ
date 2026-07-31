@@ -34,6 +34,8 @@ interface RecycledEntry {
     Context: BrowserContext;
     Adapter: SharedContextBrowserAdapter;
     UseCount: number;
+    /** The browser this context was created on — see `releaseBrowserRef`. */
+    Browser: Browser;
 }
 
 /**
@@ -51,6 +53,20 @@ type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
 interface IsolatedEntry {
     Context: BrowserContext;
     WorkerKey: string;
+    /** The browser this context was created on — see `releaseBrowserRef`. */
+    Browser: Browser;
+}
+
+/**
+ * Tracking entry for a `GetNew` adapter. The context and browser are retained
+ * alongside the adapter because `GetNew` hands the caller only the adapter, and
+ * `adapter.Close()` closes the page alone — so nothing else knows how to close
+ * the context or release its hold on the browser.
+ */
+interface FreshEntry {
+    Context: BrowserContext;
+    Adapter: SharedContextBrowserAdapter;
+    Browser: Browser;
 }
 
 export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> {
@@ -64,7 +80,7 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
     /** True when we attached to an external browser rather than launching one. */
     private _connected: boolean = false;
     private _recycled: Map<string, RecycledEntry> = new Map();
-    private _fresh: SharedContextBrowserAdapter[] = [];
+    private _fresh: FreshEntry[] = [];
     private _cleanupRegistered: boolean = false;
 
     /**
@@ -103,6 +119,40 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
 
     /** Path the current `_sharedSeedState` was loaded from (memoizes file loads). */
     private _sharedSeedLoadedFrom: string | null = null;
+
+    // ─── Browser rotation (memory reclamation) ─────────────
+    /** Isolated contexts handed out since the browser last (re)launched. */
+    private _contextsSinceLaunch: number = 0;
+
+    /**
+     * How many live contexts each browser still owns — the current one plus any
+     * retired browsers awaiting their last context. A browser is only safe to
+     * close at zero.
+     */
+    private _browserRefs: Map<Browser, number> = new Map();
+
+    /**
+     * Browsers that no longer serve new contexts and will be closed as soon as
+     * their ref count reaches zero. See {@link retireBrowserIfDue}.
+     */
+    private _retiring: Set<Browser> = new Set();
+
+    /** The single in-flight launch, so concurrent workers share one process. */
+    private _launchInFlight: Promise<void> | null = null;
+
+    /**
+     * Isolated contexts to serve before rotating the whole Chromium process.
+     *
+     * Closing a BrowserContext does NOT return its memory to the OS — Chromium's
+     * RSS only ever grows within a process. `ReleaseIsolated` closes every context
+     * correctly, and RSS still climbed 1.4 GB → 9.3 GB across 93 tests in
+     * run-20260729T172418Z (~85 MB/test, monotonic, no plateau), which starved the
+     * runner's own JS heap and killed a 155-test suite twice. Only replacing the
+     * process reclaims it. `RotateAfterUses` does not cover this — that rotates
+     * *recycled contexts*, and the default 'new' session strategy never touches
+     * that path.
+     */
+    public RotateBrowserAfterContexts: number = 25;
 
     // ─── Lifecycle ─────────────────────────────────────────
 
@@ -170,9 +220,11 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
     public async GetNew(config?: BrowserConfig): Promise<SharedContextBrowserAdapter> {
         await this.ensureBrowser();
         const cfg = config ?? new BrowserConfig();
+        const browser = this._browser!;
         const context = await this.createContext(cfg);
         const adapter = new SharedContextBrowserAdapter(context);
-        this._fresh.push(adapter);
+        this._fresh.push({ Context: context, Adapter: adapter, Browser: browser });
+        this.retainBrowserRef(browser);
         return adapter;
     }
 
@@ -210,9 +262,11 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
         }
 
         const cfg = config ?? new BrowserConfig();
+        const browser = this._browser!;
         const context = await this.createContext(cfg);
         const adapter = new SharedContextBrowserAdapter(context);
-        this._recycled.set(key, { Context: context, Adapter: adapter, UseCount: 1 });
+        this._recycled.set(key, { Context: context, Adapter: adapter, UseCount: 1, Browser: browser });
+        this.retainBrowserRef(browser);
         return adapter;
     }
 
@@ -237,12 +291,14 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
         workerKey: string,
         config?: BrowserConfig
     ): Promise<SharedContextBrowserAdapter> {
+        this.retireBrowserIfDue();
         await this.ensureBrowser();
+        const browser = this._browser!;
         const cfg = config ?? new BrowserConfig();
         // Shared seed (single-login mode) wins over the per-worker capture: every
         // worker's context starts from the same up-front authenticated state.
         const cachedState = this._sharedSeedState ?? this._workerStorageState.get(workerKey);
-        const context = await this._browser!.newContext({
+        const context = await browser.newContext({
             viewport: {
                 width: cfg.ViewportWidth,
                 height: cfg.ViewportHeight,
@@ -251,7 +307,9 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
             storageState: cachedState,
         });
         const adapter = new SharedContextBrowserAdapter(context);
-        this._isolatedAdapters.set(adapter, { Context: context, WorkerKey: workerKey });
+        this._isolatedAdapters.set(adapter, { Context: context, WorkerKey: workerKey, Browser: browser });
+        this._contextsSinceLaunch++;
+        this.retainBrowserRef(browser);
         return adapter;
     }
 
@@ -286,6 +344,10 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
         } finally {
             try { if (adapter.IsOpen) await adapter.Close(); } catch { /* swallow */ }
             try { await entry.Context.close(); } catch { /* swallow */ }
+            // Release AFTER the context is closed: this is what closes a retired
+            // browser once its last context is gone, and doing it earlier would
+            // kill the process while this context was still closing.
+            await this.releaseBrowserRef(entry.Browser);
         }
     }
 
@@ -360,6 +422,7 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
         try { if (entry.Adapter.IsOpen) await entry.Adapter.Close(); } catch { /* swallow */ }
         try { await entry.Context.close(); } catch { /* swallow */ }
         this._recycled.delete(key);
+        await this.releaseBrowserRef(entry.Browser);
     }
 
     /**
@@ -381,9 +444,10 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
      * contexts WE created (recycled, fresh, isolated) ARE closed.
      */
     public async Shutdown(): Promise<void> {
-        // Close all fresh adapters
-        for (const adapter of this._fresh) {
-            try { if (adapter.IsOpen) await adapter.Close(); } catch { /* swallow */ }
+        // Close all fresh adapters (page) and their contexts
+        for (const entry of this._fresh) {
+            try { if (entry.Adapter.IsOpen) await entry.Adapter.Close(); } catch { /* swallow */ }
+            try { await entry.Context.close(); } catch { /* swallow */ }
         }
         this._fresh = [];
 
@@ -406,7 +470,19 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
             }
             this._browser = null;
         }
+
+        // Retired browsers still awaiting a straggler's release. We launched every
+        // one of them, so shutdown owns closing them regardless of ref counts —
+        // otherwise a wedged context would leak a whole Chromium process.
+        for (const retired of this._retiring) {
+            try { await retired.close(); } catch { /* swallow */ }
+        }
+        this._retiring.clear();
+        this._browserRefs.clear();
         this._connected = false;
+
+        // Rotation bookkeeping belongs to the browser we just dropped.
+        this._contextsSinceLaunch = 0;
     }
 
     // ─── Queries ───────────────────────────────────────────
@@ -425,10 +501,115 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
 
     // ─── Internal ──────────────────────────────────────────
 
+    /**
+     * Guarantee a current browser, launching one at most once even when several
+     * workers arrive together.
+     *
+     * The in-flight guard is required, not defensive: `Initialize` checks
+     * `_browser` and then `await`s the Playwright import, so N concurrent callers
+     * all pass its guard and each launch a process — and every one but the last
+     * would be orphaned, since each overwrites `_browser`. Retirement makes this
+     * reachable on the hot path (it nulls `_browser` and returns synchronously, so
+     * every worker in the retirement window lands here at once).
+     */
     private async ensureBrowser(): Promise<void> {
-        if (!this._browser) {
-            await this.Initialize(true);
+        if (this._browser) {
+            return;
         }
+        if (this._launchInFlight) {
+            await this._launchInFlight;
+            return;
+        }
+        this._launchInFlight = this.Initialize(true);
+        try {
+            await this._launchInFlight;
+        } finally {
+            this._launchInFlight = null;
+        }
+    }
+
+    /**
+     * Stop serving new contexts from the current Chromium process once it has
+     * handed out {@link RotateBrowserAfterContexts} isolated contexts, so the next
+     * checkout launches a fresh one. The retired process is closed by
+     * `releaseBrowserRef` as soon as its last context is released — which is the
+     * only way to give back the RSS that closing contexts does not (see that
+     * field's comment).
+     *
+     * **Retire, don't drain.** The previous implementation closed the browser
+     * in-place and so had to wait for `_liveIsolatedContexts` to reach zero first.
+     * That requires a moment when *every* worker is simultaneously idle, which
+     * essentially never happens while N workers cycle continuously — each releases
+     * its context and immediately checks out another. In run-20260730T200139Z that
+     * drain timed out (60s) on nearly every attempt and rotation fired exactly
+     * ONCE in 3.9 hours, letting Chromium RSS reach 17.5 GB. Retiring instead of
+     * draining needs no global quiescent moment: the old and new process coexist
+     * for at most one test's duration, and memory comes back as soon as the last
+     * straggler finishes.
+     *
+     * Synchronous on purpose — no `await` before `_browser` is swapped, so
+     * concurrent workers cannot each retire the same browser.
+     *
+     * Auth is preserved across retirement: `_sharedSeedState` /
+     * `_workerStorageState` are plain captured data, deliberately NOT cleared here
+     * (only `Shutdown` clears them), so the next context replays the same session
+     * and no test pays for a re-login.
+     *
+     * Never retires an attached browser (`_connected`) — the caller owns that
+     * process.
+     */
+    private retireBrowserIfDue(): void {
+        if (this._contextsSinceLaunch < this.RotateBrowserAfterContexts) {
+            return;
+        }
+        if (!this._browser || this._connected) {
+            return;
+        }
+
+        const retired = this._browser;
+        const served = this._contextsSinceLaunch;
+        this._browser = null;          // next ensureBrowser launches a replacement
+        this._contextsSinceLaunch = 0;
+        this._retiring.add(retired);
+        // eslint-disable-next-line no-console
+        console.log(
+            `[HeadlessBrowserEngine] Retiring Chromium after ${served} isolated context(s); ` +
+            `new contexts use a fresh process, this one closes when its last context releases`
+        );
+        // Nothing outstanding — reclaim immediately rather than waiting for a
+        // release that will never come.
+        void this.closeIfRetiredAndIdle(retired);
+    }
+
+    /** Record that `browser` owns one more live context. */
+    private retainBrowserRef(browser: Browser): void {
+        this._browserRefs.set(browser, (this._browserRefs.get(browser) ?? 0) + 1);
+    }
+
+    /**
+     * Record that one of `browser`'s contexts has closed, and close the browser
+     * itself if it was retired and has nothing left. This is where a retired
+     * Chromium's RSS actually returns to the OS.
+     */
+    private async releaseBrowserRef(browser: Browser): Promise<void> {
+        const remaining = (this._browserRefs.get(browser) ?? 1) - 1;
+        if (remaining > 0) {
+            this._browserRefs.set(browser, remaining);
+            return;
+        }
+        this._browserRefs.delete(browser);
+        await this.closeIfRetiredAndIdle(browser);
+    }
+
+    /** Close a retired browser that no longer owns any context. No-op otherwise. */
+    private async closeIfRetiredAndIdle(browser: Browser): Promise<void> {
+        if (!this._retiring.has(browser) || (this._browserRefs.get(browser) ?? 0) > 0) {
+            return;
+        }
+        this._retiring.delete(browser);
+        try { await browser.close(); } catch { /* swallow — retired either way */ }
+        // eslint-disable-next-line no-console
+        console.log('[HeadlessBrowserEngine] Closed retired Chromium — RSS reclaimed');
     }
 
     private async createContext(config: BrowserConfig): Promise<BrowserContext> {

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T058 - Actions Overview KPI Cards and Card Navigation",
+    "Description": "Exercises the bespoke ActionsOverview dashboard — computed KPI cards + clickable-card navigation (onTotalActionsClick/onExecutionsClick/onCategoriesClick) — not a generic entity grid.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box) and switch to the 'Actions' application. It lands on the 'Actions Overview' page (default nav item). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Verify the overview renders its KPI metric cards (Total Actions with an Active/Pending/Disabled breakdown, Total Executions, Categories, AI Generated). Then click the 'Total Actions' metric card and confirm the app navigates to another Actions view (e.g. the Explorer/list of actions). Seeing the metric cards render and the card click drive navigation is success.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Actions Overview page renders a row of KPI metric cards showing numeric counts (Total Actions, Executions, Categories, AI Generated)",
+        "At least one metric card shows a breakdown sub-line (e.g. Active / Pending / Disabled counts) rather than a bare number",
+        "Clicking a clickable metric card navigates to a different Actions view (URL or main content changes)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,actions"
+  },
+  "primaryKey": {
+    "ID": "B6F581A1-69C5-4B13-9EF5-FBC571D0C729"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.421Z",
+    "checksum": "d6cc9ec5cd762f809c51f2de38b981fcc73fb1ebbb65d54d2b735370a625063d"
+  }
+}

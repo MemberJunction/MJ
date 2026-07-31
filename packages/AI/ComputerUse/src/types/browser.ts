@@ -196,6 +196,17 @@ export class ScrollAction {
      * existing delta scroll is used.
      */
     public Selector?: string;
+    /**
+     * Optional point (in the 1000x1000 action space) to scroll AT. A wheel event
+     * is dispatched wherever the mouse currently is, so without this a delta
+     * scroll always hits the main document — an open dropdown, dialog, or any
+     * inner `overflow-y: auto` pane can never be scrolled (CU-A8). When set, the
+     * adapter moves the pointer over the point first so the wheel targets the
+     * scrollable container under it. Ignored when `Selector` is set.
+     */
+    public X?: number;
+    /** Companion to {@link X}; both must be supplied for point-scrolling to apply. */
+    public Y?: number;
 }
 
 export class WaitAction {

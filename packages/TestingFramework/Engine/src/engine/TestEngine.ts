@@ -10,7 +10,8 @@ import {
     LogError,
     LogStatusEx,
     IsVerboseLoggingEnabled,
-    BaseEntity
+    BaseEntity,
+    RunView
 } from '@memberjunction/core';
 import {
     MJTestEntity,
@@ -49,13 +50,20 @@ import {
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
 import { runWithRetries, RetryPolicy, isRetriableFailure } from './retry';
-import { RetryBudget, buildSuiteRetryPolicy, computeSuiteRetryBudget, fixedRetries } from './retry-policy';
+import { RetryBudget, buildSuiteRetryPolicy, computeSuiteRetryBudget, computeInfraReserve, fixedRetries } from './retry-policy';
 import { classifyFailure } from './failure-classifier';
 import { WorkItem, seedWorkItems, drainQueue } from './work-queue';
 import { AdmissionController, readHealthState } from './admission';
 import { resolveWatchdogMs, withWatchdog } from './watchdog';
 import { CircuitBreaker, defaultMaxFailures } from './circuit-breaker';
 import * as fs from 'node:fs';
+
+/**
+ * How many of a test's most recent runs are inspected to decide whether it is a
+ * chronic failure (no pass in the window ⇒ forfeits agent-class retries). Small
+ * enough that a genuinely fixed test regains retries within a few runs.
+ */
+const CHRONIC_FAILURE_LOOKBACK_RUNS = 3;
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -104,7 +112,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
      * per-test ceiling. Set in `RunSuite`, removed in its `finally` (same
      * lifecycle as `_suiteFixtures`), so each run gets a fresh budget.
      */
-    private _suiteRetry = new Map<string, { budget: RetryBudget; requestedMax: number }>();
+    private _suiteRetry = new Map<string, { budget: RetryBudget; requestedMax: number; chronicTestIds: ReadonlySet<string> }>();
 
     /**
      * Per-suite-run circuit breaker (DR-D7), keyed by SuiteRunID. Present only
@@ -391,10 +399,25 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // total extra attempts across every test/worker, so a degraded host
             // can't trigger a retry storm (the recheck burned 34 retries on 44
             // tests). Deterministic failures additionally get 0 retries by class.
+            // A share is reserved for infrastructure failures so agent-class failures
+            // can't drain the pool before an auth-detour is even seen, and tests with
+            // no recent pass forfeit their agent-class retry (a re-roll of a
+            // known-bad outcome buys nothing).
             const retryBudget = computeSuiteRetryBudget(tests.length);
-            this._suiteRetry.set(suiteRun.ID, { budget: new RetryBudget(retryBudget), requestedMax: options.maxRetries ?? 0 });
+            const infraReserve = computeInfraReserve(retryBudget);
+            const chronicTestIds = (options.maxRetries ?? 0) > 0
+                ? await this.loadChronicallyFailingTestIds(tests.map(t => t.ID), contextUser)
+                : new Set<string>();
+            this._suiteRetry.set(suiteRun.ID, {
+                budget: new RetryBudget(retryBudget, infraReserve),
+                requestedMax: options.maxRetries ?? 0,
+                chronicTestIds,
+            });
             if ((options.maxRetries ?? 0) > 0) {
-                this.log(`Suite retry budget: ${retryBudget} extra attempt(s) across ${tests.length} tests (max ${options.maxRetries}/test, 0 for deterministic failures)`);
+                this.log(`Suite retry budget: ${retryBudget} extra attempt(s) across ${tests.length} tests (max ${options.maxRetries}/test, 0 for deterministic failures; ${infraReserve} reserved for infrastructure failures)`);
+                if (chronicTestIds.size > 0) {
+                    this.log(`Retry policy: ${chronicTestIds.size} test(s) have no pass in the last ${CHRONIC_FAILURE_LOOKBACK_RUNS} run(s) — they forfeit agent-class retries`);
+                }
             }
 
             // DR-D4: suite wall-clock budget. Option override wins; else the
@@ -804,6 +827,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 budget: retryCfg.budget,
                 requestedMax: retryCfg.requestedMax,
                 onBudgetExhausted: (r) => this.log(`[retry] suite retry budget exhausted — accepting "${r.testName}" (${r.failureCategory ?? 'unknown'}) first-shot`),
+                isChronicFailure: () => retryCfg.chronicTestIds.has(test.ID),
+                onChronicSkipped: (r) => this.log(`[retry] no pass in the last ${CHRONIC_FAILURE_LOOKBACK_RUNS} run(s) — accepting "${r.testName}" (${r.failureCategory ?? 'unknown'}) first-shot, budget left for tests that can flip`),
             })
             : fixedRetries(options.maxRetries ?? 0);
         const result = await runWithRetries(
@@ -818,6 +843,63 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             this.log(`[retry] "${test.Name}" PASSED on attempt ${result.attempts} — marking flaky`);
         }
         return result;
+    }
+
+    /**
+     * Identify tests with no `Passed` result in their most recent runs.
+     *
+     * A retry only buys something when the outcome can plausibly flip. A test that
+     * has failed every recent run is not flaky — it is broken — so re-rolling it
+     * spends a scarce budget unit on a near-certain second failure, which is
+     * exactly how the observed run left later recoverable failures with nothing.
+     *
+     * Reads history only; never throws. On any failure (missing history, query
+     * error) it returns an empty set, which restores the previous behavior — the
+     * retry policy must never be the reason a suite cannot start.
+     */
+    private async loadChronicallyFailingTestIds(testIds: string[], contextUser: UserInfo): Promise<ReadonlySet<string>> {
+        const chronic = new Set<string>();
+        if (testIds.length === 0) {
+            return chronic;
+        }
+        try {
+            const quoted = testIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+            const rv = new RunView();
+            const result = await rv.RunView<{ TestID: string; Status: string }>({
+                EntityName: 'MJ: Test Runs',
+                Fields: ['TestID', 'Status'],
+                ExtraFilter: `TestID IN (${quoted}) AND Status IN ('Passed','Failed','Error','Timeout')`,
+                OrderBy: '__mj_CreatedAt DESC',
+                // Generous cap: the newest N per test are taken in JS below.
+                MaxRows: testIds.length * CHRONIC_FAILURE_LOOKBACK_RUNS * 4,
+                ResultType: 'simple'
+            }, contextUser);
+
+            if (!result.Success) {
+                LogError(`Retry policy: could not read test-run history (${result.ErrorMessage}); chronic-failure suppression disabled`);
+                return chronic;
+            }
+
+            // Rows arrive newest-first, so the first N per test are its latest runs.
+            const seen = new Map<string, string[]>();
+            for (const row of result.Results ?? []) {
+                const history = seen.get(row.TestID) ?? [];
+                if (history.length < CHRONIC_FAILURE_LOOKBACK_RUNS) {
+                    history.push(row.Status);
+                    seen.set(row.TestID, history);
+                }
+            }
+            for (const [testId, statuses] of seen) {
+                // Require a full window before condemning a test, so a brand-new
+                // test is never suppressed on the strength of one bad run.
+                if (statuses.length >= CHRONIC_FAILURE_LOOKBACK_RUNS && !statuses.includes('Passed')) {
+                    chronic.add(testId);
+                }
+            }
+        } catch (e) {
+            LogError(`Retry policy: chronic-failure lookup failed (${e instanceof Error ? e.message : String(e)}); suppression disabled`);
+        }
+        return chronic;
     }
 
     /**

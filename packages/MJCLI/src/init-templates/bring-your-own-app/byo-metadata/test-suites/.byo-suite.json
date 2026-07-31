@@ -4,7 +4,10 @@
     "Description": "Regression suite targeting the bring-your-own-app demo (Angular + Express with two intentional bugs). Both tests are EXPECTED TO FAIL against the buggy demo app — that's the point: this exercises the runner's ability to catch real regressions in non-MJ applications.",
     "Status": "Active",
     "Configuration": {
-      "applicationContext": "## BYO Demo App\n\nA tiny Angular + Express SPA. Two routes, no authentication, no shared session state.\n\n### Routes\n- `/counter` — a counter UI with a single `+1` button. Clicking the button increments a displayed number starting at 0.\n- `/contact` — a contact form (Name, Email, Message fields) with a Submit button. After successful submission, a green confirmation banner appears inline below the form.\n\n### Navigation landmarks\n- A horizontal top nav at the page top has two links — `Counter` and `Contact` — that route between the two pages. No login, no app switcher.\n- The page body is centered in a max-width container; there is no sidebar.\n\n### Conventions\n- All UI is rendered immediately on page load; there is no spinner. A blank page is an error state, not a loading state.\n- Form inputs are labeled above the field (Name / Email / Message)."
+      "applicationContext": "## BYO Demo App\n\nA tiny Angular + Express SPA. Two routes, no authentication, no shared session state.\n\n### Routes\n- `/counter` — a counter UI with a single `+1` button. Clicking the button increments a displayed number starting at 0.\n- `/contact` — a contact form (Name, Email, Message fields) with a Submit button. After successful submission, a green confirmation banner appears inline below the form.\n\n### Navigation landmarks\n- A horizontal top nav at the page top has two links — `Counter` and `Contact` — that route between the two pages. No login, no app switcher.\n- The page body is centered in a max-width container; there is no sidebar.\n\n### Conventions\n- All UI is rendered immediately on page load; there is no spinner. A blank page is an error state, not a loading state.\n- Form inputs are labeled above the field (Name / Email / Message).",
+      "computerUse": {
+        "elementGrounding": true
+      }
     }
   },
   "relatedEntities": {

@@ -21,6 +21,7 @@ function createContext(overrides: Partial<JudgeContext> = {}): JudgeContext {
     ctx.StepNumber = overrides.StepNumber ?? 1;
     ctx.MaxSteps = overrides.MaxSteps ?? 30;
     ctx.CurrentUrl = overrides.CurrentUrl ?? 'https://example.com';
+    ctx.IsCheckpointTour = overrides.IsCheckpointTour ?? false;
     return ctx;
 }
 
@@ -383,6 +384,70 @@ describe('HeuristicJudge', () => {
             const verdict = await judge.Evaluate(ctx);
             // Loop detection runs before error detection
             expect(verdict.Reason).toContain('loop');
+        });
+    });
+    describe('Evaluate — checkpoint tour suppression (CU-D8)', () => {
+        it('does not preempt with a stuck verdict on a checkpoint tour', async () => {
+            const judge = new HeuristicJudge();
+            const ctx = createContext({
+                StepHistory: stepsWithHashes([HASH_SAME, HASH_SAME]),
+                CurrentScreenshotHash: HASH_SAME,
+                IsCheckpointTour: true,
+            });
+
+            const verdict = await judge.Evaluate(ctx);
+            // Inconclusive → HybridJudge goes on to invoke the LLM judge, which is
+            // the only thing that can latch a tour's visual criteria.
+            expect(verdict.Confidence).toBe(0);
+            expect(verdict.Reason).toContain('inconclusive');
+        });
+
+        it('does not preempt with a navigation-loop verdict on a checkpoint tour', async () => {
+            const judge = new HeuristicJudge();
+            const steps = [
+                createStep({ Url: 'https://a.com' }),
+                createStep({ Url: 'https://b.com' }),
+                createStep({ Url: 'https://a.com' }),
+                createStep({ Url: 'https://b.com' }),
+            ];
+            const ctx = createContext({
+                StepHistory: steps,
+                CurrentScreenshotHash: HASH_A,
+                IsCheckpointTour: true,
+            });
+
+            const verdict = await judge.Evaluate(ctx);
+            expect(verdict.Confidence).toBe(0);
+        });
+
+        it('still preempts on repeated hard errors during a checkpoint tour', async () => {
+            const judge = new HeuristicJudge();
+            const err = new ComputerUseError('LLMError', 'boom');
+            const ctx = createContext({
+                StepHistory: [
+                    createStep({ StepNumber: 1, Error: err }),
+                    createStep({ StepNumber: 2, Error: err }),
+                    createStep({ StepNumber: 3, Error: err }),
+                ],
+                CurrentScreenshotHash: HASH_A,
+                IsCheckpointTour: true,
+            });
+
+            const verdict = await judge.Evaluate(ctx);
+            expect(verdict.Confidence).toBeGreaterThan(0);
+            expect(verdict.Reason).toContain('consecutive step errors');
+        });
+
+        it('still preempts with stuck/loop verdicts when NOT a tour', async () => {
+            const judge = new HeuristicJudge();
+            const ctx = createContext({
+                StepHistory: stepsWithHashes([HASH_SAME, HASH_SAME]),
+                CurrentScreenshotHash: HASH_SAME,
+                IsCheckpointTour: false,
+            });
+
+            const verdict = await judge.Evaluate(ctx);
+            expect(verdict.Reason).toContain('stuck');
         });
     });
 });

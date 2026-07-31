@@ -1,0 +1,50 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T045 - Query Left-Panel Navigation",
+    "Description": "Opens the Data Explorer Queries section once, then exercises its bespoke left-panel controls (status filter chips, expand/collapse-all tree toolbar, panel resize) in one run, verifying each via checkpoints. Consolidates old T099, T107, T108.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to Data Explorer, then open the Queries section. Then perform these sub-actions IN ORDER, and as you complete each set \"checkpointReached\" to the exact checkpoint name shown: (1) query-status-chips — the left query panel shows a row of status filter chips (Approved, Pending, Rejected, Expired) with count badges; click 'Pending' to toggle it on and 'Approved' to toggle it off, and confirm the visible query tree responds to the chip toggles (the shown queries change, or a valid empty tree appears); (2) query-expand-collapse — in the panel header find the 'Expand all' (open-folder) and 'Collapse all' (folder) toolbar icons; click 'Expand all' to reveal queries under the category folders, then 'Collapse all' to collapse them back (if there are no nested categories, the buttons present + a stable/empty tree is acceptable); (3) query-panel-resize — drag the vertical resize handle between the left query tree panel and the right query viewer to change the left panel width, then release, and confirm the left panel visibly changes width and holds it. Keep going until all sub-actions are done. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "query-status-chips", "instruction": "toggle status filter chips and see the tree respond", "visualCriteria": ["A status filter chip bar with Approved/Pending/Rejected/Expired chips and count badges is visible above the query tree, and toggling a status chip on/off visibly changes which queries appear (chips gain/lose their highlighted state) or a valid empty state appears when no queries match"] },
+        { "name": "query-expand-collapse", "instruction": "expand-all then collapse-all the category tree", "visualCriteria": ["'Expand all' and 'Collapse all' toolbar controls are present in the query panel header, and clicking Expand all expands the category folders to reveal queries and Collapse all collapses them back — or, if no nested categories exist, a valid empty/flat-tree state renders without error"] },
+        { "name": "query-panel-resize", "instruction": "drag the resize handle to change the left panel width", "visualCriteria": ["A vertical resize handle/grip exists between the query tree panel and the viewer, and dragging it visibly changes the left query panel's width and it holds the new width after release"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,query"
+  },
+  "primaryKey": { "ID": "C3F8CA37-C387-4ED2-BAFE-C94D29DFCAF2" }
+}

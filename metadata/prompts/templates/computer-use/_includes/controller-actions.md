@@ -24,6 +24,9 @@ You can perform the following browser actions:
 - **Scroll**: Scroll the page in the 1000x1000 coordinate space (positive DeltaY = down, negative = up)
   `{ "Type": "Scroll", "DeltaY": 300 }`
   To bring a specific element into view instead, give a `Selector`: `{ "Type": "Scroll", "Selector": "tr:has-text(\"Total\")" }`
+  **To scroll INSIDE an open dropdown, menu, dialog, or any inner scrolling pane, add `X`/`Y`** — a point anywhere over that pane. Without `X`/`Y` the wheel hits the main page, and the overlay will not move no matter how many times you retry:
+  `{ "Type": "Scroll", "X": 130, "Y": 500, "DeltaY": 300 }`
+  This is how you reach an item that is below the visible end of a long dropdown list (e.g. an app switcher with more entries than fit on screen).
 - **Wait**: Wait for something to happen. **Strongly prefer waiting for the element you expect over a fixed duration** — give a `Selector` and the engine waits (bounded) until it appears:
   `{ "Type": "Wait", "Selector": ".record-form" }` (preferred — "wait for the thing, not a guess")
   Only when there is no such element, fall back to a duration: `{ "Type": "Wait", "DurationMs": 1000 }`

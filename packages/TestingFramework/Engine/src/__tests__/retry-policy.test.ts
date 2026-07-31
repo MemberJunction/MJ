@@ -3,6 +3,8 @@ import { FailureCategory, TestRunResult } from '@memberjunction/testing-engine-b
 import {
     RetryBudget,
     computeSuiteRetryBudget,
+    computeInfraReserve,
+    isInfrastructureFailure,
     maxExtraAttemptsForCategory,
     computeBackoffMs,
     buildSuiteRetryPolicy,
@@ -147,5 +149,134 @@ describe('fixedRetries', () => {
     });
     it('n=0 never retries', () => {
         expect(fixedRetries(0)(failed('timeout'), 1).retry).toBe(false);
+    });
+});
+
+describe('computeInfraReserve', () => {
+    it('reserves half the budget, rounded down', () => {
+        expect(computeInfraReserve(4)).toBe(2);
+        expect(computeInfraReserve(5)).toBe(2);
+        expect(computeInfraReserve(1)).toBe(0); // a 1-unit budget stays fully shared
+        expect(computeInfraReserve(0)).toBe(0);
+    });
+
+    it('never returns a negative reserve', () => {
+        expect(computeInfraReserve(-4)).toBe(0);
+    });
+});
+
+describe('isInfrastructureFailure', () => {
+    it('treats only harness-attributable classes as privileged', () => {
+        expect(isInfrastructureFailure('auth-detour')).toBe(true);
+        expect(isInfrastructureFailure('infra')).toBe(true);
+    });
+
+    it('does not privilege agent-attributable or app classes', () => {
+        for (const c of ['nav-loop', 'assertion', 'unknown', 'timeout', 'blank-page', 'app-error', 'impossible'] as FailureCategory[]) {
+            expect(isInfrastructureFailure(c)).toBe(false);
+        }
+    });
+});
+
+describe('RetryBudget infrastructure reserve', () => {
+    it('stops non-privileged callers at the reserve floor', () => {
+        const b = new RetryBudget(4, 2);
+        expect(b.tryConsume(false)).toBe(true);
+        expect(b.tryConsume(false)).toBe(true);
+        // Two units remain but they are reserved.
+        expect(b.tryConsume(false)).toBe(false);
+        expect(b.remaining).toBe(2);
+        expect(b.remainingUnreserved).toBe(0);
+    });
+
+    it('lets privileged callers claim the reserve after agent classes are capped', () => {
+        // This is the exact observed failure: 4 nav-loops drained everything and
+        // every later auth-detour was accepted first-shot.
+        const b = new RetryBudget(4, 2);
+        b.tryConsume(false);
+        b.tryConsume(false);
+        expect(b.tryConsume(true)).toBe(true);
+        expect(b.tryConsume(true)).toBe(true);
+        expect(b.tryConsume(true)).toBe(false);
+        expect(b.remaining).toBe(0);
+    });
+
+    it('keeps the TOTAL cap unchanged — a reserve redistributes, never adds', () => {
+        const b = new RetryBudget(4, 2);
+        let granted = 0;
+        while (b.tryConsume(true)) granted++;
+        expect(granted).toBe(4);
+    });
+
+    it('defaults to no reserve, preserving the previous shared-pool behavior', () => {
+        const b = new RetryBudget(3);
+        expect(b.tryConsume(false)).toBe(true);
+        expect(b.tryConsume(false)).toBe(true);
+        expect(b.tryConsume(false)).toBe(true);
+        expect(b.tryConsume(false)).toBe(false);
+    });
+
+    it('ignores a reserve larger than the total', () => {
+        const b = new RetryBudget(2, 99);
+        expect(b.tryConsume(false)).toBe(false); // everything is reserved
+        expect(b.tryConsume(true)).toBe(true);
+    });
+});
+
+describe('buildSuiteRetryPolicy — infra reserve', () => {
+    it('grants an auth-detour retry from the reserve when agent classes are spent', () => {
+        const budget = new RetryBudget(2, 1);
+        const policy = buildSuiteRetryPolicy({ budget, requestedMax: 2, rng: () => 0.5 });
+
+        expect(policy(failed('nav-loop'), 1).retry).toBe(true);   // uses the unreserved unit
+        expect(policy(failed('nav-loop'), 1).retry).toBe(false);  // reserve is off-limits
+        expect(policy(failed('auth-detour'), 1).retry).toBe(true); // reserve released
+    });
+});
+
+describe('buildSuiteRetryPolicy — chronic failures', () => {
+    it('denies an agent-class retry to a test with no recent pass', () => {
+        const budget = new RetryBudget(4, 0);
+        const onChronicSkipped = vi.fn();
+        const policy = buildSuiteRetryPolicy({
+            budget, requestedMax: 2, rng: () => 0.5,
+            isChronicFailure: () => true, onChronicSkipped,
+        });
+
+        expect(policy(failed('nav-loop'), 1).retry).toBe(false);
+        expect(onChronicSkipped).toHaveBeenCalledTimes(1);
+        // Critically, the denial must not spend a unit.
+        expect(budget.remaining).toBe(4);
+    });
+
+    it('still retries an infrastructure failure on a chronic test', () => {
+        // A chronic test failing on auth is the harness's fault, not the test's.
+        const budget = new RetryBudget(4, 2);
+        const policy = buildSuiteRetryPolicy({
+            budget, requestedMax: 2, rng: () => 0.5, isChronicFailure: () => true,
+        });
+
+        expect(policy(failed('auth-detour'), 1).retry).toBe(true);
+        expect(policy(failed('infra'), 1).retry).toBe(true);
+    });
+
+    it('leaves non-chronic tests untouched', () => {
+        const budget = new RetryBudget(4, 0);
+        const policy = buildSuiteRetryPolicy({
+            budget, requestedMax: 2, rng: () => 0.5, isChronicFailure: () => false,
+        });
+
+        expect(policy(failed('nav-loop'), 1).retry).toBe(true);
+    });
+
+    it('applies the category cap before the chronic gate', () => {
+        // app-error is 0-retry by class, so the chronic hook must never be consulted.
+        const isChronicFailure = vi.fn().mockReturnValue(true);
+        const policy = buildSuiteRetryPolicy({
+            budget: new RetryBudget(4, 0), requestedMax: 2, rng: () => 0.5, isChronicFailure,
+        });
+
+        expect(policy(failed('app-error'), 1).retry).toBe(false);
+        expect(isChronicFailure).not.toHaveBeenCalled();
     });
 });

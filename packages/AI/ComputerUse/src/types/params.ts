@@ -18,6 +18,7 @@ import type { BrowserAction, ContextSeed } from './browser.js';
 import { ComputerUseTool } from './tools.js';
 import type { JudgeFrequency } from './judge.js';
 import type { AppProfile } from './app-profile.js';
+import { GoalPostcondition } from './trace.js';
 
 // ─── Model Config ──────────────────────────────────────────
 /**
@@ -66,6 +67,43 @@ export class RunPrelude {
     public ExpectSelector?: string;
     /** Optional: a URL pattern the prelude must reach — verifies it landed. */
     public ExpectUrlPattern?: string;
+}
+
+// ─── Checkpoint Tours (CU-D8) ──────────────────────────────
+/**
+ * One section of a multi-section "tour" test — a sub-goal the run must pass
+ * through and verify (CU-D8). A checkpoint is **met** when *all* its declared
+ * checks pass: every {@link Assertions} entry (deterministic, latched for free
+ * every step) AND every {@link VisualCriteria} entry (latched at a judge call).
+ *
+ * A tour is defined as an ordered list of these on
+ * {@link RunComputerUseParams.Checkpoints}; the run passes iff every checkpoint
+ * latches met (latches are sticky — once met, never cleared). This verifies each
+ * section was actually reached, without relying on a single final-frame judge
+ * that can't see earlier sections. See
+ * `plans/regression-testing/checkpoint-tours-design.md`.
+ */
+export class RunCheckpoint {
+    /** Stable label for the section, e.g. "agents-list". */
+    public Name: string = '';
+    /**
+     * Plan hint appended to the goal so the controller knows to pass through
+     * here. Also the criterion text in the synthesized final verdict.
+     */
+    public Instruction?: string;
+    /**
+     * Deterministic assertions that latch this checkpoint for FREE, checked every
+     * step (URL always available; `visible`/`absent` require {@link
+     * RunComputerUseParams.ElementGrounding}). Preferred — most sections are
+     * URL-identifiable.
+     */
+    public Assertions?: GoalPostcondition[];
+    /**
+     * Visual/subjective criteria requiring an LLM judge (e.g. "the chart rendered
+     * with bars"). Latched when a judge call reports all of them met. Optional —
+     * omit when a section is fully verifiable by {@link Assertions}.
+     */
+    public VisualCriteria?: string[];
 }
 
 // ─── Run Parameters ────────────────────────────────────────
@@ -278,4 +316,13 @@ export class RunComputerUseParams {
      * first attempt.
      */
     public PreviousAttemptSummary?: string;
+
+    /**
+     * Ordered tour checkpoints (CU-D8). When set, the run passes iff every
+     * checkpoint latches met (sticky), and the final verdict is synthesized from
+     * the latch state rather than a single end-state judge — so a multi-section
+     * tour is verified section-by-section. Empty/undefined → today's
+     * single-end-state judging over {@link ValidationCriteria}.
+     */
+    public Checkpoints?: RunCheckpoint[];
 }

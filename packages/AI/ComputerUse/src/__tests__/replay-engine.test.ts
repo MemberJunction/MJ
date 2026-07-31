@@ -9,7 +9,7 @@ import {
     ElementInfo,
     InteractiveElement,
 } from '../types/browser.js';
-import { RunComputerUseParams } from '../types/params.js';
+import { RunComputerUseParams, RunCheckpoint } from '../types/params.js';
 import { AppProfile, SettleConfig } from '../types/app-profile.js';
 import { ComputerUseTrace, TraceStep, TraceTarget, StepPostcondition, GoalPostcondition } from '../types/trace.js';
 import { JudgePromptRequest, JudgePromptResponse } from '../types/controller.js';
@@ -303,5 +303,104 @@ describe('ComputerUseEngine.Replay end-state judge (Option 1 — goal-completion
         expect(result.Status).toBe('Completed');
         expect(engine.judgeCalls).toBe(0);
         expect(result.FinalJudgeVerdict).toBeUndefined();
+    });
+});
+
+describe('ComputerUseEngine.Replay checkpoint tours (CU-D8 on the replay tier)', () => {
+    function tourTrace(): ComputerUseTrace {
+        return trace([clickStep('#nav', { postUrl: '/app/data' })]);
+    }
+    function withGrid(engine: ComputerUseEngine): FakeAdapter {
+        const adapter = new FakeAdapter();          // starts on /app/home
+        adapter.visible.set('#nav', true);
+        adapter.clickNavigates.set('#nav', 'http://localhost:4200/app/data');
+        engine.SetBrowserAdapter(adapter);
+        return adapter;
+    }
+    function urlCheckpoint(name: string, pattern: string): RunCheckpoint {
+        const cp = new RunCheckpoint();
+        cp.Name = name;
+        cp.Instruction = `reach ${name}`;
+        const p = new GoalPostcondition();
+        p.Kind = 'url';
+        p.UrlPattern = pattern;
+        cp.Assertions = [p];
+        return cp;
+    }
+
+    it('latches both sections the trajectory passes through and needs NO judge call', async () => {
+        // The scripted judge would REJECT — proving a URL-anchored tour never calls it.
+        const engine = new JudgeScriptEngine(false);
+        withGrid(engine);
+        const params = baseParams();
+        params.Checkpoints = [urlCheckpoint('home', '/app/home'), urlCheckpoint('data', '/app/data')];
+
+        const result = await engine.Replay(tourTrace(), params);
+
+        expect(result.Status).toBe('Completed');
+        expect(result.Success).toBe(true);
+        expect(engine.judgeCalls).toBe(0);                       // free — deterministic latching only
+        expect(result.FinalJudgeVerdict?.Done).toBe(true);        // synthesized, never absent
+        expect(result.FinalJudgeVerdict?.Reason).toContain('2/2 checkpoints reached');
+    });
+
+    it('ALWAYS carries a synthesized verdict — the regression that scored replayed tours 0.5', async () => {
+        // Pre-fix: the replay tail gated on ValidationCriteria, so a tour (which has
+        // none) returned no verdict at all and the oracle reported
+        // "Engine succeeded but no judge verdict available" → auto-fail.
+        const engine = new JudgeScriptEngine(false);
+        withGrid(engine);
+        const params = baseParams();
+        params.Checkpoints = [urlCheckpoint('data', '/app/data')];
+
+        const result = await engine.Replay(tourTrace(), params);
+
+        expect(result.FinalJudgeVerdict).toBeDefined();
+        expect(result.FinalJudgeVerdict?.CriteriaVerdicts).toHaveLength(1);
+    });
+
+    it('judges only the PENDING visual criteria, and passes when they are confirmed', async () => {
+        const engine = new JudgeScriptEngine(true);
+        withGrid(engine);
+        const params = baseParams();
+        const visual = new RunCheckpoint();
+        visual.Name = 'grid-rendered';
+        visual.VisualCriteria = ['the data grid rendered with rows'];
+        params.Checkpoints = [urlCheckpoint('data', '/app/data'), visual];
+
+        const result = await engine.Replay(tourTrace(), params);
+
+        expect(engine.judgeCalls).toBe(1);                       // one call, for the visual section only
+        expect(result.Status).toBe('Completed');
+        expect(result.FinalJudgeVerdict?.Done).toBe(true);
+    });
+
+    it('stays STRICT: an unmet section fails the replay so the driver falls back to the LLM tier', async () => {
+        const engine = new JudgeScriptEngine(false);   // judge rejects the visual criterion
+        withGrid(engine);
+        const params = baseParams();
+        const visual = new RunCheckpoint();
+        visual.Name = 'grid-rendered';
+        visual.VisualCriteria = ['the data grid rendered with rows'];
+        params.Checkpoints = [urlCheckpoint('data', '/app/data'), visual];
+
+        const result = await engine.Replay(tourTrace(), params);
+
+        expect(result.Status).toBe('Failed');                    // strict — not a partial pass
+        expect(result.Replay?.AllStepsSucceeded).toBe(true);     // mechanically clean; the TOUR was incomplete
+        expect(result.FinalJudgeVerdict?.Done).toBe(false);
+        expect(result.FinalJudgeVerdict?.Reason).toContain('1/2 checkpoints reached');
+    });
+
+    it('fails a tour whose section the trajectory never visits', async () => {
+        const engine = new JudgeScriptEngine(true);
+        withGrid(engine);
+        const params = baseParams();
+        params.Checkpoints = [urlCheckpoint('data', '/app/data'), urlCheckpoint('never', '/app/nowhere')];
+
+        const result = await engine.Replay(tourTrace(), params);
+
+        expect(result.Status).toBe('Failed');
+        expect(result.FinalJudgeVerdict?.Reason).toContain('unmet: reach never');
     });
 });

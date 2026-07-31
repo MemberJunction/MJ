@@ -17,7 +17,9 @@
 import { RunComputerUseParams } from '../types/params.js';
 import { StepRecord, JudgeVerdict } from '../types/judge.js';
 import type { InteractiveElement } from '../types/browser.js';
+import type { CheckpointLatch } from './checkpoint.js';
 import { summarizeOlderSteps, DEFAULT_MAX_VERBATIM_STEPS } from './step-digest.js';
+import { distillActionError } from './action-error.js';
 
 export class RunContext {
     /** Immutable reference to the original run parameters */
@@ -56,6 +58,14 @@ export class RunContext {
 
     /** The last judge verdict, reused when the state is unchanged (CU-G5). */
     public LastJudgeVerdict?: JudgeVerdict;
+
+    /**
+     * Sticky per-checkpoint latch state for a checkpoint tour (CU-D8), keyed by
+     * checkpoint name. Empty for non-tour runs. Once a checkpoint latches met it
+     * stays met, so a run is scored on every section it reached, not just the
+     * final frame.
+     */
+    public CheckpointState: Map<string, CheckpointLatch> = new Map();
 
     /** Run start timestamp (for total duration calculation) */
     public readonly StartTime: number;
@@ -159,8 +169,10 @@ export class RunContext {
         // Browser actions
         if (step.ActionsRequested.length > 0) {
             const actions = step.ActionsRequested.map(a => a.Type).join(', ');
+            // Distilled, not raw: a Playwright call log dumped verbatim buries the
+            // only actionable fact (something covered the target) in ~15 lines.
             const results = step.ActionResults
-                .map(r => r.Success ? 'OK' : `FAIL: ${r.Error ?? 'unknown'}`)
+                .map(r => r.Success ? 'OK' : `FAIL: ${distillActionError(r.Error)}`)
                 .join(', ');
             parts.push(`Actions: [${actions}] → [${results}]`);
         }

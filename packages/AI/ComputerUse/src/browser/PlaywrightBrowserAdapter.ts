@@ -45,6 +45,8 @@ import {
     clickInteractiveElement,
     typeIntoInteractiveElement,
 } from './element-extraction.js';
+// CU-A7 ambiguous-selector narrowing, shared with SharedContextBrowserAdapter.
+import { resolveActionLocator } from './selector-resolution.js';
 // CU-G4 warm-seed in-page storage helpers, shared with SharedContextBrowserAdapter (RI-C4.1).
 import { StorageSnapshot, captureStorageInPage, restoreStorageInPage } from './page-storage.js';
 
@@ -725,12 +727,15 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         const page = this.page!;
 
         switch (action.Type) {
-            case 'Click':
+            case 'Click': {
                 if (action.Selector) {
                     // Selector path: click the matched element directly; the
                     // X/Y/BoundingBox coordinates are ignored when a selector
                     // is supplied. Modifiers (e.g. Shift-click) ride along.
-                    await page.click(action.Selector, {
+                    // Ambiguous selectors are narrowed first (CU-A7) — strict
+                    // mode would otherwise throw on a multi-match.
+                    const target = await resolveActionLocator(page, action.Selector);
+                    await target.click({
                         button: action.Button,
                         clickCount: action.ClickCount,
                         timeout: this.config.ActionTimeoutMs,
@@ -740,17 +745,20 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                     await this.executeClick(page, action);
                 }
                 break;
+            }
 
-            case 'Type':
+            case 'Type': {
                 if (action.Selector) {
                     // Selector path: focus the matched element, then type so that
                     // keystroke events (and any input handlers) fire naturally.
-                    await page.locator(action.Selector).focus({ timeout: this.config.ActionTimeoutMs });
+                    const target = await resolveActionLocator(page, action.Selector);
+                    await target.focus({ timeout: this.config.ActionTimeoutMs });
                     await page.keyboard.type(action.Text);
                 } else {
                     await page.keyboard.type(action.Text);
                 }
                 break;
+            }
 
             case 'ClickElement':
                 // Element-grounded click (CU-A4): resolve the index to the extracted
@@ -803,15 +811,23 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 await page.mouse.up({ button: action.Button });
                 break;
 
-            case 'Scroll':
+            case 'Scroll': {
                 if (action.Selector) {
                     // Selector path: bring the matched element into view; the
                     // delta scroll is ignored when a selector is supplied.
-                    await page.locator(action.Selector).scrollIntoViewIfNeeded({ timeout: this.config.ActionTimeoutMs });
+                    const target = await resolveActionLocator(page, action.Selector);
+                    await target.scrollIntoViewIfNeeded({ timeout: this.config.ActionTimeoutMs });
                 } else {
+                    // CU-A8: a wheel event lands wherever the pointer is, so move
+                    // it over the requested point first — that's what lets an open
+                    // dropdown or inner scroll pane be scrolled instead of the page.
+                    if (action.X !== undefined && action.Y !== undefined) {
+                        await page.mouse.move(action.X, action.Y);
+                    }
                     await page.mouse.wheel(action.DeltaX, action.DeltaY);
                 }
                 break;
+            }
 
             case 'Wait':
                 if (action.Selector) {

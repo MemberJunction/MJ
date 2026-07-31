@@ -126,6 +126,28 @@ export class ControllerPromptRequest {
      * rediscovering app structure on every test.
      */
     public ApplicationContext?: string;
+
+    /**
+     * Tour checkpoints for this run (CU-D8 Phase B), name + instruction only —
+     * the assertions are engine-internal. Rendered into the prompt so the
+     * controller knows the sections and can echo the exact `checkpointReached`
+     * name when it arrives at one, triggering a scoped judge at that frame.
+     * Empty/undefined for non-tour runs.
+     */
+    public Checkpoints?: ControllerCheckpointInfo[];
+}
+
+// ─── Controller Checkpoint Info ────────────────────────────
+/**
+ * The prompt-facing view of a tour checkpoint (CU-D8) — just what the controller
+ * needs to recognize and name a section. Assertions/visual criteria stay
+ * engine-internal.
+ */
+export class ControllerCheckpointInfo {
+    /** The exact checkpoint name the controller must echo in `checkpointReached`. */
+    public Name: string = '';
+    /** What this section is / how to reach it. */
+    public Instruction?: string;
 }
 
 // ─── Form Login Credentials ────────────────────────────────
@@ -174,6 +196,15 @@ export class ControllerPromptResponse {
      * the goal has been accomplished or needs confirmation of progress.
      */
     public RequestJudgement?: boolean;
+
+    /**
+     * The exact name of a tour checkpoint (CU-D8 Phase B) the controller believes
+     * it has just reached. When it names a checkpoint with pending visual
+     * criteria, the engine forces a judge call this step scoped to THAT
+     * checkpoint's criteria — verifying the section against the frame it's
+     * actually on. Undefined when not on a tour or no section was reached.
+     */
+    public CheckpointReached?: string;
 
     /**
      * Self-tracked agent state (CU-E2), all optional & parser-tolerant:

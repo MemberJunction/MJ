@@ -306,6 +306,39 @@ export interface ComputerUseExpectedOutcomes {
 
     /** Custom validation criteria for LLM judge oracles */
     judgeValidationCriteria?: string[];
+
+    /**
+     * Ordered tour checkpoints (CU-D8). When set, the test is verified
+     * section-by-section: it passes iff every checkpoint is reached (URL/element
+     * assertions latch for free every step; visual criteria via the judge), rather
+     * than on a single final-frame judge. Mapped to `RunComputerUseParams.Checkpoints`.
+     * See `plans/regression-testing/checkpoint-tours-design.md`.
+     */
+    checkpoints?: CheckpointDef[];
+}
+
+/** JSON shape of one checkpoint tour section (mapped to `RunCheckpoint`). */
+export interface CheckpointDef {
+    /** Stable label for the section, e.g. "agents-list". */
+    name: string;
+    /** Plan hint appended to the goal so the controller passes through here. */
+    instruction?: string;
+    /** Deterministic assertions — latch for free every step. Preferred. */
+    assertions?: CheckpointAssertionDef[];
+    /** Visual criteria requiring the LLM judge (e.g. "chart rendered with bars"). */
+    visualCriteria?: string[];
+}
+
+/** JSON shape of one deterministic checkpoint assertion (mapped to `GoalPostcondition`). */
+export interface CheckpointAssertionDef {
+    /** `url` matches urlPattern; `visible`/`absent` = target present/absent. */
+    kind: 'url' | 'visible' | 'absent';
+    /** Substring the normalized URL must contain (kind `url`) — a path fragment like `/app/agents`, NOT a glob. */
+    urlPattern?: string;
+    /** Element to check for presence/absence (kind `visible`/`absent`). */
+    target?: { role?: string; name?: string; selector?: string };
+    /** Optional provenance note. */
+    description?: string;
 }
 
 // ─── Actual Output (built by ComputerUseTestDriver, consumed by oracles) ──

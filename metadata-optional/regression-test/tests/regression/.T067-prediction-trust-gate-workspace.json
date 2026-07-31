@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T067 - Prediction Trust Gate Workspace",
+    "Description": "Exercises the trust-gated workspace view (trust banner + at-risk list + action-bar lock) unique to Predictions — a code path with no analog in the generic form/grid stack.",
+    "InputDefinition": {
+      "goal": "In the Predictive Studio app (open it via the application switcher dropdown next to the logo, scroll if needed), on the 'Predictions' door, open one prediction card by clicking its 'Open' button. Pages can take 10-30s to load — wait, don't navigate away. Success is the prediction WORKSPACE rendering: a trust banner with a star/dot rating and a plain-language verdict, plus either a ranked 'at-risk' call list (Member + Likelihood %) OR a trust-locked action bar showing a lock message when the prediction isn't reliable enough to act on. If the catalog has no openable cards (only the capability intro or 'Improve this' blocked cards), confirming that intro/blocked state renders is also a pass.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Opening a prediction shows a workspace with a trust banner and verdict, OR the catalog shows only blocked/intro state (no openable cards)",
+        "When a workspace opens, either the ranked at-risk list renders or the action bar shows a trust-lock message — the trust verdict visibly gates the actions",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,predictive-studio"
+  },
+  "primaryKey": {
+    "ID": "33BD7DFC-7909-4853-9AB4-1995E59DF0E3"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:58.130Z",
+    "checksum": "dc370bbe43f5dae9c6f34f7ff96207c87b43f23c428732f2574c450a52dc7a4a"
+  }
+}

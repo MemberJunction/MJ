@@ -60,7 +60,7 @@ import { ComputerUseAuthConfig } from '../types/auth.js';
 import { SettleConfig, DEFAULT_BUSY_MARKERS, LoopConfig } from '../types/app-profile.js';
 import type { SettleReason } from '../types/app-profile.js';
 import { resolveSettleExit } from './settle-decision.js';
-import { computeStateSignature, detectLoop } from './loop-detection.js';
+import { computeStateSignature, detectLoop, stateRepeatThresholdFor } from './loop-detection.js';
 import { evaluateAuthDetour } from './auth-detour.js';
 import { CancellationError, abortableDelay } from './cancellation.js';
 import { serializeInteractiveElements } from './element-serializer.js';
@@ -79,6 +79,18 @@ import { reresolveTarget, shouldAcceptHeal, isSelectorHealable } from './heal-de
 import { executeGoalPostconditions } from './postcondition.js';
 import { evaluatePreludeLanding } from './prelude.js';
 import { makeJudgeCacheKey, JudgeVerdictCache } from './judge-cache.js';
+import { timeBudgetExpiryReason } from './time-budget.js';
+import {
+    isCheckpointRun,
+    latchDeterministic,
+    latchVisualFromVerdict,
+    unlatchedVisualCriteria,
+    allCheckpointsMet,
+    countMetCheckpoints,
+    synthesizeCheckpointVerdict,
+    findCheckpoint,
+    checkpointVisualCriteria,
+} from './checkpoint.js';
 import { hashGoal } from './trace-recorder.js';
 import { buildFailureMemo } from './failure-memo.js';
 import type { ComputerUseFailureReason } from '../types/results.js';
@@ -94,6 +106,7 @@ import type { JudgeFrequency } from '../types/judge.js';
 import {
     ControllerPromptRequest,
     ControllerPromptResponse,
+    ControllerCheckpointInfo,
     JudgePromptRequest,
     JudgePromptResponse,
 } from '../types/controller.js';
@@ -687,6 +700,7 @@ export class ComputerUseEngine {
     private static readonly MAX_CONSECUTIVE_JUDGE_DISAGREEMENTS = 3;
 
     private async executeMainLoop(context: RunContext): Promise<ComputerUseResult> {
+        this.warnOnCheckpointMisconfig(context);
         let lastVerdict: JudgeVerdict | undefined;
         let consecutiveEmptySteps = 0;
         let consecutiveJudgeDisagreements = 0;
@@ -695,6 +709,11 @@ export class ComputerUseEngine {
         let cumulativeSettleMs = 0;
         // Loop detection (CU-B1): per-step state signatures + an escalating trip counter.
         const loopCfg = context.Params.AppProfile?.Loop ?? new LoopConfig();
+        const stateRepeatThreshold = this.effectiveStateRepeatThreshold(context, loopCfg);
+        // A multi-section tour alternates hub→section→hub→section, which IS a 2-state
+        // cycle — so the cycle arm needs the same tolerance as the repeat arm, or it
+        // fires on the tour's normal shape (T038 died at step 12 of 90 that way).
+        const cycleRepeatThreshold = stateRepeatThreshold > loopCfg.StateRepeatThreshold ? 3 : 2;
         const stateSignatures: string[] = [];
         let loopTrips = 0;
         // Terminal-verdict guard (CU-D6): concurring Impossible verdicts needed before we accept one.
@@ -703,7 +722,7 @@ export class ComputerUseEngine {
         for (let stepNumber = 1; stepNumber <= context.Params.MaxSteps; stepNumber++) {
             // Check cancellation
             if (this.cancelled) {
-                return this.buildResult(context, 'Cancelled', false, lastVerdict);
+                return this.buildResult(context, 'Cancelled', false, this.terminalVerdict(context, lastVerdict));
             }
 
             // Auth-detour watchdog (CU-B7): if the session was invalidated and
@@ -719,12 +738,16 @@ export class ComputerUseEngine {
             }
             cumulativeSettleMs += authResult.recoveryMs;
 
-            // Agent-time budget (CU-B4): never START a step past the budget.
-            // Graceful expiry runs one forced final judge so the run is scored
-            // on real end-state, not zeroed (pairs with CU-D4).
-            if (this.agentTimeBudgetExceeded(context, cumulativeSettleMs)) {
-                this.log(`Agent-time budget (${context.Params.MaxExecutionTimeMs}ms, settle excluded) exceeded before step ${stepNumber} — expiring gracefully`);
-                const verdict = await this.forceFinalJudge(context, stepNumber, lastVerdict);
+            // Time budget (CU-B4): never START a step past budget. Two bounds —
+            // agent-time (settle excluded) AND a wall-clock ceiling that expires a
+            // settle-heavy run HERE, gracefully, instead of letting it blow past
+            // into the TestEngine watchdog (which abandons it as an unscored infra
+            // Error). Graceful expiry runs one forced final judge so the run is
+            // scored on the real end-state, not zeroed (pairs with CU-D4).
+            const budgetExpiry = this.timeBudgetExpiry(context, cumulativeSettleMs);
+            if (budgetExpiry) {
+                this.log(`Time budget exceeded — ${budgetExpiry} — before step ${stepNumber}; expiring gracefully`);
+                const verdict = await this.finalVerdictOnTermination(context, stepNumber, lastVerdict);
                 const result = this.buildResult(context, 'TimeBudgetExceeded', false, verdict);
                 this.onRunComplete(result);
                 return result;
@@ -739,7 +762,7 @@ export class ComputerUseEngine {
             } catch (error) {
                 if (error instanceof CancellationError) {
                     this.log('Run cancelled mid-step (CU-B8) — returning Cancelled');
-                    return this.buildResult(context, 'Cancelled', false, lastVerdict);
+                    return this.buildResult(context, 'Cancelled', false, this.terminalVerdict(context, lastVerdict));
                 }
                 throw error;
             }
@@ -747,14 +770,48 @@ export class ComputerUseEngine {
             context.AddStep(step);
             this.onStepComplete(step, context.Params);
 
+            // Checkpoint tour (CU-D8): latch sections whose deterministic
+            // assertions (free, every step) or this step's visual-criteria judge
+            // verdict now hold. When every checkpoint is met, the tour is complete
+            // — scored on the synthesized latch verdict, not a single end-state judge.
+            if (isCheckpointRun(context.Params.Checkpoints)) {
+                const metBefore = countMetCheckpoints(context.Params.Checkpoints, context.CheckpointState);
+                this.updateCheckpointLatches(context, step);
+                if (step.JudgeVerdict) {
+                    latchVisualFromVerdict(context.Params.Checkpoints, context.CheckpointState, step.JudgeVerdict, stepNumber);
+                }
+                // A newly-latched checkpoint IS progress, so the loop detectors
+                // must start over (CU-D8 × CU-B1). Without this, a tour dies on
+                // its own script: the detectors define a loop as revisiting a
+                // state "with no progress", but they only perceive pixels + URL,
+                // and a tour legitimately returns to prior states (open→cancel,
+                // "click History then click Review Queue to switch back"). Tests
+                // were being killed as LoopDetected several steps AFTER the judge
+                // had confirmed a section complete.
+                const metAfter = countMetCheckpoints(context.Params.Checkpoints, context.CheckpointState);
+                if (metAfter > metBefore) {
+                    stateSignatures.length = 0;
+                    loopTrips = 0;
+                    context.LoopEvidence = undefined;
+                    this.log(`Step ${stepNumber} — checkpoint progress (${metBefore} → ${metAfter}); loop detection reset (CU-D8)`);
+                }
+                if (allCheckpointsMet(context.Params.Checkpoints, context.CheckpointState)) {
+                    const verdict = synthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
+                    this.log(`Step ${stepNumber} — all ${context.Params.Checkpoints.length} checkpoints reached; completing (CU-D8)`);
+                    const result = this.buildResult(context, 'Completed', true, verdict);
+                    this.onRunComplete(result);
+                    return result;
+                }
+            }
+
             // Track consecutive steps where the controller produced NOTHING to do.
             // A step that requested judgement (a deliberate "am I done?" checkpoint)
             // or that errored is NOT a misconfigured/stuck empty step, so it must
             // not count toward the "controller produced no actions" abort (CU-B3).
             const producedNothing = step.ActionsRequested.length === 0 && step.ToolCalls.length === 0;
-            if (producedNothing && !step.RequestedJudgement && !step.Error) {
+            if (producedNothing && !step.RequestedJudgement && !step.CheckpointReached && !step.Error) {
                 consecutiveEmptySteps++;
-                const abortResult = this.buildEmptyStepAbortResult(consecutiveEmptySteps, context, lastVerdict);
+                const abortResult = this.buildEmptyStepAbortResult(consecutiveEmptySteps, context, this.terminalVerdict(context, lastVerdict));
                 if (abortResult) return abortResult;
             } else {
                 consecutiveEmptySteps = 0;
@@ -765,33 +822,40 @@ export class ComputerUseEngine {
                 lastVerdict = step.JudgeVerdict;
                 context.LastJudgeFeedback = step.JudgeVerdict.Feedback;
 
-                // If the judge says done, we're done
-                if (step.JudgeVerdict.Done) {
-                    const result = this.buildResult(context, 'Completed', true, lastVerdict);
-                    this.onRunComplete(result);
-                    return result;
-                }
+                // Judge-driven termination is bypassed in a checkpoint tour (CU-D8):
+                // the judge scores only unlatched visual criteria (latched in the
+                // checkpoint block above), so its Done/Impossible describe those
+                // criteria, NOT the whole tour — completion is decided by the latch
+                // check above.
+                if (!isCheckpointRun(context.Params.Checkpoints)) {
+                    // If the judge says done, we're done
+                    if (step.JudgeVerdict.Done) {
+                        const result = this.buildResult(context, 'Completed', true, lastVerdict);
+                        this.onRunComplete(result);
+                        return result;
+                    }
 
-                // Impossible guard (CU-D6): don't end on a single sample. Require a
-                // quorum of concurring Impossible verdicts across ≥2 steps, and never
-                // accept Impossible while the page is still loading (settle gave up as
-                // 'budget') — a boot screen is not evidence the goal is impossible.
-                const impossibleGate = gateImpossibleVerdict({
-                    impossible: step.JudgeVerdict.Impossible,
-                    pageLoading: step.SettleReason === 'budget',
-                    priorCount: impossibleCount,
-                    quorum: DEFAULT_IMPOSSIBLE_QUORUM,
-                });
-                impossibleCount = impossibleGate.newCount;
-                if (impossibleGate.suppressed) {
-                    this.log(`Step ${stepNumber} — judge said impossible but the page is still loading; not accepting it (CU-D6)`);
-                } else if (step.JudgeVerdict.Impossible && !impossibleGate.accept) {
-                    this.log(`Step ${stepNumber} — impossible verdict ${impossibleCount}/${DEFAULT_IMPOSSIBLE_QUORUM}; need a concurring verdict before ending (CU-D6)`);
-                } else if (impossibleGate.accept) {
-                    this.log(`Step ${stepNumber} — goal confirmed impossible (${impossibleCount} concurring verdicts): ${step.JudgeVerdict.Reason}`);
-                    const result = this.buildResult(context, 'Impossible', false, lastVerdict);
-                    this.onRunComplete(result);
-                    return result;
+                    // Impossible guard (CU-D6): don't end on a single sample. Require a
+                    // quorum of concurring Impossible verdicts across ≥2 steps, and never
+                    // accept Impossible while the page is still loading (settle gave up as
+                    // 'budget') — a boot screen is not evidence the goal is impossible.
+                    const impossibleGate = gateImpossibleVerdict({
+                        impossible: step.JudgeVerdict.Impossible,
+                        pageLoading: step.SettleReason === 'budget',
+                        priorCount: impossibleCount,
+                        quorum: DEFAULT_IMPOSSIBLE_QUORUM,
+                    });
+                    impossibleCount = impossibleGate.newCount;
+                    if (impossibleGate.suppressed) {
+                        this.log(`Step ${stepNumber} — judge said impossible but the page is still loading; not accepting it (CU-D6)`);
+                    } else if (step.JudgeVerdict.Impossible && !impossibleGate.accept) {
+                        this.log(`Step ${stepNumber} — impossible verdict ${impossibleCount}/${DEFAULT_IMPOSSIBLE_QUORUM}; need a concurring verdict before ending (CU-D6)`);
+                    } else if (impossibleGate.accept) {
+                        this.log(`Step ${stepNumber} — goal confirmed impossible (${impossibleCount} concurring verdicts): ${step.JudgeVerdict.Reason}`);
+                        const result = this.buildResult(context, 'Impossible', false, lastVerdict);
+                        this.onRunComplete(result);
+                        return result;
+                    }
                 }
             }
 
@@ -799,7 +863,8 @@ export class ComputerUseEngine {
             // actions, requested judgement) but the judge keeps disagreeing, that
             // is a genuine, truthful Failed outcome — not an infrastructure Error
             // and not worth burning the rest of the step budget (CU-B3).
-            if (producedNothing && step.RequestedJudgement && step.JudgeVerdict &&
+            if (!isCheckpointRun(context.Params.Checkpoints) &&
+                producedNothing && step.RequestedJudgement && step.JudgeVerdict &&
                 !step.JudgeVerdict.Done && !step.JudgeVerdict.Impossible) {
                 consecutiveJudgeDisagreements++;
                 if (consecutiveJudgeDisagreements >= ComputerUseEngine.MAX_CONSECUTIVE_JUDGE_DISAGREEMENTS) {
@@ -818,13 +883,13 @@ export class ComputerUseEngine {
             if (step.SettleReason !== 'budget') {
                 const signature = computeStateSignature(step.UrlAfter, step.ScreenshotHash, loopCfg.VolatileParams);
                 stateSignatures.push(signature);
-                const loop = detectLoop(stateSignatures, loopCfg.StateRepeatThreshold);
+                const loop = detectLoop(stateSignatures, stateRepeatThreshold, cycleRepeatThreshold);
                 if (loop) {
                     loopTrips++;
                     if (loopTrips >= loopCfg.TerminateAfterTrips) {
                         // A truthful early verdict beats 20 more wasted steps.
                         this.log(`Step ${stepNumber} — loop persisted ${loopTrips} trips (${loop.kind}); terminating as Failed/LoopDetected (CU-B1)`);
-                        const verdict = await this.forceFinalJudge(context, stepNumber, lastVerdict);
+                        const verdict = await this.finalVerdictOnTermination(context, stepNumber, lastVerdict);
                         const result = this.buildResult(context, 'Failed', false, verdict, 'LoopDetected');
                         this.onRunComplete(result);
                         return result;
@@ -844,24 +909,160 @@ export class ComputerUseEngine {
         // the verdict reflects the true end-state (it may be up to a few steps
         // stale) and the run is scored on evidence (CU-B4.3 / CU-D4).
         this.log(`Run exhausted all ${context.Params.MaxSteps} steps without completion`);
-        const finalVerdict = await this.forceFinalJudge(context, context.Params.MaxSteps, lastVerdict);
+        const finalVerdict = await this.finalVerdictOnTermination(context, context.Params.MaxSteps, lastVerdict);
         const result = this.buildResult(context, 'MaxStepsReached', false, finalVerdict);
         this.onRunComplete(result);
         return result;
     }
 
     /**
-     * Whether the agent-time budget is exhausted (CU-B4). Agent time excludes
-     * cumulative settle wait, so a slow-to-render app doesn't burn the agent's
-     * reasoning budget. Returns false when no budget is configured.
+     * How many times one page state may recur before it counts as a loop trip.
+     *
+     * Scales with how many distinct things the goal asks for — checkpoints for a
+     * tour, validation criteria otherwise — because revisiting a state is a
+     * STRUCTURAL consequence of a multi-part goal, not evidence of being stuck:
+     *
+     *  - Tours are hub-and-spoke. Walking N sections means returning to the same hub
+     *    up to N times, so at the base threshold of 3 the hub ALONE trips the
+     *    detector on any tour of 4+ sections (T045/T102/T115/T120 died at steps
+     *    13/10/20/29 of budgets of 45/65/90/65).
+     *  - Multi-criteria goals do the same thing without being tours. "Clicking a
+     *    metric card navigates to a different view" means go-and-come-back (T058),
+     *    and "clearing the filter RESTORES the fuller list" (T124) asks the agent to
+     *    return to an earlier state *as the pass condition* — the detector cannot
+     *    tell that apart from spinning.
+     *
+     * So the allowance is one revisit per requested item plus the base tolerance,
+     * which makes the step and time budgets the real backstop — what they are for.
+     * `TerminateAfterTrips` is deliberately left alone so a genuinely wedged run
+     * still ends early instead of burning its whole budget.
      */
-    private agentTimeBudgetExceeded(context: RunContext, cumulativeSettleMs: number): boolean {
-        const max = context.Params.MaxExecutionTimeMs;
-        if (!max || max <= 0) {
-            return false;
+    private effectiveStateRepeatThreshold(context: RunContext, loopCfg: LoopConfig): number {
+        const checkpointCount = isCheckpointRun(context.Params.Checkpoints)
+            ? context.Params.Checkpoints.length
+            : 0;
+        const criteriaCount = context.Params.ValidationCriteria?.length ?? 0;
+        const requestedParts = Math.max(checkpointCount, criteriaCount);
+        const allowance = stateRepeatThresholdFor(loopCfg.StateRepeatThreshold, requestedParts);
+        if (allowance !== loopCfg.StateRepeatThreshold) {
+            this.log(
+                `Goal has ${requestedParts} requested part(s) (${checkpointCount ? 'checkpoints' : 'criteria'}): ` +
+                `loop state-repeat threshold ${loopCfg.StateRepeatThreshold} → ${allowance} ` +
+                `(revisiting a state is structural in a multi-part goal)`
+            );
         }
-        const agentTimeMs = Math.max(0, context.ElapsedMs - cumulativeSettleMs);
-        return agentTimeMs >= max;
+        return allowance;
+    }
+
+    /**
+     * Why the run must expire now (CU-B4), or null when within budget. Delegates
+     * to the pure {@link timeBudgetExpiryReason}: agent-time (settle excluded, so
+     * a slow-to-render app doesn't burn reasoning budget) OR a wall-clock ceiling
+     * (total elapsed, so a settle-heavy run expires gracefully here instead of
+     * being abandoned by the TestEngine watchdog). Returns null when no budget is
+     * configured.
+     */
+    private timeBudgetExpiry(context: RunContext, cumulativeSettleMs: number): string | null {
+        return timeBudgetExpiryReason(context.ElapsedMs, cumulativeSettleMs, context.Params.MaxExecutionTimeMs);
+    }
+
+    // ─── Checkpoint Tour (CU-D8) ───────────────────────────
+
+    /**
+     * One-time setup warnings for a checkpoint tour, so a silently-never-latching
+     * tour is surfaced rather than mysterious: `visible`/`absent` assertions need
+     * the extracted element list (ElementGrounding), and a checkpoint declaring no
+     * checks at all latches vacuously.
+     */
+    private warnOnCheckpointMisconfig(context: RunContext): void {
+        if (!isCheckpointRun(context.Params.Checkpoints)) {
+            return;
+        }
+        const grounding = context.Params.ElementGrounding === true;
+        for (const cp of context.Params.Checkpoints) {
+            const asserts = cp.Assertions ?? [];
+            const visual = cp.VisualCriteria ?? [];
+            if (asserts.length === 0 && visual.length === 0) {
+                this.log(`WARNING: checkpoint "${cp.Name}" declares no assertions or visual criteria — it latches vacuously (CU-D8)`);
+            }
+            if (!grounding && asserts.some(a => a.Kind === 'visible' || a.Kind === 'absent')) {
+                this.log(`WARNING: checkpoint "${cp.Name}" has visible/absent assertions but ElementGrounding is off — those never latch; use url assertions or enable ElementGrounding (CU-D8)`);
+            }
+        }
+    }
+
+    /**
+     * Latch tour checkpoints whose deterministic assertions hold against the
+     * step's end-state. Free (no LLM) — safe to call every step. `url` assertions
+     * always evaluate; `visible`/`absent` need the extracted element list (present
+     * only with {@link RunComputerUseParams.ElementGrounding}). Visual criteria
+     * latch separately, from the judge verdict.
+     */
+    private updateCheckpointLatches(context: RunContext, step: StepRecord): void {
+        const checkpoints = context.Params.Checkpoints ?? [];
+        const volatileParams = context.Params.AppProfile?.Loop?.VolatileParams ?? [];
+        const elements = step.InteractiveElements;
+        // Both URLs are states the run genuinely passed through this step. Latching
+        // the BEFORE url too matters on the replay tier, where one step can carry
+        // the whole transition between two tour sections (A → B): scoring only the
+        // after-url would silently never satisfy section A.
+        const urls = [step.UrlBefore, step.UrlAfter].filter(Boolean);
+        if (urls.length === 0) {
+            urls.push(context.CurrentUrl);
+        }
+        for (const url of new Set(urls)) {
+            latchDeterministic(checkpoints, context.CheckpointState, { url, elements, volatileParams }, step.StepNumber);
+        }
+    }
+
+    /**
+     * The criteria the judge should evaluate this call.
+     *
+     * In a checkpoint tour (CU-D8): when the controller signaled a specific
+     * checkpoint this step (Phase B), scope to THAT checkpoint's not-yet-latched
+     * visual criteria — verified against the frame it's actually on, with no
+     * cross-contamination from other sections. Otherwise (a scheduled/cadence
+     * call, the safety net) use the union of all not-yet-latched visual criteria.
+     * Empty ⇒ the judge is skipped, so a pure-deterministic tour costs zero judge
+     * calls. Non-tour runs use the authored {@link RunComputerUseParams.ValidationCriteria}.
+     */
+    private activeJudgeCriteria(context: RunContext, signaledCheckpoint?: string): string[] | undefined {
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            const scoped = signaledCheckpoint
+                ? checkpointVisualCriteria(context.Params.Checkpoints, context.CheckpointState, signaledCheckpoint)
+                : unlatchedVisualCriteria(context.Params.Checkpoints, context.CheckpointState);
+            return scoped.length > 0 ? scoped : undefined;
+        }
+        return context.Params.ValidationCriteria;
+    }
+
+    /**
+     * Verdict for a non-completion terminal (MaxSteps/TimeBudget/Loop). A
+     * checkpoint tour is scored on its latch state — synthesize it (no LLM);
+     * otherwise force a fresh final judge so the verdict reflects the true
+     * end-state (CU-B4.3 / CU-D4).
+     */
+    private async finalVerdictOnTermination(
+        context: RunContext,
+        stepNumber: number,
+        lastVerdict?: JudgeVerdict
+    ): Promise<JudgeVerdict | undefined> {
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            return synthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
+        }
+        return this.forceFinalJudge(context, stepNumber, lastVerdict);
+    }
+
+    /**
+     * Score a partial checkpoint tour from its latches on an abrupt terminal
+     * (Cancelled, empty-step abort) so the run isn't zeroed as "no verdict";
+     * otherwise pass the given verdict through unchanged.
+     */
+    private terminalVerdict(context: RunContext, fallback?: JudgeVerdict): JudgeVerdict | undefined {
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            return synthesizeCheckpointVerdict(context.Params.Checkpoints, context.CheckpointState);
+        }
+        return fallback;
     }
 
     /**
@@ -1020,6 +1221,14 @@ export class ComputerUseEngine {
             context.AddStep(step);
             this.onStepComplete(step, context.Params);
 
+            // Checkpoint tour (CU-D8) on the replay tier: latch sections as the
+            // replayed trajectory passes through them. Free, and REQUIRED here —
+            // a tour's earlier sections are only on screen mid-trajectory, so
+            // latching solely at the end-state would never satisfy them.
+            if (isCheckpointRun(context.Params.Checkpoints)) {
+                this.updateCheckpointLatches(context, step);
+            }
+
             if (stepResult.Outcome === 'diverged') {
                 replay.Diverged++;
                 replay.AllStepsSucceeded = false;
@@ -1054,6 +1263,18 @@ export class ComputerUseEngine {
         // no judge/LLM cost (nor a settle on a profile-less run). A replay passes
         // iff the judge confirms the goal; a not-Done/absent verdict returns Failed
         // so the driver falls back to the LLM tier.
+        // Checkpoint tour (CU-D8): scored on the latch state, NOT a scalar goal
+        // verdict. Sections latched deterministically during the trajectory above;
+        // any still-pending VISUAL criteria get one end-state judge call (skipped
+        // entirely when everything already latched — a URL-anchored tour replays
+        // for free). The synthesized verdict is always returned, so the scoring
+        // oracle can never see "no judge verdict available". Strict by design: the
+        // replay passes iff EVERY checkpoint is met; a partial tour returns Failed
+        // so the driver falls back to the LLM tier rather than false-passing.
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            return await this.buildReplayCheckpointResult(context, replay, trace.Steps.length);
+        }
+
         if (context.Params.ValidationCriteria && context.Params.ValidationCriteria.length > 0) {
             const verdict = await this.judgeReplayEndState(context, trace.Steps.length);
             const goalMet = verdict?.Done === true;
@@ -1093,6 +1314,50 @@ export class ComputerUseEngine {
         });
         const failed = results.filter(r => !r.met).map(r => r.detail).join('; ');
         return { passed, detail: failed || 'all met' };
+    }
+
+    /**
+     * Score a fully-replayed checkpoint tour (CU-D8) from its latch state.
+     *
+     * Sections were latched deterministically as the trajectory replayed. Any
+     * checkpoint whose VISUAL criteria are still pending gets one end-state judge
+     * call — `activeJudgeCriteria` narrows that call to exactly those criteria, and
+     * the call is skipped altogether when nothing is pending (a URL-anchored tour
+     * therefore replays with zero LLM cost). The synthesized verdict is ALWAYS
+     * returned so the goal-completion oracle can never fall through to "no judge
+     * verdict available".
+     *
+     * Strict: passes iff every checkpoint is met. A partial tour returns Failed, so
+     * the driver falls back to the LLM tier instead of false-passing — the same
+     * conservative contract the scalar-rubric path uses.
+     */
+    private async buildReplayCheckpointResult(
+        context: RunContext,
+        replay: ReplayInfo,
+        stepNumber: number
+    ): Promise<ComputerUseResult> {
+        const checkpoints = context.Params.Checkpoints ?? [];
+        const pendingVisual = unlatchedVisualCriteria(checkpoints, context.CheckpointState);
+        if (pendingVisual.length > 0) {
+            const verdict = await this.judgeReplayEndState(context, stepNumber);
+            if (verdict) {
+                latchVisualFromVerdict(checkpoints, context.CheckpointState, verdict, stepNumber);
+            }
+        } else {
+            this.log(`Replay — all checkpoint sections latched deterministically; no judge call needed (CU-D8)`);
+        }
+
+        const verdict = synthesizeCheckpointVerdict(checkpoints, context.CheckpointState);
+        const allMet = allCheckpointsMet(checkpoints, context.CheckpointState);
+        return this.buildReplayResult(
+            context,
+            replay,
+            allMet,
+            allMet
+                ? `all steps hit — ${verdict.Reason}`
+                : `all steps hit but the tour is incomplete: ${verdict.Reason}`,
+            verdict
+        );
     }
 
     /**
@@ -1494,6 +1759,23 @@ export class ComputerUseEngine {
                 this.log(`Step ${stepNumber} — controller requested immediate judgement evaluation`);
             }
 
+            // Tour checkpoint signal (CU-D8 Phase B): the controller names a
+            // section it reached. Honored only when it resolves to a DECLARED
+            // checkpoint with PENDING visual criteria — then it forces a judge this
+            // step scoped to that section, verified on the frame the controller
+            // signaled on (the step-start frame the judge also evaluates).
+            step.CheckpointReached = response.CheckpointReached;
+            let signaledCheckpoint: string | undefined;
+            if (isCheckpointRun(context.Params.Checkpoints) && response.CheckpointReached) {
+                const name = response.CheckpointReached;
+                if (!findCheckpoint(context.Params.Checkpoints, name)) {
+                    this.log(`Step ${stepNumber} — controller signaled unknown checkpoint "${name}" (ignored)`);
+                } else if (checkpointVisualCriteria(context.Params.Checkpoints, context.CheckpointState, name).length > 0) {
+                    signaledCheckpoint = name;
+                    this.log(`Step ${stepNumber} — controller reached checkpoint "${name}"; forcing scoped judge (CU-D8)`);
+                }
+            }
+
             this.logControllerResponse(stepNumber, response);
 
             // Cancellation checkpoint (CU-B8): if Stop() aborted the controller
@@ -1532,7 +1814,16 @@ export class ComputerUseEngine {
                 context.LastJudgeVerdict !== undefined &&
                 !context.LastJudgeVerdict.Done &&
                 !context.LastJudgeVerdict.Impossible;
-            const runJudge = controllerRequestedJudgement || (scheduledJudge && !stateUnchanged);
+            // Checkpoint tour (CU-D8): the judge only scores unlatched VISUAL
+            // criteria. When every remaining checkpoint is deterministic-only,
+            // activeJudgeCriteria is undefined → skip the judge entirely (a
+            // pure-URL tour costs zero judge calls).
+            const checkpointJudgeGate =
+                !isCheckpointRun(context.Params.Checkpoints) || this.activeJudgeCriteria(context, signaledCheckpoint) !== undefined;
+            // A controller checkpoint signal forces a judge this step (like an
+            // explicit judgement request), bypassing the unchanged-state skip.
+            const runJudge = checkpointJudgeGate &&
+                (controllerRequestedJudgement || signaledCheckpoint !== undefined || (scheduledJudge && !stateUnchanged));
 
             if (scheduledJudge && stateUnchanged && !controllerRequestedJudgement) {
                 this.log(`Step ${stepNumber} — skipping judge: visible state unchanged since last judged step (CU-G5)`);
@@ -1546,7 +1837,7 @@ export class ComputerUseEngine {
                     this.log(`Step ${stepNumber} — evaluating judge (controller request)`);
                 }
                 const judgeStart = performance.now();
-                step.JudgeVerdict = await this.evaluateJudge(context, stepNumber, controllerRequestedJudgement, step.ScreenshotHash, diagnosticsDigest);
+                step.JudgeVerdict = await this.evaluateJudge(context, stepNumber, controllerRequestedJudgement, step.ScreenshotHash, diagnosticsDigest, signaledCheckpoint);
                 step.JudgeMs = performance.now() - judgeStart;
                 context.LastJudgedHash = step.ScreenshotHash;
                 context.LastJudgeVerdict = step.JudgeVerdict;
@@ -1838,6 +2129,11 @@ export class ComputerUseEngine {
                 scaled.DeltaX = Math.round(action.DeltaX * scaleX);
                 scaled.DeltaY = Math.round(action.DeltaY * scaleY);
                 scaled.Selector = action.Selector;   // CU-A6: preserve scroll-into-view target
+                // CU-A8: the scroll-at point scales like a click coordinate.
+                if (action.X !== undefined && action.Y !== undefined) {
+                    scaled.X = Math.round(action.X * scaleX);
+                    scaled.Y = Math.round(action.Y * scaleY);
+                }
                 return scaled;
             }
 
@@ -1929,6 +2225,17 @@ export class ComputerUseEngine {
         // Forward application context (suite-level + per-test) if set
         if (context.Params.ApplicationContext) {
             request.ApplicationContext = context.Params.ApplicationContext;
+        }
+
+        // Tour checkpoints (CU-D8 Phase B): expose name + instruction so the
+        // controller can signal `checkpointReached` as it passes each section.
+        if (isCheckpointRun(context.Params.Checkpoints)) {
+            request.Checkpoints = context.Params.Checkpoints.map(cp => {
+                const info = new ControllerCheckpointInfo();
+                info.Name = cp.Name;
+                info.Instruction = cp.Instruction;
+                return info;
+            });
         }
 
         return request;
@@ -2202,7 +2509,8 @@ export class ComputerUseEngine {
         stepNumber: number,
         controllerRequestedJudgement: boolean = false,
         currentScreenshotHash: string = '',
-        currentDiagnosticsDigest: string = ''
+        currentDiagnosticsDigest: string = '',
+        signaledCheckpoint?: string
     ): Promise<JudgeVerdict> {
         // Cross-attempt judge cache (CU-C5.3): an identical (goal, URL, state)
         // returns the prior verdict — most valuably, a cached Impossible
@@ -2235,7 +2543,8 @@ export class ComputerUseEngine {
         judgeContext.CurrentUrl = context.CurrentUrl;
         judgeContext.ControllerRequestedJudgement = controllerRequestedJudgement;
         judgeContext.CurrentDiagnosticsDigest = currentDiagnosticsDigest;
-        judgeContext.ValidationCriteria = context.Params.ValidationCriteria;   // rubric judging (CU-D1)
+        judgeContext.ValidationCriteria = this.activeJudgeCriteria(context, signaledCheckpoint);   // rubric judging (CU-D1); tour visual criteria (CU-D8)
+        judgeContext.IsCheckpointTour = isCheckpointRun(context.Params.Checkpoints);   // suppress navigation-shape heuristics on a tour (CU-D8)
         judgeContext.Signal = this.abortController.signal;   // abort in-flight judge call on Stop() (CU-B8)
 
         const verdict = await this.judge.Evaluate(judgeContext);
@@ -2498,6 +2807,7 @@ export class ComputerUseEngine {
         sections.push(this.renderCurrentDateSection(request.CurrentDate));
         sections.push(this.renderApplicationContextSection(request.ApplicationContext));
         sections.push(this.renderPreviousAttemptSection(request.PreviousAttemptSummary));
+        sections.push(this.renderCheckpointsSection(request.Checkpoints));
         sections.push(this.renderHintsSection(request.Hints));
         sections.push(this.renderToolDefinitionsSection(request.ToolDefinitions));
         sections.push(this.renderFormLoginSection(request.FormLoginCredentials));
@@ -2520,6 +2830,12 @@ export class ComputerUseEngine {
         if (!hints || hints.length === 0) return '';
         const list = hints.map(h => `- ${h}`).join('\n');
         return `## Hints\nThe following hints about this task's UI may save you steps:\n${list}`;
+    }
+
+    private renderCheckpointsSection(checkpoints: ControllerCheckpointInfo[] | undefined): string {
+        if (!checkpoints || checkpoints.length === 0) return '';
+        const list = checkpoints.map(cp => `- **${cp.Name}**${cp.Instruction ? ` — ${cp.Instruction}` : ''}`).join('\n');
+        return `## Checkpoints (this is a multi-section tour)\nWork through these sections in order. As soon as you arrive at one, set \`checkpointReached\` to its **exact name** (from the list) in your response — this lets the section be verified on the frame you're on. Keep going until every section is done.\n${list}`;
     }
 
     private renderPreviousAttemptSection(summary: string | undefined): string {

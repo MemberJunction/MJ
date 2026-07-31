@@ -13,6 +13,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { loadRunResults } = require('./load-run-results.cjs');
 
 function xmlEscape(s) {
     return String(s == null ? '' : s)
@@ -96,10 +97,12 @@ module.exports = { buildJUnitXml, xmlEscape, outcomeFor, failMessage };
 if (require.main === module) {
     const runDir = process.env.RUN_DIR;
     if (!runDir) { console.error('generate-junit: RUN_DIR not set'); process.exit(1); }
-    const resultsPath = path.join(runDir, 'results.json');
-    if (!fs.existsSync(resultsPath)) { console.error(`generate-junit: no results.json in ${runDir}`); process.exit(1); }
-    const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+    // DR-D5: fall back to results.partial.json so a crashed run (e.g. runner
+    // OOM) still reports the tests it did complete instead of nothing at all.
+    const loaded = loadRunResults(runDir);
+    if (!loaded) { console.error(`generate-junit: no results.json or results.partial.json in ${runDir}`); process.exit(1); }
     const out = path.join(runDir, 'report.junit.xml');
-    fs.writeFileSync(out, buildJUnitXml(results), 'utf8');
-    console.log(`✓ JUnit report → ${out} (${(results.testResults || []).length} tests)`);
+    fs.writeFileSync(out, buildJUnitXml({ suiteName: loaded.suiteName, testResults: loaded.tests }), 'utf8');
+    const note = loaded.partial ? ' — from partial results, run did not finish' : '';
+    console.log(`✓ JUnit report → ${out} (${loaded.tests.length} tests${note})`);
 }
