@@ -63,10 +63,12 @@ function makeAgentDetail(opts: {
     tools?: RealtimeToolDefinition[];
     promptOverrideEnabled?: boolean;
     voiceOverrideEnabled?: boolean;
+    createdAtUnixSecs?: number;
 }): ElevenLabs.GetAgentResponseModel {
     return {
         agentId: opts.agentId,
         name: opts.name,
+        createdAtUnixSecs: opts.createdAtUnixSecs ?? 0,
         conversationConfig: {
             agent: {
                 prompt: {
@@ -102,11 +104,26 @@ class TestElevenLabsRealtime extends ElevenLabsRealtime {
     public Socket = new FakeSocket();
     public LastConnectArgs: ElevenLabsConnectArgs | null = null;
 
+    /**
+     * Number of leading `listAgents` calls that return NOTHING regardless of inventory —
+     * simulates ElevenLabs' eventually-consistent agent search, where a freshly created
+     * (or concurrently created) agent is briefly invisible to find-by-name.
+     */
+    public SearchMissesBeforeHit = 0;
+
     protected override async listAgents(search: string): Promise<ElevenLabs.AgentSummaryResponseModel[]> {
         this.ListCalls.push(search);
+        if (this.ListCalls.length <= this.SearchMissesBeforeHit) {
+            return []; // search index has not caught up yet
+        }
         return this.Agents.filter((a) => a.name.includes(search)).map(
-            (a) => ({ agentId: a.agentId, name: a.name }) as ElevenLabs.AgentSummaryResponseModel
+            (a) => ({ agentId: a.agentId, name: a.name, createdAtUnixSecs: a.createdAtUnixSecs ?? 0 }) as ElevenLabs.AgentSummaryResponseModel
         );
+    }
+
+    /** Tests must not actually sleep between lookup retries. */
+    protected override async pauseBetweenAgentLookups(): Promise<void> {
+        return undefined;
     }
     protected override async getAgent(agentId: string): Promise<ElevenLabs.GetAgentResponseModel> {
         this.GetCalls.push(agentId);
@@ -266,7 +283,9 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
     it('creates a missing managed agent with the tool set and the prompt-override enablement', async () => {
         await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
 
-        expect(driver.ListCalls).toEqual(['MJ Realtime Co-Agent']);
+        // every lookup targets the managed name (the count varies — a miss is retried against
+        // ElevenLabs' eventually-consistent search before we conclude the agent is absent)
+        expect(driver.ListCalls.every((c) => c === 'MJ Realtime Co-Agent')).toBe(true);
         expect(driver.CreateBodies).toHaveLength(1);
         const body = driver.CreateBodies[0];
         expect(body.name).toBe('MJ Realtime Co-Agent');
@@ -438,6 +457,47 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.UpdateCalls).toEqual([]); // webhook tool did not poison the fingerprint
     });
 
+    /**
+     * Live-verified defect: ElevenLabs' agent search is EVENTUALLY CONSISTENT. A single
+     * find-by-name miss made the ensure flow conclude the agent did not exist and CREATE one,
+     * forking a duplicate managed agent — observed live, twice, against a real account.
+     * The miss must be retried before concluding absence.
+     */
+    it('ADOPTS an existing agent the search missed at first, instead of creating a duplicate', async () => {
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_existing_7', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        driver.SearchMissesBeforeHit = 1; // first lookup returns nothing, the retry finds it
+
+        const cfg = await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(driver.CreateBodies).toEqual([]); // NO duplicate agent
+        expect(cfg.SessionConfig['agentId']).toBe('agent_existing_7');
+        expect(driver.ListCalls.length).toBeGreaterThan(1); // it actually retried
+    });
+
+    it('gives up retrying and creates EXACTLY ONE agent when the name genuinely does not exist', async () => {
+        driver.SearchMissesBeforeHit = Number.MAX_SAFE_INTEGER; // search never returns anything
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(driver.CreateBodies).toHaveLength(1); // bounded: one create, never a loop
+        expect(driver.ListCalls.length).toBeLessThanOrEqual(5); // and a small, capped number of lookups
+    });
+
+    it('adopts the OLDEST agent when duplicates share the name, so every process converges', async () => {
+        // a duplicate pair as left behind by the pre-fix race; listed newest-first
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_newer', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL], createdAtUnixSecs: 200 }),
+            makeAgentDetail({ agentId: 'agent_older', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL], createdAtUnixSecs: 100 }),
+        ];
+
+        const cfg = await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(cfg.SessionConfig['agentId']).toBe('agent_older');
+        expect(driver.CreateBodies).toEqual([]);
+    });
+
     it('caches the ensure result per name + tool fingerprint (no repeat REST round-trips)', async () => {
         driver.Agents = [
             makeAgentDetail({ agentId: 'agent_existing_7', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
@@ -558,11 +618,13 @@ describe('ElevenLabsRealtime per-session voice', () => {
 
     it('does not vary the MANAGED AGENT by voice — voice is per-session, so one agent is shared', async () => {
         await driver.CreateClientSession(makeParams({ Config: { voice: 'voice_a' } }));
+        const lookupsAfterFirst = driver.ListCalls.length;
         await driver.CreateClientSession(makeParams({ Config: { voice: 'voice_b' } }));
 
-        // one ensure, one agent: a per-session override must never fan out managed agents
-        expect(driver.ListCalls).toHaveLength(1);
+        // one agent, and the differing voice re-ensures NOTHING: a per-session override must
+        // never fan out managed agents nor re-hit the REST surface
         expect(driver.CreateBodies).toHaveLength(1);
+        expect(driver.ListCalls).toHaveLength(lookupsAfterFirst);
     });
 });
 
@@ -899,6 +961,47 @@ describe('SanitizeToolParametersForElevenLabs', () => {
         const params = mapped.parameters as unknown as Record<string, Record<string, Record<string, unknown>>>;
         expect(params['properties']['fontSize']['enum']).toBeUndefined();
         expect(params['properties']['fontSize']['description']).toContain('Allowed values');
+    });
+
+    /**
+     * Live-verified defect: ElevenLabs REORDERS schema keys on round-trip (a schema sent as
+     * `{type, properties}` comes back `{description, type, properties}`). Fingerprinting a
+     * key-order-sensitive `JSON.stringify` therefore reported permanent drift and re-PATCHed
+     * the agent on EVERY session.
+     */
+    it('is insensitive to JSON key ORDER (the remote reorders schema keys)', () => {
+        const sent = { type: 'object', description: 'A thing.', properties: { city: { type: 'string', description: 'City.' } } };
+        const returned = { description: 'A thing.', properties: { city: { description: 'City.', type: 'string' } }, type: 'object' };
+
+        expect(ElevenLabsRealtime.ToolSetFingerprint([{ Name: 'T', Description: 'd', ParametersSchema: sent }]))
+            .toBe(ElevenLabsRealtime.ToolSetFingerprint([{ Name: 'T', Description: 'd', ParametersSchema: returned }]));
+    });
+
+    /**
+     * Live-verified defect (the real shape, captured from a round-tripped agent): ElevenLabs
+     * MATERIALIZES its own defaults into the stored schema — `dynamic_variable: ""`,
+     * `is_omitted: false`, `required: []`, `isSystemProvided: false`, `constantValue: ""` …
+     * The stored form is a SUPERSET of what we sent, so equality on the raw form reports drift
+     * forever and re-PATCHes the agent on every session.
+     */
+    it('ignores the empty defaults ElevenLabs materializes into the stored schema', () => {
+        const sent = { type: 'object', properties: { city: { type: 'string', description: 'A string value.' } }, description: 'An object value.' };
+        const stored = {
+            description: 'An object value.', dynamic_variable: '', is_omitted: false, type: 'object', required: [],
+            properties: { city: { type: 'string', description: 'A string value.', isSystemProvided: false,
+                dynamicVariable: '', allowed_values_dynamic_variable: '', constantValue: '', is_omitted: false } },
+        };
+
+        expect(ElevenLabsRealtime.ToolSetFingerprint([{ Name: 'T', Description: 'd', ParametersSchema: stored }]))
+            .toBe(ElevenLabsRealtime.ToolSetFingerprint([{ Name: 'T', Description: 'd', ParametersSchema: sent }]));
+    });
+
+    it('still DISTINGUISHES schemas that differ only in ARRAY order (arrays are data, not sets)', () => {
+        const fp = (values: string[]): string => ElevenLabsRealtime.ToolSetFingerprint([
+            { Name: 'T', Description: 'd', ParametersSchema: { type: 'object', properties: { shape: { type: 'string', enum: values } } } },
+        ]);
+        // a reordered enum is a genuinely different schema — canonicalization must not erase it
+        expect(fp(['rect', 'ellipse'])).not.toBe(fp(['ellipse', 'rect']));
     });
 
     it('ToolSetFingerprint hashes the sanitized form (no PATCH-loop drift vs the remote)', () => {

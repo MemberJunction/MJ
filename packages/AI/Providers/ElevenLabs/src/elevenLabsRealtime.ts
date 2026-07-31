@@ -31,6 +31,16 @@ const ELEVENLABS_SIGNED_URL_TTL_MS = 15 * 60 * 1000;
 const ELEVENLABS_AGENT_ID_PREFIX = 'agent_';
 
 /**
+ * How many times {@link ElevenLabsRealtime.findAgentByName} looks for a managed agent before
+ * concluding it does not exist. More than one because ElevenLabs' agent search is eventually
+ * consistent and a single miss would fork a duplicate agent (see that method).
+ */
+const MAX_AGENT_LOOKUP_ATTEMPTS = 3;
+
+/** Base backoff between agent-lookup retries; attempt N waits N × this. */
+const AGENT_LOOKUP_RETRY_BASE_MS = 500;
+
+/**
  * Placeholder prompt stored on the MANAGED agent's server-side configuration. The real
  * per-session system prompt is supplied at conversation start via
  * `conversation_initiation_client_data.conversation_config_override.agent.prompt.prompt`,
@@ -149,6 +159,51 @@ function stripDisallowedEnum(obj: JSONObject): void {
     const existing = obj['description'];
     obj['description'] =
         typeof existing === 'string' && existing.trim().length > 0 ? `${existing.trim()} ${allowed}` : allowed;
+}
+
+/**
+ * Reduces a tool-parameter schema to the canonical form {@link ElevenLabsRealtime.ToolSetFingerprint}
+ * hashes, so that the schema WE send and the schema ElevenLabs STORES compare equal. Two
+ * normalizations, each answering a difference observed against the live API:
+ *
+ * 1. **Object keys are sorted.** The platform returns schema keys in its own order, so a
+ *    key-order-sensitive `JSON.stringify` never matched what we sent.
+ * 2. **Empty/default-valued entries are dropped** (`""`, `false`, `[]`). The platform
+ *    MATERIALIZES its own defaults into the stored schema — `dynamic_variable: ""`,
+ *    `is_omitted: false`, `required: []`, `isSystemProvided: false`, `constantValue: ""` —
+ *    making the stored form a superset of ours. Pruning them on BOTH sides converges the two
+ *    without having to enumerate (and chase) the platform's field list.
+ *
+ * Left as-is, either difference made the ensure flow see permanent drift and re-PATCH the
+ * managed agent on every single session.
+ *
+ * ARRAYS KEEP THEIR ORDER — an array here is data (`enum` values, `required` names), so
+ * reordering would make two genuinely different schemas hash alike.
+ *
+ * Accepted, deliberate loss of sensitivity: a field changing from `false`/`""`/`[]` to ABSENT
+ * (or back) no longer registers as drift. Any change to a MEANINGFUL value still does.
+ */
+function canonicalizeSchemaForFingerprint(value: JSONValue): JSONValue {
+    if (value === null || typeof value !== 'object') {
+        return value;
+    }
+    if (Array.isArray(value)) {
+        return value.map((item) => canonicalizeSchemaForFingerprint(item));
+    }
+    const source = value as JSONObject;
+    const canonical: JSONObject = {};
+    for (const key of Object.keys(source).sort()) {
+        if (isMaterializedDefault(source[key])) {
+            continue;
+        }
+        canonical[key] = canonicalizeSchemaForFingerprint(source[key]);
+    }
+    return canonical;
+}
+
+/** Whether a value is one of the empty defaults the platform materializes into stored schemas. */
+function isMaterializedDefault(value: JSONValue): boolean {
+    return value === '' || value === false || (Array.isArray(value) && value.length === 0);
 }
 
 // ── Wire-event shapes (snake_case, exactly as the Agents websocket emits/accepts) ──
@@ -411,8 +466,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         fingerprint: string,
         config?: JSONObject
     ): Promise<string> {
-        const summaries = await this.listAgents(name);
-        const existing = summaries.find((a) => a.name === name);
+        const existing = await this.findAgentByName(name);
         if (!existing) {
             return this.createAgent(this.buildAgentBody(name, tools, config));
         }
@@ -424,6 +478,64 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
             await this.updateAgent(existing.agentId, this.buildAgentBody(name, tools, config));
         }
         return existing.agentId;
+    }
+
+    /**
+     * Resolves the managed agent by NAME, retrying a miss up to
+     * {@link MAX_AGENT_LOOKUP_ATTEMPTS} times.
+     *
+     * ElevenLabs' agent search is EVENTUALLY CONSISTENT: an agent created moments ago — by us
+     * or by a concurrent process — is briefly invisible to find-by-name. Treating one miss as
+     * "does not exist" makes the ensure flow CREATE, forking a duplicate managed agent that
+     * then competes for the same name forever. Retrying costs a few hundred ms once per agent
+     * name (the result is instance-cached, and only the create path pays it at all).
+     *
+     * @param name The managed agent name to resolve.
+     * @returns The adopted agent summary, or `undefined` once the attempts are exhausted.
+     */
+    protected async findAgentByName(name: string): Promise<ElevenLabs.AgentSummaryResponseModel | undefined> {
+        for (let attempt = 1; attempt <= MAX_AGENT_LOOKUP_ATTEMPTS; attempt++) {
+            const match = ElevenLabsRealtime.PickCanonicalAgent(await this.listAgents(name), name);
+            if (match) {
+                return match;
+            }
+            if (attempt < MAX_AGENT_LOOKUP_ATTEMPTS) {
+                await this.pauseBetweenAgentLookups(attempt);
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Chooses ONE agent when the search returns several with the requested name — which happens
+     * whenever a duplicate was forked before this guard existed. The OLDEST wins (ties broken by
+     * agent id), so every process and every session converges on the SAME agent instead of
+     * picking whichever the API happened to list first and PATCHing them alternately.
+     *
+     * @param summaries The search results.
+     * @param name The exact name being resolved.
+     * @returns The canonical match, or `undefined` when none has that exact name.
+     */
+    public static PickCanonicalAgent(
+        summaries: ElevenLabs.AgentSummaryResponseModel[],
+        name: string
+    ): ElevenLabs.AgentSummaryResponseModel | undefined {
+        const exact = summaries.filter((a) => a.name === name);
+        if (exact.length === 0) {
+            return undefined;
+        }
+        return exact.reduce((winner, candidate) => {
+            const byAge = (candidate.createdAtUnixSecs ?? 0) - (winner.createdAtUnixSecs ?? 0);
+            if (byAge !== 0) {
+                return byAge < 0 ? candidate : winner;
+            }
+            return candidate.agentId < winner.agentId ? candidate : winner;
+        });
+    }
+
+    /** Backoff between agent-lookup retries. Overridden in tests so they never sleep. */
+    protected async pauseBetweenAgentLookups(attempt: number): Promise<void> {
+        await new Promise((resolve) => setTimeout(resolve, attempt * AGENT_LOOKUP_RETRY_BASE_MS));
     }
 
     /**
@@ -540,9 +652,16 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
         return JSON.stringify(
             [...tools]
                 .sort((a, b) => a.Name.localeCompare(b.Name))
-                // Hash the SANITIZED schema: the remote agent stores the sanitized form, so
-                // fingerprinting the raw form would see permanent drift and PATCH-loop.
-                .map((t) => ({ Name: t.Name, Description: t.Description, ParametersSchema: SanitizeToolParametersForElevenLabs(t.ParametersSchema) }))
+                // Hash the SANITIZED then CANONICALIZED schema: sanitized because the remote
+                // stores the sanitized form, canonicalized because the remote reorders keys and
+                // pads the schema with its own empty defaults (see
+                // {@link canonicalizeSchemaForFingerprint}). Without both, the remote never
+                // matched the local form and every session re-PATCHed the agent.
+                .map((t) => ({
+                    Name: t.Name,
+                    Description: t.Description,
+                    ParametersSchema: canonicalizeSchemaForFingerprint(SanitizeToolParametersForElevenLabs(t.ParametersSchema)),
+                }))
         );
     }
 
