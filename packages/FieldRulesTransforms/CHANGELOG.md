@@ -1,5 +1,11 @@
 # @memberjunction/field-rules-transforms
 
+## 5.50.0
+
+### Patch Changes
+
+- @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

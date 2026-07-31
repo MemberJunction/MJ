@@ -288,6 +288,39 @@ describe('VectorSearchProvider', () => {
             expect(results[0].EntityName).toBe('Unknown');
         });
 
+        // Chunk-Identity Contract (content autotagging): chunk vectors are written with the
+        // chunk's own identity in metadata (Entity='MJ: Content Item Chunks', RecordID=<chunk PK>,
+        // ContentItemID=<parent>). This asserts a scoped-search hit on such a vector surfaces the
+        // matched CHUNK id (not the parent content item) with no search-side transformation — the
+        // read side of that contract, guarding against future drift in convertMatches.
+        it('surfaces the ContentItemChunk id + chunk entity for a chunk-identity match', () => {
+            const convertFn = (provider as unknown as {
+                convertMatches: (
+                    matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
+                    indexName: string
+                ) => Array<{ ID: string; EntityName: string; RecordID: string; RawMetadata: string }>
+            }).convertMatches;
+
+            const chunkID = '7c3f2a10-9b4d-4e6a-8f21-0a1b2c3d4e5f';
+            const results = convertFn.call(provider, [{
+                id: chunkID, // recordId strategy: the vector id IS the chunk id
+                score: 0.83,
+                metadata: {
+                    Entity: 'MJ: Content Item Chunks',
+                    RecordID: chunkID,            // bare UUID (not composite-key format)
+                    ContentItemID: 'item-parent-1',
+                    Sequence: 0,
+                },
+            }], 'content-index');
+
+            // The result identifies the CHUNK: entity + record id both point at the chunk row...
+            expect(results[0].EntityName).toBe('MJ: Content Item Chunks');
+            expect(results[0].RecordID).toBe(chunkID);
+            expect(results[0].ID).toBe(chunkID);
+            // ...and the parent content item id is available for the external hydrator via metadata.
+            expect(JSON.parse(results[0].RawMetadata).ContentItemID).toBe('item-parent-1');
+        });
+
         it('should use the fallback entity name when metadata has no Entity field', () => {
             const convertFn = (provider as unknown as {
                 convertMatches: (
@@ -514,6 +547,66 @@ describe('VectorSearchProvider', () => {
             expect(queryIndex).toHaveBeenCalledTimes(1);
             expect(colocatedQuery).not.toHaveBeenCalled();
             expect(results[0].Score).toBe(0.7);
+        });
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // Scope MetadataFilter — must fail CLOSED when authored but unusable
+    // ────────────────────────────────────────────────────────────────
+    describe('mergeMetadataFilters — tenant-safety of the scope filter', () => {
+        type Merge = (base: object | undefined, scope: unknown) =>
+            { Status: 'absent' } | { Status: 'usable'; Value: object } | { Status: 'unusable'; Reason: string };
+        const merge = (base: object | undefined, scope: unknown) =>
+            (provider as unknown as { mergeMetadataFilters: Merge })
+                .mergeMetadataFilters.call(provider, base, scope);
+
+        it('reports absent when no scope filter and no base filter — legitimately unfiltered', () => {
+            expect(merge(undefined, null).Status).toBe('absent');
+        });
+
+        it('passes the base filter through when no scope filter was authored', () => {
+            const base = { Entity: { $in: ['People'] } };
+            const result = merge(base, undefined);
+            expect(result.Status).toBe('usable');
+            if (result.Status === 'usable') expect(result.Value).toBe(base);
+        });
+
+        it('ANDs the scope filter with the base filter', () => {
+            const result = merge({ Entity: { $in: ['People'] } }, '{"OrganizationID":{"$eq":"org-a"}}');
+            expect(result.Status).toBe('usable');
+            if (result.Status === 'usable') {
+                expect(result.Value).toEqual({
+                    $and: [{ Entity: { $in: ['People'] } }, { OrganizationID: { $eq: 'org-a' } }],
+                });
+            }
+        });
+
+        it('uses the scope filter alone when there is no base filter', () => {
+            const result = merge(undefined, { OrganizationID: { $eq: 'org-a' } });
+            expect(result.Status).toBe('usable');
+            if (result.Status === 'usable') expect(result.Value).toEqual({ OrganizationID: { $eq: 'org-a' } });
+        });
+
+        it('reports UNUSABLE for malformed JSON instead of silently dropping the filter', () => {
+            // THE REGRESSION GUARD. This previously returned `baseFilter` — usually
+            // `undefined` — so a broken template meant the vector query ran across the
+            // ENTIRE index with no tenant predicate at all.
+            const result = merge(undefined, '[');
+            expect(result.Status).toBe('unusable');
+        });
+
+        it('reports UNUSABLE even when a base filter exists, so the lane cannot run under-filtered', () => {
+            // Especially important: a surviving base filter would look "filtered" while the
+            // scope's tenant clause had vanished.
+            const result = merge({ Entity: { $in: ['People'] } }, '{"OrganizationID": ');
+            expect(result.Status).toBe('unusable');
+        });
+
+        it('never reports absent for an authored-but-broken filter', () => {
+            for (const broken of ['[', '{oops', 42, true]) {
+                expect(merge(undefined, broken).Status).not.toBe('absent');
+                expect(merge({ Entity: { $in: ['X'] } }, broken).Status).not.toBe('absent');
+            }
         });
     });
 });

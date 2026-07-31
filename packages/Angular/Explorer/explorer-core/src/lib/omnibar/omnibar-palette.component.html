@@ -4,22 +4,24 @@
     (keydown)="OnPaletteKeydown($event)">
 
     <div class="ob-input-row">
-      <span class="ob-lead" [class.ob-lead--trigger]="ActiveTriggerChar.length > 0">
-        @if (ActiveTriggerChar.length > 0) {
-          <b>{{ ActiveTriggerChar }}</b>
-        } @else {
-          <i class="fa-solid fa-magnifying-glass"></i>
-        }
-      </span>
-      <input #paletteInput class="ob-input" type="text" autocomplete="off" spellcheck="false"
-        role="combobox" aria-controls="ob-listbox" aria-autocomplete="list"
-        [attr.aria-expanded]="HasOptions"
-        [attr.aria-activedescendant]="ActiveDescendantId"
-        [placeholder]="ActivePlaceholder"
-        [ngModel]="Query" (ngModelChange)="OnQueryChange($event)"
-        (keydown)="OnInputKeydown($event)" />
-      <span class="ob-mode-badge">{{ ActiveModeLabel }}</span>
-      <kbd class="ob-kbd">esc</kbd>
+      <div class="ob-field">
+        <span class="ob-lead" [class.ob-lead--trigger]="ActiveTriggerChar.length > 0">
+          @if (ActiveTriggerChar.length > 0) {
+            <b>{{ ActiveTriggerChar }}</b>
+          } @else {
+            <i class="fa-solid fa-magnifying-glass"></i>
+          }
+        </span>
+        <input #paletteInput class="ob-input" type="text" autocomplete="off" spellcheck="false"
+          role="combobox" aria-controls="ob-listbox" aria-autocomplete="list"
+          [attr.aria-expanded]="HasOptions"
+          [attr.aria-activedescendant]="ActiveDescendantId"
+          [placeholder]="ActivePlaceholder"
+          [ngModel]="Query" (ngModelChange)="OnQueryChange($event)"
+          (keydown)="OnInputKeydown($event)" />
+        <span class="ob-mode-badge">{{ ActiveModeLabel }}</span>
+        <kbd class="ob-kbd">esc</kbd>
+      </div>
       <button type="button" class="ob-close" aria-label="Close" title="Close" (click)="Close()">
         <i class="fa-solid fa-xmark"></i>
       </button>
@@ -108,7 +110,8 @@
       <span class="ob-k"><kbd class="ob-kbd">↵</kbd> open</span>
       <button type="button" class="ob-settings" aria-label="Command Palette settings"
         title="Command Palette settings" (click)="RequestSettings()">
-        <i class="fa-solid fa-gear"></i>
+        <i class="fa-solid fa-gear" aria-hidden="true"></i>
+        <span>Settings</span>
       </button>
     </div>
   </div>

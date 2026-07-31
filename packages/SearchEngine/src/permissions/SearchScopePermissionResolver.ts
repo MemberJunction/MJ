@@ -1,6 +1,6 @@
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import type { MJSearchScopePermissionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
+import type { MJSearchScopePermissionEntity, MJAIAgentEntity, MJAISkillEntity, MJAISkillSearchScopeEntity } from '@memberjunction/core-entities';
 
 /**
  * Permission level granted on a SearchScope. None is an explicit deny that
@@ -19,6 +19,9 @@ export type SearchScopePermissionSource =
     | 'AgentUnscopedAll'           // Agent's SearchScopeAccess = 'All' overrides per-scope rules
     | 'AgentNone'                  // Agent's SearchScopeAccess = 'None' rejects regardless of user grants
     | 'AgentAssignedNotListed'     // Agent's SearchScopeAccess = 'Assigned' and this scope is not in its assigned list
+    | 'SkillUnscopedAll'           // Skill's SearchScopeAccess = 'All' overrides per-scope rules
+    | 'SkillNone'                  // Skill's SearchScopeAccess = 'None' rejects regardless of user grants
+    | 'SkillAssignedNotListed'     // Skill's SearchScopeAccess = 'Assigned' and this scope is not in its assigned list
     | 'NoGrant';                   // No applicable row found
 
 export interface EffectivePermission {
@@ -62,6 +65,19 @@ export interface ResolvePermissionInput {
      * fallback paths.
      */
     Agent: MJAIAgentEntity | null;
+    /**
+     * The skill on whose behalf the search runs, or null. A skill is a PRINCIPAL in exactly the
+     * same sense an agent is: `AISkill.SearchScopeAccess` plus `MJ: AI Skill Search Scopes` rows
+     * let activating a skill reach a scope the user's own roles do not grant. Optional so every
+     * existing caller compiles and behaves unchanged.
+     */
+    Skill?: MJAISkillEntity | null;
+    /**
+     * Tenant this search is running for (`SearchContext.PrimaryScopeRecordID`). When supplied, a
+     * grant that carries its own `PrimaryScopeRecordID` applies only to that tenant. Grants with a
+     * NULL tenant continue to apply everywhere, so existing rows are unaffected.
+     */
+    PrimaryScopeRecordID?: string | null;
     /**
      * Optional ContextUser for RunView calls. Server-side code must always
      * pass this to enforce data isolation; it is the same UserInfo as `User`
@@ -119,6 +135,7 @@ export class SearchScopePermissionResolver {
      */
     public async ResolveEffectivePermission(input: ResolvePermissionInput): Promise<EffectivePermission> {
         const { User, SearchScopeID, Agent } = input;
+        const Skill = input.Skill ?? null;
         const contextUser = input.ContextUser ?? User;
 
         // Step 1: agent-side explicit deny short-circuits everything.
@@ -141,10 +158,29 @@ export class SearchScopePermissionResolver {
             // not grant — the user must still have a per-scope grant.
         }
 
+        // Step 1c/1d: the SAME two rules for a SKILL principal. Deliberately identical in shape
+        // to the agent rules above so the two principals stay interchangeable — a reader who
+        // understands the agent path already understands this one.
+        if (Skill && Skill.SearchScopeAccess === 'None') {
+            return this.buildResult(false, 'None', 'SkillNone',
+                `Skill '${Skill.Name}' has SearchScopeAccess='None'; refused without consulting per-scope grants.`);
+        }
+        if (Skill && Skill.SearchScopeAccess === 'Assigned') {
+            const isListed = await this.isScopeAssignedToSkill(Skill.ID, SearchScopeID, contextUser);
+            if (!isListed) {
+                return this.buildResult(false, 'None', 'SkillAssignedNotListed',
+                    `Skill '${Skill.Name}' has SearchScopeAccess='Assigned' and this scope is not in its assigned scope list; refused with ACCESS_DENIED.`);
+            }
+            // Restricts but does not grant — the user still needs a per-scope grant below.
+        }
+
         // Load all SearchScopePermission rows for this scope. We pull the
         // whole set (typically small per scope) and filter in JS so we can
         // apply the user-direct-None short-circuit deterministically.
-        const rows = await this.loadPermissionsForScope(SearchScopeID, contextUser);
+        const allRows = await this.loadPermissionsForScope(SearchScopeID, contextUser);
+        // Narrow to grants that are in force RIGHT NOW and apply to THIS tenant. Both filters
+        // are no-ops for a row that leaves the new columns NULL, which is every pre-existing row.
+        const rows = this.applicableGrants(allRows, input.PrimaryScopeRecordID ?? null);
 
         // Step 2: direct grant for this user (highest priority).
         const userGrants = rows.filter(r => r.UserID && UUIDsEqual(r.UserID, User.ID));
@@ -179,9 +215,76 @@ export class SearchScopePermissionResolver {
                 `Agent '${Agent.Name}' has SearchScopeAccess='All'; granting 'Search' as a fallback for this scope.`);
         }
 
+        // Step 4b: skill fallback, mirroring the agent's 'All'.
+        if (Skill && Skill.SearchScopeAccess === 'All') {
+            return this.buildResult(true, 'Search', 'SkillUnscopedAll',
+                `Skill '${Skill.Name}' has SearchScopeAccess='All'; granting 'Search' as a fallback for this scope.`);
+        }
+
         // Step 5: no grant.
         return this.buildResult(false, 'None', 'NoGrant',
-            `User '${User.Name}' has no direct grant, no qualifying role grant, and no agent-side fallback for this scope.`);
+            `User '${User.Name}' has no direct grant, no qualifying role grant, and no agent- or skill-side fallback for this scope.`);
+    }
+
+    /**
+     * Keep only grants that are in force at this moment and apply to this tenant.
+     *
+     * Both dimensions are additive: a row that leaves `StartAt`/`EndAt`/`PrimaryScopeRecordID`
+     * NULL is always in force and applies to every tenant, which is exactly how every row
+     * behaved before those columns existed.
+     */
+    protected applicableGrants(
+        rows: MJSearchScopePermissionEntity[],
+        primaryScopeRecordID: string | null,
+        now: Date = new Date(),
+    ): MJSearchScopePermissionEntity[] {
+        return rows.filter((r) => this.isGrantInWindow(r, now) && this.isGrantForTenant(r, primaryScopeRecordID));
+    }
+
+    /** A grant with no window is always in force; otherwise `now` must fall inside it. */
+    protected isGrantInWindow(row: MJSearchScopePermissionEntity, now: Date): boolean {
+        if (row.StartAt && new Date(row.StartAt) > now) return false;
+        if (row.EndAt && new Date(row.EndAt) < now) return false;
+        return true;
+    }
+
+    /**
+     * A grant with a NULL tenant applies everywhere. A tenant-scoped grant applies ONLY to that
+     * tenant — and, notably, does not apply when the search supplies no tenant at all, because
+     * "this grant is for org A" cannot be honoured by an untenanted search.
+     */
+    protected isGrantForTenant(row: MJSearchScopePermissionEntity, primaryScopeRecordID: string | null): boolean {
+        if (!row.PrimaryScopeRecordID) return true;
+        if (!primaryScopeRecordID) return false;
+        return UUIDsEqual(row.PrimaryScopeRecordID, primaryScopeRecordID);
+    }
+
+    /**
+     * Whether the scope is in the skill's assigned-scope list via `__mj.AISkillSearchScope`.
+     * Mirrors `isScopeAssignedToAgent`, including honouring Status and the optional time window
+     * (which the agent table also has). Fails closed on an unreadable table.
+     */
+    protected async isScopeAssignedToSkill(
+        skillID: string,
+        searchScopeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const rv = new RunView();
+        const result = await rv.RunView<MJAISkillSearchScopeEntity>({
+            EntityName: 'MJ: AI Skill Search Scopes',
+            ExtraFilter: `SkillID='${skillID}' AND SearchScopeID='${searchScopeID}' AND Status='Active'`,
+            ResultType: 'simple',
+            // Same reasoning as loadPermissionsForScope: a permission decision must never read
+            // a stale cache.
+            BypassCache: true,
+        }, contextUser);
+        if (!result.Success) {
+            throw new Error(
+                `SearchScopePermissionResolver: failed to check skill scope assignment for skill ${skillID}: ${result.ErrorMessage}`);
+        }
+        const now = new Date();
+        return (result.Results ?? []).some((r) =>
+            (!r.StartAt || new Date(r.StartAt) <= now) && (!r.EndAt || new Date(r.EndAt) >= now));
     }
 
     /**

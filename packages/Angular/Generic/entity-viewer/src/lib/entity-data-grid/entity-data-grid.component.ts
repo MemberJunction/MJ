@@ -290,6 +290,21 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   @Input() ShowPager: boolean = false;
 
   /**
+   * Optional provider that returns the FULL result set for export. Because the grid is server-side
+   * paged, `Data`/`rowData` only hold the current page (default 100 rows), so exporting them would
+   * silently cap the export at the page size (bug C1). The host (entity-viewer) supplies this callback
+   * to fetch every matching row (honoring the active filter/sort) on demand; the grid awaits it when
+   * the user opens the export dialog. When not provided, export falls back to the loaded page.
+   */
+  @Input() ExportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
+
+  /** True while an export is fetching the full result set via ExportDataProvider. */
+  public IsPreparingExport: boolean = false;
+
+  /** True while "Add to List" (with no explicit selection) is fetching the full result set. */
+  public IsPreparingAddToList: boolean = false;
+
+  /**
    * Whether to render the Recycle Bin chip in the toolbar. The chip
    * auto-hides itself when the entity has no deleted records, doesn't
    * track changes, or the user lacks Delete permission — so it stays
@@ -799,7 +814,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   private _showExportButton: boolean = true;
   /**
-   * Show the "Export to Excel" button in toolbar
+   * Show the "Export" button in toolbar (opens the export dialog — Excel/CSV/JSON)
    */
   @Input()
   set ShowExportButton(value: boolean) {
@@ -2300,8 +2315,6 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     const cols: ColDef[] = [];
 
     for (const colConfig of sortedColumns) {
-      if (colConfig.hidden) continue;
-
       const field = this._entityInfo.Fields.find(f =>
         f.Name.toLowerCase() === colConfig.Name.toLowerCase()
       );
@@ -2314,7 +2327,14 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         headerName: colConfig.userDisplayName || colConfig.DisplayName || field.DisplayNameOrName,
         width: colConfig.width || this.estimateColumnWidth(field),
         sortable: this._allowSorting,
-        resizable: this._allowColumnResize
+        resizable: this._allowColumnResize,
+        // Hidden columns are still added as col defs with hide:true rather than omitted
+        // entirely (bug C2). A column omitted from the col defs is invisible to AG Grid's
+        // quick filter, so search couldn't match values in columns the user had hidden.
+        // Adding it with hide:true keeps it out of the visible layout and CSV export while
+        // making its values quick-filterable. (Server-side filtered grids additionally need
+        // the field flagged IncludeInUserSearchAPI for the server to return matching rows.)
+        hide: colConfig.hidden === true
       };
 
       // Add type-specific formatters with optional custom format
@@ -2643,7 +2663,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         // Regular number formatting
         else if (fieldType === 'number') {
           const num = Number(params.value);
-          displayValue = isNaN(num) ? String(params.value) : num.toLocaleString();
+          if (isNaN(num)) {
+            displayValue = String(params.value);
+          } else if (field.IsPrimaryKey) {
+            // Primary-key integers are identifiers, not quantities — never group them with
+            // thousands separators (an ID of 12345 must render as "12345", not "12,345").
+            displayValue = String(params.value);
+          } else {
+            displayValue = num.toLocaleString();
+          }
         }
         // Email formatting
         else if (isEmail && vc.clickableEmails) {
@@ -3357,6 +3385,11 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   onGridReady(event: GridReadyEvent): void {
     this.gridApi = event.api;
+    // Let the quick filter (search box) match values in HIDDEN columns too (bug C2). AG Grid
+    // defaults `includeHiddenColumnsInQuickFilter` to false, so without this a search term that
+    // only exists in a column the user has hidden would match nothing — even though we now add
+    // hidden columns to the col defs with hide:true precisely so they remain searchable.
+    this.gridApi.setGridOption('includeHiddenColumnsInQuickFilter', true);
     this.updateSelection();
 
     if (this._sortState.length > 0) {
@@ -4112,14 +4145,22 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this.ExportRequested.emit();
     this.ExportButtonClick.emit();
     // Show the export dialog
-    this.showExportDialogForCurrentData();
+    void this.showExportDialogForCurrentData();
   }
 
   /**
-   * Shows the export dialog for the current grid data
+   * Shows the export dialog for the full result set (falling back to the loaded page when no
+   * ExportDataProvider is supplied).
    */
-  private showExportDialogForCurrentData(): void {
-    const data = this.getExportData();
+  private async showExportDialogForCurrentData(): Promise<void> {
+    this.IsPreparingExport = true;
+    this.cdr.detectChanges();
+    let data: ExportData;
+    try {
+      data = await this.resolveExportData();
+    } finally {
+      this.IsPreparingExport = false;
+    }
     const columns = this.getExportColumns();
     const fileName = this.getDefaultExportFileName();
 
@@ -4154,7 +4195,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * @returns Export result with data buffer and metadata
    */
   async Export(options?: Partial<ExportOptions>, download: boolean = true): Promise<ExportResult> {
-    const data = this.getExportData();
+    const data = await this.resolveExportData();
     const columns = this.getExportColumns();
     const fileName = options?.fileName || this.getDefaultExportFileName();
 
@@ -4200,9 +4241,27 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Get the current grid data formatted for export
+   * Resolves the rows to export. An explicit row selection always wins — export exactly the rows the
+   * user picked (matches the Query viewer's behavior). With NO selection, the FULL result set is
+   * fetched via the host's ExportDataProvider so export isn't silently capped at the current page
+   * (bug C1). So: "export these" = select rows first; "export everything" = export with nothing
+   * selected. If no provider is supplied or the fetch yields nothing, falls back to the loaded page.
    */
-  private getExportData(): ExportData {
+  private async resolveExportData(): Promise<ExportData> {
+    const selected = this.GetSelectedRows();
+    if (selected.length > 0) {
+      return selected.map(row => row as Record<string, unknown>);
+    }
+    if (this.ExportDataProvider) {
+      try {
+        const allRows = await this.ExportDataProvider();
+        if (allRows && allRows.length > 0) {
+          return allRows.map(row => row as Record<string, unknown>);
+        }
+      } catch {
+        // Fall through to the loaded page on any fetch failure.
+      }
+    }
     // rowData is already plain Record<string, unknown>[] objects - return directly
     return this.rowData.map(row => row as Record<string, unknown>);
   }
@@ -4303,20 +4362,38 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  onAddToListClick(): void {
-    const selectedRows = this.GetSelectedRows();
-    if (selectedRows.length > 0) {
+  async onAddToListClick(): Promise<void> {
+    let rows = this.GetSelectedRows();
+
+    // No explicit selection → add EVERY matching record, not just the loaded page. Without this,
+    // building a list from a sizeable view meant selecting-all page by page (bug E3). We fetch the
+    // full result set via the host-supplied provider; the downstream list dialog still requires the
+    // user to pick a target list and confirm, so nothing is committed implicitly.
+    if (rows.length === 0 && this.ExportDataProvider) {
+      this.IsPreparingAddToList = true;
+      this.cdr.detectChanges();
+      try {
+        rows = await this.ExportDataProvider();
+      } catch {
+        rows = [];
+      } finally {
+        this.IsPreparingAddToList = false;
+        this.cdr.detectChanges();
+      }
+    }
+
+    if (rows.length > 0) {
       // Emit legacy event for backward compatibility
-      this.AddToListButtonClick.emit(selectedRows);
+      this.AddToListButtonClick.emit(rows);
 
       // Emit new structured event with record IDs for list management
       if (this._entityInfo) {
-        const recordIds = selectedRows.map(r => {
+        const recordIds = rows.map(r => {
           return buildPkString(r, this._entityInfo!);
         });
         this.AddToListRequested.emit({
           entityInfo: this._entityInfo,
-          records: selectedRows,
+          records: rows,
           recordIds
         });
       }

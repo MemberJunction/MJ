@@ -66,6 +66,44 @@
             "lastModified": "2026-05-24T13:05:30.456Z",
             "checksum": "91d0106633068775761b8b383211aab0d345846021752ad486282ef748981e99"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Purge",
+            "DefaultValue": "0",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When '1', purges soft-deleted (superseded) content item chunks after vectorization — removes their vectors from the 3rd-party vector store and marks the rows 'Deleted'. Independent of Vectorize, so a purge-only run is valid. Bounded by MaxItems. Default '0' (off).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "096AFC02-34E9-4D38-ACDB-C31A5779F3EA"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:13.268Z",
+            "checksum": "8b233e4d75898ea89821ef0df8d4741b0a323ef0e53d0f5e045a7f929bf570a6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EmbedPendingChunks",
+            "DefaultValue": "0",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When '1', (re)embeds persisted Content Item Chunk rows whose EmbeddingStatus is still 'Pending' and upserts their vectors. Independent of the other phases — used for migration backfill and error recovery. Bounded by MaxItems. Default '0' (off).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "31B50539-2A38-4459-BF19-591B3B5D3C3C"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:13.296Z",
+            "checksum": "40028ace5f041ae51ac2e8cf1aceefac438738175595eda3af012cd91e440e2c"
+          }
         }
       ],
       "MJ: Action Result Codes": [

@@ -38,6 +38,7 @@ import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedb
 import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { AppSwitcherStyle } from './components/header/app-switcher.component';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -57,6 +58,7 @@ interface ShellChromeFlags {
   searchPreview: boolean;
   notifications: boolean;
   appSwitcher: boolean;
+  appSwitcherStyle: AppSwitcherStyle;
   appNav: boolean;
 }
 
@@ -179,11 +181,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           return this._chromeFlags;
       }
       const engine = InstanceConfigEngine.Instance;
+      const rawStyle = engine.Get('Shell.AppSwitcher.Style');
       const flags: ShellChromeFlags = {
           searchBar: engine.GetBoolean('Shell.SearchBar.Enabled', true),
           searchPreview: engine.GetBoolean('Shell.SearchBar.EnablePreview', true),
           notifications: engine.GetBoolean('Shell.Notifications.Enabled', true),
           appSwitcher: engine.GetBoolean('Shell.AppSwitcher.Enabled', true),
+          // 'launcher' | 'compact' | 'auto' — invalid/absent values fall back
+          // to 'auto' (compact under a handful of apps, launcher otherwise)
+          appSwitcherStyle: rawStyle === 'launcher' || rawStyle === 'compact' ? rawStyle : 'auto',
           appNav: engine.GetBoolean('Shell.AppNav.Enabled', true),
       };
       if (engine.Loaded) {
@@ -202,6 +208,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /** Instance Config gate for the app switcher (also the add/configure-apps entry point). */
   get ShowAppSwitcher(): boolean {
       return this.chromeFlags.appSwitcher;
+  }
+  /** Instance Config presentation style for the app switcher (launcher/compact/auto). */
+  get AppSwitcherStyle(): AppSwitcherStyle {
+      return this.chromeFlags.appSwitcherStyle;
   }
   /** Instance Config gate for the app navigation strip (desktop and the mobile drawer). */
   get ShowAppNav(): boolean {

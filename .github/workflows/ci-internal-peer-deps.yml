@@ -1,0 +1,27 @@
+name: No internal peerDependencies
+
+on:
+  pull_request:
+    branches:
+      - next
+    paths:
+      - 'packages/**/package.json'
+      - '.github/scripts/check-internal-peer-deps.mjs'
+      - '.github/workflows/ci-internal-peer-deps.yml'
+
+jobs:
+  check-internal-peer-deps:
+    name: packages/** must not peer-depend on @memberjunction/*
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Check for internal peerDependencies
+        run: node .github/scripts/check-internal-peer-deps.mjs packages

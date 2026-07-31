@@ -1,5 +1,126 @@
 # Change Log - @memberjunction/server
 
+## 5.50.0
+
+### Patch Changes
+
+- 623dfc5: Break CodeGen FK cycle between AIAgentRun, AIPromptRun, and ConversationDetail. Move SummaryPromptRunID from ConversationDetail to a new ConversationCompactionRun audit table. Remove AgentRunID from AIPromptRun (derivable via AIAgentRunStep.TargetLogID). Remove agentRunId from AIPromptParams and all write sites across the prompt/agent stack.
+- dd04a24: Declare phantom dependencies surfaced by strict installs: MJServer now declares `@types/express` (devDependency — express type imports across `src/`; pinned `^4.17.25` because that is the copy MJServer has always compiled against via its `@types/compression` dependency, and `express-rate-limit`'s handler types bind to it — the v5 types migration is a separate change) and `@memberjunction/integration-engine-base` (dependency — imported by `IntegrationDiscoveryResolver`); ng-action-gallery now declares `@memberjunction/ng-test-utils` (devDependency — imported by its DOM test). npm's hoisting hid these; strict package managers (pnpm) fail on them. No behavior change.
+- 764d6f6: Fix three client-reported issues (search coverage, Configure App dialog, default-app provisioning):
+  - **C3 — Search coverage:** decouple the per-entity fetch depth from the global `topK` budget in both `EntitySearchProvider` and `FullTextSearchProvider` (new tunable `PerEntityFetchDepth`, default 15), so multi-entity searches no longer starve individual entities of results. Also lower `MIN_TERM_LENGTH` from 3 to 2 across the engine and both providers so short queries (e.g. "US", "AI") are searchable.
+  - **F1 — Configure App dialog glitch:** the `[(ShowDialog)]` setter now emits `ShowDialogChange`, so the app-switcher's flag round-trips correctly; the dialog resets its app lists on open/close and reloads the user's applications on a deferred microtask (avoids `ExpressionChangedAfterItHasBeenCheckedError`). Removed the redundant double-drive in the app switcher.
+  - **F2 — Default-app provisioning (`Status = 'Active'` filter):** the JWT new-user provisioning path selected default applications with `DefaultForNewUser` but **without** the `Status = 'Active'` check that the client self-heal path already applied, so an inactive app flagged `DefaultForNewUser` could be provisioned onto new users there. Both paths now use a single shared selector, `UserInfoEngine.GetDefaultApplicationsForNewUser`, which filters to Active + `DefaultForNewUser` in `DefaultSequence` order — eliminating the drift.
+
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [54a037f]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [a3bd648]
+- Updated dependencies [c221553]
+- Updated dependencies [86832fa]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0686d52]
+- Updated dependencies [c7b6710]
+- Updated dependencies [764d6f6]
+- Updated dependencies [408e4bf]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [1e0008f]
+- Updated dependencies [03fc891]
+- Updated dependencies [76c0ffb]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-agents@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/computer-use-engine@5.50.0
+  - @memberjunction/codegen-lib@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/communication-types@5.50.0
+  - @memberjunction/communication-ms-graph@5.50.0
+  - @memberjunction/search-engine@5.50.0
+  - @memberjunction/core-entities-server@5.50.0
+  - @memberjunction/integration-engine@5.50.0
+  - @memberjunction/schema-engine@5.50.0
+  - @memberjunction/communication-sendgrid@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/core-actions@5.50.0
+  - @memberjunction/ai-mcp-client@5.50.0
+  - @memberjunction/config@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/testing-engine@5.50.0
+  - @memberjunction/ai-agent-manager-actions@5.50.0
+  - @memberjunction/ai-agent-manager@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/clustering-engine@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/tag-engine@5.50.0
+  - @memberjunction/tag-engine-base@5.50.0
+  - @memberjunction/ai-bridge-base@5.50.0
+  - @memberjunction/ai-bridge-ringcentral@5.50.0
+  - @memberjunction/ai-bridge-teams@5.50.0
+  - @memberjunction/ai-bridge-twilio@5.50.0
+  - @memberjunction/ai-bridge-vonage@5.50.0
+  - @memberjunction/ai-bridge-server@5.50.0
+  - @memberjunction/remote-browser-base@5.50.0
+  - @memberjunction/remote-browser-server@5.50.0
+  - @memberjunction/ai-vector-sync@5.50.0
+  - @memberjunction/api-keys@5.50.0
+  - @memberjunction/actions-apollo@5.50.0
+  - @memberjunction/actions-bizapps-accounting@5.50.0
+  - @memberjunction/actions-bizapps-crm@5.50.0
+  - @memberjunction/actions-bizapps-formbuilders@5.50.0
+  - @memberjunction/actions-bizapps-lms@5.50.0
+  - @memberjunction/actions-bizapps-social@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/communication-engine@5.50.0
+  - @memberjunction/entity-communications-base@5.50.0
+  - @memberjunction/entity-communications-server@5.50.0
+  - @memberjunction/notifications@5.50.0
+  - @memberjunction/credentials@5.50.0
+  - @memberjunction/doc-utils@5.50.0
+  - @memberjunction/encryption@5.50.0
+  - @memberjunction/external-change-detection@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/integration-engine-base@5.50.0
+  - @memberjunction/lists@5.50.0
+  - @memberjunction/livekit-room-server@5.50.0
+  - @memberjunction/data-context@5.50.0
+  - @memberjunction/queue@5.50.0
+  - @memberjunction/record-comparison@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/scheduling-actions@5.50.0
+  - @memberjunction/scheduling-engine-base@5.50.0
+  - @memberjunction/scheduling-engine@5.50.0
+  - @memberjunction/templates@5.50.0
+  - @memberjunction/testing-engine-base@5.50.0
+  - @memberjunction/version-history@5.50.0
+  - @memberjunction/esignature@5.50.0
+  - @memberjunction/computer-use@5.50.0
+  - @memberjunction/remote-browser-cdp@5.50.0
+  - @memberjunction/remote-browser-selfhost@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/ai-vectors-pinecone@5.50.0
+  - @memberjunction/auth-providers@5.50.0
+  - @memberjunction/component-registry-client-sdk@5.50.0
+  - @memberjunction/integration-schema-builder@5.50.0
+  - @memberjunction/interactive-component-types@5.50.0
+  - @memberjunction/data-context-server@5.50.0
+  - @memberjunction/postgresql-dataprovider@5.50.0
+  - @memberjunction/redis-provider@5.50.0
+  - @memberjunction/server-extensions-core@5.50.0
+  - @memberjunction/ai-provider-bundle@5.50.0
+  - @memberjunction/integration-progress-artifacts@5.50.0
+  - @memberjunction/lists-base@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+  - @memberjunction/scheduling-base-types@5.50.0
+
 ## 5.49.0
 
 ### Minor Changes

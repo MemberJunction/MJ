@@ -211,5 +211,127 @@ npx mj sync push --dir=metadata --include="prompts,agents"
 - Keep clear separation of concerns
 - Document each agent's purpose clearly
 
+### 13b. The MetadataSync Validation System
+
+Validation runs **automatically before push operations**. It:
+
+- **Detects fields intelligently**: recognizes virtual properties (getter/setter methods) on `BaseEntity` subclasses
+- **Checks required fields sensibly**: skips fields with defaults, computed fields, and virtual relationships
+- **Validates references**: `@file`, `@lookup`, `@template`, `@parent`, and `@root`
+- **Analyzes dependencies**: topological sort ensures correct processing order
+
+```bash
+# Validate metadata
+npx mj-sync validate --dir=./metadata
+
+# Push with validation (default)
+npx mj-sync push
+
+# Skip validation (use with caution)
+npx mj-sync push --no-validate
+
+# Generate a markdown report
+npx mj-sync validate --save-report
+```
+
+**Virtual properties**: some entities have virtual properties that manage complex relationships —
+e.g. `TemplateText` on the Templates entity manages both `Template` and `TemplateContent` records.
+These exist as getters/setters on the entity class but **not** in database metadata. The validation
+system detects them automatically by instantiating the entity, so a "missing required field" error
+on one of these usually means the property name is wrong, not that data is absent.
+
+### 14. Externalize Complex JSON with `@file:`
+
+**Complex JSON values** (schemas, templates, etc.) should be stored in separate files and referenced using `@file:` syntax. This improves readability and maintainability over escaped JSON strings.
+
+```json
+// ❌ BAD - Escaped JSON in main file is hard to read
+{
+  "fields": {
+    "Name": "API Key",
+    "FieldSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"object\",\"properties\":{\"apiKey\":{\"type\":\"string\"}}}"
+  }
+}
+
+// ✅ GOOD - Reference external file
+{
+  "fields": {
+    "Name": "API Key",
+    "FieldSchema": "@file:schemas/api-key.schema.json"
+  }
+}
+```
+
+**Directory structure for schemas/templates** — when metadata records contain JSON blobs:
+1. Create a subdirectory named for the content type (e.g., `schemas/`, `templates/`)
+2. Name files descriptively with an appropriate extension (e.g., `api-key.schema.json`)
+3. Use the `@file:relative/path.json` syntax in the main metadata file
+
+### 15. Seeding New Lookup/Reference Tables
+
+When a migration creates a new lookup or reference table (e.g., `AIAgentRequestType`, `ResourceType`), **never seed it with SQL INSERT statements in the migration**. Use the metadata file system instead.
+
+1. Create a new directory under `/metadata/` named for the entity (e.g., `agent-request-types/`)
+2. Create `.mj-sync.json` with the entity configuration:
+   ```json
+   {
+     "entity": "MJ: AI Agent Request Types",
+     "filePattern": "**/.*.json",
+     "defaults": {},
+     "pull": {
+       "createNewFileIfNotFound": true,
+       "newFileName": ".agent-request-types.json",
+       "appendRecordsToExistingFile": true,
+       "updateExistingRecords": true,
+       "preserveFields": [],
+       "excludeFields": [],
+       "mergeStrategy": "merge",
+       "backupBeforeUpdate": true,
+       "backupDirectory": ".backups",
+       "filter": "",
+       "externalizeFields": [],
+       "ignoreNullFields": true,
+       "ignoreVirtualFields": true,
+       "lookupFields": {},
+       "relatedEntities": {}
+     }
+   }
+   ```
+3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — see rule 1.
+4. Push with: `npx mj sync push --dir=metadata --include="agent-request-types"`
+
+**Why metadata files over SQL INSERTs:**
+- Version-controlled, declarative, and human-readable
+- `@lookup:` references resolve entity names to IDs automatically
+- `mj sync push` handles upsert semantics — safe to re-run
+- Consistent with how all other MJ reference data is managed
+
+See `/metadata/resource-types/` for a clean example of a seeded lookup table.
+
+### 16. Application Metadata and Custom Dashboards
+
+When creating new applications with custom dashboards:
+
+1. Create `.{app-name}-application.json` in `/metadata/applications/`
+2. Set `DefaultForNewUser: false` unless it should appear for all users
+3. Define a `DefaultNavItems` array with:
+   - `Label`: Display name for the nav item
+   - `Icon`: Font Awesome icon class
+   - `ResourceType`: Usually `"Custom"` for dashboard resources
+   - `DriverClass`: Class name registered with `@RegisterClass(BaseResourceComponent, 'ClassName')`
+   - `isDefault`: Set to `true` for the default tab (only one per app)
+4. For new apps, omit `primaryKey` and `sync` (see rule 1)
+5. Include `"relatedEntities": { "Application Entities": [] }` for the sync structure
+
+**Resource components for custom dashboards** — each nav item with `ResourceType: "Custom"` requires a corresponding Angular component:
+
+1. Create a component extending `BaseResourceComponent`
+2. Add the `@RegisterClass(BaseResourceComponent, 'YourDriverClassName')` decorator
+3. Add a tree-shaking prevention function: `export function LoadYourResource() {}`
+4. Call the load function from the module's `public-api.ts`
+5. Register the component in the module's declarations and exports
+
+> **Note**: every `BaseResourceComponent` subclass must call `this.NotifyLoadComplete()` when its initial load finishes, or direct URL navigation hangs on the loading screen. See [`packages/Angular/CLAUDE.md`](../packages/Angular/CLAUDE.md).
+
 ## Remember
 The metadata system is designed to be declarative and version-controlled. Let the MetadataSync tool handle all the system-level bookkeeping while you focus on defining the business logic and behavior of your agents.

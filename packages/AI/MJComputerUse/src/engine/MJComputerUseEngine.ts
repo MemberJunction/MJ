@@ -648,7 +648,6 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         params.prompt = promptEntity;
         params.data = templateData;
         params.contextUser = this.contextUser;
-        params.agentRunId = this.agentRunId;
         params.attemptJSONRepair = true;
         // Cancellation (CU-B8): let engine.Stop() abort an in-flight LLM call so a
         // cancelled run releases its worker slot in seconds instead of at step end.

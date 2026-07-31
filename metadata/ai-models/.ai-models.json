@@ -8779,7 +8779,7 @@
   {
     "fields": {
       "Name": "Gemini 2.0 Flash",
-      "Description": "DEPRECATED 2026-06-01: Google retired gemini-2.0-flash on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026; since March 6, 2026 the API was restricted to existing customers. Recommended replacement: gemini-2.5-flash-lite or Gemini 3 Flash for stronger reasoning. Original description: Next-gen features and improved capabilities, including superior speed, native tool use, multimodal generation, and a 1M token context window.",
+      "Description": "DEPRECATED 2026-06-01: Google retired gemini-2.0-flash on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026; since March 6, 2026 the API was restricted to existing customers. Recommended replacement: Gemini 3 Flash for stronger reasoning (gemini-2.5-flash-lite was itself retired 2026-07-28). Original description: Next-gen features and improved capabilities, including superior speed, native tool use, multimodal generation, and a 1M token context window.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": false,
@@ -8900,8 +8900,8 @@
       "ID": "5A4DF845-F821-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-06-05T02:25:04.072Z",
-      "checksum": "cd0460402b19593bf8f01fcee43709aaebd45902cd4a2a3da8a6a074ece504bf"
+      "lastModified": "2026-07-28T18:00:08.457Z",
+      "checksum": "44f14d948a679ea86c0d3752f9373c865fd71b6dcc76098b457c2d41f71802e1"
     }
   },
   {
@@ -9165,7 +9165,7 @@
   {
     "fields": {
       "Name": "Gemini 2.0 Flash-Lite",
-      "Description": "DEPRECATED 2026-06-01: Google retired gemini-2.0-flash-lite on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026. Recommended replacement: gemini-2.5-flash-lite or gemini-3.1-flash-lite. Original description: A Gemini 2.0 Flash model optimized for cost efficiency and low latency.",
+      "Description": "DEPRECATED 2026-06-01: Google retired gemini-2.0-flash-lite on June 1, 2026 per ai.google.dev/gemini-api/docs/pricing. Original deprecation announced February 18, 2026. Recommended replacement: gemini-3.1-flash-lite (gemini-2.5-flash-lite was itself retired 2026-07-28). Original description: A Gemini 2.0 Flash model optimized for cost efficiency and low latency.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": false,
@@ -9286,8 +9286,8 @@
       "ID": "0C93395D-F821-F011-8B3D-000D3A9E3408"
     },
     "sync": {
-      "lastModified": "2026-06-05T02:25:04.090Z",
-      "checksum": "711d80c0637fbd508cd0d19ca3f67335011b645593a7d86dfb18f161237ff702"
+      "lastModified": "2026-07-28T18:00:08.475Z",
+      "checksum": "d7ed55665b984a94e8d4d91c8960fb1fcbd8c7a8e6a4ff4136cde21f3bd1cfd0"
     }
   },
   {
@@ -10227,7 +10227,7 @@
   {
     "fields": {
       "Name": "Claude Opus 4.1",
-      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. DEPRECATION ANNOUNCED 2026-06-05: claude-opus-4-1-20250805 retires August 5, 2026. Recommended replacement is claude-opus-4-8. Source: https://platform.claude.com/docs/en/about-claude/model-deprecations",
+      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. DEPRECATION ANNOUNCED 2026-06-05: claude-opus-4-1-20250805 retires August 5, 2026 (9 days after this report). RECOMMENDED REPLACEMENT UPDATED 2026-07-24: migrate to claude-opus-5 (this report added it) rather than claude-opus-4-8 — Opus 5 is now the current Opus flagship at the same $5/$25 per-1M pricing as 4.8 and is Anthropic's official post-4.1 migration target. Source: https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-4-8-to-claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/model-deprecations",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 19,
       "IsActive": true,
@@ -10381,8 +10381,8 @@
       "ID": "2C5EA224-85A1-4D09-ABA6-0D52F2E6AFBB"
     },
     "sync": {
-      "lastModified": "2026-06-09T06:32:19.016Z",
-      "checksum": "b7babef47ddeb2f1dcdde5a7d8e6bf3e5e8db3312f652b532dea97e478d2b51d"
+      "lastModified": "2026-07-28T16:46:11.192Z",
+      "checksum": "e4b509781f1ec4e12c486ec1d4c3f9140bc81a0d4a24913aae889df5e2125f14"
     }
   },
   {
@@ -10574,10 +10574,10 @@
   {
     "fields": {
       "Name": "Gemini 2.5 Flash-Lite",
-      "Description": "Google's smallest and most cost-effective model, built for scale usage. Optimized for speed with 10K token input limit and 400 token output limit.",
+      "Description": "DEPRECATED 2026-07-28: Google retired gemini-2.5-flash-lite; the API returns 404 NOT_FOUND with \"no longer available to new users\". Confirmed against generativelanguage.googleapis.com during the v5.50.0 release build, where it 404'd on every call and forced the integration ladder onto its secondary binding. Recommended replacement: Gemini 3 Flash or gemini-3.1-flash-lite. Original description: Google's smallest and most cost-effective model, built for scale usage. Optimized for speed with 10K token input limit and 400 token output limit.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 10,
       "CostRank": 2,
       "InheritTypeModalities": true
@@ -10745,8 +10745,8 @@
       "ID": "13297942-3AE2-4584-832C-551237847140"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:25.412Z",
-      "checksum": "bc5175f0c315289254ddda05042e789568849d221e286c4928db28371d0870a0"
+      "lastModified": "2026-07-28T18:00:08.507Z",
+      "checksum": "541422ac0d9e72108408e378c67d4d8a7d7761857c5344b7151aa4e20c23f211"
     }
   },
   {
@@ -18018,6 +18018,29 @@
             "lastModified": "2026-07-01T23:25:34.933Z",
             "checksum": "3aa4ed27e892757457da1396000a60c07d523e21abbf69f95293c7e484255db5"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 150,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "accounts/fireworks/models/glm-5p2",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FAABAA69-6478-4775-A8DC-B59242169965"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.533Z",
+            "checksum": "6ed7333c9751a1873172b711aaa38195719e09b9122baa40a805d8f74153aaec"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -18063,6 +18086,30 @@
           "sync": {
             "lastModified": "2026-07-01T23:25:34.964Z",
             "checksum": "79c81e2185acaefbb04e098668eddc3c26290d9b08e47362ecd92a1c4e6ab2e0"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-06-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.4,
+            "OutputPricePerUnit": 4.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM 5.2 Standard-tier serverless pricing on Fireworks.ai: $1.40/$4.40 per 1M tokens with $0.14 cached-input — vendor-parity with Z.AI direct. Live on Fireworks day-zero. Batch inference is billed at 50% of these rates. Priority tier is $1.75/$5.50 / $0.18 cached and Fast tier (accounts/fireworks/routers/glm-5p2-fast, ~2x throughput) is $2.10/$6.60 / $0.21 cached — neither is modeled here. Sources: https://docs.fireworks.ai/serverless/pricing ; https://fireworks.ai/models/fireworks/glm-5p2 ; https://fireworks.ai/blog/glm-5p2",
+            "CacheReadPricePerUnit": 0.14,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "815E9451-CEBB-4FCA-92A1-BEB6ABA61F3D"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.592Z",
+            "checksum": "eb209908342b9a5e2087ac86ce6e15a57b801ecc6e976c279d89b8e9d31aa69b"
           }
         }
       ]
@@ -20228,6 +20275,29 @@
             "lastModified": "2026-07-22T13:40:32.292Z",
             "checksum": "9a255850d8472de3abd522cce95c5d1a101ee99bc710059c51f0fa6a84b97f77"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 2,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "accounts/fireworks/models/kimi-k3",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "01EB7935-BC98-4C9D-8205-883CC896F369"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.437Z",
+            "checksum": "d6b64fb3a9384285145740bfd0f4346c3eb957d66d6e00030e34d4ed5d69f25f"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -20253,6 +20323,30 @@
           "sync": {
             "lastModified": "2026-07-22T13:40:32.306Z",
             "checksum": "332ba95bac0825d3a9480fed853236484eb541ec36faff545e410b501e08d66e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-07-27T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 3,
+            "OutputPricePerUnit": 15,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kimi K3 Standard-tier serverless pricing on Fireworks.ai: $3.00/$15.00 per 1M tokens with $0.30 cached-input — vendor-parity with Moonshot direct. Moonshot's early-access license bars third-party hosts from undercutting its own API, so Fireworks competes on US-hosted infrastructure and zero data retention rather than price. Batch inference is billed at 50% of these rates. Priority tier (accounts/fireworks/models/kimi-k3 with priority routing) is $3.75/$18.75 / $0.375 cached — not modeled here. Fast tier is a distinct router endpoint, modeled as the separate \"Kimi K3 Fast\" entry. Sources: https://docs.fireworks.ai/serverless/pricing ; https://fireworks.ai/models/fireworks/kimi-k3 ; https://fireworks.ai/blog/kimik3-on-fireworks",
+            "CacheReadPricePerUnit": 0.3,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "58CDD24C-97B3-4454-A6A3-36E8CAFECBE8"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.454Z",
+            "checksum": "9c19317914333dec4d533af521840402288e4d6edf77889b1f12b5b5fccbabe3"
           }
         }
       ]
@@ -20354,6 +20448,421 @@
     "sync": {
       "lastModified": "2026-07-22T13:40:31.546Z",
       "checksum": "db907c9a104072640b8828ce50f8942567e68d76bea8ebeb8dfff8ff0b3f9cfb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Opus 5",
+      "PowerRank": 26,
+      "Description": "Anthropic's fifth-generation Opus flagship, released July 24, 2026 with simultaneous availability on Anthropic API, Amazon Bedrock, Claude Platform on AWS, Google Vertex AI, and Microsoft Foundry. Same headline pricing ($5/$25 per 1M) as Opus 4.8 with a doubling of Frontier-Bench v0.1 performance versus Opus 4.8; comes within 0.5% of Fable 5 on CursorBench 3.2 at half the cost and surpasses Fable 5 on OSWorld 2.0 at one-third the cost. Features 1M-token context, 128K max output (300K via `output-300k-2026-03-24` batch beta), adaptive thinking with `effort` defaulting to `high` on the API and Claude Code, mid-conversation tool changes (beta), automatic safety fallbacks (beta), visual output generation, and stronger agentic self-verification. Fast mode available at ~2.5x speed for 2x cost ($10/$50 per 1M). Knowledge cutoff May 2026. Also available on OpenRouter as `anthropic/claude-opus-5` with `anthropic/claude-opus-5-fast` as the fast-mode variant. Direct successor to Claude Opus 4.8.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Opus 4.8"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "2DA5BA66-F8AB-4171-8A32-65F3131920A3"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.609Z",
+            "checksum": "855fe6d2f60967860a8183f7790fefe88ca5d1b5d8efb698e65b239d38b8f014"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-opus-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "05CA33F7-91AC-4158-885E-711068C6A2D0"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.628Z",
+            "checksum": "c5d0901e7eb143a30020c62ad5fb346ccaef4511fa9465b800fda281bd3986e0"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-opus-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "AE73A973-439C-415A-8D9A-5665076D857B"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.646Z",
+            "checksum": "9ea9dae42571984061dc254da8e3e759a22e90c5cb7f00fa6b746d77be591b3e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-opus-5",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "24EA8666-844C-4BC2-96C6-12DB225460F6"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.663Z",
+            "checksum": "a1644618067999b7de16b2e9717a73f2d6456c32264fe6cce02d94f56bfadf9d"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-07-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 5 launch pricing on Anthropic direct as of July 24, 2026: $5/$25 per 1M tokens — same as Opus 4.8 at doubled Frontier-Bench performance. Cache hit at $0.50/1M (up to 90% savings). Batch API 50% discount ($2.50/$12.50). Fast mode at $10/$50 per 1M (2.5x throughput / 2x price). Sources: https://www.anthropic.com/news/claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/models/overview ; https://platform.claude.com/docs/en/about-claude/pricing ; https://openrouter.ai/anthropic/claude-opus-5",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "BF1FE2DA-3B0D-479C-B30D-1AFF62970BB5"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.683Z",
+            "checksum": "a5db2bd4bfe0a895fb93ecb18f9a0884eaf188a2cd577f8e9ccc1992f94575ab"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-07-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 5 pricing on Amazon Bedrock as of July 24, 2026 simultaneous launch. Vendor-parity with Anthropic direct ($5/$25 per 1M). Model ID: anthropic.claude-opus-5 (also available as global.anthropic.claude-opus-5). Cross-region inference adds ~10%. Sources: https://aws.amazon.com/blogs/machine-learning/introducing-claude-opus-5-on-aws-anthropics-most-capable-opus-model/ ; https://aws.amazon.com/about-aws/whats-new/2026/07/claude-opus-5-aws/ ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5.html",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "EA96EE36-A150-4AD1-8C2F-1DE795692E9D"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.702Z",
+            "checksum": "e7437b6487eb02d61345134c80ad53b67082e6b68e0e0e7ae258e6988bf93d98"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-07-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 5 on OpenRouter (passthrough pricing). Also listed as `anthropic/claude-opus-5-fast` for the 2.5x-throughput fast-mode variant at 2x price. Source: https://openrouter.ai/anthropic/claude-opus-5",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "ECF00045-03AE-4BFD-B557-4145A2E6F765"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.718Z",
+            "checksum": "4baa3e5de3026141170afcf60bfa617a221614d238f53d4099e0bf2fbdae3839"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E977DF7A-5E44-4A55-8DC6-F2D3F9D2ABF2"
+    },
+    "sync": {
+      "lastModified": "2026-07-28T16:46:12.501Z",
+      "checksum": "aab0558af79418bfd0cc4c07819927696c1f798d00397fa3f4d7fbfa2bf758b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kimi K3 Fast",
+      "PowerRank": 22,
+      "Description": "Fireworks.ai's Fast-tier serving path for Moonshot AI's Kimi K3 — identical weights and capabilities to standard Kimi K3, served on a dedicated high-throughput endpoint at roughly 2x the generated-token speed (~200 tps vs ~100 tps Standard) for roughly 1.5x the price. Invoked through a distinct router model ID (`accounts/fireworks/routers/kimi-k3-fast`), not a per-request flag, which is why it is modeled as its own entry rather than a second vendor row on Kimi K3. 1M-token context, 131,072 max output, function calling supported. Use for latency-sensitive agentic loops where iteration speed dominates token cost; use standard Kimi K3 for batch and throughput-insensitive work. Fast tier has no Priority variant.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 6,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "9D04F4E3-E94E-41AE-828A-6F557AE4D230"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.082Z",
+            "checksum": "a5027c3113a898e0e6076d614cfffe2a125525d91d12553389522228640eac4e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 2,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "accounts/fireworks/routers/kimi-k3-fast",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C274FFCB-AD37-4AF8-B27E-393A81CE4817"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.102Z",
+            "checksum": "6a1bcccb7145cf7324c90395f697b795b1bfa791e4efee00313abdfdceee193d"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-07-27T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4.5,
+            "OutputPricePerUnit": 22.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kimi K3 Fast-tier serverless pricing on Fireworks.ai: $4.50/$22.50 per 1M tokens with $0.45 cached-input — 1.5x the Standard tier ($3.00/$15.00/$0.30) for ~2x generated-token throughput. Same weights as standard Kimi K3; the premium buys latency, not capability. Fast tier has no Priority variant. Sources: https://docs.fireworks.ai/serverless/pricing ; https://docs.fireworks.ai/serverless/priority-and-fast ; https://fireworks.ai/blog/kimik3-on-fireworks",
+            "CacheReadPricePerUnit": 0.45,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "4BAE502D-9611-4A7F-BAE5-4C57EA695054"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.136Z",
+            "checksum": "1473eee0005a8ff96ab8b9d9c97b60ed663582e7f1acf8c4354c2babcbb0829f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C2A679FE-1F79-4C3D-9D89-0C1848584A0F"
+    },
+    "sync": {
+      "lastModified": "2026-07-28T16:46:11.295Z",
+      "checksum": "5155084aef1c6995b2d9332a612f2a8c79e483d944de880baf984d5d78632bb6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Opus 5 Fast",
+      "PowerRank": 26,
+      "Description": "Anthropic's Fast-mode variant of Claude Opus 5 — identical weights, capabilities, and 1M-token context, served at approximately 2.5x output throughput for 2x the price ($10/$50 per 1M vs $5/$25). The premium buys latency, not intelligence. Invoked as its own API model ID (`claude-opus-5-fast`), which is why it is modeled as a separate entry rather than a flag on Claude Opus 5. IMPORTANT AVAILABILITY LIMITS: Fast mode is a research preview on the Anthropic first-party API only — it is NOT available on Amazon Bedrock, Google Vertex AI, or Microsoft Foundry, and is NOT supported by the Batch API. Also routable via OpenRouter as `anthropic/claude-opus-5-fast`. Use standard Claude Opus 5 for batch workloads and any cloud-hosted deployment.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 11,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "3C017B8B-AE5C-4E96-8151-00E6106FF4E7"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.152Z",
+            "checksum": "855fe6d2f60967860a8183f7790fefe88ca5d1b5d8efb698e65b239d38b8f014"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-opus-5-fast",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FF554478-0617-4170-9047-36F904BF020D"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.199Z",
+            "checksum": "15beaaf3fbd5a7a54a93a55add3a7b4e90ad8e0a189a335e0ae2d6c7d976636d"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "anthropic/claude-opus-5-fast",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "49652736-CAD2-47F4-80E1-296989A0D3C9"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.217Z",
+            "checksum": "ac6b43f57810e18bc1832faa82c897ad117072c78fcf6ab1cde84e40c9a27f65"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-07-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 5 Fast mode on Anthropic direct: $10/$50 per 1M tokens — exactly 2x standard Opus 5 ($5/$25) for ~2.5x output throughput. Research preview on the first-party API only; not on Bedrock/Vertex/Foundry and not supported by the Batch API, so no batch cost row exists for this model. CacheReadPricePerUnit is intentionally left null: Anthropic has not published a separate cache-read rate for fast mode, and it is NOT safe to assume it is 2x the standard $0.50/1M — verify before relying on cache economics. Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://www.anthropic.com/news/claude-opus-5 ; https://openrouter.ai/anthropic/claude-opus-5-fast",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "5E9B35C2-825F-403C-9975-5026DF0829B0"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.236Z",
+            "checksum": "a0e8608cccd25d532ce4660910a2989c9476303bf0b6cbda01d35a50fbc2a254"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-07-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 5 Fast on OpenRouter (passthrough pricing, 2x standard Opus 5). Source: https://openrouter.ai/anthropic/claude-opus-5-fast",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "8EEA0010-913E-4848-8443-8FADDE46B309"
+          },
+          "sync": {
+            "lastModified": "2026-07-28T16:46:12.250Z",
+            "checksum": "5beece4b3cbfb1fb7ceca9f4a3adcf8f8990c058bff32b60efa2c837a654ff94"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "17F2B585-24B6-483F-AAF9-7DE37F310440"
+    },
+    "sync": {
+      "lastModified": "2026-07-28T16:46:11.314Z",
+      "checksum": "7563c8b942af0270b73a3feaeded535c18730d28c5aafe16f7b08c3adc883696"
     }
   }
 ]

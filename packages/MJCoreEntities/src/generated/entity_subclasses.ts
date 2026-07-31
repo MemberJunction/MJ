@@ -6582,12 +6582,6 @@ export const MJAIPromptRunSchema = z.object({
         * * Display Name: Execution Order
         * * SQL Data Type: int
         * * Description: Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.`),
-    AgentRunID: z.string().nullable().describe(`
-        * * Field Name: AgentRunID
-        * * Display Name: Agent Run
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
-        * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.`),
     Cost: z.number().nullable().describe(`
         * * Field Name: Cost
         * * Display Name: Cost
@@ -6964,10 +6958,6 @@ export const MJAIPromptRunSchema = z.object({
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
-        * * SQL Data Type: nvarchar(255)`),
-    AgentRun: z.string().nullable().describe(`
-        * * Field Name: AgentRun
-        * * Display Name: Agent Run
         * * SQL Data Type: nvarchar(255)`),
     OriginalModel: z.string().nullable().describe(`
         * * Field Name: OriginalModel
@@ -7782,6 +7772,80 @@ export const MJAISkillPermissionSchema = z.object({
 export type MJAISkillPermissionEntityType = z.infer<typeof MJAISkillPermissionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Skill Search Scopes
+ */
+export const MJAISkillSearchScopeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SkillID: z.string().describe(`
+        * * Field Name: SkillID
+        * * Display Name: Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+        * * Description: The skill this grant belongs to.`),
+    SearchScopeID: z.string().describe(`
+        * * Field Name: SearchScopeID
+        * * Display Name: Search Scope ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+        * * Description: The Search Scope this skill may reach.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Active or Inactive. Inactive rows are ignored during resolution.`),
+    StartAt: z.date().nullable().describe(`
+        * * Field Name: StartAt
+        * * Display Name: Start At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional start of the window in which this grant is honoured. NULL = no lower bound. Evaluated against the current time on every resolution, so a window opening or closing needs no cache invalidation.`),
+    EndAt: z.date().nullable().describe(`
+        * * Field Name: EndAt
+        * * Display Name: End At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional end of the window in which this grant is honoured. NULL = no upper bound.`),
+    Priority: z.number().nullable().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Description: Lower numbers win when several granted scopes are candidates and none is marked IsDefault.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set, this scope is chosen for the skill ahead of Priority ordering.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Skill: z.string().describe(`
+        * * Field Name: Skill
+        * * Display Name: Skill
+        * * SQL Data Type: nvarchar(255)`),
+    SearchScope: z.string().describe(`
+        * * Field Name: SearchScope
+        * * Display Name: Search Scope
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJAISkillSearchScopeEntityType = z.infer<typeof MJAISkillSearchScopeSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Skill Sub Agents
  */
 export const MJAISkillSubAgentSchema = z.object({
@@ -7900,6 +7964,16 @@ export const MJAISkillSchema = z.object({
     *   * Auto
     *   * RequestedOnly
         * * Description: Controls whether this skill may ever be self-activated by an agent. Auto: the skill may appear in accepting agents' prompt catalogs and be activated mid-run on agent judgment — but only for agents whose own SkillActivationMode is also Auto (double gate). RequestedOnly (default): the skill is excluded from prompt catalogs entirely and can only be activated when the user explicitly requests it for the run (a /skill mention flowing through ExecuteAgentParams.requestedSkillIDs). All other activation gates (AcceptsSkills, skill Status, per-agent assignment, user Run permission) apply unchanged in both modes.`),
+    SearchScopeAccess: z.union([z.literal('All'), z.literal('Assigned'), z.literal('None')]).nullable().describe(`
+        * * Field Name: SearchScopeAccess
+        * * Display Name: Search Scope Access
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Assigned
+    *   * None
+        * * Description: Which Search Scopes this skill may reach when activated. None = grants no retrieval scope; Assigned = only scopes listed in AISkillSearchScope; All = any active scope. NULL behaves as None so existing skills are unaffected. Mirrors AIAgent.SearchScopeAccess so a skill and an agent are interchangeable principals to SearchScopePermissionResolver.`),
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
@@ -11993,6 +12067,175 @@ export const MJContentItemAttributeSchema = z.object({
 export type MJContentItemAttributeEntityType = z.infer<typeof MJContentItemAttributeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Content Item Chunks
+ */
+export const MJContentItemChunkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ContentItemID: z.string().describe(`
+        * * Field Name: ContentItemID
+        * * Display Name: Content Item
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.`),
+    Text: z.string().nullable().describe(`
+        * * Field Name: Text
+        * * Display Name: Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector. NULL for media-only segments (for example an image, or a video window with no transcript), where the embedded payload is the media itself and any readable representation lives in Description/Transcript.`),
+    VectorRecordID: z.string().nullable().describe(`
+        * * Field Name: VectorRecordID
+        * * Display Name: Vector Record ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The identifier of this chunk's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the chunk's embedding under. Provides traceability from the chunk back to its stored vector.`),
+    EmbeddingStatus: z.union([z.literal('Active'), z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processed'), z.literal('Processing'), z.literal('Skipped')]).describe(`
+        * * Field Name: EmbeddingStatus
+        * * Display Name: Embedding Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processed
+    *   * Processing
+    *   * Skipped
+        * * Description: Embedding lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.`),
+    TaggingStatus: z.union([z.literal('Active'), z.literal('Complete'), z.literal('Failed'), z.literal('Pending'), z.literal('Processed'), z.literal('Processing'), z.literal('Skipped')]).describe(`
+        * * Field Name: TaggingStatus
+        * * Display Name: Tagging Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processed
+    *   * Processing
+    *   * Skipped
+        * * Description: Tagging lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.`),
+    DeleteStatus: z.union([z.literal('Deleted'), z.literal('Pending')]).nullable().describe(`
+        * * Field Name: DeleteStatus
+        * * Display Name: Delete Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Deleted
+    *   * Pending
+        * * Description: Deletion lifecycle state of this chunk's vector: NULL when not slated for deletion, Pending when vector removal is queued, or Deleted once the vector has been removed from the vector database.`),
+    LastEmbeddedAt: z.date().nullable().describe(`
+        * * Field Name: LastEmbeddedAt
+        * * Display Name: Last Embedded At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the last successful embedding of this chunk.`),
+    LastTaggedAt: z.date().nullable().describe(`
+        * * Field Name: LastTaggedAt
+        * * Display Name: Last Tagged At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the last successful tagging of this chunk.`),
+    LastDeletedAt: z.date().nullable().describe(`
+        * * Field Name: LastDeletedAt
+        * * Display Name: Last Deleted At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the last successful deletion of this chunk's vector from the vector database.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Modality: z.union([z.literal('audio'), z.literal('image'), z.literal('multimodal'), z.literal('text'), z.literal('video')]).describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio
+    *   * image
+    *   * multimodal
+    *   * text
+    *   * video
+        * * Description: The modality of this chunk's embedded payload: text (default), image, audio, video, or multimodal (text and media fused into a single vector). Determines which vector index the chunk's embedding belongs to, since a multimodal embedding model produces vectors of a different dimension than a text model, and is used at retrieval time to merge results per modality rather than taking a single global top-k.`),
+    StartOffset: z.number().nullable().describe(`
+        * * Field Name: StartOffset
+        * * Display Name: Start Offset
+        * * SQL Data Type: int
+        * * Description: Inclusive character offset where this chunk begins within the parent Content Item's extracted text. Together with EndOffset this is the provenance link that resolves a search hit back to the exact passage in the source document. NULL for media segments, which are positioned by StartMs/EndMs instead.`),
+    EndOffset: z.number().nullable().describe(`
+        * * Field Name: EndOffset
+        * * Display Name: End Offset
+        * * SQL Data Type: int
+        * * Description: Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.`),
+    StartMs: z.number().nullable().describe(`
+        * * Field Name: StartMs
+        * * Display Name: Start (ms)
+        * * SQL Data Type: int
+        * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.`),
+    EndMs: z.number().nullable().describe(`
+        * * Field Name: EndMs
+        * * Display Name: End (ms)
+        * * SQL Data Type: int
+        * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.`),
+    PageNumber: z.number().nullable().describe(`
+        * * Field Name: PageNumber
+        * * Display Name: Page Number
+        * * SQL Data Type: int
+        * * Description: One-based page number this chunk came from, for paginated sources such as PDFs or slide decks. Provides citation-grade provenance alongside the character offsets. NULL when the source is not paginated.`),
+    SegmentTitle: z.string().nullable().describe(`
+        * * Field Name: SegmentTitle
+        * * Display Name: Segment Title
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Human-readable label for this segment — a document heading for structure-based segmentation, or a generated chapter title for topic- and transcript-based segmentation. Displayed with search results and prepended to the embedded text so a chunk's vector carries its own topic.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: An AI-generated description of this chunk's content, primarily for non-text segments. Retrieval of a media chunk otherwise yields only a pointer (an asset and a time window) that an agent cannot reason over; this column is the readable representation that an agent reads, a cross-encoder reranks, and lexical search matches. A short summary of it may be mirrored into the vector record's metadata for display and filtering, but the full text belongs here.`),
+    Transcript: z.string().nullable().describe(`
+        * * Field Name: Transcript
+        * * Display Name: Transcript
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The verbatim transcript covering this chunk's time window, for audio and video segments, including speaker labels where the source provides them. Distinct from Description, which is a generated summary: this is what was actually said, and it is what makes a recording findable by lexical search.`),
+    SegmenterKey: z.string().nullable().describe(`
+        * * Field Name: SegmenterKey
+        * * Display Name: Segmenter Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Registration key of the segmentation strategy that produced this chunk (for example StructuralText, SemanticText, Transcript, or FixedWindow). Provenance: when a Content Source's configured strategy changes, this identifies which chunks were produced by the previous strategy and therefore need re-chunking.`),
+    ParentChunkID: z.string().nullable().describe(`
+        * * Field Name: ParentChunkID
+        * * Display Name: Parent Chunk
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Item Chunks (vwContentItemChunks.ID)
+        * * Description: Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.`),
+    ContentItem: z.string().nullable().describe(`
+        * * Field Name: ContentItem
+        * * Display Name: Content Item
+        * * SQL Data Type: nvarchar(250)`),
+    RootParentChunkID: z.string().nullable().describe(`
+        * * Field Name: RootParentChunkID
+        * * Display Name: Root Parent Chunk
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type MJContentItemChunkEntityType = z.infer<typeof MJContentItemChunkSchema>;
+
+/**
  * zod schema definition for the entity MJ: Content Item Duplicates
  */
 export const MJContentItemDuplicateSchema = z.object({
@@ -12165,7 +12408,7 @@ export const MJContentItemSchema = z.object({
         * * Default Value: newsequentialid()`),
     ContentSourceID: z.string().describe(`
         * * Field Name: ContentSourceID
-        * * Display Name: Content Source ID
+        * * Display Name: Content Source
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)`),
     Name: z.string().nullable().describe(`
@@ -12178,17 +12421,17 @@ export const MJContentItemSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     ContentTypeID: z.string().describe(`
         * * Field Name: ContentTypeID
-        * * Display Name: Content Type ID
+        * * Display Name: Content Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)`),
     ContentSourceTypeID: z.string().describe(`
         * * Field Name: ContentSourceTypeID
-        * * Display Name: Content Source Type ID
+        * * Display Name: Content Source Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)`),
     ContentFileTypeID: z.string().describe(`
         * * Field Name: ContentFileTypeID
-        * * Display Name: Content File Type ID
+        * * Display Name: Content File Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)`),
     Checksum: z.string().nullable().describe(`
@@ -12203,7 +12446,7 @@ export const MJContentItemSchema = z.object({
         * * Description: The source location URL where this content was retrieved from.`),
     Text: z.string().nullable().describe(`
         * * Field Name: Text
-        * * Display Name: Text
+        * * Display Name: Extracted Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The extracted text content from the source document or file.`),
     __mj_CreatedAt: z.date().describe(`
@@ -12218,7 +12461,7 @@ export const MJContentItemSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityRecordDocumentID: z.string().nullable().describe(`
         * * Field Name: EntityRecordDocumentID
-        * * Display Name: Entity Record Document ID
+        * * Display Name: Entity Record Document
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Record Documents (vwEntityRecordDocuments.ID)
         * * Description: For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.`),
@@ -12242,7 +12485,7 @@ export const MJContentItemSchema = z.object({
         * * Description: Timestamp of the most recent successful embedding for this content item.`),
     EmbeddingModelID: z.string().nullable().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model ID
+        * * Display Name: Embedding Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: The AI model used to generate the most recent embedding for this content item.`),
@@ -12264,30 +12507,54 @@ export const MJContentItemSchema = z.object({
         * * Display Name: Last Tagged At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp of the most recent successful autotagging run for this content item.`),
+    VectorRecordID: z.string().nullable().describe(`
+        * * Field Name: VectorRecordID
+        * * Display Name: Vector Record ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent Content
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+        * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.`),
+    DisplayLink: z.string().nullable().describe(`
+        * * Field Name: DisplayLink
+        * * Display Name: Display Link
+        * * SQL Data Type: nvarchar(2000)
+        * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.`),
     ContentSource: z.string().nullable().describe(`
         * * Field Name: ContentSource
-        * * Display Name: Content Source
+        * * Display Name: Content Source Name
         * * SQL Data Type: nvarchar(255)`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
-        * * Display Name: Content Type
+        * * Display Name: Content Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
-        * * Display Name: Content Source Type
+        * * Display Name: Content Source Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
-        * * Display Name: Content File Type
+        * * Display Name: Content File Type Name
         * * SQL Data Type: nvarchar(255)`),
     EntityRecordDocument: z.string().nullable().describe(`
         * * Field Name: EntityRecordDocument
-        * * Display Name: Entity Record Document
+        * * Display Name: Entity Record Document Name
         * * SQL Data Type: nvarchar(450)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent Content Name
+        * * SQL Data Type: nvarchar(250)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent Content
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type MJContentItemEntityType = z.infer<typeof MJContentItemSchema>;
@@ -12761,37 +13028,47 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Actions (vwScheduledActions.ID)
         * * Description: Optional link to a MJ Scheduled Action that automatically runs the classification pipeline for this source on a cron schedule.`),
+    SegmenterKey: z.string().nullable().describe(`
+        * * Field Name: SegmenterKey
+        * * Display Name: Segmenter Strategy
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Registration key of the segmentation strategy used to split this source's content into embeddable chunks — for example StructuralText (document headings), AdaptiveBoundary (target size closing on the nearest natural break), SemanticText (LLM-detected topic boundaries), Transcript (audio/video chapters), PagedContent (one segment per page), or FixedWindow (uniform windows). NULL falls back to the Content Type's value, then to a built-in default.`),
+    CleanerKey: z.string().nullable().describe(`
+        * * Field Name: CleanerKey
+        * * Display Name: Cleaner Strategy
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Registration key of the content-cleaning strategy applied to this source before segmentation — for example Html (CSS-selector-driven extraction that drops navigation, sidebars, and advertising) or PlainText (whitespace normalization only). Cleaning is separate from segmentation because the two change for different reasons: a new site template needs new selectors, not a new chunking strategy. NULL falls back to the Content Type's value, then to a default inferred from the content's mime type.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
-        * * Display Name: Content Type
+        * * Display Name: Content Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentSourceType: z.string().describe(`
         * * Field Name: ContentSourceType
-        * * Display Name: Content Source Type
+        * * Display Name: Content Source Type Name
         * * SQL Data Type: nvarchar(255)`),
     ContentFileType: z.string().describe(`
         * * Field Name: ContentFileType
-        * * Display Name: Content File Type
+        * * Display Name: Content File Type Name
         * * SQL Data Type: nvarchar(255)`),
     EmbeddingModel: z.string().nullable().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
     VectorIndex: z.string().nullable().describe(`
         * * Field Name: VectorIndex
-        * * Display Name: Vector Index
+        * * Display Name: Vector Index Name
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     EntityDocument: z.string().nullable().describe(`
         * * Field Name: EntityDocument
-        * * Display Name: Entity Document
+        * * Display Name: Entity Document Name
         * * SQL Data Type: nvarchar(250)`),
     ScheduledAction: z.string().nullable().describe(`
         * * Field Name: ScheduledAction
-        * * Display Name: Scheduled Action
+        * * Display Name: Scheduled Action Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -12898,6 +13175,16 @@ export const MJContentTypeSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJContentTypeEntity_IContentTypeConfiguration
         * * Description: JSON configuration blob for content-type-level settings. Conforms to the IContentTypeConfiguration interface. Reserved for future type-wide settings such as default tag taxonomy rules and processing options.`),
+    SegmenterKey: z.string().nullable().describe(`
+        * * Field Name: SegmenterKey
+        * * Display Name: Segmenter Strategy
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Default segmentation strategy for content of this type, used when a Content Source does not specify its own SegmenterKey. See ContentSource.SegmenterKey for the available strategies.`),
+    CleanerKey: z.string().nullable().describe(`
+        * * Field Name: CleanerKey
+        * * Display Name: Cleaner Strategy
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Default content-cleaning strategy for content of this type, used when a Content Source does not specify its own CleanerKey. See ContentSource.CleanerKey.`),
     AIModel: z.string().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model Name
@@ -13083,6 +13370,49 @@ export const MJConversationArtifactSchema = z.object({
 });
 
 export type MJConversationArtifactEntityType = z.infer<typeof MJConversationArtifactSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Conversation Compaction Runs
+ */
+export const MJConversationCompactionRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConversationDetailID: z.string().describe(`
+        * * Field Name: ConversationDetailID
+        * * Display Name: Conversation Detail
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
+        * * Description: The conversation detail row whose SummaryOfEarlierConversation was produced by this compaction run.`),
+    PromptRunID: z.string().describe(`
+        * * Field Name: PromptRunID
+        * * Display Name: Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: The AI Prompt Run that generated the compaction summary (model, tokens, cost, prompt version).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ConversationDetail: z.string().nullable().describe(`
+        * * Field Name: ConversationDetail
+        * * Display Name: Conversation Detail Name
+        * * SQL Data Type: nvarchar(100)`),
+    PromptRun: z.string().nullable().describe(`
+        * * Field Name: PromptRun
+        * * Display Name: Prompt Run Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJConversationCompactionRunEntityType = z.infer<typeof MJConversationCompactionRunSchema>;
 
 /**
  * zod schema definition for the entity MJ: Conversation Detail Artifacts
@@ -13500,12 +13830,6 @@ export const MJConversationDetailSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`),
-    SummaryPromptRunID: z.string().nullable().describe(`
-        * * Field Name: SummaryPromptRunID
-        * * Display Name: Summary Prompt Run
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
-        * * Description: When SummaryOfEarlierConversation is populated by a cross-turn compaction, this links to the AIPromptRun that produced it (model, tokens, cost, prompt version). Null for ordinary (non-summary) rows.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -13533,10 +13857,6 @@ export const MJConversationDetailSchema = z.object({
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
         * * Display Name: Test Run
-        * * SQL Data Type: nvarchar(255)`),
-    SummaryPromptRun: z.string().nullable().describe(`
-        * * Field Name: SummaryPromptRun
-        * * Display Name: Summary Prompt Run
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -27312,6 +27632,22 @@ export const MJSearchExecutionLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    AISkillID: z.string().nullable().describe(`
+        * * Field Name: AISkillID
+        * * Display Name: AI Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+        * * Description: The AI Skill on whose behalf this search ran, or NULL for a search with no active skill. Mirrors AIAgentID: since a skill is a search principal in its own right (AISkill.SearchScopeAccess plus MJ: AI Skill Search Scopes rows can reach a scope the user's own roles do not grant), the log must record which skill was active or the entitlement decision cannot be reconstructed.`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: The tenant this search ran for, taken from SearchContext.PrimaryScopeRecordID. Lets a multi-tenant deployment partition, filter and retain search audit history per customer. NULL for untenanted searches. Named for the existing primary-scope concept rather than OrganizationID because a scope's primary scope may be a Company, Client or Practice.`),
+    ScopeDecisionJSON: z.string().nullable().describe(`
+        * * Field Name: ScopeDecisionJSON
+        * * Display Name: Scope Decision JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Serialized ScopeExplanation recording WHY this search could reach what it reached: the entitlement decision and the grant that produced it, every dimension with its provenance (CallerSupplied / ServerDerived / Default / DiscardedCaller / Absent), and each lane's rendered filter with its active-or-skipped status and reason. Identical in shape to the value returned by SearchEngine.ExplainScope(), so the dry-run an administrator previews before running a search is the same structure the audit log stores afterwards. NULL when the engine did not capture a decision (older writers, or a failure before scope resolution).`),
     SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
@@ -27323,6 +27659,10 @@ export const MJSearchExecutionLogSchema = z.object({
     AIAgent: z.string().nullable().describe(`
         * * Field Name: AIAgent
         * * Display Name: AI Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    AISkill: z.string().nullable().describe(`
+        * * Field Name: AISkill
+        * * Display Name: AI Skill
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -27463,6 +27803,11 @@ export const MJSearchScopeEntitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RequiredMetadataKeys: z.string().nullable().describe(`
+        * * Field Name: RequiredMetadataKeys
+        * * Display Name: Required Metadata Keys
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of column or alias names the rendered ExtraFilter MUST reference for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if one is missing the lane is SKIPPED rather than queried, because a partially-rendered filter (an {% if %} clause dropped when its dimension was absent or discarded) is still valid SQL and silently widens the search. Same concept and same engine check as SearchScopeExternalIndex.RequiredMetadataKeys, applied to the SQL lane. NULL = no contract declared, which is the pre-migration behaviour.`),
     SearchScope: z.string().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope
@@ -27534,6 +27879,11 @@ export const MJSearchScopeExternalIndexSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RequiredMetadataKeys: z.string().nullable().describe(`
+        * * Field Name: RequiredMetadataKeys
+        * * Display Name: Required Metadata Keys
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of metadata key names the rendered MetadataFilter MUST constrain on for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if a key is missing the lane is SKIPPED rather than queried, because a partially-rendered filter silently widens the search. This also documents the ingest contract — these are the labels the writer must stamp on every document in the index, since a filter on a key that was never written either matches nothing or (on providers that ignore unknown keys) matches everything. NULL = no contract declared, which is the pre-migration behaviour.`),
     SearchScope: z.string().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope
@@ -27595,6 +27945,21 @@ export const MJSearchScopePermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StartAt: z.date().nullable().describe(`
+        * * Field Name: StartAt
+        * * Display Name: Start At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional start of the window in which this grant applies. NULL = no lower bound. SearchScopePermission was the only member of this family without a time window, so temporary grants previously needed a bespoke mechanism.`),
+    EndAt: z.date().nullable().describe(`
+        * * Field Name: EndAt
+        * * Display Name: End At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional end of the window in which this grant applies. NULL = no upper bound.`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Optional tenant this grant is limited to, matched against SearchContext.PrimaryScopeRecordID at search time and type-checkable against the scope's own PrimaryScopeEntityID. NULL = applies to every tenant, which is the pre-migration behaviour for all existing rows. Deliberately NOT called OrganizationID: MJ is domain-agnostic and a scope's primary scope may be a Company, Client or Practice, so this reuses the existing primary-scope concept rather than inventing a parallel tenancy column.`),
     SearchScope: z.string().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
@@ -43879,6 +44244,97 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CompactionTargetPercent: The compaction target percentage must be a value between 1 and 100 percent.
+    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100 percent.
+    * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than 0.
+    * * Table-Level: The compaction target percentage must be less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCompactionTargetPercentRange(result);
+        this.ValidateCompactionTriggerPercentRange(result);
+        this.ValidateContextWindowMaxTokensGreaterThanZero(result);
+        this.ValidateCompactionTargetPercentLessThanTriggerPercent(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The compaction target percentage must be a value between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTargetPercentRange(result: ValidationResult) {
+    	if (this.CompactionTargetPercent != null && (this.CompactionTargetPercent < 1 || this.CompactionTargetPercent > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			'CompactionTargetPercent',
+    			'Compaction Target Percent must be between 1 and 100.',
+    			this.CompactionTargetPercent,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The compaction trigger percentage must be a value between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
+    	if (this.CompactionTriggerPercent != null && (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CompactionTriggerPercent",
+    			"Compaction trigger percentage must be between 1 and 100.",
+    			this.CompactionTriggerPercent,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The maximum tokens for the context window must be a positive number greater than 0.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextWindowMaxTokensGreaterThanZero(result: ValidationResult) {
+    	if (this.ContextWindowMaxTokens != null && this.ContextWindowMaxTokens <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ContextWindowMaxTokens",
+    			"Context Window Max Tokens must be a positive number greater than 0.",
+    			this.ContextWindowMaxTokens,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The compaction target percentage must be less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTargetPercentLessThanTriggerPercent(result: ValidationResult) {
+    	if (this.CompactionTargetPercent != null && this.CompactionTriggerPercent != null) {
+    		if (this.CompactionTargetPercent >= this.CompactionTriggerPercent) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"CompactionTargetPercent",
+    				"The compaction target percentage must be strictly less than the compaction trigger percentage.",
+    				this.CompactionTargetPercent,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -44298,6 +44754,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CompactionTargetPercent: The compaction target percentage must be between 1 and 100 percent.
+    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100.
+    * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than zero.
     * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
     * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
     * * MaxMessages: This rule ensures that the maximum number of messages, if specified, must be greater than zero.
@@ -44311,6 +44770,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateCompactionTargetPercentRange(result);
+        this.ValidateCompactionTriggerPercentRange(result);
+        this.ValidateContextWindowMaxTokensGreaterThanZero(result);
         this.ValidateDefaultPromptEffortLevelInAllowedRange(result);
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
         this.ValidateMaxMessagesGreaterThanZero(result);
@@ -44321,6 +44783,57 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * The compaction target percentage must be between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTargetPercentRange(result: ValidationResult) {
+    	if (this.CompactionTargetPercent != null && (this.CompactionTargetPercent < 1 || this.CompactionTargetPercent > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CompactionTargetPercent",
+    			"Compaction target percent must be between 1 and 100.",
+    			this.CompactionTargetPercent,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The compaction trigger percentage must be a value between 1 and 100.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
+    		if (this.CompactionTriggerPercent != null && (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"CompactionTriggerPercent",
+    				"Compaction trigger percentage must be between 1 and 100.",
+    				this.CompactionTriggerPercent,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+
+    /**
+    * The maximum tokens for the context window must be a positive number greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextWindowMaxTokensGreaterThanZero(result: ValidationResult) {
+        if (this.ContextWindowMaxTokens != null && this.ContextWindowMaxTokens <= 0) {
+            result.Errors.push(new ValidationErrorInfo(
+                "ContextWindowMaxTokens",
+                "The maximum tokens for the context window must be greater than zero.",
+                this.ContextWindowMaxTokens,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
@@ -50785,20 +51298,6 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
-    * * Field Name: AgentRunID
-    * * Display Name: Agent Run
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
-    * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.
-    */
-    get AgentRunID(): string | null {
-        return this.Get('AgentRunID');
-    }
-    set AgentRunID(value: string | null) {
-        this.Set('AgentRunID', value);
-    }
-
-    /**
     * * Field Name: Cost
     * * Display Name: Cost
     * * SQL Data Type: decimal(19, 8)
@@ -51731,15 +52230,6 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
-    }
-
-    /**
-    * * Field Name: AgentRun
-    * * Display Name: Agent Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get AgentRun(): string | null {
-        return this.Get('AgentRun');
     }
 
     /**
@@ -53855,6 +54345,188 @@ export class MJAISkillPermissionEntity extends BaseEntity<MJAISkillPermissionEnt
 
 
 /**
+ * MJ: AI Skill Search Scopes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AISkillSearchScope
+ * * Base View: vwAISkillSearchScopes
+ * * @description Search Scopes an AI Skill may reach when activated, honoured when AISkill.SearchScopeAccess = 'Assigned'. Mirrors AIAgentSearchScope: Status plus an optional StartAt/EndAt window time-box a grant, and Priority/IsDefault pick among several. An empty table means no skill grants any scope - the pre-migration behaviour.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Skill Search Scopes')
+export class MJAISkillSearchScopeEntity extends BaseEntity<MJAISkillSearchScopeEntityType> {
+    /**
+    * Loads the MJ: AI Skill Search Scopes record from the database
+    * @param ID: string - primary key value to load the MJ: AI Skill Search Scopes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAISkillSearchScopeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SkillID
+    * * Display Name: Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    * * Description: The skill this grant belongs to.
+    */
+    get SkillID(): string {
+        return this.Get('SkillID');
+    }
+    set SkillID(value: string) {
+        this.Set('SkillID', value);
+    }
+
+    /**
+    * * Field Name: SearchScopeID
+    * * Display Name: Search Scope ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+    * * Description: The Search Scope this skill may reach.
+    */
+    get SearchScopeID(): string {
+        return this.Get('SearchScopeID');
+    }
+    set SearchScopeID(value: string) {
+        this.Set('SearchScopeID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Active or Inactive. Inactive rows are ignored during resolution.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartAt
+    * * Display Name: Start At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional start of the window in which this grant is honoured. NULL = no lower bound. Evaluated against the current time on every resolution, so a window opening or closing needs no cache invalidation.
+    */
+    get StartAt(): Date | null {
+        return this.Get('StartAt');
+    }
+    set StartAt(value: Date | null) {
+        this.Set('StartAt', value);
+    }
+
+    /**
+    * * Field Name: EndAt
+    * * Display Name: End At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional end of the window in which this grant is honoured. NULL = no upper bound.
+    */
+    get EndAt(): Date | null {
+        return this.Get('EndAt');
+    }
+    set EndAt(value: Date | null) {
+        this.Set('EndAt', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Description: Lower numbers win when several granted scopes are candidates and none is marked IsDefault.
+    */
+    get Priority(): number | null {
+        return this.Get('Priority');
+    }
+    set Priority(value: number | null) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set, this scope is chosen for the skill ahead of Priority ordering.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Skill
+    * * Display Name: Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Skill(): string {
+        return this.Get('Skill');
+    }
+
+    /**
+    * * Field Name: SearchScope
+    * * Display Name: Search Scope
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SearchScope(): string {
+        return this.Get('SearchScope');
+    }
+}
+
+
+/**
  * MJ: AI Skill Sub Agents - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AISkillSubAgent
@@ -54153,6 +54825,24 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
     }
     set ActivationMode(value: 'Auto' | 'RequestedOnly') {
         this.Set('ActivationMode', value);
+    }
+
+    /**
+    * * Field Name: SearchScopeAccess
+    * * Display Name: Search Scope Access
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Assigned
+    *   * None
+    * * Description: Which Search Scopes this skill may reach when activated. None = grants no retrieval scope; Assigned = only scopes listed in AISkillSearchScope; All = any active scope. NULL behaves as None so existing skills are unaffected. Mirrors AIAgent.SearchScopeAccess so a skill and an agent are interchangeable principals to SearchScopePermissionResolver.
+    */
+    get SearchScopeAccess(): 'All' | 'Assigned' | 'None' | null {
+        return this.Get('SearchScopeAccess');
+    }
+    set SearchScopeAccess(value: 'All' | 'Assigned' | 'None' | null) {
+        this.Set('SearchScopeAccess', value);
     }
 
     /**
@@ -64552,6 +65242,395 @@ export class MJContentItemAttributeEntity extends BaseEntity<MJContentItemAttrib
 
 
 /**
+ * MJ: Content Item Chunks - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ContentItemChunk
+ * * Base View: vwContentItemChunks
+ * * @description Represents an individual chunk of a Content Item's text that was embedded as a distinct vector. When a Content Item is too large to embed as a single vector it is split into ordered chunks; each chunk becomes one row here, linking the stored vector back to the specific portion of the parent Content Item it represents.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Content Item Chunks')
+export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntityType> {
+    /**
+    * Loads the MJ: Content Item Chunks record from the database
+    * @param ID: string - primary key value to load the MJ: Content Item Chunks record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJContentItemChunkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ContentItemID
+    * * Display Name: Content Item
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+    */
+    get ContentItemID(): string {
+        return this.Get('ContentItemID');
+    }
+    set ContentItemID(value: string) {
+        this.Set('ContentItemID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Description: Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Text
+    * * Display Name: Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector. NULL for media-only segments (for example an image, or a video window with no transcript), where the embedded payload is the media itself and any readable representation lives in Description/Transcript.
+    */
+    get Text(): string | null {
+        return this.Get('Text');
+    }
+    set Text(value: string | null) {
+        this.Set('Text', value);
+    }
+
+    /**
+    * * Field Name: VectorRecordID
+    * * Display Name: Vector Record ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The identifier of this chunk's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the chunk's embedding under. Provides traceability from the chunk back to its stored vector.
+    */
+    get VectorRecordID(): string | null {
+        return this.Get('VectorRecordID');
+    }
+    set VectorRecordID(value: string | null) {
+        this.Set('VectorRecordID', value);
+    }
+
+    /**
+    * * Field Name: EmbeddingStatus
+    * * Display Name: Embedding Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processed
+    *   * Processing
+    *   * Skipped
+    * * Description: Embedding lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.
+    */
+    get EmbeddingStatus(): 'Active' | 'Complete' | 'Failed' | 'Pending' | 'Processed' | 'Processing' | 'Skipped' {
+        return this.Get('EmbeddingStatus');
+    }
+    set EmbeddingStatus(value: 'Active' | 'Complete' | 'Failed' | 'Pending' | 'Processed' | 'Processing' | 'Skipped') {
+        this.Set('EmbeddingStatus', value);
+    }
+
+    /**
+    * * Field Name: TaggingStatus
+    * * Display Name: Tagging Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Complete
+    *   * Failed
+    *   * Pending
+    *   * Processed
+    *   * Processing
+    *   * Skipped
+    * * Description: Tagging lifecycle state of this chunk: Pending (default), Processing, Active, Complete, Processed, Failed, or Skipped.
+    */
+    get TaggingStatus(): 'Active' | 'Complete' | 'Failed' | 'Pending' | 'Processed' | 'Processing' | 'Skipped' {
+        return this.Get('TaggingStatus');
+    }
+    set TaggingStatus(value: 'Active' | 'Complete' | 'Failed' | 'Pending' | 'Processed' | 'Processing' | 'Skipped') {
+        this.Set('TaggingStatus', value);
+    }
+
+    /**
+    * * Field Name: DeleteStatus
+    * * Display Name: Delete Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Deleted
+    *   * Pending
+    * * Description: Deletion lifecycle state of this chunk's vector: NULL when not slated for deletion, Pending when vector removal is queued, or Deleted once the vector has been removed from the vector database.
+    */
+    get DeleteStatus(): 'Deleted' | 'Pending' | null {
+        return this.Get('DeleteStatus');
+    }
+    set DeleteStatus(value: 'Deleted' | 'Pending' | null) {
+        this.Set('DeleteStatus', value);
+    }
+
+    /**
+    * * Field Name: LastEmbeddedAt
+    * * Display Name: Last Embedded At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the last successful embedding of this chunk.
+    */
+    get LastEmbeddedAt(): Date | null {
+        return this.Get('LastEmbeddedAt');
+    }
+    set LastEmbeddedAt(value: Date | null) {
+        this.Set('LastEmbeddedAt', value);
+    }
+
+    /**
+    * * Field Name: LastTaggedAt
+    * * Display Name: Last Tagged At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the last successful tagging of this chunk.
+    */
+    get LastTaggedAt(): Date | null {
+        return this.Get('LastTaggedAt');
+    }
+    set LastTaggedAt(value: Date | null) {
+        this.Set('LastTaggedAt', value);
+    }
+
+    /**
+    * * Field Name: LastDeletedAt
+    * * Display Name: Last Deleted At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the last successful deletion of this chunk's vector from the vector database.
+    */
+    get LastDeletedAt(): Date | null {
+        return this.Get('LastDeletedAt');
+    }
+    set LastDeletedAt(value: Date | null) {
+        this.Set('LastDeletedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * audio
+    *   * image
+    *   * multimodal
+    *   * text
+    *   * video
+    * * Description: The modality of this chunk's embedded payload: text (default), image, audio, video, or multimodal (text and media fused into a single vector). Determines which vector index the chunk's embedding belongs to, since a multimodal embedding model produces vectors of a different dimension than a text model, and is used at retrieval time to merge results per modality rather than taking a single global top-k.
+    */
+    get Modality(): 'audio' | 'image' | 'multimodal' | 'text' | 'video' {
+        return this.Get('Modality');
+    }
+    set Modality(value: 'audio' | 'image' | 'multimodal' | 'text' | 'video') {
+        this.Set('Modality', value);
+    }
+
+    /**
+    * * Field Name: StartOffset
+    * * Display Name: Start Offset
+    * * SQL Data Type: int
+    * * Description: Inclusive character offset where this chunk begins within the parent Content Item's extracted text. Together with EndOffset this is the provenance link that resolves a search hit back to the exact passage in the source document. NULL for media segments, which are positioned by StartMs/EndMs instead.
+    */
+    get StartOffset(): number | null {
+        return this.Get('StartOffset');
+    }
+    set StartOffset(value: number | null) {
+        this.Set('StartOffset', value);
+    }
+
+    /**
+    * * Field Name: EndOffset
+    * * Display Name: End Offset
+    * * SQL Data Type: int
+    * * Description: Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.
+    */
+    get EndOffset(): number | null {
+        return this.Get('EndOffset');
+    }
+    set EndOffset(value: number | null) {
+        this.Set('EndOffset', value);
+    }
+
+    /**
+    * * Field Name: StartMs
+    * * Display Name: Start (ms)
+    * * SQL Data Type: int
+    * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.
+    */
+    get StartMs(): number | null {
+        return this.Get('StartMs');
+    }
+    set StartMs(value: number | null) {
+        this.Set('StartMs', value);
+    }
+
+    /**
+    * * Field Name: EndMs
+    * * Display Name: End (ms)
+    * * SQL Data Type: int
+    * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.
+    */
+    get EndMs(): number | null {
+        return this.Get('EndMs');
+    }
+    set EndMs(value: number | null) {
+        this.Set('EndMs', value);
+    }
+
+    /**
+    * * Field Name: PageNumber
+    * * Display Name: Page Number
+    * * SQL Data Type: int
+    * * Description: One-based page number this chunk came from, for paginated sources such as PDFs or slide decks. Provides citation-grade provenance alongside the character offsets. NULL when the source is not paginated.
+    */
+    get PageNumber(): number | null {
+        return this.Get('PageNumber');
+    }
+    set PageNumber(value: number | null) {
+        this.Set('PageNumber', value);
+    }
+
+    /**
+    * * Field Name: SegmentTitle
+    * * Display Name: Segment Title
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Human-readable label for this segment — a document heading for structure-based segmentation, or a generated chapter title for topic- and transcript-based segmentation. Displayed with search results and prepended to the embedded text so a chunk's vector carries its own topic.
+    */
+    get SegmentTitle(): string | null {
+        return this.Get('SegmentTitle');
+    }
+    set SegmentTitle(value: string | null) {
+        this.Set('SegmentTitle', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: An AI-generated description of this chunk's content, primarily for non-text segments. Retrieval of a media chunk otherwise yields only a pointer (an asset and a time window) that an agent cannot reason over; this column is the readable representation that an agent reads, a cross-encoder reranks, and lexical search matches. A short summary of it may be mirrored into the vector record's metadata for display and filtering, but the full text belongs here.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Transcript
+    * * Display Name: Transcript
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The verbatim transcript covering this chunk's time window, for audio and video segments, including speaker labels where the source provides them. Distinct from Description, which is a generated summary: this is what was actually said, and it is what makes a recording findable by lexical search.
+    */
+    get Transcript(): string | null {
+        return this.Get('Transcript');
+    }
+    set Transcript(value: string | null) {
+        this.Set('Transcript', value);
+    }
+
+    /**
+    * * Field Name: SegmenterKey
+    * * Display Name: Segmenter Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Registration key of the segmentation strategy that produced this chunk (for example StructuralText, SemanticText, Transcript, or FixedWindow). Provenance: when a Content Source's configured strategy changes, this identifies which chunks were produced by the previous strategy and therefore need re-chunking.
+    */
+    get SegmenterKey(): string | null {
+        return this.Get('SegmenterKey');
+    }
+    set SegmenterKey(value: string | null) {
+        this.Set('SegmenterKey', value);
+    }
+
+    /**
+    * * Field Name: ParentChunkID
+    * * Display Name: Parent Chunk
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Item Chunks (vwContentItemChunks.ID)
+    * * Description: Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.
+    */
+    get ParentChunkID(): string | null {
+        return this.Get('ParentChunkID');
+    }
+    set ParentChunkID(value: string | null) {
+        this.Set('ParentChunkID', value);
+    }
+
+    /**
+    * * Field Name: ContentItem
+    * * Display Name: Content Item
+    * * SQL Data Type: nvarchar(250)
+    */
+    get ContentItem(): string | null {
+        return this.Get('ContentItem');
+    }
+
+    /**
+    * * Field Name: RootParentChunkID
+    * * Display Name: Root Parent Chunk
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentChunkID(): string | null {
+        return this.Get('RootParentChunkID');
+    }
+}
+
+
+/**
  * MJ: Content Item Duplicates - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ContentItemDuplicate
@@ -64984,7 +66063,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceID
-    * * Display Name: Content Source ID
+    * * Display Name: Content Source
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
     */
@@ -65021,7 +66100,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentTypeID
-    * * Display Name: Content Type ID
+    * * Display Name: Content Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Types (vwContentTypes.ID)
     */
@@ -65034,7 +66113,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceTypeID
-    * * Display Name: Content Source Type ID
+    * * Display Name: Content Source Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Source Types (vwContentSourceTypes.ID)
     */
@@ -65047,7 +66126,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentFileTypeID
-    * * Display Name: Content File Type ID
+    * * Display Name: Content File Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content File Types (vwContentFileTypes.ID)
     */
@@ -65086,7 +66165,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: Text
-    * * Display Name: Text
+    * * Display Name: Extracted Text
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The extracted text content from the source document or file.
     */
@@ -65119,7 +66198,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: EntityRecordDocumentID
-    * * Display Name: Entity Record Document ID
+    * * Display Name: Entity Record Document
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Record Documents (vwEntityRecordDocuments.ID)
     * * Description: For entity-sourced content items, links to the Entity Record Document snapshot that was rendered for this item. Provides traceability back to the source entity record via ERD.EntityID + ERD.RecordID. NULL for non-entity sources.
@@ -65167,7 +66246,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model ID
+    * * Display Name: Embedding Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: The AI model used to generate the most recent embedding for this content item.
@@ -65214,8 +66293,48 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
     }
 
     /**
+    * * Field Name: VectorRecordID
+    * * Display Name: Vector Record ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.
+    */
+    get VectorRecordID(): string | null {
+        return this.Get('VectorRecordID');
+    }
+    set VectorRecordID(value: string | null) {
+        this.Set('VectorRecordID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent Content
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+    * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: DisplayLink
+    * * Display Name: Display Link
+    * * SQL Data Type: nvarchar(2000)
+    * * Description: Optional display/clickable URL for this Content Item (e.g. a canonical or human-facing link), distinct from the source URL used for ingestion.
+    */
+    get DisplayLink(): string | null {
+        return this.Get('DisplayLink');
+    }
+    set DisplayLink(value: string | null) {
+        this.Set('DisplayLink', value);
+    }
+
+    /**
     * * Field Name: ContentSource
-    * * Display Name: Content Source
+    * * Display Name: Content Source Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSource(): string | null {
@@ -65224,7 +66343,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentType
-    * * Display Name: Content Type
+    * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentType(): string {
@@ -65233,7 +66352,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentSourceType
-    * * Display Name: Content Source Type
+    * * Display Name: Content Source Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSourceType(): string {
@@ -65242,7 +66361,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ContentFileType
-    * * Display Name: Content File Type
+    * * Display Name: Content File Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentFileType(): string {
@@ -65251,7 +66370,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: EntityRecordDocument
-    * * Display Name: Entity Record Document
+    * * Display Name: Entity Record Document Name
     * * SQL Data Type: nvarchar(450)
     */
     get EntityRecordDocument(): string | null {
@@ -65260,11 +66379,29 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string | null {
         return this.Get('EmbeddingModel');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent Content Name
+    * * SQL Data Type: nvarchar(250)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent Content
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -66434,6 +67571,21 @@ export class MJContentSourceTypeEntity extends BaseEntity<MJContentSourceTypeEnt
  * The keys match the RequiredFields defined on the parent ContentSourceType's Configuration.
  */
 export interface MJContentSourceEntity_IContentSourceConfiguration {
+    /**
+     * Options passed to the segmentation strategy named by SegmenterKey.
+     *
+     * Sizing note: TargetTokens should be driven by the shape of your QUERIES, not by the
+     * embedding model's context window. The window is an upper bound; a good chunk is about
+     * as much content as a good answer, so that a matching chunk is mostly signal.
+     */
+    SegmentationOptions?: MJContentSourceEntity_IContentSegmentationOptions;
+
+    /**
+     * Options passed to the cleaning strategy named by CleanerKey. Selector rules are
+     * per-source because the right selector is a property of the site's template.
+     */
+    CleaningOptions?: MJContentSourceEntity_IContentCleaningOptions;
+
     /** Tag taxonomy matching mode: constrained (only match within subtree), auto-grow (match or create within subtree), free-flow (match or create anywhere) */
     TagTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
     /** Root Tag ID for constrained/auto-grow modes — limits taxonomy operations to this subtree */
@@ -66444,6 +67596,33 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
     ShareTaxonomyWithLLM?: boolean;
     /** Enable vectorization for this source. Default true */
     EnableVectorization?: boolean;
+    /**
+     * Vector-database record-id strategy for this source's chunks. Default 'recordId'.
+     * - 'recordId' (default, recommended): each ContentItemChunk's unique RecordID is used as its
+     *   vector-DB record id. Safe with the soft-delete + PurgeDeletedChunks flow — a re-chunk mints
+     *   new rows with new ids, so a superseded (soft-deleted) chunk and its replacement never share
+     *   a vector id, and purging the old one can't orphan the live chunk's vector.
+     * - 'hash': a deterministic hash of the parent content item id (5.49 EntityDocument parity).
+     *   NOT safe with re-chunking + purge — a replacement chunk reuses the superseded chunk's id,
+     *   so purging the old chunk would delete the live chunk's vector. Use only for sources that
+     *   are never re-chunked or purged.
+     */
+    VectorIDStrategy?: 'hash' | 'recordId';
+    /**
+     * How chunk text + vectors are stored for this source. Default 'alwaysChunk'.
+     * - 'alwaysChunk' (default): every content item gets at least one ContentItemChunk row holding
+     *   its text — even items small enough to fit in a single chunk — and ContentItem.VectorRecordID
+     *   is never set. The ContentItemChunk table is always the single source of truth for vectors.
+     * - 'mixed': items that fit in a single chunk keep their text and vector id on the ContentItem
+     *   (no chunk row); only larger items are split into ContentItemChunk rows.
+     */
+    ChunkTextStorage?: 'mixed' | 'alwaysChunk';
+    /**
+     * Controls what goes into each vector's metadata. Vector-store metadata has real storage +
+     * performance cost, so this lets a source keep it minimal. Falls back to the ContentType's
+     * default, then 'default'.
+     */
+    VectorMetadata?: MJContentSourceEntity_IContentSourceVectorMetadataConfig;
     /**
      * Lower confidence band (0.0-1.0) that routes a semantic match into the human-in-the-loop
      * `MJ:Tag Suggestions` queue instead of auto-applying or auto-creating. A score `s` is
@@ -66513,6 +67692,66 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
 }
 
 /**
+ * Controls which keys land in a content vector's metadata. Vector metadata is expensive in a
+ * vector database (storage + query performance). This mirrors the entity-vectorization pipeline's
+ * metadata-control structure (field strategy, per-field overrides, storage-type coercion,
+ * truncation, opt-out toggles), adapted to content-item vectors.
+ *
+ * Field values are read from the parent ContentItem. The identity keys (Entity + RecordID, plus
+ * ContentItemID / Sequence for chunk vectors) are managed as system keys — see FieldStrategy.
+ */
+export interface MJContentSourceEntity_IContentSourceVectorMetadataConfig {
+    /**
+     * Which ContentItem fields go into metadata. Mirrors the entity pipeline's field strategy.
+     * When UNSET, the standard curated content set is used (the historical default): the identity
+     * keys + ContentSourceID / ContentSourceTypeID + Title / Description / URL + Tags. When set:
+     * - 'all': every eligible ContentItem field (non-PK, non-uniqueidentifier, non-binary,
+     *   non-system) plus the toggle-driven keys below.
+     * - 'include': ONLY the ContentItem fields marked `Included: true` in `Fields` (explicit
+     *   inclusion wins over the eligibility heuristics — a uniqueidentifier / PK / __mj_* field
+     *   can be included by name; only genuinely unstorable binary types are refused).
+     * - 'exclude': all eligible fields EXCEPT those marked `Included: false` in `Fields`.
+     * - 'explicit': EXACTLY the fields in `Fields` — no system keys except `Entity` (always kept so
+     *   content search results stay correctly labeled), and the toggles flip to opt-in (default
+     *   false). Keeps metadata minimal. NOTE: under 'explicit' a search hit's record id is
+     *   recoverable only when VectorIDStrategy='recordId' (the default), where the vector's own id
+     *   is the chunk id; with 'hash' the id would need to be kept explicitly.
+     */
+    FieldStrategy?: 'all' | 'include' | 'exclude' | 'explicit';
+    /** Per-field overrides keyed by ContentItem field name (see {@link MJContentSourceEntity_IContentSourceVectorMetadataFieldConfig}). */
+    Fields?: Record<string, MJContentSourceEntity_IContentSourceVectorMetadataFieldConfig>;
+    /** Global default truncation limit (characters) for large string fields. Default 1000. */
+    DefaultTruncationLimit?: number;
+    /** Include the content entity's icon. Default true under a set strategy; opt-in under 'explicit'. */
+    IncludeEntityIcon?: boolean;
+    /** Include __mj_UpdatedAt for recency sorting. Default true under a set strategy; opt-in under 'explicit'. */
+    IncludeUpdatedAt?: boolean;
+    /** Include the item's Tags array. Default true (and under the curated default); opt-in under 'explicit'. */
+    IncludeTags?: boolean;
+    /**
+     * When true, include the embedded text in metadata under the 'Text' key (which surfaces as the
+     * search snippet). Default false — external hydrators read the authoritative text from the
+     * ContentItem / ContentItemChunk row, so the copy is usually unnecessary storage. Honored under
+     * every strategy (including the curated default).
+     */
+    IncludeText?: boolean;
+}
+
+/** Per-field metadata override, keyed by ContentItem field name. Mirrors the entity pipeline. */
+export interface MJContentSourceEntity_IContentSourceVectorMetadataFieldConfig {
+    /** Include this field under 'include'/'explicit', or exclude it (false) under 'all'/'exclude'. */
+    Included?: boolean;
+    /** Override the truncation limit (characters) for this field. */
+    TruncationLimit?: number;
+    /**
+     * How to store this field's value: 'string' (default, truncated), 'number', 'boolean',
+     * 'epochSeconds' / 'epochMilliseconds' (parse a date to Unix epoch for numeric range filters).
+     * SQL numeric column types store as numbers automatically without setting this.
+     */
+    StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+}
+
+/**
  * Per-source crawl/discovery settings specific to AutotagWebsite. All optional with
  * runtime defaults; an empty object is valid and produces the standard behavior
  * (MaxDepth=2, recursive crawl on, sibling-domain fan-out off, no URL filter).
@@ -66545,6 +67784,63 @@ export interface MJContentSourceEntity_IContentSourceWebsiteConfiguration {
      * origin to crawl the whole site).
      */
     RootURL?: string;
+}
+
+/**
+ * Options for the segmentation strategy. All optional; each segmenter ignores options
+ * that don't apply to it.
+ */
+export interface MJContentSourceEntity_IContentSegmentationOptions {
+    /** Hard ceiling on tokens per segment. Segments larger than this are split. */
+    MaxSegmentTokens?: number;
+    /** Overlap tokens applied when an oversized segment must be split. */
+    OverlapTokens?: number;
+    /** Merge adjacent text segments estimating below this many tokens. */
+    MinSegmentTokens?: number;
+    /** AdaptiveBoundary: desired segment size — size this to your queries, not to the model. */
+    TargetTokens?: number;
+    /** AdaptiveBoundary: percent below target at which a paragraph break is accepted. */
+    UndershootPercent?: number;
+    /** AdaptiveBoundary: percent above target to keep looking for a sentence/word break. */
+    OvershootPercent?: number;
+    /** AdaptiveBoundary: if the whole text is within this percent of target, don't split at all. */
+    NoSplitPercent?: number;
+    /** Transcript: maximum wall-clock length of one chapter, in milliseconds. */
+    MaxChapterMs?: number;
+    /** Transcript: a silence gap at least this long starts a new chapter. */
+    BoundaryGapMs?: number;
+    /** Transcript: also emit one child segment per speaker turn within each chapter. */
+    EmitSubChapters?: boolean;
+    /** FixedWindow: window length in milliseconds for audio/video with no transcript. */
+    WindowMs?: number;
+    /** SemanticText: skip the LLM boundary pass for documents below this token count. */
+    MinTokensForLLM?: number;
+}
+
+/**
+ * Options for the content-cleaning strategy that runs before segmentation.
+ *
+ * Garbage that survives cleaning is expensive: it gets embedded, stored, retrieved, and
+ * shown to a user or an agent. Navigation chrome repeated across a thousand pages produces
+ * a thousand near-identical vectors that crowd out real answers.
+ */
+export interface MJContentSourceEntity_IContentCleaningOptions {
+    /**
+     * CSS selectors whose content is the ONLY content to keep. The highest-leverage knob:
+     * naming the element that holds the article (e.g. '.article-body', 'main') discards
+     * navigation, sidebars, and advertising without enumerating what to drop.
+     */
+    IncludeSelectors?: string[];
+    /** CSS selectors to remove, applied after IncludeSelectors (inline ad slots, share widgets). */
+    ExcludeSelectors?: string[];
+    /** Collapse runs of whitespace and blank lines. Default true. */
+    NormalizeWhitespace?: boolean;
+    /** Maximum characters to retain after cleaning. */
+    MaxLength?: number;
+    /** Html cleaner: replace the built-in exclusion list rather than appending to it. */
+    ReplaceDefaultExcludes?: boolean;
+    /** Html cleaner: keep `alt` text from images as content. */
+    IncludeImageAltText?: boolean;
 }
 
 /**
@@ -66780,8 +68076,34 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: SegmenterKey
+    * * Display Name: Segmenter Strategy
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Registration key of the segmentation strategy used to split this source's content into embeddable chunks — for example StructuralText (document headings), AdaptiveBoundary (target size closing on the nearest natural break), SemanticText (LLM-detected topic boundaries), Transcript (audio/video chapters), PagedContent (one segment per page), or FixedWindow (uniform windows). NULL falls back to the Content Type's value, then to a built-in default.
+    */
+    get SegmenterKey(): string | null {
+        return this.Get('SegmenterKey');
+    }
+    set SegmenterKey(value: string | null) {
+        this.Set('SegmenterKey', value);
+    }
+
+    /**
+    * * Field Name: CleanerKey
+    * * Display Name: Cleaner Strategy
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Registration key of the content-cleaning strategy applied to this source before segmentation — for example Html (CSS-selector-driven extraction that drops navigation, sidebars, and advertising) or PlainText (whitespace normalization only). Cleaning is separate from segmentation because the two change for different reasons: a new site template needs new selectors, not a new chunking strategy. NULL falls back to the Content Type's value, then to a default inferred from the content's mime type.
+    */
+    get CleanerKey(): string | null {
+        return this.Get('CleanerKey');
+    }
+    set CleanerKey(value: string | null) {
+        this.Set('CleanerKey', value);
+    }
+
+    /**
     * * Field Name: ContentType
-    * * Display Name: Content Type
+    * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentType(): string {
@@ -66790,7 +68112,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentSourceType
-    * * Display Name: Content Source Type
+    * * Display Name: Content Source Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentSourceType(): string {
@@ -66799,7 +68121,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ContentFileType
-    * * Display Name: Content File Type
+    * * Display Name: Content File Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContentFileType(): string {
@@ -66808,7 +68130,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string | null {
@@ -66817,7 +68139,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: VectorIndex
-    * * Display Name: Vector Index
+    * * Display Name: Vector Index Name
     * * SQL Data Type: nvarchar(255)
     */
     get VectorIndex(): string | null {
@@ -66826,7 +68148,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
@@ -66835,7 +68157,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EntityDocument
-    * * Display Name: Entity Document
+    * * Display Name: Entity Document Name
     * * SQL Data Type: nvarchar(250)
     */
     get EntityDocument(): string | null {
@@ -66844,7 +68166,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: ScheduledAction
-    * * Display Name: Scheduled Action
+    * * Display Name: Scheduled Action Name
     * * SQL Data Type: nvarchar(255)
     */
     get ScheduledAction(): string | null {
@@ -66977,10 +68299,138 @@ export class MJContentTypeAttributeEntity extends BaseEntity<MJContentTypeAttrib
  * their own {@link IContentSourceConfiguration}.
  */
 export interface MJContentTypeEntity_IContentTypeConfiguration {
+    /**
+     * Options passed to the segmentation strategy named by SegmenterKey.
+     *
+     * Sizing note: TargetTokens should be driven by the shape of your QUERIES, not by the
+     * embedding model's context window. The window is an upper bound; a good chunk is about
+     * as much content as a good answer, so that a matching chunk is mostly signal.
+     */
+    SegmentationOptions?: MJContentTypeEntity_IContentSegmentationOptions;
+
+    /**
+     * Options passed to the cleaning strategy named by CleanerKey. Selector rules are
+     * per-source because the right selector is a property of the site's template.
+     */
+    CleaningOptions?: MJContentTypeEntity_IContentCleaningOptions;
+
     /** Whether to share tag taxonomy with LLM by default for all sources of this type. Can be overridden per source. Default true */
     ShareTaxonomyWithLLM?: boolean;
     /** Default tag taxonomy mode for sources of this type. Can be overridden per source */
     DefaultTagTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
+    /**
+     * Default vector-database record-id strategy for sources of this type. Overridable per source
+     * via {@link IContentSourceConfiguration.VectorIDStrategy}. Default 'recordId' (the safe,
+     * purge-compatible strategy); 'hash' is legacy parity and unsafe with re-chunk + purge.
+     */
+    VectorIDStrategy?: 'hash' | 'recordId';
+    /**
+     * Default chunk text/vector storage mode for sources of this type. Overridable per source via
+     * {@link IContentSourceConfiguration.ChunkTextStorage}. Default 'alwaysChunk' — every item gets
+     * a ContentItemChunk row and ContentItem.VectorRecordID is never set; 'mixed' keeps
+     * single-chunk items' text/vector on the ContentItem.
+     */
+    ChunkTextStorage?: 'mixed' | 'alwaysChunk';
+    /**
+     * Default vector-metadata configuration for sources of this type. Overridable per source via
+     * {@link IContentSourceConfiguration.VectorMetadata}. Controls how minimal each vector's
+     * metadata is kept.
+     */
+    VectorMetadata?: MJContentTypeEntity_IContentTypeVectorMetadataConfig;
+}
+
+/**
+ * Content-type-level default for vector metadata shape. Structurally identical to
+ * {@link IContentSourceConfiguration.VectorMetadata}; a source's own setting overrides it.
+ */
+export interface MJContentTypeEntity_IContentTypeVectorMetadataConfig {
+    /**
+     * Which ContentItem fields go into metadata (mirrors the entity pipeline). Unset ⇒ the curated
+     * default (identity + ContentSourceID/Type + Title / Description / URL + Tags).
+     * - 'all': every eligible ContentItem field. - 'include': only `Fields` marked Included.
+     * - 'exclude': all eligible except `Fields` marked Included:false. - 'explicit': exactly
+     * `Fields`, no system keys except Entity, toggles opt-in.
+     */
+    FieldStrategy?: 'all' | 'include' | 'exclude' | 'explicit';
+    /** Per-field overrides keyed by ContentItem field name. */
+    Fields?: Record<string, MJContentTypeEntity_IContentTypeVectorMetadataFieldConfig>;
+    /** Global default truncation limit (characters) for large string fields. Default 1000. */
+    DefaultTruncationLimit?: number;
+    /** Include the content entity's icon. Default true under a set strategy; opt-in under 'explicit'. */
+    IncludeEntityIcon?: boolean;
+    /** Include __mj_UpdatedAt for recency sorting. Default true under a set strategy; opt-in under 'explicit'. */
+    IncludeUpdatedAt?: boolean;
+    /** Include the item's Tags array. Default true (and under the curated default); opt-in under 'explicit'. */
+    IncludeTags?: boolean;
+    /** Include the embedded text under the 'Text' key. Default false. Honored under every strategy. */
+    IncludeText?: boolean;
+}
+
+/** Per-field metadata override, keyed by ContentItem field name. Mirrors the entity pipeline. */
+export interface MJContentTypeEntity_IContentTypeVectorMetadataFieldConfig {
+    /** Include this field under 'include'/'explicit', or exclude it (false) under 'all'/'exclude'. */
+    Included?: boolean;
+    /** Override the truncation limit (characters) for this field. */
+    TruncationLimit?: number;
+    /** How to store this field's value ('string' default, 'number', 'boolean', 'epochSeconds', 'epochMilliseconds'). */
+    StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds';
+}
+
+/**
+ * Options for the segmentation strategy. All optional; each segmenter ignores options
+ * that don't apply to it.
+ */
+export interface MJContentTypeEntity_IContentSegmentationOptions {
+    /** Hard ceiling on tokens per segment. Segments larger than this are split. */
+    MaxSegmentTokens?: number;
+    /** Overlap tokens applied when an oversized segment must be split. */
+    OverlapTokens?: number;
+    /** Merge adjacent text segments estimating below this many tokens. */
+    MinSegmentTokens?: number;
+    /** AdaptiveBoundary: desired segment size — size this to your queries, not to the model. */
+    TargetTokens?: number;
+    /** AdaptiveBoundary: percent below target at which a paragraph break is accepted. */
+    UndershootPercent?: number;
+    /** AdaptiveBoundary: percent above target to keep looking for a sentence/word break. */
+    OvershootPercent?: number;
+    /** AdaptiveBoundary: if the whole text is within this percent of target, don't split at all. */
+    NoSplitPercent?: number;
+    /** Transcript: maximum wall-clock length of one chapter, in milliseconds. */
+    MaxChapterMs?: number;
+    /** Transcript: a silence gap at least this long starts a new chapter. */
+    BoundaryGapMs?: number;
+    /** Transcript: also emit one child segment per speaker turn within each chapter. */
+    EmitSubChapters?: boolean;
+    /** FixedWindow: window length in milliseconds for audio/video with no transcript. */
+    WindowMs?: number;
+    /** SemanticText: skip the LLM boundary pass for documents below this token count. */
+    MinTokensForLLM?: number;
+}
+
+/**
+ * Options for the content-cleaning strategy that runs before segmentation.
+ *
+ * Garbage that survives cleaning is expensive: it gets embedded, stored, retrieved, and
+ * shown to a user or an agent. Navigation chrome repeated across a thousand pages produces
+ * a thousand near-identical vectors that crowd out real answers.
+ */
+export interface MJContentTypeEntity_IContentCleaningOptions {
+    /**
+     * CSS selectors whose content is the ONLY content to keep. The highest-leverage knob:
+     * naming the element that holds the article (e.g. '.article-body', 'main') discards
+     * navigation, sidebars, and advertising without enumerating what to drop.
+     */
+    IncludeSelectors?: string[];
+    /** CSS selectors to remove, applied after IncludeSelectors (inline ad slots, share widgets). */
+    ExcludeSelectors?: string[];
+    /** Collapse runs of whitespace and blank lines. Default true. */
+    NormalizeWhitespace?: boolean;
+    /** Maximum characters to retain after cleaning. */
+    MaxLength?: number;
+    /** Html cleaner: replace the built-in exclusion list rather than appending to it. */
+    ReplaceDefaultExcludes?: boolean;
+    /** Html cleaner: keep `alt` text from images as content. */
+    IncludeImageAltText?: boolean;
 }
 
 /**
@@ -67170,6 +68620,32 @@ export class MJContentTypeEntity extends BaseEntity<MJContentTypeEntityType> {
         this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: SegmenterKey
+    * * Display Name: Segmenter Strategy
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Default segmentation strategy for content of this type, used when a Content Source does not specify its own SegmenterKey. See ContentSource.SegmenterKey for the available strategies.
+    */
+    get SegmenterKey(): string | null {
+        return this.Get('SegmenterKey');
+    }
+    set SegmenterKey(value: string | null) {
+        this.Set('SegmenterKey', value);
+    }
+
+    /**
+    * * Field Name: CleanerKey
+    * * Display Name: Cleaner Strategy
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Default content-cleaning strategy for content of this type, used when a Content Source does not specify its own CleanerKey. See ContentSource.CleanerKey.
+    */
+    get CleanerKey(): string | null {
+        return this.Get('CleanerKey');
+    }
+    set CleanerKey(value: string | null) {
+        this.Set('CleanerKey', value);
     }
 
     /**
@@ -67725,6 +69201,117 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
     */
     get ArtifactType(): string {
         return this.Get('ArtifactType');
+    }
+}
+
+
+/**
+ * MJ: Conversation Compaction Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationCompactionRun
+ * * Base View: vwConversationCompactionRuns
+ * * @description Links a conversation detail boundary row to the AI Prompt Run that produced its compaction summary. Audit-only join table replacing the former ConversationDetail.SummaryPromptRunID FK to break the CodeGen cycle.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Compaction Runs')
+export class MJConversationCompactionRunEntity extends BaseEntity<MJConversationCompactionRunEntityType> {
+    /**
+    * Loads the MJ: Conversation Compaction Runs record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Compaction Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJConversationCompactionRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ConversationDetailID
+    * * Display Name: Conversation Detail
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
+    * * Description: The conversation detail row whose SummaryOfEarlierConversation was produced by this compaction run.
+    */
+    get ConversationDetailID(): string {
+        return this.Get('ConversationDetailID');
+    }
+    set ConversationDetailID(value: string) {
+        this.Set('ConversationDetailID', value);
+    }
+
+    /**
+    * * Field Name: PromptRunID
+    * * Display Name: Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: The AI Prompt Run that generated the compaction summary (model, tokens, cost, prompt version).
+    */
+    get PromptRunID(): string {
+        return this.Get('PromptRunID');
+    }
+    set PromptRunID(value: string) {
+        this.Set('PromptRunID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ConversationDetail
+    * * Display Name: Conversation Detail Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ConversationDetail(): string | null {
+        return this.Get('ConversationDetail');
+    }
+
+    /**
+    * * Field Name: PromptRun
+    * * Display Name: Prompt Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PromptRun(): string | null {
+        return this.Get('PromptRun');
     }
 }
 
@@ -68885,23 +70472,6 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     get Sequence(): number {
         return this.Get('Sequence');
     }
-    set Sequence(value: number) {
-        this.Set('Sequence', value);
-    }
-
-    /**
-    * * Field Name: SummaryPromptRunID
-    * * Display Name: Summary Prompt Run
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
-    * * Description: When SummaryOfEarlierConversation is populated by a cross-turn compaction, this links to the AIPromptRun that produced it (model, tokens, cost, prompt version). Null for ordinary (non-summary) rows.
-    */
-    get SummaryPromptRunID(): string | null {
-        return this.Get('SummaryPromptRunID');
-    }
-    set SummaryPromptRunID(value: string | null) {
-        this.Set('SummaryPromptRunID', value);
-    }
 
     /**
     * * Field Name: Conversation
@@ -68964,15 +70534,6 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     */
     get TestRun(): string | null {
         return this.Get('TestRun');
-    }
-
-    /**
-    * * Field Name: SummaryPromptRun
-    * * Display Name: Summary Prompt Run
-    * * SQL Data Type: nvarchar(255)
-    */
-    get SummaryPromptRun(): string | null {
-        return this.Get('SummaryPromptRun');
     }
 
     /**
@@ -104124,6 +105685,46 @@ export class MJSearchExecutionLogEntity extends BaseEntity<MJSearchExecutionLogE
     }
 
     /**
+    * * Field Name: AISkillID
+    * * Display Name: AI Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    * * Description: The AI Skill on whose behalf this search ran, or NULL for a search with no active skill. Mirrors AIAgentID: since a skill is a search principal in its own right (AISkill.SearchScopeAccess plus MJ: AI Skill Search Scopes rows can reach a scope the user's own roles do not grant), the log must record which skill was active or the entitlement decision cannot be reconstructed.
+    */
+    get AISkillID(): string | null {
+        return this.Get('AISkillID');
+    }
+    set AISkillID(value: string | null) {
+        this.Set('AISkillID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: The tenant this search ran for, taken from SearchContext.PrimaryScopeRecordID. Lets a multi-tenant deployment partition, filter and retain search audit history per customer. NULL for untenanted searches. Named for the existing primary-scope concept rather than OrganizationID because a scope's primary scope may be a Company, Client or Practice.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: ScopeDecisionJSON
+    * * Display Name: Scope Decision JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Serialized ScopeExplanation recording WHY this search could reach what it reached: the entitlement decision and the grant that produced it, every dimension with its provenance (CallerSupplied / ServerDerived / Default / DiscardedCaller / Absent), and each lane's rendered filter with its active-or-skipped status and reason. Identical in shape to the value returned by SearchEngine.ExplainScope(), so the dry-run an administrator previews before running a search is the same structure the audit log stores afterwards. NULL when the engine did not capture a decision (older writers, or a failure before scope resolution).
+    */
+    get ScopeDecisionJSON(): string | null {
+        return this.Get('ScopeDecisionJSON');
+    }
+    set ScopeDecisionJSON(value: string | null) {
+        this.Set('ScopeDecisionJSON', value);
+    }
+
+    /**
     * * Field Name: SearchScope
     * * Display Name: Search Scope Name
     * * SQL Data Type: nvarchar(200)
@@ -104148,6 +105749,15 @@ export class MJSearchExecutionLogEntity extends BaseEntity<MJSearchExecutionLogE
     */
     get AIAgent(): string | null {
         return this.Get('AIAgent');
+    }
+
+    /**
+    * * Field Name: AISkill
+    * * Display Name: AI Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AISkill(): string | null {
+        return this.Get('AISkill');
     }
 }
 
@@ -104538,6 +106148,19 @@ export class MJSearchScopeEntityEntity extends BaseEntity<MJSearchScopeEntityEnt
     }
 
     /**
+    * * Field Name: RequiredMetadataKeys
+    * * Display Name: Required Metadata Keys
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of column or alias names the rendered ExtraFilter MUST reference for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if one is missing the lane is SKIPPED rather than queried, because a partially-rendered filter (an {% if %} clause dropped when its dimension was absent or discarded) is still valid SQL and silently widens the search. Same concept and same engine check as SearchScopeExternalIndex.RequiredMetadataKeys, applied to the SQL lane. NULL = no contract declared, which is the pre-migration behaviour.
+    */
+    get RequiredMetadataKeys(): string | null {
+        return this.Get('RequiredMetadataKeys');
+    }
+    set RequiredMetadataKeys(value: string | null) {
+        this.Set('RequiredMetadataKeys', value);
+    }
+
+    /**
     * * Field Name: SearchScope
     * * Display Name: Search Scope
     * * SQL Data Type: nvarchar(200)
@@ -104751,6 +106374,19 @@ export class MJSearchScopeExternalIndexEntity extends BaseEntity<MJSearchScopeEx
     }
 
     /**
+    * * Field Name: RequiredMetadataKeys
+    * * Display Name: Required Metadata Keys
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of metadata key names the rendered MetadataFilter MUST constrain on for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if a key is missing the lane is SKIPPED rather than queried, because a partially-rendered filter silently widens the search. This also documents the ingest contract — these are the labels the writer must stamp on every document in the index, since a filter on a key that was never written either matches nothing or (on providers that ignore unknown keys) matches everything. NULL = no contract declared, which is the pre-migration behaviour.
+    */
+    get RequiredMetadataKeys(): string | null {
+        return this.Get('RequiredMetadataKeys');
+    }
+    set RequiredMetadataKeys(value: string | null) {
+        this.Set('RequiredMetadataKeys', value);
+    }
+
+    /**
     * * Field Name: SearchScope
     * * Display Name: Search Scope
     * * SQL Data Type: nvarchar(200)
@@ -104935,6 +106571,45 @@ export class MJSearchScopePermissionEntity extends BaseEntity<MJSearchScopePermi
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: StartAt
+    * * Display Name: Start At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional start of the window in which this grant applies. NULL = no lower bound. SearchScopePermission was the only member of this family without a time window, so temporary grants previously needed a bespoke mechanism.
+    */
+    get StartAt(): Date | null {
+        return this.Get('StartAt');
+    }
+    set StartAt(value: Date | null) {
+        this.Set('StartAt', value);
+    }
+
+    /**
+    * * Field Name: EndAt
+    * * Display Name: End At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional end of the window in which this grant applies. NULL = no upper bound.
+    */
+    get EndAt(): Date | null {
+        return this.Get('EndAt');
+    }
+    set EndAt(value: Date | null) {
+        this.Set('EndAt', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Optional tenant this grant is limited to, matched against SearchContext.PrimaryScopeRecordID at search time and type-checkable against the scope's own PrimaryScopeEntityID. NULL = applies to every tenant, which is the pre-migration behaviour for all existing rows. Deliberately NOT called OrganizationID: MJ is domain-agnostic and a scope's primary scope may be a Company, Client or Practice, so this reuses the existing primary-scope concept rather than inventing a parallel tenancy column.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
     }
 
     /**

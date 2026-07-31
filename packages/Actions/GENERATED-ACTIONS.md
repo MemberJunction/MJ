@@ -1297,6 +1297,6 @@ Generated Actions provide a powerful way to rapidly create entity-specific actio
 
 For questions or issues, consult:
 - [CLAUDE.md](./CLAUDE.md) - General action development guidelines
-- [Action development guidelines](./CLAUDE.md#actions-design-philosophy) - When to use actions vs direct code
+- [Action development guidelines](./CLAUDE.md#core-philosophy-actions-are-boundaries-not-internal-apis) - When to use actions vs direct code
 - `/metadata/prompts/templates/system/action-generation.template.md` - The AI prompt template
 - `/packages/MJCoreEntitiesServer/src/custom/ActionEntity.server.ts` - Generation implementation
