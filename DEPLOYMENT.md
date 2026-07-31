@@ -167,7 +167,7 @@ Check if there are any pending metadata changes (new/updated records in `metadat
    > This push includes the inert **"Integration Test" TestType** (it lives in the normal
    > `metadata/test-types/` tree) — that's fine, it's just a type definition. But **do NOT push
    > `metadata-optional/integration-test/` here.** That optional sibling root holds the actual
-   > test-only records — the **IT01–IT66 Tests (67 records: 52 in the Deterministic suite, 15 in
+   > test-only records — the **IT01–IT68 Tests (69 records: 54 in the Deterministic suite, 15 in
    > the Live Model suite)**, the three-suite hierarchy, the RLS principals (three synthetic
    > `it-*@integration.test` users + the "Integration Test: RLS Scoped Reader" role + its grants),
    > **and the synthetic AI stack the live tier drives** (14 `IT: *` AI Agents — 12 of them
@@ -234,10 +234,10 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 
 | Suite | Members | Gate |
 |---|---|---|
-| `Integration Tests — Deterministic` | 52 | **Required — must be 52/52.** Deterministic: any shortfall blocks the release |
+| `Integration Tests — Deterministic` | 54 | **Required — must be 54/54.** Deterministic: any shortfall blocks the release |
 | `Integration Tests — Live Model` | 15 | **Required to run and be triaged — but *not* required to be 15/15.** Real LLM calls; see 4.4 |
 
-> **The two tiers have different pass criteria, and conflating them will either block a good release or wave through a bad one.** The deterministic tier is exactly that — 52/52 or stop. The live tier drives real models, and `agents-suite.md` documents run-to-run variance as a known characteristic "surfaced honestly rather than hidden": checks that need the model to take a specific action use a two-phase bounded retry (≤3 attempts) and then fail **loudly** with `model-noncompliance:`. So a live shortfall is not automatically a blocker — every failing live test must be **triaged individually** (see 4.6): `model-noncompliance:` is variance and may be accepted; anything else is a real defect and blocks.
+> **The two tiers have different pass criteria, and conflating them will either block a good release or wave through a bad one.** The deterministic tier is exactly that — 54/54 or stop. The live tier drives real models, and `agents-suite.md` documents run-to-run variance as a known characteristic "surfaced honestly rather than hidden": checks that need the model to take a specific action use a two-phase bounded retry (≤3 attempts) and then fail **loudly** with `model-noncompliance:`. So a live shortfall is not automatically a blocker — every failing live test must be **triaged individually** (see 4.6): `model-noncompliance:` is variance and may be accepted; anything else is a real defect and blocks.
 
 > ⚠️ Do **not** run `mj test suite "Integration Tests"`. That is the empty parent container (zero members); it exits **1** with `No tests found in suite: <id>`. A hyphen typed instead of the em dash also exits 1, with `Test suite not found: <arg>`.
 
@@ -271,7 +271,7 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 npx mj sync push --dir ./metadata-optional/integration-test --ci
 ```
 
-This seeds **242 records**: the **67 IT Test records** (IT01–IT66), the 3 suite rows and their 52 + 15 memberships, the RLS principals (3 synthetic `it-*@integration.test` users + the `Integration Test: RLS Scoped Reader` role + 2 entity-permission grants), and the synthetic AI stack the live tier drives (14 `IT: *` AI Agents — 12 root-level — 14 IT AI Prompts with 42 multi-vendor model bindings + templates, `IT: Probe Skill`, `IT: Integration Test Scope`, and the IT categories). Expect `Created 242 / Errors 0` in the push summary.
+This seeds **246 records**: the **69 IT Test records** (IT01–IT68), the 3 suite rows and their 54 + 15 memberships, the RLS principals (3 synthetic `it-*@integration.test` users + the `Integration Test: RLS Scoped Reader` role + 2 entity-permission grants), and the synthetic AI stack the live tier drives (14 `IT: *` AI Agents — 12 root-level — 14 IT AI Prompts with 42 multi-vendor model bindings + templates, `IT: Probe Skill`, `IT: Integration Test Scope`, and the IT categories). Expect `Created 246 / Errors 0` in the push summary.
 
 Verify it actually landed — the push can exit 0 without seeding, which silently degrades the RLS checks to skip-as-pass (this is the same assertion `integration.yml` makes in CI):
 
@@ -283,7 +283,7 @@ SELECT COUNT(*) FROM __mj.[User] WHERE Email LIKE '%@integration.test';   -- mus
 
 > This push emits **no** SQL log, so it cannot contaminate the Step-3 `Metadata_Sync.sql` migration. It **does** rewrite `sync.lastModified`/`checksum` into the `metadata-optional/**` JSON files — **discard that churn.** Unlike the Step-3 `metadata/**` writeback (Step 3.8), it does not belong in the release commit.
 
-**One more precondition a virgin database does not satisfy.** `IT29 - Cache Gauntlet` enforces an explicit *anti-vacuity floor*: CG1/CG4/CG5 assert that `MJ: User Settings` already holds **≥ 2 rows** before they create their own, because "a `MaxRows:1` slot returned ≤ 1 row" would be trivially true against an empty table. A Step-3 database is brand new, so that table is empty and those three checks fail with `need >= 2 existing rows … (found 0)` — **51/52, and not a product regression.** Seed a baseline once, before running:
+**One more precondition a virgin database does not satisfy.** `IT29 - Cache Gauntlet` enforces an explicit *anti-vacuity floor*: CG1/CG4/CG5 assert that `MJ: User Settings` already holds **≥ 2 rows** before they create their own, because "a `MaxRows:1` slot returned ≤ 1 row" would be trivially true against an empty table. A Step-3 database is brand new, so that table is empty and those three checks fail with `need >= 2 existing rows … (found 0)` — **53/54, and not a product regression.** Seed a baseline once, before running:
 
 ```sql
 DECLARE @u UNIQUEIDENTIFIER = (SELECT TOP 1 ID FROM __mj.[User] ORDER BY __mj_CreatedAt);
@@ -293,11 +293,11 @@ INSERT INTO __mj.UserSetting (ID, UserID, Setting, Value) VALUES
   (NEWID(), @u, 'mj.baselineFloor.c', '3');
 ```
 
-With those rows present all 7 cache-gauntlet checks pass and the tier reaches 52/52.
+With those rows present all 7 cache-gauntlet checks pass and the tier reaches 54/54.
 
-#### 4.3 Start MJAPI (REQUIRED — 19 of the 52 deterministic tests need it)
+#### 4.3 Start MJAPI (REQUIRED — the client-transport deterministic tests need it)
 
-19 of the 52 deterministic members are **client-transport** and exercise the real GraphQL wire (IT03, IT15, IT23, IT25–IT28, IT31–IT34, IT37, IT40, IT43–IT45, IT47, IT50, IT52). Start MJAPI against the Step-3 database before running:
+The **client-transport** members exercise the real GraphQL wire. The authoritative list is `CLIENT_BUNDLES` in `packages/TestingFramework/testing-integration/src/IntegrationTestDriver.ts` — currently `client-cache`, `rls-isolation-client`, `remote-op-wire-progress`, i.e. **3** deterministic tests (IT03, IT15, IT23). Derive the count from that constant rather than trusting a list here; an earlier revision of this guide claimed 19, which no longer matches the code. Start MJAPI against the Step-3 database before running:
 
 ```bash
 # In a separate shell, pointed at the Step-3 database
@@ -323,8 +323,8 @@ The two failure modes are **asymmetric, and neither shows up in the exit code**:
 
 | Condition | Result |
 |---|---|
-| MJAPI not reachable | 19 tests **skip-as-PASS** (`SKIPPED (environment gap)`) — a green 52/52 that really ran 33 tests |
-| `MJ_API_KEY` unset or rejected | 19 tests return status `Error` — which **also** exits 0 |
+| MJAPI not reachable | the client-transport tests **skip-as-PASS** (`SKIPPED (environment gap)`) — a green 54/54 that silently ran fewer |
+| `MJ_API_KEY` unset or rejected | those tests return status `Error` — which **also** exits 0 |
 
 #### 4.4 Run the two suites
 
@@ -359,14 +359,14 @@ MJ_INTEGRATION_TEST=1 npx mj test suite "Integration Tests — Live Model" 2>&1 
 The exit code is driven by `failedTests`, which counts **only** status `Failed`. Statuses `Error` and `Timeout`, tier-gated skips, and MJAPI-absent skips all exit **0**. So for each of the two runs:
 
 1. Read the console block: `[SUMMARY] N/M passed (X%)`.
-2. **Deterministic:** require **N === M === 52**. A 100% summary over a smaller M means tests errored or were skipped — it did not pass.
+2. **Deterministic:** require **N === M === 54**. A 100% summary over a smaller M means tests errored or were skipped — it did not pass.
    **Live model:** require **M === 15** (everything actually ran); `N` may legitimately be < 15, so instead of a number gate, triage every failure per 4.6 — `model-noncompliance:` is accepted variance, anything else blocks.
 3. Confirm the log contains no `SKIPPED (environment gap)` and no `Bootstrap failed:`.
 4. **Get the real status breakdown from the database, not the console.** The console prints `✗ FAILED` for *any* non-passed test, so an `Error` is visually indistinguishable from a `Failed` — and only `Failed` moves the exit code. Query the run you just did:
    ```sql
    SELECT Status, COUNT(*) FROM __mj.TestRun
    WHERE __mj_CreatedAt > DATEADD(minute, -30, GETUTCDATE())
-   GROUP BY Status;     -- want: Passed = 52, nothing else
+   GROUP BY Status;     -- want: Passed = 54, nothing else
    ```
    A tally like `Error = 19 / Failed = 15 / Passed = 18` is the signature of an environment problem (here: 19 client-transport bundles with no `MJ_API_KEY`), not 34 product defects.
 5. Record both `[SUMMARY]` lines in the release checklist. Per-run telemetry persists to `MJ: Test Runs` / `MJ: Test Suite Runs` (`DurationSeconds`, `CostUSD`, `MachineName`) — useful for trending a bundle that's slowing down.
@@ -517,6 +517,45 @@ This is not hypothetical. It has happened in both directions:
 
 - **v5.45** shipped `Metadata_Sync.pg.sql` as a **126-byte marker** — 12,041 lines of SQL Server metadata DML reduced to two comment lines. PostgreSQL deployments migrating through v5.45 silently received none of that release's curated metadata (issue #3253). The v5.46 PG baseline was dumped from a gapped database, so **fresh installs from that baseline were gapped too**. Healed forward in v5.50 by the idempotent reseed [`V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql`](migrations-pg/v5/V202607271005__v5.50.x__Reseed_v545_Metadata.pg-only.sql) (derivation: [`scripts/generate-v545-metadata-reseed.mjs`](scripts/generate-v545-metadata-reseed.mjs); rationale below) — no `mj sync push` required.
 - In a later build the converter emitted **three** header-only stubs and one file containing six bare `;` statements where six `CREATE INDEX` statements belonged — while reporting `unhandled stmts: 0` and exiting successfully (issue #3252).
+- **v5.51 reproduced the v5.45 stub exactly** — same two comment lines, same 126 bytes — and it was caught only by diffing against the committed ledger. See the rule immediately below; this is the single highest-value check in Step 8.
+
+##### 🚨 NEVER use `--split` for `*_Metadata_Sync.sql` — use the LEGACY converter
+
+`mj migrate convert --split` is described as "the standard path", and it is — **except for metadata-sync migrations, where it will silently produce a gap.** Its own `--help` says it defers mj-sync metadata to `mj sync push`, so for a `*_Metadata_Sync.sql` it emits a two-line marker instead of the DML:
+
+```
+-- V<ts>__v5.X.x__Metadata_Sync.sql — no DDL to translate.
+-- Metadata is re-seeded via `mj sync push` against PG.
+```
+
+That is **exactly** the v5.45 artifact behind issue #3253. The reasoning is wrong because PostgreSQL deployments *migrating through* a release never run `mj sync push` — the metadata must live in the migration.
+
+**The correct command for a metadata-sync migration** (no `--split`, one file at a time):
+
+```bash
+npx mj migrate convert --file V<ts>__v5.X.x__Metadata_Sync.sql
+```
+
+**Two things to check immediately after running it:**
+
+1. **Size.** A healthy counterpart is **60–70% of the SQL Server line count** — that ratio holds across every committed `Metadata_Sync` counterpart. Two comment lines means you used the wrong path.
+2. **The legacy converter mutates COMMITTED files.** Its "EntityField Sequence deduplication" pass rewrites sequence numbers in *existing* `.pg.sql` files. Those are Flyway-checksummed and immutable — shipping the edits breaks validation on every database that already ran them. Revert every one before continuing:
+
+   ```bash
+   git status --porcelain migrations-pg/v5/ | grep -E '^ ?M '   # MUST be empty; revert anything listed
+   ```
+
+**Neither automated gate catches an emptied counterpart.** Empty SQL applies cleanly, so the fresh-apply gate passes, and the L1 parity script only checks the file *exists*. The ledger diff is the only thing that finds it.
+
+##### The strongest check is content, not size
+
+Size catches a *fully* empty file; it cannot catch a partially-emptied one. After the deploy gate applies the set to a fresh PG database — and **before** any `mj sync push` — query for records the migration was supposed to create:
+
+```sql
+SELECT COUNT(*) FROM __mj."AIModel" WHERE "Name" = '<a model this release added>';
+```
+
+Cross-check the counts against the `mj sync push` summary from Step 3 (`Created N / Updated M`). A vacuous counterpart returns zero here while passing every other gate.
 
 ##### How to heal a ledger gap (and why the obvious repairs are wrong)
 
@@ -805,7 +844,7 @@ mj migrate
 # Push metadata to database
 mj sync push --dir ./metadata
 
-# Seed the integration metadata — REQUIRED before Step 4 (IT01-IT66 Tests, the two tier suites,
+# Seed the integration metadata — REQUIRED before Step 4 (IT01-IT68 Tests, the two tier suites,
 # the RLS principals, and the IT agent/prompt/skill/search fixtures; the TestType itself lives in
 # normal metadata/) — TEST/CI databases ONLY, never production (kept out of ./metadata on purpose)
 npx mj sync push --dir ./metadata-optional/integration-test --ci
@@ -821,7 +860,7 @@ metadata/sql_logging/MetadataSync_Push_*.sql
 # server-transport test errors out. Exit code 2 = ran inside a process that already owns
 # the cache (e.g. a live MJAPI).
 
-# Deterministic tier (52 tests) + mutation axis — the release gate
+# Deterministic tier (54 tests) + mutation axis — the release gate
 RUN_MUTATION_TESTS=1 npm run test:integration
 
 # Live-model tier (15 tests) — SEPARATE suite, real LLM cost. Note the em dash.
