@@ -12,8 +12,6 @@
  * Root cause is identical: CodeGen generated corrected SQL to disk but the
  * cascade-regeneration check saw no metadata change and never executed it.
  *
- * This migration contains the corrected CodeGen output for both procedures,
- * with [__mj] replaced by ${flyway:defaultSchema}.
  ******************************************************************************/
 
 
