@@ -22,6 +22,17 @@ export interface ChunkTextParams {
 }
 
 /**
+ * A text unit (sentence or paragraph) paired with its real position in the
+ * source text. Positions are resolved once, in a single forward pass, so a unit
+ * whose text repeats elsewhere in the document still reports its own offsets.
+ */
+interface PositionedUnit {
+    Text: string;
+    Start: number;
+    End: number;
+}
+
+/**
  * A single chunk of text with position metadata.
  */
 export interface TextChunk {
@@ -88,18 +99,46 @@ export class TextChunker {
 
     private static chunkBySentence(text: string, maxTokens: number, overlapTokens: number): TextChunk[] {
         const sentences = TextChunker.splitSentences(text);
-        return TextChunker.mergeUnitsIntoChunks(sentences, text, maxTokens, overlapTokens);
+        return TextChunker.mergeUnitsIntoChunks(TextChunker.locateUnits(sentences, text), maxTokens, overlapTokens);
     }
 
     private static chunkByParagraph(text: string, maxTokens: number, overlapTokens: number): TextChunk[] {
         const paragraphs = text.split(/\n\n+/).filter((p) => p.trim().length > 0);
-        return TextChunker.mergeUnitsIntoChunks(paragraphs, text, maxTokens, overlapTokens);
+        return TextChunker.mergeUnitsIntoChunks(TextChunker.locateUnits(paragraphs, text), maxTokens, overlapTokens);
+    }
+
+    /**
+     * Resolve each unit's true offsets with a single forward-moving cursor.
+     *
+     * Searching from the start of the document for every unit (the obvious
+     * implementation) returns the *first* occurrence of that text, so any repeated
+     * sentence — boilerplate, a recurring header, "Thank you." — makes later chunks
+     * report offsets pointing at the wrong part of the document. Because those
+     * offsets are persisted as chunk provenance, that silently corrupts the link
+     * from a search hit back to its source passage. The cursor also makes this a
+     * single O(n) pass instead of O(n²).
+     */
+    private static locateUnits(units: string[], originalText: string): PositionedUnit[] {
+        const positioned: PositionedUnit[] = [];
+        let cursor = 0;
+        for (const unit of units) {
+            const found = originalText.indexOf(unit, cursor);
+            const start = found >= 0 ? found : cursor;
+            const end = Math.min(start + unit.length, originalText.length);
+            positioned.push({ Text: unit, Start: start, End: end });
+            cursor = end;
+        }
+        return positioned;
     }
 
     private static chunkByFixed(text: string, maxTokens: number, overlapTokens: number): TextChunk[] {
-        const words = text.split(/\s+/);
         const maxChars = maxTokens * 4; // rough token-to-char estimate
-        const overlapChars = overlapTokens * 4;
+        // Cap the overlap at half the window. Beyond 50% each chunk is mostly a copy
+        // of its predecessor, and as the overlap approaches the window size the chunk
+        // count explodes (an overlap >= the window never advances at all). The loop
+        // below additionally guarantees forward progress, since backing up to a word
+        // boundary can shorten a window enough that even a legal overlap would stall.
+        const overlapChars = Math.min(overlapTokens * 4, Math.floor(maxChars / 2));
         const chunks: TextChunk[] = [];
         let startCharOffset = 0;
         let chunkIndex = 0;
@@ -126,9 +165,10 @@ export class TextChunker {
                 });
             }
 
-            startCharOffset = endCharOffset - overlapChars;
-            if (startCharOffset >= text.length) break;
             if (endCharOffset >= text.length) break;
+            // Always advance by at least one character, so a short word-boundary
+            // window can never leave the cursor where it started.
+            startCharOffset = Math.max(endCharOffset - overlapChars, startCharOffset + 1);
         }
 
         return chunks;
@@ -155,36 +195,35 @@ export class TextChunker {
      * the token limit, with overlap between consecutive chunks.
      */
     private static mergeUnitsIntoChunks(
-        units: string[],
-        originalText: string,
+        units: PositionedUnit[],
         maxTokens: number,
         overlapTokens: number
     ): TextChunk[] {
         const chunks: TextChunk[] = [];
-        let currentUnits: string[] = [];
+        let currentUnits: PositionedUnit[] = [];
         let currentTokens = 0;
         let chunkIndex = 0;
 
         for (const unit of units) {
-            const unitTokens = TextChunker.EstimateTokenCount(unit);
+            const unitTokens = TextChunker.EstimateTokenCount(unit.Text);
 
             // If a single unit exceeds the max, emit it as its own chunk
             if (unitTokens > maxTokens) {
                 // Flush current buffer first
                 if (currentUnits.length > 0) {
-                    chunks.push(TextChunker.buildChunkFromUnits(currentUnits, originalText, chunkIndex++));
+                    chunks.push(TextChunker.buildChunkFromUnits(currentUnits, chunkIndex++));
                     currentUnits = TextChunker.getOverlapUnits(currentUnits, overlapTokens);
-                    currentTokens = currentUnits.reduce((sum, u) => sum + TextChunker.EstimateTokenCount(u), 0);
+                    currentTokens = TextChunker.sumTokens(currentUnits);
                 }
                 // Emit the oversized unit
-                chunks.push(TextChunker.buildChunkFromUnits([unit], originalText, chunkIndex++));
+                chunks.push(TextChunker.buildChunkFromUnits([unit], chunkIndex++));
                 continue;
             }
 
             if (currentTokens + unitTokens > maxTokens && currentUnits.length > 0) {
-                chunks.push(TextChunker.buildChunkFromUnits(currentUnits, originalText, chunkIndex++));
+                chunks.push(TextChunker.buildChunkFromUnits(currentUnits, chunkIndex++));
                 currentUnits = TextChunker.getOverlapUnits(currentUnits, overlapTokens);
-                currentTokens = currentUnits.reduce((sum, u) => sum + TextChunker.EstimateTokenCount(u), 0);
+                currentTokens = TextChunker.sumTokens(currentUnits);
             }
 
             currentUnits.push(unit);
@@ -193,23 +232,30 @@ export class TextChunker {
 
         // Flush remaining
         if (currentUnits.length > 0) {
-            chunks.push(TextChunker.buildChunkFromUnits(currentUnits, originalText, chunkIndex));
+            chunks.push(TextChunker.buildChunkFromUnits(currentUnits, chunkIndex));
         }
 
         return chunks;
     }
 
     /**
+     * Total estimated tokens across a set of units.
+     */
+    private static sumTokens(units: PositionedUnit[]): number {
+        return units.reduce((sum, u) => sum + TextChunker.EstimateTokenCount(u.Text), 0);
+    }
+
+    /**
      * Get the trailing units that fit within the overlap token budget.
      */
-    private static getOverlapUnits(units: string[], overlapTokens: number): string[] {
+    private static getOverlapUnits(units: PositionedUnit[], overlapTokens: number): PositionedUnit[] {
         if (overlapTokens <= 0) return [];
 
-        const overlapUnits: string[] = [];
+        const overlapUnits: PositionedUnit[] = [];
         let tokens = 0;
 
         for (let i = units.length - 1; i >= 0; i--) {
-            const unitTokens = TextChunker.EstimateTokenCount(units[i]);
+            const unitTokens = TextChunker.EstimateTokenCount(units[i].Text);
             if (tokens + unitTokens > overlapTokens) break;
             overlapUnits.unshift(units[i]);
             tokens += unitTokens;
@@ -219,18 +265,16 @@ export class TextChunker {
     }
 
     /**
-     * Build a TextChunk from a list of text units, finding their offset in the original text.
+     * Build a TextChunk from positioned units. Offsets come from the units
+     * themselves, which were resolved by a forward scan in `locateUnits`.
      */
-    private static buildChunkFromUnits(units: string[], originalText: string, index: number): TextChunk {
-        const text = units.join(' ');
-        const startOffset = originalText.indexOf(units[0]);
-        const lastUnit = units[units.length - 1];
-        const endOffset = originalText.indexOf(lastUnit, startOffset) + lastUnit.length;
+    private static buildChunkFromUnits(units: PositionedUnit[], index: number): TextChunk {
+        const text = units.map((u) => u.Text).join(' ');
 
         return {
             Text: text,
-            StartOffset: Math.max(0, startOffset),
-            EndOffset: Math.min(endOffset, originalText.length),
+            StartOffset: units[0].Start,
+            EndOffset: units[units.length - 1].End,
             TokenCount: TextChunker.EstimateTokenCount(text),
             Index: index,
         };

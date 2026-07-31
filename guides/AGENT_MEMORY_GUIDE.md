@@ -204,4 +204,4 @@ Then confirm injection by inspecting the run's persisted payload (`AIPromptRun.M
 | Injection implementation | `packages/AI/Agents/src/agent-context-injector.ts` |
 | Memory Manager implementation | `packages/AI/Agents/src/memory-manager-agent.ts` |
 | E2E smoke harness | `packages/AI/Agents/scripts/memory-write-smoke.ts` |
-| Package overview | [`packages/AI/Agents/README.md`](../packages/AI/Agents/readme.md) |
+| Package overview | [`packages/AI/Agents/README.md`](../packages/AI/Agents/README.md) |
