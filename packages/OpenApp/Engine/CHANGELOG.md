@@ -1,5 +1,52 @@
 # @memberjunction/open-app-engine
 
+## 5.50.0
+
+### Patch Changes
+
+- a7dfaf5: fix(open-app): detect the workspace layout and write config to every file a consumer loads (#3270, #3271)
+
+  `mj app install` could complete — or report success — while leaving an app that never actually loads. Two causes, both in the install's `[Packages]` / `[Config]` steps.
+
+  **#3270 — workspace layout.** The installer defaulted to the monorepo paths (`packages/MJAPI`, `packages/MJExplorer`), but `mj install` scaffolds a distribution under `apps/`. Installing onto a host created by MJ's own installer failed with `Could not read package.json at <root>/packages/MJAPI/package.json: ENOENT`, and it failed _after_ schema creation and migrations had committed, leaving the app recorded with `Status='Error'`. Both paths are now probed (`packages/…`, then `apps/…`) via a shared `workspace-paths` module, so a plain `mj app install` works on either layout with no configuration; an explicit `openApps.serverPackagePath` / `clientPackagePath` still wins.
+
+  **#3271 — config write target.** Config edits went to a single file: the server workspace's `mj.config.cjs` when present, else the repo root. But the `dynamicPackages.client` array is consumed by `mj codegen manifest --open-app-client-bootstrap`, which resolves config from the _client_ workspace and so never sees a server-workspace config; and a container / App Service deployment that ships only the root config never sees the `server` entry. Either way the miss is silent: the client bootstrap reports `0 client packages wired` so the app's `@RegisterClass` decorators never fire, and a deployed API loads no server package at all — its GraphQL schema lacks every one of the app's types while `__mj.OpenApp` still reports the app `Active`. All config writes (`dynamicPackages`, `entityPackageName`, `excludeSchemas`) now target **every** `mj.config.cjs` a consumer may load. Entry insertion is idempotent, so a config that already has the entry is unchanged.
+
+  A file that genuinely cannot be edited — most commonly the distribution's `module.exports = require('../../mj.config.cjs')` re-export, which has no object literal to insert into — is now reported as a warning instead of failing the install, since it re-exports the root config that _did_ get written. The install fails only when no config could be updated. `ConfigOperationResult` gains an optional `Warnings` field and the orchestrator surfaces them via `OnWarn`.
+
+- d79dd11: fix(open-app): coerce prerelease host versions to base tuple in the MJ version compatibility gate
+
+  `CheckMJVersionCompatibility` called `semver.satisfies(mjVersion, range)` directly, and semver ranges exclude prerelease versions unless tuple-anchored. Once MJ's Edge prerelease grammar activates (every dev/fast-channel build versioned `X.Y.Z-edge.N`), every dev host would fail `satisfies('6.2.0-edge.3', '>=6.0.0 <7.0.0')` and reject every app install even though the app's range is era-correct.
+
+  The host MJ version is now coerced to its base release tuple (`6.2.0-edge.3` → `6.2.0`) via the new exported `CoerceToBaseVersion` helper before the range check. Base-tuple coercion is used instead of `{ includePrerelease: true }` because semver orders a prerelease below its release: `satisfies('7.0.0-edge.0', '>=6.1.0 <7.0.0', { includePrerelease: true })` is `true`, so a 7-era Edge host would wrongly pass a `<7.0.0` cap — coercion correctly fails it as `7.0.0`.
+
+  Only the host-side gate changes; installed app/dependency version comparison (`CheckDependencyVersionCompatibility`, `IsValidUpgrade`) is untouched (tracked separately in #3310).
+
+- 918563e: Harden the Open App install engine: four independent fixes to install, upgrade and remove.
+
+  **Manifest values can no longer inject code into `mj.config.cjs`.** That file is `require`d — and therefore executed — by every `mj migrate`, `codegen` and build. The config writer built entries by concatenating single-quoted strings, so a manifest-sourced value containing a quote could escape its literal and have arbitrary expressions evaluated on the next `mj` command. Every injected value is now emitted as a fully escaped literal, and the removal/detection regexes accept both quote styles so entries written by earlier versions stay removable. As defence in depth — the config writer is not the only consumer of these values — package names and `schema.entityPackage` must now be valid npm names and `startupExport` a single JavaScript identifier, rejected at manifest validation before any engine code touches them.
+
+  **Schema names are compared case-insensitively at read, fixing Postgres install/remove/reinstall.** PostgreSQL folds unquoted DDL identifiers to lowercase, so a schema declared as `__mj_BizAppsCommon` exists as `__mj_bizappscommon` while stored metadata may carry either casing. Three paths were comparing raw casing: the schema-existence check now tests the canonical name the create path actually produces (raw-casing checks sent Postgres reinstalls into an "already exists" dead end), the legacy `Schema Info` delete filter now matches case-insensitively, and the shared-schema check does too — previously two apps storing different casings of the same schema missed each other, and removing one could cascade-drop a schema the other still lives in. Healing happens at read rather than by rewriting stored rows, so installs that already carry mixed casing are fixed the moment this ships.
+
+  **Removing an app keeps npm dependencies that co-installed apps still declare.** The remove path already computed the other installed manifests for prebundle excludes but never passed them to package removal, so uninstalling one app stripped `package.json` entries a surviving app depends on. Package removal now accepts a retain list, and the orchestrator derives it from every other installed app's server, client and shared package lists.
+
+  **A failed `npm install` during upgrade finalizes the app as Disabled.** The upgrade path wrote `Active` unconditionally even when dependency installation had failed, leaving the server to load packages that were never installed. It now mirrors the install path: finalize `Disabled`, switch the app's dynamic-package entries off so the server loader and client bootstrap skip it, and tell the operator to run `npm install` followed by `mj app enable`.
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes
