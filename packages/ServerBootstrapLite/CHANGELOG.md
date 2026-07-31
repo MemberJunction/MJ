@@ -1,5 +1,99 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.50.0
+
+### Patch Changes
+
+- 623dfc5: Break CodeGen FK cycle between AIAgentRun, AIPromptRun, and ConversationDetail. Move SummaryPromptRunID from ConversationDetail to a new ConversationCompactionRun audit table. Remove AgentRunID from AIPromptRun (derivable via AIAgentRunStep.TargetLogID). Remove agentRunId from AIPromptParams and all write sites across the prompt/agent stack.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [86832fa]
+- Updated dependencies [deb02b4]
+- Updated dependencies [8b4c6b2]
+- Updated dependencies [0686d52]
+- Updated dependencies [c7b6710]
+- Updated dependencies [764d6f6]
+- Updated dependencies [408e4bf]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [03fc891]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-agents@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/content-autotagging@5.50.0
+  - @memberjunction/communication-types@5.50.0
+  - @memberjunction/search-engine@5.50.0
+  - @memberjunction/core-entities-server@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/core-actions@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/testing-engine@5.50.0
+  - @memberjunction/ai-agent-manager@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/ai-form-builder@5.50.0
+  - @memberjunction/tag-engine-base@5.50.0
+  - @memberjunction/predictive-studio@5.50.0
+  - @memberjunction/ai-recommendations-rex@5.50.0
+  - @memberjunction/ai-reranker@5.50.0
+  - @memberjunction/ai-vector-dupe@5.50.0
+  - @memberjunction/actions-apollo@5.50.0
+  - @memberjunction/actions-bizapps-accounting@5.50.0
+  - @memberjunction/actions-bizapps-crm@5.50.0
+  - @memberjunction/actions-bizapps-formbuilders@5.50.0
+  - @memberjunction/actions-bizapps-lms@5.50.0
+  - @memberjunction/actions-bizapps-social@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/doc-utils@5.50.0
+  - @memberjunction/encryption@5.50.0
+  - @memberjunction/queue@5.50.0
+  - @memberjunction/react-linter@5.50.0
+  - @memberjunction/record-comparison@5.50.0
+  - @memberjunction/record-set-processor@5.50.0
+  - @memberjunction/scheduling-actions@5.50.0
+  - @memberjunction/scheduling-engine-base@5.50.0
+  - @memberjunction/scheduling-engine@5.50.0
+  - @memberjunction/templates@5.50.0
+  - @memberjunction/geo-core@5.50.0
+  - @memberjunction/ai-vectors-memory@5.50.0
+  - @memberjunction/ai-vectors-pinecone@5.50.0
+  - @memberjunction/ai-vectors-qdrant@5.50.0
+  - @memberjunction/ai-vectors-sqlserver@5.50.0
+  - @memberjunction/ai-vectors-pgvector@5.50.0
+  - @memberjunction/data-context-server@5.50.0
+  - @memberjunction/ai-anthropic@5.50.0
+  - @memberjunction/ai-assemblyai@5.50.0
+  - @memberjunction/ai-azure@5.50.0
+  - @memberjunction/ai-bedrock@5.50.0
+  - @memberjunction/ai-betty-bot@5.50.0
+  - @memberjunction/ai-blackforestlabs@5.50.0
+  - @memberjunction/ai-cerebras@5.50.0
+  - @memberjunction/ai-cohere@5.50.0
+  - @memberjunction/ai-elevenlabs@5.50.0
+  - @memberjunction/ai-fireworks@5.50.0
+  - @memberjunction/ai-gemini@5.50.0
+  - @memberjunction/ai-groq@5.50.0
+  - @memberjunction/ai-heygen@5.50.0
+  - @memberjunction/ai-inception@5.50.0
+  - @memberjunction/ai-inworld@5.50.0
+  - @memberjunction/ai-lmstudio@5.50.0
+  - @memberjunction/ai-llamacpp@5.50.0
+  - @memberjunction/ai-local-embeddings@5.50.0
+  - @memberjunction/ai-minimax@5.50.0
+  - @memberjunction/ai-mistral@5.50.0
+  - @memberjunction/ai-ollama@5.50.0
+  - @memberjunction/ai-openai@5.50.0
+  - @memberjunction/ai-openrouter@5.50.0
+  - @memberjunction/ai-vertex@5.50.0
+  - @memberjunction/ai-zhipu@5.50.0
+  - @memberjunction/ai-xai@5.50.0
+  - @memberjunction/ai-provider-bundle@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes
