@@ -4,7 +4,7 @@
  * MJ issue #3371: the realtime relayed-tool path ran delegated work as the anonymous magic-link
  * visitor, whose role deliberately holds no grants on the AI run entities — so a scoped anonymous
  * session could not run an agent, and its observability runs were silently never created,
- * accumulated, or finalized. The fix (MJServer's `resolveScopedAnonymousRunUser`) swaps the AI-run
+ * accumulated, or finalized. The fix (MJServer's `ResolveScopedAnonymousRunUser`) swaps the AI-run
  * work onto the system user once ownership is proven.
  *
  * WHAT THIS BUNDLE PROVES — the permission-reality contract the fix rests on, against the real

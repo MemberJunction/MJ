@@ -8,7 +8,7 @@ import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import { GetHostInstanceID } from './HostInstance.js';
 import { writeReturningVisitorRecap } from './ReturningVisitorRecap.js';
-import { resolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -238,7 +238,7 @@ export class SessionManager {
             await new RealtimeClientSessionService().FinalizeCoAgentRun(
                 config.coAgentRunID ?? null,
                 config.promptRunID ?? null,
-                resolveScopedAnonymousRunUser(contextUser),
+                ResolveScopedAnonymousRunUser(contextUser),
                 provider,
                 true,
                 config.coAgentRunStepID ?? null,

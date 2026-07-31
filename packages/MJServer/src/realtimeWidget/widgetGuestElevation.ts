@@ -98,7 +98,7 @@ export async function resolveWidgetGuestRunContext(
  * Ownership/RLS gates must NEVER use this — they stay on the caller; this only changes who the
  * work RUNS AS after ownership is proven.
  */
-export function resolveScopedAnonymousRunUser(contextUser: UserInfo): UserInfo {
+export function ResolveScopedAnonymousRunUser(contextUser: UserInfo): UserInfo {
   const scopeId = contextUser?.MagicLinkScope?.ResourceID;
   if (!contextUser?.IsMagicLinkAnonymous || !scopeId || contextUser.WidgetGuestContext?.WidgetID) {
     return contextUser;

@@ -60,7 +60,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
-import { resolveWidgetGuestRunContext, resolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { resolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -500,7 +500,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // (the caller's role deliberately holds no grants on the run entities). The lead
         // targetAgentID comes from the session config and was CanRun-gated at start; the colleague
         // union is gated just below, against the CALLER, so elevation never widens agent authority.
-        const runUser = resolveScopedAnonymousRunUser(contextUser);
+        const runUser = ResolveScopedAnonymousRunUser(contextUser);
         if (runUser !== contextUser) {
             LogStatus(
                 `ExecuteRealtimeSessionTool: dispatching relayed tool '${toolName}' for session ${agentSessionId} ` +
@@ -650,7 +650,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 this.mapTranscriptRoleToChatRole(role),
                 text,
                 replacesPrevious ?? false,
-                resolveScopedAnonymousRunUser(contextUser),
+                ResolveScopedAnonymousRunUser(contextUser),
                 provider,
             );
         }
@@ -713,7 +713,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // server-side plumbing over entities (MJ: AI Agents read, MJ: Files, the file-session link)
         // the caller's narrow relay role deliberately does not hold. Attribution flows through the
         // session link, so nothing here depends on the caller's identity.
-        const runUser = resolveScopedAnonymousRunUser(contextUser);
+        const runUser = ResolveScopedAnonymousRunUser(contextUser);
         try {
             const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', runUser);
             if (!(await agent.Load(session.AgentID))) {
@@ -786,7 +786,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
             const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
             // Scoped-anonymous elevation (issue #3371) — same rationale as UploadRealtimeRecording.
-            const runUser = resolveScopedAnonymousRunUser(contextUser);
+            const runUser = ResolveScopedAnonymousRunUser(contextUser);
             const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', runUser);
             if (!(await agent.Load(session.AgentID))) {
                 return false;
@@ -840,7 +840,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             'assistant',
             this.formatToolTurn(toolName, argsJson, resultJson),
             false,
-            resolveScopedAnonymousRunUser(contextUser),
+            ResolveScopedAnonymousRunUser(contextUser),
             provider,
         );
     }
@@ -940,7 +940,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // appends — otherwise the frequent usage save clobbers freshly-appended Messages (and vice-versa).
         // Runs as the scoped-anonymous elevated user (issue #3371) — the caller's role holds no prompt-run grants.
         return this.clientSessionService.AccumulatePromptRunUsage(
-            promptRunID, inputDelta, outputDelta, resolveScopedAnonymousRunUser(contextUser), provider,
+            promptRunID, inputDelta, outputDelta, ResolveScopedAnonymousRunUser(contextUser), provider,
         );
     }
 
@@ -1650,7 +1650,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             // deliberately cannot write. `UserID` above stays the CALLER's id, so run attribution
             // and memory scope remain the visitor's. Authorization (CanRun, runtime overrides)
             // already ran on the caller in StartRealtimeClientSession.
-            resolveScopedAnonymousRunUser(contextUser),
+            ResolveScopedAnonymousRunUser(contextUser),
             provider,
         );
 

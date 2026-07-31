@@ -15,7 +15,7 @@ vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
 import {
   resolveWidgetGuestRunContext,
   elevateUserPayload,
-  resolveScopedAnonymousRunUser,
+  ResolveScopedAnonymousRunUser,
 } from '../realtimeWidget/widgetGuestElevation.js';
 import type { UserPayload } from '../types.js';
 
@@ -47,7 +47,7 @@ describe('widgetGuestElevation — resolveWidgetGuestRunContext (guard paths, no
   });
 });
 
-describe('widgetGuestElevation — resolveScopedAnonymousRunUser (issue #3371)', () => {
+describe('widgetGuestElevation — ResolveScopedAnonymousRunUser (issue #3371)', () => {
   const systemUser = { ID: 'system-1', Email: 'system@system.org' } as UserInfo;
 
   /** Builds a UserInfo carrying the given per-session guest flags. */
@@ -62,19 +62,19 @@ describe('widgetGuestElevation — resolveScopedAnonymousRunUser (issue #3371)',
 
   it('returns the caller unchanged for a normal authenticated user', () => {
     const named = userWith({ IsMagicLinkAnonymous: false, MagicLinkScope: { ResourceID: 'res-1' } });
-    expect(resolveScopedAnonymousRunUser(named)).toBe(named);
+    expect(ResolveScopedAnonymousRunUser(named)).toBe(named);
     expect(getSystemUserMock).not.toHaveBeenCalled();
   });
 
   it('returns the caller unchanged for an anonymous session with no resource scope', () => {
     const unscoped = userWith({ IsMagicLinkAnonymous: true, MagicLinkScope: undefined });
-    expect(resolveScopedAnonymousRunUser(unscoped)).toBe(unscoped);
+    expect(ResolveScopedAnonymousRunUser(unscoped)).toBe(unscoped);
     expect(getSystemUserMock).not.toHaveBeenCalled();
   });
 
   it('returns the caller unchanged for a scoped anonymous session with an empty ResourceID', () => {
     const emptyScope = userWith({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: '' } });
-    expect(resolveScopedAnonymousRunUser(emptyScope)).toBe(emptyScope);
+    expect(ResolveScopedAnonymousRunUser(emptyScope)).toBe(emptyScope);
   });
 
   it('returns the caller unchanged for a PUBLIC WEB-WIDGET guest (widget guests keep their own path)', () => {
@@ -83,19 +83,19 @@ describe('widgetGuestElevation — resolveScopedAnonymousRunUser (issue #3371)',
       MagicLinkScope: { ResourceID: 'res-1' },
       WidgetGuestContext: { WidgetID: 'widget-1' },
     });
-    expect(resolveScopedAnonymousRunUser(widgetGuest)).toBe(widgetGuest);
+    expect(ResolveScopedAnonymousRunUser(widgetGuest)).toBe(widgetGuest);
     expect(getSystemUserMock).not.toHaveBeenCalled();
   });
 
   it('FAILS CLOSED to the caller when no system user is available', () => {
     getSystemUserMock.mockReturnValue(undefined);
     const scopedAnon = userWith({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'res-1' } });
-    expect(resolveScopedAnonymousRunUser(scopedAnon)).toBe(scopedAnon);
+    expect(ResolveScopedAnonymousRunUser(scopedAnon)).toBe(scopedAnon);
   });
 
   it('returns the SYSTEM user for a scoped anonymous (non-widget) magic-link session', () => {
     const scopedAnon = userWith({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'res-1' } });
-    expect(resolveScopedAnonymousRunUser(scopedAnon)).toBe(systemUser);
+    expect(ResolveScopedAnonymousRunUser(scopedAnon)).toBe(systemUser);
   });
 });
 
