@@ -36,6 +36,29 @@ export class MyGenericComponent {
 - Importing Router creates a hard dependency on `RouterModule` being configured
 - MJ Explorer has `NavigationService` that wraps Router — Generic components should never bypass it
 
+## This Rule Is Enforced, Not Just Documented
+
+Packages here declare their layer in their own `package.json` and are checked by the gate:
+
+```jsonc
+{ "mjUILayer": "widgets" }     // L1 + L2 — see guides/UI_LAYERING_GUIDE.md
+```
+
+```bash
+npm run check:ui-layers        # from the repo root
+```
+
+Beyond Router, the `widgets` layer also bans `@memberjunction/ng-shared` (`SharedService`,
+`BaseResourceComponent`, `NavigationService`) and global-provider construction
+(`new RunView()` / `new Metadata()` — use `this.ProviderToUse`, per
+[../CLAUDE.md](../CLAUDE.md)).
+
+**Adoption is incremental.** A package without `mjUILayer` is skipped. Adding the field to a
+package that has drifted is exactly how you find out what to fix. Packages still to be
+cleaned up and declared: `archive-manager`, `clustering`, `join-grid`, `timeline`, `trees`,
+`file-storage`, `ai-test-harness`, `conversations`.
+
 ## Related Guides
 
+- **[UI Layering Guide](../../../guides/UI_LAYERING_GUIDE.md)** — the four-layer model this rule is one boundary of, plus the `Before*`/`After*` event contract and the enforcement gate.
 - **[Navigation & Routing Guide](../../../guides/NAVIGATION_AND_ROUTING_GUIDE.md)** — How navigation, URL sync, and back/forward work in MJ Explorer. Explains why Generic components must not touch Router.

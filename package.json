@@ -100,6 +100,7 @@
     "check:peer-deps": "node .github/scripts/check-internal-peer-deps.mjs packages",
     "check:esm:test": "vitest run --config .github/scripts/vitest.config.mts",
     "check:claude-md": "node .github/scripts/check-claude-md.mjs",
+    "check:ui-layers": "node .github/scripts/check-ui-layers.mjs packages",
     "change": "changeset",
     "version": "changeset version",
     "mergemain": "node ci/merge_main.mjs",

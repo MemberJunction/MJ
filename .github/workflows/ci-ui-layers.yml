@@ -1,0 +1,29 @@
+name: UI layering gate
+
+on:
+  pull_request:
+    branches:
+      - next
+    paths:
+      - 'packages/**/*.ts'
+      - 'packages/**/package.json'
+      - '.github/scripts/check-ui-layers.mjs'
+      - '.github/workflows/ci-ui-layers.yml'
+
+jobs:
+  check-ui-layers:
+    name: widgets must not import Explorer or Router
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # Opt-in per package via "mjUILayer" in package.json — see guides/UI_LAYERING_GUIDE.md.
+      - name: Check UI layer boundaries
+        run: node .github/scripts/check-ui-layers.mjs packages
