@@ -785,6 +785,9 @@
             "TestID": "@lookup:MJ: Tests.Name=IT31 - Startup Mode",
             "Sequence": 27,
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3F247D8B-BDB2-4095-BDF5-511E3A7B7942"
           }
         },
         {
@@ -796,6 +799,21 @@
           },
           "primaryKey": {
             "ID": "3EB937A9-1C1F-4DB4-AD95-5698FD27F705"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT68 - Scoped-Anonymous Elevation Permission Contract",
+            "Sequence": 32,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1E50C41A-E29C-4CCA-B04B-31438A547087"
+          },
+          "sync": {
+            "lastModified": "2026-07-31T16:12:26.160Z",
+            "checksum": "9810d9dfac4530c59c7bdb885595c69131833d026c3fd452cad55c782e30c076"
           }
         }
       ]

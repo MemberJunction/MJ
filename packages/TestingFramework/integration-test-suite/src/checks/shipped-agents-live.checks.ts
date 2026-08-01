@@ -51,7 +51,7 @@ async function runAndVerify(ctx: IntegrationCheckContext, agent: MJAIAgentEntity
     const fallback = opts?.conversationDetailId
         ? `AgentID='${agent.ID}' AND ConversationDetailID='${opts.conversationDetailId}'`
         : `AgentID='${agent.ID}' AND Status<>'Running'`;
-    const runId = await resolveRunId(result, ctx.User, fallback);
+    const runId = await resolveRunId(result, ctx.User, fallback, ctx.Provider);
     Assert(!!runId, `shipped run for '${agent.Name}' landed an AI Agent Run`);
     fixture(ctx).LiveRunIds.push(runId!);
     // Deep pass — recurses into Sub-Agent child runs and every step's target log.
@@ -68,7 +68,7 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
             const sage = await resolveShipped('Sage', ctx.User);
             if (!sage) { return; }
             const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.');
-            const steps = await getRunSteps(runId, ctx.User);
+            const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
             Assert(steps.length > 0, 'SA1: the run produced steps (the agent graph executed)');
         }
     },
@@ -81,7 +81,7 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
             if (!qb) { return; }
             // verifyAgentRun already recurses Sub-Agent steps into their linked child runs (parent↔child lineage).
             const runId = await runAndVerify(ctx, qb, 'How many users are in the system? Give the number only.');
-            const steps = await getRunSteps(runId, ctx.User);
+            const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
             const subAgentSteps = steps.filter(s => s.StepType === 'Sub-Agent');
             // If it delegated, every Sub-Agent step must be linked to a child run (TargetLogID) — no dangling delegation.
             Assert(subAgentSteps.every(s => !!s.TargetLogID), 'SA2: every Sub-Agent step links a child run (TargetLogID set)');
@@ -100,7 +100,7 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
                 'Using only this sentence and no web search, answer in one word what color the sky is described as: "The sky is blue." Then finish.',
             );
             // verifyAgentRun recursed the whole tree; re-assert no top-level orphan Running step remains.
-            const steps = await getRunSteps(runId, ctx.User);
+            const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
             Assert(steps.every(s => s.Status !== 'Running' && s.CompletedAt != null), 'SA3: every step in the tree finalized (no orphan Running steps)');
         }
     },

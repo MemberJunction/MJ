@@ -1,5 +1,17 @@
 # @memberjunction/postgresql-dataprovider
 
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-vectordb@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/query-processor@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes
