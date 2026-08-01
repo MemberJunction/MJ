@@ -324,10 +324,33 @@ the half-mutated inputs are usually the most diagnostic thing available.
 `ResultParams` being NULL therefore means exactly one thing — **the run never finished** (process
 died, host killed). That is a signal, not an absence, and it must not be backfilled.
 
-**Implementation note:** `StartAndEndActionLog` performs a single force-persist write rather than an
-INSERT followed by an UPDATE. Make sure that path persists **both** columns — `Params` is set in
-memory by `StartActionLog(params, false)` and must survive, and `EndActionLog` must never clear or
-rewrite it.
+**Implementation note — the "as-called" guarantee has a hole in it today, on the one path where it
+matters most.**
+
+Logging is BaseEntity throughout: `StartActionLog` does
+`md.GetEntityObject<MJActionExecutionLogEntity>('MJ: Action Execution Logs', ContextUser)` +
+`NewRecord()`, and persistence runs through `_logQueue` (a `BaseEntitySaveQueue`) so the writes stay
+off the critical path. `StartAndEndActionLog` is the same two calls with `saveRecord: false`, so one
+write happens instead of two — `Update()` on a never-inserted `NewRecord()` inserts. Because it is
+one entity instance carrying both fields, a single `Save()` persists both; `Params` survives that
+path without special handling.
+
+The real problem is **when** `StartActionLog` runs. There are three `StartAndEndActionLog` call
+sites:
+
+| Call site | Runs | `Params` is |
+|---|---|---|
+| Input validation failed | before the action | a true as-called snapshot |
+| Filters said don't run | before the action | a true as-called snapshot |
+| **Timeout / abort** | **after the action has been running** | **whatever the array holds by then** |
+
+Actions mutate `params.Params` in place, so on the timeout path `Params` is a *post-hoc* capture that
+merely lands in the as-called column. The guarantee silently does not hold — on the path where "what
+did we send it?" is the first question anyone asks.
+
+**Fix it rather than document it:** take the input snapshot **once at the top of `RunAction`**, before
+any branch, and have every path write `Params` from that snapshot. Cheap, and it makes the column
+mean one thing everywhere instead of two things depending on how the run ended.
 
 The migration also corrects `Message`'s description, which said *"JSON-formatted output data or
 response"* — it is set from `result.Message`, a human-readable summary. Outputs were never there.
@@ -395,7 +418,7 @@ land.
 | **3** | Verify the value list regenerated | `EntityActionParam.ValueType`'s `EntityFieldValue` rows and its generated TypeScript union both come from the CHECK constraint. `'Entity Object Data'` must appear in both. **Never hand-insert `EntityFieldValue`.** |
 | **4** | **`MapParams`: the `'Entity Object Data'` case** | `entity.GetAll()`. Smallest change, highest value per line. |
 | **5** | **`RedactParams` helper + wire it into every persister (§5.3, §5.7)** | Rule 1 first — no configuration, closes the hole on its own. Build it as a **shared helper**, not inline in the log methods, or step 9 re-opens it via `QueueTask.Data`. **Until this lands, do not author bindings that pass whole records.** |
-| **5b** | `EndActionLog` writes `ResultParams`; `Params` is no longer overwritten (§5.6) | Two-line change once the column exists, and it makes every run's as-called inputs durable |
+| **5b** | `EndActionLog` writes `ResultParams`; `Params` is no longer overwritten (§5.6) | Also **hoist the input snapshot to the top of `RunAction`** — otherwise the timeout path keeps writing a post-hoc capture into the as-called column (§5.6) |
 | **6** | `EntityActionEngineBase`: `Sequence` ordering + scope filtering via the resolver seam (§4.5) | |
 | **7** | Stamp the new `ActionExecutionLog` columns on the entity-action invocation path | §5.1 |
 | **8** | Filter contract: documented `OldValues`/`NewValues`; seed the two `ActionFilter` rows in `metadata/action-filters/` | §4.2. Metadata, not SQL inserts. |
