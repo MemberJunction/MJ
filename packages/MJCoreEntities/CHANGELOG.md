@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core-entities
 
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
 ## 5.50.0
 
 ### Minor Changes

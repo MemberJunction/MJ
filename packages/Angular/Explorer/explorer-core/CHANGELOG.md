@@ -1,5 +1,62 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.51.0
+
+### Patch Changes
+
+- 1e048ef: Fix MJ Explorer lazy module loading: chunks are now deduped by an explicit `chunkId` instead of loader source text (which collapsed all 18 chunks into one and stopped lazy-only registrations like `FeaturePipelinesResource` from ever loading), and lookups fall back to the subclass key alone so resolution survives build-mode renames of the base class (`_BaseResourceComponent`, `BaseResourceComponent2`). Failed chunk imports now retry on the next navigation instead of caching the rejection for the rest of the session. Downstream apps must regenerate their lazy config (`mj codegen manifest --lazy-config …`) after upgrading — generated entries changed shape from a loader function to `{ chunkId, load }`, and `GetSnapshot().chunkCount` was renamed `loadedChunkCount`.
+- Updated dependencies [1e048ef]
+- Updated dependencies [a8fc549]
+  - @memberjunction/ng-dashboards@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ng-shared@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/ng-auth-services@5.51.0
+  - @memberjunction/ng-base-application@5.51.0
+  - @memberjunction/ng-entity-form-dialog@5.51.0
+  - @memberjunction/ng-entity-permissions@5.51.0
+  - @memberjunction/ng-explorer-settings@5.51.0
+  - @memberjunction/ng-list-detail-grid@5.51.0
+  - @memberjunction/ng-ai-test-harness@5.51.0
+  - @memberjunction/ng-artifacts@5.51.0
+  - @memberjunction/ng-base-forms@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-composer@5.51.0
+  - @memberjunction/ng-container-directives@5.51.0
+  - @memberjunction/ng-conversations@5.51.0
+  - @memberjunction/ng-dashboard-viewer@5.51.0
+  - @memberjunction/ng-entity-viewer@5.51.0
+  - @memberjunction/ng-feedback@5.51.0
+  - @memberjunction/ng-file-storage@5.51.0
+  - @memberjunction/ng-list-management@5.51.0
+  - @memberjunction/ng-mj-livekit-room@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/ng-query-viewer@5.51.0
+  - @memberjunction/ng-record-changes@5.51.0
+  - @memberjunction/ng-record-selector@5.51.0
+  - @memberjunction/ng-record-tags@5.51.0
+  - @memberjunction/ng-resource-permissions@5.51.0
+  - @memberjunction/ng-search@5.51.0
+  - @memberjunction/ng-shared-generic@5.51.0
+  - @memberjunction/ng-user-avatar@5.51.0
+  - @memberjunction/communication-types@5.51.0
+  - @memberjunction/entity-communications-client@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/templates-base-types@5.51.0
+  - @memberjunction/ng-export-service@5.51.0
+  - @memberjunction/ng-generic-dialog@5.51.0
+  - @memberjunction/ng-markdown@5.51.0
+  - @memberjunction/ng-pagination@5.51.0
+  - @memberjunction/ng-ui-components@5.51.0
+  - @memberjunction/ng-word-cloud@5.51.0
+  - @memberjunction/lists-base@5.51.0
+  - @memberjunction/export-engine@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/theme-engine@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes
