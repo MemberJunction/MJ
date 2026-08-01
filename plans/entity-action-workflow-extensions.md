@@ -1,7 +1,7 @@
 # Entity Action Workflow Extensions
 
 > **Status:** Draft v0.1 (2026-08-01) — schema authored, engine work specified, not yet built.
-> **Migration:** [`migrations/v5/V202608011200__v5.51.x__EntityAction_Workflow_Extensions.sql`](../migrations/v5/V202608011200__v5.51.x__EntityAction_Workflow_Extensions.sql)
+> **Migration:** [`migrations/v5/V202608011200__v5.52.x__EntityAction_Workflow_Extensions.sql`](../migrations/v5/V202608011200__v5.52.x__EntityAction_Workflow_Extensions.sql)
 > **Driven by:** the BizApps Sales / Contracts workflow requirement — "when a Deal reaches Closed
 > Won, run a workflow, configurable per Deal Type and per Company." Generalized here because it is
 > a framework need, not a sales need.
@@ -19,8 +19,9 @@ for running any Action off an entity's create / update / delete / validate. It i
 real save path and it works. Four small gaps stop it from being the answer for workflow, and this
 plan closes them.
 
-**The conclusion up front: no new subsystem, in core or in any OpenApp.** Three additive columns,
-one extended value list, and four bounded engine changes.
+**The conclusion up front: no new subsystem, in core or in any OpenApp.** Additive columns, one
+extended value list, and bounded engine changes — plus one behaviour change to execution logging
+that has to ship with them (§5), because the feature is unsafe to turn on without it.
 
 ---
 
@@ -94,6 +95,8 @@ is a complete, working configuration today — **except for one trap**, which is
 | 2 | **No declarative transition semantics** | `AfterUpdate` fires on *every* update. "Moved **to** Closed Won" needs old-vs-new, so every author hand-writes it and someone eventually writes "status **is** won" — which re-fires on every later save and creates duplicate onboarding tasks. |
 | 3 | **No ordering between bindings** | `EntityActionFilter` has `Sequence`; `EntityAction` does not. Two actions on one event run in undefined order. |
 | 4 | **`After*` is fire-and-forget with no durable record** | Errors are logged and swallowed. For a workflow that creates a contract and orders, silent failure is unacceptable — and the sibling path already solved this (see §4.4). |
+| 5 | **The execution log has no entity-action provenance** | `ActionExecutionLog` cannot say which binding fired, on which record, from which event. A failed workflow is undiagnosable (§5.1). |
+| 6 | **Param logging writes every value, unconditionally** | And entity-action params are whole records — so turning this feature on writes full rows into a general-purpose log, twice per invocation. This is the one that makes the feature *unsafe*, not merely incomplete (§5.2). |
 
 ---
 
@@ -101,8 +104,8 @@ is a complete, working configuration today — **except for one trap**, which is
 
 ### 4.1 `EntityAction.ScopeEntityID` + `ScopeRecordID` *(migration — done)*
 
-Two nullable columns, paired by `CK_EntityAction_Scope`, plus `IX_EntityAction_Scope` for the
-reverse lookup. `NULL` = applies to all records, exactly as today.
+Two nullable columns, paired by `CK_EntityAction_Scope`. `NULL` = applies to all records, exactly as
+today.
 
 One mechanism covers *this Deal Type*, *this Contract Type*, *this Pipeline*, *this Company* — and
 whatever the next app needs — with **zero per-app columns, ever**. That is the whole point: the
@@ -182,23 +185,106 @@ by returning null, most-specific wins.
 
 ---
 
-## 5. Build order
+## 5. Execution logging — provenance, and payloads that are safe to write
 
-| Step | Work | Notes |
+Two problems with one cause, and the second is why this section is not optional.
+
+### 5.1 Provenance *(migration — done)*
+
+`ActionExecutionLog` records `ActionID` / `StartedAt` / `EndedAt` / `Params` / `ResultCode` /
+`UserID` / `Message`. It cannot answer *which binding fired this, on which record, from which event* —
+so the moment Entity Actions become the workflow substrate, a failed workflow is undiagnosable.
+
+Four nullable columns: `EntityActionID`, `EntityActionInvocationTypeID`, `TargetEntityID`,
+`TargetRecordID`.
+
+**Extended rather than a side table** because the child is optional, small and 1:1 — nullable columns
+beat a join in that shape, and "did this action run" stays one query. Accounting already uses the
+same pattern with `JournalEntry.LinkedEntityID` / `LinkedRecordID`.
+
+`TargetEntityID` is denormalized rather than derived through `EntityActionID` deliberately: it
+survives the binding being deleted or retargeted, and it lets the log be queried by record with no
+join. It is also kept **generic** — every invoker has a subject, not only Entity Actions.
+
+**Not** generic: the invoker. A `InvokedByEntityID`/`InvokedByRecordID` pair would also cover Record
+Processes, agent flow steps and scheduled actions — but those already have their own detail logs
+(`RecordProcessRunDetail`, `AIAgentRunStep`), so it would duplicate them while giving up foreign-key
+integrity. Concrete FK for the case we know matters; generalize only if a second invoker turns up
+that genuinely lacks its own log.
+
+### 5.2 🚨 Param logging is currently unsafe for this feature
+
+`ActionEngine.StartActionLog` writes `JSON.stringify(params.Params)` on **every** run, and
+`EndActionLog` writes the merged input+output set again. Unconditionally — there is no opt-out on
+`Action`. (The writes are queued and fire-and-forget, so performance is not the issue.)
+
+That is harmless while Entity Actions are unused. It stops being harmless the instant they are the
+workflow substrate, because **entity-action params are whole records**: `ValueType='Entity Object'`
+and `'Entity Object Data'` put the entire row into `ActionExecutionLog.Params`, twice per invocation.
+An `AfterUpdate` binding on a busy entity therefore writes the full record to a general-purpose log
+on every save.
+
+- **Space** — the `NVARCHAR(MAX)` payload is the size problem, not the row. A row per invocation is
+  cheap; a record serialized twice is not.
+- **Security** — message bodies, Person fields, contract terms landing in a log with broad read
+  access. `RetentionPeriod` deletes it eventually, which is not the same as never writing it.
+
+### 5.3 The posture: fail-closed
+
+The safe behaviour is the default; logging a value is opt-in. Same posture the family takes
+elsewhere for sensitive defaults.
+
+| # | Rule | Where |
 |---|---|---|
-| **1** | Apply the migration, run `mj codegen`, commit generated output | **Not done — no TypeScript may reference the new columns until this runs** |
-| **2** | `MapParams`: add the `'Entity Object Data'` case | Smallest, highest value-per-line |
-| **3** | `EntityActionEngineBase`: order by `Sequence`; filter by scope via the resolver seam | §4.1, §4.3, §4.5 |
-| **4** | Filter contract: documented `OldValues`/`NewValues`; seed the two `ActionFilter` rows in `metadata/action-filters/` | §4.2 |
-| **5** | `OnAfterSaveExecute` → `QueueManager` | §4.4 |
-| **6** | Explorer UI: show scoped bindings on the scope record's form | What makes §4.1 visible |
-| **7** | Docs: a guide covering the whole hook story, agent dispatch, and the sync/async rule | The capability is currently under-documented, which is why apps keep reinventing it |
+| 1 | **Hard rule, no configuration.** Params whose `ValueType` is `'Entity Object'` or `'Entity Object Data'` are **never** written to the log. They are whole records by definition. The log records the param name, its type, and a redaction marker. | Engine |
+| 2 | `ActionParam.LogValue` — the *definition* declares whether a param's value is loggable at all. Default `1`. Set `0` on `Execute Agent`'s `Data` and anything carrying credentials or personal data. | Migration ✓ |
+| 3 | `EntityActionParam.LogValue` — per-binding override, `NULL` inherits. Lets one binding redact a param that is ordinarily fine to log. Cannot re-enable what rule 1 suppresses. | Migration ✓ |
+| 4 | `EntityAction.LoggingMode` — `All` (default) / `FailuresOnly` / `None`. Volume control for high-frequency bindings, where successful runs are noise. | Migration ✓ |
 
-Steps 2–5 are independent and parallelizable. Step 6 depends on 3.
+**Rule 1 is what actually closes the hole.** Rules 2–4 handle the grey area — a `Static` param
+holding an API key, an `Entity Field` holding a national ID — and volume.
+
+### 5.4 The redaction record shape
+
+When a value is suppressed the log still records that the param existed, so a run is reconstructable
+without the payload:
+
+```jsonc
+{ "Name": "Data", "Type": "Input", "ValueType": "Entity Object Data",
+  "Logged": false, "Reason": "WholeRecordValueType", "ByteLength": 4182 }
+```
+
+`ByteLength` without the bytes is deliberate: it makes "the payload was enormous" diagnosable without
+making it readable.
 
 ---
 
-## 6. What this deliberately is not
+## 6. What to do after CodeGen
+
+The migration is inert on its own. **This is the order, and it matters** — steps 4 and 5 are what
+make the feature safe to use, so bindings that pass whole records must not be authored before they
+land.
+
+| # | Step | Notes |
+|---|---|---|
+| **1** | Apply the migration | `mj migrate` |
+| **2** | `mj sync push --include=entities`, **then** `mj codegen` | Push before CodeGen or stale JSONType definitions silently truncate generated interfaces — see [`migrations/CLAUDE.md`](../migrations/CLAUDE.md). Commit the generated output. |
+| **3** | Verify the value list regenerated | `EntityActionParam.ValueType`'s `EntityFieldValue` rows and its generated TypeScript union both come from the CHECK constraint. `'Entity Object Data'` must appear in both. **Never hand-insert `EntityFieldValue`.** |
+| **4** | **`MapParams`: the `'Entity Object Data'` case** | `entity.GetAll()`. Smallest change, highest value per line. |
+| **5** | **`StartActionLog` / `EndActionLog`: the redaction rules (§5.3)** | Rule 1 first — it needs no configuration and closes the hole on its own. **Until this lands, do not author bindings that pass whole records.** |
+| **6** | `EntityActionEngineBase`: `Sequence` ordering + scope filtering via the resolver seam (§4.5) | |
+| **7** | Stamp the new `ActionExecutionLog` columns on the entity-action invocation path | §5.1 |
+| **8** | Filter contract: documented `OldValues`/`NewValues`; seed the two `ActionFilter` rows in `metadata/action-filters/` | §4.2. Metadata, not SQL inserts. |
+| **9** | `OnAfterSaveExecute` → `QueueManager` | §4.4 |
+| **10** | Indexes, once query patterns are real | Deliberately **not** in the migration — the repo's rule is that indexes are not hand-authored unless requested, and CodeGen owns FK indexes. Two composites are likely wanted: `EntityAction (ScopeEntityID, ScopeRecordID)` for the configuration UI's reverse lookup, and `ActionExecutionLog (TargetEntityID, TargetRecordID, StartedAt DESC)` for "what ran against this record". Measure first. |
+| **11** | Explorer UI: scoped bindings on the scope record's form | What makes §4.1 visible |
+| **12** | A guide covering the whole hook story, agent dispatch, the sync/async rule and the logging posture | The capability is under-documented, which is why apps keep reinventing it |
+
+Steps 4, 5 and 8 are independent and parallelizable. 6 gates 11. **5 gates production use.**
+
+---
+
+## 7. What this deliberately is not
 
 - **Not a replacement for `MJ: Record Processes`.** That owns WORK × SCOPE × TRIGGER for *bulk and
   scheduled* work over views, lists and filters. EntityAction owns *per-record lifecycle* hooks.
@@ -220,7 +306,7 @@ Steps 2–5 are independent and parallelizable. Step 6 depends on 3.
 
 ---
 
-## 7. Worked example — the requirement that produced this
+## 8. Worked example — the requirement that produced this
 
 *"When a Deal reaches Closed Won, run a workflow. Configurable per Deal Type, which may be global or
 company-specific."*
@@ -266,7 +352,7 @@ can retarget it, scope it, reorder it or disable it from the Deal Type record.
 
 ---
 
-## 8. Open questions
+## 9. Open questions
 
 1. **Should `Before*` be able to veto?** They are awaited and their results discarded, so `Validate`
    is the only gate. Honouring `Before*` failures would be more expressive but changes existing
@@ -280,3 +366,11 @@ can retarget it, scope it, reorder it or disable it from the Deal Type record.
    to the same entity) is a refusal, not a guess.
 4. **Does `Sequence` need to be unique per (EntityID, InvocationType)?** *Recommendation: no* —
    ties break by creation order; forced uniqueness makes inserting a step painful.
+5. **Should `ActionParam.LogValue` default to `0` rather than `1`?** `1` preserves today's behaviour
+   for every existing action, and rule 1 (§5.3) closes the actual hole regardless. *Recommendation:
+   keep `1`* — but set `0` explicitly on `Execute Agent`'s `Data` param in the same pass, since that
+   is the one everything routes through.
+6. **Should suppressed values be hashed rather than omitted?** A stable hash would let you prove two
+   runs received the same payload without storing it. *Recommendation: not in v1* — it is a real
+   capability but it is also a fingerprint of the record, and that deserves its own decision rather
+   than riding along.
