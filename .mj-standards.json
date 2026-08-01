@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/@memberjunction/standards/schema/mj-standards.schema.json",
+  "StandardsVersion": "5.51.0",
+  "Checks": {
+    "ui-layers": {
+      "Severity": "error",
+      "Roots": [
+        "packages"
+      ],
+      "Options": {
+        "requireDeclaredIn": [
+          "packages/Angular"
+        ]
+      }
+    }
+  }
+}

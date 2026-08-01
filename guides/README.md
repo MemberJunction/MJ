@@ -99,7 +99,7 @@ If you're about to start work in one of the areas below, **read the guide first*
   - The `Before*` / `After*` **cancelable event contract** (`Cancel` + `CancelReason`, `After*` suppressed on the canceled path), naming conventions, and why `Before*` handlers must be synchronous
   - Data access per layer and the multi-provider rule that makes it matter
   - **Package split** (`*-entities` / `*-engine-base` / `*-ng-widgets` / `*-ng`) with the allowed-dependency table
-  - **Enforcement** — `npm run check:ui-layers`, opt-in per package via `"mjUILayer"`, self-contained so app repos and external teams copy one file
+  - **Enforcement** — shipped as [`@memberjunction/standards`](../packages/Standards/README.md): `mj standards adopt` scaffolds a repo, `mj standards check` runs what it adopted, opt-in per package via `"mjUILayer"` and version-pinned so a new standard never changes an existing repo's result
   - A step-by-step recipe for migrating an existing 400-line do-everything screen
   - **Read before building any new UI in any MJ repo**, and before adding a component to a Generic package.
 - **[Optimistic-UI Save Pattern](OPTIMISTIC_UI_SAVE_PATTERN.md)** — ⚠️ *Status: proposal for review, not yet an adopted convention.* Documents a pattern several Angular surfaces adopted independently (render the user's action immediately, reconcile after `Save()` resolves) plus a proposed framework hook (`EntitySaveOptions.OnValidated`) that generalizes it. Includes two competing implementations — generic vs. inline — for reviewers to compare before any codebase-wide sweep. Read for context on perceived-latency work on chat/list/settings surfaces; **do not treat as settled guidance until the proposal is resolved.**
