@@ -257,6 +257,33 @@ without the payload:
 `ByteLength` without the bytes is deliberate: it makes "the payload was enormous" diagnosable without
 making it readable.
 
+### 5.5 `Execute Agent` ships with its content params flagged
+
+`Execute Agent` is the action every workflow binding routes through, so it is the one place where
+getting this wrong would leak by default. Its params are seeded in
+`metadata/actions/.execute-agent.json`, and four now carry `LogValue: false`:
+
+| Param | Direction | Why |
+|---|---|---|
+| `Data` | Input | The agent payload — **a whole record** whenever a binding maps a row onto it |
+| `ConversationMessages` | Input | Conversation text |
+| `Payload` | Output | Whatever the agent produced from the record |
+| `AgentResult` | Output | The full run trace, payload included |
+
+`EndActionLog` writes `result.Params ?? params.Params` — the **merged input and output set** — so
+outputs are logged too. Flagging only the inputs would have left the same content in the log by a
+different door.
+
+**The six identifier params stay logged**: `AgentName`, `AgentID`, `ConversationDetailID`,
+`LastRunID`, `MaxExecutionTimeMs`, `AgentRunID`. That is the point — a run stays fully diagnosable
+from the log (which agent, on which conversation, producing which run), and the content is one hop
+away in **`MJ: AI Agent Runs`**, where it belongs and is already access-controlled. **The content is
+not lost; it stops being duplicated into a general-purpose log.**
+
+This also means rule 1 and the `LogValue` flags are belt and braces for the common case: a binding
+that maps a record onto `Data` is suppressed by rule 1 (whole-record `ValueType`) *and* by the
+param's own flag.
+
 ---
 
 ## 6. What to do after CodeGen
@@ -269,6 +296,7 @@ land.
 |---|---|---|
 | **1** | Apply the migration | `mj migrate` |
 | **2** | `mj sync push --include=entities`, **then** `mj codegen` | Push before CodeGen or stale JSONType definitions silently truncate generated interfaces — see [`migrations/CLAUDE.md`](../migrations/CLAUDE.md). Commit the generated output. |
+| **2b** | Push the `Execute Agent` param flags | `metadata/actions/.execute-agent.json` already carries `LogValue: false` on its four content params (§5.5). It **cannot** be pushed before step 1 — the column does not exist yet. Revert the `sync` block write-back afterwards; those belong to the release-time consolidated sync. |
 | **3** | Verify the value list regenerated | `EntityActionParam.ValueType`'s `EntityFieldValue` rows and its generated TypeScript union both come from the CHECK constraint. `'Entity Object Data'` must appear in both. **Never hand-insert `EntityFieldValue`.** |
 | **4** | **`MapParams`: the `'Entity Object Data'` case** | `entity.GetAll()`. Smallest change, highest value per line. |
 | **5** | **`StartActionLog` / `EndActionLog`: the redaction rules (§5.3)** | Rule 1 first — it needs no configuration and closes the hole on its own. **Until this lands, do not author bindings that pass whole records.** |
@@ -366,10 +394,9 @@ can retarget it, scope it, reorder it or disable it from the Deal Type record.
    to the same entity) is a refusal, not a guess.
 4. **Does `Sequence` need to be unique per (EntityID, InvocationType)?** *Recommendation: no* —
    ties break by creation order; forced uniqueness makes inserting a step painful.
-5. **Should `ActionParam.LogValue` default to `0` rather than `1`?** `1` preserves today's behaviour
-   for every existing action, and rule 1 (§5.3) closes the actual hole regardless. *Recommendation:
-   keep `1`* — but set `0` explicitly on `Execute Agent`'s `Data` param in the same pass, since that
-   is the one everything routes through.
+5. ~~**Should `ActionParam.LogValue` default to `0` rather than `1`?**~~ **Resolved (Amith
+   2026-08-01): keep the `1` default, and flip `Execute Agent`'s content-bearing params explicitly.**
+   Done in `metadata/actions/.execute-agent.json` — see §5.5.
 6. **Should suppressed values be hashed rather than omitted?** A stable hash would let you prove two
    runs received the same payload without storing it. *Recommendation: not in v1* — it is a real
    capability but it is also a fingerprint of the record, and that deserves its own decision rather
