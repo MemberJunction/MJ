@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseImports, stripComments } from '../check-ui-layers.mjs';
+import { parseImports, stripComments, isAllowed } from '../check-ui-layers.mjs';
 
 describe('stripComments', () => {
     it('blanks line comments while preserving line numbers', () => {
@@ -63,5 +63,31 @@ describe('parseImports', () => {
     it('does not treat a namespace import as a named binding', () => {
         const [result] = parseImports(`import * as path from 'node:path';`);
         expect(result.Names).toEqual([]);
+    });
+});
+
+describe('isAllowed (reviewed-exception marker)', () => {
+    it('honours a marker on the offending line', () => {
+        const lines = ['import { Router } from \'@angular/router\'; // mj-ui-layers-allow: reason'];
+        expect(isAllowed(lines, 1)).toBe(true);
+    });
+
+    it('honours a marker on the line directly above', () => {
+        const lines = ['// mj-ui-layers-allow: reason', 'import { Router } from \'@angular/router\';'];
+        expect(isAllowed(lines, 2)).toBe(true);
+    });
+
+    it('does NOT reach further than one line above', () => {
+        // A wider window would let a marker drift away from the thing it excuses.
+        const lines = ['// mj-ui-layers-allow: reason', '', 'import { Router } from \'@angular/router\';'];
+        expect(isAllowed(lines, 3)).toBe(false);
+    });
+
+    it('is false with no marker anywhere', () => {
+        expect(isAllowed(['import { Router } from \'@angular/router\';'], 1)).toBe(false);
+    });
+
+    it('does not crash on the first line', () => {
+        expect(isAllowed(['something'], 1)).toBe(false);
     });
 });

@@ -7,6 +7,15 @@
  *   runtime  (L0)      pure TS — no Angular at all
  *   widgets  (L1+L2)   framework-clean Angular — no Router, no Explorer, no global provider
  *   surface  (L3)      Explorer surfaces — NavigationService only, never Router
+ *   shell              the navigation layer ITSELF — the documented Router exception
+ *
+ * `shell` deliberately checks nothing. It exists so the exception is ENUMERABLE: the shell,
+ * app-routing, the guards, the OAuth callback and NavigationService are what `NavigationService`
+ * is implemented on top of, so banning Router there would ban the implementation of the rule.
+ * Declaring the layer states that out loud in the package itself, and keeps `--list` honest —
+ * an undeclared package reads as "not looked at yet", which these have been.
+ * Keep this list SMALL. A `shell` declaration on anything that is not literally the navigation
+ * layer is a rule being avoided rather than applied.
  *
  * OPT-IN BY DESIGN. A package is checked only when its own package.json declares:
  *
@@ -15,6 +24,11 @@
  * so a repo can adopt the gate one package at a time instead of blocking on a full
  * cleanup. Packages without the field are listed as unchecked and ignored.
  *
+ * ONCE A TREE IS CLEAN, LOCK IT. Pass `--require-declared` and an undeclared package under the
+ * scanned roots becomes a failure rather than a skip. Without it, the way drift returns is simply
+ * a NEW package that never opts in — and "undeclared" is indistinguishable from "compliant" when
+ * you are reading a green check.
+ *
  * SELF-CONTAINED BY DESIGN. Node built-ins only, no MJ imports, no config file. App
  * repos and external teams copy this one file, add the npm script, and get the same
  * gate. Do not add repo-specific logic here — add it to the package's own tests.
@@ -22,7 +36,7 @@
  * Escape hatch: put `mj-ui-layers-allow` in a comment on the offending line. Use it
  * for a genuine, reviewed exception; a package that needs several is in the wrong layer.
  *
- * Usage:  node .github/scripts/check-ui-layers.mjs [root ...] [--quiet] [--list]
+ * Usage:  node .github/scripts/check-ui-layers.mjs [root ...] [--quiet] [--list] [--require-declared]
  * Exit:   0 = clean, 1 = at least one violation.
  */
 
@@ -47,6 +61,9 @@ const FORBIDDEN_MODULES = {
     // import for declarative `routerLink` chrome. What breaks Explorer is *imperative*
     // navigation, so the surface rule bans the symbols below rather than the module.
     surface: [],
+    // The shell IS the navigation layer — it is what `NavigationService` is implemented on top
+    // of. Banning Router here would be banning the implementation of the rule.
+    shell: [],
 };
 
 /** Imported symbol names a layer may never bind, regardless of the module they came from. */
@@ -67,22 +84,29 @@ const FORBIDDEN_SYMBOLS = {
         ['ActivatedRoute', 'use GetQueryParams() / OnQueryParamsChanged()'],
         ['NavigationEnd', 'the shell owns URL sync — never subscribe to Router events'],
     ],
+    shell: [],
 };
 
 /**
  * Source patterns a layer may never contain. Global-provider construction binds a
  * component to `Metadata.Provider`, which breaks the moment it is embedded under a
  * different provider — the exact reuse this layering exists to enable.
+ *
+ * NOTE the `\(\s*\)` — only the ZERO-ARGUMENT form is a violation. `new RunView(provider)` and
+ * `new RunQuery(this.RunQueryToUse)` pass a provider explicitly and are correct; an earlier,
+ * blunter version of these patterns flagged them, which is exactly the kind of false positive
+ * that gets a gate switched off.
  */
 const FORBIDDEN_PATTERNS = {
     runtime: [],
     widgets: [
-        [/\bnew\s+RunViews?\s*\(/, 'new RunView()', 'binds the global provider — use RunView.FromMetadataProvider(this.ProviderToUse)'],
-        [/\bnew\s+RunQuery\s*\(/, 'new RunQuery()', 'binds the global provider — use this.RunQueryToUse'],
-        [/\bnew\s+RunReport\s*\(/, 'new RunReport()', 'binds the global provider — use this.RunReportToUse'],
-        [/\bnew\s+Metadata\s*\(/, 'new Metadata()', 'binds the global provider — use this.ProviderToUse'],
+        [/\bnew\s+RunViews?\s*\(\s*\)/, 'new RunView()', 'binds the global provider — use RunView.FromMetadataProvider(this.ProviderToUse)'],
+        [/\bnew\s+RunQuery\s*\(\s*\)/, 'new RunQuery()', 'binds the global provider — use this.RunQueryToUse'],
+        [/\bnew\s+RunReport\s*\(\s*\)/, 'new RunReport()', 'binds the global provider — use this.RunReportToUse'],
+        [/\bnew\s+Metadata\s*\(\s*\)/, 'new Metadata()', 'binds the global provider — use this.ProviderToUse'],
     ],
     surface: [],
+    shell: [],
 };
 
 /** package.json dependency specifiers a layer may never declare. Manifest half of the module ban. */
@@ -90,6 +114,7 @@ const FORBIDDEN_DEPS = {
     runtime: [/^@angular\//],
     widgets: [/^@angular\/router$/, /^@memberjunction\/ng-shared$/, /^@memberjunction\/ng-explorer/],
     surface: [],
+    shell: [],
 };
 
 const VALID_LAYERS = Object.keys(FORBIDDEN_MODULES);
@@ -210,10 +235,18 @@ export function parseImports(source) {
     return results;
 }
 
-/** True when the given 1-based line carries the reviewed-exception marker. */
-function isAllowed(lines, lineNumber) {
-    const line = lines[lineNumber - 1] ?? '';
-    return line.includes(ALLOW_MARKER);
+/**
+ * True when the given 1-based line carries the reviewed-exception marker, or the line directly
+ * above it does.
+ *
+ * The preceding line counts because a real exception deserves a sentence of explanation, and a
+ * trailing comment long enough to hold one is unreadable. Only ONE line above — a wider window
+ * would let a marker drift away from the thing it excuses.
+ */
+export function isAllowed(lines, lineNumber) {
+    const own = lines[lineNumber - 1] ?? '';
+    const above = lineNumber >= 2 ? (lines[lineNumber - 2] ?? '') : '';
+    return own.includes(ALLOW_MARKER) || above.includes(ALLOW_MARKER);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -280,6 +313,7 @@ function main() {
     const argv = process.argv.slice(2);
     const quiet = argv.includes('--quiet');
     const listOnly = argv.includes('--list');
+    const requireDeclared = argv.includes('--require-declared');
     const roots = argv.filter((a) => !a.startsWith('--'));
     if (roots.length === 0) roots.push('packages');
 
@@ -328,7 +362,15 @@ function main() {
     }
 
     log('');
-    log(`Checked ${checked.length} package(s); ${unchecked.length} have no "mjUILayer" declaration and were skipped.`);
+    if (requireDeclared && unchecked.length > 0) {
+        failures += unchecked.length;
+        console.error('');
+        console.error(`✗ ${unchecked.length} package(s) under the scanned roots have no "mjUILayer" declaration:`);
+        for (const name of unchecked.sort()) console.error(`    ${name}`);
+        console.error('  This tree is locked (--require-declared): every package must declare its layer.');
+        console.error('  Add "mjUILayer": "runtime" | "widgets" | "surface" | "shell" to each package.json.');
+    }
+    log(`Checked ${checked.length} package(s); ${unchecked.length} have no "mjUILayer" declaration${requireDeclared ? ' (REQUIRED — see above)' : ' and were skipped'}.`);
     if (listOnly) {
         log('');
         log('Packages without a layer declaration:');

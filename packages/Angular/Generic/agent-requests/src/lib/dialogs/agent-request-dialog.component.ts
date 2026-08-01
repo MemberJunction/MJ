@@ -10,6 +10,7 @@ import {
     ChangeDetectionStrategy, ViewChild, OnInit, OnChanges, SimpleChanges
 } from '@angular/core';
 import { MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RunView } from '@memberjunction/core';
 import { AgentRequestPanelComponent, AgentRequestPanelResult } from '../panels/agent-request-panel/agent-request-panel.component';
 
@@ -49,7 +50,7 @@ import { AgentRequestPanelComponent, AgentRequestPanelResult } from '../panels/a
     `],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AgentRequestDialogComponent implements OnInit, OnChanges {
+export class AgentRequestDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
     @ViewChild('requestPanel') requestPanel!: AgentRequestPanelComponent;
 
     @Input() Visible = false;
@@ -60,7 +61,8 @@ export class AgentRequestDialogComponent implements OnInit, OnChanges {
     public IsLoading = false;
     public requestTypes: MJAIAgentRequestTypeEntity[] = [];
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) {
+        super();}
 
     ngOnInit(): void {
         if (this.Visible) {
@@ -88,7 +90,7 @@ export class AgentRequestDialogComponent implements OnInit, OnChanges {
         this.cdr.markForCheck();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJAIAgentRequestTypeEntity>({
                 EntityName: 'MJ: AI Agent Request Types',
                 OrderBy: 'Name',

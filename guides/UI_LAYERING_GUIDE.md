@@ -395,6 +395,7 @@ A package opts in by declaring its layer in its own `package.json`:
 | `runtime` | No `@angular/*` imports or dependencies at all. |
 | `widgets` | No `@angular/router`, no `@memberjunction/ng-shared`, no `@memberjunction/ng-explorer-*` — in **source or manifest**. No `Router` / `ActivatedRoute` / `NavigationService` / `SharedService` / `BaseResourceComponent` / `BaseDashboard` symbols. No global `new RunView()` / `new Metadata()` / `new RunQuery()` (use `ProviderToUse`). |
 | `surface` | No `Router` / `ActivatedRoute` / `NavigationEnd` symbols — L3 navigates through `NavigationService` only. Importing `RouterModule` for declarative `routerLink` chrome is allowed; L3 already lives inside an app that has Router configured, and what breaks the shell is *imperative* navigation. |
+| `shell` | Nothing. This is the navigation layer **itself** — `ng-explorer-core`, `ng-explorer-app` and `ng-shared` are what `NavigationService` is implemented on top of, so banning Router there would ban the implementation of the rule. Declaring the layer makes the exception **enumerable** instead of leaving those packages looking un-reviewed. In MJ it is exactly four: `ng-explorer-core`, `ng-explorer-app`, `ng-shared`, `ng-bootstrap` (auth shell + app initialization). A `shell` declaration on anything that is not literally the navigation or bootstrap layer is a rule being avoided, not applied. |
 
 Comments are stripped before matching, so a JSDoc block that *explains* a banned
 construct is not itself a violation — a gate that can't tell those apart is a gate

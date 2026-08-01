@@ -53,10 +53,17 @@ Beyond Router, the `widgets` layer also bans `@memberjunction/ng-shared` (`Share
 (`new RunView()` / `new Metadata()` — use `this.ProviderToUse`, per
 [../CLAUDE.md](../CLAUDE.md)).
 
-**Adoption is incremental.** A package without `mjUILayer` is skipped. Adding the field to a
-package that has drifted is exactly how you find out what to fix. Packages still to be
-cleaned up and declared: `archive-manager`, `clustering`, `join-grid`, `timeline`, `trees`,
-`file-storage`, `ai-test-harness`, `conversations`.
+**Every package in this tree is declared and passing.** There is no "not looked at yet" state
+left here — `npm run check:ui-layers` covers all of `packages/Angular/**`, and the PR check runs
+on every PR that touches it.
+
+The one standing exception is marked in source with `mj-ui-layers-allow` and a reason:
+`file-storage`'s `FileBrowserResource` is an Explorer surface sitting in this tree. Moving it is
+the right fix but requires regenerating three CodeGen manifests, so it is tracked rather than
+hand-edited.
+
+**When you add a package here**, declare `"mjUILayer": "widgets"` in its `package.json` from the
+first commit. A new Generic package without the field is the only way drift gets back in.
 
 ## Related Guides
 
