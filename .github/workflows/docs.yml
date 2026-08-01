@@ -7,9 +7,11 @@ on:
     types:
       - completed
 
-  # Docs content changes that land on main outside a release cycle
+  # Docs content changes that land on main or the LTS line outside a release
+  # cycle. The lts/5 trigger is what makes line release notes self-deploying:
+  # the notes commit pushed to lts/5 touches releases/** and fires this.
   push:
-    branches: [main]
+    branches: [main, lts/5]
     paths:
       - 'docs-site/**'
       - 'guides/**'
@@ -22,6 +24,11 @@ on:
       - 'releases/**'
 
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to build the site from (defaults to the certified LTS line)'
+        required: false
+        default: 'lts/5'
 
 permissions:
   contents: read
@@ -45,10 +52,17 @@ jobs:
             exit 1
           fi
 
+      # The public site documents the LTS line, whatever branch fired the
+      # trigger. Without an explicit ref, workflow_run events check out the
+      # repo DEFAULT branch (next) — verified from past run history — which
+      # after the 6.x era opens would publish Edge dev content on every
+      # release. Pinned until versioned docs (/v5, /v6) land; update this ref
+      # when a new line certifies.
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.inputs.ref || 'lts/5' }}
 
       - name: Set up node
         uses: actions/setup-node@v6
