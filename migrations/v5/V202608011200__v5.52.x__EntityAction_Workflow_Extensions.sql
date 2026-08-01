@@ -28,6 +28,11 @@
 --                                         written to the log.
 --   6. EntityAction.LoggingMode         — volume control per binding.
 --
+--   PART 3 (below) — input/output separation:
+--   7. ActionExecutionLog.ResultParams   — the final merged set, so that Params can
+--                                          stop being overwritten and keep the
+--                                          AS-CALLED inputs.
+--
 -- WHAT THIS DOES *NOT* DO
 --   No engine changes. The columns are inert until the server-side work in the
 --   plan lands (scope filtering in EntityActionEngineBase, Sequence ordering,
@@ -272,4 +277,66 @@ EXEC sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'EntityAction',
     @level2type = N'COLUMN', @level2name = N'LoggingMode';
+GO
+
+
+-- =============================================================================
+-- PART 3 — Separate the as-called inputs from the final result set
+-- =============================================================================
+--
+-- `ActionExecutionLog.Params` is written TWICE against the same column:
+--
+--   StartActionLog  Params = JSON.stringify(params.Params)              -- inputs
+--   EndActionLog    Params = JSON.stringify(result.Params ?? params.Params)
+--                                                    -- merged inputs + outputs
+--
+-- The second write OVERWRITES the first. And because Custom and Generated
+-- actions mutate `params.Params` in place, the end state is not merely the
+-- inputs plus outputs — it is the inputs AS THE ACTION LEFT THEM. So the values
+-- the action was actually CALLED with are captured at start and then destroyed
+-- at end. "What was this called with" and "what did it end up holding" are
+-- different questions, and only the second is currently answerable.
+--
+-- Splitting them costs one nullable column, and MJ already has the precedent one
+-- table over: QueueTask separates Data / Options / Output rather than merging.
+--
+--   Params        -> the AS-CALLED inputs. Written once at start, never
+--                    overwritten. Answers "what was this invoked with".
+--   ResultParams  -> the final merged set at completion. Answers "what did the
+--                    action produce, and what did the inputs become".
+--
+-- Both are subject to the redaction rules in PART 2 — a param suppressed on the
+-- way in is suppressed on the way out.
+-- =============================================================================
+
+ALTER TABLE [${flyway:defaultSchema}].[ActionExecutionLog] ADD
+    [ResultParams] NVARCHAR(MAX) NULL;
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'JSON-formatted FINAL parameter set captured when the action completed - the inputs as the action left them, plus any output parameters it produced. Distinct from Params, which holds the values the action was called with and is never overwritten. Subject to the same per-parameter redaction rules as Params: a value suppressed on the way in is suppressed on the way out. NULL while a run is still in flight, and for runs that never completed.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'ActionExecutionLog',
+    @level2type = N'COLUMN', @level2name = N'ResultParams';
+GO
+
+EXEC sp_updateextendedproperty
+    @name = N'MS_Description',
+    @value = N'JSON-formatted input parameters AS THE ACTION WAS CALLED, captured once when execution starts and never overwritten. Custom and Generated actions mutate their parameter array in place, so this is the only durable record of the values actually passed in; the final state lives in ResultParams. Parameter values may be redacted per ActionParam.LogValue / EntityActionParam.LogValue, and whole-record value types are never written - see the parameter''s own documentation.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'ActionExecutionLog',
+    @level2type = N'COLUMN', @level2name = N'Params';
+GO
+
+-- Pre-existing description said "JSON-formatted output data or response from the
+-- action execution", which describes ResultParams rather than this column. The
+-- code sets it from `result.Message` - a human-readable summary. Corrected here
+-- so nobody goes looking for outputs in the wrong place.
+EXEC sp_updateextendedproperty
+    @name = N'MS_Description',
+    @value = N'Human-readable summary message returned by the action - the reason for a refusal, or a short description of what was done. Not the action''s output data: parameter values live in Params and ResultParams, and the outcome code in ResultCode.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'ActionExecutionLog',
+    @level2type = N'COLUMN', @level2name = N'Message';
 GO

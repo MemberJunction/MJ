@@ -20,8 +20,8 @@ real save path and it works. Four small gaps stop it from being the answer for w
 plan closes them.
 
 **The conclusion up front: no new subsystem, in core or in any OpenApp.** Additive columns, one
-extended value list, and bounded engine changes — plus one behaviour change to execution logging
-that has to ship with them (§5), because the feature is unsafe to turn on without it.
+extended value list, and bounded engine changes — plus a set of changes to execution logging that
+have to ship with them (§5), because the feature is unsafe and under-diagnosable without them.
 
 ---
 
@@ -97,6 +97,8 @@ is a complete, working configuration today — **except for one trap**, which is
 | 4 | **`After*` is fire-and-forget with no durable record** | Errors are logged and swallowed. For a workflow that creates a contract and orders, silent failure is unacceptable — and the sibling path already solved this (see §4.4). |
 | 5 | **The execution log has no entity-action provenance** | `ActionExecutionLog` cannot say which binding fired, on which record, from which event. A failed workflow is undiagnosable (§5.1). |
 | 6 | **Param logging writes every value, unconditionally** | And entity-action params are whole records — so turning this feature on writes full rows into a general-purpose log, twice per invocation. This is the one that makes the feature *unsafe*, not merely incomplete (§5.2). |
+| 7 | **The end write destroys the as-called inputs** | `Params` is overwritten with the final set, and actions mutate their param array in place — so "what was this invoked with" is unanswerable (§5.6). |
+| 8 | **Retention is documented but not enforced** | Nothing prunes `ActionExecutionLog`. Pre-existing, but workflow volume is what makes it bite (§5.8). |
 
 ---
 
@@ -196,7 +198,7 @@ Two problems with one cause, and the second is why this section is not optional.
 so the moment Entity Actions become the workflow substrate, a failed workflow is undiagnosable.
 
 Four nullable columns: `EntityActionID`, `EntityActionInvocationTypeID`, `TargetEntityID`,
-`TargetRecordID`.
+`TargetRecordID`. A fifth, `ResultParams`, is §5.6.
 
 **Extended rather than a side table** because the child is optional, small and 1:1 — nullable columns
 beat a join in that shape, and "did this action run" stays one query. Accounting already uses the
@@ -246,16 +248,23 @@ holding an API key, an `Entity Field` holding a national ID — and volume.
 
 ### 5.4 The redaction record shape
 
-When a value is suppressed the log still records that the param existed, so a run is reconstructable
-without the payload:
+When a value is suppressed the log still records **the shape**, so a run stays diagnosable without
+the payload:
 
 ```jsonc
 { "Name": "Data", "Type": "Input", "ValueType": "Entity Object Data",
-  "Logged": false, "Reason": "WholeRecordValueType", "ByteLength": 4182 }
+  "Logged": false, "Reason": "WholeRecordValueType",
+  "ByteLength": 4182, "KeyCount": 41,
+  "Keys": ["ID","DealNumber","Name","PipelineID","PipelineStageID","..."] }
 ```
 
-`ByteLength` without the bytes is deliberate: it makes "the payload was enormous" diagnosable without
-making it readable.
+**Shape, never values.** `ByteLength` and `KeyCount` make "it was called with the 41-column deal row,
+not the 3-field summary" answerable — which is most of what an incident actually needs. Top-level
+`Keys` are column names for a record: schema, not data. Truncate the key list at a sane bound and
+mark it elided rather than letting a wide row reintroduce the size problem.
+
+Nested keys are deliberately **not** walked. One level is schema; deeper is structure that can encode
+content (a `Notes` object keyed by author, say).
 
 ### 5.5 `Execute Agent` ships with its content params flagged
 
@@ -284,6 +293,75 @@ This also means rule 1 and the `LogValue` flags are belt and braces for the comm
 that maps a record onto `Data` is suppressed by rule 1 (whole-record `ValueType`) *and* by the
 param's own flag.
 
+### 5.6 `Params` stops being overwritten *(migration — done)*
+
+`Params` is written twice against the same column — inputs at start, then the merged input+output set
+at end, which **overwrites** the first. And because Custom and Generated actions mutate
+`params.Params` **in place**, the end state is not "inputs plus outputs" but *inputs as the action
+left them*. So the values the action was actually **called with** are captured and then destroyed.
+
+"What was this invoked with" and "what did it end up holding" are different questions, and today only
+the second is answerable. For a workflow binding that is the difference between "the agent got the
+wrong record" and "the agent mangled the right one."
+
+One nullable column fixes it, and MJ already has the precedent one table over — `QueueTask`
+separates `Data` / `Options` / `Output` rather than merging:
+
+| Column | Holds |
+|---|---|
+| `Params` | The **as-called** inputs. Written once at start, never overwritten. |
+| `ResultParams` | The final merged set at completion. NULL while in flight, and for runs that never finished. |
+
+The migration also corrects `Message`'s description, which said *"JSON-formatted output data or
+response"* — it is set from `result.Message`, a human-readable summary. Outputs were never there.
+
+### 5.7 Redaction belongs to the params, not to the log
+
+**This is the part that is easy to get wrong, and I nearly did.** If the redaction rules live inside
+`StartActionLog` / `EndActionLog`, they cover exactly one of the places these params get persisted.
+There are at least three:
+
+| Persister | Column | Notes |
+|---|---|---|
+| `ActionEngine` | `ActionExecutionLog.Params` / `ResultParams` | §5.2 |
+| `QueueManager` | `QueueTask.Data` | **Step 9 of the runbook routes `After*` through the queue** — so the fix for one problem re-opens the other unless redaction is shared |
+| `AgentRunner` | agent run payload | `Execute Agent` passes `Data` straight through |
+
+So it is one exported helper, called by every persister:
+
+```ts
+RedactParams(params: ActionParam[], actionParams: MJActionParamEntity[],
+             entityActionParams?: MJEntityActionParamEntity[]): RedactedParam[]
+```
+
+Rule 1 (whole-record value types) needs no lookup at all and can be applied from the `ActionParam`
+alone. The `LogValue` flags need the definition rows, which the engine already has loaded.
+
+**The invariant to state in the code:** no path may write a raw `ActionParam[]` to persistent
+storage. Grep-able, and worth a CI check once the helper exists.
+
+### 5.8 Retention is not enforced today
+
+`ActionExecutionLog.RetentionPeriod` is documented as *"Number of days to retain the log; NULL for
+indefinite retention"* — and there is **no enforcement anywhere in the Actions packages**. Outside
+generated code, nothing reads it. The same is true of `Action.RetentionPeriod`.
+
+That matters twice over. Volume: entity-action logging multiplies row count and nothing prunes it.
+And honesty: "retention deletes it eventually" is not available as a mitigation for anything, because
+it does not happen.
+
+Two options, and they are not exclusive:
+
+1. **Implement it** — a Scheduled Job that deletes `ActionExecutionLog` rows older than the effective
+   retention, resolved most-specific-first: the log row's own `RetentionPeriod`, then the
+   `Action`'s, then a system default from config. Bounded per run, and it must log what it deleted.
+2. **Or stop treating it as mitigation** and say so in the column description.
+
+*Recommendation: implement it,* and treat the config default as the real control — a per-action value
+nobody sets is not a retention policy. This is pre-existing rather than caused by this PR, so it
+could reasonably be split out; it is included here because the workflow feature is what makes it
+start to matter.
+
 ---
 
 ## 6. What to do after CodeGen
@@ -299,11 +377,13 @@ land.
 | **2b** | Push the `Execute Agent` param flags | `metadata/actions/.execute-agent.json` already carries `LogValue: false` on its four content params (§5.5). It **cannot** be pushed before step 1 — the column does not exist yet. Revert the `sync` block write-back afterwards; those belong to the release-time consolidated sync. |
 | **3** | Verify the value list regenerated | `EntityActionParam.ValueType`'s `EntityFieldValue` rows and its generated TypeScript union both come from the CHECK constraint. `'Entity Object Data'` must appear in both. **Never hand-insert `EntityFieldValue`.** |
 | **4** | **`MapParams`: the `'Entity Object Data'` case** | `entity.GetAll()`. Smallest change, highest value per line. |
-| **5** | **`StartActionLog` / `EndActionLog`: the redaction rules (§5.3)** | Rule 1 first — it needs no configuration and closes the hole on its own. **Until this lands, do not author bindings that pass whole records.** |
+| **5** | **`RedactParams` helper + wire it into every persister (§5.3, §5.7)** | Rule 1 first — no configuration, closes the hole on its own. Build it as a **shared helper**, not inline in the log methods, or step 9 re-opens it via `QueueTask.Data`. **Until this lands, do not author bindings that pass whole records.** |
+| **5b** | `EndActionLog` writes `ResultParams`; `Params` is no longer overwritten (§5.6) | Two-line change once the column exists, and it makes every run's as-called inputs durable |
 | **6** | `EntityActionEngineBase`: `Sequence` ordering + scope filtering via the resolver seam (§4.5) | |
 | **7** | Stamp the new `ActionExecutionLog` columns on the entity-action invocation path | §5.1 |
 | **8** | Filter contract: documented `OldValues`/`NewValues`; seed the two `ActionFilter` rows in `metadata/action-filters/` | §4.2. Metadata, not SQL inserts. |
-| **9** | `OnAfterSaveExecute` → `QueueManager` | §4.4 |
+| **9** | `OnAfterSaveExecute` → `QueueManager` | §4.4. **Route the payload through `RedactParams` first** — `QueueTask.Data` is persistent storage too (§5.7). |
+| **9b** | Retention purge job (§5.8) | Pre-existing gap; could split into its own PR. Until it exists, retention is not a mitigation for anything. |
 | **10** | Indexes, once query patterns are real | Deliberately **not** in the migration — the repo's rule is that indexes are not hand-authored unless requested, and CodeGen owns FK indexes. Two composites are likely wanted: `EntityAction (ScopeEntityID, ScopeRecordID)` for the configuration UI's reverse lookup, and `ActionExecutionLog (TargetEntityID, TargetRecordID, StartedAt DESC)` for "what ran against this record". Measure first. |
 | **11** | Explorer UI: scoped bindings on the scope record's form | What makes §4.1 visible |
 | **12** | A guide covering the whole hook story, agent dispatch, the sync/async rule and the logging posture | The capability is under-documented, which is why apps keep reinventing it |
@@ -397,7 +477,11 @@ can retarget it, scope it, reorder it or disable it from the Deal Type record.
 5. ~~**Should `ActionParam.LogValue` default to `0` rather than `1`?**~~ **Resolved (Amith
    2026-08-01): keep the `1` default, and flip `Execute Agent`'s content-bearing params explicitly.**
    Done in `metadata/actions/.execute-agent.json` — see §5.5.
-6. **Should suppressed values be hashed rather than omitted?** A stable hash would let you prove two
+6. **Should `ResultParams` also be written on failure?** A refused or thrown run has no result set,
+   but the *partial* mutation of the inputs is often the most diagnostic thing available.
+   *Recommendation: yes* — write whatever the param array holds at the point of failure, redacted the
+   same way.
+7. **Should suppressed values be hashed rather than omitted?** A stable hash would let you prove two
    runs received the same payload without storing it. *Recommendation: not in v1* — it is a real
    capability but it is also a fingerprint of the record, and that deserves its own decision rather
    than riding along.
