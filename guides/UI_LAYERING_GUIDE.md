@@ -57,7 +57,7 @@ MJ app and every app built **on** MJ can follow it.
 │
 ├─ L2  Composite widget                       ← assembles L1 into a working thing
 │      Framework-clean Angular. MAY read data — ONLY via ProviderToUse.
-│      Takes entities and models, never a primary key it resolves itself.
+│      Prefers entities and models as inputs; may take a key when loading IS its job.
 │      Emits intent (RecordOpenRequested, SaveRequested), never performs it.
 │      Package: <app>-ng-widgets    (NO ng-shared, NO @angular/router)
 │
@@ -205,6 +205,13 @@ breaks the moment it is embedded somewhere else.
 | **L0** | Whatever it is given. Pure functions and clients take a provider/connection as an argument. |
 | **L1** | **None.** If a presentational widget needs data, it needs an `@Input()`. |
 | **L2** | Allowed, but **only** through `BaseAngularComponent`: extend it, and use `this.ProviderToUse`, `RunView.FromMetadataProvider(this.ProviderToUse)`, `this.ProviderToUse.GetEntityObject(...)`. |
+
+**On composite inputs.** Prefer a model or an already-loaded entity — a composite whose input is a
+plain object is testable with an object literal. But a composite whose *job* is "show everything
+about record X" may legitimately take a key and own the load; that is a design choice, not a
+violation. The useful pattern is to accept **both**: a key for hosts that only have one, and a
+pre-loaded record for hosts (like an entity form) that already have it, so those skip a round trip.
+What a composite may never do is *navigate* — that is the boundary, not data acquisition.
 | **L3** | Same provider discipline; additionally owns record loading for the surface. |
 
 ```typescript
