@@ -307,6 +307,13 @@ GO
 --
 -- Both are subject to the redaction rules in PART 2 — a param suppressed on the
 -- way in is suppressed on the way out.
+--
+-- ResultParams is written on FAILURE exactly as on success. Both failure paths in
+-- ActionEngine.InternalRunAction already reach EndActionLog — the returned
+-- Success:false case and the thrown-exception catch, which passes params.Params
+-- (the mutated array) — so this needs no new control flow. A failed run's
+-- partially-mutated inputs are usually the most diagnostic thing available, and
+-- an audit trail that records only successes is not an audit trail.
 -- =============================================================================
 
 ALTER TABLE [${flyway:defaultSchema}].[ActionExecutionLog] ADD
@@ -315,7 +322,7 @@ GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'JSON-formatted FINAL parameter set captured when the action completed - the inputs as the action left them, plus any output parameters it produced. Distinct from Params, which holds the values the action was called with and is never overwritten. Subject to the same per-parameter redaction rules as Params: a value suppressed on the way in is suppressed on the way out. NULL while a run is still in flight, and for runs that never completed.',
+    @value = N'JSON-formatted FINAL parameter set captured when the action finished - the inputs as the action left them, plus any output parameters it produced. Written on FAILURE exactly as on success, under the same redaction rules: a failed run''s partially-mutated inputs are usually the most diagnostic thing available, and an audit trail that records only successes is not an audit trail. Distinct from Params, which holds the values the action was called with and is never overwritten. NULL means one thing only - the run never finished (process died, host killed) - so it is a signal rather than an absence, and must not be backfilled.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'ActionExecutionLog',
     @level2type = N'COLUMN', @level2name = N'ResultParams';

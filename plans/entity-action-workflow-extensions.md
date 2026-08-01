@@ -310,7 +310,24 @@ separates `Data` / `Options` / `Output` rather than merging:
 | Column | Holds |
 |---|---|
 | `Params` | The **as-called** inputs. Written once at start, never overwritten. |
-| `ResultParams` | The final merged set at completion. NULL while in flight, and for runs that never finished. |
+| `ResultParams` | The final merged set. Written on **failure exactly as on success**. |
+
+**Failure writes too — and it costs nothing.** Both failure paths in
+`ActionEngine.InternalRunAction` already reach `EndActionLog`: the returned `Success: false` case,
+and the thrown-exception `catch`, which constructs its result with `Params: params.Params` — the
+array **as the action mutated it before dying**. So the partial mutation is already in hand; it was
+simply being written to a column that then looked identical to a successful run's.
+
+An audit trail that records only successes is not an audit trail, and on a failed workflow binding
+the half-mutated inputs are usually the most diagnostic thing available.
+
+`ResultParams` being NULL therefore means exactly one thing — **the run never finished** (process
+died, host killed). That is a signal, not an absence, and it must not be backfilled.
+
+**Implementation note:** `StartAndEndActionLog` performs a single force-persist write rather than an
+INSERT followed by an UPDATE. Make sure that path persists **both** columns — `Params` is set in
+memory by `StartActionLog(params, false)` and must survive, and `EndActionLog` must never clear or
+rewrite it.
 
 The migration also corrects `Message`'s description, which said *"JSON-formatted output data or
 response"* — it is set from `result.Message`, a human-readable summary. Outputs were never there.
@@ -477,10 +494,8 @@ can retarget it, scope it, reorder it or disable it from the Deal Type record.
 5. ~~**Should `ActionParam.LogValue` default to `0` rather than `1`?**~~ **Resolved (Amith
    2026-08-01): keep the `1` default, and flip `Execute Agent`'s content-bearing params explicitly.**
    Done in `metadata/actions/.execute-agent.json` — see §5.5.
-6. **Should `ResultParams` also be written on failure?** A refused or thrown run has no result set,
-   but the *partial* mutation of the inputs is often the most diagnostic thing available.
-   *Recommendation: yes* — write whatever the param array holds at the point of failure, redacted the
-   same way.
+6. ~~**Should `ResultParams` also be written on failure?**~~ **Resolved (Amith 2026-08-01): yes,
+   under the same rules as success, for the audit trail.** No new control flow needed — see §5.6.
 7. **Should suppressed values be hashed rather than omitted?** A stable hash would let you prove two
    runs received the same payload without storing it. *Recommendation: not in v1* — it is a real
    capability but it is also a fingerprint of the record, and that deserves its own decision rather
