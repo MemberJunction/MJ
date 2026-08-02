@@ -1,7 +1,7 @@
 # API-Key-Scoped Row Filters
 
 **Branch:** `claude/api-key-row-filters-98ev39`
-**Status:** Plan approved in outline (v2.1) — migration written, implementation not started
+**Status:** Plan approved (v2.2) — migration written, all blocking decisions resolved, implementation not started
 **Proposed implementation owner:** @jordanfanapour (cc @MarceloT-BC)
 **Date:** 2026-08-02
 **Supersedes:** the original "Row-Level Filter Rules for MJ API Key Scopes" proposal (written against the public
@@ -17,8 +17,8 @@
 > **v2.1 changelog.** §9.1 resolved in favor of the FK. The shared-filter drift hazard that choice introduces is closed by a
 > same-entity invariant (§5.3 check 6) plus a second enforcement point on filter save (§5.3) — the latter is mandatory under
 > either storage option, because without it the save-time validation is bypassable by editing `FilterText` after attaching.
-> Migration written (§8 Phase 2). **§9.2 (`full_access` semantics) remains open and is the only decision still blocking
-> implementation.**
+> Migration written (§8 Phase 2). §9.2 (`full_access` semantics) also resolved: the combination is **invalid and rejected**,
+> not silently resolved either way — see §5.6.1. **No decisions remain blocking implementation.**
 
 ---
 
@@ -482,13 +482,43 @@ v1 did not enumerate these. Each needs an explicit decision, and the default for
 | # | Bypass | Current behavior | Decision |
 |---|---|---|---|
 | 1 | **Role RLS exemption** | `entityInfo.ts:2312` early-returns `''` | Key filter evaluated outside the exemption — §5.5 |
-| 2 | **`full_access` scope** | `ResolverBase.ts:679-692` short-circuits the specific scope check | **Row filters still apply.** `full_access` means "every operation," not "every row." A key with `full_access` + a row filter is a legitimate, useful config. The full-access fast path must still resolve and attach row filters, or must refuse to coexist with a filtered key. Pick one; do not leave it implicit. |
+| 2 | **`full_access` scope** | `ResolverBase.ts:679-692` short-circuits the specific scope check | **DECIDED: the combination is invalid and is rejected, not silently resolved.** `full_access` means unrestricted, so a row filter alongside it is incoherent — one of the two is a lie about what the key can reach. Rather than pick a winner at runtime, forbid the config. See §5.6.1. |
 | 3 | **`enforcementEnabled: false`** | `APIKeyEngine.ts:596` returns `Allowed` unconditionally | Global kill switch — filters off too. Acceptable *only* if startup logs a prominent warning when any filtered scope rule exists while enforcement is disabled. |
 | 4 | **Key has no scope rules + `defaultBehaviorNoScopes: 'allow'`** | `ScopeEvaluator.ts:156-167` allows | No rule ⇒ no filter ⇒ unfiltered access. Document that a filtered deployment must set `'deny'` (already the engine's own default at `APIKeyEngine.ts:144`). |
 | 5 | **External-data-source entities** | `assertExternalReadAllowedUnderRLS` (`GenericDatabaseProvider.ts:2509`) refuses reads when RLS applies, **but lets exempt users through** | Must refuse when a *key* filter applies, regardless of role exemption. Otherwise the filter is silently unenforceable on external-backed entities. Migrating this call site to `GetEffectiveRowFilterWhereClause` fixes it. |
 | 6 | **Non-resolver entry points** | Scope checks live in resolvers; MCP/A2A/REST surfaces may not call them | The data-layer filter covers these *because* it is in RLS — but confirm no surface constructs a provider with a principal lacking acting context, which would deny (correct) rather than allow. |
 | 7 | **`APIKeysEngineBase` not `Config`'d** | Cached rules empty → no rules match | Must deny, not allow, when a filtered key is used before the engine loads. Verify the load-order at `MJServer/src/index.ts:672-674`. |
 | 8 | **Dangling `RowFilterID`** | FK prevents it in-DB; a stale cache could hold one | Unresolvable filter ID → deny. |
+
+#### 5.6.1 `full_access` + row filter is an invalid configuration
+
+**Decision (2026-08-02):** a `full_access` grant means unrestricted access. A row filter on the same key asserts the
+opposite. The two cannot both be honored, and *either* silent resolution is a bug: applying the filter makes `full_access`
+not mean full access, and ignoring it makes a row filter that someone deliberately configured silently absent — the
+fail-open case this whole feature exists to prevent.
+
+So the combination is **rejected outright** rather than resolved. Enforced at two points:
+
+**Authoring time (primary).** Reject at save:
+- Setting `RowFilterID` on an `APIKeyScope` / `APIApplicationScope` row when that key (or application) also holds a
+  `full_access` grant.
+- Granting `full_access` to a key (or application) that already has any row-filtered scope rule.
+
+Error text must name both sides so the author can see the conflict: *"Cannot set a row filter on this scope rule: the key
+also holds a `full_access` grant, which is unrestricted by definition. Remove the `full_access` grant or the row filter."*
+
+**Runtime (backstop, fail-closed).** The `full_access` fast path at `ResolverBase.ts:679-692` currently returns early on
+`Allowed`. It must first check whether the key has any row-filtered scope rule, and if so **deny** — throwing the existing
+`AuthorizationError` (a 403 with a diagnosable reason), not a 500, and not falling through to the unrestricted allow.
+
+The backstop is not redundant with the authoring check. A key can acquire `full_access` through the **application ceiling**
+rather than its own rules, the two records can be modified independently, and `APIKeysEngineBase`'s cache can serve a stale
+combination for up to `scopeCacheTTLMs`. Any of those produces a live key holding both at request time, and the only safe
+answer there is to refuse the request.
+
+**Consequence to document for operators:** a key that legitimately needs broad access *and* row scoping does not use
+`full_access` — it enumerates the scopes it needs and filters those. That is the intended shape; `full_access` is a
+break-glass grant, not a convenience.
 
 ### 5.7 Caching — resolved, with a testable invariant
 
@@ -601,7 +631,12 @@ regression tests — the ones that would pass against a broken implementation if
 - **Exempt user (holds a role with a filter-less permission row) + filtered key → filter STILL applies** **[FO]** — the §5.5 regression; write this one first
 - Role RLS present + key filter present → AND-composed, not OR-composed **[FO]**
 - Adding a second, more permissive role does not widen past the key filter **[FO]**
-- `full_access` + filtered key → whichever §5.6#2 decision is taken, asserted explicitly **[FO]**
+- Setting `RowFilterID` on a scope rule whose key holds `full_access` → rejected at save, error names both sides
+- Granting `full_access` to a key that already has a filtered scope rule → rejected at save
+- **Runtime backstop: key holding both at request time → denied, not allowed** **[FO]** — the case authoring validation
+  cannot catch. Exercise all three routes: `full_access` inherited from the application ceiling, the two records edited
+  independently, and a stale `APIKeysEngineBase` cache serving the combination
+- Runtime backstop denial is an `AuthorizationError` (403 with a reason), not an unhandled 500
 - `enforcementEnabled: false` + filtered rule exists → startup warning emitted
 - Key with no scope rules + `defaultBehaviorNoScopes: 'allow'` → documented behavior asserted
 - External-source entity + key filter → read refused even for a role-exempt user **[FO]**
@@ -665,9 +700,10 @@ Adding nullable columns with FKs is additive and consistent with
    so the sharing hazard is forbidden rather than accommodated (§5.1, §5.3 check 6), and the FK's delete protection is a
    security win an inline column cannot match. Migration written:
    `migrations/v5/V202608021623__v5.52.x__APIKey_Scope_RowFilterID.sql`.
-2. **`full_access` semantics** (§5.6 #2). Do row filters survive a `full_access` grant? Recommendation: yes — `full_access`
-   is about operations, not rows. The alternative (refuse to let `full_access` coexist with a filtered key) is also
-   defensible. Needs a decision; it cannot stay implicit.
+2. ~~**`full_access` semantics**~~ — **RESOLVED 2026-08-02: the combination is invalid and is rejected.** `full_access`
+   means unrestricted; a row filter alongside it is incoherent, and either silent resolution is a bug. Rejected at authoring
+   time on both sides, with a fail-closed runtime backstop for the cases authoring validation cannot catch (ceiling-granted
+   `full_access`, independent edits, stale scope cache). Specified in §5.6.1.
 3. **Application ceiling filters in v1, or keys only?** Included because the column is free once the mechanism exists.
    Deferring is not breaking.
 4. **Vocabulary size** (§5.2). Three tokens cover the AR portal and partner-integration cases. Anything else worth
