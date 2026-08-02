@@ -123,6 +123,15 @@ test('structural: dbImpact enum enforced', () => {
   assert.ok(validateStructure(doc).some((e) => e.includes('dbImpact')));
 });
 
+test('structural: dbImpact accepts repair (codegen-repair tier, doc §12)', () => {
+  const doc = minimal();
+  const line = certifiedLine();
+  line.newest = '6.1.4';
+  line.releases['6.1.4'] = { dbImpact: 'repair', labels: ['codegen-repair'] };
+  doc.lines['6.1'] = line;
+  assert.deepEqual(validateStructure(doc), []);
+});
+
 test('push freeze: mechanical fields may change', () => {
   const base = minimal();
   base.lines['6.1'] = certifiedLine();

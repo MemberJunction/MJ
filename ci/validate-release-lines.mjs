@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 export const LINE_STATUSES = ['candidate', 'certified', 'maintenance', 'eol', 'withdrawn'];
-export const DB_IMPACTS = ['none', 'metadata', 'schema'];
+export const DB_IMPACTS = ['none', 'metadata', 'repair', 'schema'];
 export const UPGRADE_IMPACTS = ['none', 'config', 'breaking'];
 
 const RX = {

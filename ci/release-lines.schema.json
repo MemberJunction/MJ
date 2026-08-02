@@ -30,7 +30,7 @@
               "required": ["dbImpact"],
               "additionalProperties": false,
               "properties": {
-                "dbImpact": { "enum": ["none", "metadata", "schema"] },
+                "dbImpact": { "enum": ["none", "metadata", "repair", "schema"] },
                 "labels": { "type": "array", "items": { "type": "string" } }
               }
             }
@@ -83,7 +83,7 @@
                   "required": ["dbImpact"],
                   "additionalProperties": false,
                   "properties": {
-                    "dbImpact": { "enum": ["none", "metadata", "schema"] },
+                    "dbImpact": { "enum": ["none", "metadata", "repair", "schema"] },
                     "labels": { "type": "array", "items": { "type": "string" } }
                   }
                 }
