@@ -1,6 +1,7 @@
 # MemberJunction LTS Release Process
 
-> **Status: PROPOSAL** — v1.3.3, 2026-07-28. Owner: Craig Adam (certification owner).
+> **Status: PROPOSAL** — v1.3.4, 2026-08-02. Owner: Craig Adam (certification owner).
+> v1.3.4 promotes §14 mitigation 2 from contingency to plan: the bootstrap certification completes on the 5.x line branch (§5.1, §14). It adds the respin policy + evidence carry-over rules (§14.1), corrects the bootstrap line name to `lts/5` (Appendix B — a spec correction, no branch existed yet), records the line-publish choreography with the completed dry-check's findings (§14.1), and adds a third migration tier — `codegen-repair`, `dbImpact: repair` — for generated-object repair on a line (§12, §10, §5.2, Appendix B, plus schema/validator/tests).
 > v1.3.3 folds in the third review round (tooling-focused): honest candidacy-window wording + deprecate-on-withdraw + release-lines-driven version resolution (§3.1, §4.2, §15 item 7), the gate-4 `mj sync push` no-op assertion + plain-install rule (§6, §14), the routine-publish `latest` era gate (publish.yml), CODEOWNERS coverage for the enforcement chain itself, the stated ruleset assumption behind the push freeze (§8), certified-tag-checkout guidance for the dist-tag flip, a dual-certified-lines validator warning, and manifest reconciliation (rxjs + npm pins joined the era platform blocks).
 > v1.3.2 folds in the second review round: the Edge-host compatibility coercion (§3.2, §15 item 5) + fresh-install range enforcement (#3310, §15 item 10), the PUBLISH_NO_BREAK supersession (§3.2, §17), the one-copy guard extended to the MJ registry packages + mechanism-neutral wording (§3.2, §13.1, Appendix C), a dedicated cert DB for gate 2 (§6), and the DDL scanner named as tripwire (§5.2).
 > v1.3.1 folds in three review-round items (from Marcelo's feedback): line-pinning guidance (§4.2), the `mjVersionRange`-agreement `mj doctor` check (§3.2, §13.1, §15 item 10), and the Appendix C release-note ask. It also lands the queued consumption-guidance edits: continuous Edge tracking via the dist-tag specifier + the publish-window skew caveat (§4.2, Appendix B), the per-release `dbImpact` ledger on the `edge` block (§4.1, with matching schema/validator support), and the true lockstep package count (294, was 233).
@@ -37,7 +38,7 @@ Two commitments live under the one label:
 | **Era** | A major version (5.x, 6.x, …). **Majors are for eras, not cycles** — a major signals a genuine architectural epoch **and pins the infrastructure contract** (§3.2). Never a routine certification. |
 | **Cycle** | One candidate-to-certification pass. Cycle #1 is the **LTS bootstrap cycle** (special, freeze-based, 5.x-era grammar, §14). Every cycle after it is a **regular cycle**. |
 | **Metadata migration** | A migration file containing only data changes (inserts/updates to metadata & configuration tables) — no DDL, no CodeGen impact. Distinct from a **schema (DDL) migration**. The line-fix rules differ sharply (§12). |
-| **`dbImpact`** | Per-release metadata (`none | metadata | schema`) in `release-lines.json` + release notes: "does this update touch the DB, and how?" — surfaced by `mj versions` and at upgrade time. The honest replacement for smuggling that signal into version digits. |
+| **`dbImpact`** | Per-release metadata (`none | metadata | repair | schema`) in `release-lines.json` + release notes: "does this update touch the DB, and how?" — surfaced by `mj versions` and at upgrade time. The honest replacement for smuggling that signal into version digits. |
 | **Platform manifest** | The per-era pin set for underlying infrastructure (Angular, Node, TypeScript, zone.js, pnpm, …), published in `release-lines.json` (§3.2, §4.1). |
 | **cert-blocker** | An issue that blocks certification: P0/P1 regressions, data loss/corruption, install or upgrade failure, or breakage of a core flow (navigation, search, views, forms, auth). Cosmetic and P3 issues are recorded on the scorecard but do not block. |
 
@@ -167,12 +168,14 @@ Notes:
 
 Runs entirely in the 5.x era under classic versioning: the candidate is the tip of `next`; cert fixes merge to `next`; each patch build is a normal release (a cert fix carrying a migration advances the candidate a minor under the standing Edge rule — fine, the line freezes at whatever version certifies). This works because a **merge freeze** is in effect (already running). **The freeze does not recur.** The 5.x line owns all remaining 5.x space after the era split — patch-only from certification on, like every line. Details and dates in §14.
 
+The bootstrap cert **completes on the line branch**, not on `next`. Sequence: (1) while the freeze holds, cert fixes merge to `next` and candidate rebuilds ship from `next` — the known-good publish path; (2) the **final freeze-window rebuild is the last `next`-built 5.x release**; the bootstrap line branch is cut from its tag immediately after it publishes; (3) from that moment all 5.x work flows fix → `next`-first → `backport lts/5` → line build, and the era open changes nothing for 5.x — it only flips `next` to Edge pre-mode. Cutting the branch at the rebuild (rather than at era open) means the line machinery is commissioned while `next` is still a working fallback, not improvised mid-soak.
+
 ### 5.2 Regular cycles (cycle #2 onward — `next` never stops)
 
 1. **Candidate cut = the pre-exit dance** (scripted): `changeset pre exit` → version → publish **`6.2.0`** (normal, `make_latest: false` until certified) → branch **`lts/6.2`** from the tag → `changeset pre enter edge` (Edge resumes at `6.3.0-edge.0`). `next` flows at full speed throughout.
 2. **Fixes land on `next` first**, then reach the line by label: `backport lts/6.2` on the merged PR → [korthout/backport-action](https://github.com/korthout/backport-action) opens the cherry-pick PR automatically (conflicts become a draft PR a human finishes). The only exceptions to next-first: fixes for code that no longer exists on the dev line, and genuinely line-specific metadata corrections (certification-owner triage).
 3. **Line releases** ship from a parameterized `publish-lts.yml`: `changeset publish --tag lts-6.2`, git tag `v6.2.N`, GitHub Release (`make_latest` only if newest certified). Line publishes never merge back to `next`.
-4. **Line guard** (CI on `lts/*` branches): **patch-only, always.** A `migrations/` diff is scanned for DDL (CREATE/ALTER/DROP/…): **data-only** → requires the `metadata-migration` label; **contains DDL** → requires the `security-exception` label (§12). Either way the release remains a patch; `dbImpact` records the DB touch. The scanner is a **tripwire, not the gate** — dynamic SQL (`EXEC`, `sp_rename`, string-built DDL) can evade a regex; the `security-exception` human review is the real control.
+4. **Line guard** (CI on `lts/*` branches): **patch-only, always.** A `migrations/` diff is scanned for DDL (CREATE/ALTER/DROP/…): **data-only** → requires the `metadata-migration` label; **contains DDL** → requires the `codegen-repair` label (generated-object repair only, §12) or the `security-exception` label (§12). Either way the release remains a patch; `dbImpact` records the DB touch. The scanner is a **tripwire, not the gate** — dynamic SQL (`EXEC`, `sp_rename`, string-built DDL) can evade a regex; the human review behind each DDL label is the real control.
 
 The existing `next → main → publish → merge-back` pipeline is untouched for Edge in every cycle — it just runs in prerelease mode.
 
@@ -288,23 +291,27 @@ Edge cases:
 13. **An installation upgrades LTS → LTS** (5.50.x → 6.2.x, skipping Edge). `mj bump` to 6.2.x; migrations apply in order, including the 6-era baseline; backported migrations already applied are skipped (same Flyway version); `mj migrate`'s upgrade mode handles the out-of-order case (§12, §15 item 9). The CLI warns if the path crosses an `upgradeImpact: breaking` entry.
 14. **An Open App and a certified line.** An app at `6.4.0` declaring `mjVersionRange >=6.1.0 <7.0.0` runs on any certified 6.x line — and that range *cannot* accidentally resolve an Edge build (prerelease exclusion). App development against Edge pins exact (`6.3.0-edge.7`), which is what `mj bump` produces.
 15. **A breaking change is needed on Edge.** Rare and deliberate: if era-scale (including any infrastructure-contract change like an Angular major), it's a new era (`7.0.0-edge.0`) with its own platform manifest, baseline, and comms. Otherwise it ships in the Edge stream with `upgradeImpact: breaking` on its release entry — badged in notes, warned on upgrade paths. It reaches LTS users only when a future line certifies past it, with the flag intact.
+16. **A stale generated proc is found on line 6.1** (a CodeGen-owned object out of line with the shipped schema — e.g. a delete proc still referencing a dropped column). Fix lands on `next` first (regenerated by CodeGen there) → `backport lts/6.1` with the `codegen-repair` label → ships as the line's next patch (say **6.1.4**), `dbImpact: repair`, mini-cert gates 1–3. No table DDL, so no security exception is being stretched to cover it (§12).
 
 ## 11. Contributor Impact (what actually changes for the Core team)
 
 - Day-to-day: **nothing changes.** PRs → `next`, changesets as usual, Edge ships as fast as ever (after the bootstrap freeze ends, permanently). Version strings on Edge grow an `-edge.N` suffix at the 6.x era open — that's the visible difference.
-- New labels exist: `backport lts/<line>` (opt-in backporting), `cert-blocker` (jumps every queue during a cycle), `metadata-migration` (data-only line fix), `security-exception` (DDL on a line — rarest), `backport-declined`.
+- New labels exist: `backport lts/<line>` (opt-in backporting), `cert-blocker` (jumps every queue during a cycle), `metadata-migration` (data-only line fix), `codegen-repair` (generated-object repair on a line), `security-exception` (DDL on a line — rarest), `backport-declined`.
 - During a regular cycle, the only team-wide effect is that `cert-blocker` fixes take priority. No freezes.
 - Educating the team on this process is part of the process: the bootstrap cycle is announced with Appendix A.1, the era-open grammar change with A.3, and Craig trains delegates on the human gates during cycles 2–3.
 
 ## 12. Migrations, Metadata & CodeGen Policy
 
-Three tiers, per the PR-thread convergence. **On a line, everything is a patch** — the tiers differ in what's allowed and how it's labeled, with `dbImpact` carrying the operational signal:
+Four tiers. **On a line, everything is a patch** — the tiers differ in what's allowed and how it's labeled, with `dbImpact` carrying the operational signal:
 
 | Change type | On a certified line? | Version effect | Label / `dbImpact` |
 |---|---|---|---|
 | **Code-only fix** | Yes — normal maintenance | Patch | — / `none` |
 | **Metadata migration** (data-only: inserts/updates to metadata & config tables; includes AI model/vendor/pricing seeds) | Yes — permissible for normal bug fixes; "metadata is a different beast" | Patch | `metadata-migration` (CI verifies the file is DDL-free) / `metadata` |
+| **Generated-object repair** (DROP/CREATE of CodeGen-owned procs/views/indexes only; **no table DDL**; re-aligns generated objects with the line's *existing* schema) | Yes — permissible for normal bug fixes. DDL by the scanner's regex, schema-neutral in substance: "upgrading runs a migration, your schema does not change" | Patch | `codegen-repair` (the scanner flags the DDL; the label asserts repair-only scope; human review confirms no table DDL) / `repair` |
 | **Schema (DDL) migration + CodeGen** | **Rarest of occasions — security-driven necessity only.** A schema+CodeGen step on a stable line undermines the stability promise | Patch | `security-exception`; additive-only (Publish-No-Break), next-first, **byte-identical** (same Flyway version string + content) / `schema` |
+
+The repair tier exists because the class is real: the 5.51.0 cert window shipped three waves of exactly this shape (stale delete procs left behind by a column drop — §10 example 16 is the general case). Without the tier, that fix on a certified line would have to masquerade as a security exception, which debases the rarest label.
 
 - **On Edge**, the migration-⇒-minor rule holds at tuple level: migrations only ever ship in minor-or-higher-tupled releases — which every `X.Y.0-edge.N` is by construction (§3.1).
 - **During candidacy** (post-cut, pre-certification), the line rules above already apply — the candidate's fixes are line patches.
@@ -339,11 +346,38 @@ Three tiers, per the PR-thread convergence. **On a line, everything is a patch**
 | **Jul 20–26** | This process doc + exec review round (Robert Kihm, John, Johanna Snider + scan group) + cadence decision (§9.1) · team freeze work: core-functionality sweep (navigation, search, views, performance), known-defect backlog (Johanna Snider's list → GitHub issue, assigned Craig), integration-suite expansion · punch items 1–3 (§15) · gate-3 pass criteria + delegated-execution dry run (Caeleb) · **name the UNKNOWNs in §7** · comms A.1 goes out |
 | **~Jul 27** | Candidate cut (5.50.x era, classic grammar) + gate-checklist tracking issue · comms A.2 |
 | **Jul 27 – Aug 2** | Full gate run (§6) · patch loop on `next` (freeze model) |
-| **When gates pass** (target ~Aug 2, flexible per Amith) | Certification sign-off → label, scorecard, `latest` flip, GH latest flag · comms A.3 to MJ Dev (All Companies) |
-| **6.x era opens** (target Aug 3, hackathon) | Era-split tooling (baseline migration, version guard, docker tags) + 6-era platform manifest published (§3.2) + **Edge prerelease grammar begins** (`changeset pre enter edge`; first Edge release `6.1.0-edge.0`) · freeze ends permanently · 5.x line branch + backport machinery live · Open App 6.x alignment begins per Appendix C timing. The v6 baseline migration squash re-runs the gate-4 `mj sync push` no-op assertion against a fresh v6 install — a one-time squash of the whole migration stack is the single riskiest moment for non-self-contained metadata |
+| **Jul 31 – Aug 1** | Batched cert-blocker respin ships **5.51.0 — the last `next`-built 5.x release** (batch closed at an announced time; ruling applied to a SHA, §14.1) · **`lts/5`** cut from its tag · comms: one line to gate-5 owners re-anchoring the soak target version · line-publish dry-check (§14.1) over the weekend, while `next` remains a working fallback |
+| **6.x era opens** (target Aug 3, hackathon) | Era-split tooling (baseline migration, version guard, docker tags) + 6-era platform manifest published (§3.2) + **Edge prerelease grammar begins** (`changeset pre enter edge`; first Edge release `6.1.0-edge.0`) · freeze ends permanently · Open App 6.x alignment begins per Appendix C timing. The 5.x line branch + backport machinery are *already live from the respin cut* — the era open flips `next` only. The v6 baseline migration squash re-runs the gate-4 `mj sync push` no-op assertion against a fresh v6 install — a one-time squash of the whole migration stack is the single riskiest moment for non-self-contained metadata |
+| **When gates pass** (target ~Aug 6–7, flexible per Amith) | Certification sign-off → label, scorecard, `latest` flip, GH latest flag · comms A.3 to MJ Dev (All Companies) |
 | **Freeze merge rules (bootstrap only)** | cert-blocker fixes and quality/test/docs PRs merge; feature and refactor PRs queue until 6.x opens |
 
 Cycle #1 additionally carries the **baseline mandate**: certification testing catches things that worked and then broke; it won't catch things that never worked well. The sweep above means the first label reflects the baseline actually being held to the bar, not grandfathered past it.
+
+### 14.1 Cert-window finds: triage, batching, and the ratchet
+
+Certification exists to surface defects, so finds are expected; what must converge is the **candidate**, not the find rate. A **respin** — discarding the current candidate and building a new one because fixes landed — is governed by three rules:
+
+1. **Cert-blockers batch; everything else queues.** A find is either a cert-blocker (would fail a gate, or is a defect the scorecard could not honestly carry as a known issue) or it joins the known-issues list and ships in the line's first post-cert patch or the next era. Blockers accumulate into **at most one scheduled respin before the gate-5 soak begins**. The batch closes at an announced calendar time, and the ruling applies to a **SHA, not a branch** — finds after the close re-enter triage.
+2. **From soak start, the respin bar is showstopper** — data loss, security, a core function inoperable. The same defect that justifies a respin before the soak does not justify one after it, because the cost side changed.
+3. **Evidence carries across small deltas.** A respin invalidates only the gate evidence its delta touches. Automated gates (1–3) re-run wholesale — they are cheap. Soak evidence **carries** across a small enumerable delta (the stacks upgrade in place and keep soaking; a mid-soak line upgrade is itself upgrade-path evidence — it is exactly what real line consumers will do). Only a broad delta re-anchors the soak clock.
+
+Version grammar on the line branch **pre-certification** stays classic 5.x: code-only fix → patch; migration-bearing or metadata-bearing fix → the candidate advances a minor. "Patch-only, forever" locks in **at certification**, and the line freezes at whatever version passes the gates. (This wrinkle is bootstrap-only: in the 6.x grammar, line candidates take labeled patches from birth per §12.)
+
+**Line-publish choreography.** The steady state is a parameterized `publish-lts.yml` dispatched from the line branch (§5.2 rule 3; §15). Until it exists, **the existing `publish.yml` must not be `workflow_dispatch`ed from `lts/5`** — the dry-check below verified it is unsafe: its publish step runs a bare `changeset publish` (no `--tag`, so a line build would land on `latest`), and its version-guard and tag-push steps are `main`-gated and would silently skip. Interim line builds therefore ship by hand, from a clean checkout of `lts/5`:
+
+1. `changeset version` (the branch runs in normal, non-pre mode; backported fixes carry their changeset files, yielding patch or minor per the pre-cert grammar above)
+2. `npm install` and **commit the lockfile** — `changeset version` leaves `package-lock.json` uncommitted
+3. build
+4. `changeset publish --tag lts-5`
+5. push the version commit + tags to `lts/5`
+
+Constraints in force on every line publish, manual or automated:
+
+- **`main` is never touched.** Line publishes never merge to `main` nor back to `next` (extends §5.2 rule 3). Once 6.x publishes through `main`, merging a 5.x state into it would drag it backwards.
+- **Dist-tags:** line builds publish `--tag lts-5`, never `latest`. `latest` moves only at certification (the era-gated rule in this PR's `publish.yml` / `dist-tag-all` changes).
+- **GH Releases** from the line: `make_latest: false` until certified.
+
+**Dry-check (completed 2026-08-01, before first use, while `next` remained a fallback):** on a scratch clone of `lts/5` with a dummy patch changeset — (a) `changeset version` landed exactly where expected: all 298 lockstep packages advanced together, zero strays; (b) no pre-mode state leaked from `next`'s era flip (no `.changeset/pre.json` on the branch); (c) the publish plan resolves `--tag lts-5` only via the explicit flag — the finding that rules out the bare `publish.yml` dispatch path above. The check stopped before `npm publish`.
 
 ## 15. Tooling Punch List & Delivery Plan
 
@@ -430,13 +464,14 @@ Ordered so that **items 1–3 are enough to label and enforce** the first LTS; t
 |---|---|
 | Version grammar | Normal semver (`6.1.1`) = candidate/LTS only · `6.2.0-edge.N` = Edge (prerelease of the next line) · era 5 keeps classic grammar |
 | Line | Consecutive minors per era: 6.1, 6.2, … Line = its minor, patches only, forever. Bootstrap 5.x line owns all remaining 5.x |
-| Line branch | `lts/6.1` (bootstrap era line: `lts/5.50`) |
-| Backport request | Label `backport lts/6.1` on the merged `next` PR |
+| Line branch | `lts/6.1` (bootstrap era line: **`lts/5`** — it owns *all* remaining 5.x and can advance minors pre-cert, so a minor-pinned name would go stale; 6.x lines keep per-minor names because their candidates never advance minors) |
+| Backport request | Label `backport lts/6.1` on the merged `next` PR (bootstrap: `backport lts/5`) |
 | Blocks certification | Label `cert-blocker` |
 | Data-only line migration | Label `metadata-migration` (CI-verified DDL-free; ships as a patch, `dbImpact: metadata`) |
+| Generated-object repair on a line | Label `codegen-repair` (DROP/CREATE of CodeGen-owned procs/views/indexes only, no table DDL; ships as a patch, `dbImpact: repair`) |
 | DDL on a line — rarest, security-driven | Label `security-exception` (additive-only, next-first, byte-identical; ships as a patch, `dbImpact: schema`) |
 | Considered, not backported | Label `backport-declined` |
-| npm | `latest` = newest certified · `edge` = fast channel · `lts-6.1` = per-line · continuous Edge tracking = the `edge` tag as version specifier or `mj bump --channel edge` exact pins, never a semver range |
+| npm | `latest` = newest certified · `edge` = fast channel · `lts-6.1` = per-line (bootstrap: `lts-5`) · continuous Edge tracking = the `edge` tag as version specifier or `mj bump --channel edge` exact pins, never a semver range |
 | Docker | `:latest` = certified · `:edge` · `:6.1` |
 | Scorecards | `certifications/<version>.md`, linked from the GitHub Release |
 
