@@ -1,7 +1,8 @@
 # API-Key-Scoped Row Filters
 
 **Branch:** `claude/api-key-row-filters-98ev39`
-**Status:** Revised plan (v2) — awaiting review before implementation
+**Status:** Plan approved in outline (v2.1) — migration written, implementation not started
+**Proposed implementation owner:** @jordanfanapour (cc @MarceloT-BC)
 **Date:** 2026-08-02
 **Supersedes:** the original "Row-Level Filter Rules for MJ API Key Scopes" proposal (written against the public
 `@memberjunction/api-keys` README, without access to internals)
@@ -12,6 +13,12 @@
 > the key filter into a method that early-returns for exempt users — see §5.5 below), resolved the caching question with a
 > concrete answer and a testable invariant (§5.7), and added five bypass paths v1 did not address (§5.6). v1's core
 > direction — extend RLS rather than build a parallel path — survived review unchanged.
+>
+> **v2.1 changelog.** §9.1 resolved in favor of the FK. The shared-filter drift hazard that choice introduces is closed by a
+> same-entity invariant (§5.3 check 6) plus a second enforcement point on filter save (§5.3) — the latter is mandatory under
+> either storage option, because without it the save-time validation is bypassable by editing `FilterText` after attaching.
+> Migration written (§8 Phase 2). **§9.2 (`full_access` semantics) remains open and is the only decision still blocking
+> implementation.**
 
 ---
 
@@ -304,11 +311,22 @@ Add an optional filter reference to both scope-rule tables:
 | `APIKeyScope` | `RowFilterID` | `uniqueidentifier NULL` FK → `RowLevelSecurityFilter.ID` | Row restriction this key's grant carries. NULL = current behavior. |
 | `APIApplicationScope` | `RowFilterID` | `uniqueidentifier NULL` FK → `RowLevelSecurityFilter.ID` | Ceiling filter every key in the application inherits and cannot widen. |
 
-**Why an FK to the existing `RowLevelSecurityFilter` rather than an inline `RowFilter nvarchar(max)`:** it reuses the
-substitution engine, the filter is a named reviewable object rather than a string buried in a join table, it matches how
-`EntityPermission` already references filters, and it inherits whatever platform-variant work lands later without a second
-migration. Cost: authoring a key filter means creating a filter record first. *This is the main reversible decision in the
-plan — flagged for review as §9.1.*
+**Why an FK to the existing `RowLevelSecurityFilter` rather than an inline `RowFilter nvarchar(max)`** *(decided — §9.1)*:
+it reuses the substitution engine, matches how `EntityPermission` already references filters, inherits whatever
+platform-variant work lands later without a second migration, and — the security argument — the FK makes the filter
+**undeletable while referenced**. With `NO ACTION` (the default), you cannot silently un-filter a live API key by deleting
+its filter record. An inline column has no equivalent: clearing it is an ordinary update.
+
+`RowLevelSecurityFilter` today has exactly four referrers, all from `EntityPermission`
+(`FK_EntityPermission_{Read,Create,Update,Delete}RLSFilter`, baseline `:73367-73377`). These columns make it six.
+
+**The one hazard the FK introduces, and how it is closed.** A filter record carries *no entity binding* — it is only
+`ID / Name / Description / FilterText`. All entity context lives in the referrer: `EntityPermission` supplies it via
+`EntityID`, an `APIKeyScope` via `ResourcePattern`. So one filter record can be pointed at two *different* entities by two
+rows, and `FilterText` is a column-level expression that is only valid against entities having those columns. Reuse is not a
+requirement for this feature, so rather than accommodate that, we forbid it (§5.3 check 6): **every referrer of a filter must
+resolve to the same entity.** Sharing between two `APIKeyScope` rows on the same entity — a read rule and an update rule —
+stays legal, which is the only sharing pattern that is actually plausible.
 
 ### 5.2 Runtime values: a registered vocabulary, not free-form parameters
 
@@ -362,10 +380,23 @@ Validated at rule save:
 4. Every column identifier in `FilterText` resolves to a real, non-virtual, non-computed field on that entity.
 5. **The filter is not a `PatternType='Exclude'` or `IsDeny` rule.** A row filter narrows an *allow*; attaching one to a deny
    or exclude rule has no coherent meaning and would read as though it restricted something. Reject at save.
+6. **Every other referrer of this filter resolves to the same entity** (§5.1). Check the filter's existing `EntityPermission`
+   rows (via `EntityID`) and `APIKeyScope` / `APIApplicationScope` rows (via `ResourcePattern`). Any disagreement → reject.
 
 Check 4 supersedes the original proposal's `FilterParameters`-as-allowlist idea and is strictly stronger: it bounds *every*
 column the expression touches. `SQLExpressionValidator.checkFieldReferences` exists in lenient warn-only form
 (`SQLExpressionValidator.ts:391`, called from `:235`) — add a strict variant rather than writing a second parser.
+
+**Validation needs a second enforcement point, on the filter itself.** Checks 4 and 6 constrain `FilterText` against an
+entity, but they run when the *scope rule* is saved. Without an equivalent check when the *filter* is saved, all of it is
+trivially bypassable: attach a valid filter, then edit its `FilterText` to reference anything. Add a
+`MJRowLevelSecurityFilterEntityServer` subclass that, on save, re-runs checks 4 and 6 against **every** current referrer and
+rejects if any fails. This is mandatory regardless of the FK-vs-inline decision — it is the difference between validation and
+the appearance of validation.
+
+Note this makes the filter record's edit path stricter than it is today for pure-`EntityPermission` filters, which currently
+have no such validation. That is a deliberate tightening: an invalid RLS filter fails closed at query time (SQL error), but
+"fails closed with an unexplainable 500" is not a good outcome either.
 
 ### 5.4 Fail closed, and fail diagnosably
 
@@ -610,21 +641,30 @@ Extend existing suites: `rls-isolation.checks.ts`, `scope-enforcement.checks.ts`
 | Phase | Contents | Gate |
 |---|---|---|
 | **1** | WS1 + WS2. No schema changes, no CodeGen. | Both tiers green. Independently shippable. |
-| **2** | Migration adding `RowFilterID` to both scope tables → `mj sync push` → `mj codegen`. | Generated entity classes carry the new fields. No TypeScript written against them before this completes — see the `.Get()`/`.Set()` prohibition. |
+| **2** | **Migration written** — `migrations/v5/V202608021623__v5.52.x__APIKey_Scope_RowFilterID.sql`. Remaining: run it, then `mj codegen`, then append CodeGen's output into the same migration file behind the separator block and delete the standalone `CodeGen_Run_*.sql`. | Generated entity classes expose `RowFilterID` on `MJAPIKeyScopeEntity` and `MJAPIApplicationScopeEntity`. No TypeScript written against them before this completes — see the `.Get()`/`.Set()` prohibition. |
 | **3** | WS3: `GetEffectiveRowFilterWhereClause` + **all** call-site migrations + `APIKeyActingContext` + token resolution + `context.ts` wiring + rule-save validation. | Both tiers green, INV-1/INV-2 asserted. |
 | **4** | Docs: package README trust-boundary section, `guides/UNIFIED_PERMISSIONS_GUIDE.md` update placing the key layer in the permission model. | — |
 
-Migration authoring follows [`migrations/CLAUDE.md`](../migrations/CLAUDE.md) — naming, hardcoded UUIDs, the system columns
-CodeGen owns, and the `mj sync push` → `mj codegen` ordering (out of order, CodeGen regenerates from stale definitions and
-*silently deletes* properties). Adding a nullable column with an FK is additive and consistent with
+Migration authoring follows [`migrations/CLAUDE.md`](../migrations/CLAUDE.md). Two notes specific to this one:
+
+- **The `mj sync push` → `mj codegen` ordering hazard does not apply here.** That rule exists because CodeGen reads JSONType
+  definitions from the database. v2 eliminated the `FilterParameters` JSON column (§5.2 replaced it with the registered token
+  vocabulary), so this migration introduces no JSON types and there is no stale-definition/silent-property-deletion risk.
+  Run the documented order anyway; just don't treat it as load-bearing.
+- **No FK indexes in the migration.** CodeGen creates `IDX_AUTO_MJ_FKEY_<table>_<column>` automatically; hand-written ones
+  leave two competing indexes on the same column (`migrations/CLAUDE.md:239`).
+
+Adding nullable columns with FKs is additive and consistent with
 [`PUBLISH_NO_BREAK_POLICY.md`](../packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md).
 
 ---
 
 ## 9. Open questions for review
 
-1. **FK vs inline filter text** (§5.1). FK to `RowLevelSecurityFilter` is the recommendation; inline `nvarchar(max)` is
-   simpler to author and loses reuse plus the named-object review surface.
+1. ~~**FK vs inline filter text**~~ — **RESOLVED 2026-08-02: FK to `RowLevelSecurityFilter`.** Reuse is not a requirement,
+   so the sharing hazard is forbidden rather than accommodated (§5.1, §5.3 check 6), and the FK's delete protection is a
+   security win an inline column cannot match. Migration written:
+   `migrations/v5/V202608021623__v5.52.x__APIKey_Scope_RowFilterID.sql`.
 2. **`full_access` semantics** (§5.6 #2). Do row filters survive a `full_access` grant? Recommendation: yes — `full_access`
    is about operations, not rows. The alternative (refuse to let `full_access` coexist with a filtered key) is also
    defensible. Needs a decision; it cannot stay implicit.
