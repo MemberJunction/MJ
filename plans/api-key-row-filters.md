@@ -1,12 +1,17 @@
 # API-Key-Scoped Row Filters
 
 **Branch:** `claude/api-key-row-filters-98ev39`
-**Status:** Revised plan — awaiting review before implementation
+**Status:** Revised plan (v2) — awaiting review before implementation
 **Date:** 2026-08-02
 **Supersedes:** the original "Row-Level Filter Rules for MJ API Key Scopes" proposal (written against the public
 `@memberjunction/api-keys` README, without access to internals)
 **Packages touched:** `@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/api-keys`,
 `@memberjunction/api-keys-base`, `@memberjunction/server`, `@memberjunction/core-entities` (generated)
+
+> **v2 changelog.** A security review against the actual source found a **critical fail-open** in v1's design (§5.5 folded
+> the key filter into a method that early-returns for exempt users — see §5.5 below), resolved the caching question with a
+> concrete answer and a testable invariant (§5.7), and added five bypass paths v1 did not address (§5.6). v1's core
+> direction — extend RLS rather than build a parallel path — survived review unchanged.
 
 ---
 
@@ -28,7 +33,7 @@ Grounding it against the codebase changed the shape of the work substantially:
   are not forward-looking requirements here; they name bugs that exist in the tree today. Those are higher-value than the
   feature and must land first.
 
-This plan therefore delivers three workstreams in dependency order:
+Three workstreams in dependency order:
 
 | WS | What | Why first |
 |---|---|---|
@@ -39,6 +44,10 @@ This plan therefore delivers three workstreams in dependency order:
 **Design commitment:** WS3 ships as *the existing RLS mechanism, additionally keyed to API keys*. Not a second filter
 language. A filter that is trusted as the last line of defense but enforced on only one data path is worse than no filter,
 because callers will assume the other paths are covered. If we cannot land it as an RLS extension, we should not land it.
+
+**Governing principle for every open decision in this plan: a row filter must fail closed, and it must fail *loudly*.**
+Every ambiguity below is resolved in the direction of "deny and say why," never "return everything" and never "return
+nothing silently."
 
 ---
 
@@ -51,8 +60,8 @@ because callers will assume the other paths are covered. If we cannot land it as
 `{{ScopeResourceID}}` / `{{ScopeResourceType}}` from `UserInfo.MagicLinkScope` (`:474-479`).
 
 `EntityInfo.GetUserRowLevelSecurityWhereClause(user, type, prefix)` (`packages/MJCore/src/generic/entityInfo.ts:2309`)
-ORs together every filter the user's roles carry for that permission type, after a centralized exemption check
-(`UserExemptFromRowLevelSecurity`, `:2231`). Filters attach to an entity+role via `EntityPermission.{Read,Create,Update,Delete}RLSFilterID`
+**first checks exemption** (`:2312`), and if not exempt, ORs together every filter the user's roles carry for that
+permission type (`:2318-2324`). Filters attach to an entity+role via `EntityPermission.{Read,Create,Update,Delete}RLSFilterID`
 (`entityInfo.ts:319-322`).
 
 Applied at:
@@ -60,24 +69,47 @@ Applied at:
 | Site | File |
 |---|---|
 | `RunView` WHERE assembly (step 5) | `packages/GenericDatabaseProvider/src/GenericDatabaseProvider.ts:1590` |
-| Save — new record (post-image) | `:3910` `CheckCreateRLS` |
+| RunView **cache fingerprint** (via `ComputeRunViewRLSWhereClause`) | `packages/MJCore/src/generic/providerBase.ts:2190`, used at `:2292` and `GenericDatabaseProvider.ts:2237, 2447, 2606` |
+| `BaseEntity.Load()` by primary key | `GenericDatabaseProvider.ts:3811` |
+| Save — new record (post-image) | `GenericDatabaseProvider.ts:3910` `CheckCreateRLS` |
 | Save — existing record (pre-image) | `:3884` `CheckRecordRLS` |
 | Delete | `packages/MJCore/src/generic/databaseProviderBase.ts:1487` |
+| External-source read guard | `GenericDatabaseProvider.ts:2509` `assertExternalReadAllowedUnderRLS` |
 | Search | `packages/SearchEngine/src/generic/SearchEngine.ts:1897` |
 | GraphQL resolver helper | `packages/MJServer/src/generic/ResolverBase.ts:1002` |
 
 RLS is already AND-composed with `ExtraFilter`, user search, and exclusion filters (`GenericDatabaseProvider.ts:1550-1594`).
 
-### 2.2 Per-session context on `UserInfo`
+### 2.2 🚨 The RLS exemption is an early return, and it is broad
 
-`UserInfo` carries four per-session context objects, all non-enumerable getter/setter pairs, none of them DB/GraphQL fields:
+`UserExemptFromRowLevelSecurity` (`entityInfo.ts:2231`) walks the entity's permissions and returns `true` **as soon as it
+finds any role the user holds whose `EntityPermission` row for that permission type has no RLS filter ID** (`:2238-2252`).
+It does not check whether the permission is actually granted (`CanRead` etc.) — only that a filter is absent.
+
+`GetUserRowLevelSecurityWhereClause` then returns `''` immediately (`:2312-2314`) — no filter at all.
+
+**Consequence, and it is the single most important fact in this document:** the users who hold API keys are
+disproportionately service accounts, integration users, and admins with at least one broad role. Those users are *exempt*.
+Any row filter folded into this method after the exemption check is **silently absent for exactly the principals the feature
+exists to constrain**, and it would pass any test written with a narrow-role fixture user. See §5.5.
+
+### 2.3 Per-session context on `UserInfo`
+
+`UserInfo` carries four per-session context objects, all non-enumerable getter/setter pairs over `_`-prefixed backing fields:
 `TenantContext`, `MagicLinkScope`, `ReturningVisitorContext`, `WidgetGuestContext` (`securityInfo.ts:200-278`).
 
 `buildMagicLinkSessionUser` (`packages/MJServer/src/context.ts:202`) constructs a **fresh** `UserInfo` before setting any of
 these. The comment at `:197-200` states why: *"the resolved userRecord may be a SHARED cached instance … mutating it would
 leak one session's scope to another."*
 
-### 2.3 Data hooks
+The clone works, but by a subtle mechanism worth stating because WS2/WS3 depend on it: `UserInfo`'s constructor
+(`securityInfo.ts:203-207`) calls `BaseInfo.copyInitData`, which assigns a key **only if `Object.prototype.hasOwnProperty.call(this, key)`**
+(`packages/MJCore/src/generic/baseInfo.ts:20-42`). Spreading a `UserInfo` does *not* capture the public getters, but *does*
+capture the `_`-prefixed backing fields, which are own properties — which is how the contexts survive. Roles need the
+explicit `_UserRoles: undefined` / `UserRoles: …` dance the magic-link path performs, because the constructor reads
+`initData.UserRoles || initData._UserRoles` (`:207`).
+
+### 2.4 Data hooks
 
 `PreRunViewHook` / `PostRunViewHook` / `PreSaveHook` with `RegisterDataHook` / `GetDataHooks`
 (`packages/MJCore/src/generic/dataHooks.ts:23-88`), consumed at `providerBase.ts:3123` (RunView), `providerBase.ts:2355`
@@ -87,13 +119,16 @@ leak one session's scope to another."*
 `RunQuery`, not single-record GraphQL resolvers. RLS covers more of those. This is the decisive argument for the RLS-extension
 route over a hook-only implementation.
 
-### 2.4 API key authorization
+### 2.5 API key authorization
 
 `APIKeyEngine.Authorize()` (`packages/APIKeys/Engine/src/APIKeyEngine.ts:546`) → `ScopeEvaluator.EvaluateAccess()`
-(`ScopeEvaluator.ts:67`), which is pure in-memory evaluation over `APIKeysEngineBase` caches. It never touches entity data.
+(`ScopeEvaluator.ts:67`), pure in-memory evaluation over `APIKeysEngineBase` caches. It never touches entity data.
 
 Enforcement is invoked at the **resolver** boundary — `ResolverBase.CheckAPIKeyScopeAuthorization` (`:654`), called from
 ~20 resolvers. Data access happens later, in the provider. The two layers never meet.
+
+Two blanket bypasses exist above the scope evaluator: `enforcementEnabled: false` returns `Allowed` unconditionally
+(`APIKeyEngine.ts:596`), and a `full_access` grant short-circuits the specific scope check (`ResolverBase.ts:679-692`).
 
 `AuthorizationRequest` already declares `Context?: Record<string, unknown>` (`interfaces.ts:121`), currently written and read
 by nobody.
@@ -101,7 +136,7 @@ by nobody.
 Scope rule schema — `APIKeyScope` (`migrations/v5/B202602151200__v5.0__Baseline.sql:14068`) and `APIApplicationScope`
 (`:14869`), both: `ID, {APIKeyID|ApplicationID}, ScopeID, ResourcePattern nvarchar(750) NULL, PatternType, IsDeny, Priority`.
 
-### 2.5 Known limits of the current filter path
+### 2.6 Known limits of the current filter path
 
 - **No parameter binding anywhere on the filter path.** `MarkupFilterText` does `ret.replace(..., String(val))`.
   `InternalRunView` concatenates every predicate into one WHERE string and calls `ExecuteSQL(viewSQL, undefined, ...)`
@@ -113,8 +148,8 @@ Scope rule schema — `APIKeyScope` (`migrations/v5/B202602151200__v5.0__Baselin
   strip-literals-then-keyword-match structure.
 - **Platform variants are not wired on the RLS path.** `RowLevelSecurityFilterInfo.GetPlatformFilterText()` exists
   (`securityInfo.ts:452`), but `GetUserRowLevelSecurityWhereClause` calls `MarkupFilterText()`, which reads `this.FilterText`
-  directly. The `MJRowLevelSecurityFilterEntity` generated class exposes only `ID/Name/Description/FilterText` — there is no
-  `PlatformVariants` column on `RowLevelSecurityFilter`. Cross-platform filter text is an **open item, not a freebie**.
+  directly. `MJRowLevelSecurityFilterEntity` exposes only `ID/Name/Description/FilterText` — there is no `PlatformVariants`
+  column on `RowLevelSecurityFilter`. Cross-platform filter text is an **open item, not a freebie**.
 
 ---
 
@@ -122,13 +157,8 @@ Scope rule schema — `APIKeyScope` (`migrations/v5/B202602151200__v5.0__Baselin
 
 ### 3.1 The defect
 
-`databaseProviderBase.ts:1335`, on save of an existing record:
-
-```ts
-const updateRLSPass = await this.CheckRecordRLS(entity, user, EntityPermissionType.Update);
-```
-
-`CheckRecordRLS` (`GenericDatabaseProvider.ts:3884`) runs:
+`databaseProviderBase.ts:1335`, on save of an existing record, calls
+`CheckRecordRLS(entity, user, EntityPermissionType.Update)`. That method (`GenericDatabaseProvider.ts:3884`) runs:
 
 ```sql
 SELECT COUNT(*) AS cnt FROM <view> WHERE <PK> = <value> AND (<rls>)
@@ -137,47 +167,71 @@ SELECT COUNT(*) AS cnt FROM <view> WHERE <PK> = <value> AND (<rls>)
 That reads the row **as it exists in the database** — the pre-image. `CheckCreateRLS` (`:3910`) validates the post-image, but
 only fires for new records (`bNewRecord`).
 
-**Consequence:** an update that moves a row *out* of the caller's filter passes. With an RLS filter of
+**Consequence:** an update that moves a row *out* of the caller's filter passes. With a filter of
 `OrganizationID = '{{UserOrganizationID}}'`, a caller can take a row they legitimately own and set `OrganizationID` to an org
-they do not belong to. This is privilege escalation, not a read leak, and it is live for every RLS-governed entity today —
-independent of API keys.
+they do not belong to. Privilege escalation, live today for every RLS-governed entity, independent of API keys.
 
 ### 3.2 The fix
 
-After the pre-image check passes, validate the post-image using the same synthetic-row technique `CheckCreateRLS` already
-uses, with the **Update** filter and the entity's pending values:
+After the pre-image check passes, validate the post-image using the same synthetic-row technique `CheckCreateRLS` uses, with
+the **Update** filter and the entity's pending values:
 
 ```sql
 SELECT CASE WHEN (<update rls>) THEN 1 ELSE 0 END AS pass FROM (SELECT <projections>) AS newrow
 ```
 
-Both checks must pass. Pre-image failure keeps the existing generic message (`databaseProviderBase.ts:1341-1343` deliberately
+Both checks must pass. Pre-image failure keeps the existing generic message (`databaseProviderBase.ts:1338-1341` deliberately
 does not distinguish "not found" from "access denied", to prevent ID enumeration); post-image failure gets its own message,
 since the caller demonstrably has access to the row and the diagnostic leaks nothing.
 
-**Projection correctness.** `BuildCreateRLSProjections` (`:3930`) skips fields whose value is `null`. That is acceptable for
-create but wrong for update: a filter referencing a column the caller just nulled would see the column missing from the
-subquery rather than `NULL`. The update projection must emit every non-virtual field including nulls, typed, so the predicate
-evaluates against a faithful post-image.
+**Projection correctness — typed NULLs.** `BuildCreateRLSProjections` (`:3930`) skips fields whose value is `null`. That is
+acceptable for create but wrong for update: a filter referencing a column the caller just nulled would see the column missing
+from the subquery rather than `NULL`. The update projection must emit **every** non-virtual field, including nulls.
 
-**Cost control — skip the check when it cannot change the answer.** Parse the column references out of the resolved Update
-filter and compare against the entity's dirty-field set. If no field referenced by the filter changed, the post-image and
-pre-image agree on every column the predicate reads, and the pre-image check is sufficient. This makes the common update path
-zero-additional-round-trip; only updates that actually touch a filter-referenced column pay for the second query.
+A bare `SELECT NULL AS Col` has no type, and comparisons against an untyped NULL can behave differently from a real row
+(notably in `CASE`/`CAST` contexts and under `CONCAT_NULL_YIELDS_NULL` settings). Emit `CAST(NULL AS <sqltype>) AS <Col>`,
+taking `<sqltype>` from `EntityFieldInfo` (`Type`, `Length`, `Precision`, `Scale`) — the same metadata CodeGen uses. If a
+field's SQL type cannot be resolved, **fail the save**; do not emit an untyped NULL and hope.
 
-### 3.3 Files
+**Cost control — and why the obvious optimization is rejected as designed.** v1 proposed parsing column references out of the
+resolved filter and skipping the post-image check when no referenced field is dirty. That optimization **fails open**: a
+reference the parser misses (aliased column, function-wrapped column, column inside a subquery, case variance, a value
+changed by a DEFAULT/trigger/computed column rather than an explicit `Set`) silently skips a required authorization check.
 
-- `packages/MJCore/src/generic/databaseProviderBase.ts` — call the new check at `:1335`; declare the abstract method
-  alongside `CheckRecordRLS`/`CheckCreateRLS` (`:1583`, `:1593`)
+Revised rule: **the post-image check runs by default.** The skip is permitted only when the resolved filter fully decomposes
+into a conjunction of simple `Column <op> <literal|token>` terms that the parser understands completely, and none of those
+columns is dirty. If decomposition is not total — for any reason — run the check. The parser must return
+"fully-understood: yes/no", and "no" means run it. A fail-open optimization in an authorization path is not a performance
+win; it is a vulnerability with a benchmark attached.
+
+**Hook ordering.** The post-image check must run **after** `OnBeforeSaveExecute` (`databaseProviderBase.ts:1347`), not before.
+Before-save hooks (entity actions, AI actions, the multi-tenancy `PreSaveHook`) can mutate field values, including
+filter-referenced ones. A check that runs before them validates a state that is not what gets written. Note this reorders the
+current sequence — RLS currently runs at step 2b, before the before-save hook at step 3 — so the pre-image check stays where
+it is and the new post-image check is inserted after hooks complete.
+
+### 3.3 Scope
+
+WS1 covers the **update** path. Explicitly in scope to verify and, if broken, fix in the same workstream:
+
+- **Delete** (`databaseProviderBase.ts:1487`) — pre-image only is *correct* for delete; no post-image exists. Confirm no change needed.
+- **Transaction groups** — `TransactionGroupResolver` routes items through the CRUD path; confirm the post-image check runs per item.
+- **Composite-PK entities** — `CheckRecordRLS` builds `pkWhere` from `entity.PrimaryKeys` (`:3897`); the post-image path must handle composites identically.
+
+### 3.4 Files
+
+- `packages/MJCore/src/generic/databaseProviderBase.ts` — insert the post-image call after the before-save hook; declare the
+  abstract method alongside `CheckRecordRLS`/`CheckCreateRLS` (`:1583`, `:1593`)
 - `packages/GenericDatabaseProvider/src/GenericDatabaseProvider.ts` — implement; generalize `BuildCreateRLSProjections` into a
-  shared projection builder with an include-nulls mode
+  shared projection builder with an include-nulls, typed-CAST mode
 
-### 3.4 Risk
+### 3.5 Risk
 
 This tightens behavior on a path that previously allowed the operation. Deployments with an Update RLS filter and code that
 legitimately reassigns a filter-referenced column (a genuine ownership-transfer flow) will start failing. Mitigation: such a
-flow should run as an RLS-exempt principal, which `UserExemptFromRowLevelSecurity` already supports. Call this out in the
-changeset — it is a behavior change, and the correct one.
+flow should run as an RLS-exempt principal. **Note the tension with §2.2**: exemption is broad and easy to acquire, so
+"just make it exempt" is a real escape hatch that weakens the boundary elsewhere. Prefer narrowing the Update filter to permit
+the legitimate transition over granting exemption. Call this out in the changeset — it is a behavior change, and the correct one.
 
 ---
 
@@ -185,7 +239,7 @@ changeset — it is a behavior change, and the correct one.
 
 Both defects are in `packages/MJServer/src/multiTenancy/index.ts`. The feature is opt-in
 (`configInfo.multiTenancy?.enabled`, default off — `middleware/MJTenantFilterMiddleware.ts:25`), so neither is a live
-default-path vulnerability. Both are worth fixing here because WS3 would otherwise repeat them.
+default-path vulnerability. Both are fixed here because WS3 would otherwise repeat them.
 
 ### 4.1 Injection via the tenant header
 
@@ -195,39 +249,47 @@ default-path vulnerability. Both are worth fixing here because WS3 would otherwi
 const tenantFilter = `[${tenantColumn}] = '${contextUser.TenantContext.TenantID}'`;
 ```
 
-`TenantID` can come straight from a request header when `contextSource === 'header'` (`:42-47`), unvalidated. Downstream, that
-string reaches `ValidateUserProvidedSQLClause`, which strips string literals *before* keyword matching and has no rule for
-`OR`. A header value of `x' OR '1'='1` yields `[TenantID] = 'x' OR '1'='1'`, strips to `[TenantID] =  OR =`, passes
+`TenantID` can come straight from a request header when `contextSource === 'header'` (`:42-47`), unvalidated. Downstream,
+that string reaches `ValidateUserProvidedSQLClause`, which strips string literals *before* keyword matching and has no rule
+for `OR`. A header value of `x' OR '1'='1` yields `[TenantID] = 'x' OR '1'='1'`, strips to `[TenantID] =  OR =`, passes
 validation, and defeats tenant scoping entirely.
 
-**Fix, defense in depth:**
+**Fix, defense in depth — with the exact transformations specified:**
 
-1. **Validate at the boundary.** `attachTenantContext` rejects any tenant id that is not a GUID or a conservative
-   identifier (`^[A-Za-z0-9_\-.]{1,128}$`). A malformed header fails the request rather than silently producing an
-   unscoped session.
-2. **Escape at construction.** Single-quote-escape the value when building the predicate, so a future caller reaching
-   `attachTenantContext` from a different source (`'linkedEntity'`, `'custom'`) cannot reintroduce the hole.
-3. **Bound the column name.** `tenantColumn` is operator-controlled config, not user input, but it is interpolated into a
-   bracket identifier. Verify it resolves to a real non-virtual field on the entity and escape `]` → `]]`.
-4. **Flag for follow-up:** `[${tenantColumn}]` is SQL Server bracket syntax hardcoded in a provider-agnostic hook. Confirm
-   behavior under the Postgres provider before this is relied on cross-platform. Out of scope to fix here; note it.
+1. **Validate at the boundary.** `attachTenantContext` rejects any tenant id not matching `^[A-Za-z0-9_.\-]{1,128}$` (GUIDs
+   included). Malformed → fail the request with 400. A rejected header must never degrade to "no tenant context," which would
+   silently produce an *unscoped* session — that is the fail-open case and it is the whole point of validating.
+2. **Escape at construction, platform-aware.** Even with (1), escape the value where the predicate is built, so a future
+   caller reaching `attachTenantContext` from `'linkedEntity'` or `'custom'` cannot reintroduce the hole. Single-quote
+   escaping is `'` → `''` for both SQL Server and Postgres. Do **not** rely on backslash escaping (Postgres
+   `standard_conforming_strings` dependent).
+3. **Bound and quote the column identifier.** `tenantColumn` is operator config, not user input, but it is interpolated into
+   a bracket identifier. Verify it resolves to a real non-virtual field on the entity (reject otherwise), and quote via the
+   provider's own `QuoteIdentifier` rather than hardcoded `[...]` — which also fixes (4).
+4. **Platform correctness.** `[${tenantColumn}]` is T-SQL bracket syntax hardcoded in a provider-agnostic hook; it is invalid
+   on Postgres. Using `QuoteIdentifier` resolves it. In-scope for WS2, not deferred — a tenant filter that throws on Postgres
+   is a broken security control, and one that *doesn't* throw is worse.
 
 ### 4.2 Shared-`UserInfo` mutation
 
-`createTenantMiddleware` calls `attachTenantContext(userPayload.userRecord as UserInfo, ...)` (`:45`), mutating the object in
-place. For JWT sessions and API-key sessions alike, `userRecord` may be the **shared `UserCache` instance**
-(`context.ts:400-405` for the API-key path). Two concurrent requests for the same user, with different tenant headers, race on
-one object.
+`createTenantMiddleware` calls `attachTenantContext(userPayload.userRecord as UserInfo, ...)` (`:45`), mutating in place. For
+JWT and API-key sessions alike, `userRecord` may be the **shared `UserCache` instance** (`context.ts:400-405` for the API-key
+path). Two concurrent requests for the same user with different tenant headers race on one object.
 
-**Fix:** clone to a fresh `UserInfo` before setting per-session state and write it back to `userPayload.userRecord`, exactly
-as `buildMagicLinkSessionUser` does (`context.ts:258-276`). Extract that clone-then-stamp step into a small shared helper so
-WS3 and any future per-session context use the same path rather than each rediscovering the rule.
+**Fix:** clone to a fresh `UserInfo` before setting per-session state and write it back to `userPayload.userRecord`, as
+`buildMagicLinkSessionUser` does (`context.ts:258-276`). Extract clone-then-stamp into one shared helper so WS3 and any future
+per-session context use the same path.
+
+**The helper is load-bearing for authorization and must be tested as such.** Per §2.3, the clone survives only because
+backing fields are own properties and `copyInitData` gates on `hasOwnProperty`. A tsconfig change to class-field semantics,
+or a refactor that converts a backing field to a `#private` field or a `WeakMap`, would silently drop context or roles — and
+dropping a *restricting* context fails open. Unit-test that a cloned `UserInfo` preserves: `UserRoles` (identity and count),
+all four existing contexts, and the new `APIKeyActingContext`.
 
 ### 4.3 Note on `createTenantPreSaveHook`
 
-It validates `entity.Get(tenantColumn)` — the post-image — and auto-stamps the tenant on new records (`:163-172`). That is the
-correct shape and needs no change. Worth observing that the multi-tenancy hook got the post-image right while core RLS
-(WS1) did not.
+It validates `entity.Get(tenantColumn)` — the post-image — and auto-stamps the tenant on new records (`:163-172`). Correct
+shape; no change needed. Worth observing that the multi-tenancy hook got the post-image right while core RLS (WS1) did not.
 
 ---
 
@@ -245,22 +307,21 @@ Add an optional filter reference to both scope-rule tables:
 **Why an FK to the existing `RowLevelSecurityFilter` rather than an inline `RowFilter nvarchar(max)`:** it reuses the
 substitution engine, the filter is a named reviewable object rather than a string buried in a join table, it matches how
 `EntityPermission` already references filters, and it inherits whatever platform-variant work lands later without a second
-migration. Cost: authoring a key filter means creating a filter record first. At the scale where row filters are used, that is
-the right trade. *This is the main reversible decision in the plan — flagging it explicitly for review.*
+migration. Cost: authoring a key filter means creating a filter record first. *This is the main reversible decision in the
+plan — flagged for review as §9.1.*
 
 ### 5.2 Runtime values: a registered vocabulary, not free-form parameters
 
-The original proposal declared per-rule `FilterParameters` JSON naming a parameter and the entity field it compares against,
-from which the engine would resolve a bind type. Given MJ's existing conventions, a **registered vocabulary** is both simpler
-and safer, and it eliminates the JSON column entirely.
-
-Add a fifth per-session context to `UserInfo`, alongside `TenantContext` / `MagicLinkScope` / `ReturningVisitorContext` /
-`WidgetGuestContext`:
+Add a fifth per-session context to `UserInfo`, alongside the existing four:
 
 ```ts
 /**
  * Per-request acting context for an API-key session. Set server-side from an authenticated
  * identity; consumed by API-key-scoped RLS filters via the {{Acting*}} tokens.
+ *
+ * TRUST BOUNDARY: these values MUST be derived server-side. The engine binds what it is given
+ * and cannot validate provenance. Never populate from a client-supplied header, argument, or
+ * GraphQL variable. Never expose via a resolver — see §5.8.
  */
 export interface APIKeyActingContext {
     /** Organization / tenant the caller is acting on behalf of. */
@@ -275,33 +336,23 @@ export interface APIKeyActingContext {
 Tokens `{{ActingOrganizationID}}`, `{{ActingPersonID}}`, `{{ActingScopeID}}` resolve in `MarkupFilterText` alongside the
 existing ones.
 
-This buys:
-
-- **Types without restating the schema.** The vocabulary is typed in TypeScript, so each token has a known validator
-  (`ActingOrganizationID` and `ActingPersonID` are GUIDs; `ActingScopeID` is a bounded identifier). No per-rule type
-  declarations to drift, and no `FilterParameters` JSON at all.
-- **No typo class.** The original proposal's open question — free-form names fail closed but confusingly — disappears.
-  An unknown token is caught at rule save.
-- **Extension is a typed code change**, not a schema change, matching how the other four contexts evolved.
-
-**Trust boundary.** These values must be derived server-side from an authenticated identity. The engine binds what it is
-given and cannot validate provenance. A caller that forwards a client-supplied org id has defeated the mechanism. This goes in
-the package docs *and* in the TSDoc on the interface, because the interface is what someone will actually read.
+This buys types without restating the schema (each token has a known validator — the two ID tokens are GUIDs,
+`ActingScopeID` is a bounded identifier), removes the typo class entirely (an unknown token is caught at rule save), and
+makes extension a typed code change rather than a schema change — matching how the other four contexts evolved. It also
+eliminates the original proposal's `FilterParameters` JSON column.
 
 ### 5.3 Exactly one entity per filtered rule
 
 A scope rule carrying `RowFilterID` must name a single exact entity in `ResourcePattern` — no wildcards, no comma-separated
-lists. Rationale from the original proposal stands and is unimproved by restating: with patterns allowed, a rule could match
-an entity lacking the referenced column, and both available behaviors (deny, or skip the filter) are wrong in an authorization
-path. Forbidding the case removes it.
+lists. With patterns allowed, a rule could match an entity lacking the referenced column, and both available behaviors (deny,
+or skip the filter) are wrong in an authorization path. Forbidding the case removes it.
 
 Unfiltered rules keep full pattern support — no behavior change. The restriction can be relaxed later without breaking
 anything; tightening later would be breaking.
 
 **Enforcement** lives in a server-side entity subclass under `packages/MJCoreEntitiesServer/src/custom/` — a CHECK constraint
-cannot express "no wildcards AND names a real entity AND every column reference resolves to a real non-virtual field on it."
-`PatternMatcher.isValidPattern` (`packages/APIKeys/Engine/src/PatternMatcher.ts:121`) is the natural sibling for an
-`IsExactResourceName` helper.
+cannot express these. `PatternMatcher.isValidPattern` (`packages/APIKeys/Engine/src/PatternMatcher.ts:121`) is the natural
+sibling for an `IsExactResourceName` helper.
 
 Validated at rule save:
 
@@ -309,132 +360,248 @@ Validated at rule save:
 2. `ResourcePattern` resolves via `Metadata.EntityByName` to a real entity.
 3. Every `{{Token}}` in the filter's `FilterText` is a member of the registered vocabulary.
 4. Every column identifier in `FilterText` resolves to a real, non-virtual, non-computed field on that entity.
+5. **The filter is not a `PatternType='Exclude'` or `IsDeny` rule.** A row filter narrows an *allow*; attaching one to a deny
+   or exclude rule has no coherent meaning and would read as though it restricted something. Reject at save.
 
 Check 4 supersedes the original proposal's `FilterParameters`-as-allowlist idea and is strictly stronger: it bounds *every*
-column the expression touches, not only the ones being compared. `SQLExpressionValidator.checkFieldReferences` already exists
-in lenient warn-only form (`SQLExpressionValidator.ts:391`, called from `:235`) — add a strict variant rather than writing
-a second parser.
+column the expression touches. `SQLExpressionValidator.checkFieldReferences` exists in lenient warn-only form
+(`SQLExpressionValidator.ts:391`, called from `:235`) — add a strict variant rather than writing a second parser.
 
 ### 5.4 Fail closed, and fail diagnosably
 
-`MagicLinkScope` resolves an absent scope to `''`, so a pinned predicate matches no rows. Safe, but it produces an
-unexplainable empty result rather than a diagnosable failure.
-
-For API-key filters, deny **before** any SQL is built:
+Deny **before** any SQL is built:
 
 - At load time, `APIKeysEngineBase` parses the `{{Token}}` set out of each referenced filter's `FilterText` and caches it
   (templates are principal-independent — safe to cache; **resolved** filters are principal-specific and must never be).
 - `Authorize()` compares the matched rule's required tokens against the supplied acting context. Any missing or
   type-invalid value → **deny**, with a reason naming the token.
-- The data layer still resolves an absent token to `''` as defense in depth, so a filter that somehow reaches SQL without
-  its context matches nothing rather than everything.
+- A type mismatch denies. It does not coerce, and it does not silently match zero rows.
 
-A type mismatch denies. It does not coerce, and it does not silently match zero rows.
+**Defense-in-depth substitution must be `(1=0)`, not `''`.** v1 proposed resolving an absent token to the empty string, as
+`MagicLinkScope` does. That is safe for `Col = '{{Tok}}'` but **fails open** for other shapes a filter author may plausibly
+write: `Col <> '{{Tok}}'` matches every row, `Col LIKE '%{{Tok}}%'` matches every row, `Col NOT IN ('{{Tok}}')` matches
+nearly every row, and in an unquoted numeric context `''` is either a syntax error or coerces to `0`.
 
-### 5.5 Composition
+Revised rule: if any required token is unresolved at markup time, **the entire filter resolves to the literal `(1=0)`** —
+matching nothing regardless of the expression's shape — and an error is logged naming the filter and token. Never substitute
+an empty string into a predicate whose operator you do not control. (The existing `{{ScopeResourceID}}` → `''` behavior is
+out of scope to change here, but it has the same latent weakness and deserves its own ticket.)
 
-`GetUserRowLevelSecurityWhereClause` gains the key/application filters and conjoins them:
+### 5.5 🚨 Composition — and why it cannot live inside `GetUserRowLevelSecurityWhereClause`
+
+**This section is the correction that motivated v2.** v1 said the key filter would be added inside
+`GetUserRowLevelSecurityWhereClause` and conjoined. That is wrong and would have shipped a silent fail-open.
+
+Per §2.2, that method early-returns `''` at `entityInfo.ts:2312` whenever `UserExemptFromRowLevelSecurity` is true — and
+exemption is granted by holding *any* role with a filter-less permission row for that type. API keys are overwhelmingly held
+by service accounts and admins, who are exempt. The key filter would therefore be dropped for precisely the principals it
+exists to constrain, while appearing to work in any test using a narrow-role fixture.
+
+The exemption is a property of **role RLS** — "this user has a role that grants unrestricted access" — and must not extend to
+a key ceiling, whose entire purpose is to restrict a principal *below* what their roles allow.
+
+**Design:** introduce a new method on `EntityInfo` and move the call sites to it:
+
+```ts
+/**
+ * Effective row-filter clause: role RLS (subject to role exemption) AND the API-key and
+ * application ceiling filters (NOT subject to role exemption — a key ceiling must bind an
+ * exempt principal, that is its purpose). Returns '' only when no layer contributes.
+ */
+public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string
+```
+
+Composition:
 
 ```
-(role filter A OR role filter B)  AND  (application ceiling filter)  AND  (key scope filter)
+[ role RLS: (roleA OR roleB), or '' if exempt/none ]
+  AND [ application ceiling filter, or omitted if none ]
+  AND [ key scope filter, or omitted if none ]
 ```
 
-OR within a layer (existing behavior — a user's roles are additive), AND across layers. No layer can widen another. The
-existing WHERE assembly already ANDs the result with `ExtraFilter` and user search
-(`GenericDatabaseProvider.ts:1550-1594`), so caller-supplied filters conjoin rather than replace, with no change needed.
+- **OR within the role layer** — existing, unchanged semantics; a user's roles are additive.
+- **AND across layers** — no layer can widen another. An exempt user gets `''` for the role term and the key term still
+  applies. This is what makes "a key can be less than its owner" true.
+- `GetUserRowLevelSecurityWhereClause` keeps its current signature and semantics for backward compatibility; the new method
+  wraps it.
 
-### 5.6 Carrying the context
+**Call sites to migrate — the complete list, verified.** `GetUserRowLevelSecurityWhereClause` has **nine** callers outside
+tests. Every one is an enforcement point; a missed one is an unenforced path, so migrating all nine is part of the definition
+of done:
+
+| # | Site | What it guards |
+|---|---|---|
+| 1 | `GenericDatabaseProvider.ts:1590` | `InternalRunView` WHERE assembly (primary read path) |
+| 2 | `GenericDatabaseProvider.ts:2361` | secondary WHERE assembly (alternate RunView path) |
+| 3 | `GenericDatabaseProvider.ts:2510` | `assertExternalReadAllowedUnderRLS` — external-source refusal (§5.6 #5) |
+| 4 | `GenericDatabaseProvider.ts:3811` | **`BaseEntity.Load()` by primary key** — the path a `PreRunViewHook` would miss |
+| 5 | `GenericDatabaseProvider.ts:3890` | `CheckRecordRLS` — pre-image on update/delete |
+| 6 | `GenericDatabaseProvider.ts:3915` | `CheckCreateRLS` — post-image on create |
+| 7 | `providerBase.ts:2195` | `ComputeRunViewRLSWhereClause` — **feeds the cache fingerprint** (§5.7 INV-1) |
+| 8 | `SearchEngine.ts:1897` | search path |
+| 9 | `ResolverBase.ts:1002` | GraphQL resolver helper |
+
+Site 4 is the concrete proof of §2.4's argument: `Load()` by PK is covered by RLS and would **not** have been covered by a
+`PreRunViewHook` implementation.
+
+### 5.6 Bypass inventory — every way the filter could fail to apply
+
+v1 did not enumerate these. Each needs an explicit decision, and the default for all of them is *deny*.
+
+| # | Bypass | Current behavior | Decision |
+|---|---|---|---|
+| 1 | **Role RLS exemption** | `entityInfo.ts:2312` early-returns `''` | Key filter evaluated outside the exemption — §5.5 |
+| 2 | **`full_access` scope** | `ResolverBase.ts:679-692` short-circuits the specific scope check | **Row filters still apply.** `full_access` means "every operation," not "every row." A key with `full_access` + a row filter is a legitimate, useful config. The full-access fast path must still resolve and attach row filters, or must refuse to coexist with a filtered key. Pick one; do not leave it implicit. |
+| 3 | **`enforcementEnabled: false`** | `APIKeyEngine.ts:596` returns `Allowed` unconditionally | Global kill switch — filters off too. Acceptable *only* if startup logs a prominent warning when any filtered scope rule exists while enforcement is disabled. |
+| 4 | **Key has no scope rules + `defaultBehaviorNoScopes: 'allow'`** | `ScopeEvaluator.ts:156-167` allows | No rule ⇒ no filter ⇒ unfiltered access. Document that a filtered deployment must set `'deny'` (already the engine's own default at `APIKeyEngine.ts:144`). |
+| 5 | **External-data-source entities** | `assertExternalReadAllowedUnderRLS` (`GenericDatabaseProvider.ts:2509`) refuses reads when RLS applies, **but lets exempt users through** | Must refuse when a *key* filter applies, regardless of role exemption. Otherwise the filter is silently unenforceable on external-backed entities. Migrating this call site to `GetEffectiveRowFilterWhereClause` fixes it. |
+| 6 | **Non-resolver entry points** | Scope checks live in resolvers; MCP/A2A/REST surfaces may not call them | The data-layer filter covers these *because* it is in RLS — but confirm no surface constructs a provider with a principal lacking acting context, which would deny (correct) rather than allow. |
+| 7 | **`APIKeysEngineBase` not `Config`'d** | Cached rules empty → no rules match | Must deny, not allow, when a filtered key is used before the engine loads. Verify the load-order at `MJServer/src/index.ts:672-674`. |
+| 8 | **Dangling `RowFilterID`** | FK prevents it in-DB; a stale cache could hold one | Unresolvable filter ID → deny. |
+
+### 5.7 Caching — resolved, with a testable invariant
+
+**The question:** does the server-side RunView cache fingerprint vary by the resolved per-principal filter, or will two
+principals collide and read each other's rows?
+
+**The answer: it varies — by construction, provided the filter enters through the RLS path.**
+`ComputeRunViewRLSWhereClause` (`providerBase.ts:2190`) resolves the RLS clause and is passed as the third argument to
+`GenerateRunViewFingerprint` at every cache read/write: `providerBase.ts:2292`, `GenericDatabaseProvider.ts:2237` (read),
+`:2447` (write), `:2606`. So a different resolved filter yields a different fingerprint and a different cache slot.
+
+**This converts into two invariants that must be stated and tested:**
+
+- **INV-1.** The key filter MUST be emitted by `ComputeRunViewRLSWhereClause` (i.e. reached via
+  `GetEffectiveRowFilterWhereClause`). It must **not** be appended later inside `InternalRunView`'s WHERE assembly, which runs
+  *after* the fingerprint is computed — that would produce two principals sharing one cache slot with different effective
+  filters. This is the single highest-consequence implementation constraint in WS3.
+- **INV-2.** The clause used for the fingerprint and the clause used in the WHERE must be byte-identical. They are computed by
+  two independent calls today (`providerBase.ts:2195` vs `GenericDatabaseProvider.ts:1590`). Any nondeterminism —
+  role-iteration order, `Set` ordering, whitespace — silently splits or merges cache slots. Make the composition
+  deterministic (stable ordering of the OR terms and the AND layers) and assert it.
+
+**Also flagged:** `baseEngine.ts:1525` and `:2005` call `GenerateRunViewFingerprint` with only two arguments — no RLS clause.
+Confirm no `BaseEngine` config caches an entity that carries RLS or a key filter; if one does, its cache slot is
+principal-agnostic and would collide.
+
+### 5.8 Carrying the context
 
 In `context.ts`, the API-key branch (`:397-415`) resolves `userRecord` from the shared `UserCache`. It must clone before
-stamping `APIKeyActingContext`, via the shared helper introduced in WS2 §4.2. This is not a cache-TTL concern — it is
-same-instant cross-request aliasing on one object.
+stamping `APIKeyActingContext`, via the WS2 §4.2 helper. Not a cache-TTL concern — same-instant cross-request aliasing.
 
-Where the acting values come from is deployment-specific (a verified session token, a server-side session lookup, a trusted
-upstream assertion). The plan does **not** invent a transport for them; it defines the carrier and the contract. For the AR
-portal, the portal's own authenticated session supplies them server-side.
+**Client-boundary hazard.** `TenantContext` is serialized to the client and auto-stamped onto the client-side `UserInfo` by
+`GraphQLDataProvider` (`graphQLDataProvider.ts:457-461`) via a `CurrentUserTenantContext` query
+(`resolvers/CurrentUserContextResolver.ts`). `APIKeyActingContext` must **not** get equivalent treatment: no resolver may
+expose it, and no client-side path may set it. A client-settable acting context is a total bypass of the feature. Add an
+explicit negative test asserting no GraphQL field returns it.
 
-### 5.7 What Phase 2 becomes
+Where the acting values originate is deployment-specific (a verified session token, a server-side session lookup, a trusted
+upstream assertion). This plan defines the carrier and the contract, not a transport. For the AR portal, the portal's own
+authenticated session supplies them server-side.
 
-Nothing. Because the filter resolves inside `GetUserRowLevelSecurityWhereClause`, every existing RLS call site enforces it on
-day one: `RunView`, `RunViews`, the count query, `BaseEntity` load/save/delete, `SearchEngine`, and the GraphQL resolver
-helper. There is no advisory phase to ship and no `EffectiveFilter` for callers to remember to apply.
+### 5.9 What Phase 2 becomes
 
-`AuthorizationResult` still gains an optional `EffectiveFilter` — but as **observability**, not as the enforcement contract:
-it is what `UsageLogger` records so the audit trail answers "what could this request actually see," and it is what a
-consumer inspects when debugging a denial. Typed concretely, not as `Record<string, unknown>`.
+Nothing. Because the filter resolves inside the effective-filter method, every migrated RLS call site enforces it on day one:
+`RunView`, `RunViews`, the count query, `BaseEntity` load/save/delete, `SearchEngine`, the external-source guard, and the
+GraphQL resolver helper. There is no advisory phase and no `EffectiveFilter` for callers to remember to apply.
+
+`AuthorizationResult` still gains an optional `EffectiveFilter` — as **observability**, not the enforcement contract: what
+`UsageLogger` records so the audit trail answers "what could this request actually see," and what a consumer inspects when
+debugging a denial. Typed concretely, not as `Record<string, unknown>`.
 
 ---
 
 ## 6. Deliberately out of scope
 
-**Parameterized binding on the filter path.** The right long-term answer to §2.5, and the original proposal is correct that
-interpolation inside an authorization layer is the worst place for it. But it means threading a parameter array through
-`InternalRunView`'s WHERE assembly, the server-side RunView cache fingerprint, and the GraphQL transport for client-issued
-filters. That is its own workstream, it touches every consumer of `RunView`, and gating this feature on it would sink both.
+**Parameterized binding on the filter path.** The right long-term answer to §2.6. It means threading a parameter array through
+`InternalRunView`'s WHERE assembly, the cache fingerprint, and the GraphQL transport for client-issued filters. Its own
+workstream; gating this feature on it would sink both.
 
 **What we do instead, now:** the registered vocabulary means every value that can reach a filter is server-derived and
-type-validated against a known validator before `Authorize()` returns. That is the second layer §3 of the original proposal
-asked for, achievable today, and it does not depend on binding. It is genuinely weaker than binding and should be recorded as
-such — an accepted interim position, not a solution.
+type-validated against a known validator before `Authorize()` returns. That is the second layer the original proposal asked
+for, achievable today, and independent of binding. It is genuinely weaker than binding and is recorded as an accepted interim
+position, not a solution.
 
-**RLS platform variants.** §2.5 notes `GetPlatformFilterText` is unwired on the RLS path and `RowLevelSecurityFilter` has no
-variants column. Filters authored for this feature will be single-dialect. Worth its own ticket now that a Postgres provider
-ships.
+**RLS platform variants.** §2.6 notes `GetPlatformFilterText` is unwired on the RLS path and `RowLevelSecurityFilter` has no
+variants column. Filters authored for this feature are single-dialect. **Fail mode if a T-SQL filter runs on Postgres: the
+query throws, so the request fails closed** — acceptable, but confirm during WS3 that the thrown error is not swallowed
+anywhere into an empty-result path, which would be indistinguishable from "no rows match." Own ticket now that a Postgres
+provider ships.
+
+**The RLS exemption's own looseness.** §2.2 notes `UserExemptFromRowLevelSecurity` grants exemption from the mere *presence*
+of a filter-less permission row, without checking that the permission is granted. That is arguably a bug in its own right.
+WS3 routes around it rather than changing it — changing it would alter behavior for every existing RLS deployment. Separate
+ticket.
 
 ---
 
 ## 7. Test plan
 
-Both tiers must pass, per the Definition of Done. Reported with pass/fail/skip counts.
+Both tiers must pass, per the Definition of Done. Reported with pass/fail/skip counts. Tests marked **[FO]** are fail-open
+regression tests — the ones that would pass against a broken implementation if written carelessly.
 
 ### 7.1 Unit — WS1
 
-- Update where no filter-referenced field is dirty → one query, pre-image only (the optimization holds)
-- Update that moves a row out of the Update filter → rejected
-- Update that moves a row *into* the filter from a passing pre-image → allowed
-- Post-image projection emits nulls as typed NULLs, not omitted columns
-- Pre-image failure keeps the existing non-enumerable message; post-image failure gets its own
-- RLS-exempt principal bypasses both checks
+- Update that moves a row out of the Update filter → rejected **[FO]**
+- Update that moves a row into the filter from a passing pre-image → allowed
+- Post-image projection emits `CAST(NULL AS <type>)` for every non-virtual null field, not omitted columns
+- Unresolvable field type → save fails rather than emitting untyped NULL
+- Skip-optimization: filter that does **not** fully decompose (function-wrapped column, subquery, alias) → check still runs **[FO]**
+- Skip-optimization: simple filter, no referenced field dirty → check skipped (perf assertion)
+- Before-save hook mutates a filter-referenced field → post-image check sees the mutated value **[FO]**
+- Composite-PK entity → post-image check builds the correct predicate
+- Pre-image failure keeps the non-enumerable message; post-image failure gets its own
+- Delete path unchanged
 
 ### 7.2 Unit — WS2
 
-- Header tenant id containing `'`, `--`, or `OR` → request rejected at the boundary
-- Escaped value produces a predicate matching exactly the intended tenant
+- Header tenant id containing `'`, `--`, `OR`, or exceeding 128 chars → request rejected at the boundary **[FO]**
+- Rejected header does **not** degrade to an unscoped session **[FO]**
+- Escaping is applied even when the value arrives via `'linkedEntity'` / `'custom'` source
 - Tenant column not present on the entity → rejected
-- Two concurrent requests, same user, different tenant headers → each sees only its own tenant (the aliasing regression)
+- Identifier quoted via `QuoteIdentifier`, producing valid SQL on both SQL Server and Postgres
+- Clone helper preserves `UserRoles`, all four existing contexts, and `APIKeyActingContext` **[FO]**
+- Two concurrent requests, same user, different tenant headers → each sees only its own tenant
 
 ### 7.3 Unit — WS3
 
 - Rule with no `RowFilterID` behaves exactly as today *(regression)*
 - Rule with a pattern resource and no `RowFilterID` → still permitted *(regression)*
-- Rule with `RowFilterID` and complete acting context → correct resolved filter
-- Rule with `RowFilterID` and a **missing** token → denied, with the token named; not unfiltered, not empty-result
+- **Exempt user (holds a role with a filter-less permission row) + filtered key → filter STILL applies** **[FO]** — the §5.5 regression; write this one first
+- Role RLS present + key filter present → AND-composed, not OR-composed **[FO]**
+- Adding a second, more permissive role does not widen past the key filter **[FO]**
+- `full_access` + filtered key → whichever §5.6#2 decision is taken, asserted explicitly **[FO]**
+- `enforcementEnabled: false` + filtered rule exists → startup warning emitted
+- Key with no scope rules + `defaultBehaviorNoScopes: 'allow'` → documented behavior asserted
+- External-source entity + key filter → read refused even for a role-exempt user **[FO]**
+- Missing required token → denied at `Authorize()`, reason names the token
+- Unresolved token reaching markup → filter resolves to `(1=0)`, not `''` **[FO]**
+- `(1=0)` fallback asserted for `<>`, `LIKE`, `NOT IN`, and numeric-context filters **[FO]**
 - Malformed value for a typed token (non-GUID for `ActingOrganizationID`) → denied, not coerced
-- `RowFilterID` set with a pattern resource (`Orders,Payments`, `Order*`) → rejected at rule save
-- `FilterText` referencing a field absent from the target entity → rejected at rule save
-- `FilterText` referencing a computed or virtual field → rejected at rule save
+- `RowFilterID` set with a pattern resource → rejected at rule save
+- `RowFilterID` set on an `IsDeny` or `Exclude` rule → rejected at rule save
+- `FilterText` referencing an absent / computed / virtual field → rejected at rule save
 - `FilterText` containing an unregistered `{{Token}}` → rejected at rule save
-- Application ceiling filter and key filter both present → conjoined with AND
+- Application ceiling filter and key filter both present → conjoined
 - Caller-supplied `ExtraFilter` present → conjoined, not replaced
-- Role RLS and key filter both present → conjoined (OR within roles, AND across layers)
 - Token value containing SQL metacharacters → rejected by the type validator before reaching SQL
-- Two principals in rapid succession → no filter bleed; template cached, resolved filter not
+- No GraphQL field exposes `APIKeyActingContext`; client cannot set it **[FO]**
 - Usage log records the effective filter
 
 ### 7.4 Integration — deterministic tier
 
-Extend the existing suites rather than adding new ones:
+Extend existing suites: `rls-isolation.checks.ts`, `scope-enforcement.checks.ts`, `server-cache.checks.ts`
+(all under `packages/TestingFramework/integration-test-suite/src/checks/`).
 
-- `packages/TestingFramework/integration-test-suite/src/checks/rls-isolation.checks.ts` — key-scoped isolation between two
-  principals; post-image update rejection end to end
-- `packages/TestingFramework/integration-test-suite/src/checks/scope-enforcement.checks.ts` — filtered scope rules through
-  the real resolver path
-- `packages/TestingFramework/integration-test-suite/src/checks/server-cache.checks.ts` — **highest-risk seam.** MJ auto-caches
-  small unfiltered result sets and the server trusts its cache completely. Assert a filtered principal is never served an
-  unfiltered cached result, and that two principals with different resolved filters never share a cache entry.
-
-Plus coverage that the filter applies on paths a `PreRunViewHook` would have missed — `BaseEntity.Load()` by primary key,
-`RunViews` (plural), and the count query as well as the data query — which is the concrete payoff of the RLS-extension route.
+- **INV-1 (cache slot separation)** — two principals whose only difference is the resolved key filter, querying the same
+  entity with identical `RunViewParams`, must not share a cache slot. Must force the auto-cache path (small, unfiltered,
+  unsorted result set) or the test proves nothing **[FO]**
+- **INV-2 (fingerprint/WHERE agreement)** — assert the clause used for the fingerprint equals the clause in the executed SQL,
+  including ordering stability across repeated calls with multiple roles **[FO]**
+- Every migrated call site enforces: `BaseEntity.Load()` by PK, `RunViews` (plural), the count query, delete, search,
+  external-source guard, transaction-group items — each asserted individually, since "covered for free" is the claim under test
+- Post-image update rejection end to end
+- No `BaseEngine` config caches an RLS/key-filtered entity under a principal-agnostic fingerprint
 
 ---
 
@@ -442,30 +609,33 @@ Plus coverage that the filter applies on paths a `PreRunViewHook` would have mis
 
 | Phase | Contents | Gate |
 |---|---|---|
-| **1** | WS1 + WS2. No schema changes, no CodeGen. | Both test tiers green. Independently shippable and independently valuable. |
+| **1** | WS1 + WS2. No schema changes, no CodeGen. | Both tiers green. Independently shippable. |
 | **2** | Migration adding `RowFilterID` to both scope tables → `mj sync push` → `mj codegen`. | Generated entity classes carry the new fields. No TypeScript written against them before this completes — see the `.Get()`/`.Set()` prohibition. |
-| **3** | WS3: `APIKeyActingContext` + token resolution + `GetUserRowLevelSecurityWhereClause` composition + `context.ts` wiring + rule-save validation in `MJCoreEntitiesServer`. | Both test tiers green. |
+| **3** | WS3: `GetEffectiveRowFilterWhereClause` + **all** call-site migrations + `APIKeyActingContext` + token resolution + `context.ts` wiring + rule-save validation. | Both tiers green, INV-1/INV-2 asserted. |
 | **4** | Docs: package README trust-boundary section, `guides/UNIFIED_PERMISSIONS_GUIDE.md` update placing the key layer in the permission model. | — |
 
 Migration authoring follows [`migrations/CLAUDE.md`](../migrations/CLAUDE.md) — naming, hardcoded UUIDs, the system columns
 CodeGen owns, and the `mj sync push` → `mj codegen` ordering (out of order, CodeGen regenerates from stale definitions and
-*silently deletes* properties).
+*silently deletes* properties). Adding a nullable column with an FK is additive and consistent with
+[`PUBLISH_NO_BREAK_POLICY.md`](../packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md).
 
 ---
 
 ## 9. Open questions for review
 
-1. **FK vs inline filter text** (§5.1). FK to `RowLevelSecurityFilter` is the recommendation; inline `nvarchar(max)` on the
-   scope row is simpler to author and loses reuse plus the named-object review surface. Reversible either way, but cheaper to
-   decide now.
-2. **Application ceiling filters in v1, or keys only?** The plan includes both because the column is free once the mechanism
-   exists. Deferring the ceiling to v2 is not breaking.
-3. **Vocabulary size.** Three tokens (`ActingOrganizationID`, `ActingPersonID`, `ActingScopeID`) covers the AR portal and the
-   partner-integration cases. Anything else worth registering up front, given adding one later is a typed code change rather
-   than a migration?
-4. **WS1 behavior-change blast radius.** Do any existing deployments run an Update RLS filter *and* legitimately reassign a
-   filter-referenced column as a non-exempt principal? If so, that flow needs to move to an exempt principal before this
-   lands.
-5. **Should WS1 and WS2 be their own PR?** They are independently valuable, carry a behavior change, and have nothing to do
-   with API keys. Splitting gives them their own review and their own revert. The counter-argument is that WS3 depends on
-   WS1's correctness and reviewing them together shows why.
+1. **FK vs inline filter text** (§5.1). FK to `RowLevelSecurityFilter` is the recommendation; inline `nvarchar(max)` is
+   simpler to author and loses reuse plus the named-object review surface.
+2. **`full_access` semantics** (§5.6 #2). Do row filters survive a `full_access` grant? Recommendation: yes — `full_access`
+   is about operations, not rows. The alternative (refuse to let `full_access` coexist with a filtered key) is also
+   defensible. Needs a decision; it cannot stay implicit.
+3. **Application ceiling filters in v1, or keys only?** Included because the column is free once the mechanism exists.
+   Deferring is not breaking.
+4. **Vocabulary size** (§5.2). Three tokens cover the AR portal and partner-integration cases. Anything else worth
+   registering up front, given adding one later is a typed code change rather than a migration?
+5. **WS1 blast radius** (§3.5). Do any deployments run an Update RLS filter *and* legitimately reassign a filter-referenced
+   column as a non-exempt principal? Given §2.2, "grant exemption" is a poor remedy — prefer widening the filter.
+6. **Should WS1 and WS2 be their own PR?** They are independently valuable, carry a behavior change, and have nothing to do
+   with API keys. Stronger case for splitting now that WS1 includes a hook-ordering change and WS2 a Postgres-affecting
+   identifier-quoting change. Counter-argument: WS3 depends on WS1's correctness and reviewing together shows why.
+7. **Is the §2.2 exemption looseness worth its own fix now?** WS3 routes around it. Left alone, every role-RLS deployment
+   keeps a broader-than-intended exemption. Changing it is behavior-affecting for existing deployments.
