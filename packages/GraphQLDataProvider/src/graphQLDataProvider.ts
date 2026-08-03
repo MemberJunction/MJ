@@ -1376,7 +1376,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (params.Fields) {
             for (const kv of e.PrimaryKeys) {
                 if (params.Fields.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
-                    fieldList.push(kv.Name); // always include the primary key fields in view run time field list
+                    fieldList.push(SharedFieldMapper.MapFieldName(kv.Name)); // always include the primary key fields; MapFieldName sanitizes a '__mj_'-prefixed PK (materialization surrogate) to '_mj__' to match the server GraphQL type field — a raw '__mj_' name makes the grid RunView query fail with "Cannot query field __mj_MaterializedRowID"
             }
 
             // now add any other fields that were passed in
@@ -1404,7 +1404,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // first make sure we have the primary key field in the view column list, always should, but make sure
                 for (const kv of e.PrimaryKeys) {
                     if (fieldList.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
-                        fieldList.push(kv.Name); // always include the primary key fields in view run time field list
+                        fieldList.push(SharedFieldMapper.MapFieldName(kv.Name)); // always include the primary key fields; MapFieldName sanitizes a '__mj_'-prefixed PK (materialization surrogate) to '_mj__' to match the server GraphQL type field — a raw '__mj_' name makes the grid RunView query fail with "Cannot query field __mj_MaterializedRowID"
                 }
 
                 // Now: include the fields that are part of the view definition
@@ -2096,9 +2096,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const pk = entity.Fields.find(f => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase()); // get the field for the primary key field
                 vars[pk.CodeName] = pk.Value;
                 mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
+                // GraphQL forbids '__'-prefixed arg/field names; sanitize a '__mj_'-prefixed PK to '_mj__' to match
+                // the server (same rule as the single-record Load). The client VARIABLE name keeps the raw CodeName.
+                // (Materialized entities are read-only virtual so no Delete resolver is generated — this is defense-in-depth.)
+                const pkGraphQLName = pk.CodeName.startsWith('__mj_') ? pk.CodeName.replace('__mj_', '_mj__') : pk.CodeName;
                 if (pkeyInnerParamString.length > 0)
                     pkeyInnerParamString += ', ';
-                pkeyInnerParamString += `${pk.CodeName}: $${pk.CodeName}`;
+                pkeyInnerParamString += `${pkGraphQLName}: $${pk.CodeName}`;
 
                 if (pkeyOuterParamString.length > 0)
                     pkeyOuterParamString += ', ';
@@ -2106,7 +2110,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 if (returnValues.length > 0)
                     returnValues += '\n                    ';
-                returnValues += `${pk.CodeName}`;
+                returnValues += `${pkGraphQLName}`;
             }
 
             mutationInputTypes.push({varName: "options___", inputType: 'DeleteOptionsInput!'}); // only used when doing a transaction group, but it is easier to do in this main loop

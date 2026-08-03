@@ -1503,6 +1503,11 @@ export class ManageMetadataBase {
     */
    protected async processQueryMaterializations(pool: CodeGenConnection, currentUser: UserInfo): Promise<{ success: boolean; processedCount: number; mintedCount: number }> {
       const coreSchema = mj_core_schema();
+      // Gate the whole method on the IsMaterialized column existing — the flagged-query SELECT below filters on it,
+      // and it (like the MaterializedResult table) is added by the materialization Foundation migration. On a DB
+      // where that migration hasn't run yet the SELECT would throw and abort the entire codegen pass; with no such
+      // column there are no materializations to process anyway. Same defensive pattern as the EDS-column gate below.
+      if (!(await this.queryHasIsMaterializedColumn(pool))) return { success: true, processedCount: 0, mintedCount: 0 };
       // Gate the ExternalDataSourceID column ref so the SELECT stays valid on a DB without the EDS schema
       // (PostgreSQL today). When absent, no query can be external, so the flag defaults false everywhere.
       const queryHasEDSCol = await this.queryHasExternalDataSourceColumn(pool);
@@ -1734,6 +1739,10 @@ export class ManageMetadataBase {
     */
    protected async detectMaterializationDrift(pool: CodeGenConnection): Promise<{ success: boolean; heldCount: number }> {
       const coreSchema = mj_core_schema();
+      // Gate on MaterializedResult existing — the SELECT below reads it. Absent (materialization migration not yet
+      // applied on this DB) ⇒ no materializations exist to check for drift; skip cleanly rather than throwing and
+      // aborting the codegen pass.
+      if (!(await this.materializedResultTableExists(pool))) return { success: true, heldCount: 0 };
       const rows = await this.runQuery(
          pool,
          `SELECT ID, SourceType, SourceEntityID, SourceQueryID, GeneratedEntityID, SchemaName, TableName FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE Status NOT IN ('Disabled', 'DriftHold')`,
@@ -2275,6 +2284,42 @@ export class ManageMetadataBase {
          this._queryHasExternalDataSourceColumn = Number(cnt) > 0;
       }
       return this._queryHasExternalDataSourceColumn;
+   }
+
+   /**
+    * True if the Query table has the IsMaterialized column (added by the materialization Foundation migration).
+    * processQueryMaterializations gates on this so codegen doesn't throw on a DB where that migration hasn't run
+    * yet (e.g. the PostgreSQL parallel world's object-availability lag) — same defensive pattern as
+    * queryHasExternalDataSourceColumn. Cached per run.
+    */
+   private _queryHasIsMaterializedColumn: boolean | null = null;
+   protected async queryHasIsMaterializedColumn(pool: CodeGenConnection): Promise<boolean> {
+      if (this._queryHasIsMaterializedColumn === null) {
+         const sql = `SELECT COUNT(*) AS ColExists FROM INFORMATION_SCHEMA.COLUMNS ` +
+                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'Query' AND COLUMN_NAME = 'IsMaterialized'`;
+         const result = await this.runQuery(pool, sql);
+         const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
+         const cnt = row.ColExists ?? row.colexists ?? 0;
+         this._queryHasIsMaterializedColumn = Number(cnt) > 0;
+      }
+      return this._queryHasIsMaterializedColumn;
+   }
+
+   /**
+    * True if the MaterializedResult table exists. createNewEntities and detectMaterializationDrift gate their
+    * references to it on this so codegen doesn't throw on a DB lacking the materialization schema. Cached per run.
+    */
+   private _materializedResultTableExists: boolean | null = null;
+   protected async materializedResultTableExists(pool: CodeGenConnection): Promise<boolean> {
+      if (this._materializedResultTableExists === null) {
+         const sql = `SELECT COUNT(*) AS TblExists FROM INFORMATION_SCHEMA.TABLES ` +
+                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'MaterializedResult'`;
+         const result = await this.runQuery(pool, sql);
+         const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
+         const cnt = row.TblExists ?? row.tblexists ?? 0;
+         this._materializedResultTableExists = Number(cnt) > 0;
+      }
+      return this._materializedResultTableExists;
    }
 
    protected async manageExternalEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<{success: boolean, anyUpdates: boolean, relationshipsUpdated: boolean}> {
@@ -5288,9 +5333,18 @@ export class ManageMetadataBase {
          // wrapper view is already excluded (it carries the minted entity, so EntityID IS NOT NULL). The outer
          // view is aliased `t` so the correlated MaterializedResult subquery can't resolve columns ambiguously.
          const coreSchema = mj_core_schema();
+         // Gate the MaterializedResult reference on the table actually existing. Referencing it unconditionally
+         // would throw — breaking new-entity creation for EVERY entity — on any DB where MaterializedResult
+         // isn't present yet (e.g. the PostgreSQL parallel world's object-availability lag). If it's absent we
+         // simply skip the exclusion (the physical materialized table can't exist without it either, so nothing
+         // to exclude). Uses the shared cached helper so all three materialization-schema gates stay consistent.
+         const matResultExists = await this.materializedResultTableExists(pool);
+         const matExclusion = matResultExists
+            ? `AND NOT EXISTS (SELECT 1 FROM ${this.qs(coreSchema, 'MaterializedResult')} mr WHERE mr.${this.qi('SchemaName')} = t.${this.qi('SchemaName')} AND mr.${this.qi('TableName')} = t.${this.qi('TableName')}) `
+            : '';
          const sSQL = `SELECT t.* FROM ${this.qs(coreSchema, 'vwSQLTablesAndEntities')} t `
             + `WHERE t.${this.qi('EntityID')} IS NULL `
-            + `AND NOT EXISTS (SELECT 1 FROM ${this.qs(coreSchema, 'MaterializedResult')} mr WHERE mr.${this.qi('SchemaName')} = t.${this.qi('SchemaName')} AND mr.${this.qi('TableName')} = t.${this.qi('TableName')}) `
+            + matExclusion
             + this.createExcludeTablesAndSchemasFilter('t.');
          const newEntitiesResult = await this.runQuery(pool, sSQL);
       const newEntities = newEntitiesResult.recordset;
