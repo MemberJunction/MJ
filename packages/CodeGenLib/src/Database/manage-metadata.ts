@@ -1332,6 +1332,16 @@ export class ManageMetadataBase {
       const decls = this.extractMaterializedBaseViewsFromConfig(config as Record<string, unknown>);
       if (decls.length === 0) return { success: true, processedCount: 0 };
 
+      // Gate on the MaterializedResult table existing. Base-view materializations are DECLARED in config, but the
+      // target DB may not have the materialization migration applied yet (e.g. the PostgreSQL parallel world, or a
+      // fresh env sharing a config). The MaterializedResult upsert below would otherwise throw and abort the whole
+      // codegen pass. Unlike the unconditional gates on the sibling methods this one logs, because the user asked
+      // for these materializations — a silent skip would look like the feature quietly did nothing.
+      if (!(await this.materializedResultTableExists(pool))) {
+         logStatus(`    > Base-view materialization: ${decls.length} declaration${decls.length === 1 ? '' : 's'} in config but the MaterializedResult table is absent on this database — skipping (has the materialization migration been applied?)`);
+         return { success: true, processedCount: 0 };
+      }
+
       // Refresh so entity.Fields reflect this run's field sync before we snapshot the shape.
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       await md.Refresh();
