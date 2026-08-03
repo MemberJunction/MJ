@@ -10,6 +10,7 @@ import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFie
 import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
+import { applyIncludeSchemaScope } from "./schema-scope";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import { mapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
@@ -1302,8 +1303,6 @@ export class ManageMetadataBase {
             }
          }
       }
-      const excludeSchemas = configInfo.excludeSchemas ? [...configInfo.excludeSchemas] : [];
-
       // Ensure the platform's metadata-management support objects exist and
       // match this CodeGenLib version. These routines/views are CodeGen's own
       // machinery — when the provider supplies DDL (PostgreSQL), we install it
@@ -1320,6 +1319,35 @@ export class ManageMetadataBase {
             return false;
          }
       }
+
+      // Resolve the opt-in `includeSchemas` positive scope into excludeSchemas, BEFORE the exclude
+      // snapshot below and before createNewEntities() runs. The universe is queried from the DATABASE
+      // rather than taken from loaded metadata on purpose: createNewEntities() discovers tables with no
+      // EntityID straight from the database, so a schema MJ has never seen — the exact case an include
+      // list exists to protect against, e.g. a client's own schemas in a deployed instance — is absent
+      // from Metadata.Entities and would otherwise be adopted on the first run (and then excluded on
+      // every run after, orphaning its entity records). No-op when includeSchemas is unset.
+      if (configInfo.includeSchemas && configInfo.includeSchemas.length > 0) {
+         try {
+            const schemaSQL = `SELECT DISTINCT ${this.qi('SchemaName')} FROM ${this.qs(mj_core_schema(), 'vwSQLTablesAndEntities')}`;
+            const schemaResult = await this.runQuery(pool, schemaSQL);
+            const allSchemas: string[] = (schemaResult.recordset ?? [])
+               .map((r: { SchemaName?: string }) => r.SchemaName)
+               .filter((s: string | undefined): s is string => !!s);
+            const newlyExcluded = applyIncludeSchemaScope(allSchemas, configInfo);
+            logStatus(
+               `   Applied includeSchemas scope [${configInfo.includeSchemas.join(', ')}] — excluded ${newlyExcluded.length} other schema(s) present in the database`
+            );
+         }
+         catch (e) {
+            // Proceeding would let CodeGen traverse schemas the include list was meant to keep it off,
+            // which can create entity metadata for another app's (or a client's) tables. Fail instead.
+            logError(`   Error resolving includeSchemas scope: ${e instanceof Error ? e.message : e}`);
+            return false;
+         }
+      }
+
+      const excludeSchemas = configInfo.excludeSchemas ? [...configInfo.excludeSchemas] : [];
 
       let bSuccess = true;
       let start = new Date();

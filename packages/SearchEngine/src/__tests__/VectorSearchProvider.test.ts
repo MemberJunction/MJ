@@ -549,4 +549,64 @@ describe('VectorSearchProvider', () => {
             expect(results[0].Score).toBe(0.7);
         });
     });
+
+    // ────────────────────────────────────────────────────────────────
+    // Scope MetadataFilter — must fail CLOSED when authored but unusable
+    // ────────────────────────────────────────────────────────────────
+    describe('mergeMetadataFilters — tenant-safety of the scope filter', () => {
+        type Merge = (base: object | undefined, scope: unknown) =>
+            { Status: 'absent' } | { Status: 'usable'; Value: object } | { Status: 'unusable'; Reason: string };
+        const merge = (base: object | undefined, scope: unknown) =>
+            (provider as unknown as { mergeMetadataFilters: Merge })
+                .mergeMetadataFilters.call(provider, base, scope);
+
+        it('reports absent when no scope filter and no base filter — legitimately unfiltered', () => {
+            expect(merge(undefined, null).Status).toBe('absent');
+        });
+
+        it('passes the base filter through when no scope filter was authored', () => {
+            const base = { Entity: { $in: ['People'] } };
+            const result = merge(base, undefined);
+            expect(result.Status).toBe('usable');
+            if (result.Status === 'usable') expect(result.Value).toBe(base);
+        });
+
+        it('ANDs the scope filter with the base filter', () => {
+            const result = merge({ Entity: { $in: ['People'] } }, '{"OrganizationID":{"$eq":"org-a"}}');
+            expect(result.Status).toBe('usable');
+            if (result.Status === 'usable') {
+                expect(result.Value).toEqual({
+                    $and: [{ Entity: { $in: ['People'] } }, { OrganizationID: { $eq: 'org-a' } }],
+                });
+            }
+        });
+
+        it('uses the scope filter alone when there is no base filter', () => {
+            const result = merge(undefined, { OrganizationID: { $eq: 'org-a' } });
+            expect(result.Status).toBe('usable');
+            if (result.Status === 'usable') expect(result.Value).toEqual({ OrganizationID: { $eq: 'org-a' } });
+        });
+
+        it('reports UNUSABLE for malformed JSON instead of silently dropping the filter', () => {
+            // THE REGRESSION GUARD. This previously returned `baseFilter` — usually
+            // `undefined` — so a broken template meant the vector query ran across the
+            // ENTIRE index with no tenant predicate at all.
+            const result = merge(undefined, '[');
+            expect(result.Status).toBe('unusable');
+        });
+
+        it('reports UNUSABLE even when a base filter exists, so the lane cannot run under-filtered', () => {
+            // Especially important: a surviving base filter would look "filtered" while the
+            // scope's tenant clause had vanished.
+            const result = merge({ Entity: { $in: ['People'] } }, '{"OrganizationID": ');
+            expect(result.Status).toBe('unusable');
+        });
+
+        it('never reports absent for an authored-but-broken filter', () => {
+            for (const broken of ['[', '{oops', 42, true]) {
+                expect(merge(undefined, broken).Status).not.toBe('absent');
+                expect(merge({ Entity: { $in: ['X'] } }, broken).Status).not.toBe('absent');
+            }
+        });
+    });
 });

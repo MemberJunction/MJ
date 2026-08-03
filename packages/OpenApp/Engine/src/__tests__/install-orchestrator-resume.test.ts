@@ -114,7 +114,7 @@ function serveManifests(byRepoUrl: Record<string, string>): void {
 
 const context = {
     ContextUser: {},
-    DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver' } },
+    DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
     DatabaseConfig: {},
     GitHubOptions: {},
     RepoRoot: '/tmp/test-repo',

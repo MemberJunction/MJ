@@ -53,6 +53,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     MJGlobal: {
       Instance: {
         ClassFactory: {
+          // Segmenters resolve via TryCreateInstance; returning an unresolved result makes
+          // ResolveSegmenter fall through to its built-in FixedWindow instance, so tests
+          // exercise the real segmentation logic without the class registry.
+          TryCreateInstance: vi.fn(() => ({ Resolved: false, Instance: null })),
           CreateInstance: vi.fn().mockReturnValue({}),
         },
       },

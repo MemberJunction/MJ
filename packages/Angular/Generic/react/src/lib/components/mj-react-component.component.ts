@@ -1383,8 +1383,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     this.isInitialized = false;
     this.capturedData = [];
 
-    // Trigger registry cleanup
-    this.adapter.getRegistry().cleanup();
+    // Trigger registry cleanup (guard: adapter may not be initialized if
+    // React bootstrap failed or was destroyed during retry)
+    if (this.adapter.isInitialized()) {
+      this.adapter.getRegistry().cleanup();
+    }
   }
 
   /**

@@ -22,9 +22,22 @@ function escapeRegex(s: string): string {
  *
  * - Strips any prior managed block first, so the result is idempotent (re-running with
  *   the same entries is a no-op; changed entries fully replace the block).
- * - Enabled entries become `import '<pkg>';`; disabled entries become a comment so a
- *   re-enable restores the import without losing the record.
+ * - Enabled entries become a REFERENCED namespace import (`import * as _n from '<pkg>'`)
+ *   collected into an exported `unknown[]` that is anchored by an observable side effect
+ *   (a `globalThis` assignment). Disabled entries become a comment so a re-enable
+ *   restores the import without losing the record.
  * - Zero entries => the block is removed entirely (no stale imports left behind).
+ *
+ * Why namespace imports and not a bare `import '<pkg>';`: a bare side-effect import
+ * is legally dropped by production bundlers (esbuild/Angular) when the imported
+ * package declares `"sideEffects": false` in its package.json — which some open-app
+ * `-ng` packages do (e.g. `@mj-biz-apps/committees-ng`). When that happens the
+ * package's module-scope `@RegisterClass(...)` calls never run, so its view/resource
+ * components (e.g. `MemberHomeComponent`) are absent from the build. A namespace
+ * import that is actually referenced forces the bundler to evaluate the module.
+ * The `globalThis` assignment guarantees the reference (and thus the whole block)
+ * survives even aggressive dead-code elimination, independent of how the host app
+ * consumes the manifest.
  *
  * Exported for unit testing of the idempotency / disabled / cleared cases.
  */
@@ -36,11 +49,31 @@ export function applyOpenAppClientBootstrapBlock(content: string, clientEntries:
     let result = content.replace(blockPattern, '\n').replace(/\n+$/, '\n');
 
     if (clientEntries.length > 0) {
-        const lines = clientEntries.map(e =>
-            e.Enabled === false
-                ? `// '${e.PackageName}' disabled by \`mj app disable\``
-                : `import '${e.PackageName}';`
-        );
+        const lines: string[] = [];
+        const refs: string[] = [];
+        clientEntries.forEach((e, i) => {
+            if (e.Enabled === false) {
+                lines.push(`// '${e.PackageName}' disabled by \`mj app disable\``);
+            } else {
+                const alias = `__openAppClient${i}`;
+                lines.push(`import * as ${alias} from '${e.PackageName}';`);
+                refs.push(alias);
+            }
+        });
+        // Anchor: the exported array references every namespace, and the globalThis
+        // assignment is an observable side effect the bundler must preserve — which
+        // keeps the array, the namespace imports, and their @RegisterClass side effects.
+        //
+        // `unknown[]` rather than `any[]`: the elements are module namespace objects that
+        // exist only to be referenced. Nothing reads them, so there is no member access to
+        // type — `unknown` states that precisely and needs no eslint escape hatch.
+        lines.push('');
+        lines.push(`export const OPEN_APP_CLIENT_MODULES: unknown[] = [${refs.join(', ')}];`);
+        // Bracket access, not dot: `globalThis` is cast to `Record<string, unknown>`, so this
+        // property comes from an index signature. Consumers compile this generated file under
+        // their own tsconfig, and MJExplorer sets `noPropertyAccessFromIndexSignature: true`,
+        // which rejects dot access here (TS4111) and fails its build with zero JS emitted.
+        lines.push("(globalThis as Record<string, unknown>)['__mjOpenAppClientModules'] = OPEN_APP_CLIENT_MODULES;");
         result = `${result.replace(/\n+$/, '')}\n\n${OPEN_APP_BOOTSTRAP_BEGIN}\n${lines.join('\n')}\n${OPEN_APP_BOOTSTRAP_END}\n`;
     }
     return result;

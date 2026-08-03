@@ -228,6 +228,18 @@
 }
 
 /* Avatar images (for users with uploaded photos or URLs) */
+/* Host-supplied assistant avatar: the AI tile is a rounded SQUARE (8px, brand
+   fill), so the image must clip to the tile's radius — not the user avatar's
+   50% circle — and the brand fill must drop so nothing peeks out at the
+   corners or behind a transparent image. */
+.avatar-circle.ai-avatar.avatar-has-image {
+  background-color: transparent;
+  overflow: hidden;
+}
+.avatar-circle.ai-avatar .avatar-image {
+  border-radius: inherit;
+}
+
 .avatar-image {
   width: 100%;
   height: 100%;

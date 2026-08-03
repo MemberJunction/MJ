@@ -27,7 +27,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (409 classes)
+// @memberjunction/core-entities (410 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -99,6 +99,7 @@ import {
     MJAISkillActionEntity,
     MJAISkillEntity,
     MJAISkillPermissionEntity,
+    MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
@@ -590,7 +591,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (101 classes)
+// @memberjunction/ng-dashboards (102 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -638,6 +639,7 @@ import {
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
     EventMonitorComponent,
+    FeaturePipelinesResourceComponent,
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     HomeApplication,
@@ -796,6 +798,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAISkillActionEntity,
     MJAISkillEntity,
     MJAISkillPermissionEntity,
+    MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
@@ -1267,6 +1270,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
     EventMonitorComponent,
+    FeaturePipelinesResourceComponent,
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     HomeApplication,
@@ -1341,7 +1345,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 617;
+export const CLASS_REGISTRATIONS_COUNT = 619;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

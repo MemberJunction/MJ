@@ -157,8 +157,8 @@ vi.mock('@memberjunction/core-entities', () => ({
             Config: vi.fn().mockResolvedValue(undefined),
             EntityDocuments: [],
             VectorIndexes: [],
-            GetEntityDocumentById: vi.fn().mockReturnValue(undefined),
-            GetVectorIndexById: vi.fn().mockReturnValue({
+            GetEntityDocumentByID: vi.fn().mockReturnValue(undefined),
+            GetVectorIndexByID: vi.fn().mockReturnValue({
                 ID: 'vi-1',
                 Name: 'mj-knowledge-index',
                 VectorDatabaseID: 'vdb-1',

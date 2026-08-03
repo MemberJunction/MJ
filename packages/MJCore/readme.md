@@ -444,6 +444,29 @@ if (!result.Success) {
 }
 ```
 
+#### IS-A (Table-Per-Type) entities
+
+An entity may inherit from another — `Webinar` IS-A `Meeting` IS-A `Product` — with one primary key
+shared across every table. `BaseEntity` makes the chain invisible: set a field belonging to ANY
+ancestor directly on the child, and one `Save()` writes every level in a single transaction.
+
+```typescript
+const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+webinar.NewRecord();
+webinar.RecordingURL = '...';        // Webinar's own field
+webinar.StartTime    = startTime;    // Meeting's field
+webinar.Name         = 'Q1 Webinar'; // Product's field — same object
+await webinar.Save();                // writes Product, Meeting, Webinar
+```
+
+Two things catch people out. Do **not** create the parent separately and then attach a child to it —
+`NewRecord()` starts a new chain rather than adopting an existing row. And remember to set NOT NULL
+columns that live on ANCESTOR tables: the child can look complete while the parent insert is
+rejected, which fails the whole save.
+
+See [docs/isa-relationships.md](docs/isa-relationships.md) for the full model — discovery, disjoint
+vs overlapping subtypes, delete orchestration, and CodeGen integration.
+
 ### CompositeKey
 
 The `CompositeKey` class provides flexible primary key representation supporting both single and multi-field primary keys.
