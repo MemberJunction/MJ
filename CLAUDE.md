@@ -88,6 +88,8 @@ Unit tests passing is necessary but **not sufficient** — the integration tier 
 
 **Strong typing, always.** Never use `any`, `as any`, or `unknown`-as-a-shortcut — MJ has a proper type for everything; ask if you think you need one. Never use `.Get()`/`.Set()` as a substitute for generated entity properties. Details: [`.claude/rules/typescript-style.md`](.claude/rules/typescript-style.md).
 
+**All writes go through `BaseEntity.Save()`/`Delete()`.** Never hand-write `INSERT`/`UPDATE`/`DELETE`/`MERGE` from application code, including "just for this bulk case" — raw DML silently skips validation, Entity Actions, Record Changes, and cache invalidation. Bulk work goes to Record Set Processing. Raw SQL is fine for *reads*, migrations, and CodeGen output. Details: [`.claude/rules/data-access.md`](.claude/rules/data-access.md).
+
 **Entity names carry the `MJ: ` prefix.** As of v5.0, all core entities are `MJ: AI Agents`, `MJ: AI Prompt Runs`, etc. An unprefixed name throws `Entity ... not found in metadata`. Verify names in `packages/MJCoreEntities/src/generated/entity_subclasses.ts`.
 
 **The generated ORM is the schema's source of truth** — not migration SQL. Migrations are append-only history; the entity classes reflect the net result.
@@ -120,7 +122,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 | Rule | Loads for | Covers |
 |---|---|---|
-| [`data-access.md`](.claude/rules/data-access.md) | `**/*.ts` | `RunView`/`RunViews`, `ResultType`/`Fields`, `BaseEntity` Save/Delete error handling, entity metadata lookup (`EntityByName`), per-provider `Metadata` scoping, caching + `BaseEngine`/`BaseEngineRegistry`, keyset pagination, `UserInfoEngine` preferences |
+| [`data-access.md`](.claude/rules/data-access.md) | `**/*.ts` | No hand-written SQL DML, `RunView`/`RunViews`, `ResultType`/`Fields`, `BaseEntity` Save/Delete error handling, entity metadata lookup (`EntityByName`), per-provider `Metadata` scoping, caching + `BaseEngine`/`BaseEngineRegistry`, keyset pagination, `UserInfoEngine` preferences |
 | [`typescript-style.md`](.claude/rules/typescript-style.md) | `**/*.ts` | No `any`, no `.Get()`/`.Set()`, derive field types from the entity, no cross-package re-exports, `BaseSingleton`, no dynamic `import()`, naming conventions, functional decomposition, OOD |
 | [`design-tokens.md`](.claude/rules/design-tokens.md) | `**/*.scss`, `**/*.css` | No hardcoded colors, the semantic token catalog, hex→token mappings, `color-mix()`, the CI gates |
 | [`testing.md`](.claude/rules/testing.md) | `**/*.test.ts`, `**/__tests__/**` | Vitest conventions, test structure, the scaffold script, fixing test drift, CI integration |

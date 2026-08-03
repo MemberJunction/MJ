@@ -10,6 +10,70 @@ caching, and the performance patterns that go with them.
 
 ---
 
+## 🚨 NEVER HAND-WRITE SQL DML AGAINST MJ ENTITY TABLES 🚨
+
+**All writes to MJ entity tables go through `BaseEntity.Save()` / `Delete()`.** Never hand-write
+`INSERT`, `UPDATE`, `DELETE`, or `MERGE` from application code — not via `provider.ExecuteSQL(...)`,
+not via a raw connection, not "just for this one bulk case."
+
+```typescript
+// ❌ WRONG — bypasses the entire save pipeline, silently
+await provider.ExecuteSQL(`INSERT INTO ${schema}.Score (ID, Value) VALUES ('${id}', ${value})`, ...);
+
+// ✅ CORRECT
+const score = await md.GetEntityObject<ScoreEntity>('Scores', contextUser);
+score.NewRecord();
+score.Value = value;
+if (!await score.Save()) LogError(score.LatestResult?.CompleteMessage);
+```
+
+### What direct DML silently skips
+
+`BaseEntity.Save()` is not a thin wrapper around an `INSERT`. The provider's save pipeline
+(`databaseProviderBase.Save()`) runs a sequence of steps, and raw SQL gets none of them:
+
+| Skipped | Consequence |
+|---|---|
+| Field validation | Invalid data lands in the table with no error |
+| **Entity Actions** (`Validate` / `Before*` / `After*`) | Configured workflow hooks never fire. `Validate` is a real blocking gate, so a business rule someone configured as metadata is simply not enforced |
+| **Record Changes** | No audit history for those rows. MJ's built-in version control has a hole in it |
+| Cache invalidation | Server-side caches keep serving pre-write data until something else evicts them |
+| Geocoding sync, ISA sibling propagation, `OnSaveCompleted` patches | Any provider-level post-save behavior for that entity |
+
+None of these fail loudly. The rows appear, everything looks fine, and the gaps surface much later
+as "why is there no history for these records" or "why didn't that workflow run."
+
+### Bulk and long-running work
+
+If the reason you reached for raw SQL is volume — a scheduled recompute, an import, a bulk
+update over thousands of records — the answer is **Record Set Processing**, not hand-rolled SQL.
+It owns batching, bounded concurrency, rate limiting, an error-rate circuit breaker, progress,
+pause/cancel/resume, per-record isolation, and a persisted audit trail in `MJ: Process Runs`.
+See [`guides/RECORD_SET_PROCESSING_GUIDE.md`](../../guides/RECORD_SET_PROCESSING_GUIDE.md).
+
+**Be aware of the tradeoff, and don't work around it silently.** RSP is an *orchestration*
+substrate: `IRecordProcessor.ProcessRecord` handles one record at a time, and its write-back path
+calls `Save()` per row. There is no set-based write primitive on the provider surface today
+(no `BulkSave`, no `SaveMany`), and `TransactionGroup` gives atomicity rather than a reduced
+statement count. So a high-volume write is N round trips times writes-per-record, and that is the
+current, accepted cost of a correct write.
+
+If that cost is genuinely prohibitive for your workload, **raise it as a framework gap** — a bulk
+write seam that still fires hooks and records changes would serve every app. Do not solve it
+privately with a SQL string builder; that is how this rule gets violated in shipped code.
+
+### Where raw SQL IS legitimate
+
+- **Reads.** Prefer `RunView` / `RunViews` / `RunQuery`. `provider.ExecuteSQL` for a genuinely
+  set-based read (aggregates, compiled declarative queries) is a judgment call, not a violation.
+  Parameterize it — never interpolate user input.
+- **Migrations.** That's what they're for. See [`migrations/CLAUDE.md`](../../migrations/CLAUDE.md).
+- **View and stored-proc bodies**, which CodeGen owns and generates.
+- **CodeGen-generated code.** Don't hand-edit it, and don't copy its `ExecuteSQL` calls as a
+  pattern for your own code — it operates at a layer below this rule.
+
+---
+
 ## Entity Metadata Best Practices (CRITICAL)
 
 ### 🚨 GROUND TRUTH FOR SCHEMA IS THE ORM LAYER — NOT MIGRATIONS 🚨
