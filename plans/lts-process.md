@@ -1,15 +1,15 @@
 # MemberJunction LTS Release Process
 
-> **Status: PROPOSAL** — v1.3.4, 2026-08-02. Owner: Craig Adam (certification owner).
+> **Status: CANON** — v1.3.4, adopted 2026-08-03 (PR #3241 merged with exec acceptance: "until we determine at some point what would improve it, yes, I'm 100% on board" — Amith). Owner: Craig Adam (certification owner).
 > v1.3.4 promotes §14 mitigation 2 from contingency to plan: the bootstrap certification completes on the 5.x line branch (§5.1, §14). It adds the respin policy + evidence carry-over rules (§14.1), corrects the bootstrap line name to `lts/5` (Appendix B — a spec correction, no branch existed yet), records the line-publish choreography with the completed dry-check's findings (§14.1), and adds a third migration tier — `codegen-repair`, `dbImpact: repair` — for generated-object repair on a line (§12, §10, §5.2, Appendix B, plus schema/validator/tests).
 > v1.3.3 folds in the third review round (tooling-focused): honest candidacy-window wording + deprecate-on-withdraw + release-lines-driven version resolution (§3.1, §4.2, §15 item 7), the gate-4 `mj sync push` no-op assertion + plain-install rule (§6, §14), the routine-publish `latest` era gate (publish.yml), CODEOWNERS coverage for the enforcement chain itself, the stated ruleset assumption behind the push freeze (§8), certified-tag-checkout guidance for the dist-tag flip, a dual-certified-lines validator warning, and manifest reconciliation (rxjs + npm pins joined the era platform blocks).
 > v1.3.2 folds in the second review round: the Edge-host compatibility coercion (§3.2, §15 item 5) + fresh-install range enforcement (#3310, §15 item 10), the PUBLISH_NO_BREAK supersession (§3.2, §17), the one-copy guard extended to the MJ registry packages + mechanism-neutral wording (§3.2, §13.1, Appendix C), a dedicated cert DB for gate 2 (§6), and the DDL scanner named as tripwire (§5.2).
 > v1.3.1 folds in three review-round items (from Marcelo's feedback): line-pinning guidance (§4.2), the `mjVersionRange`-agreement `mj doctor` check (§3.2, §13.1, §15 item 10), and the Appendix C release-note ask. It also lands the queued consumption-guidance edits: continuous Edge tracking via the dist-tag specifier + the publish-window skew caveat (§4.2, Appendix B), the per-release `dbImpact` ledger on the `edge` block (§4.1, with matching schema/validator support), and the true lockstep package count (294, was 233).
 > v1.3 folds in the alignment items from the Open App local-dev program: mechanism-neutral consumption wording (§3.2), pnpm joins the platform manifest (§4.1), a peer-deps ≡ platform-manifest certification check (gate 1), the no-write-through rule (§13.1), and a local-dev tooling RACI row (§7).
 > v1.2 replaced v1.1's reserved-minor-band design with the **Edge-prerelease version grammar** (§3.1): normal semver versions are certified/candidate builds only; Edge releases are semver prereleases of the next line. Introduced **all at once** at the 6.x era open — no staged transition. The band, and its open band-size question, are gone.
-> Under team review: comments requested from Robert Kihm, John, and Johanna Snider; scan requested from the wider group tagged on the PR. On merge, this document becomes canon.
-> Decisions explicitly open: **starting cadence** (§9.1). Gating prerequisite: the **changesets pre-mode dry run** (§15 item 5).
-> Follow-ups on this branch after blessing: punch-list items 1–3 (§15) and a root-level `VERSIONING.md` distillation for humans and agents.
+> Amendments follow the same PR flow (proposal on a branch, review, merge); the document remains canon between amendments.
+> Decisions explicitly open: **starting cadence** (§9.1).
+> Post-adoption follow-ups: remaining §15 punch-list items (incl. `publish-lts.yml`), the P.8 `PUBLISH_NO_BREAK_POLICY.md` amendment (§3.2 supersession), and a root-level `VERSIONING.md` distillation for humans and agents.
 
 ---
 
