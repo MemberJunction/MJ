@@ -187,8 +187,8 @@ export interface LazyChunk {
     subpath: string;
     /** The full import path for dynamic import (e.g., '@memberjunction/ng-dashboards/ai-dashboards.module') */
     importPath: string;
-    /** The generated variable name for the loader function */
-    loaderVarName: string;
+    /** The generated variable name for the chunk descriptor ({ chunkId, load }) */
+    chunkVarName: string;
     /** The @RegisterClass entries (base class + key pairs) that map to this chunk */
     entries: LazyChunkEntry[];
 }
@@ -1586,7 +1586,7 @@ function groupClassesIntoChunks(
                 packageName: cls.packageName,
                 subpath,
                 importPath,
-                loaderVarName: buildLoaderVarName(cls.packageName, subpath),
+                chunkVarName: buildChunkVarName(cls.packageName, subpath),
                 entries: []
             });
         }
@@ -1607,35 +1607,35 @@ function groupClassesIntoChunks(
     }
 
     const sorted = Array.from(chunks.values()).sort((a, b) => a.importPath.localeCompare(b.importPath));
-    uniquifyLoaderVarNames(sorted);
+    uniquifyChunkVarNames(sorted);
     return sorted;
 }
 
 /**
- * Ensures every chunk's loader variable name is unique in the generated file. Subpath-derived
+ * Ensures every chunk's descriptor variable name is unique in the generated file. Subpath-derived
  * names collide when two packages expose the same subpath export (e.g. './plugins' in both
  * codegen-lib and metadata-sync produced two `const loadPlugins` → TS2451). Non-colliding
  * names are left untouched so existing generated files don't churn; every member of a colliding
  * group is package-qualified, which is deterministic regardless of chunk discovery order.
  */
-function uniquifyLoaderVarNames(chunks: LazyChunk[]): void {
+function uniquifyChunkVarNames(chunks: LazyChunk[]): void {
     const byName = new Map<string, LazyChunk[]>();
     for (const chunk of chunks) {
-        const group = byName.get(chunk.loaderVarName) ?? [];
+        const group = byName.get(chunk.chunkVarName) ?? [];
         group.push(chunk);
-        byName.set(chunk.loaderVarName, group);
+        byName.set(chunk.chunkVarName, group);
     }
 
     for (const [name, group] of byName.entries()) {
         if (group.length < 2) continue;
         const suffix = name.replace(/^load/, '');
         group.forEach((chunk, index) => {
-            const qualified = `${buildLoaderVarName(chunk.packageName, '.')}${suffix}`;
+            const qualified = `${buildChunkVarName(chunk.packageName, '.')}${suffix}`;
             // Same package + same-named subpaths can't happen (chunkKey is unique per subpath),
             // but guard against pathological sanitized-name ties with an index suffix.
             const stillTaken = group.some((other, i) => i < index &&
-                `${buildLoaderVarName(other.packageName, '.')}${suffix}` === qualified);
-            chunk.loaderVarName = stillTaken ? `${qualified}${index}` : qualified;
+                `${buildChunkVarName(other.packageName, '.')}${suffix}` === qualified);
+            chunk.chunkVarName = stillTaken ? `${qualified}${index}` : qualified;
         });
     }
 }
@@ -1685,7 +1685,7 @@ function findClassSubpathByFile(
 }
 
 /**
- * Builds a deterministic loader variable name from a package name and subpath.
+ * Builds a deterministic chunk-descriptor variable name from a package name and subpath.
  *
  * Both package name and subpath are included to prevent collisions when
  * different packages export the same subpath (e.g. two packages both
@@ -1697,7 +1697,7 @@ function findClassSubpathByFile(
  *   ('@memberjunction/codegen-lib', './plugins')                → 'loadCodegenLibPlugins'
  *   ('@memberjunction/metadata-sync', './plugins')              → 'loadMetadataSyncPlugins'
  */
-function buildLoaderVarName(packageName: string, subpath: string): string {
+function buildChunkVarName(packageName: string, subpath: string): string {
     const pkgParts = sanitizePackageName(packageName).split('_').filter(Boolean);
     const pkgPascal = pkgParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
 
@@ -1733,34 +1733,38 @@ function generateLazyConfigContent(chunks: LazyChunk[]): string {
         ' * When ClassFactory.GetRegistrationAsync() or CreateInstanceAsync() cannot find a',
         ' * registration synchronously, the registered lazy loader builds the compound key and',
         ' * looks it up here to dynamically import the chunk containing the class.',
+        ' *',
+        ' * Every entry carries an explicit `chunkId` — the dynamic import specifier — because many',
+        ' * compound keys share one chunk and the registry must be able to tell those chunks apart.',
+        ' * Do NOT collapse these into a shared helper that returns a closure: closures built by the',
+        ' * same helper are indistinguishable by identity-adjacent means (e.g. Function.toString()),',
+        ' * which silently merges all chunks into one.',
         ' */',
-        '',
-        '/** Helper to create a loader that all entries in a feature share. */',
-        'function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {',
-        '  return () => importFn().then(() => {});',
-        '}',
         ''
     ];
 
-    // Emit one loader variable per chunk
+    // Emit one chunk descriptor per chunk
     for (const chunk of chunks) {
         lines.push(`// --- ${chunk.packageName} → ${chunk.subpath} (${chunk.entries.length} entries) ---`);
-        lines.push(`const ${chunk.loaderVarName} = featureLoader(() => import('${chunk.importPath}'));`);
+        lines.push(`const ${chunk.chunkVarName} = {`);
+        lines.push(`  chunkId: '${chunk.importPath}',`);
+        lines.push(`  load: () => import('${chunk.importPath}').then(() => {})`);
+        lines.push('};');
         lines.push('');
     }
 
     // Emit the config record with compound keys
     lines.push('/**');
-    lines.push(' * Complete mapping of compound keys (BaseClassName::Key) to lazy-loading functions.');
+    lines.push(' * Complete mapping of compound keys (BaseClassName::Key) to their chunk descriptor.');
     lines.push(' * Covers all @RegisterClass decorated classes in lazy-loaded packages.');
     lines.push(' */');
-    lines.push('export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {');
+    lines.push('export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => Promise<void> }> = {');
 
     for (const chunk of chunks) {
         lines.push(`  // ${chunk.packageName} → ${chunk.subpath}`);
         for (const entry of chunk.entries) {
             const compoundKey = `${entry.baseClassName}::${entry.key}`;
-            lines.push(`  '${compoundKey}': ${chunk.loaderVarName},`);
+            lines.push(`  '${compoundKey}': ${chunk.chunkVarName},`);
         }
         lines.push('');
     }

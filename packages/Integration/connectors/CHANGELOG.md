@@ -1,5 +1,17 @@
 # @memberjunction/integration-connectors
 
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/external-data-sources@5.51.0
+  - @memberjunction/integration-engine@5.51.0
+  - @memberjunction/integration-engine-base@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/global@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @memberjunction/ng-shared-generic
 
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/theme-engine@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes
