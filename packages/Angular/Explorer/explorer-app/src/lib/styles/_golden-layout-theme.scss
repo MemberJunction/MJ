@@ -129,6 +129,9 @@
   font-weight: 900;
 }
 
+/* Tab overflow is handled by the SCROLLING strip (see tab-container CSS +
+   GoldenLayoutManager settingsConfig) — GL's lm_tabdropdown menu never
+   activates, so it gets no theme treatment. */
 .lm_header .lm_controls .lm_tabdropdown::before {
   color: var(--mj-text-secondary);
 }

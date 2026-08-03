@@ -272,12 +272,80 @@ mj-tab-container .lm_header {
   box-sizing: border-box !important;
 }
 
+/* SCROLLING TAB STRIP (browser-tab pattern, Matt's call over GL's overflow
+   dropdown): tabs keep natural width and the strip scrolls horizontally.
+   Works with settingsConfig()'s effectively-infinite tabOverlapAllowance —
+   GL then never re-homes tabs to its dropdown, only writes inline zIndex +
+   negative marginLeft, both neutralized here. Scrollbar hidden per the
+   browser-tab convention; wheel input is translated to horizontal scroll by
+   GoldenLayoutManager.onStripWheel, and activation scrolls the tab into view. */
 mj-tab-container .lm_tabs {
   height: 36px !important;
+  left: 0;
+  right: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
 }
 
-/* Hide Golden Layout window controls */
-mj-tab-container .lm_controls {
+mj-tab-container .lm_tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* Strip nudge arrows — the VISIBLE overflow affordance (created by
+   GoldenLayoutManager.updateStripNudges, one pair per header, [hidden]
+   unless that direction has more tabs). The gradient doubles as the
+   "content continues" edge fade. */
+mj-tab-container .mj-strip-nudge {
+  position: absolute;
+  top: 0;
+  height: 36px;
+  width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  padding: 0;
+  margin: 0;
+  z-index: 3; /* above tabs (z 1/2) within the header context */
+  font-size: 11px;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+
+mj-tab-container .mj-strip-nudge[hidden] {
+  display: none;
+}
+
+mj-tab-container .mj-strip-nudge--left {
+  left: 0;
+  background: linear-gradient(to right, var(--mj-bg-surface-sunken) 55%, transparent);
+  justify-content: flex-start;
+  padding-left: 6px;
+}
+
+mj-tab-container .mj-strip-nudge--right {
+  right: 0;
+  background: linear-gradient(to left, var(--mj-bg-surface-sunken) 55%, transparent);
+  justify-content: flex-end;
+  padding-right: 6px;
+}
+
+mj-tab-container .mj-strip-nudge:hover {
+  color: var(--mj-text-primary);
+}
+
+mj-tab-container .mj-strip-nudge:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: -2px;
+}
+
+/* Hide Golden Layout WINDOW controls (popout/maximise/stack-close). The
+   scrolling strip replaces GL's lm_tabdropdown overflow menu entirely (it
+   never activates with the infinite overlap allowance). */
+mj-tab-container .lm_controls .lm_popout,
+mj-tab-container .lm_controls .lm_maximise,
+mj-tab-container .lm_controls .lm_close {
   display: none !important;
 }
 
@@ -295,6 +363,11 @@ mj-tab-container .lm_header .lm_tab {
   padding: 0 9px !important;
   font-size: 13px !important;
   height: 35px !important;
+  /* Scrolling strip: tabs are flex items of .lm_tabs — never let them
+     shrink to "fit" (that's what the strip's scroll is for), and zero out
+     the negative overlap margins GL writes inline when tabs overflow. */
+  flex: 0 0 auto !important;
+  margin-left: 0 !important;
   line-height: 35px !important;
   box-sizing: border-box !important;
   cursor: pointer !important;

@@ -37,6 +37,18 @@ interface GLLayoutItem {
 
 interface GLLayoutConfig {
   root: GLLayoutNode;
+  /**
+   * SCROLLING TAB STRIP: golden-layout's native overflow handling either
+   * overlaps tabs (negative margins) or re-homes them into a dropdown menu
+   * once `settings.tabOverlapAllowance` is exceeded. The shell renders a
+   * browser-style SCROLLING strip instead: an effectively-infinite allowance
+   * keeps every tab in the strip (GL then only writes inline zIndex +
+   * marginLeft, both neutralized by the shell's CSS), and `.lm_tabs`
+   * scrolls horizontally.
+   */
+  settings?: {
+    tabOverlapAllowance: number;
+  };
   header?: {
     // Golden Layout's Header.show is `false | Side` — false renders NO tab
     // strip at all ("splitters only"), which is how the records region goes
@@ -140,6 +152,90 @@ export class GoldenLayoutManager {
   private hideHeaders = false;
 
   /**
+   * Vertical wheel over a tab strip scrolls it horizontally. Delegated from
+   * the container (strips are created/destroyed by GL as stacks come and
+   * go); bound field so Destroy can remove it from the persistent container.
+   */
+  private onStripWheel = (e: WheelEvent): void => {
+    const strip = (e.target as HTMLElement | null)?.closest?.('.lm_tabs') as HTMLElement | null;
+    if (!strip || strip.scrollWidth <= strip.clientWidth) {
+      return; // not over a strip, or nothing to scroll
+    }
+    const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (delta !== 0) {
+      strip.scrollLeft += delta;
+      e.preventDefault();
+    }
+  };
+
+  /**
+   * Strip scroll events (capture phase — scroll doesn't bubble) keep the
+   * nudge arrows' visibility in sync while the user scrolls.
+   */
+  private onStripScroll = (e: Event): void => {
+    const target = e.target as HTMLElement | null;
+    if (target?.classList?.contains('lm_tabs')) {
+      this.updateStripNudges();
+    }
+  };
+
+  /**
+   * VISIBLE overflow affordance for the scrolling tab strip (Matt's call —
+   * hidden-scrollbar-plus-wheel alone is power-user-only): ‹ › nudge buttons
+   * at the strip's edges, shown only in the direction(s) with more tabs.
+   * One pair per header (splits have a strip per stack), created lazily and
+   * kept in sync by the same coalesced pass that styles tabs.
+   */
+  private updateStripNudges(): void {
+    if (!this.containerElement) {
+      return;
+    }
+    const headers = this.containerElement.querySelectorAll<HTMLElement>('.lm_header');
+    headers.forEach(header => {
+      const strip = header.querySelector<HTMLElement>('.lm_tabs');
+      if (!strip) {
+        return;
+      }
+      let left = header.querySelector<HTMLButtonElement>('.mj-strip-nudge--left');
+      let right = header.querySelector<HTMLButtonElement>('.mj-strip-nudge--right');
+      if (!left || !right) {
+        left = this.createStripNudge(header, strip, 'left');
+        right = this.createStripNudge(header, strip, 'right');
+      }
+      const overflowing = strip.scrollWidth > strip.clientWidth + 1;
+      const canLeft = overflowing && strip.scrollLeft > 1;
+      const canRight = overflowing && strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
+      left.hidden = !canLeft;
+      right.hidden = !canRight;
+    });
+  }
+
+  private createStripNudge(header: HTMLElement, strip: HTMLElement, direction: 'left' | 'right'): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `mj-strip-nudge mj-strip-nudge--${direction}`;
+    button.setAttribute('aria-label', direction === 'left' ? 'Scroll tabs left' : 'Scroll tabs right');
+    button.hidden = true;
+    const icon = document.createElement('i');
+    icon.className = `fa-solid fa-chevron-${direction}`;
+    icon.setAttribute('aria-hidden', 'true');
+    button.appendChild(icon);
+    button.addEventListener('click', (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const step = Math.max(120, Math.floor(strip.clientWidth * 0.6));
+      const reduceMotion = typeof window !== 'undefined'
+        && typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      strip.scrollBy({ left: direction === 'left' ? -step : step, behavior: reduceMotion ? 'auto' : 'smooth' });
+    });
+    // Keep GL's header mousedown handlers (drag/select) away from the button
+    button.addEventListener('mousedown', (e: MouseEvent) => e.stopPropagation());
+    header.appendChild(button);
+    return button;
+  }
+
+  /**
    * True when Golden Layout has been initialized and not yet destroyed.
    * Use this from external callers (e.g. tab-container) to avoid issuing
    * AddTab/RemoveTab against a torn-down layout.
@@ -217,6 +313,7 @@ export class GoldenLayoutManager {
         type: 'row',
         content: []
       },
+      settings: this.settingsConfig(),
       header: this.headerConfig()
     };
 
@@ -241,12 +338,26 @@ export class GoldenLayoutManager {
     });
 
     this.layout.on('activeContentItemChanged', (item: unknown) => {
-      const typedItem = item as { container?: { state?: TabComponentState } };
+      const typedItem = item as { container?: { state?: TabComponentState; tab?: { element?: HTMLElement } } };
       const state = typedItem?.container?.state;
       if (state?.tabId) {
         this.activeTab$.next(state.tabId);
       }
+      // Scrolling strip: keep the newly-active tab in view (no-op when the
+      // strip isn't overflowing; guarded for test DOMs without the API)
+      const tabElement = typedItem?.container?.tab?.element;
+      if (tabElement && typeof tabElement.scrollIntoView === 'function') {
+        tabElement.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+      }
     });
+
+    // Scrolling strip: translate vertical wheel/trackpad input over the tab
+    // strip into horizontal scroll (browser-tab convention — the strip hides
+    // its scrollbar, so the wheel is the mouse user's only scroll input).
+    this.containerElement.addEventListener('wheel', this.onStripWheel, { passive: false });
+    // Capture phase: scroll doesn't bubble — this keeps the nudge arrows'
+    // visibility in sync with user scrolling on any strip in the container.
+    this.containerElement.addEventListener('scroll', this.onStripScroll, true);
 
     // Load the empty config to establish root structure
     // This MUST be done before adding any components
@@ -283,6 +394,7 @@ export class GoldenLayoutManager {
       if (rect.width > 0 && rect.height > 0) {
         this.layout.setSize(rect.width, rect.height);
       }
+      this.updateStripNudges();
     }
   }
 
@@ -290,6 +402,11 @@ export class GoldenLayoutManager {
    * Destroy the Golden Layout instance
    */
   Destroy(): void {
+    // The container element PERSISTS across Destroy/Initialize cycles
+    // (breakpoint rebuilds) — release the delegated listeners or each
+    // cycle stacks another set.
+    this.containerElement?.removeEventListener('wheel', this.onStripWheel);
+    this.containerElement?.removeEventListener('scroll', this.onStripScroll, true);
     if (this.layout) {
       this.layout.destroy();
       this.layout = null;
@@ -675,8 +792,17 @@ export class GoldenLayoutManager {
       slot.addEventListener('click', (e: MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        // Anchor the menu under the slot — EXCEPT when the slot lives in a
+        // row of the tab-overflow dropdown: GL's document-mouseup listener
+        // hides that list before this click handler runs, so the rect
+        // measures 0x0 at the origin (the menu "floats to the top left").
+        // A hidden anchor's coordinates are garbage — fall back to the
+        // pointer position (keyboard activation still has a live rect).
         const rect = slot!.getBoundingClientRect();
-        this.tabRightClicked.next({ tabId: state.tabId, x: rect.left, y: rect.bottom + 2, anchorEl: slot! });
+        const anchorVisible = rect.width > 0 || rect.height > 0;
+        const x = anchorVisible ? rect.left : e.clientX;
+        const y = anchorVisible ? rect.bottom + 2 : e.clientY;
+        this.tabRightClicked.next({ tabId: state.tabId, x, y, anchorEl: anchorVisible ? slot! : undefined });
       });
       // GL's own tab handlers listen for keydown/mousedown on the tab — keep
       // keyboard activation of the slot from leaking into tab drag/select.
@@ -718,6 +844,8 @@ export class GoldenLayoutManager {
           this.applyTabStyles(container, state);
         }
       });
+      // Tab set / widths may have changed — re-resolve nudge visibility
+      this.updateStripNudges();
     }, 50);
   }
 
@@ -752,7 +880,19 @@ export class GoldenLayoutManager {
 
     return {
       root: sanitizedRoot as GLLayoutNode,
+      settings: this.settingsConfig(),
       header: this.headerConfig()
+    };
+  }
+
+  /**
+   * Layout-level settings for every config this manager loads. The huge
+   * tabOverlapAllowance is what makes the scrolling tab strip possible —
+   * see the GLLayoutConfig.settings doc comment.
+   */
+  private settingsConfig(): NonNullable<GLLayoutConfig['settings']> {
+    return {
+      tabOverlapAllowance: 1_000_000_000
     };
   }
 
