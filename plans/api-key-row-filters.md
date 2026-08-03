@@ -19,6 +19,16 @@
 > either storage option, because without it the save-time validation is bypassable by editing `FilterText` after attaching.
 > Migration written (§8 Phase 2). §9.2 (`full_access` semantics) also resolved: the combination is **invalid and rejected**,
 > not silently resolved either way — see §5.6.1. **No decisions remain blocking implementation.**
+>
+> **v2.2 changelog — post-review (PR #3409, cadam11).** All four review observations verified against source and adopted:
+> (1) §5.9's coverage claim was overstated — `query:run`/`query:test`/`dataset:read`/`report:run` bypass RLS entirely
+> (queries by documented design; the query cache carries **no user segment**); new §5.10 is the scope×RLS matrix, with v1
+> denying those scopes to filtered keys. (2) Binding mechanics answered concretely in §5.5.1 (per-request stamp on the
+> cloned `UserInfo`; staleness = `scopeCacheTTLMs`, same envelope as scope enforcement; object-valued stamps are outside the
+> token surface). (3) §5.6 rows 3/4 escalated from warn/document to **startup refusal**. (4) WS1/WS2 split into their own
+> PR; §3.2's "reordering" wording fixed — nothing existing moves. Verification also surfaced rule shadowing (§5.4: a
+> higher-priority unfiltered rule would silently defeat a filter; evaluation now ANDs all matching filters) and a
+> stamp-dropping `UserCache` re-fetch in `ReportResolver` (§5.6 row 11).
 
 ---
 
@@ -102,8 +112,14 @@ exists to constrain**, and it would pass any test written with a narrow-role fix
 
 ### 2.3 Per-session context on `UserInfo`
 
-`UserInfo` carries four per-session context objects, all non-enumerable getter/setter pairs over `_`-prefixed backing fields:
-`TenantContext`, `MagicLinkScope`, `ReturningVisitorContext`, `WidgetGuestContext` (`securityInfo.ts:200-278`).
+`UserInfo` carries four per-session context objects — `TenantContext`, `MagicLinkScope`, `ReturningVisitorContext`,
+`WidgetGuestContext` — as getter/setter pairs over `_`-prefixed backing fields (`securityInfo.ts:200-278`). A precision that
+matters for the token-surface analysis in §5.5.1: the **getters** are non-enumerable prototype accessors, but the **backing
+fields are enumerable own properties** (declared with initializers under `useDefineForClassFields: false`, so they become
+constructor assignments). What keeps context objects out of `MarkupFilterText`'s `{{UserX}}` token surface is not
+enumerability — it is the `typeof val !== 'object'` guard at `securityInfo.ts:470`, which skips object-valued properties.
+The one scalar backing field, `_IsMagicLinkAnonymous`, *does* enter the token surface (as `{{User_IsMagicLinkAnonymous}}`);
+no filter authors that token today, and §5.3's vocabulary check keeps underscore tokens out of key filters.
 
 `buildMagicLinkSessionUser` (`packages/MJServer/src/context.ts:202`) constructs a **fresh** `UserInfo` before setting any of
 these. The comment at `:197-200` states why: *"the resolved userRecord may be a SHARED cached instance … mutating it would
@@ -213,9 +229,12 @@ win; it is a vulnerability with a benchmark attached.
 
 **Hook ordering.** The post-image check must run **after** `OnBeforeSaveExecute` (`databaseProviderBase.ts:1347`), not before.
 Before-save hooks (entity actions, AI actions, the multi-tenancy `PreSaveHook`) can mutate field values, including
-filter-referenced ones. A check that runs before them validates a state that is not what gets written. Note this reorders the
-current sequence — RLS currently runs at step 2b, before the before-save hook at step 3 — so the pre-image check stays where
-it is and the new post-image check is inserted after hooks complete.
+filter-referenced ones. A check that runs before them validates a state that is not what gets written.
+
+To be precise about what changes, because an earlier draft's wording invited misreading: **nothing existing moves.** The
+pre-image check stays at step 2b and `OnBeforeSaveExecute` stays at step 3; the post-image check is a *new* step inserted
+after hooks complete, so it validates final values. No existing hook's ordering or inputs change. The only difference hooks
+observe is that their mutations now land *inside* the authorization boundary instead of after it — which is the point.
 
 ### 3.3 Scope
 
@@ -408,6 +427,19 @@ Deny **before** any SQL is built:
   type-invalid value → **deny**, with a reason naming the token.
 - A type mismatch denies. It does not coerce, and it does not silently match zero rows.
 
+**Multiple matching rules — a filter cannot be shadowed.** `ScopeEvaluator.evaluateRules` sorts Priority DESC / IsDeny DESC
+and **returns on the first matching allow rule** (`ScopeEvaluator.ts:184-211`); rules sorted below the winner are never
+evaluated and never appear in `EvaluatedRules`. Left as-is, a key holding an unfiltered `Order*` Include rule at higher
+priority plus a filtered exact `Orders` rule would grant **unfiltered** access to Orders — the filter silently defeated,
+invisibly, by a priority number. Worse, same-priority ties fall back to load order of an ORDER-BY-less query
+(`APIKeysEngineBase.ts:120-124` — the `_keyScopes` config has no OrderBy), which is not deterministic across cache reloads.
+
+Required evaluation change: for the resource being authorized, collect **all** matching allow rules; the effective row
+filter is the **AND of every filter carried by any matching allow rule**. An unfiltered matching rule still grants, but
+contributes no filter and cannot cancel one — most-restrictive-wins, always. Deny rules keep their existing trumping
+semantics. This also makes the same-priority nondeterminism moot for filtering (AND is order-independent); add an `OrderBy`
+to the `_keyScopes`/`_appScopes` engine configs anyway so `MatchedKeyRule` is stable across reloads.
+
 **Defense-in-depth substitution must be `(1=0)`, not `''`.** v1 proposed resolving an absent token to the empty string, as
 `MagicLinkScope` does. That is safe for `Col = '{{Tok}}'` but **fails open** for other shapes a filter author may plausibly
 write: `Col <> '{{Tok}}'` matches every row, `Col LIKE '%{{Tok}}%'` matches every row, `Col NOT IN ('{{Tok}}')` matches
@@ -475,6 +507,46 @@ of done:
 Site 4 is the concrete proof of §2.4's argument: `Load()` by PK is covered by RLS and would **not** have been covered by a
 `PreRunViewHook` implementation.
 
+#### 5.5.1 Where the binding lives (mechanics)
+
+`EntityInfo` lives in MJCore, which cannot depend on the APIKeys packages — the dependency points the other way. The
+key→entity→filter binding rows live in `APIKeyScope`, cached by `APIKeysEngineBase`. The bridge is the same one every other
+per-session concern uses: **plain data stamped on `UserInfo`**.
+
+- **Stamp point:** `context.ts`, in MJServer — which sees both sides. After key validation, resolve the key's filtered scope
+  rules from `APIKeysEngineBase` into a compact binding set and stamp it, together with `APIKeyActingContext`, onto the
+  **cloned** per-request `UserInfo` (the WS2 §4.2 helper):
+
+  ```ts
+  interface APIKeyRowFilterBinding {
+      EntityID: string;
+      PermissionType: EntityPermissionType;   // resolved from the rule's scope path at stamp time
+      FilterID: string;
+  }
+  ```
+
+  The scope-path→permission-type mapping is fixed here: `entity:read` and `view:run` → Read, `entity:create` → Create,
+  `entity:update` → Update, `entity:delete` → Delete. Mapping by permission type (not scope path) at the data layer is
+  deliberate — reads reach the provider via more than one scope, and `entity:read` is currently defined but unenforced at the
+  resolver layer (reads gate through `view:run`, see §5.10), so the data layer must not care which resolver scope admitted
+  the call.
+
+- **Consumption:** `GetEffectiveRowFilterWhereClause` reads `user.APIKeyRowFilters` and resolves each `FilterID` via
+  `Metadata.Provider.RowLevelSecurityFilters` — already MJCore-resident, so no dependency inversion.
+- **Staleness:** the binding is rebuilt **per request** (`getUserPayload` runs per request) from the `APIKeysEngineBase`
+  cache, so the staleness envelope is exactly `scopeCacheTTLMs` — identical to scope enforcement itself. No new staleness
+  class is introduced; a key-scope edit propagates on the same schedule as any other scope change.
+- **Token surface:** the binding carrier is object-valued, so `MarkupFilterText`'s `typeof` guard (`securityInfo.ts:470`)
+  keeps it out of the `{{UserX}}` surface (see §2.3). The §5.8 no-client-exposure negative test covers the binding carrier
+  as well as `APIKeyActingContext`.
+- **Downstream propagation — verified:** agent, prompt, action, template, task, and MCP execution all resolve their
+  `contextUser` via `GetUserFromPayload`, which returns `userPayload.userRecord` when present (`ResolverBase.ts:1074-1075`) —
+  and `getUserPayload` always populates it. So stamps flow into engine execution without further work. The verified
+  exception: `ReportResolver.CreateReportFromConversationDetailID` re-fetches the user from `UserCache` by email
+  (`ReportResolver.ts:83`) and runs its entity work under that **unstamped** shared instance. Fix it to use
+  `GetUserFromPayload` as part of WS3, and add a repo test that no resolver resolves its operation `contextUser` from
+  `UserCache` when a payload user exists (§5.6 row 11).
+
 ### 5.6 Bypass inventory — every way the filter could fail to apply
 
 v1 did not enumerate these. Each needs an explicit decision, and the default for all of them is *deny*.
@@ -483,12 +555,15 @@ v1 did not enumerate these. Each needs an explicit decision, and the default for
 |---|---|---|---|
 | 1 | **Role RLS exemption** | `entityInfo.ts:2312` early-returns `''` | Key filter evaluated outside the exemption — §5.5 |
 | 2 | **`full_access` scope** | `ResolverBase.ts:679-692` short-circuits the specific scope check | **DECIDED: the combination is invalid and is rejected, not silently resolved.** `full_access` means unrestricted, so a row filter alongside it is incoherent — one of the two is a lie about what the key can reach. Rather than pick a winner at runtime, forbid the config. See §5.6.1. |
-| 3 | **`enforcementEnabled: false`** | `APIKeyEngine.ts:596` returns `Allowed` unconditionally | Global kill switch — filters off too. Acceptable *only* if startup logs a prominent warning when any filtered scope rule exists while enforcement is disabled. |
-| 4 | **Key has no scope rules + `defaultBehaviorNoScopes: 'allow'`** | `ScopeEvaluator.ts:156-167` allows | No rule ⇒ no filter ⇒ unfiltered access. Document that a filtered deployment must set `'deny'` (already the engine's own default at `APIKeyEngine.ts:144`). |
+| 3 | **`enforcementEnabled: false`** | `APIKeyEngine.ts:596` returns `Allowed` unconditionally | **Startup refusal** (escalated from a warning, per review — a warning is fail-open). `Config()` throws when any row-filtered scope rule exists while enforcement is disabled. Operator remedy: remove the filters or re-enable enforcement. |
+| 4 | **Key has no scope rules + `defaultBehaviorNoScopes: 'allow'`** | `ScopeEvaluator.ts:156-167` allows | **Startup refusal** (escalated from documentation, same rationale). Combined with row 3, this is one invariant: *the presence of any row-filtered scope rule requires the engine to be enforcing and default-deny; violations refuse startup.* `'deny'` is already the engine default (`APIKeyEngine.ts:144`). |
 | 5 | **External-data-source entities** | `assertExternalReadAllowedUnderRLS` (`GenericDatabaseProvider.ts:2509`) refuses reads when RLS applies, **but lets exempt users through** | Must refuse when a *key* filter applies, regardless of role exemption. Otherwise the filter is silently unenforceable on external-backed entities. Migrating this call site to `GetEffectiveRowFilterWhereClause` fixes it. |
 | 6 | **Non-resolver entry points** | Scope checks live in resolvers; MCP/A2A/REST surfaces may not call them | The data-layer filter covers these *because* it is in RLS — but confirm no surface constructs a provider with a principal lacking acting context, which would deny (correct) rather than allow. |
 | 7 | **`APIKeysEngineBase` not `Config`'d** | Cached rules empty → no rules match | Must deny, not allow, when a filtered key is used before the engine loads. Verify the load-order at `MJServer/src/index.ts:672-674`. |
 | 8 | **Dangling `RowFilterID`** | FK prevents it in-DB; a stale cache could hold one | Unresolvable filter ID → deny. |
+| 9 | **Rule shadowing** | `ScopeEvaluator.ts:184-211` — first matching allow wins, evaluation stops; shadowed rules absent even from `EvaluatedRules` | Evaluation change in §5.4: AND every filter carried by any matching allow rule; an unfiltered match grants but cannot cancel a filter. |
+| 10 | **Scopes checked in code but absent from scope metadata** | `report:run`, `template:execute`, `mcp:sync/execute/oauth` have no record in `metadata/api-scopes/.api-scopes.json`; unknown path ⇒ `GetScopeByPath` null ⇒ zero rules ⇒ default-behavior branch | Fail-closed under the row-3/4 invariant (default-deny required). Pre-existing metadata gap — file its own ticket to register the missing scopes. |
+| 11 | **`UserCache` re-fetch drops stamps** | `ReportResolver.ts:83` resolves its operation user from `UserCache` by email, bypassing the stamped payload user; `ResolverBase.ts:757` has a fallback branch | Fix `ReportResolver` to use `GetUserFromPayload`; add a test asserting no resolver resolves its operation `contextUser` from `UserCache` when a payload user exists (§5.5.1). |
 
 #### 5.6.1 `full_access` + row filter is an invalid configuration
 
@@ -569,6 +644,51 @@ GraphQL resolver helper. There is no advisory phase and no `EffectiveFilter` for
 `AuthorizationResult` still gains an optional `EffectiveFilter` — as **observability**, not the enforcement contract: what
 `UsageLogger` records so the audit trail answers "what could this request actually see," and what a consumer inspects when
 debugging a denial. Typed concretely, not as `Record<string, unknown>`.
+
+**Scope qualification (per review):** "every RLS call site" is not "every read path." Three read scopes bypass RLS entirely
+by design and one more is unenforced; §5.10 is the matrix and the decision.
+
+### 5.10 Scope coverage: read paths that bypass RLS
+
+Review of the plan surfaced that §5.9's coverage claim held only for the entity CRUD/view/search paths. Verified against
+source, the full picture:
+
+| Scope | Data path | RLS? | Cache safety |
+|---|---|---|---|
+| `view:run`, `view:batch` | RunView WHERE assembly | ✅ | ✅ fingerprint carries RLS clause |
+| `entity:create/update/delete/merge` | BaseEntity save/delete + RLS checks | ✅ | n/a |
+| `entity:read` | **defined but unenforced** — zero call sites in MJServer; reads gate via `view:run` | (✅ at data layer) | — |
+| `search:execute` | SearchEngine | ✅ (`SearchEngine.ts:1897`) | — |
+| `user:read`, `datacontext:read` (view/entity items) | RunView | ✅ | ✅ |
+| `query:run`, `query:test` | Rendered stored/tested SQL via raw `ExecuteSQL` — **no RLS by documented design** (`GenericDatabaseProvider.ts:3141-3147`: "a saved Query is trusted, admin-authored raw SQL gated by query-level permissions") | ❌ | ❌ **query cache fingerprint carries no user segment** (`providerBase.ts:1859-1860`: "user A's warmed slot is user B's cache hit"); the B43 hit-gate re-authorizes but is binary run/deny — every authorized principal gets identical cached rows |
+| `datacontext:read` (query/SQL items) | inherits the query path | ❌ | ❌ same |
+| `dataset:read` | Per-item `SELECT ... FROM <baseView> WHERE <item filter>` — no RLS clause; resolver doesn't even pass `contextUser` (`DatasetResolver.ts:51`); fingerprint built **without** the RLS argument the cache API documents as mandatory (`GenericDatabaseProvider.ts:4058-4061` vs `localCacheManager.ts:1393-1398`) | ❌ | ❌ cross-user shared slots keyed on `{EntityName, ExtraFilter}` |
+| `report:run` | Stored `ReportSQL` executed verbatim via raw `ExecuteSQL`, no `contextUser` passed (`ReportResolver.ts:56-58`, `databaseProviderBase.ts:2194-2199`); scope not even registered in metadata (row 10) | ❌ | — |
+| `agent/prompt/action/template/task/mcp:*` | Execution scopes — their own data access flows through RunView/BaseEntity under the stamped `contextUser` (§5.5.1) | ✅ inherited | ✅ inherited |
+
+Datasets are seeded metadata-only (`MJ_Metadata`, `ResourceTypes`, `Communication_Metadata`, `Template_Metadata`) but
+nothing constrains them to metadata — `DatasetItem.EntityID` can point at any entity.
+
+**Decision — v1 denies the bypassing scopes for filtered keys.** A key carrying **any** row-filtered scope rule is denied
+`query:run`, `query:test`, `dataset:read`, `report:run`, and any other scope whose path executes raw SQL (confirm the
+ad-hoc-query surface's gate at implementation time), enforced in `Authorize()` alongside the §5.6.1 backstop. Rationale: a
+filtered key that can run an arbitrary saved query against the filtered entity reads it unfiltered — the filter would be
+decoration. Same "start strict, relax later is non-breaking" principle as the exact-entity rule.
+
+**The precise relaxation, for later, is asymmetric:**
+
+- **Datasets: implementable now.** `DatasetItem.EntityID` is a non-nullable FK, and the read path already joins it. "Deny
+  `dataset:read` only when the dataset includes a filtered entity" is a straightforward metadata check.
+- **Queries: NOT safely implementable today.** The `MJ: Query Entities` bridge is best-effort and **fails open**: rows exist
+  only for queries saved through the server entity path (migration-seeded queries have none), the SQL extractor swallows
+  parse errors and records an entity only when it resolves fields, an empty extraction *deletes* existing bridge rows, and
+  explicit Query Permissions short-circuit entity checks entirely (`MJQueryEntityServer.server.ts:71-101`,
+  `resolve.ts:530-562`, `MJQueryEntityExtended.ts:157-175`). A precise deny built on that mapping treats "no bridge rows" as
+  "touches nothing" — fail-open. Any future relaxation must fail closed on absent bridge data.
+
+Also noted while verifying (outside this feature's scope, worth tickets): the query-path cache serving identical rows to all
+authorized principals is a pre-existing property worth revisiting independently, and
+`ReportResolver.CreateReportFromConversationDetailID` builds raw SQL by string-interpolating an ID (`ReportResolver.ts:92-104`).
 
 ---
 
@@ -651,8 +771,15 @@ regression tests — the ones that would pass against a broken implementation if
 - Application ceiling filter and key filter both present → conjoined
 - Caller-supplied `ExtraFilter` present → conjoined, not replaced
 - Token value containing SQL metacharacters → rejected by the type validator before reaching SQL
-- No GraphQL field exposes `APIKeyActingContext`; client cannot set it **[FO]**
+- No GraphQL field exposes `APIKeyActingContext` **or the row-filter binding carrier**; client cannot set either **[FO]**
 - Usage log records the effective filter
+- **Shadowing: unfiltered higher-priority Include rule + filtered exact rule on the same entity → filter applies** **[FO]**
+- Two filtered rules both matching → filters AND together
+- Startup refusal: filtered rule exists + `enforcementEnabled: false` → `Config()` throws
+- Startup refusal: filtered rule exists + `defaultBehaviorNoScopes: 'allow'` → `Config()` throws
+- **Filtered key requesting `query:run` / `query:test` / `dataset:read` / `report:run` → denied** **[FO]** (§5.10)
+- Unfiltered key requesting those scopes → unchanged *(regression)*
+- `ReportResolver` operation user comes from `GetUserFromPayload`, not a `UserCache` re-fetch (§5.6 row 11)
 
 ### 7.4 Integration — deterministic tier
 
@@ -675,7 +802,7 @@ Extend existing suites: `rls-isolation.checks.ts`, `scope-enforcement.checks.ts`
 
 | Phase | Contents | Gate |
 |---|---|---|
-| **1** | WS1 + WS2. No schema changes, no CodeGen. | Both tiers green. Independently shippable. |
+| **1** | WS1 + WS2, **as their own PR** (adopted from review — independently valuable, and they carry both the behavior change and the Postgres quoting change, so they deserve their own review and their own revert). No schema changes, no CodeGen. | Both tiers green. |
 | **2** | **Migration written** — `migrations/v5/V202608021623__v5.52.x__APIKey_Scope_RowFilterID.sql`. Remaining: run it, then `mj codegen`, then append CodeGen's output into the same migration file behind the separator block and delete the standalone `CodeGen_Run_*.sql`. | Generated entity classes expose `RowFilterID` on `MJAPIKeyScopeEntity` and `MJAPIApplicationScopeEntity`. No TypeScript written against them before this completes — see the `.Get()`/`.Set()` prohibition. |
 | **3** | WS3: `GetEffectiveRowFilterWhereClause` + **all** call-site migrations + `APIKeyActingContext` + token resolution + `context.ts` wiring + rule-save validation. | Both tiers green, INV-1/INV-2 asserted. |
 | **4** | Docs: package README trust-boundary section, `guides/UNIFIED_PERMISSIONS_GUIDE.md` update placing the key layer in the permission model. | — |
@@ -710,8 +837,11 @@ Adding nullable columns with FKs is additive and consistent with
    registering up front, given adding one later is a typed code change rather than a migration?
 5. **WS1 blast radius** (§3.5). Do any deployments run an Update RLS filter *and* legitimately reassign a filter-referenced
    column as a non-exempt principal? Given §2.2, "grant exemption" is a poor remedy — prefer widening the filter.
-6. **Should WS1 and WS2 be their own PR?** They are independently valuable, carry a behavior change, and have nothing to do
-   with API keys. Stronger case for splitting now that WS1 includes a hook-ordering change and WS2 a Postgres-affecting
-   identifier-quoting change. Counter-argument: WS3 depends on WS1's correctness and reviewing together shows why.
+6. ~~**Should WS1 and WS2 be their own PR?**~~ — **RESOLVED 2026-08-02: yes, split** (reviewer concurred). §8 Phase 1 ships
+   as its own PR.
 7. **Is the §2.2 exemption looseness worth its own fix now?** WS3 routes around it. Left alone, every role-RLS deployment
    keeps a broader-than-intended exemption. Changing it is behavior-affecting for existing deployments.
+8. **§5.10's v1 wholesale-deny** (filtered keys denied `query:run`/`query:test`/`dataset:read`/`report:run`) is decided in
+   the plan on fail-closed grounds, but it is the one decision added post-review — flagging it for the PR thread so it gets
+   an explicit ack rather than riding in silently. The relaxation path (precise per-target denial) is documented and
+   asymmetric: implementable for datasets now, not safely for queries until the `Query Entities` bridge fails closed.
