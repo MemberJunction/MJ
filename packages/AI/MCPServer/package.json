@@ -25,6 +25,7 @@
     "@memberjunction/actions": "5.51.0",
     "@memberjunction/actions-base": "5.51.0",
     "@memberjunction/ai": "5.51.0",
+    "@memberjunction/ai-agent-manager": "5.51.0",
     "@memberjunction/ai-agents": "5.51.0",
     "@memberjunction/ai-core-plus": "5.51.0",
     "@memberjunction/ai-prompts": "5.51.0",
