@@ -1,0 +1,37 @@
+name: Backport merged pull request
+
+# Line-fix flow (see plans/lts-process.md §5.2 on PR #3241): fixes land on
+# next first, then reach an LTS line by label. Put `backport lts/5` on a
+# merged next PR and this opens the cherry-pick PR against lts/5
+# automatically; conflicts become a draft PR a human finishes. Labeling
+# after the merge also triggers (the `labeled` event type below).
+
+on:
+  pull_request_target:
+    types: [closed, labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  backport:
+    name: Open backport pull request
+    if: >
+      github.repository_owner == 'MemberJunction' &&
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create backport pull requests
+        uses: korthout/backport-action@v3
+        with:
+          # Matches labels of the form `backport <branch>`, e.g. `backport lts/5`
+          label_pattern: ^backport ([^ ]+)$
+          pull_title: "[${target_branch}] ${pull_title}"
+          pull_description: |-
+            Backport of #${pull_number} to `${target_branch}`, opened automatically by the `backport ${target_branch}` label.
+
+            Line rules apply: patch-only; migrations require their §12 label.

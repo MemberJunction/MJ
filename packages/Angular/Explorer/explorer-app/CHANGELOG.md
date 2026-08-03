@@ -1,5 +1,27 @@
 # @memberjunction/ng-explorer-app
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-client@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/ng-bootstrap@6.0.0
+  - @memberjunction/ng-auth-services@6.0.0
+  - @memberjunction/ng-base-application@6.0.0
+  - @memberjunction/ng-explorer-core@6.0.0
+  - @memberjunction/ng-shared@6.0.0
+  - @memberjunction/ng-workspace-initializer@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-conversations@6.0.0
+  - @memberjunction/ng-feedback@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-agent-client@6.0.0
+  - @memberjunction/ng-explorer-service-worker@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes
