@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/actions
 
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/code-execution@5.51.0
+  - @memberjunction/action-runtime@5.51.0
+  - @memberjunction/doc-utils@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes

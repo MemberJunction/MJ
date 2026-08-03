@@ -3,7 +3,7 @@
  *
  * SPLIT TIER: a DETERMINISTIC engine core (RS1/RS2/RS3/RS7 — no LLM, keyword path only) + LIVE agent
  * legs (RS4/RS6). The keyword path is fully deterministic: EntitySearchProvider LIKE over the seeded
- * scope's entity list, MIN_TERM_LENGTH=3 short-circuit, RRF/permission safety-net (SearchEngine.ts).
+ * scope's entity list, below-MIN_TERM_LENGTH short-circuit, RRF/permission safety-net (SearchEngine.ts).
  *
  * SEEDED METADATA (metadata-optional/integration-test/ai-search/): 'IT: Integration Test Scope' — a
  * Database-provider scope over MJ: AI Agent Notes whose entity ExtraFilter is `Note NOT LIKE
@@ -264,10 +264,14 @@ export const AgentRagSearchChecks: NamedCheck[] = [
   },
   {
     Id: 'agent-rag-search.RS7',
-    Name: 'RS7: (deterministic) a sub-3-char query short-circuits — empty success, no provider fan-out',
+    Name: 'RS7: (deterministic) a below-MIN_TERM_LENGTH query short-circuits — empty success, no provider fan-out',
     Fn: async (ctx): Promise<void> => {
       await SearchEngine.Instance.Config({}, ctx.User, false);
-      const res = await SearchEngine.Instance.Search({ Query: 'mj' }, ctx.User); // 2 chars → below MIN_TERM_LENGTH
+      // A SINGLE character, deliberately. SearchEngine.MIN_TERM_LENGTH is private and has already
+      // moved once (3 → 2, so short queries like "AI"/"US" now search), which retired the previous
+      // 2-char input here without failing loudly. One char is below every plausible minimum, so this
+      // check exercises the short-circuit itself rather than tracking the threshold's current value.
+      const res = await SearchEngine.Instance.Search({ Query: 'm' }, ctx.User);
       AssertEqual(res.Success, true, 'a sub-minimum-length query must return empty SUCCESS');
       AssertEqual(res.TotalCount, 0, 'a sub-minimum-length query must return zero results');
       // The short-circuit returns BEFORE any provider fan-out — every source count stays zero.
@@ -276,7 +280,7 @@ export const AgentRagSearchChecks: NamedCheck[] = [
         0,
         'a short-circuited query must not fan out to any source',
       );
-      console.log('      → sub-3-char query short-circuited with no fan-out');
+      console.log('      → below-minimum-length query short-circuited with no fan-out');
     },
   },
   {
