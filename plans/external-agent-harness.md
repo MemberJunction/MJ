@@ -110,7 +110,7 @@ sequenceDiagram
         BA-->>C: surface to user (existing semantics, ChatHandlingOption honored)
     else step = Success / Failed
         BA->>BA: FinalPayloadValidation (Retry re-enters harness with feedback)
-        AD->>H: teardown; revoke key; finalize sandbox
+        AD->>H: teardown — revoke key, finalize sandbox
         BA-->>C: ExecuteAgentResult
     end
 ```
