@@ -5280,7 +5280,18 @@ export class ManageMetadataBase {
 
    protected async createNewEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       try   {
-         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwSQLTablesAndEntities')} WHERE ${this.qi('EntityID')} IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
+         // Exclude the PHYSICAL materialization tables (materialized_<Name>) from new-entity auto-creation.
+         // They are internal snapshot storage, surfaced ONLY through the read-only virtual entity minted over
+         // their wrapper view. On any codegen re-run after a materialization exists, this scan would otherwise
+         // find the physical table (which has no entity of its own) and auto-mint a spurious CRUD entity over
+         // it — user-visible AND editable, letting someone mutate the snapshot the refresher overwrites. The
+         // wrapper view is already excluded (it carries the minted entity, so EntityID IS NOT NULL). The outer
+         // view is aliased `t` so the correlated MaterializedResult subquery can't resolve columns ambiguously.
+         const coreSchema = mj_core_schema();
+         const sSQL = `SELECT t.* FROM ${this.qs(coreSchema, 'vwSQLTablesAndEntities')} t `
+            + `WHERE t.${this.qi('EntityID')} IS NULL `
+            + `AND NOT EXISTS (SELECT 1 FROM ${this.qs(coreSchema, 'MaterializedResult')} mr WHERE mr.${this.qi('SchemaName')} = t.${this.qi('SchemaName')} AND mr.${this.qi('TableName')} = t.${this.qi('TableName')}) `
+            + this.createExcludeTablesAndSchemasFilter('t.');
          const newEntitiesResult = await this.runQuery(pool, sSQL);
       const newEntities = newEntitiesResult.recordset;
 
