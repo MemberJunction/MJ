@@ -1521,6 +1521,14 @@ export class ManageMetadataBase {
          {},
       );
       if (flagged.recordset.length === 0) return { success: true, processedCount: 0, mintedCount: 0 };
+      // Symmetry with the three sibling gates: the per-query loop below also reads/writes the MaterializedResult
+      // TABLE (not just the IsMaterialized column). Don't lean on the "same Foundation migration ships both"
+      // coupling — confirm the table itself exists. If a query is flagged but the table is absent (partial schema),
+      // skip cleanly instead of throwing mid-loop and aborting the whole codegen pass.
+      if (!(await this.materializedResultTableExists(pool))) {
+         logStatus(`    > Query materialization: ${flagged.recordset.length} query(ies) flagged IsMaterialized but the MaterializedResult table is absent on this database — skipping (has the materialization migration been applied?)`);
+         return { success: true, processedCount: 0, mintedCount: 0 };
+      }
 
       const esc = (s: string) => s.replace(/'/g, "''");
       const idLit = (id: string | null | undefined) => (id ? `'${id}'` : 'NULL');
@@ -5955,6 +5963,15 @@ export class ManageMetadataBase {
       sourceEntities: EntityInfo[],
    ): Promise<void> {
       if (!configInfo.newEntityDefaults.PermissionDefaults?.AutoAddPermissionsForNewEntities) {
+         return;
+      }
+      // Fail-closed (C2): with no resolved source entities we cannot prove any role can read EVERY source, so
+      // grant nothing. `sourceEntities.every(...)` is vacuously true on an empty array and would otherwise grant
+      // read to every default role — the exact "read the snapshot without read on a source" leak this method
+      // exists to prevent. Callers already refuse on empty provenance, but guard here too so the security
+      // invariant holds in isolation, not only by a distant caller's gate.
+      if (sourceEntities.length === 0) {
+         logStatus(`    > Materialized entity "${entityName}": no resolved source entities — granting no role-based read (fail-closed).`);
          return;
       }
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
