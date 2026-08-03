@@ -1992,7 +1992,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // build up the param string for the inner query call
                 if (pkeyInnerParamString.length > 0)
                     pkeyInnerParamString += ', ';
-                pkeyInnerParamString += `${field.CodeName}: $${field.CodeName}`;
+                // The GraphQL ARGUMENT name must match the server resolver's @Arg, which sanitizes a '__mj'-prefixed
+                // PK (the materialization surrogate '__mj_MaterializedRowID') to '_mj__…' because GraphQL forbids
+                // names starting with '__'. Mirror that here (same rule as the field-selection mapping below); the
+                // client-side VARIABLE name ($__mj_…) can keep the raw CodeName. Without this, loading a materialized
+                // entity record fails with "Unknown argument __mj_MaterializedRowID … did you mean _mj__…".
+                const pkeyGraphQLArgName = field.CodeName.startsWith('__mj_') ? field.CodeName.replace('__mj_', '_mj__') : field.CodeName;
+                pkeyInnerParamString += `${pkeyGraphQLArgName}: $${field.CodeName}`;
 
                 // build up the variables we are passing along to the query
                 if (field.TSType === EntityFieldTSType.Number) {
