@@ -803,7 +803,7 @@ Extend existing suites: `rls-isolation.checks.ts`, `scope-enforcement.checks.ts`
 | Phase | Contents | Gate |
 |---|---|---|
 | **1** | WS1 + WS2, **as their own PR** (adopted from review — independently valuable, and they carry both the behavior change and the Postgres quoting change, so they deserve their own review and their own revert). No schema changes, no CodeGen. | Both tiers green. |
-| **2** | **Migration written** — `migrations/v5/V202608021623__v5.52.x__APIKey_Scope_RowFilterID.sql`. Remaining: run it, then `mj codegen`, then append CodeGen's output into the same migration file behind the separator block and delete the standalone `CodeGen_Run_*.sql`. | Generated entity classes expose `RowFilterID` on `MJAPIKeyScopeEntity` and `MJAPIApplicationScopeEntity`. No TypeScript written against them before this completes — see the `.Get()`/`.Set()` prohibition. |
+| **2** | **Migration written and STAGED** — `plans/api-key-row-filters-staged/` (T-SQL + PG counterpart + changeset, with an activation README). It was originally committed live under `migrations/v5/`, and CI's deterministic tier **correctly rejected** it: DDL without its CodeGen output leaves views/procs/EntityField metadata inconsistent (IT13/IT36 fail on the `INSERT INTO @ResultTable EXEC spCreate...` column-count mismatch after `R__RefreshMetadata` partially absorbs the new columns). Empirical confirmation of this row's own rule. Activation: move files into place → apply → `mj sync push` → `mj codegen` → append output behind the separator block → restore the changeset. | Generated entity classes expose `RowFilterID` on `MJAPIKeyScopeEntity` and `MJAPIApplicationScopeEntity`. No TypeScript written against them before this completes — see the `.Get()`/`.Set()` prohibition. |
 | **3** | WS3: `GetEffectiveRowFilterWhereClause` + **all** call-site migrations + `APIKeyActingContext` + token resolution + `context.ts` wiring + rule-save validation. | Both tiers green, INV-1/INV-2 asserted. |
 | **4** | Docs: package README trust-boundary section, `guides/UNIFIED_PERMISSIONS_GUIDE.md` update placing the key layer in the permission model. | — |
 
@@ -825,8 +825,8 @@ Adding nullable columns with FKs is additive and consistent with
 
 1. ~~**FK vs inline filter text**~~ — **RESOLVED 2026-08-02: FK to `RowLevelSecurityFilter`.** Reuse is not a requirement,
    so the sharing hazard is forbidden rather than accommodated (§5.1, §5.3 check 6), and the FK's delete protection is a
-   security win an inline column cannot match. Migration written:
-   `migrations/v5/V202608021623__v5.52.x__APIKey_Scope_RowFilterID.sql`.
+   security win an inline column cannot match. Migration written and staged at
+   `plans/api-key-row-filters-staged/` (see §8 Phase 2 for why it is staged rather than live).
 2. ~~**`full_access` semantics**~~ — **RESOLVED 2026-08-02: the combination is invalid and is rejected.** `full_access`
    means unrestricted; a row filter alongside it is incoherent, and either silent resolution is a bug. Rejected at authoring
    time on both sides, with a fail-closed runtime backstop for the cases authoring validation cannot catch (ceiling-granted
