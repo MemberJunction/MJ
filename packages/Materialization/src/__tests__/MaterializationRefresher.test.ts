@@ -93,8 +93,8 @@ describe('MaterializationRefresher.buildFullRebuildStatementsPostgreSQL', () => 
             surrogateColumn: MATERIALIZATION_SURROGATE_COLUMN,
         });
 
-        it('produces the 7-statement sequence (build → swap → repoint + surrogate unique index)', () => {
-            expect(stmts).toHaveLength(7);
+        it('produces the 4-statement sequence (build → interim repoint → one atomic swap batch)', () => {
+            expect(stmts).toHaveLength(4);
         });
 
         it('builds the shadow with the surrogate FIRST via ROW_NUMBER (PG view-column-order strictness)', () => {
@@ -104,13 +104,16 @@ describe('MaterializationRefresher.buildFullRebuildStatementsPostgreSQL', () => 
             expect(stmts[1].indexOf(MATERIALIZATION_SURROGATE_COLUMN)).toBeLessThan(stmts[1].indexOf('src.*'));
         });
 
-        it('repoints via CREATE OR REPLACE VIEW, then drops (CASCADE) / renames / repoints back, then restores the surrogate unique index', () => {
+        it('interim-repoints to the shadow, then drops (CASCADE) / renames / repoints back / restores the surrogate index in ONE atomic transaction', () => {
             expect(stmts[2]).toBe('CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo__shadow"');
-            expect(stmts[3]).toBe('DROP TABLE IF EXISTS __mj."materialized_demo" CASCADE');
-            expect(stmts[4]).toBe('ALTER TABLE __mj."materialized_demo__shadow" RENAME TO "materialized_demo"');
-            expect(stmts[5]).toBe('CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo"');
-            // CREATE TABLE AS carries no constraints → restore the surrogate uniqueness ON CONFLICT relies on.
-            expect(stmts[6]).toBe(`CREATE UNIQUE INDEX ON __mj."materialized_demo" ("${MATERIALIZATION_SURROGATE_COLUMN}")`);
+            const swap = stmts[3];
+            expect(swap.startsWith('BEGIN;')).toBe(true);
+            expect(swap.trimEnd().endsWith('COMMIT;')).toBe(true);
+            expect(swap).toContain('DROP TABLE IF EXISTS __mj."materialized_demo" CASCADE;');
+            expect(swap).toContain('ALTER TABLE __mj."materialized_demo__shadow" RENAME TO "materialized_demo";');
+            expect(swap).toContain('CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo";');
+            // CREATE TABLE AS carries no constraints → restore the surrogate uniqueness ON CONFLICT relies on, inside the tran.
+            expect(swap).toContain(`CREATE UNIQUE INDEX ON __mj."materialized_demo" ("${MATERIALIZATION_SURROGATE_COLUMN}");`);
         });
 
         it('never truncates the live table in place (no TRUNCATE)', () => {
@@ -129,9 +132,11 @@ describe('MaterializationRefresher.buildFullRebuildStatementsPostgreSQL', () => 
             expect(stmts[1]).not.toContain('ROW_NUMBER');
         });
 
-        it('still performs the atomic swap + rename + repoint', () => {
+        it('still performs the atomic swap + rename + repoint (no surrogate index)', () => {
+            expect(stmts).toHaveLength(4);
             expect(stmts[2]).toContain('CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo__shadow"');
-            expect(stmts[4]).toBe('ALTER TABLE __mj."materialized_demo__shadow" RENAME TO "materialized_demo"');
+            expect(stmts[3]).toContain('ALTER TABLE __mj."materialized_demo__shadow" RENAME TO "materialized_demo";');
+            expect(stmts[3]).not.toContain('CREATE UNIQUE INDEX'); // base-view case has no surrogate
         });
     });
 });
@@ -159,7 +164,7 @@ describe('MaterializationRefresher.buildExternalRebuildPlan (Phase 1.5, paramete
         expect(swap).not.toContain('CREATE UNIQUE INDEX'); // no surrogateColumn passed → no index
     });
 
-    it('restores the surrogate UNIQUE index when a surrogateColumn is given (SS inside tran, PG appended)', () => {
+    it('restores the surrogate UNIQUE index when a surrogateColumn is given (inside the swap tran on both engines)', () => {
         const ss = MaterializationRefresher.buildExternalRebuildPlan({
             schema: '__mj', tableName: 'materialized_q', viewName: 'materialized_vwQ',
             columns: [{ name: '__mj_MaterializedRowID', sqlType: 'int' }, { name: 'v', sqlType: 'int' }],
@@ -171,7 +176,10 @@ describe('MaterializationRefresher.buildExternalRebuildPlan (Phase 1.5, paramete
             columns: [{ name: '__mj_MaterializedRowID', sqlType: 'int' }, { name: 'v', sqlType: 'int' }],
             rows: [], isPostgres: true, surrogateColumn: '__mj_MaterializedRowID',
         });
-        expect(pg.postStatements[pg.postStatements.length - 1]).toBe('CREATE UNIQUE INDEX ON __mj."materialized_q" ("__mj_MaterializedRowID")');
+        const pgSwap = pg.postStatements[pg.postStatements.length - 1];
+        expect(pgSwap.startsWith('BEGIN;')).toBe(true);
+        expect(pgSwap.trimEnd().endsWith('COMMIT;')).toBe(true);
+        expect(pgSwap).toContain('CREATE UNIQUE INDEX ON __mj."materialized_q" ("__mj_MaterializedRowID");');
     });
 
     it('escapes the identifier delimiter in a hostile external column name (no break-out)', () => {

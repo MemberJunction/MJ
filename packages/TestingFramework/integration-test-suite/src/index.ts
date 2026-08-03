@@ -58,6 +58,7 @@ export * from './checks/class-resolution.checks';
 export * from './checks/metadata-sync.checks';
 export * from './checks/codegen-determinism.checks';
 export * from './checks/realtime-deterministic.checks';
+export * from './checks/scoped-anon-elevation.checks';
 export * from './checks/search.checks';
 export * from './checks/agent-loop-live.checks';
 export * from './checks/shipped-agents-live.checks';

@@ -1611,49 +1611,48 @@ export class ManageMetadataBase {
               : 'DirtyGroupRecompute';
 
          // RLS downgrade gate (§6.2, ships day one) — a materialized query entity does NOT inherit its
-         // source entities' row-level security. Refuse to materialize when any source entity carries a
-         // read RLS filter, to prevent a silent privilege escalation. Asymmetric risk (§10): over-restriction
-         // is harmless; the dangerous direction (protected → unprotected) must be loud.
+         // source entities' row-level security. Refuse to materialize when RLS-safety cannot be proven, to
+         // prevent a silent privilege escalation. Asymmetric risk (§10): over-restriction is harmless; the
+         // dangerous direction (protected → unprotected) must be loud. The SAME assessment is re-run on every
+         // CodeGen pass by detectMaterializationDrift, so a source that LATER gains RLS holds the existing
+         // materialization AND revokes its read access rather than leaking (see assessQuerySourceRLSSafety).
          const sourceLinks = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'vwQueryEntities')} WHERE QueryID = @QID`, { QID: queryId });
-         // FAIL-CLOSED (§6.2 / §10): the gate can only clear a query as RLS-safe by inspecting its source
-         // entities' permissions. With NO source-entity provenance (raw SQL, un-analyzed query, or missing
-         // vwQueryEntities links) we CANNOT prove the query doesn't read an RLS-protected source — so refuse
-         // rather than silently mint an unprotected entity. The author must run query analysis so the source
-         // entities are linked (then the gate can verify them), or use a base-view materialization (which
-         // reuses the source entity and its RLS). Over-restriction here is harmless; the reverse is a leak.
-         if (sourceLinks.recordset.length === 0) {
+         const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceLinks.recordset.map((r: CodeGenQueryRow) => r.EntityID as string));
+         if (!rlsVerdict.safe) {
             logError(
-               `    > REFUSING to materialize query "${queryName}": no source-entity provenance is recorded (vwQueryEntities is empty for it), so RLS-safety cannot be verified. Run query analysis so its source entities are linked, or use a base-view materialization (which inherits source RLS). Skipping to avoid a silent privilege escalation.`,
+               `    > REFUSING to materialize query "${queryName}": ${rlsVerdict.reason}. Run query analysis so its source entities are linked, or use a base-view materialization (which inherits source RLS). Skipping to avoid a silent privilege escalation.`,
             );
             continue;
          }
-         // Resolve every linked source entity. A link that does NOT resolve to a known EntityInfo (e.g. an
-         // entity excluded from generated metadata but still referenced) can't be RLS-inspected — and if it
-         // secretly carried a Read RLS filter, materializing over it would be the exact silent escalation the
-         // gate prevents. So fail closed on ANY unresolvable link, not just on zero links.
-         const resolvedLinks = sourceLinks.recordset.map((r: CodeGenQueryRow) => ({ id: r.EntityID as string, entity: md.EntityByID(r.EntityID as string) }));
-         const unresolved = resolvedLinks.filter((x) => !x.entity);
-         if (unresolved.length > 0) {
-            logError(
-               `    > REFUSING to materialize query "${queryName}": ${unresolved.length} source-entity link(s) [${unresolved.map((u) => u.id).join(', ')}] do not resolve to a known entity, so their RLS status can't be verified. Ensure the source entities are in metadata, or use a base-view materialization. Skipping to avoid a silent privilege escalation.`,
-            );
-            continue;
-         }
-         const rlsProtectedSources = resolvedLinks
-            .map((x) => x.entity as EntityInfo)
-            .filter((e) => e.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0));
-         if (rlsProtectedSources.length > 0) {
-            const names = rlsProtectedSources.map((e) => `"${e.Name}"`).join(', ');
-            logError(
-               `    > REFUSING to materialize query "${queryName}": source entit${rlsProtectedSources.length === 1 ? 'y' : 'ies'} ${names} ${rlsProtectedSources.length === 1 ? 'is' : 'are'} read-RLS-protected, and a materialized query entity does NOT inherit source RLS (plan §6.2). Author equivalent protection on the materialized entity, or use a base-view materialization (which reuses the source entity and its RLS). Skipping to avoid a silent privilege escalation.`,
-            );
-            continue;
-         }
+         // The resolved source entities (all guaranteed to resolve — the gate above fails closed otherwise)
+         // scope the minted entity's read permissions to the INTERSECTION of source read access (C2). Without
+         // this, the minted entity would receive broad config-default read permissions and a user who cannot
+         // read a source entity could read its rows through the unscoped snapshot.
+         const resolvedSourceEntities = sourceLinks.recordset
+            .map((r: CodeGenQueryRow) => md.EntityByID(r.EntityID as string))
+            .filter((e): e is EntityInfo => !!e);
 
          // 2) Physical table + wrapper view (create-if-absent; reuse a migration-provided table — §12).
          const codeName = CodeNameFromString(queryName);
          const tableName = `materialized_${codeName}`;
          const viewName = `materialized_vw${codeName}`;
+         // CodeName-collision guard (C3): two query names that normalize to the SAME CodeName (e.g. "Sales
+         // Report" / "Sales-Report" / "sales report") derive the same physical table. Minting the second would
+         // reuse the first's create-if-absent table (wrong columns) and its minted entity, then register a
+         // second MaterializedResult pointing at the SAME table — two refreshers clobbering one snapshot from
+         // different source SQL. Refuse if the derived table is already owned by a different materialization.
+         const tableOwners = await this.runQueryWithParams(
+            pool,
+            `SELECT SourceType, SourceQueryID FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE SchemaName = @S AND TableName = @T`,
+            { S: coreSchema, T: tableName },
+         );
+         const foreignOwner = tableOwners.recordset.find((row: CodeGenQueryRow) => !(row.SourceType === 'Query' && UUIDsEqual(row.SourceQueryID as string, queryId)));
+         if (foreignOwner) {
+            logError(
+               `    > REFUSING to materialize query "${queryName}": its derived table [${coreSchema}].[${tableName}] (from CodeName "${codeName}") is already owned by a different materialization (SourceType=${foreignOwner.SourceType}, SourceQueryID=${foreignOwner.SourceQueryID ?? 'n/a'}). Two sources whose names normalize to the same CodeName would clobber each other's snapshot — rename one so their CodeNames differ. Skipping.`,
+            );
+            continue;
+         }
          const tableSQL = this.dbProvider.generateMaterializedTableSQL(coreSchema, tableName, analysis.columns);
          const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(coreSchema, viewName, tableName);
          await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for query "${queryName}"`, false, true);
@@ -1675,7 +1674,7 @@ export class ManageMetadataBase {
                if (generatedEntityId) {
                   mintedCount++;
                   await this.addEntityToApplicationForSchema(pool, generatedEntityId, queryName, coreSchema, currentUser);
-                  await this.addDefaultPermissionsForEntity(pool, generatedEntityId, queryName);
+                  await this.addMaterializedQueryEntityPermissions(pool, generatedEntityId, queryName, resolvedSourceEntities);
                   logStatus(`    > Minted materialized entity "${queryName}" (ID: ${generatedEntityId}) over [${coreSchema}].[${viewName}]`);
                }
             } catch (err) {
@@ -1737,7 +1736,7 @@ export class ManageMetadataBase {
       const coreSchema = mj_core_schema();
       const rows = await this.runQuery(
          pool,
-         `SELECT ID, SourceType, SourceEntityID, SourceQueryID, SchemaName, TableName FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE Status NOT IN ('Disabled', 'DriftHold')`,
+         `SELECT ID, SourceType, SourceEntityID, SourceQueryID, GeneratedEntityID, SchemaName, TableName FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE Status NOT IN ('Disabled', 'DriftHold')`,
       );
       if (rows.recordset.length === 0) return { success: true, heldCount: 0 };
 
@@ -1746,6 +1745,31 @@ export class ManageMetadataBase {
       let heldCount = 0;
 
       for (const r of rows.recordset) {
+         // RLS re-check (C1): a QUERY materialization whose source has SINCE gained a read RLS filter (or lost
+         // its source-entity provenance) would keep serving the full unscoped snapshot to every user — the
+         // mint-time gate cannot see a change made after minting. Re-run the same assessment here and, when it
+         // now fails, hold the materialization AND revoke the minted entity's read access: a precomputed
+         // snapshot cannot enforce per-user scoping, so fail closed until a human authors protection. Base-view
+         // materializations re-apply the source entity's RLS at read time (they reuse the source entity), so
+         // they are exempt from this check.
+         if (r.SourceType === 'Query' && r.SourceQueryID) {
+            const qe = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'QueryEntity')} WHERE QueryID = @Q`, { Q: r.SourceQueryID as string });
+            const rlsVerdict = this.assessQuerySourceRLSSafety(md, qe.recordset.map((x: CodeGenQueryRow) => x.EntityID as string));
+            if (!rlsVerdict.safe) {
+               await this.LogSQLAndExecute(
+                  pool,
+                  `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
+                  `Flag materialization "${r.TableName}" as DriftHold (source RLS drift)`,
+               );
+               if (r.GeneratedEntityID) {
+                  await this.revokeMaterializedEntityReadAccess(pool, r.GeneratedEntityID as string, r.TableName as string, rlsVerdict.reason ?? 'source RLS drift');
+               }
+               logError(`    > RLS DRIFT: materialization "${r.TableName}" → DriftHold + read access revoked — ${rlsVerdict.reason}`);
+               heldCount++;
+               continue; // already held for the leak; the shape-drift check below is moot
+            }
+         }
+
          const facts = await this.gatherDriftFacts(pool, md, r as CodeGenQueryRow, coreSchema);
          const verdict = evaluateMaterializationDrift(facts);
          if (verdict.drift) {
@@ -5815,6 +5839,88 @@ export class ManageMetadataBase {
             LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for entity ${entityName}`);
          }
       }
+   }
+
+   /**
+    * RLS-safety assessment for a QUERY materialization, shared by the mint-time gate and the per-run drift
+    * re-check (plan §6.2 / §10). A materialized query entity does NOT inherit its source entities' row-level
+    * security, so it is only safe to serve an unscoped snapshot when we can PROVE no source is RLS-protected.
+    * Fails closed (returns `{ safe:false }`) on three conditions, in order of decreasing severity of what we
+    * cannot prove:
+    *  1. **No provenance** — zero linked source entities (raw SQL / un-analyzed query): we cannot inspect any
+    *     source's RLS, so we cannot prove safety.
+    *  2. **Unresolvable link** — a linked EntityID that doesn't resolve to a known `EntityInfo`: if it secretly
+    *     carried a read RLS filter we'd never see it.
+    *  3. **RLS-protected source** — any resolved source with a non-empty `ReadRLSFilterID`.
+    * Over-restriction here is harmless (the query stays live-only, or an existing materialization is held); the
+    * reverse — serving a protected source's rows unscoped — is the leak this guard exists to prevent.
+    */
+   protected assessQuerySourceRLSSafety(md: Metadata, sourceEntityIds: string[]): { safe: boolean; reason?: string } {
+      if (sourceEntityIds.length === 0) {
+         return { safe: false, reason: 'no source-entity provenance is recorded (its QueryEntity links are empty), so RLS-safety cannot be verified' };
+      }
+      const resolved = sourceEntityIds.map((id) => ({ id, entity: md.EntityByID(id) }));
+      const unresolved = resolved.filter((x) => !x.entity);
+      if (unresolved.length > 0) {
+         return { safe: false, reason: `${unresolved.length} source-entity link(s) [${unresolved.map((u) => u.id).join(', ')}] do not resolve to a known entity, so their RLS status can't be verified` };
+      }
+      const rlsProtected = resolved
+         .map((x) => x.entity as EntityInfo)
+         .filter((e) => e.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0));
+      if (rlsProtected.length > 0) {
+         const names = rlsProtected.map((e) => `"${e.Name}"`).join(', ');
+         return { safe: false, reason: `source entit${rlsProtected.length === 1 ? 'y' : 'ies'} ${names} ${rlsProtected.length === 1 ? 'is' : 'are'} read-RLS-protected, and a materialized query entity does NOT inherit source RLS (plan §6.2)` };
+      }
+      return { safe: true };
+   }
+
+   /**
+    * Grants read permissions to a newly-minted materialized QUERY entity scoped to the INTERSECTION of source
+    * read access (C2). A precomputed snapshot has no per-row scoping, so a role may read it only if it can read
+    * EVERY source entity — otherwise a user who cannot read a source could read its rows through the snapshot.
+    * Starts from the same config-default role list as {@link addDefaultPermissionsForEntity} (never grants a
+    * role the defaults wouldn't) and drops any role that lacks explicit read on every source. Always read-only
+    * (the entity is a virtual entity with no CRUD sprocs). If the intersection is empty the entity receives no
+    * role-based read grants — the fail-closed direction (§10); a human can grant read after review.
+    */
+   protected async addMaterializedQueryEntityPermissions(
+      pool: CodeGenConnection,
+      entityId: string,
+      entityName: string,
+      sourceEntities: EntityInfo[],
+   ): Promise<void> {
+      if (!configInfo.newEntityDefaults.PermissionDefaults?.AutoAddPermissionsForNewEntities) {
+         return;
+      }
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      const roleCanReadAllSources = (roleId: string): boolean =>
+         sourceEntities.every((e) => e.Permissions.some((p) => UUIDsEqual(p.RoleID, roleId) && p.CanRead));
+      for (const p of configInfo.newEntityDefaults.PermissionDefaults.Permissions) {
+         const roleId = md.Roles.find((r) => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
+         if (!roleId) {
+            LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for materialized entity ${entityName}`);
+            continue;
+         }
+         if (!p.CanRead || !roleCanReadAllSources(roleId)) {
+            logStatus(`    > Materialized entity "${entityName}": role "${p.RoleName}" NOT granted read (it cannot read every source entity; the snapshot has no row-level scoping).`);
+            continue;
+         }
+         const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
+                              (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
+                              ('${entityId}', '${roleId}', ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.utcNow()}, ${this.utcNow()})`;
+         await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add read permission for materialized entity ${entityName} for role ${p.RoleName}`);
+      }
+   }
+
+   /**
+    * Revokes read access on a minted materialized entity by setting `CanRead=0` on all its EntityPermission
+    * rows (the __mj_UpdatedAt trigger stamps the timestamp). Used by the drift re-check when a query source
+    * gains RLS after minting: the snapshot can no longer be safely served, so it is made unreadable until a
+    * human authors protection. Non-destructive (rows are kept, just flipped) so the grant can be restored.
+    */
+   protected async revokeMaterializedEntityReadAccess(pool: CodeGenConnection, entityId: string, entityLabel: string, reason: string): Promise<void> {
+      const sql = `UPDATE ${this.qs(mj_core_schema(), 'EntityPermission')} SET ${this.qi('CanRead')}=${this.boolLit(false)} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`;
+      await this.LogSQLAndExecute(pool, sql, `Revoke read access on materialized entity "${entityLabel}" (${reason})`);
    }
 
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {

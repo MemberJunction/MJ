@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT68 - Scoped-Anonymous Elevation Permission Contract",
+    "Description": "Issue #3371 permission-reality contract on the real DB: a zero-role scoped anonymous magic-link principal is denied Create on the AI run entities (SA1), the system user the elevation swaps in exists with sufficient grants (SA2), an elevated AIAgentRun write keeps visitor attribution (SA3), and FinalizeCoAgentRun / AccumulatePromptRunUsage contrast silent no-ops under the anonymous caller with real writes under the system user (SA4/SA5). The elevation ROUTING itself is unit-covered in MJServer. Server transport; self-cleaning fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Anonymous principal denied on AI run entities; system user available and sufficient; elevated writes keep visitor attribution; finalize and usage accumulation no-op as anon and land as system."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "scoped-anon-elevation"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "5D8DF3C7-BC25-4374-8F53-81661537730F"
+  },
+  "sync": {
+    "lastModified": "2026-07-31T16:12:26.113Z",
+    "checksum": "b70701b83e19b4dc6d5026af0d0181c5ee2f80703ddb902b49eca87ec54773af"
+  }
+}

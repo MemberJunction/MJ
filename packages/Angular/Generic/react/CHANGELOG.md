@@ -1,5 +1,24 @@
 # @memberjunction/ng-react
 
+## 5.51.0
+
+### Patch Changes
+
+- a8fc549: - Fix BaseEngine cache callback fingerprint mismatch that broke cross-server invalidation via Redis pub/sub by extracting a shared BuildRunViewParamsForConfig method to ensure consistent RunViewParams across LoadSingleEntityConfig, LoadMultipleEntityConfigs, and RegisterCacheChangeCallbacks
+  - Eliminate React CDN script execution order race condition in library-loader by enforcing sequential script loading
+  - Make ChangeDetectorRef optional in BaseResourceComponent to prevent NG0201 injection errors
+  - Regenerate spDeleteAIPrompt and spDeleteAIConfiguration stored procedures to remove stale AIPromptRun.AgentRunID cascade references
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/react-runtime@5.51.0
+  - @memberjunction/ai-vectors-memory@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/global@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes
