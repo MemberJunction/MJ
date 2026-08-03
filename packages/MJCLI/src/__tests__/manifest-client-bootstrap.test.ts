@@ -25,7 +25,7 @@ describe('applyOpenAppClientBootstrapBlock', () => {
         expect(out).not.toContain("import '@acme/a-ng';");
         // The anchor: exported array references every namespace + observable global assignment.
         expect(out).toContain('export const OPEN_APP_CLIENT_MODULES: unknown[] = [__openAppClient0, __openAppClient1];');
-        expect(out).toContain('(globalThis as Record<string, unknown>).__mjOpenAppClientModules = OPEN_APP_CLIENT_MODULES;');
+        expect(out).toContain("(globalThis as Record<string, unknown>)['__mjOpenAppClientModules'] = OPEN_APP_CLIENT_MODULES;");
         // No `any` and therefore no eslint escape hatch in generated output.
         expect(out).not.toContain('any');
         expect(out).not.toContain('eslint-disable');
@@ -33,6 +33,18 @@ describe('applyOpenAppClientBootstrapBlock', () => {
         expect(out).toContain('END Open App client bootstrap');
         // Original manifest content is preserved.
         expect(out).toContain('export const CLASS_REGISTRATIONS = [];');
+    });
+
+    it('writes the globalThis anchor with bracket access — dot access is TS4111 in the host build', () => {
+        // MJExplorer's tsconfig sets `noPropertyAccessFromIndexSignature: true`, so
+        // `(globalThis as Record<string, unknown>).__mjOpenAppClientModules = …` is a hard
+        // compile error in its production `ng build` — the host-app build break this whole
+        // block's tests otherwise cannot see, since the block is emitted only when an Open
+        // App client package is installed. Verified live: with one installed client package,
+        // `ng build` failed with TS4111 on this exact line and went green on the bracket form.
+        const out = applyOpenAppClientBootstrapBlock(BASE, [{ PackageName: '@acme/a-ng', Enabled: true }]);
+        expect(out).toContain("(globalThis as Record<string, unknown>)['__mjOpenAppClientModules']");
+        expect(out).not.toContain(').__mjOpenAppClientModules');
     });
 
     it('emits a disabled package as a comment, not an import', () => {
