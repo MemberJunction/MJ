@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 6.0.0
+
+### Major Changes
+
+- a2670a9: Open the 6.x era: major-align all packages to the 6.0.0 era baseline (era split per plans/lts-process.md §3.1/§14). This version is the never-published baseline; the first published 6.x release is 6.1.0-edge.0.
+
+### Patch Changes
+
+- @memberjunction/global@6.0.0
+- @memberjunction/sql-dialect@6.0.0
+
 ## 5.51.0
 
 ### Minor Changes
