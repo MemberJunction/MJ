@@ -27,7 +27,7 @@ import {
   WorkspaceTab,
   LayoutNode
 } from '@memberjunction/ng-base-application';
-import { MJGlobal } from '@memberjunction/global';
+import { ClassRegistration, MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent, HomeAppPinService, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -1251,13 +1251,24 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    *
    * "Not registered" is NOT memoized: a lazy chunk may register the class later,
    * and `ClassFactory` already caches its own null and invalidates it on
-   * `Register()`.
+   * `Register()`. Neither is a REJECTED lookup — a lazy loader rejects when its
+   * chunk fetch fails, which is just as transient.
    */
   private async buildDisplayNameProvider(driverClass: string): Promise<BaseResourceComponent | null> {
-    const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
-      BaseResourceComponent,
-      driverClass
-    );
+    let resourceReg: ClassRegistration | null;
+    try {
+      resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
+        BaseResourceComponent,
+        driverClass
+      );
+    } catch {
+      // Memoizing this rejection would disable display names for the driver for
+      // the life of the shell over one flaky chunk fetch — and hand every later
+      // caller a rejected promise. Delete and let the next ask retry; the failed
+      // load already reports itself on the resource's real load path.
+      this.displayNameProviders.delete(driverClass);
+      return null;
+    }
     if (!resourceReg) {
       this.displayNameProviders.delete(driverClass);
       return null;

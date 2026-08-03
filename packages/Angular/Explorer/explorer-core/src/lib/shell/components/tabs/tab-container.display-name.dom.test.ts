@@ -213,4 +213,33 @@ describe('TabContainerComponent display-name provider resolution', () => {
 
         expect(await resolve(component, 'TestLateDriver')).not.toBeNull();
     });
+
+    /**
+     * A REJECTED lookup is transient too: `ClassFactory.tryLazyLoad` awaits each
+     * loader uncaught, so a failed chunk fetch rejects `GetRegistrationAsync`
+     * itself. Memoizing that rejection would disable display names for the driver
+     * for the life of the shell — and hand every later caller a rejected promise.
+     *
+     * The loader is key-scoped so it cannot affect the other specs: lazy loaders
+     * are global and there is no unregister API.
+     */
+    it('does not memoize a rejected registration lookup — a later ask recovers', async () => {
+        MJGlobal.Instance.ClassFactory.RegisterLazyLoader(async (_baseClassName, key) => {
+            if (key === 'TestRejectingDriver') {
+                throw new Error('chunk fetch failed');
+            }
+            return false;
+        });
+
+        const component = makeComponent();
+        // Must resolve null — not reject, not warn (the wrong-message hazard).
+        await expect(resolve(component, 'TestRejectingDriver')).resolves.toBeNull();
+        expect(warn).not.toHaveBeenCalled();
+
+        // Once the class registers (found synchronously, so the throwing loader
+        // no longer runs), the same driver must recover.
+        MJGlobal.Instance.ClassFactory.Register(BaseResourceComponent, WorkingDriver, 'TestRejectingDriver');
+
+        expect(await resolve(component, 'TestRejectingDriver')).not.toBeNull();
+    });
 });
