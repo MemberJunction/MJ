@@ -26,17 +26,33 @@ describe('SQLExpressionValidator - Security', () => {
       expect(r.trigger).toBe('DROP');
     });
 
-    it('should block UNION-based data exfiltration', () => {
-      // This is valid in full_query because UNION is allowed—
-      // BUT it must still start with SELECT. The attack vector here
-      // is actually fine for full_query (UNION is legitimate).
-      // The real guard is that only SELECT queries can be submitted.
+    it('should block UNION-based data exfiltration from system catalogs', () => {
+      // UNION itself is legitimate in full_query, but reading SQL Server system catalogs
+      // (sys.sql_logins holds login password hashes) sits entirely outside MJ's
+      // entity-permission model. The system-object denylist rejects it regardless of the
+      // read-only connection, so a validated ad-hoc SELECT can't be used to exfiltrate credentials.
       const r = validator.validateFullQuery(
         "SELECT 1 UNION SELECT password FROM sys.sql_logins"
       );
-      // UNION is allowed in full_query, so this is valid from a syntax perspective.
-      // The protection is that ad-hoc queries run on a read-only connection.
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('system-object');
+    });
+
+    it('should still allow a legitimate UNION over application views', () => {
+      // Regression guard: the system-catalog denylist must NOT block ordinary UNION queries
+      // over application entity views — only true system/metadata objects are rejected.
+      const r = validator.validateFullQuery(
+        "SELECT ID FROM vwCustomers UNION SELECT ID FROM vwProspects"
+      );
       expect(r.valid).toBe(true);
+    });
+
+    it('should block INFORMATION_SCHEMA enumeration', () => {
+      const r = validator.validateFullQuery(
+        "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES"
+      );
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('system-object');
     });
 
     it('should block stacked DELETE after SELECT', () => {
