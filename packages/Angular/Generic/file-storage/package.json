@@ -19,6 +19,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "build": "ngc",
     "watch": "ngc -w",
     "test:watch": "vitest"
@@ -59,9 +60,5 @@
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
   },
-  "mjUILayer": "widgets",
-  "_mjUILayerAllowedDepsReason": "file-browser-resource.component.ts extends BaseResourceComponent (an L3 surface) and is registered in three CodeGen-generated manifests, so moving it requires a CodeGen run against a database. Tracked in MJ#3404. Acknowledged debt, not a blessing of the pattern.",
-  "mjUILayerAllowedDeps": [
-    "@memberjunction/ng-shared"
-  ]
+  "mjUILayer": "surface"
 }

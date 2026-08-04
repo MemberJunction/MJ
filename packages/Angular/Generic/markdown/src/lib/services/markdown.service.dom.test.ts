@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MarkdownService } from '../lib/services/markdown.service';
+import { MarkdownService } from './markdown.service';
 
 /**
  * jsdom specs for the web shell around @memberjunction/markdown-core.
