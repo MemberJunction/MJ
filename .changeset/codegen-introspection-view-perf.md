@@ -1,5 +1,5 @@
 ---
-"@memberjunction/codegen-lib": patch
+"@memberjunction/codegen-lib": minor
 ---
 
 perf(codegen): narrow the `vwSQLColumnsAndEntityFields` introspection view to user objects.
