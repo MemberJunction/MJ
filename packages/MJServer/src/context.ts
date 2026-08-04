@@ -431,8 +431,13 @@ export const getUserPayload = async (
       // short-circuits on the first differing byte, leaking a timing side-channel that could
       // be used to recover the key byte-by-byte. Hash both sides to fixed-length digests so
       // timingSafeEqual never throws on length mismatch and the comparison is length-agnostic.
-      const systemKeyDigest = createHash('sha256').update(String(systemApiKey)).digest();
-      const providedKeyDigest = createHash('sha256').update(String(apiKey)).digest();
+      // `Uint8Array.from(...)` strips the Buffer→ArrayBufferLike narrowing that TS 5.9's
+      // node:crypto typings reject (they require a concrete ArrayBuffer, not the
+      // SharedArrayBuffer-tolerant union Buffer carries). Required because this package's
+      // declared @types/node (24.x, generic Buffer) is forced down to the root override's
+      // 20.14.2 (non-generic Buffer) by `npm install` — see deltaToken.ts for the same fix.
+      const systemKeyDigest = Uint8Array.from(createHash('sha256').update(String(systemApiKey)).digest());
+      const providedKeyDigest = Uint8Array.from(createHash('sha256').update(String(apiKey)).digest());
       if (timingSafeEqual(systemKeyDigest, providedKeyDigest)) {
         const systemUser = await getSystemUser(readOnlyDataSource);
         return {
