@@ -3,10 +3,12 @@
   "compilerOptions": {
     "types": ["vitest/globals", "node"]
   },
-  "//": "Narrowed to the DOM-tested subtree. The editor component is excluded because it imports @memberjunction/ng-notifications, which has no dist build for Vite to resolve (see deferred in the test report). The summary/slide-panel/dialog specs use NO_ERRORS_SCHEMA so they never pull the editor into compilation.",
+  "//": "Narrowed to the DOM-tested subtree. The editor component's @memberjunction/ng-notifications dependency now resolves under Vite, so it is DOM-tested here; the summary/slide-panel/dialog specs still use NO_ERRORS_SCHEMA for their own child surfaces.",
   "include": [
     "src/lib/services/scheduled-job.service.ts",
     "src/lib/panels/scheduled-job-summary/scheduled-job-summary.component.ts",
+    "src/lib/panels/scheduled-job-editor/scheduled-job-editor.component.ts",
+    "src/lib/panels/scheduled-job-editor/scheduled-job-editor.component.dom.test.ts",
     "src/lib/panels/scheduled-job-summary/scheduled-job-summary.component.dom.test.ts",
     "src/lib/slide-panel/scheduled-job-slide-panel.component.ts",
     "src/lib/slide-panel/scheduled-job-slide-panel.component.dom.test.ts",
