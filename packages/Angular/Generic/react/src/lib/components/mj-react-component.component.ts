@@ -235,7 +235,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     // An explicitly-provided styles input always wins — but user-requested overrides
     // still layer on top, since they represent an explicit request rather than a theme.
     if (this._styles) {
-      return ApplyStyleOverrides(this._styles, this.styleOverrides);
+      return this.applyStyleOverridesMemoized(this._styles);
     }
     // Otherwise bridge the host's live MJ theme (--mj-* tokens) into ComponentStyles
     // so generated components inherit the active theme — including dark mode and
@@ -251,7 +251,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     }
     // Applied outside the theme memo so the spec's overrides survive a theme flip
     // (the memo caches the theme, not the request).
-    return ApplyStyleOverrides(this._themeStyles, this.styleOverrides);
+    return this.applyStyleOverridesMemoized(this._themeStyles);
   }
 
   /**
@@ -261,6 +261,29 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
    */
   private get styleOverrides(): StyleOverrides | undefined {
     return this.resolvedComponentSpec?.styleOverrides ?? this._component?.styleOverrides;
+  }
+
+  // Memo for the override merge. ApplyStyleOverrides allocates a new object whenever
+  // overrides are present, and components key effects/memos on the styles identity
+  // (e.g. simple-chart tears down and rebuilds its Chart.js instance) — so the merged
+  // result must be stable across reads. Keyed by reference: a theme rebuild, a new
+  // styles input, or a restyled spec each produce a new ref, which is exactly when
+  // the merge must re-run.
+  private _mergedStylesBase?: Partial<ComponentStyles>;
+  private _mergedStylesOverrides?: StyleOverrides;
+  private _mergedStylesResult?: Partial<ComponentStyles>;
+
+  private applyStyleOverridesMemoized(base: Partial<ComponentStyles>): Partial<ComponentStyles> {
+    const overrides = this.styleOverrides;
+    if (!overrides) {
+      return base;
+    }
+    if (!this._mergedStylesResult || this._mergedStylesBase !== base || this._mergedStylesOverrides !== overrides) {
+      this._mergedStylesBase = base;
+      this._mergedStylesOverrides = overrides;
+      this._mergedStylesResult = ApplyStyleOverrides(base, overrides);
+    }
+    return this._mergedStylesResult;
   }
 
   /**

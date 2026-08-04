@@ -99,6 +99,18 @@ describe('BuildStylesFromTheme overlay and status bridging', () => {
     expect(styles.colors.errorBorder).toBe('#f5c2c0');
   });
 
+  it('bridges the secondary palette from --mj-brand-secondary tokens', () => {
+    const root = stubTheme({
+      '--mj-brand-secondary': '#092340',
+      '--mj-brand-secondary-hover': '#004a71',
+    });
+
+    const styles = BuildStylesFromTheme(root);
+
+    expect(styles.colors.secondary).toBe('#092340');
+    expect(styles.colors.secondaryHover).toBe('#004a71');
+  });
+
   it('keeps the defaults when the tokens are absent', () => {
     const root = stubTheme({});
     const styles = BuildStylesFromTheme(root);

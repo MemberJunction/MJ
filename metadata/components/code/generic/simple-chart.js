@@ -50,12 +50,14 @@ function SimpleChart({
   const errorColor = themeColors.error || '#ff4d4f';
 
   // Translucent version of a themed color, for area fills. Without this the fill
-  // stays blue while the series line follows the theme.
-  const withAlpha = (color, alpha) => {
-    if (typeof color !== 'string') return `rgba(24, 144, 255, ${alpha})`;
+  // stays blue while the series line follows the theme. Only hex can carry an alpha
+  // this way — a theme expressing the color as rgb() or a named color falls back to
+  // the translucent default rather than becoming a fully opaque fill.
+  const withAlpha = (color, alpha, fallback) => {
+    if (typeof color !== 'string') return fallback;
     const hex = color.trim().replace('#', '');
     const full = hex.length === 3 ? hex.split('').map(ch => ch + ch).join('') : hex;
-    if (!/^[0-9a-fA-F]{6}$/.test(full)) return color;
+    if (!/^[0-9a-fA-F]{6}$/.test(full)) return fallback;
     const int = parseInt(full, 16);
     return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
   };
@@ -437,7 +439,7 @@ function SimpleChart({
               backgroundColor: isPieOrDoughnut
                 ? (colors || defaultColors).slice(0, processData.values.length)
                 : isLineOrArea
-                  ? withAlpha((colors || defaultColors)[0], 0.2)
+                  ? withAlpha((colors || defaultColors)[0], 0.2, 'rgba(24, 144, 255, 0.2)')
                   : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar
               borderColor: isPieOrDoughnut
                 ? surfaceColor
@@ -600,7 +602,7 @@ function SimpleChart({
             color: isPieOrDoughnut ? inverseColor : mutedColor
           } : undefined,
           tooltip: {
-            backgroundColor: withAlpha(themeColors.text || '#1e1e1e', 0.9),
+            backgroundColor: withAlpha(themeColors.text || '#1e1e1e', 0.9, 'rgba(30, 30, 30, 0.9)'),
             titleColor: surfaceColor,
             bodyColor: surfaceColor,
             titleFont: {

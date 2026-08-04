@@ -164,6 +164,9 @@ const THEME_COLOR_TOKEN_MAP: Record<string, string> = {
   primaryHover: '--mj-brand-primary-hover',
   primaryActive: '--mj-brand-primary-active',
   primaryLight: '--mj-brand-primary-light',
+  // Secondary
+  secondary: '--mj-brand-secondary',
+  secondaryHover: '--mj-brand-secondary-hover',
   // Status
   success: '--mj-status-success',
   successLight: '--mj-status-success-bg',
