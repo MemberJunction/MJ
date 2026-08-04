@@ -382,6 +382,32 @@ END`;
       expect(result).toContain('CREATE SCHEMA IF NOT EXISTS "my-custom schema";');
     });
 
+    it('should emit a placeholder-built schema unquoted, matching its unquoted references', () => {
+      // `[${mjSchema}_BizAppsCommon]` is how an open app names a sibling app's schema.
+      // convertIdentifiers leaves placeholder schema REFERENCES unquoted, so quoting here would
+      // create a case-preserved schema that none of those references resolve to — the same
+      // mismatch the mixed-case fix above closes, for the case the placeholder exists to serve.
+      const sql = `IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '\${mjSchema}_BizAppsCommon')
+BEGIN
+    EXEC('CREATE SCHEMA [\${mjSchema}_BizAppsCommon]')
+END`;
+      const result = convert(sql);
+      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS ${mjSchema}_bizappscommon;');
+      // The placeholder itself must survive verbatim — its contents name a migration variable
+      // that is matched exactly at substitution time.
+      expect(result).not.toContain('${mjschema}');
+      expect(result).not.toContain('"${mjSchema}');
+    });
+
+    it('should still quote a placeholder name that cannot survive folding', () => {
+      const sql = `IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '\${mjSchema}-common app')
+BEGIN
+    EXEC('CREATE SCHEMA [\${mjSchema}-common app]')
+END`;
+      const result = convert(sql);
+      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS "${mjSchema}-common app";');
+    });
+
     it('should not create a phantom schema from CREATE SCHEMA mentioned in a comment', () => {
       // The rule used to scan the raw text, so prose in a comment was parsed as SQL: the
       // commented name won the match and the real statement was dropped entirely.
