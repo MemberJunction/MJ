@@ -1198,7 +1198,9 @@ export class SQLCodeGenBase {
                 sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
             }
             // always generate permissions for the base view
-            const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Permissions for ' + options.entity.BaseView) + this.generateViewPermissions(options.entity)
+            const permHeader = this.generateSingleEntitySQLFileHeader(options.entity, 'Permissions for ' + options.entity.BaseView);
+            const permBody = this.generateViewPermissions(options.entity);
+            const s = permHeader + permBody;
             if (s.length > 0)
                 permissionsSQL += s + '\n' + this._dbProvider.BatchSeparator + '\n';
             if (options.writeFiles) {
@@ -1211,22 +1213,7 @@ export class SQLCodeGenBase {
             // now, append the permissions to the return string IF we did NOT generate the base view - because if we generated the base view, that
             // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
             if (!options.entity.BaseViewGenerated) {
-                // For custom base views (BaseViewGenerated=false), emit sp_refreshview before permissions
-                // so that SQL Server picks up schema changes (new columns from migrations) before we
-                // grant permissions. Developers no longer need to remember to add this manually.
-                if (this._dbProvider.NeedsViewRefresh && !options.entity.VirtualEntity) {
-                    // INNER BEFORE OUTER for a layered entity: the custom view selects `g.*` from the
-                    // generated one, and a view caches its column list — refreshing the outer against a
-                    // stale inner re-caches the OLD columns, so a new column stays missing and looks
-                    // exactly like it was never added.
-                    if (options.entity.HasLayeredBaseView) {
-                        sRet += this._dbProvider.generateViewRefreshSQL(options.entity.SchemaName, options.entity.GeneratedViewName)
-                             + '\n' + this._dbProvider.BatchSeparator + '\n';
-                    }
-                    const refreshSQL = this._dbProvider.generateViewRefreshSQL(options.entity.SchemaName, options.entity.BaseView);
-                    sRet += refreshSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
-                }
-                sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
+                sRet += this.generateCustomBaseViewRefreshAndPermissions(options.entity, permHeader, permBody);
             }
 
             // CREATE SP
@@ -1716,6 +1703,53 @@ export class SQLCodeGenBase {
 
     protected generateViewPermissions(entity: EntityInfo): string {
         return this._dbProvider.generateViewPermissions(entity);
+    }
+
+    /**
+     * Emits the refresh + permission statements for an entity whose `BaseView` CodeGen does NOT
+     * write — fully custom, or the application-owned outer half of a layered entity.
+     *
+     * The refresh runs before the grants so SQL Server picks up schema changes (new columns from
+     * migrations) before permissions are applied; developers no longer add it by hand.
+     *
+     * Two things are specific to LAYERED entities:
+     *
+     * - **Inner before outer.** The custom view selects `g.*` from the generated one, and a view
+     *   caches its column list. Refreshing the outer against a stale inner re-caches the OLD
+     *   columns, so a newly added column stays missing — indistinguishable from never having been
+     *   added at all, which is the exact failure layering exists to eliminate.
+     * - **The outer view may not exist yet.** On the first pass after layering is enabled it cannot
+     *   exist: it selects from the inner view that this very pass creates. Unguarded, the refresh
+     *   and the `GRANT` both fail — and the step they fail on is the documented setup procedure, so
+     *   there would be no way to adopt the feature at all. Guarding makes the bootstrap pass skip
+     *   them and leaves every later pass identical to the unguarded form.
+     */
+    protected generateCustomBaseViewRefreshAndPermissions(entity: EntityInfo, permissionsHeader: string, permissionsBody: string): string {
+        const separator: string = '\n' + this._dbProvider.BatchSeparator + '\n';
+        let sOutput: string = '';
+
+        if (this._dbProvider.NeedsViewRefresh && !entity.VirtualEntity) {
+            if (entity.HasLayeredBaseView) {
+                sOutput += this._dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.GeneratedViewName) + separator;
+            }
+            const refreshSQL: string = this._dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
+            sOutput += this.guardOnApplicationOwnedView(entity, refreshSQL) + separator;
+        }
+
+        return sOutput + permissionsHeader + this.guardOnApplicationOwnedView(entity, permissionsBody) + separator;
+    }
+
+    /**
+     * Wraps SQL in an existence check on the application-owned `BaseView`, but only for a layered
+     * entity — that is the one arrangement where the view legitimately may not exist yet. For a
+     * fully custom base view the object is a standing prerequisite, so a missing one stays a loud
+     * failure rather than becoming a silent skip.
+     */
+    private guardOnApplicationOwnedView(entity: EntityInfo, sql: string): string {
+        if (!entity.HasLayeredBaseView || sql.trim().length === 0) {
+            return sql;
+        }
+        return this._dbProvider.generateIfViewExistsSQL(entity.SchemaName, entity.BaseView, sql);
     }
 
     protected generateBaseViewJoins(entity: EntityInfo, entityFields: EntityFieldInfo[]): string {

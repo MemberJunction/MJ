@@ -52,6 +52,29 @@ describe('the view CodeGen writes', () => {
     it('trims a padded name', () => {
         expect(entity({ GeneratedBaseViewName: '  vwInner  ' }).GeneratedViewName).toBe('vwInner');
     });
+
+    it('is BaseView when the inner name differs only by case', () => {
+        // The two getters must agree. `HasLayeredBaseView` compares case-insensitively, because SQL
+        // Server object names are case-insensitive — so `VWORDERHEADERS` is NOT a second view. If
+        // this getter answered the differently-cased string anyway, CodeGen would write there while
+        // every layering-gated path believed no second view existed: on SQL Server that silently
+        // overwrites BaseView, and on a case-sensitive dialect it creates an orphan nothing reads.
+        const e = entity({ GeneratedBaseViewName: 'VWORDERHEADERS' });
+        expect(e.HasLayeredBaseView).toBe(false);
+        expect(e.GeneratedViewName).toBe('vwOrderHeaders');
+    });
+
+    it('never disagrees with HasLayeredBaseView about which view is written', () => {
+        // The invariant the whole design rests on, asserted directly rather than inferred from the
+        // cases above: not layered => CodeGen writes BaseView; layered => it writes the inner name.
+        const candidates: (string | null | undefined)[] =
+            [undefined, null, '', '   ', 'vwOrderHeaders', 'VWORDERHEADERS', '  vwOrderHeaders  ', 'vwInner', '  vwInner  '];
+        for (const name of candidates) {
+            const e = entity({ GeneratedBaseViewName: name });
+            const expected = e.HasLayeredBaseView ? (name ?? '').trim() : 'vwOrderHeaders';
+            expect(e.GeneratedViewName, `GeneratedBaseViewName = ${JSON.stringify(name)}`).toBe(expected);
+        }
+    });
 });
 
 describe('whether an entity is layered', () => {

@@ -48,6 +48,11 @@ SELECT g.*, CASE WHEN ... END AS IsOverdue
 FROM   [orders].[vwOrderHeadersGenerated] g;
 ```
 
+**SQL Server only.** `PostgreSQLCodeGenProvider.generateBaseView` throws on a layered entity. PG
+expands `SELECT *` at creation and freezes it, has no `sp_refreshview` equivalent, and CodeGen does
+not own the outer view — so a late-added column would silently never reach it, which is the exact
+failure layering exists to prevent. On PG, use a fully custom base view instead.
+
 Rules if you touch this:
 
 - **Use `EntityInfo.GeneratedViewName`**, never re-derive from `BaseView`. It is the one answer to
@@ -55,9 +60,15 @@ Rules if you touch this:
   and what to refresh, and any two disagreeing produce a view under a name nothing reads.
 - **`EntityInfo.HasLayeredBaseView`** is the layering test. It compares names case-insensitively —
   a view cannot select from itself, and a CHECK constraint on `Entity` refuses equal names too.
+  `GeneratedViewName` is derived FROM it, so the two cannot drift; keep it that way rather than
+  re-testing the raw column.
 - **Refresh inner before outer.** The custom layer does `SELECT g.*` and a view caches its column
   list; refreshing the outer against a stale inner re-caches the old columns and the new one stays
   missing. CodeGen already emits `sp_refreshview` in that order — keep it that way.
+- **Guard anything aimed at the outer view.** CodeGen refreshes and grants on `BaseView` but never
+  creates it, and on the first pass after layering is enabled it does not exist yet — it selects
+  from the inner view that pass is creating. Emit those through
+  `generateIfViewExistsSQL`, or the run that is supposed to bootstrap the arrangement fails.
 - **CRUD routines stay on `BaseView`.** They return the affected row, so custom columns come back on
   create/update/delete. Do not point them at the inner view.
 
