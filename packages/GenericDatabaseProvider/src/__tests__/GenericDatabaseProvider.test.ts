@@ -696,6 +696,274 @@ describe('GenericDatabaseProvider', () => {
         });
     });
 
+    describe('Row-Level Security — escaping, post-image checks, and projections', () => {
+        /**
+         * Typed access to the protected RLS members under test. Mirrors the narrowing-cast
+         * pattern used elsewhere in this file for protected methods.
+         */
+        interface RLSAccess {
+            CheckRecordRLS: (e: BaseEntity, u: UserInfo, t: EntityPermissionType) => Promise<boolean>;
+            CheckUpdateRLSPostImage: (e: BaseEntity, u: UserInfo) => Promise<boolean>;
+            TryExtractSimpleFilterColumns: (clause: string) => string[] | null;
+            BuildRLSSyntheticRowProjections: (e: BaseEntity, ei: EntityInfo, includeNulls: boolean) => string;
+        }
+        const RLS = (): RLSAccess => provider as unknown as RLSAccess;
+
+        /** Spec for one mocked entity field used by the RLS fixtures. */
+        interface MockRLSFieldSpec {
+            Name: string;
+            Dirty?: boolean;
+            IsVirtual?: boolean;
+            NeedsQuotes?: boolean;
+            SQLFullType?: string;
+            Value?: unknown;
+        }
+
+        /**
+         * Builds a fake BaseEntity + EntityInfo pair sufficient for the RLS check paths:
+         * EntityInfo.Fields / FieldByName / GetEffectiveRowFilterWhereClause, and the
+         * entity's PrimaryKeys / Fields (Dirty) / Get(fieldName).
+         */
+        function MakeRLSEntity(opts: {
+            rlsClause: string;
+            fields: MockRLSFieldSpec[];
+            primaryKeys?: Array<{ Name: string; Value: unknown }>;
+        }): { entity: BaseEntity; entityInfo: EntityInfo } {
+            const infoFields = opts.fields.map(f => ({
+                Name: f.Name,
+                IsVirtual: f.IsVirtual ?? false,
+                NeedsQuotes: f.NeedsQuotes ?? true,
+                SQLFullType: f.SQLFullType,
+            }));
+            const entityInfo = {
+                Name: 'TestEntity',
+                SchemaName: 'dbo',
+                BaseView: 'vwTestEntities',
+                Fields: infoFields,
+                FieldByName: (name: string) => infoFields.find(f => f.Name.trim().toLowerCase() === name.trim().toLowerCase()),
+                GetEffectiveRowFilterWhereClause: () => opts.rlsClause,
+            } as unknown as EntityInfo;
+
+            const valueMap = new Map<string, unknown>(opts.fields.map(f => [f.Name, f.Value]));
+            const entity = {
+                EntityInfo: entityInfo,
+                PrimaryKeys: opts.primaryKeys ?? [],
+                Fields: opts.fields.map(f => ({ Name: f.Name, Dirty: f.Dirty ?? false })),
+                Get: (name: string) => valueMap.get(name),
+            } as unknown as BaseEntity;
+
+            return { entity, entityInfo };
+        }
+
+        describe('CheckRecordRLS — PK value escaping', () => {
+            it('escapes embedded single quotes in client-supplied PK values (no injection into WHERE)', async () => {
+                const { entity } = MakeRLSEntity({
+                    rlsClause: "OwnerID = 'me'",
+                    fields: [{ Name: 'ID', NeedsQuotes: true }],
+                    primaryKeys: [{ Name: 'ID', Value: "x' OR '1'='1" }],
+                });
+                provider.executeSQLResults = [[{ cnt: 1 }]];
+
+                const result = await RLS().CheckRecordRLS(entity, mockUser, EntityPermissionType.Read);
+
+                expect(result).toBe(true);
+                expect(provider.executeSQLCalls).toHaveLength(1);
+                const sql = provider.executeSQLCalls[0].sql;
+                // The escaped form must be present...
+                expect(sql).toContain("\"ID\"='x'' OR ''1''=''1'");
+                // ...and the raw, unescaped injection sequence must never appear anywhere.
+                expect(sql).not.toContain("' OR '1'='1");
+            });
+        });
+
+        describe('CheckUpdateRLSPostImage — skip optimization and fail-closed behavior', () => {
+            it('returns true WITHOUT executing SQL when the simple filter references only non-dirty columns', async () => {
+                const { entity } = MakeRLSEntity({
+                    rlsClause: "OrganizationID = 'abc'",
+                    fields: [
+                        { Name: 'OrganizationID', Dirty: false, Value: 'abc' },
+                        { Name: 'Name', Dirty: true, Value: 'New Name' },
+                    ],
+                });
+
+                const result = await RLS().CheckUpdateRLSPostImage(entity, mockUser);
+
+                expect(result).toBe(true);
+                expect(provider.executeSQLCalls).toHaveLength(0); // skip optimization — no query
+            });
+
+            it('executes SQL when a filter-referenced column IS dirty; pass=1 → true', async () => {
+                const { entity } = MakeRLSEntity({
+                    rlsClause: "OrganizationID = 'abc'",
+                    fields: [{ Name: 'OrganizationID', Dirty: true, Value: 'abc', SQLFullType: 'nvarchar(50)' }],
+                });
+                provider.executeSQLResults = [[{ pass: 1 }]];
+
+                const result = await RLS().CheckUpdateRLSPostImage(entity, mockUser);
+
+                expect(result).toBe(true);
+                expect(provider.executeSQLCalls).toHaveLength(1);
+                expect(provider.executeSQLCalls[0].sql).toContain("OrganizationID = 'abc'");
+            });
+
+            it('executes SQL when a filter-referenced column IS dirty; pass=0 → false', async () => {
+                const { entity } = MakeRLSEntity({
+                    rlsClause: "OrganizationID = 'abc'",
+                    fields: [{ Name: 'OrganizationID', Dirty: true, Value: 'other-org', SQLFullType: 'nvarchar(50)' }],
+                });
+                provider.executeSQLResults = [[{ pass: 0 }]];
+
+                const result = await RLS().CheckUpdateRLSPostImage(entity, mockUser);
+
+                expect(result).toBe(false);
+                expect(provider.executeSQLCalls).toHaveLength(1);
+            });
+
+            const nonDecomposableFilters: Array<{ label: string; clause: string }> = [
+                { label: 'function call', clause: "UPPER(OrganizationID) = 'ABC'" },
+                { label: 'OR disjunction', clause: "A = 'x' OR B = 'y'" },
+                { label: 'EXISTS subquery', clause: "EXISTS (SELECT 1 FROM dbo.OrgMembers WHERE UserID = 'u1')" },
+            ];
+
+            for (const { label, clause } of nonDecomposableFilters) {
+                it(`fail-closed: still executes SQL for non-decomposable filter (${label}) even when NOTHING is dirty`, async () => {
+                    const { entity } = MakeRLSEntity({
+                        rlsClause: clause,
+                        fields: [
+                            { Name: 'OrganizationID', Dirty: false, Value: 'abc', SQLFullType: 'nvarchar(50)' },
+                            { Name: 'A', Dirty: false, Value: 'x', SQLFullType: 'nvarchar(50)' },
+                            { Name: 'B', Dirty: false, Value: 'y', SQLFullType: 'nvarchar(50)' },
+                        ],
+                    });
+                    provider.executeSQLResults = [[{ pass: 1 }]];
+
+                    const result = await RLS().CheckUpdateRLSPostImage(entity, mockUser);
+
+                    expect(result).toBe(true);
+                    expect(provider.executeSQLCalls).toHaveLength(1); // no skip — the check must run
+                });
+            }
+        });
+
+        describe('TryExtractSimpleFilterColumns', () => {
+            it('is not confused by string literals containing " AND "', () => {
+                const cols = RLS().TryExtractSimpleFilterColumns("Name = 'Tom AND Jerry' AND OrgID = 'a'");
+                expect(cols).toEqual(['name', 'orgid']);
+            });
+
+            it('extracts bracketed, double-quoted, and bare column names from a simple conjunction', () => {
+                const cols = RLS().TryExtractSimpleFilterColumns('[Col1] = \'a\' AND "Col2" <> \'b\' AND Col3 IS NOT NULL');
+                expect(cols).toEqual(['col1', 'col2', 'col3']);
+            });
+
+            it('returns null for OR', () => {
+                expect(RLS().TryExtractSimpleFilterColumns("A = 'x' OR B = 'y'")).toBeNull();
+            });
+
+            it('returns null for parenthesized groups', () => {
+                expect(RLS().TryExtractSimpleFilterColumns("(A = 'x' AND B = 'y') AND C = 'z'")).toBeNull();
+            });
+
+            it('returns null for function calls', () => {
+                expect(RLS().TryExtractSimpleFilterColumns("UPPER(OrgID) = 'ABC'")).toBeNull();
+            });
+
+            it('returns null for subqueries', () => {
+                expect(RLS().TryExtractSimpleFilterColumns('OrgID IN (SELECT ID FROM Orgs)')).toBeNull();
+            });
+
+            it('returns null for CASE expressions', () => {
+                expect(RLS().TryExtractSimpleFilterColumns("CASE WHEN A = 'x' THEN 1 ELSE 0 END = 1")).toBeNull();
+            });
+
+            it('returns null for arithmetic', () => {
+                expect(RLS().TryExtractSimpleFilterColumns('Amount + 1 = 2')).toBeNull();
+            });
+
+            it('returns null for an empty string', () => {
+                expect(RLS().TryExtractSimpleFilterColumns('')).toBeNull();
+            });
+        });
+
+        describe('BuildRLSSyntheticRowProjections', () => {
+            it('includeNulls=true emits a typed CAST(NULL AS <SQLFullType>) for null fields', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [{ Name: 'Notes', NeedsQuotes: true, SQLFullType: 'nvarchar(100)', Value: null }],
+                });
+
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+
+                expect(projections).toBe('CAST(NULL AS nvarchar(100)) AS "Notes"');
+            });
+
+            it('includeNulls=true throws for a null field with no resolvable SQLFullType', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [{ Name: 'Notes', NeedsQuotes: true, SQLFullType: '', Value: null }],
+                });
+
+                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                    .toThrow(/no resolvable SQL type/i);
+            });
+
+            it('includeNulls=false skips null fields instead of projecting them', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [
+                        { Name: 'Notes', NeedsQuotes: true, SQLFullType: 'nvarchar(100)', Value: null },
+                        { Name: 'Name', NeedsQuotes: true, Value: 'Keep' },
+                    ],
+                });
+
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, false);
+
+                expect(projections).toBe('\'Keep\' AS "Name"');
+            });
+
+            it('throws for a non-numeric string in a numeric (NeedsQuotes=false) field instead of interpolating it', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [{ Name: 'Amount', NeedsQuotes: false, Value: 'abc' }],
+                });
+
+                expect(() => RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                    .toThrow(/does not parse as a number/i);
+            });
+
+            it('emits numeric 42 as-is, boolean true as 1, and escapes embedded quotes in strings', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [
+                        { Name: 'Amount', NeedsQuotes: false, Value: 42 },
+                        { Name: 'IsActive', NeedsQuotes: false, Value: true },
+                        { Name: 'LastName', NeedsQuotes: true, Value: "O'Brien" },
+                    ],
+                });
+
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+
+                expect(projections).toContain('42 AS "Amount"');
+                expect(projections).toContain('1 AS "IsActive"');
+                expect(projections).toContain('\'O\'\'Brien\' AS "LastName"');
+            });
+
+            it('skips virtual fields', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [
+                        { Name: 'Organization', IsVirtual: true, NeedsQuotes: true, Value: 'Denorm Name' },
+                        { Name: 'OrganizationID', NeedsQuotes: true, Value: 'abc' },
+                    ],
+                });
+
+                const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
+
+                expect(projections).toBe('\'abc\' AS "OrganizationID"');
+            });
+        });
+    });
+
     describe('AdjustDatetimeFields (default no-op)', () => {
         it('returns rows unchanged by default', async () => {
             const now = new Date();

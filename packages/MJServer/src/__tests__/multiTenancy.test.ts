@@ -15,6 +15,22 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
       { Name: 'AI Models', SchemaName: '__mj' },
       { Name: 'Users', SchemaName: '__mj' },
     ];
+
+    // The hook validates that the tenant column resolves to a real, stored
+    // (non-virtual) field on the entity before interpolating it as an identifier.
+    EntityByName(name: string) {
+      const entity = this.Entities.find(
+        e => e.Name.trim().toLowerCase() === name.trim().toLowerCase()
+      );
+      if (!entity) return undefined;
+      return {
+        ...entity,
+        Fields: [
+          { Name: 'OrganizationID', IsVirtual: false },
+          { Name: 'TenantID', IsVirtual: false },
+        ],
+      };
+    }
   }
 
   return {
