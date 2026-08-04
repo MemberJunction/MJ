@@ -59,5 +59,9 @@
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
   },
-  "mjUILayer": "widgets"
+  "mjUILayer": "widgets",
+  "_mjUILayerAllowedDepsReason": "file-browser-resource.component.ts extends BaseResourceComponent (an L3 surface) and is registered in three CodeGen-generated manifests, so moving it requires a CodeGen run against a database. Tracked in MJ#3404. Acknowledged debt, not a blessing of the pattern.",
+  "mjUILayerAllowedDeps": [
+    "@memberjunction/ng-shared"
+  ]
 }
