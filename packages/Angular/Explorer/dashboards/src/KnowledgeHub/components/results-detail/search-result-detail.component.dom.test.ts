@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
-import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, capture, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import type { SearchResultItem } from '@memberjunction/ng-search';
 import { SearchResultDetailComponent } from './search-result-detail.component';
 
@@ -12,13 +11,6 @@ import { SearchResultDetailComponent } from './search-result-detail.component';
  * Single synchronous render.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class LoadingStub {
-  @Input() text = '';
-  @Input() showText = true;
-  @Input() size = '';
-}
-
 const RESULT = {
   Title: 'Q3 Report', EntityName: 'Documents', RecordID: 'rec-42', Score: 0.9,
   Snippet: 'A snippet', SourceIcon: 'fa-solid fa-file', SourceType: 'database', Tags: [],
@@ -26,7 +18,7 @@ const RESULT = {
 
 const render = (Result: SearchResultItem | null, SidePanelMode = false) =>
   renderComponentFixture(SearchResultDetailComponent, {
-    imports: [MJEmptyStateComponent, LoadingStub],
+    imports: [MJEmptyStateComponent, StubLoadingComponent],
     declarations: [SearchResultDetailComponent],
     inputs: { Result, SidePanelMode },
   });

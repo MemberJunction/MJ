@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { query } from '@memberjunction/ng-test-utils';
 import { createFakeProvider, useFakeGlobalProvider } from '@memberjunction/ng-test-utils';
+import type { EntityInfo } from '@memberjunction/core';
 import { EntityPermissionsSelectorWithGridComponent } from './entity-selector-with-grid.component';
 import { EntityPermissionsModule } from '../module';
 
@@ -13,9 +14,11 @@ import { EntityPermissionsModule } from '../module';
  * `useFakeGlobalProvider` keeps its async load from blowing up when we assert it has mounted.
  */
 
-const ENTITIES = [{ Name: 'Users' }, { Name: 'Accounts' }] as never;
+// Minimal entity catalog — `Partial<EntityInfo>` is exactly what createFakeProvider's
+// `entities` option accepts, so the fields we DO provide stay type-checked.
+const ENTITIES: Array<Partial<EntityInfo>> = [{ Name: 'Users' }, { Name: 'Accounts' }];
 
-function render(inputs: Record<string, unknown> = {}, entities: never = ENTITIES): ComponentFixture<EntityPermissionsSelectorWithGridComponent> {
+function render(inputs: Record<string, unknown> = {}, entities: Array<Partial<EntityInfo>> = ENTITIES): ComponentFixture<EntityPermissionsSelectorWithGridComponent> {
   TestBed.configureTestingModule({ imports: [EntityPermissionsModule] });
   const fixture = TestBed.createComponent(EntityPermissionsSelectorWithGridComponent);
   fixture.componentRef.setInput('Provider', createFakeProvider({ entities }));
@@ -41,7 +44,7 @@ describe('EntityPermissionsSelectorWithGridComponent (DOM)', () => {
   it('does not render the inner permission grid when no entity is selectable (empty catalog)', () => {
     // With an empty entity catalog the dropdown has nothing to select, so CurrentEntity stays
     // unset and the `@if (CurrentEntity)` grid is not rendered.
-    expect(query(render({}, [] as never), 'mj-entity-permissions-grid')).toBeNull();
+    expect(query(render({}, []), 'mj-entity-permissions-grid')).toBeNull();
   });
 
   it('reveals the inner permission grid, auto-selecting the first entity from the provider catalog', () => {
