@@ -20,6 +20,15 @@
 > Migration written (§8 Phase 2). §9.2 (`full_access` semantics) also resolved: the combination is **invalid and rejected**,
 > not silently resolved either way — see §5.6.1. **No decisions remain blocking implementation.**
 >
+> **v2.4 changelog — owner decisions (PR #3409, jordanfanapour, 2026-08-04).** §9.3 resolved: ceiling filters deferred to
+> v2, keys-only enforcement in v1 (column ships unused). §9.5 resolved: WS1 proceeds as a pure bugfix; changeset
+> documentation requirement stands. §9.7 resolved: exemption looseness deferred to its own ticket, with the sharpened
+> role-stacking analysis recorded (the second role need not even grant the permission) and the note that WS3 is
+> structurally unaffected. §9.4/§9.8 struck as answered in body. §5.10 ticket 1 updated:
+> [PR #3428](https://github.com/MemberJunction/MJ/pull/3428) lands the `ReportResolver` fix plus, ahead of this plan,
+> WS1's M1 (`CheckRecordRLS` escaping) and §5.4's `MarkupFilterText` hardening — WS1 rebases on it and keeps M5 + the
+> typed-CAST builder. **Plan status: implementation-ready; nothing blocks WS1.**
+>
 > **v2.3 changelog — post-approval review (PR #3409, MarceloT-BC; findings verified against source before adoption).**
 > All six findings held. (M1) `CheckRecordRLS` interpolates the PK unescaped — a client-reachable RLS bypass; fixed in WS1
 > alongside (M5) the raw numeric branch of the projection builder. (M2) `MarkupFilterText` substitutes `"undefined"` for
@@ -249,6 +258,10 @@ To be precise about what changes, because an earlier draft's wording invited mis
 pre-image check stays at step 2b and `OnBeforeSaveExecute` stays at step 3; the post-image check is a *new* step inserted
 after hooks complete, so it validates final values. No existing hook's ordering or inputs change. The only difference hooks
 observe is that their mutations now land *inside* the authorization boundary instead of after it — which is the point.
+
+> **Status update (2026-08-04):** finding M1 below (and §5.4's `MarkupFilterText` hardening) is landing ahead of this plan
+> in [PR #3428](https://github.com/MemberJunction/MJ/pull/3428), with regression tests. WS1 rebases on #3428 and keeps
+> what #3428 does not cover: finding M5 (the raw numeric branch) and the typed-CAST projection-builder rewrite.
 
 **Escaping fixes folded into WS1** (review findings M1/M5, both verified). `CheckRecordRLS` interpolates the primary-key
 value with **no quote escaping** (`GenericDatabaseProvider.ts:3895-3899`), while the `Load()`-by-PK path 90 lines earlier
@@ -537,8 +550,8 @@ Composition:
 
 ```
 [ role RLS: (roleA OR roleB), or '' if exempt/none ]
-  AND [ application ceiling filter, or omitted if none ]
-  AND [ key scope filter, or omitted if none ]
+  AND [ application ceiling filter, or omitted if none ]    ← v2 (deferred per §9.3; column ships, enforcement doesn't)
+  AND [ key scope filter, or omitted if none ]              ← v1
 ```
 
 - **OR within the role layer** — existing, unchanged semantics; a user's roles are additive.
@@ -768,9 +781,12 @@ five-minute fix and a lost day when a filtered key's workload later grows into a
 
 **Tickets to file** (per review — these evaporate when the plan doc goes stale; none are gated on this feature):
 
-1. **`ReportResolver.CreateReportFromConversationDetailID` SQL injection** — client-supplied `ConversationDetailID`
-   interpolated into raw `mssql.Request` SQL (`ReportResolver.ts:92-104`, verified). Live shipping code; deserves its own
-   issue and severity, not a closing aside. (Upgraded from "worth a ticket" on review pushback — correctly so.)
+1. **`ReportResolver.CreateReportFromConversationDetailID` SQL injection** — ~~to file~~ **being fixed in
+   [PR #3428](https://github.com/MemberJunction/MJ/pull/3428)** (parameterized `request.input(...)` bind, with regression
+   tests). #3428 also lands two other items from this plan ahead of schedule: the `CheckRecordRLS` PK escaping (WS1
+   finding M1) and the `MarkupFilterText` `undefined`/escaping hardening (§5.4, finding M2) including the blast-radius
+   changeset callout. Point this entry at the merged commit once it lands. **Not covered by #3428 and still WS1's:** the
+   projection builder's raw numeric branch (M5) and the typed-CAST rewrite.
 2. **RLS exemption looseness** — exemption granted from the mere presence of a filter-less permission row, without checking
    the permission is granted (§2.2, §6, §9.7).
 3. **Query cache carries no user segment** — all authorized principals share one cached result set
@@ -928,17 +944,27 @@ Adding nullable columns with FKs is additive and consistent with
    means unrestricted; a row filter alongside it is incoherent, and either silent resolution is a bug. Rejected at authoring
    time on both sides, with a fail-closed runtime backstop for the cases authoring validation cannot catch (ceiling-granted
    `full_access`, independent edits, stale scope cache). Specified in §5.6.1.
-3. **Application ceiling filters in v1, or keys only?** Included because the column is free once the mechanism exists.
-   Deferring is not breaking.
-4. **Vocabulary size** (§5.2). Three tokens cover the AR portal and partner-integration cases. Anything else worth
-   registering up front, given adding one later is a typed code change rather than a migration?
-5. **WS1 blast radius** (§3.5). Do any deployments run an Update RLS filter *and* legitimately reassign a filter-referenced
-   column as a non-exempt principal? Given §2.2, "grant exemption" is a poor remedy — prefer widening the filter.
+3. ~~**Application ceiling filters in v1, or keys only?**~~ — **RESOLVED 2026-08-04 (jordanfanapour): keys-only in v1.**
+   The `APIApplicationScope.RowFilterID` column stays (already in the staged migration, costs nothing unused), but WS3 does
+   not build ceiling-filter enforcement to land. Non-breaking to add later; §5.5's composition formula marks the ceiling
+   term as v2.
+4. ~~**Vocabulary size**~~ — **RESOLVED in §5.2** (review round 2): `ActingCompanyIDs` registered list-capable;
+   `ActingCustomerID` considered and rejected (organizations cover it); scalar tokens documented as one-way doors.
+5. ~~**WS1 blast radius**~~ — **RESOLVED 2026-08-04 (jordanfanapour): treat as a pure bugfix.** No known deployment
+   legitimately reassigns a filter-referenced column as a non-exempt principal under an Update RLS filter. Proceed as
+   scoped — but §3.5's changeset-documentation requirement stands: "not aware of one" is not "confirmed none exist," and an
+   affected deployment needs something to point at when a previously-succeeding update starts failing.
 6. ~~**Should WS1 and WS2 be their own PR?**~~ — **RESOLVED 2026-08-02: yes, split** (reviewer concurred). §8 Phase 1 ships
    as its own PR.
-7. **Is the §2.2 exemption looseness worth its own fix now?** WS3 routes around it. Left alone, every role-RLS deployment
-   keeps a broader-than-intended exemption. Changing it is behavior-affecting for existing deployments.
-8. **§5.10's v1 wholesale-deny** (filtered keys denied `query:run`/`query:test`/`dataset:read`/`report:run`) is decided in
-   the plan on fail-closed grounds, but it is the one decision added post-review — flagging it for the PR thread so it gets
-   an explicit ack rather than riding in silently. The relaxation path (precise per-target denial) is documented and
-   asymmetric: implementable for datasets now, not safely for queries until the `Query Entities` bridge fails closed.
+7. ~~**Is the §2.2 exemption looseness worth its own fix now?**~~ — **RESOLVED 2026-08-04 (jordanfanapour): defer, own
+   ticket, not this feature.** Confirmed real, and sharper than §2.2 stated: `UserExemptFromRowLevelSecurity`
+   (`entityInfo.ts:2231-2258`) exempts off the mere *absence* of a role's `*RLSFilterID`, never checking that role's
+   `Can{Read,Create,Update,Delete}` flag or its `Type` — so a filtered "Sales Rep" user who also holds any second role
+   whose permission row for the entity has no filter (**including one that doesn't grant the permission at all**) becomes
+   fully exempt. Privilege escalation via role stacking, for pure role-based RLS. Deferring does not weaken this feature:
+   WS3 composes key filters via `GetEffectiveRowFilterWhereClause`, structurally outside that method, so a wrongly-exempt
+   user is still bound by their key's filter. Not fixed here on purpose — correcting it changes who is exempt in every
+   existing role-RLS deployment, and whether "a role with no filter and no grant" is intended blanket access in some
+   deployment's convention needs its own audit first (§5.10 ticket 2).
+8. ~~**§5.10's v1 wholesale-deny**~~ — **RESOLVED in §5.10**: acked in review (MarceloT-BC) as (a)-now-(b)-roadmap, with
+   the hard condition that the `AuthorizationError` names the row filter as cause and states the split-the-key remedy.
