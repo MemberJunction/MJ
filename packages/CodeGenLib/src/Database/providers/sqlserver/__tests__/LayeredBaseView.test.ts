@@ -138,6 +138,19 @@ describe('refresh and permissions for an application-owned base view', () => {
         expect(sql).toContain('sp_executesql');
     });
 
+    it('blocks and terminates the guard so concatenated statements stay outside it', () => {
+        // recompileAllBaseViews appends these into one script with no separator between entries. A
+        // bare single-statement IF would leave whatever follows looking like the guarded statement
+        // to a reader, and the next entry butted onto the same line.
+        const guarded = provider.generateIfViewExistsSQL('orders', 'vwOrderHeaders', "EXEC sp_refreshview 'orders.vwOrderHeaders';");
+        expect(guarded).toContain('BEGIN');
+        expect(guarded).toContain('END');
+        expect(guarded.endsWith('\n')).toBe(true);
+
+        const script = guarded + provider.generateViewRefreshSQL('orders', 'vwOther');
+        expect(script).toContain("END\nEXEC sp_refreshview 'orders.vwOther';");
+    });
+
     it('escapes quotes so the wrapped statement survives the string literal', () => {
         // sp_refreshview takes a quoted name, so the guarded body always contains quotes. Leaving
         // them unescaped would terminate the N'...' literal early and emit a syntax error.

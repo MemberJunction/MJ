@@ -1646,7 +1646,8 @@ BEGIN
     EXECUTE '${escaped}';
   END IF;
 END
-$if_view_exists$;`;
+$if_view_exists$;
+`;
     }
 
     /** @inheritdoc */
