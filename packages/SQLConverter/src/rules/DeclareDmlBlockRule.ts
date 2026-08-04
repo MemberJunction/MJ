@@ -18,6 +18,7 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
 import {
   convertIdentifiers, removeNPrefix, convertCommonFunctions, quotePascalCaseIdentifiers,
+  convertTopToLimit,
   castBooleanInsertValues, convertBooleanLiteralComparisons,
 } from './ExpressionHelpers.js';
 import { resolveType } from './TypeResolver.js';
@@ -155,9 +156,15 @@ export class DeclareDmlBlockRule implements IConversionRule {
     if (!m) return `${indent}  -- Could not parse: ${item}`;
 
     const pgType = resolveType(m[2].trim());
-    return init
-      ? `${indent}v_${m[1]} ${pgType} := ${init};`
-      : `${indent}v_${m[1]} ${pgType};`;
+    if (!init) return `${indent}v_${m[1]} ${pgType};`;
+
+    // The initializer is an expression the block's other passes never see — the whole item used
+    // to be dropped, so nothing downstream had to handle it. `SELECT TOP n` is the case that bites:
+    // left verbatim it reaches PG as `syntax error at or near "n"`. convertTopToLimit puts LIMIT on
+    // its own line, which would split this declaration across lines and break the line-based
+    // DECLARE-section split below, so the result is folded back onto one line.
+    const pgInit = convertTopToLimit(init).replace(/\s*\n\s*/g, ' ');
+    return `${indent}v_${m[1]} ${pgType} := ${pgInit};`;
   }
 
   /**

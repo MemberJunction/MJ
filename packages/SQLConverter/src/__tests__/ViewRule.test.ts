@@ -202,6 +202,23 @@ INNER JOIN [__mj].[Person] AS mjCommonPerson_PayerID
       expect(result).not.toMatch(/(?<!")\bmjCommonPerson_PayerID\./);
     });
 
+    it('should leave references to an implicit (no AS) mixed-case alias unquoted', () => {
+      // MJ's baseline views introduce aliases WITHOUT the AS keyword — `__mj."vwEntities"
+      // relatedEntity`. Only `AS <alias>` definitions get quoted, so an implicit definition folds
+      // to lowercase; quoting its references makes the alias unresolvable. Verified live: with the
+      // references quoted, the converted __mj.vwEntityRelationships from B202602151200__v5.0__
+      // Baseline.sql fails on PG 17 with `missing FROM-clause entry for table "relatedEntity"`.
+      const sql = `CREATE VIEW [__mj].[vwEntityRelationships] AS
+SELECT er.*, relatedEntity.[Name] AS [RelatedEntity]
+FROM [__mj].[EntityRelationship] er
+INNER JOIN [__mj].[vwEntities] relatedEntity
+  ON [er].[RelatedEntityID] = relatedEntity.[ID]`;
+      const result = convert(sql);
+      expect(result).toContain('relatedEntity."Name"');
+      expect(result).toContain('relatedEntity."ID"');
+      expect(result).not.toContain('"relatedEntity"');
+    });
+
     it('should leave an all-lowercase alias unquoted', () => {
       const sql = `CREATE VIEW [__mj].[vwFoo] AS
 SELECT p.[ID] FROM [__mj].[Payment] AS p`;
