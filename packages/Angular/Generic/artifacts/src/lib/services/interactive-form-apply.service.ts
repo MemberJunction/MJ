@@ -17,7 +17,7 @@
  * eventually the cockpit's chat-pane Apply flow) follows the same rules.
  */
 import { Injectable, inject } from '@angular/core';
-import { Metadata, LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { Metadata, LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
@@ -73,7 +73,7 @@ export class InteractiveFormApplyService {
         // Step 1: detect existing state via Get Active Form For Entity.
         const activeResult = await this.runActionByName(client, 'Get Active Form For Entity', [
             { Name: 'EntityName', Value: entityName, Type: 'Input' },
-        ]);
+        ], p);
         if (!activeResult.Success) {
             return this.fail(`Could not check for existing override: ${activeResult.Message ?? 'unknown error'}`);
         }
@@ -117,13 +117,13 @@ export class InteractiveFormApplyService {
                 // version exists yet), use in-place to avoid creating unnecessary
                 // version history.
                 { Name: 'VersionBumpKind', Value: isPending ? 'in-place' : 'minor', Type: 'Input' },
-            ]);
+            ], p);
             // Auto-activate the resulting version too. "Apply to my form" is an explicit
             // user action — they expect the applied form to go live, not sit as a Pending
             // draft the runtime variant switcher (Active variants only) can't reach. The
             // prior version is preserved as history and restorable from Form Builder.
             const modifyActivated = modifyResult.Success
-                ? await this.activateCreatedOverride(client, modifyResult.Message)
+                ? await this.activateCreatedOverride(client, modifyResult.Message, p)
                 : false;
             return this.summarize(modifyResult, 'modify', user, modifyActivated);
         }
@@ -131,13 +131,13 @@ export class InteractiveFormApplyService {
             { Name: 'EntityName', Value: entityName, Type: 'Input' },
             { Name: 'Name',       Value: formName,   Type: 'Input' },
             { Name: 'Spec',       Value: JSON.stringify(spec), Type: 'Input' },
-        ]);
+        ], p);
         // Net-new "Apply to my form" is an explicit, confirmed user action, so we
         // activate the freshly-created (Pending) override immediately — the form goes
         // live in one step. Refining an EXISTING active form (the branch above) stays
         // Pending so a live form is never silently replaced.
         const activated = createResult.Success
-            ? await this.activateCreatedOverride(client, createResult.Message)
+            ? await this.activateCreatedOverride(client, createResult.Message, p)
             : false;
         return this.summarize(createResult, 'create', user, activated);
     }
@@ -155,12 +155,13 @@ export class InteractiveFormApplyService {
         client: GraphQLActionClient,
         actionName: string,
         params: Array<{ Name: string; Value: string; Type: 'Input' }>,
+        provider: IMetadataProvider,
     ): Promise<{ Success: boolean; Message?: string; ResultCode?: string }> {
         try {
             // The action ID is required by RunAction. We look it up from the
             // action engine's cached metadata if available; otherwise we ask
             // the GraphQL provider directly.
-            const actionId = await this.resolveActionIdByName(actionName);
+            const actionId = await this.resolveActionIdByName(actionName, provider);
             if (!actionId) {
                 return { Success: false, Message: `Action '${actionName}' not found.` };
             }
@@ -186,12 +187,11 @@ export class InteractiveFormApplyService {
      * Resolve an action ID by Name. Falls back to a direct RunView against
      * the Action entity when ActionEngine isn't loaded.
      */
-    private async resolveActionIdByName(name: string): Promise<string | null> {
+    private async resolveActionIdByName(name: string, provider: IMetadataProvider): Promise<string | null> {
         try {
             // ActionEngine may not be initialised in the chat surface — query directly.
             // The core Action table is registered as the "MJ: Actions" entity.
-            const { RunView } = await import('@memberjunction/core');
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(provider);
             const result = await rv.RunView<{ ID: string }>({
                 EntityName: 'MJ: Actions',
                 ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
@@ -215,6 +215,7 @@ export class InteractiveFormApplyService {
     private async activateCreatedOverride(
         client: GraphQLActionClient,
         createMessage: string | undefined,
+        provider: IMetadataProvider,
     ): Promise<boolean> {
         let overrideId: string | undefined;
         try {
@@ -225,7 +226,7 @@ export class InteractiveFormApplyService {
         if (!overrideId) return false;
         const activateResult = await this.runActionByName(client, 'Activate Interactive Form Version', [
             { Name: 'OverrideID', Value: overrideId, Type: 'Input' },
-        ]);
+        ], provider);
         if (!activateResult.Success) {
             LogError(`InteractiveFormApplyService: created override ${overrideId} but auto-activation failed: ${activateResult.Message ?? 'unknown error'}`);
         }

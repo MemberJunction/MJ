@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-entity-action-ux",
-  "version": "5.50.0",
+  "version": "6.0.0",
   "description": "MemberJunction: Pluggable runtime-UX framework for entity actions — a registry-resolved component seam that lets an entity action mount a rich, interactive UI (e.g. the Record Process bulk-update runner) instead of firing blind.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -11,6 +11,7 @@
     "build": "npm run clean && ngc",
     "clean": "rimraf dist",
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "test:watch": "vitest"
   },
   "keywords": [
@@ -35,17 +36,19 @@
     "rxjs": "^7.8.2"
   },
   "dependencies": {
-    "@memberjunction/core": "5.50.0",
-    "@memberjunction/core-entities": "5.50.0",
-    "@memberjunction/global": "5.50.0",
-    "@memberjunction/graphql-dataprovider": "5.50.0",
-    "@memberjunction/ng-ui-components": "5.50.0",
-    "@memberjunction/record-set-processor-base": "5.50.0",
+    "@memberjunction/core": "6.0.0",
+    "@memberjunction/core-entities": "6.0.0",
+    "@memberjunction/global": "6.0.0",
+    "@memberjunction/graphql-dataprovider": "6.0.0",
+    "@memberjunction/ng-base-types": "6.0.0",
+    "@memberjunction/ng-ui-components": "6.0.0",
+    "@memberjunction/record-set-processor-base": "6.0.0",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
-  }
+  },
+  "mjUILayer": "widgets"
 }

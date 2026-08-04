@@ -15,6 +15,7 @@ on:
       - 'CONTRIBUTING.md'
       - 'metadata/README.md'
       - '.claude/skills/**'
+      - 'releases/**'
       - '.github/workflows/docs-site-ci.yml'
 
 permissions:

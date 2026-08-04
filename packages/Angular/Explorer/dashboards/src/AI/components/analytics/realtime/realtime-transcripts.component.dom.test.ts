@@ -1,8 +1,7 @@
-import { Component, Input } from '@angular/core';
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
-import { createFakeProvider, useFakeGlobalProvider, query, queryAll } from '@memberjunction/ng-test-utils';
+import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsRealtimeTranscriptsComponent } from './realtime-transcripts.component';
 
 /**
@@ -14,13 +13,6 @@ import { AnalyticsRealtimeTranscriptsComponent } from './realtime-transcripts.co
  * "Select a meeting" transcript-pane placeholder. `selectRoom()` loads that room's transcript lines
  * (`MJ: Conversation Details`) and renders one `.line` per utterance. `mj-loading`/`mj-empty-state` stubbed.
  */
-
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading {}
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<div class="stub-empty">{{ Title }}</div>' })
-class StubEmptyState {
-  @Input() Title = '';
-}
 
 const ROOMS = [
   { ID: 'c1', Name: 'Standup', ExternalID: 'room-1', __mj_CreatedAt: '2026-01-05T09:00:00Z', __mj_UpdatedAt: '2026-01-05T09:30:00Z' },
@@ -36,7 +28,7 @@ const transcriptRows = (p: RunViewParams): unknown[] =>
   p.EntityName === 'MJ: Conversations' ? ROOMS : p.EntityName === 'MJ: Conversation Details' ? LINES : [];
 
 async function render(rows: (p: RunViewParams) => unknown[]): Promise<ComponentFixture<AnalyticsRealtimeTranscriptsComponent>> {
-  TestBed.configureTestingModule({ declarations: [AnalyticsRealtimeTranscriptsComponent], imports: [StubLoading, StubEmptyState] });
+  TestBed.configureTestingModule({ declarations: [AnalyticsRealtimeTranscriptsComponent], imports: [StubLoadingComponent, StubEmptyStateComponent] });
   const fixture = TestBed.createComponent(AnalyticsRealtimeTranscriptsComponent);
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: rows }));
   fixture.detectChanges(false);

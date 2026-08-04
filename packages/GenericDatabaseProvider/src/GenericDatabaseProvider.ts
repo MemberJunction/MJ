@@ -474,7 +474,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     InvocationType: invocationTypeEntity,
                     ContextUser: user,
                 });
-                results.push(result);
+                // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
+                // outside it — the action never ran, so there is no result to report.
+                if (result) {
+                    results.push(result);
+                }
             }
             return results;
         } catch (e) {
@@ -1574,8 +1578,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 let sExcludeSQL = `${this.QuoteIdentifier(entityInfo.FirstPrimaryKey?.Name ?? 'ID')} NOT IN (SELECT RecordID FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails')} WHERE EntityID='${viewEntity?.EntityID}' AND`;
                 if (params.ExcludeDataFromAllPriorViewRuns === true)
                     sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
-                else
+                else {
+                    // SECURITY: excludeUserViewRunID is user-supplied (GraphQL input) and is
+                    // interpolated directly into SQL here. Unlike ExtraFilter/UserSearchString/
+                    // OverrideExcludeFilter (all passed through ValidateUserProvidedSQLClause),
+                    // this value historically had NO validation — allowing SQL injection into the
+                    // view WHERE clause. It is only ever a UserViewRun.ID (a GUID), so reject
+                    // anything that is not a well-formed GUID before it reaches the query.
+                    if (!/^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/.test(excludeUserViewRunID))
+                        throw new Error(`Invalid ExcludeUserViewRunID: must be a GUID`);
                     sExcludeSQL += ` UserViewRunID=${excludeUserViewRunID})`;
+                }
 
                 if (overrideExcludeFilter.length > 0) {
                     if (!this.ValidateUserProvidedSQLClause(overrideExcludeFilter))
@@ -3895,7 +3908,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const pkWhere = entity.PrimaryKeys.map(pk => {
             const fieldInfo = entityInfo.FieldByName(pk.Name);
             const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
-            return `${this.QuoteIdentifier(pk.Name)}=${quotes}${pk.Value}${quotes}`;
+            // Escape embedded single quotes when the value is wrapped in quotes — see Load() above.
+            const safeVal = quotes ? String(pk.Value).replace(/'/g, "''") : pk.Value;
+            return `${this.QuoteIdentifier(pk.Name)}=${quotes}${safeVal}${quotes}`;
         }).join(' AND ');
 
         const sql = `SELECT COUNT(*) AS cnt FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${pkWhere} AND (${rlsWhereClause})`;

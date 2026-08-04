@@ -336,7 +336,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       if (table.metadata?.sql) {
         // Live SQL execution
         const pageState = this.tablePageState.get(tableIndex)!;
-        const rq = new RunQuery();
+        const rq = this.RunQueryToUse;
         const startRow = (pageState.pageNumber - 1) * pageState.pageSize;
         const result = await rq.RunQuery({
           SQL: table.metadata.sql,

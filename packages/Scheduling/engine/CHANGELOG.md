@@ -1,5 +1,48 @@
 # @memberjunction/scheduling-engine
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/notifications@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/record-set-processor@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/scheduling-engine-base@6.0.0
+  - @memberjunction/templates@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/scheduling-base-types@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [c382605]
+- Updated dependencies [a8fc549]
+  - @memberjunction/ai-agents@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/record-set-processor@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/notifications@5.51.0
+  - @memberjunction/integration-engine@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/scheduling-engine-base@5.51.0
+  - @memberjunction/templates@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/scheduling-base-types@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes

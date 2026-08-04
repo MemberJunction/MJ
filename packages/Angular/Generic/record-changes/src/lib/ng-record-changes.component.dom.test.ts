@@ -4,9 +4,11 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EntityFieldTSType } from '@memberjunction/core';
+import type { EntityInfo } from '@memberjunction/core';
+import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
-import { query, queryAll, text, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { query, queryAll, text, click, capture, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { RecordChangesComponent, RestoreVersionEvent } from './ng-record-changes.component';
 
 /**
@@ -40,13 +42,6 @@ class StubSlidePanel {
   @Input() MinWidthPx: unknown;
   @Input() MaxWidthRatio: unknown;
   @Output() Closed = new EventEmitter<void>();
-}
-
-@Component({ standalone: false, selector: 'mj-loading', template: '<span class="stub-loading">{{ text }}</span>' })
-class StubLoading {
-  @Input() text = '';
-  @Input() size: unknown;
-  @Input() showText: unknown;
 }
 
 @Component({ standalone: false, selector: 'mj-restore-preview-panel', template: '' })
@@ -89,8 +84,25 @@ function fakeRecord() {
 }
 
 // ── Canned MJ: Record Changes rows. Newest first is enforced by the component's sort.
-function change(over: Record<string, unknown>) {
-  return {
+//    The double is typed as a Pick of the real entity, so field names AND value-list
+//    unions (Type/Source/Status) stay in lockstep with the CodeGen-generated class.
+type RecordChangeDouble = Pick<
+  MJRecordChangeEntity,
+  | 'ID'
+  | 'Type'
+  | 'Source'
+  | 'Status'
+  | 'User'
+  | 'ChangedAt'
+  | 'ChangesJSON'
+  | 'ChangesDescription'
+  | 'FullRecordJSON'
+  | 'Comments'
+  | 'ErrorLog'
+>;
+
+function change(over: Partial<RecordChangeDouble> = {}): RecordChangeDouble {
+  const base = {
     ID: 'c-id',
     Type: 'Update',
     Source: 'Internal',
@@ -99,11 +111,13 @@ function change(over: Record<string, unknown>) {
     ChangedAt: new Date('2025-03-01T17:56:00Z'),
     ChangesJSON: JSON.stringify({ Name: { field: 'Name', oldValue: 'Old', newValue: 'New' } }),
     ChangesDescription: 'Name changed',
-    FullRecordJSON: null,
+    // FullRecordJSON is a non-nullable string on the entity; '' is equally falsy for the
+    // component's "has snapshot?" guards.
+    FullRecordJSON: '',
     Comments: null,
     ErrorLog: null,
-    ...over,
-  };
+  } satisfies RecordChangeDouble;
+  return { ...base, ...over };
 }
 
 const CHANGES = [
@@ -121,14 +135,14 @@ interface RunViewLike {
 function provider(changes = CHANGES) {
   return createFakeProvider({
     runViewResults: (p: RunViewLike) => (p.EntityName === 'MJ: Record Changes' ? changes : []),
-    entityByName: () => ({ TrackRecordChanges: true }) as never,
+    entityByName: () => ({ TrackRecordChanges: true } satisfies Pick<EntityInfo, 'TrackRecordChanges'>) as unknown as EntityInfo,
   });
 }
 
 async function render(inputs: Record<string, unknown>): Promise<ComponentFixture<RecordChangesComponent>> {
   TestBed.configureTestingModule({
-    imports: [CommonModule, FormsModule, MJEmptyStateComponent],
-    declarations: [RecordChangesComponent, StubSlidePanel, StubLoading, StubRestorePreview, StubLabelCreate],
+    imports: [CommonModule, FormsModule, MJEmptyStateComponent, StubLoadingComponent],
+    declarations: [RecordChangesComponent, StubSlidePanel, StubRestorePreview, StubLabelCreate],
     providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } }],
   });
   const fixture = TestBed.createComponent(RecordChangesComponent);
@@ -238,7 +252,9 @@ describe('RecordChangesComponent (DOM, data-bound)', () => {
 
     // Select a change for preview, then drive the panel's confirm path directly.
     const targetChange = CHANGES[2]; // c1
-    f.componentInstance.RestorePreviewChange = targetChange as never;
+    // targetChange is a RecordChangeDouble (a typed Pick of the entity); the seam widens
+    // the partial double to the full entity type the component property expects.
+    f.componentInstance.RestorePreviewChange = targetChange as unknown as MJRecordChangeEntity;
     f.componentInstance.OnRestorePanelConfirmed({
       SourceChangeID: 'c1',
       Reason: 'fixing data',

@@ -1,5 +1,21 @@
 # @memberjunction/ai-huggingface
 
+## 6.0.0
+
+### Patch Changes
+
+- @memberjunction/ai@6.0.0
+- @memberjunction/ai-openai@6.0.0
+- @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.51.0
+- @memberjunction/ai-openai@5.51.0
+- @memberjunction/global@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes
