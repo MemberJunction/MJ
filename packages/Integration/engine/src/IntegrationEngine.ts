@@ -1818,7 +1818,22 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     else if (currentPage != null) currentPage += 1;
                     continue;
                 }
+                // Cannot skip past this page (cursor paging, or the gap budget is spent), so the object
+                // stops here with an incomplete result set. The watermark is held below and the run
+                // re-fetches next time — but WITHOUT this warning that outcome is invisible: the map
+                // reports success with the records it did get, so an object whose very first page
+                // failed reads as a clean "0 records, nothing changed" run. Verified live: a sync
+                // whose only page timed out finished Status=Success, errorCount=0, empty ErrorLog.
                 fetchCompletedCleanly = false;
+                logger?.warning(
+                    entityMap.ExternalObjectName ?? entityMap.ID,
+                    'FETCH_ABORTED_INCOMPLETE',
+                    `Fetch for '${entityMap.ExternalObjectName}' stopped at batch ${batchCount} after a persistent ` +
+                    `error and could not continue past it, so this object's result set is INCOMPLETE ` +
+                    `(${recordsInMap} record(s) fetched before the failure). The watermark is held, so the ` +
+                    `unfetched window is retried next run. Error: ${errMsg}`,
+                    { batchIndex: batchCount, recordsFetchedBeforeFailure: recordsInMap, error: errMsg },
+                );
                 break;
             }
             logger?.emit('sync.fetch.batch.complete', {
