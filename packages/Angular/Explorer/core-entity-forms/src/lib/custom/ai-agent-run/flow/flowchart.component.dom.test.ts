@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderComponentFixture, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { FlowchartComponent } from './flowchart.component';
 import type { FlowModel, FlowNode } from './agent-run-flow.model';
@@ -12,12 +12,27 @@ import type { FlowModel, FlowNode } from './agent-run-flow.model';
  * (test-file scope only). OnPush + imperative SVG, so one render + explicit Render() call per test.
  */
 
-// jsdom has no SVGGraphicsElement.getBBox — Flowchart's deferred fitToView() needs it.
+// jsdom has no SVGGraphicsElement.getBBox — Flowchart's deferred fitToView() needs it. Installed in
+// beforeAll and restored in afterAll so the patch cannot leak into other specs if per-file process
+// isolation is ever relaxed.
+let savedGetBBox: PropertyDescriptor | undefined;
+
 beforeAll(() => {
-  if (!('getBBox' in SVGElement.prototype)) {
-    (SVGElement.prototype as unknown as { getBBox: () => DOMRect }).getBBox = () =>
-      ({ x: 0, y: 0, width: 800, height: 600 }) as DOMRect;
-  }
+  savedGetBBox = Object.getOwnPropertyDescriptor(SVGElement.prototype, 'getBBox');
+  const stub = (): DOMRect => new DOMRect(0, 0, 800, 600);
+  Object.defineProperty(SVGElement.prototype, 'getBBox', { value: stub, configurable: true, writable: true });
+});
+
+afterAll(async () => {
+  // Every rendering test queues `requestAnimationFrame(() => this.fitToView())` (which calls
+  // getBBox). rAF callbacks run FIFO, so awaiting one queued NOW guarantees all of the tests'
+  // earlier callbacks have already fired — while the stub is still installed. Without this
+  // flush, slow CI runners fire those callbacks AFTER the restore below and every one crashes
+  // as an Unhandled Error ("this.mainG.getBBox is not a function"), failing the run even
+  // though all tests passed.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  if (savedGetBBox) Object.defineProperty(SVGElement.prototype, 'getBBox', savedGetBBox);
+  else Reflect.deleteProperty(SVGElement.prototype, 'getBBox');
 });
 
 /** Build a minimal FlowNode with sensible defaults for the fields renderers read. */
