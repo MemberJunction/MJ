@@ -1462,6 +1462,28 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             parts.push(`ak:${params.AfterKey.ToString()}`);
         }
 
+        // TotalRowCount semantics MUST be part of the fingerprint, because the provider now
+        // computes TotalRowCount only for requests that actually need it: OFFSET-paginated reads,
+        // ResultType='count_only', and explicit ReturnTotalRowCount opt-ins. Everything else gets
+        // TotalRowCount = the returned row count. Two otherwise-identical requests that differ on
+        // that axis therefore carry DIFFERENT TotalRowCount meanings and must not share a slot.
+        //
+        // Two collisions this closes, both invisible before the narrowing (every variant used to
+        // return the same true count, so sharing was harmless):
+        //   1. `{MaxRows:500}` vs `{MaxRows:500, StartRow:0}` — the numeric startRow segment above
+        //      normalizes undefined to 0, so these are byte-identical, but only the second is
+        //      "paginated" and gets the true count. Whichever ran first decided what the other saw.
+        //   2. `{ReturnTotalRowCount:true}` vs the same params without it — the opt-in was not
+        //      represented in the key at all.
+        // Appended only when the request is paginated or opted in, so the overwhelmingly common
+        // plain read keeps producing the exact pre-existing fingerprint.
+        const isOffsetPaginated = !params.AfterKey
+            && !!params.MaxRows && params.MaxRows > 0
+            && params.StartRow !== undefined && params.StartRow >= 0;
+        if (isOffsetPaginated || params.ReturnTotalRowCount === true) {
+            parts.push(`trc:${isOffsetPaginated ? 'pg' : ''}${params.ReturnTotalRowCount === true ? '1' : ''}`);
+        }
+
         // Row-Level-Security segment. The provider appends a per-user RLS WHERE clause to the
         // executed SQL AFTER the cache key would otherwise be computed, so without this an
         // RLS-scoped read could collide with (and be served) a cached unscoped result — a data

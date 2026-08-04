@@ -3048,7 +3048,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         ...runViewParams,
         ResultType: 'simple',
         Fields: this._entityInfo ? computeFieldsList(this._entityInfo, this._gridState) : undefined,
-        Aggregates: aggregateExpressions
+        Aggregates: aggregateExpressions,
+        // The grid's row-count display must reflect the FULL set even when the caller's
+        // params cap the rows. Unlike the infinite-scroll datasource below (which sets
+        // StartRow and therefore paginates), this path is not paginated, so the true
+        // count is only computed when explicitly requested.
+        ReturnTotalRowCount: true
       });
 
       const loadTimeMs = performance.now() - startTime;

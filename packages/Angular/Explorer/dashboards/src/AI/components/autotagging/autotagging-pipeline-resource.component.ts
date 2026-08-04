@@ -654,7 +654,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             EntityName: 'MJ: Tag Suggestions',
             ExtraFilter: `Status='Pending' AND Reason NOT IN ('MergeCandidate','LowUsage','WideNode')`,
             Fields: ['ID'],
-            ResultType: 'simple',
+            // count_only: this is a badge count, not a row read. It also guarantees a TRUE
+            // total — a plain capped read reports only the rows it returned.
+            ResultType: 'count_only',
         });
         this.InboxPendingCount = result.Success ? result.TotalRowCount : 0;
     }
@@ -680,7 +682,9 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             EntityName: 'MJ: Tag Suggestions',
             ExtraFilter: `Status='Pending' AND Reason IN ('MergeCandidate','LowUsage','WideNode')`,
             Fields: ['ID'],
-            ResultType: 'simple',
+            // count_only: this is a badge count, not a row read. It also guarantees a TRUE
+            // total — a plain capped read reports only the rows it returned.
+            ResultType: 'count_only',
         });
         this.HealthPendingCount = result.Success ? result.TotalRowCount : 0;
     }

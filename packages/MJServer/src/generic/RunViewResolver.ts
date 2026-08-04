@@ -177,6 +177,13 @@ export class RunViewByIDInput {
       'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
   })
   BypassCache?: boolean;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the server computes the TRUE total row count for the underlying query and returns it in TotalRowCount, even when the result rows are capped by MaxRows. When omitted, TotalRowCount reflects the number of rows actually returned (unless the read is OFFSET-paginated or ResultType is count_only, which always compute the true count). Use for KPI/badge counts that must reflect the full set rather than the page.',
+  })
+  ReturnTotalRowCount?: boolean;
 }
 
 @InputType()
@@ -291,6 +298,13 @@ export class RunViewByNameInput {
       'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
   })
   BypassCache?: boolean;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the server computes the TRUE total row count for the underlying query and returns it in TotalRowCount, even when the result rows are capped by MaxRows. When omitted, TotalRowCount reflects the number of rows actually returned (unless the read is OFFSET-paginated or ResultType is count_only, which always compute the true count). Use for KPI/badge counts that must reflect the full set rather than the page.',
+  })
+  ReturnTotalRowCount?: boolean;
 }
 
 @InputType()
@@ -391,6 +405,13 @@ export class RunDynamicViewInput {
       'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
   })
   BypassCache?: boolean;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the server computes the TRUE total row count for the underlying query and returns it in TotalRowCount, even when the result rows are capped by MaxRows. When omitted, TotalRowCount reflects the number of rows actually returned (unless the read is OFFSET-paginated or ResultType is count_only, which always compute the true count). Use for KPI/badge counts that must reflect the full set rather than the page.',
+  })
+  ReturnTotalRowCount?: boolean;
 }
 
 @InputType()
@@ -520,6 +541,13 @@ export class RunViewGenericInput {
       'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
   })
   BypassCache?: boolean;
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true the server computes the TRUE total row count for the underlying query and returns it in TotalRowCount, even when the result rows are capped by MaxRows. When omitted, TotalRowCount reflects the number of rows actually returned (unless the read is OFFSET-paginated or ResultType is count_only, which always compute the true count). Use for KPI/badge counts that must reflect the full set rather than the page.',
+  })
+  ReturnTotalRowCount?: boolean;
 }
 
 //****************************************************************************
@@ -1085,6 +1113,7 @@ export class RunViewResolver extends ResolverBase {
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
+          ReturnTotalRowCount: item.params.ReturnTotalRowCount,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,

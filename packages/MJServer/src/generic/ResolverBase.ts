@@ -388,7 +388,8 @@ export class ResolverBase {
           viewInput.AfterKey
             ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
             : undefined,
-          viewInput.BypassCache
+          viewInput.BypassCache,
+          viewInput.ReturnTotalRowCount
         );
       }
       else {
@@ -431,7 +432,8 @@ export class ResolverBase {
         viewInput.StartRow,
         viewInput.Aggregates,
         undefined,
-        viewInput.BypassCache
+        viewInput.BypassCache,
+        viewInput.ReturnTotalRowCount
       );
     } catch (err) {
       console.log(err);
@@ -477,7 +479,8 @@ export class ResolverBase {
         viewInput.StartRow,
         viewInput.Aggregates,
         undefined,
-        viewInput.BypassCache
+        viewInput.BypassCache,
+        viewInput.ReturnTotalRowCount
       );
     } catch (err) {
       console.log(err);
@@ -551,6 +554,7 @@ export class ResolverBase {
           userPayload,
           aggregates: viewInput.Aggregates,
           bypassCache: viewInput.BypassCache,
+          returnTotalRowCount: viewInput.ReturnTotalRowCount,
         });
       } catch (err) {
         LogError(err);
@@ -740,7 +744,8 @@ export class ResolverBase {
     startRow: number | undefined,
     aggregates?: AggregateExpression[],
     afterKey?: CompositeKey,
-    bypassCache?: boolean
+    bypassCache?: boolean,
+    returnTotalRowCount?: boolean
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -810,6 +815,7 @@ export class ResolverBase {
           ResultType: rt,
           Aggregates: aggregates,
           BypassCache: bypassCache,
+          ReturnTotalRowCount: returnTotalRowCount,
         },
         user
       );
@@ -930,6 +936,7 @@ export class ResolverBase {
           ResultType: rt,
           Aggregates: param.aggregates,
           BypassCache: param.bypassCache,
+          ReturnTotalRowCount: param.returnTotalRowCount,
         });
       }
 

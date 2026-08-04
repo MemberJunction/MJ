@@ -1407,9 +1407,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [sourcesResult, itemsResult, runsResult, tagsResult, sourceTypesResult, contentTypesResult] = await rv.RunViews([
                 { EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' },
-                { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: 200, ResultType: 'simple', Fields: ['ID', 'Name', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'] },
+                { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: 200, ResultType: 'simple', Fields: ['ID', 'Name', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'], ReturnTotalRowCount: true },
                 { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple' },
-                { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'] },
+                { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'], ReturnTotalRowCount: true },
                 { EntityName: 'MJ: Content Source Types', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Types', ResultType: 'simple' }
             ]);
@@ -1422,7 +1422,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             this.contentTypesRaw = contentTypesResult.Success ? contentTypesResult.Results : [];
 
             // Use TotalRowCount for accurate KPI/badge counts (the Results arrays are
-            // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count)
+            // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count).
+            // Both queries carry ReturnTotalRowCount: true — a capped, non-paginated read
+            // otherwise reports TotalRowCount = the number of rows it returned (i.e. the cap).
             this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
             this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
 
