@@ -86,8 +86,10 @@ interface Conn {
 function makeComponent(): MCPDashboardComponent {
   const cdr = { detectChanges: vi.fn(), markForCheck: vi.fn() };
   const svc = {};
-  // The constructor wires a debounced settings subject; that's harmless here.
-  return new MCPDashboardComponent(cdr as never, svc as never);
+  const confirm = {};
+  // The constructor wires a debounced settings subject; that's harmless here. None of the
+  // index-precompute paths under test touch the confirm service, so an empty double suffices.
+  return new MCPDashboardComponent(cdr as never, svc as never, confirm as never);
 }
 
 function setData(component: MCPDashboardComponent, tools: Tool[], connections: Conn[] = []): void {

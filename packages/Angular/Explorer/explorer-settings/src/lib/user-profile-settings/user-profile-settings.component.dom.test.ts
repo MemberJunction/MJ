@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { renderComponentFixture, query, queryAll, attr, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, attr, createFakeProvider, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SharedService } from '@memberjunction/ng-shared';
 import { UserProfileSettingsComponent } from './user-profile-settings.component';
@@ -24,14 +24,6 @@ class AlertStub {
   @Output() Dismissed = new EventEmitter<void>();
 }
 
-@Component({ standalone: true, selector: 'mj-empty-state', template: '' })
-class EmptyStateStub {
-  @Input() Variant = '';
-  @Input() Size = '';
-  @Input() Title = '';
-  @Input() Message = '';
-}
-
 /** Fake provider with a GetEntityObject returning a minimal, avatar-less user entity. */
 function providerWithUser(): IMetadataProvider {
   const fake = createFakeProvider({ currentUser: { ID: 'u1' } });
@@ -51,7 +43,7 @@ const avatarServiceStub = {
 
 async function render() {
   const fixture = renderComponentFixture(UserProfileSettingsComponent, {
-    imports: [FormsModule, AlertStub, EmptyStateStub],
+    imports: [FormsModule, AlertStub, StubEmptyStateComponent],
     declarations: [UserProfileSettingsComponent],
     providers: [
       { provide: UserAvatarService, useValue: avatarServiceStub },
