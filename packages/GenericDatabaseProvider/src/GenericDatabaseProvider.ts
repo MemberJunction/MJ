@@ -1574,8 +1574,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 let sExcludeSQL = `${this.QuoteIdentifier(entityInfo.FirstPrimaryKey?.Name ?? 'ID')} NOT IN (SELECT RecordID FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails')} WHERE EntityID='${viewEntity?.EntityID}' AND`;
                 if (params.ExcludeDataFromAllPriorViewRuns === true)
                     sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
-                else
+                else {
+                    // SECURITY: excludeUserViewRunID is user-supplied (GraphQL input) and is
+                    // interpolated directly into SQL here. Unlike ExtraFilter/UserSearchString/
+                    // OverrideExcludeFilter (all passed through ValidateUserProvidedSQLClause),
+                    // this value historically had NO validation — allowing SQL injection into the
+                    // view WHERE clause. It is only ever a UserViewRun.ID (a GUID), so reject
+                    // anything that is not a well-formed GUID before it reaches the query.
+                    if (!/^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/.test(excludeUserViewRunID))
+                        throw new Error(`Invalid ExcludeUserViewRunID: must be a GUID`);
                     sExcludeSQL += ` UserViewRunID=${excludeUserViewRunID})`;
+                }
 
                 if (overrideExcludeFilter.length > 0) {
                     if (!this.ValidateUserProvidedSQLClause(overrideExcludeFilter))
