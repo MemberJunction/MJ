@@ -120,10 +120,10 @@ function eligibleOutputData(dataMarker: string): string {
 async function observeTurn(ctx: IntegrationCheckContext, observer: MJAIAgentEntityExtended, detailId: string, conversationId: string): Promise<{ role: string; content: string }[]> {
     const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), observer, userTurn('Acknowledge and finish.'), { conversationDetailId: detailId });
     await sleep(AGENT_LIVE_SETTLE_MS);
-    const runId = await resolveRunId(result, ctx.User, `ConversationID='${conversationId}' AND AgentID='${observer.ID}'`);
+    const runId = await resolveRunId(result, ctx.User, `ConversationID='${conversationId}' AND AgentID='${observer.ID}'`, ctx.Provider);
     Assert(!!runId, 'CF: the observing turn landed an AI Agent Run');
     fixture(ctx).LiveRunIds.push(runId!);
-    return firstPromptMessages(runId!, ctx.User);
+    return firstPromptMessages(runId!, ctx.User, ctx.Provider);
 }
 
 /** Messages whose content carries the carry-forward header (the injected transient message(s)). */
