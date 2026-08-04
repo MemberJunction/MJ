@@ -108,6 +108,17 @@ jobs:
         env:
           REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
 
+      # In Edge pre-mode the string-math version guard below is not
+      # prerelease-aware (and migration=>minor holds at tuple level by
+      # construction in the Edge grammar), so it yields to a grammar assertion.
+      - name: Detect changesets prerelease mode
+        id: premode
+        run: |
+          MODE=none
+          if [ -f .changeset/pre.json ]; then MODE=$(jq -r .mode .changeset/pre.json); fi
+          echo "MODE=$MODE" >> "$GITHUB_OUTPUT"
+          echo "::notice::Changesets mode: $MODE"
+
       - name: Check for version override in commit message
         id: commit_override
         run: |
@@ -118,7 +129,7 @@ jobs:
           fi
 
       - name: Determine next expected version
-        if: ${{ env.BRANCH == 'main' && !github.event.inputs.targetVersion && !steps.commit_override.outputs.VERSION_OVERRIDE }}
+        if: ${{ env.BRANCH == 'main' && !github.event.inputs.targetVersion && !steps.commit_override.outputs.VERSION_OVERRIDE && steps.premode.outputs.MODE != 'pre' }}
         id: version_check
         run: |
           git fetch --tags
@@ -137,14 +148,21 @@ jobs:
       - name: Update version and check against expected
         if: ${{ env.BRANCH == 'main' }}
         run: |
-          EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.commit_override.outputs.VERSION_OVERRIDE || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
           npm run version
 
           NEXT_VERSION=$(jq -r .version packages/MJServer/package.json)
           echo "::notice::Version to be published: $NEXT_VERSION"
-          if [ "$NEXT_VERSION" != "$EXPECTED_NEXT_VERSION" ]; then
-            echo "::error::The version to be published ($NEXT_VERSION) does not match the expected version ($EXPECTED_NEXT_VERSION)"
-            exit 1
+          if [ "${{ steps.premode.outputs.MODE }}" = "pre" ]; then
+            if [[ "$NEXT_VERSION" != *-edge.* ]]; then
+              echo "::error::Repo is in Edge prerelease mode but changeset version produced unsuffixed $NEXT_VERSION"
+              exit 1
+            fi
+          else
+            EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.commit_override.outputs.VERSION_OVERRIDE || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
+            if [ "$NEXT_VERSION" != "$EXPECTED_NEXT_VERSION" ]; then
+              echo "::error::The version to be published ($NEXT_VERSION) does not match the expected version ($EXPECTED_NEXT_VERSION)"
+              exit 1
+            fi
           fi
 
       - name: Build packages
