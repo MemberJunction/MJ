@@ -18,8 +18,12 @@ function OpenRecordButton({
   // Theme tokens, with the previous hardcoded values as fallbacks for a host that
   // renders this component without styles.
   const colors = styles?.colors || {};
-  const primaryColor = colors.primary || '#3B82F6';
-  const primaryHoverColor = colors.primaryHover || '#2563EB';
+  const primaryColor = colors.primary || '#1890ff';
+  const primaryHoverColor = colors.primaryHover || '#40a9ff';
+  // The default variant was a second, distinct fill in the original palette; mapping it
+  // to the theme's secondary keeps it visually distinct from the primary variant.
+  const secondaryColor = colors.secondary || '#3B82F6';
+  const secondaryHoverColor = colors.secondaryHover || colors.secondary || '#2563EB';
   const linkColor = colors.link || colors.primary || '#1890ff';
   const linkHoverColor = colors.linkHover || colors.primaryHover || '#40a9ff';
   const inverseColor = colors.textInverse || '#fff';
@@ -159,7 +163,7 @@ function OpenRecordButton({
         boxShadow: `0 2px 4px ${shadowColor}`
       },
       default: {
-        backgroundColor: primaryColor,
+        backgroundColor: secondaryColor,
         color: inverseColor,
         border: 'none'
       },
@@ -192,7 +196,7 @@ function OpenRecordButton({
         backgroundColor: primaryHoverColor
       },
       default: {
-        backgroundColor: primaryHoverColor
+        backgroundColor: secondaryHoverColor
       },
       text: {
         backgroundColor: subtleHoverColor

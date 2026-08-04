@@ -115,13 +115,54 @@ function DataGrid({
     return current;
   };
 
-  // Status families. Each family's hue now comes from the theme, while the shade ramp
-  // keeps values inside a family distinguishable the way the original palette did.
+  // Original per-status pill colors (darker for better contrast with white text) — the
+  // exact pre-theming literals, kept for any family whose base color the theme does not supply.
+  const originalStatusColors = {
+    // Green colors for positive states
+    active: '#389e0d',      // darker green
+    approved: '#52c41a',    // green
+    complete: '#237804',    // dark green
+    completed: '#135200',   // very dark green
+    success: '#3f6600',     // olive green
+    successful: '#5b8c00',  // light olive
+    enabled: '#7cb305',     // lime
+    published: '#a0d911',   // light lime
+
+    // Red colors for negative states
+    inactive: '#cf1322',    // darker red
+    rejected: '#f5222d',    // red
+    failed: '#a8071a',      // dark red
+    error: '#820014',       // very dark red
+    disabled: '#ff4d4f',    // light red
+    cancelled: '#ff7875',   // salmon
+    canceled: '#ff9c9c',    // light salmon
+    terminated: '#873800',  // burnt orange
+    expired: '#ad4e00',     // dark orange
+    deprecated: '#d4380d',  // rust orange
+
+    // Yellow/Orange for pending states
+    pending: '#d48806',     // darker orange
+    paused: '#fa8c16',      // orange
+    temporary: '#faad14',   // gold
+    draft: '#d4b106',       // dark gold
+    review: '#ad8b00',      // darker gold
+    waiting: '#ffc53d',     // light gold
+
+    // Blue for informational states
+    processing: '#096dd9',  // darker blue
+    running: '#1890ff',     // blue
+    inprogress: '#0050b3',  // dark blue
+    'in progress': '#003a8c', // very dark blue
+    'in-progress': '#40a9ff' // light blue
+  };
+
+  // Status families. When the theme supplies a family's base hue, a shade ramp keeps
+  // values inside the family distinguishable the way the original palette did.
   const statusFamilies = [
-    { token: 'success', fallback: '#389e0d', statuses: ['active', 'approved', 'complete', 'completed', 'success', 'successful', 'enabled', 'published'] },
-    { token: 'error', fallback: '#cf1322', statuses: ['inactive', 'rejected', 'failed', 'error', 'disabled', 'cancelled', 'canceled'] },
-    { token: 'warning', fallback: '#d48806', statuses: ['terminated', 'expired', 'deprecated', 'pending', 'paused', 'temporary', 'draft', 'review', 'waiting'] },
-    { token: 'info', fallback: '#096dd9', statuses: ['processing', 'running', 'inprogress', 'in progress', 'in-progress'] }
+    { token: 'success', statuses: ['active', 'approved', 'complete', 'completed', 'success', 'successful', 'enabled', 'published'] },
+    { token: 'error', statuses: ['inactive', 'rejected', 'failed', 'error', 'disabled', 'cancelled', 'canceled'] },
+    { token: 'warning', statuses: ['terminated', 'expired', 'deprecated', 'pending', 'paused', 'temporary', 'draft', 'review', 'waiting'] },
+    { token: 'info', statuses: ['processing', 'running', 'inprogress', 'in progress', 'in-progress'] }
   ];
 
   // Only a parseable hex base can be shaded. A theme expressing a status as a named
@@ -132,9 +173,10 @@ function DataGrid({
       ? color.trim()
       : null;
 
-  const statusColorMap = {};
+  const statusColorMap = { ...originalStatusColors };
   statusFamilies.forEach(family => {
-    const base = asHex(themeColors[family.token]) || family.fallback;
+    const base = asHex(themeColors[family.token]);
+    if (!base) return;
     const span = Math.max(1, family.statuses.length - 1);
     family.statuses.forEach((name, index) => {
       // -35% (darkest) through +15% (lightest) across the family.
@@ -211,7 +253,16 @@ function DataGrid({
   const fallbackColors = (styles?.chartPalette && styles.chartPalette.length > 0)
     ? styles.chartPalette.map(darkenForWhiteText)
     : builtInFallbackColors;
-  
+
+  // A themed chartPalette is typically short (~10 colors); wrapping modulo would hand
+  // the 11th+ distinct value a duplicate color. Overflow past the palette falls through
+  // to the built-in 50-color list so distinct values keep getting distinct colors.
+  const fallbackColorAt = (index) =>
+    index < fallbackColors.length
+      ? fallbackColors[index]
+      : builtInFallbackColors[(index - fallbackColors.length) % builtInFallbackColors.length];
+  const fallbackColorCount = Math.max(fallbackColors.length, builtInFallbackColors.length);
+
   // Get color for a value in a value list - ensures unique colors for all values
   const getValueColor = (value, possibleValues) => {
     if (!value) return null;
@@ -232,7 +283,7 @@ function DataGrid({
             colorAssignments.set(pvValue, statusColorMap[pvValue]);
           } else {
             // Assign next available fallback color
-            colorAssignments.set(pvValue, fallbackColors[nextColorIndex % fallbackColors.length]);
+            colorAssignments.set(pvValue, fallbackColorAt(nextColorIndex));
             nextColorIndex++;
           }
         }
@@ -255,7 +306,7 @@ function DataGrid({
     for (let i = 0; i < normalized.length; i++) {
       hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
     }
-    return fallbackColors[Math.abs(hash) % fallbackColors.length];
+    return fallbackColorAt(Math.abs(hash) % fallbackColorCount);
   };
   
   // Debounce filter input
@@ -629,7 +680,7 @@ function DataGrid({
 
       return columnDef;
     });
-  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells]);
+  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells, styles]);
   
   // Filter data based on search term
   // Handles null/undefined data gracefully and returns appropriate defaults

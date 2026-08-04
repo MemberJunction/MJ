@@ -31,6 +31,21 @@ describe('SetupStyles visualization defaults', () => {
   });
 });
 
+describe('SetupStyles overlay and status defaults', () => {
+  it('ships an overlay scrim and status text/border colors', () => {
+    const colors = SetupStyles().colors;
+    expect(colors.overlay).toBeTruthy();
+    for (const key of [
+      'successText', 'successBorder',
+      'warningText', 'warningBorder',
+      'errorText', 'errorBorder',
+      'infoText', 'infoBorder',
+    ]) {
+      expect(colors[key]).toBeTruthy();
+    }
+  });
+});
+
 describe('BuildStylesFromTheme visualization ramps', () => {
   it('populates both ramps from --mj-viz-seq-* / --mj-viz-div-* tokens', () => {
     const root = stubTheme({
@@ -65,10 +80,39 @@ describe('BuildStylesFromTheme visualization ramps', () => {
   });
 });
 
+describe('BuildStylesFromTheme overlay and status bridging', () => {
+  it('bridges the overlay scrim from --mj-bg-overlay', () => {
+    const root = stubTheme({ '--mj-bg-overlay': 'rgba(15, 23, 42, 0.5)' });
+
+    expect(BuildStylesFromTheme(root).colors.overlay).toBe('rgba(15, 23, 42, 0.5)');
+  });
+
+  it('bridges status text and border tokens', () => {
+    const root = stubTheme({
+      '--mj-status-success-text': '#0a7d43',
+      '--mj-status-error-border': '#f5c2c0',
+    });
+
+    const styles = BuildStylesFromTheme(root);
+
+    expect(styles.colors.successText).toBe('#0a7d43');
+    expect(styles.colors.errorBorder).toBe('#f5c2c0');
+  });
+
+  it('keeps the defaults when the tokens are absent', () => {
+    const root = stubTheme({});
+    const styles = BuildStylesFromTheme(root);
+    const defaults = SetupStyles().colors;
+
+    expect(styles.colors.overlay).toBe(defaults.overlay);
+    expect(styles.colors.warningText).toBe(defaults.warningText);
+  });
+});
+
 describe('ApplyStyleOverrides', () => {
   const base = (): ComponentStyles => SetupStyles();
   const userRequest = (partial: Partial<StyleOverrides>): StyleOverrides =>
-    ({ source: 'user-request', ...partial }) as StyleOverrides;
+    ({ ...partial, source: 'user-request' });
 
   it('returns the base untouched when there are no overrides', () => {
     const input = base();
@@ -91,7 +135,7 @@ describe('ApplyStyleOverrides', () => {
   });
 
   it('ignores a diverging override missing an endpoint', () => {
-    const overrides = { source: 'user-request', divergingScale: { low: '#f00' } } as unknown as StyleOverrides;
+    const overrides = userRequest({ divergingScale: { low: '#f00', high: '' } });
     expect(ApplyStyleOverrides(base(), overrides).divergingScale).toEqual(SetupStyles().divergingScale);
   });
 
@@ -123,5 +167,74 @@ describe('ApplyStyleOverrides', () => {
     expect(styles.chartPalette).toEqual(['#00f']);
     // The theme still supplies everything the user did not ask about.
     expect(styles.colors.primary).toBe(themed.colors.primary);
+  });
+});
+
+describe('ApplyStyleOverrides fontScale', () => {
+  const orgDefault = (partial: Partial<StyleOverrides>): StyleOverrides =>
+    ({ ...partial, source: 'organization-default' });
+
+  it('scales every fontSize token up together for large', () => {
+    // The point of doing this here rather than in the generator: one factor, whole ladder.
+    const styles = ApplyStyleOverrides(SetupStyles(), orgDefault({ fontScale: 'large' }));
+    expect(styles.typography.fontSize).toEqual({
+      xs: '14px', sm: '15px', md: '18px', lg: '20px', xl: '25px', xxl: '30px', xxxl: '40px',
+    });
+  });
+
+  it('scales every fontSize token down together for small', () => {
+    const styles = ApplyStyleOverrides(SetupStyles(), orgDefault({ fontScale: 'small' }));
+    expect(styles.typography.fontSize).toEqual({
+      xs: '10px', sm: '11px', md: '12px', lg: '14px', xl: '18px', xxl: '21px', xxxl: '28px',
+    });
+  });
+
+  it('treats normal as no override at all', () => {
+    const input = SetupStyles();
+    expect(ApplyStyleOverrides(input, orgDefault({ fontScale: 'normal' }))).toBe(input);
+  });
+
+  it('ignores an unrecognized scale rather than guessing a factor', () => {
+    const input = SetupStyles();
+    const overrides = orgDefault({ fontScale: 'huge' as unknown as 'large' });
+    expect(ApplyStyleOverrides(input, overrides)).toBe(input);
+  });
+
+  it('holds a floor so small cannot render text illegible', () => {
+    const base = SetupStyles();
+    base.typography.fontSize = { xs: '9px', sm: '12px', md: '14px', lg: '16px', xl: '20px' };
+    const styles = ApplyStyleOverrides(base, orgDefault({ fontScale: 'small' }));
+    expect(styles.typography.fontSize.xs).toBe('10px');
+  });
+
+  it('leaves sizes not expressed in px alone rather than guessing', () => {
+    const base = SetupStyles();
+    base.typography.fontSize = { sm: '0.875rem', md: '14px', lg: 'clamp(1rem, 2vw, 2rem)', xl: '20px' };
+    const styles = ApplyStyleOverrides(base, orgDefault({ fontScale: 'large' }));
+    expect(styles.typography.fontSize).toEqual({
+      sm: '0.875rem', md: '18px', lg: 'clamp(1rem, 2vw, 2rem)', xl: '25px',
+    });
+  });
+
+  it('keeps fontFamily, weights, spacing and colors untouched', () => {
+    const input = SetupStyles();
+    const styles = ApplyStyleOverrides(input, orgDefault({ fontScale: 'large' }));
+    expect(styles.typography.fontFamily).toBe(input.typography.fontFamily);
+    expect(styles.typography.fontWeight).toEqual(input.typography.fontWeight);
+    expect(styles.spacing).toEqual(input.spacing);
+    expect(styles.colors.primary).toBe(input.colors.primary);
+  });
+
+  it('does not mutate the base ladder', () => {
+    const input = SetupStyles();
+    ApplyStyleOverrides(input, orgDefault({ fontScale: 'large' }));
+    expect(input.typography.fontSize.md).toBe('14px');
+  });
+
+  it('combines with a color override in one pass', () => {
+    const styles = ApplyStyleOverrides(
+      SetupStyles(), orgDefault({ fontScale: 'small', chartPalette: ['#00f', '#fc0'] }));
+    expect(styles.chartPalette).toEqual(['#00f', '#fc0']);
+    expect(styles.typography.fontSize.md).toBe('12px');
   });
 });

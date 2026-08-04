@@ -46,23 +46,24 @@ function EntityDataGrid({
   const borderColor = themeColors.border || '#d9d9d9';
   const borderLightColor = themeColors.borderLight || '#f0f0f0';
   const primaryColor = themeColors.primary || '#1890ff';
+  const textInverseColor = themeColors.textInverse || 'white';
   const errorColor = themeColors.error || '#ff4d4f';
   const errorStrongColor = themeColors.error || '#cf1322';
   const errorSurfaceColor = themeColors.errorLight || '#fff2f0';
   const successColor = themeColors.success || '#389e0d';
   const successSurfaceColor = themeColors.successLight || '#f6ffed';
-  const successBorderColor = themeColors.success || '#b7eb8f';
+  const successBorderColor = themeColors.successBorder || '#b7eb8f';
   const warningColor = themeColors.warning || '#d48806';
   const warningStrongColor = themeColors.warning || '#d46b08';
-  const warningTextColor = themeColors.warning || '#8c6c00';
+  const warningTextColor = themeColors.warningText || '#8c6c00';
   const warningSurfaceColor = themeColors.warningLight || '#fffbe6';
   const warningSurfaceAltColor = themeColors.warningLight || '#fff7e6';
-  const warningBorderColor = themeColors.warning || '#ffe58f';
-  const warningBorderAltColor = themeColors.warning || '#ffd591';
+  const warningBorderColor = themeColors.warningBorder || '#ffe58f';
+  const warningBorderAltColor = themeColors.warningBorder || '#ffd591';
   const infoColor = themeColors.info || '#096dd9';
   const infoStrongColor = themeColors.info || '#0050b3';
   const infoSurfaceColor = themeColors.infoLight || '#e6f7ff';
-  const infoBorderColor = themeColors.info || '#91d5ff';
+  const infoBorderColor = themeColors.infoBorder || '#91d5ff';
   // Translucent version of a themed color. Appending hex alpha to the token directly
   // would break on any theme that expresses background as rgb() or a named color.
   const withAlpha = (color, alpha, fallback) => {
@@ -727,7 +728,7 @@ function EntityDataGrid({
             style={{
               padding: '8px 16px',
               backgroundColor: primaryColor,
-              color: 'white',
+              color: textInverseColor,
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer',

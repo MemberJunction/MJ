@@ -41,7 +41,7 @@ function AIInsightsPanel({
   const successColor = themeColors.success || '#10B981';
   const errorColor = themeColors.error || '#EF4444';
   const errorSurfaceColor = themeColors.errorLight || '#FEE2E2';
-  const errorBorderColor = themeColors.error || '#FECACA';
+  const errorBorderColor = themeColors.errorBorder || '#FECACA';
   const shadowColor = themeColors.shadowMedium || 'rgba(0, 0, 0, 0.1)';
   const inverseSurfaceColor = themeColors.text || '#1F2937';
   const inverseTextColor = themeColors.background || '#F9FAFB';

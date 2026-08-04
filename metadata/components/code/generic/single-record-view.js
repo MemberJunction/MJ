@@ -31,7 +31,7 @@ function SingleRecordView({
   const surfaceColor = colors.background || '#fff';
   const primaryColor = colors.primary || '#3B82F6';
   const warningSurfaceColor = colors.warningLight || '#fffbe6';
-  const warningBorderColor = colors.warning || '#ffe58f';
+  const warningBorderColor = colors.warningBorder || '#ffe58f';
   const shadowColor = colors.shadow || 'rgba(0,0,0,0.05)';
 
   const [entityInfo, setEntityInfo] = React.useState(null);

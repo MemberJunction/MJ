@@ -570,6 +570,7 @@ function SimpleChart({
           title: {
             display: !!title,
             text: title,
+            color: mutedColor,
             font: {
               size: 16,
               weight: 600
@@ -587,6 +588,7 @@ function SimpleChart({
               usePointStyle: true,
               pointStyle: 'circle',
               padding: 16,
+              color: mutedColor,
               font: {
                 size: legendFontSize
               }
@@ -648,6 +650,7 @@ function SimpleChart({
           },
           ticks: {
             padding: 8,
+            color: mutedColor,
             callback: (value) => formatValue(value)
           }
         },
@@ -661,6 +664,7 @@ function SimpleChart({
             minRotation: 0,
             maxTicksLimit: 20,
             padding: 4,
+            color: mutedColor,
             font: {
               size: 11
             },
@@ -743,7 +747,7 @@ function SimpleChart({
         chartInstanceRef.current = null;
       }
     };
-  }, [processData, actualChartType, title, height, colors, showLegend, legendPosition, legendFontSize, showDataLabels, enableExport, ChartJS]);
+  }, [processData, actualChartType, title, height, colors, styles, showLegend, legendPosition, legendFontSize, showDataLabels, enableExport, ChartJS]);
 
   // Download chart as image
   React.useEffect(() => {

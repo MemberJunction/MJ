@@ -179,6 +179,14 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
 
       if (isDifferent) {
         this.reinitializeComponent();
+      } else if (JSON.stringify(previousComponent.styleOverrides) !== JSON.stringify(value.styleOverrides)) {
+        // Same code, new styleOverrides (a regenerated spec whose only change is the
+        // requested styling): re-render in place — no teardown needed. The resolved
+        // spec must be kept in step because the styleOverrides getter prefers it.
+        if (this.resolvedComponentSpec) {
+          this.resolvedComponentSpec.styleOverrides = value.styleOverrides;
+        }
+        this.renderComponent();
       }
     }
   }
@@ -227,7 +235,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     // An explicitly-provided styles input always wins — but user-requested overrides
     // still layer on top, since they represent an explicit request rather than a theme.
     if (this._styles) {
-      return ApplyStyleOverrides(this._styles as ComponentStyles, this.styleOverrides);
+      return ApplyStyleOverrides(this._styles, this.styleOverrides);
     }
     // Otherwise bridge the host's live MJ theme (--mj-* tokens) into ComponentStyles
     // so generated components inherit the active theme — including dark mode and

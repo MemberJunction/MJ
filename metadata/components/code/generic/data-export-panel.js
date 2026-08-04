@@ -94,8 +94,9 @@ function DataExportPanel({
   const successColor = themeColors.success || '#10B981';
   const successStrongColor = themeColors.success || '#059669';
   const errorColor = themeColors.error || '#DC2626';
+  const textInverseColor = themeColors.textInverse || 'white';
   const shadowColor = themeColors.shadowMedium || 'rgba(0, 0, 0, 0.1)';
-  const scrimColor = themeColors.shadowLarge || 'rgba(0, 0, 0, 0.5)';
+  const scrimColor = themeColors.overlay || 'rgba(0, 0, 0, 0.5)';
 
   // Merge default styles with custom styles
   const panelStyles = {
@@ -107,7 +108,7 @@ function DataExportPanel({
     button: {
       padding: '8px 16px',
       backgroundColor: styles?.colors?.primary || '#3B82F6',
-      color: 'white',
+      color: textInverseColor,
       border: 'none',
       borderRadius: '6px',
       cursor: 'pointer',
@@ -124,7 +125,7 @@ function DataExportPanel({
       top: '100%',
       right: 0,
       marginTop: '4px',
-      backgroundColor: 'white',
+      backgroundColor: surfaceColor,
       border: `1px solid ${borderColor}`,
       borderRadius: '8px',
       boxShadow: `0 4px 6px ${shadowColor}`,
@@ -948,7 +949,7 @@ function DataExportPanel({
         zIndex: 2000
       }}>
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: surfaceColor,
           borderRadius: '12px',
           padding: '20px',
           maxWidth: '400px',
@@ -992,7 +993,7 @@ function DataExportPanel({
                 padding: '8px 16px',
                 border: `1px solid ${controlBorderColor}`,
                 borderRadius: '6px',
-                backgroundColor: 'white',
+                backgroundColor: surfaceColor,
                 cursor: 'pointer'
               }}
             >
@@ -1005,7 +1006,7 @@ function DataExportPanel({
                 border: 'none',
                 borderRadius: '6px',
                 backgroundColor: styles?.colors?.primary || '#3B82F6',
-                color: 'white',
+                color: textInverseColor,
                 cursor: 'pointer'
               }}
             >
@@ -1038,7 +1039,7 @@ function DataExportPanel({
         zIndex: 2000
       }}>
         <div style={{
-          backgroundColor: 'white',
+          backgroundColor: surfaceColor,
           borderRadius: '12px',
           padding: '20px',
           maxWidth: '90%',
@@ -1108,7 +1109,7 @@ function DataExportPanel({
                 padding: '8px 16px',
                 border: `1px solid ${controlBorderColor}`,
                 borderRadius: '6px',
-                backgroundColor: 'white',
+                backgroundColor: surfaceColor,
                 cursor: 'pointer'
               }}
             >
@@ -1125,7 +1126,7 @@ function DataExportPanel({
                 border: 'none',
                 borderRadius: '6px',
                 backgroundColor: styles?.colors?.primary || '#3B82F6',
-                color: 'white',
+                color: textInverseColor,
                 cursor: 'pointer'
               }}
             >

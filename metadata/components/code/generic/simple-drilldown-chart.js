@@ -32,7 +32,19 @@ function SimpleDrilldownChart({
   const surfaceColor = colors.background || '#fff';
   const surfaceAltColor = colors.surface || '#fafafa';
   const primaryColor = colors.primary || '#1890ff';
-  const primaryLightColor = colors.primaryLight || '#f0f5ff';
+  // Translucent version of a themed color. Appending hex alpha to the token directly
+  // would break on any theme that expresses the color as rgb() or a named color.
+  const withAlpha = (color, alpha, fallback) => {
+    if (typeof color !== 'string') return fallback;
+    const hex = color.trim().replace('#', '');
+    const full = hex.length === 3 ? hex.split('').map(ch => ch + ch).join('') : hex;
+    if (!/^[0-9a-fA-F]{6}$/.test(full)) return fallback;
+    const int = parseInt(full, 16);
+    return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
+  };
+  // Pale tint of primary for the selection banner — primaryLight itself can resolve to a
+  // saturated mid-tone in some themes, which would leave dark text unreadable.
+  const primaryTintColor = withAlpha(colors.primary, 0.08, '#f0f5ff');
   const successColor = colors.success || '#52c41a';
   const errorColor = colors.error || '#ff4d4f';
   const accentColor = colors.info || colors.secondary || '#722ed1';
@@ -156,7 +168,7 @@ function SimpleDrilldownChart({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '12px 16px',
-          backgroundColor: primaryLightColor,
+          backgroundColor: primaryTintColor,
           borderLeft: `4px solid ${primaryColor}`,
           marginTop: '16px',
           borderRadius: '4px'

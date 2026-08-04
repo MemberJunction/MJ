@@ -89,12 +89,15 @@ export interface ComponentTestResult {
  * Styling a user explicitly asked for, carried on the spec as data rather than
  * baked into generated code as color literals.
  *
- * Every slot targets a visualization surface whose colors are data-driven and
- * therefore tolerant of light/dark mode — chart series and intensity ramps. Slots
- * for mode-hostile surfaces (backgrounds, text, borders) are deliberately absent:
- * honoring those safely requires derived per-mode variants.
+ * The color slots each target a visualization surface whose colors are data-driven
+ * and therefore tolerant of light/dark mode — chart series and intensity ramps.
+ * Slots for mode-hostile surfaces (backgrounds, text, borders) are deliberately
+ * absent: honoring those safely requires derived per-mode variants.
  *
  * Hosts apply these over the theme-resolved tokens; components never read them.
+ * Invalid values are ignored rather than applied: an empty `chartPalette`, a
+ * `sequentialScale` with fewer than two stops, or a `divergingScale` missing
+ * either endpoint leaves the theme value in place.
  */
 export interface StyleOverrides {
     /**
@@ -118,6 +121,17 @@ export interface StyleOverrides {
         mid?: string;
         high: string;
     };
+
+    /**
+     * Uniform scale factor for the whole `ComponentStyles.typography.fontSize` ladder
+     * — `'small'` tightens it to fit more on screen, `'large'` opens it up for
+     * readability. `'normal'` (and omitting the field) leaves the theme ladder alone.
+     *
+     * Scaling the tokens rather than asking a generator to pick different ones is what
+     * makes this reliable: every piece of text moves together, including text inside
+     * registry components and libraries the generator never touched.
+     */
+    fontScale?: 'small' | 'normal' | 'large';
 
     /**
      * Provenance of these values. Never a generator's own aesthetic choice — either
