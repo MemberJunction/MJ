@@ -1,10 +1,10 @@
-import { Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
+import { ChangeDetectorRef, Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
 import { Subject } from "rxjs";
 import { filter, takeUntil } from "rxjs/operators";
 import { BaseEntity } from "@memberjunction/core";
 import { BaseNavigationComponent } from "./base-navigation-component";
 import { ResourceData } from "@memberjunction/core-entities";
-import { NavigationService } from "./navigation.service";
+import { NavigationService, TabQueryParamUpdateGuard } from "./navigation.service";
 
 @Directive()
 export abstract class BaseResourceComponent extends BaseNavigationComponent implements OnInit, OnDestroy {
@@ -15,6 +15,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     private _lastDeliveredParamsKey: string | null = null;
     protected destroy$ = new Subject<void>();
     protected navigationService = inject(NavigationService);
+    private changeDetectorRef = inject(ChangeDetectorRef, { optional: true });
 
     /**
      * Tab ID for query param notification scoping. Set by resource wrappers
@@ -138,7 +139,13 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      */
     protected UpdateQueryParams(params: Record<string, string | null>): void {
         if (this._suppressQueryParamSync) return;
-        this.navigationService.UpdateActiveTabQueryParams(params);
+        const tabId = this.getTabId();
+        if (!tabId) {
+            this.navigationService.UpdateActiveTabQueryParams(params);
+            return;
+        }
+
+        this.navigationService.UpdateTabQueryParams(tabId, params, this.getQueryParamUpdateGuard());
     }
 
     /**
@@ -203,13 +210,18 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         }
         this._lastDeliveredParamsKey = key;
         const source: 'popstate' | 'deeplink' = isInitial ? 'deeplink' : 'popstate';
-        // try/finally ensures the suppression flag is always cleared, even if
-        // OnQueryParamsChanged throws.
+        // try/finally ensures the suppression flag is always cleared, and the view is always
+        // refreshed, even if OnQueryParamsChanged throws.
         this._suppressQueryParamSync = true;
         try {
             this.OnQueryParamsChanged(params, source);
         } finally {
             this._suppressQueryParamSync = false;
+            // Query params arrive via RxJS (workspace stream / popstate), not via a template event —
+            // state a subclass changed in OnQueryParamsChanged needs an explicit re-render request
+            // for dynamically-attached views (see RefreshView). Inside `finally` so a subclass
+            // override that throws still renders whatever partial state it applied before throwing.
+            this.RefreshView();
         }
     }
 
@@ -229,6 +241,17 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         return this.ParentTabId || this.Data?.Configuration?.['tabId'] as string || '';
     }
 
+    private getQueryParamUpdateGuard(): TabQueryParamUpdateGuard {
+        const config = this.Data?.Configuration || {};
+        return {
+            resourceType: config['resourceType'] as string | undefined,
+            driverClass: (config['resourceTypeDriverClass'] || config['driverClass']) as string | undefined,
+            recordId: (this.Data?.ResourceRecordID || config['recordId']) as string | undefined,
+            navItemName: config['navItemName'] as string | undefined,
+            entity: (config['Entity'] || config['entity']) as string | undefined
+        };
+    }
+
     protected NotifyLoadComplete() {
         this._loadComplete = true;
         if (this._loadCompleteWatchdog) {
@@ -238,6 +261,10 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         if (this._loadCompleteEvent) {
             this._loadCompleteEvent();
         }
+        // Load completion almost always follows async work (RunView/fetch continuations) that
+        // Angular's tick will NOT pick up on its own for dynamically-attached views — re-render
+        // must be requested explicitly. See RefreshView() for the full explanation.
+        this.RefreshView();
     }
 
     protected NotifyLoadStarted() {
@@ -245,6 +272,28 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         if (this._loadStartedEvent) {
             this._loadStartedEvent();
         }
+        this.RefreshView();
+    }
+
+    /**
+     * Marks this component's view (and its ancestors) as needing change detection and schedules
+     * a tick — the reliable way for a resource component to re-render after updating state from
+     * async work (RunView/RunQuery continuations, timers, websocket pushes, RxJS subscriptions).
+     *
+     * WHY THIS EXISTS: the Explorer shell hosts resource components dynamically — `createComponent()`
+     * + `ApplicationRef.attachView()` — because tab content mounts into Golden Layout / cached DOM
+     * containers, not into an Angular template. Since Angular 18's change-detection scheduler
+     * rework (Explorer is on Angular 21), `ApplicationRef.tick()` only refreshes attached views
+     * that are FLAGGED dirty; a root-level attached view whose component mutates plain fields from
+     * an async continuation is never flagged, so the view silently never re-renders — even though
+     * the component uses default (non-OnPush) change detection (issue #3106).
+     *
+     * The framework calls this automatically from NotifyLoadStarted() / NotifyLoadComplete(), so
+     * the standard load lifecycle re-renders without any subclass action. Call it yourself after
+     * any LATER async state change that must reach the DOM outside those signals.
+     */
+    protected RefreshView(): void {
+        this.changeDetectorRef?.markForCheck();
     }
 
 

@@ -277,10 +277,8 @@
       }
 
       @if (Schedules.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-calendar-xmark"></i>
-          <p>No integrations found</p>
-        </div>
+        <mj-empty-state Icon="fa-solid fa-calendar-xmark"
+          Title="No integrations found" />
       }
     </div>
   </div>

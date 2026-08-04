@@ -67,18 +67,12 @@
           <!-- Agents Display -->
           @if (!isLoading) {
             @if (filteredAgents.length === 0) {
-              <div class="empty-state">
-                <i class="fa-solid fa-robot"></i>
-                <h3>No agents found</h3>
-                <p>No agents match your current filters. Try adjusting your search criteria or create a new agent.</p>
-                <button 
-                  type="button" 
-                  class="empty-state-btn"
-                  (click)="createNewAgent()">
-                  <i class="fa-solid fa-plus"></i>
-                  Create New Agent
-                </button>
-              </div>
+              <mj-empty-state Icon="fa-solid fa-robot"
+                Title="No agents found"
+                Message="No agents match your current filters. Try adjusting your search criteria or create a new agent."
+                ActionText="Create New Agent"
+                ActionIcon="fa-solid fa-plus"
+                (Action)="createNewAgent()" />
             } @else {
               <!-- Grid View -->
               @if (viewMode === 'grid') {

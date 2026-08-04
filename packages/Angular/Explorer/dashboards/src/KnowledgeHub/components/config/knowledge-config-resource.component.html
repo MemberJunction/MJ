@@ -293,16 +293,14 @@
 
             <!-- Full-Text Indexes -->
             @if (ActiveSection === 'fulltext') {
-                <div class="config-section">
+                <div class="config-section" [class.config-section--centered]="!IsLoadingFTSEntities && FTSEntities.length === 0">
 
                     @if (IsLoadingFTSEntities) {
                         <mj-loading text="Discovering searchable entities..." size="medium"></mj-loading>
                     } @else if (FTSEntities.length === 0) {
-                        <div class="config-empty-state">
-                            <i class="fa-solid fa-text-width config-empty-icon"></i>
-                            <h3 class="config-empty-title">No Searchable Entities Found</h3>
-                            <p class="config-empty-text">No entities with text fields were discovered. Ensure your database schema includes entities with varchar/nvarchar columns.</p>
-                        </div>
+                        <mj-empty-state Icon="fa-solid fa-text-width"
+                            Title="No Searchable Entities Found"
+                            Message="No entities with text fields were discovered. Ensure your database schema includes entities with varchar/nvarchar columns." />
                     } @else {
                         <div class="fts-entity-controls">
                             <div class="fts-summary">
@@ -344,7 +342,7 @@
 
             <!-- Embedding Models -->
             @if (ActiveSection === 'embedding') {
-                <div class="config-section">
+                <div class="config-section" [class.config-section--centered]="!HasEmbeddingModel">
 
                     @if (HasEmbeddingModel) {
                         <div class="config-group">
@@ -372,14 +370,9 @@
                             Manage embedding models in the AI Dashboard > Models tab.
                         </p>
                     } @else {
-                        <div class="config-empty-state">
-                            <i class="fa-solid fa-microchip config-empty-icon"></i>
-                            <h3 class="config-empty-title">No Embedding Models Found</h3>
-                            <p class="config-empty-text">
-                                Embedding models are required to convert text into vectors for semantic search and duplicate detection.
-                                Configure at least one embedding model (e.g., text-embedding-3-small) in the AI Dashboard > Models tab.
-                            </p>
-                        </div>
+                        <mj-empty-state Icon="fa-solid fa-microchip"
+                            Title="No Embedding Models Found"
+                            Message="Embedding models are required to convert text into vectors for semantic search and duplicate detection. Configure at least one embedding model (e.g., text-embedding-3-small) in the AI Dashboard > Models tab." />
                     }
                 </div>
             }
@@ -439,9 +432,9 @@
                             @if (IsLoadingScopes) {
                                 <div class="scope-manager-loading">Loading&hellip;</div>
                             } @else if (SearchScopes.length === 0) {
-                                <div class="scope-manager-empty">
-                                    No scopes defined yet. Click <strong>New</strong> to create one.
-                                </div>
+                                <mj-empty-state class="scope-manager-empty" Size="compact"
+                                    Icon="" Title="No scopes defined yet"
+                                    Message="Click New to create one." />
                             } @else {
                                 @for (s of SearchScopes; track s.ID) {
                                     <button
@@ -606,9 +599,10 @@
                                     </mj-search-scope-child-grid>
                                 }
                             } @else {
-                                <div class="scope-manager-empty-detail">
-                                    Select a scope on the left, or click <strong>New</strong> to create one.
-                                </div>
+                                <mj-empty-state class="scope-manager-empty-detail"
+                                    Icon="fa-solid fa-hand-pointer"
+                                    Title="No scope selected"
+                                    Message="Select a scope on the left, or click New to create one." />
                             }
                         </section>
                     </div>
@@ -750,9 +744,10 @@
                         </div>
 
                         @if (FilteredPermissionsRows.length === 0) {
-                            <div class="search-permissions-empty">
-                                No permission rows match your filters.
-                            </div>
+                            <mj-empty-state class="search-permissions-empty" Size="compact"
+                                Variant="no-results"
+                                Title="No matching permissions"
+                                Message="No permission rows match your filters." />
                         } @else {
                             <table class="search-permissions-table">
                                 <thead>

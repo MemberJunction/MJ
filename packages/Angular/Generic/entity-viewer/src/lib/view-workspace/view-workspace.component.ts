@@ -20,6 +20,9 @@ import {
   MJUserViewEntity_ISortStateItem
 } from '@memberjunction/core-entities';
 import { CompositeFilterDescriptor, FilterFieldInfo } from '@memberjunction/ng-filter-builder';
+import { ExportDialogConfig, ExportDialogResult } from '@memberjunction/ng-export-service';
+import { ExportColumn } from '@memberjunction/export-engine';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import {
   RecordSelectedEvent,
@@ -29,7 +32,9 @@ import {
   QuickSaveAdvancedEvent,
   DataLoadedEvent,
   FilteredCountChangedEvent,
-  EntityViewerConfig
+  EntityViewerConfig,
+  SortState,
+  SortDirection
 } from '../types';
 import { EntityViewerComponent } from '../entity-viewer/entity-viewer.component';
 import { ViewRelatedRecordNavigation } from '../view-types';
@@ -447,6 +452,79 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     super();
   }
 
+  /** Controls the workspace-level export dialog (the same generic dialog the grid uses). */
+  public showExportDialog: boolean = false;
+  public exportDialogConfig: ExportDialogConfig | null = null;
+
+  /**
+   * Handles the toolbar's Export button (the `<mj-view-selector>` `ExportRequested` output). This is
+   * the always-visible, view-type-agnostic export for the workspace — previously the event wasn't
+   * wired at all, so the button did nothing on every view type. It fetches the FULL result set via the
+   * inner viewer's capped, filter/sort-aware fetch (bounded + warns past the cap), then opens the SAME
+   * generic export dialog the grid uses — with format (Excel/CSV/JSON), sampling, and file-name
+   * options. Because the dialog only needs data + columns (it has no view-type dependency), this works
+   * identically for Grid, Cards, Map and Timeline. Never fails silently — every path notifies.
+   */
+  public async onExportRequested(): Promise<void> {
+    const viewer = this.entityViewerRef;
+    if (!viewer || !this._entity) {
+      console.error('[ViewWorkspace] Export: viewer not ready', { hasViewer: !!viewer, hasEntity: !!this._entity });
+      MJNotificationService.Instance.CreateSimpleNotification('Export is not ready yet — try again in a moment.', 'error', 5000);
+      return;
+    }
+    MJNotificationService.Instance.CreateSimpleNotification('Preparing your export…', 'info', 2000);
+    try {
+      const rows = await viewer.FetchAllRowsForExport();
+      if (!rows || rows.length === 0) {
+        MJNotificationService.Instance.CreateSimpleNotification('Nothing to export — the view returned no records.', 'warning', 5000);
+        return;
+      }
+      this.exportDialogConfig = {
+        data: rows,
+        columns: this.buildExportColumns(),
+        defaultFileName: this.buildExportFileName(),
+        availableFormats: ['excel', 'csv', 'json'],
+        defaultFormat: 'excel',
+        showSamplingOptions: true,
+        defaultSamplingMode: 'all',
+        dialogTitle: `Export ${this._entity.Name}`
+      };
+      this.showExportDialog = true;
+      this.cdr.detectChanges();
+    } catch (e) {
+      MJNotificationService.Instance.CreateSimpleNotification('Error preparing export — see console for details.', 'error', 5000);
+      console.error('[ViewWorkspace] Export error:', e);
+    }
+  }
+
+  /** Closes the workspace export dialog (the dialog performs the export + download itself). */
+  public onExportDialogClosed(_result: ExportDialogResult): void {
+    this.showExportDialog = false;
+    this.exportDialogConfig = null;
+    this.cdr.detectChanges();
+  }
+
+  /** Columns to export — from the active grid state, else the view's columns, else the entity fields. */
+  private buildExportColumns(): ExportColumn[] {
+    if (!this._entity) {
+      return [];
+    }
+    const gridCols = this.currentGridState?.columnSettings;
+    if (gridCols && gridCols.length > 0) {
+      return gridCols
+        .filter(c => c.hidden !== true)
+        .map(c => ({ name: c.Name, displayName: c.DisplayName || c.Name }));
+    }
+    return this._entity.Fields
+      .filter(f => !f.IsVirtual)
+      .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
+  }
+
+  private buildExportFileName(): string {
+    const viewName = this.currentViewEntity?.Name || 'Data';
+    return `${this._entity!.Name}_${viewName}_${new Date().toISOString().split('T')[0]}`;
+  }
+
   // ========================================
   // LIFECYCLE
   // ========================================
@@ -613,6 +691,73 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.cdr.detectChanges();
   }
 
+  // ========================================
+  // PROGRAMMATIC GRID CONTROL (passthrough to the inner entity viewer)
+  // ========================================
+  // Thin public passthroughs so a parent (e.g. the Data Explorer dashboard driving
+  // the AI agent) can page/sort the grid and read its live pagination/sort state
+  // without reaching into the protected child reference. All return null/false when
+  // the viewer isn't mounted yet (e.g. at the home level before an entity is selected).
+
+  /** Live pagination/sort snapshot from the inner viewer, or null when not mounted. */
+  public GetGridState(): { CurrentPage: number; PageSize: number; TotalRecords: number; TotalPages: number; Sort: SortState | null } | null {
+    const v = this.entityViewerRef;
+    if (!v) {
+      return null;
+    }
+    return {
+      CurrentPage: v.CurrentPageNumber,
+      PageSize: v.CurrentPageSize,
+      TotalRecords: v.TotalRecords,
+      TotalPages: v.TotalPageCount,
+      Sort: v.CurrentSortState,
+    };
+  }
+
+  /** Navigate to a 1-based page on the inner grid. Returns the page applied, or null. */
+  public GoToPage(pageNumber: number): number | null {
+    return this.entityViewerRef?.GoToPageNumber(pageNumber) ?? null;
+  }
+
+  /** Advance the inner grid to the next page. Returns the new 1-based page, or null. */
+  public NextPage(): number | null {
+    return this.entityViewerRef?.NextPage() ?? null;
+  }
+
+  /** Move the inner grid to the previous page. Returns the new 1-based page, or null. */
+  public PreviousPage(): number | null {
+    return this.entityViewerRef?.PreviousPage() ?? null;
+  }
+
+  /** Set the inner grid's server-side page size (reloads from page 1). Returns the size applied, or null. */
+  public SetPageSize(pageSize: number): number | null {
+    return this.entityViewerRef?.SetServerPageSize(pageSize) ?? null;
+  }
+
+  /** Apply a server-side sort to the inner grid. Returns true when applied, false otherwise. */
+  public SetSort(field: string, direction: SortDirection): boolean {
+    return this.entityViewerRef?.ApplySort(field, direction) ?? false;
+  }
+
+  /**
+   * Programmatically select a record in the inner grid — highlights the row and emits
+   * {@link RecordSelected} for the host (the no-UI equivalent of a user row-click). Returns
+   * false when the viewer isn't mounted or has no entity context. The record must be one of
+   * the loaded rows; the host resolves it (e.g. from {@link loadedRecords}).
+   */
+  public SelectRecord(record: Record<string, unknown>): boolean {
+    return this.entityViewerRef?.SelectRecord(record) ?? false;
+  }
+
+  /**
+   * Export the current view's records via the inner viewer's active renderer. Returns false
+   * when the viewer isn't mounted or the active view type doesn't support export. The grid
+   * renderer downloads the file itself.
+   */
+  public async ExportRecords(format?: 'csv' | 'excel' | 'json'): Promise<boolean> {
+    return this.entityViewerRef ? this.entityViewerRef.ExportRecords(format) : false;
+  }
+
   /** Handle the selector's "save view" request — open the config panel in the requested mode. */
   public onSaveViewRequested(event: SaveViewRequestedEvent): void {
     this.defaultSaveAsNew = event.SaveAsNew || false;
@@ -695,7 +840,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     if (success) {
       this.isConfigPanelOpen = false;
       this.clearPendingNewViewState();
-      await this.viewSelectorRef?.LoadViews();
+      // The view selector re-derives its lists reactively from UserViewEngine's cache
+      // (BaseEntity save auto-invalidates the engine); we only need to reload the grid data.
       await this.entityViewerRef?.LoadData();
     }
 
@@ -876,7 +1022,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.viewModified = false;
     this.isConfigPanelOpen = false;
     this.currentGridState = this.loadUserDefaultGridState();
-    await this.viewSelectorRef?.LoadViews();
+    // The view selector re-derives its lists reactively from UserViewEngine's cache
+    // (BaseEntity delete auto-invalidates the engine), so no explicit reload is needed here.
     this.ViewSelected.emit(null);
     this.SelectedViewChange.emit(null);
     this.AfterViewDelete.emit({ ViewID: viewId, ViewName: viewName });
@@ -1092,7 +1239,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return;
     }
 
-    await this.viewSelectorRef?.LoadViews();
+    // The view selector re-derives its lists reactively from UserViewEngine's cache
+    // (BaseEntity save auto-invalidates the engine), so no explicit reload is needed here.
     this.AfterViewSave.emit({ View: newView, IsNew: true });
   }
 

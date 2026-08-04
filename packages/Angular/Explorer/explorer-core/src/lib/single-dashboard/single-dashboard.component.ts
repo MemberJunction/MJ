@@ -4,7 +4,7 @@ import { MJDashboardEntityExtended, MJResourceTypeEntity } from '@memberjunction
 import { Metadata } from '@memberjunction/core';
 import { SharedService, RecentAccessService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
-import { Subject, debounceTime } from 'rxjs';
+import { Subject, debounceTime, takeUntil } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 
@@ -64,7 +64,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     this.recentAccessService = new RecentAccessService();
 
     this.saveChangesSubject
-    .pipe(debounceTime(500))
+    .pipe(debounceTime(500), takeUntil(this.destroy$))
     .subscribe(() => {
       this.SaveDashboard();
     });

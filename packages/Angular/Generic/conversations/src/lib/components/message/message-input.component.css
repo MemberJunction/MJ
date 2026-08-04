@@ -3,6 +3,9 @@
   width: 100%;
 }
 
+/* Plan Mode moved into the in-composer toolbar (message-input-box) as a toggle icon button
+   next to the attachment/voice buttons — see .plan-mode-button-icon there. */
+
 .processing-indicator {
   position: absolute;
   top: 50%;

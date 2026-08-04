@@ -10,19 +10,15 @@ import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJTestRunFormComponent } from '../../generated/Entities/MJTestRun/mjtestrun.form.component';
 import { TestingDialogService, TagsHelper } from '@memberjunction/ng-testing';
 import { createCopyOnlyToolbar, ToolbarConfig } from '@memberjunction/ng-code-editor';
+import { CheckResult, parseCheckResults } from './test-run-checks';
 
 interface ParsedData {
   input?: Record<string, unknown>;
   expected?: Record<string, unknown>;
   actual?: Record<string, unknown>;
-  resultDetails?: Record<string, unknown>;
-}
-
-interface CheckResult {
-  name: string;
-  passed: boolean;
-  message?: string;
-  weight?: number;
+  // The engine persists TestRun.ResultDetails as a bare OracleResult[] array,
+  // so this is typed `unknown` and narrowed by parseCheckResults().
+  resultDetails?: unknown;
 }
 
 @RegisterClass(BaseFormComponent, 'MJ: Test Runs')
@@ -511,9 +507,7 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
   }
 
   getCheckResults(): CheckResult[] {
-    const details = this.parsedData.resultDetails as Record<string, unknown> | undefined;
-    if (!details?.checkResults) return [];
-    return details.checkResults as CheckResult[];
+    return parseCheckResults(this.parsedData.resultDetails);
   }
 
   getPassRate(): number {

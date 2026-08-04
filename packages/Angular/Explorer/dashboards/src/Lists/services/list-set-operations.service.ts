@@ -134,17 +134,35 @@ export interface SetOperationResult {
   resultCount: number;
 }
 
-// Predefined color palette for Venn sets
-const VENN_COLORS = [
-  '#2196F3', // Blue
-  '#4CAF50', // Green
-  '#FF9800', // Orange
-  '#E91E63', // Pink
-  '#9C27B0', // Purple
-  '#00BCD4', // Cyan
-  '#F44336', // Red
-  '#8BC34A'  // Light Green
+// Default categorical palette for Venn sets. These mirror the platform
+// `--mj-viz-1..8` design tokens; `vennColor()` resolves the live token values so
+// themes re-tint the diagram, and falls back to these when no themed DOM exists.
+const VENN_COLOR_FALLBACKS = [
+  '#2196F3', // Blue        (--mj-viz-1)
+  '#4CAF50', // Green       (--mj-viz-2)
+  '#FF9800', // Orange      (--mj-viz-3)
+  '#E91E63', // Pink        (--mj-viz-4)
+  '#9C27B0', // Purple      (--mj-viz-5)
+  '#00BCD4', // Cyan        (--mj-viz-6)
+  '#F44336', // Red         (--mj-viz-7)
+  '#8BC34A'  // Light Green (--mj-viz-8)
 ];
+
+/**
+ * Resolves the categorical color for a set index from the live `--mj-viz-*`
+ * theme tokens (so the diagram follows the active theme/brand), falling back to
+ * {@link VENN_COLOR_FALLBACKS} when there is no themed DOM (SSR/tests). The Venn
+ * component applies these as SVG `fill` attributes, which require a concrete
+ * color value rather than a `var()` reference — hence runtime resolution.
+ */
+function vennColor(index: number): string {
+  const i = index % VENN_COLOR_FALLBACKS.length;
+  const fallback = VENN_COLOR_FALLBACKS[i];
+  if (typeof document === 'undefined' || typeof getComputedStyle === 'undefined') {
+    return fallback;
+  }
+  return getComputedStyle(document.documentElement).getPropertyValue(`--mj-viz-${i + 1}`).trim() || fallback;
+}
 
 /**
  * Service for performing set operations on lists and preparing data for Venn visualization.
@@ -153,6 +171,25 @@ const VENN_COLORS = [
   providedIn: 'root'
 })
 export class ListSetOperationsService {
+  /**
+   * Defensive cap on membership rows loaded per operand query (P8). Set
+   * operations are in-memory over full member sets; beyond this size the
+   * result would be wrong-by-truncation, so we cap the load and warn —
+   * callers can check {@link WasLastLoadTruncated} to surface it.
+   */
+  public static readonly MAX_OPERAND_RECORDS = 50000;
+
+  /** True when the most recent membership load hit MAX_OPERAND_RECORDS — results may be incomplete. */
+  public WasLastLoadTruncated = false;
+
+  /** Applies the operand cap: flags/warns when a membership query filled the cap. */
+  private trackTruncation(rowsReturned: number, context: string): void {
+    if (rowsReturned >= ListSetOperationsService.MAX_OPERAND_RECORDS) {
+      this.WasLastLoadTruncated = true;
+      console.warn(`[ListSetOperations] ${context} hit the ${ListSetOperationsService.MAX_OPERAND_RECORDS}-row operand cap — set-operation results may be incomplete.`);
+    }
+  }
+
   private _provider: IMetadataProvider | null = null;
   /** Set the metadata provider this service should use. Components should call this after injection. */
   public set Provider(value: IMetadataProvider | null) {
@@ -185,12 +222,15 @@ export class ListSetOperationsService {
       const listIdFilter = listIds.map(id => `'${id}'`).join(',');
 
       const rv = RunView.FromMetadataProvider(this.Provider);
+      this.WasLastLoadTruncated = false;
       const result = await rv.RunView<{ ListID: string; RecordID: string }>({
         EntityName: 'MJ: List Details',
         ExtraFilter: `ListID IN (${listIdFilter})`,
         Fields: ['ListID', 'RecordID'],
-        ResultType: 'simple'
+        ResultType: 'simple',
+        MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS
       });
+      this.trackTruncation(result.Results?.length ?? 0, 'calculateVennData');
 
       // Build sets per list
       const setsMap = new Map<string, Set<string>>();
@@ -222,7 +262,7 @@ export class ListSetOperationsService {
         kind: 'list' as const,
         listId: list.ID,
         listName: list.Name,
-        color: VENN_COLORS[index % VENN_COLORS.length],
+        color: vennColor(index),
         recordIds: setsMap.get(list.ID) || new Set(),
         size: setsMap.get(list.ID)?.size || 0
       }));
@@ -483,7 +523,9 @@ export class ListSetOperationsService {
       ExtraFilter: `ListID IN (${listIdFilter})`,
       Fields: ['ListID', 'RecordID'],
       ResultType: 'simple',
+      MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS,
     });
+    this.trackTruncation(result.Results?.length ?? 0, 'loadMissingLists');
 
     for (const id of listIds) {
       this.listDetailsCache.set(OperandCacheKey('list', id), new Set<string>());
@@ -527,7 +569,9 @@ export class ListSetOperationsService {
       ViewID: operand.id,
       Fields: pkFields,
       ResultType: 'simple',
+      MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS,
     });
+    this.trackTruncation(result.Results?.length ?? 0, `loadSingleView(${operand.id})`);
 
     const set = new Set<string>();
     if (result.Success && result.Results) {
@@ -604,8 +648,10 @@ export class ListSetOperationsService {
       EntityName: 'MJ: List Details',
       ExtraFilter: `ListID IN (${listIdFilter})`,
       Fields: ['ListID', 'RecordID'],
-      ResultType: 'simple'
+      ResultType: 'simple',
+      MaxRows: ListSetOperationsService.MAX_OPERAND_RECORDS
     });
+    this.trackTruncation(result.Results?.length ?? 0, 'ensureListsLoaded');
 
     // Initialize sets for missing lists
     for (const id of missingIds) {
@@ -703,7 +749,7 @@ export class ListSetOperationsService {
    * Get the color for a list by its index
    */
   getColorForIndex(index: number): string {
-    return VENN_COLORS[index % VENN_COLORS.length];
+    return vennColor(index);
   }
 
   /**

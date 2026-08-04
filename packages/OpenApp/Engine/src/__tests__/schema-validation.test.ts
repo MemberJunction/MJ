@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { DatabaseProviderBase, DatabasePlatform } from '@memberjunction/core';
+import { GetDialect } from '@memberjunction/sql-dialect';
 import { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName } from '../install/schema-manager.js';
 
 describe('ValidateSchemaName', () => {
@@ -53,9 +54,11 @@ function makeMockProvider(
 } {
     const queue = [...sqlResults];
     const executeSql = vi.fn(async () => queue.shift() ?? []);
-    // ExecuteSQL + Dialect.PlatformKey are the surfaces used by the schema-manager.
+    // The schema-manager uses ExecuteSQL + the platform Dialect's PlatformKey, CanonicalSchemaName,
+    // and QuoteIdentifier — so the mock carries the REAL dialect (not a PlatformKey-only stub), which
+    // keeps the bracket/double-quote/CASCADE assertions exercising genuine dialect behavior.
     return {
-        provider: { ExecuteSQL: executeSql, Dialect: { PlatformKey: platform } } as unknown as DatabaseProviderBase,
+        provider: { ExecuteSQL: executeSql, Dialect: GetDialect(platform) } as unknown as DatabaseProviderBase,
         executeSql,
     };
 }
@@ -134,8 +137,10 @@ describe('CreateAppSchema — dialect-aware identifier quoting', () => {
 
 describe('DropAppSchema — PostgreSQL CASCADE vs SQL Server object-drop', () => {
     it('PostgreSQL uses a single DROP SCHEMA ... CASCADE (no sys.* object enumeration)', async () => {
-        // [0] existence probe returns a row (exists), then [1] the DROP.
-        const { provider, executeSql } = makeMockProvider([[{ Exists_: 1 }]], 'postgresql');
+        // [0] the PG path SELECTs matching schema_name(s) from information_schema.schemata,
+        // then [1] CASCADE-drops each. The scripted row must carry `schema_name` (what the query
+        // reads), not the SQL-Server `Exists_` probe shape.
+        const { provider, executeSql } = makeMockProvider([[{ schema_name: 'bcsaas' }]], 'postgresql');
         const result = await DropAppSchema('bcsaas', provider);
         expect(result.Success).toBe(true);
         // Exactly two calls: existence check + the cascading drop.

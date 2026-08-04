@@ -104,6 +104,12 @@ export class ClassifyInboxTabComponent extends BaseAngularComponent {
         return this.StatusFilter === 'Pending' ? this.allSuggestions.length : 0;
     }
 
+    /** Empty-state message for the suggestion list (reflects the active filters). */
+    public get NoSuggestionsMessage(): string {
+        const status = this.StatusFilter.toLowerCase();
+        return `No ${status} suggestions${this.ReasonFilter ? ' for this reason' : ''}.`;
+    }
+
     /** Total loaded suggestions (across all reasons) for the "All" filter count. */
     public get TotalLoadedCount(): number {
         return this.allSuggestions.length;

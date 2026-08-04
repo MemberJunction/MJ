@@ -10,11 +10,15 @@ import {
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     GetProviderVoiceSettings,
+    GetSessionTuningSettings,
     BuildVoiceMannerSection,
     GetNarrationPaceMs,
     EvaluateRuntimeOverrideAuthorization,
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
-    RealtimeCoAgentConfig
+    RealtimeCoAgentConfig,
+    GetEffectiveModeratorConfig,
+    GetEffectiveTurnMode,
+    REALTIME_MODERATOR_DEFAULTS
 } from '../realtime/realtime-coagent-config';
 
 describe('DeepMergeConfigs', () => {
@@ -375,5 +379,87 @@ describe('EvaluateRuntimeOverrideAuthorization — the authorization matrix', ()
             CallerHasAdvancedControls: false
         });
         expect(d.Allowed).toBe(true);
+    });
+});
+
+describe('turnTaking — moderator + mode normalization', () => {
+    const wrap = (turnTaking: unknown) => JSON.stringify({ realtime: { turnTaking } });
+
+    it('parses a full moderator block and clamps the context window to 50', () => {
+        const cfg = ResolveEffectiveRealtimeConfig(null, null, wrap({
+            mode: 'addressed-only',
+            moderator: {
+                promptId: 'P1', contextWindowTurns: 999, maxCharsPerTurn: 200,
+                maxConsecutiveAgentOnlyTurns: 6, timeoutMs: 500, onError: 'addressed-only', prestageOnAgentSpeech: false,
+            },
+        }));
+        expect(cfg.realtime?.turnTaking?.mode).toBe('addressed-only');
+        const m = cfg.realtime?.turnTaking?.moderator;
+        expect(m).toMatchObject({ promptId: 'P1', contextWindowTurns: 50, maxCharsPerTurn: 200, maxConsecutiveAgentOnlyTurns: 6, timeoutMs: 500, onError: 'addressed-only', prestageOnAgentSpeech: false });
+    });
+
+    it('drops invalid mode + invalid moderator fields, keeps the valid ones', () => {
+        const cfg = ResolveEffectiveRealtimeConfig(null, null, wrap({
+            mode: 'bogus', moderator: { promptId: '  ', contextWindowTurns: -1, onError: 'nope', timeoutMs: 0 },
+        }));
+        expect(cfg.realtime?.turnTaking ?? null).toBeNull(); // nothing usable survived
+    });
+
+    it('honors an explicit null maxConsecutiveAgentOnlyTurns (no cap) distinctly from absent', () => {
+        const withNull = ResolveEffectiveRealtimeConfig(null, null, wrap({ moderator: { promptId: 'P', maxConsecutiveAgentOnlyTurns: null } }));
+        expect(withNull.realtime?.turnTaking?.moderator?.maxConsecutiveAgentOnlyTurns).toBeNull();
+    });
+
+    it('GetEffectiveModeratorConfig fills defaults, returns null without a promptId', () => {
+        expect(GetEffectiveModeratorConfig(ResolveEffectiveRealtimeConfig(null, null, wrap({ moderator: { contextWindowTurns: 10 } })))).toBeNull();
+        const eff = GetEffectiveModeratorConfig(ResolveEffectiveRealtimeConfig(null, null, wrap({ moderator: { promptId: 'P' } })));
+        expect(eff).toEqual({ promptId: 'P', ...REALTIME_MODERATOR_DEFAULTS });
+    });
+
+    it('target-agent layer overrides mode while inheriting the type-default moderator (cascade)', () => {
+        const typeDefault = JSON.stringify({ realtime: { turnTaking: { moderator: { promptId: 'JUDGE', contextWindowTurns: 25 } } } });
+        const targetAgent = JSON.stringify({ realtime: { turnTaking: { mode: 'proactive' } } });
+        const cfg = ResolveEffectiveRealtimeConfig(typeDefault, null, null, targetAgent);
+        expect(GetEffectiveTurnMode(cfg)).toBe('proactive');
+        expect(cfg.realtime?.turnTaking?.moderator?.promptId).toBe('JUDGE');
+        expect(cfg.realtime?.turnTaking?.moderator?.contextWindowTurns).toBe(25);
+    });
+
+    it('GetEffectiveTurnMode defaults to proactive when unset', () => {
+        expect(GetEffectiveTurnMode(ResolveEffectiveRealtimeConfig(null, null, null))).toBe('proactive');
+    });
+});
+
+describe('C1: GetSessionTuningSettings', () => {
+    it('projects every knob onto the flat driver bag keys', () => {
+        const bag = GetSessionTuningSettings({
+            realtime: {
+                session: {
+                    effortLevel: 85,
+                    parallelToolCalls: false,
+                    mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
+                    inputTranscriptionModel: '  whisper-1  ',
+                },
+            },
+        });
+        expect(bag).toEqual({
+            effortLevel: 85,
+            parallelToolCalls: false,
+            mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
+            inputTranscriptionModel: 'whisper-1',
+        });
+    });
+
+    it('named effort levels pass through as strings', () => {
+        expect(GetSessionTuningSettings({ realtime: { session: { effortLevel: 'xhigh' } } })).toEqual({ effortLevel: 'xhigh' });
+    });
+
+    it('returns null for an absent/empty section (bag construction skipped byte-for-byte)', () => {
+        expect(GetSessionTuningSettings(undefined)).toBeNull();
+        expect(GetSessionTuningSettings({})).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: {} })).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: { session: {} } })).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: { session: { mcpTools: [] } } })).toBeNull();
+        expect(GetSessionTuningSettings({ realtime: { session: { inputTranscriptionModel: '   ' } } })).toBeNull();
     });
 });

@@ -1,0 +1,22 @@
+{
+  "candidateVerdicts": [
+    {
+      "recordId": "A1B2C3D4-0000-0000-0000-000000000002",
+      "recommendation": "Merge",
+      "confidence": 0.98,
+      "reasoning": "Same legal entity as the source: shared domain acme.com and the same primary address; \"Corp\" vs \"Corporation LLC\" is a legal-suffix variant and the phone digits match (formatting only). Strengthened the 0.96 vector score to 0.98 — no field contradicts a merge."
+    },
+    {
+      "recordId": "A1B2C3D4-0000-0000-0000-000000000003",
+      "recommendation": "NotDuplicate",
+      "confidence": 0.9,
+      "reasoning": "Despite a 0.93 vector score, this is a distinct subsidiary: different tax ID and a different billing address in another state. The shared brand word is what pulled it close in embedding space, not a true match."
+    }
+  ],
+  "survivorRecordId": "A1B2C3D4-0000-0000-0000-000000000001",
+  "fieldChoices": [
+    { "fieldName": "Phone", "sourceRecordId": "A1B2C3D4-0000-0000-0000-000000000002" },
+    { "fieldName": "BillingAddress", "sourceRecordId": "A1B2C3D4-0000-0000-0000-000000000002" }
+  ],
+  "reasoning": "One candidate (…0002) is a confident merge into the source; the other (…0003) is a distinct subsidiary that merely shares a brand word."
+}

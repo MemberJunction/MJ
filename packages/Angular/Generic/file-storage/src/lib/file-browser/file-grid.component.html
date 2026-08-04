@@ -184,16 +184,15 @@
 
     <!-- Error State -->
     @if (errorMessage && !isLoading) {
-      <div class="error-state">
-        <div class="error-icon">
-          <i class="fa-solid fa-circle-exclamation"></i>
-        </div>
-        <p class="error-message">{{ errorMessage }}</p>
-        <button class="retry-btn" (click)="refresh()">
-          <i class="fa-solid fa-arrows-rotate"></i>
-          Retry
-        </button>
-      </div>
+      <mj-empty-state
+        class="file-grid-empty-fill"
+        Variant="error"
+        Icon="fa-solid fa-circle-exclamation"
+        Title="Couldn't load files"
+        [Message]="errorMessage"
+        ActionText="Retry"
+        ActionIcon="fa-solid fa-arrows-rotate"
+        (Action)="refresh()" />
     }
 
     <!-- List View -->
@@ -281,16 +280,13 @@
 
     <!-- Empty State -->
     @if (!isLoading && !errorMessage && filteredItems.length === 0) {
-      <div class="empty-state">
-        <div class="empty-icon">
-          <i class="fa-solid fa-folder-open"></i>
-        </div>
-        <p class="empty-message">This folder is empty</p>
-        <button class="upload-btn" (click)="onUploadClick()">
-          <i class="fa-solid fa-upload"></i>
-          Upload Files
-        </button>
-      </div>
+      <mj-empty-state
+        class="file-grid-empty-fill"
+        Icon="fa-solid fa-folder-open"
+        Title="This folder is empty"
+        ActionText="Upload Files"
+        ActionIcon="fa-solid fa-upload"
+        (Action)="onUploadClick()" />
     }
 
     <!-- Bottom Toolbar -->

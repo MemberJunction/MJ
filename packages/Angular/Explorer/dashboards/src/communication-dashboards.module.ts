@@ -4,7 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
-import { MJButtonDirective, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageSearchComponent, MJFilterChipComponent, MJFilterPopoverComponent, MJFilterPanelComponent, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageSearchComponent, MJFilterChipComponent, MJFilterPopoverComponent, MJFilterPanelComponent, MJRefreshButtonComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 
 // Communication Components
@@ -39,6 +39,7 @@ import { CommunicationsNewMessageResource } from './Communication/communication-
     SharedDashboardWidgetsModule,
     ListManagementModule,
     MJButtonDirective,
+    MJEmptyStateComponent,
     MJPageHeaderComponent,
     MJPageLayoutComponent,
     MJPageBodyComponent,

@@ -138,6 +138,79 @@ describe('DropboxSignSignatureProvider', () => {
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('400');
         });
+
+        it('appends NO form_fields_per_document when no fields are specified', async () => {
+            await provider.initialize(VALID_CONFIG);
+            fetchMock.mockResolvedValueOnce(jsonResponse({ signature_request: { signature_request_id: 'SR-1' } }));
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                recipients: [{ email: 'a@b.com' }],
+            });
+
+            const form = fetchMock.mock.calls[0][1].body as FormData;
+            expect(form.get('form_fields_per_document')).toBeNull();
+            expect(form.get('use_text_tags')).toBeNull();
+        });
+
+        it('emits form_fields_per_document for coordinate fields (pixels from normalized %)', async () => {
+            await provider.initialize(VALID_CONFIG);
+            fetchMock.mockResolvedValueOnce(jsonResponse({ signature_request: { signature_request_id: 'SR-2' } }));
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                recipients: [{ email: 'a@b.com', fields: [{ type: 'signature', page: 1, xPercent: 50, yPercent: 80 }] }],
+            });
+
+            const form = fetchMock.mock.calls[0][1].body as FormData;
+            const perDoc = JSON.parse(form.get('form_fields_per_document') as string);
+            expect(perDoc).toHaveLength(1); // one document
+            expect(perDoc[0][0]).toMatchObject({
+                type: 'signature',
+                signer: 0,
+                page: 1,
+                x: 408, // 50% of 816px (US-Letter fallback)
+                y: 845, // 80% of 1056px
+                required: true,
+            });
+        });
+
+        it('converts coordinates against the ACTUAL page size (pt → px at 96 DPI) when supplied', async () => {
+            await provider.initialize(VALID_CONFIG);
+            fetchMock.mockResolvedValueOnce(jsonResponse({ signature_request: { signature_request_id: 'SR-2b' } }));
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                // A4 = 595 × 842 pt → px at 96/72: width 793.3, height 1122.7.
+                recipients: [
+                    { email: 'a@b.com', fields: [{ type: 'signature', page: 1, xPercent: 50, yPercent: 80, pageWidthPt: 595, pageHeightPt: 842 }] },
+                ],
+            });
+
+            const form = fetchMock.mock.calls[0][1].body as FormData;
+            const perDoc = JSON.parse(form.get('form_fields_per_document') as string);
+            // 50% of (595*96/72=793.3) = 397; 80% of (842*96/72=1122.7) = 898 (rounded).
+            expect(perDoc[0][0]).toMatchObject({ x: 397, y: 898 });
+        });
+
+        it('enables use_text_tags when a field uses an anchor (Dropbox has no free-text anchor API)', async () => {
+            await provider.initialize(VALID_CONFIG);
+            fetchMock.mockResolvedValueOnce(jsonResponse({ signature_request: { signature_request_id: 'SR-3' } }));
+
+            await provider.CreateEnvelope({
+                title: 'Doc',
+                documents: [{ bytes: Buffer.from('x'), filename: 'a.pdf', contentType: 'application/pdf' }],
+                recipients: [{ email: 'a@b.com', fields: [{ type: 'signature', anchor: 'Signature:' }] }],
+            });
+
+            const form = fetchMock.mock.calls[0][1].body as FormData;
+            expect(form.get('use_text_tags')).toBe('1');
+            // Anchor-only field produces no coordinate placement.
+            expect(form.get('form_fields_per_document')).toBeNull();
+        });
     });
 
     describe('GetEnvelopeStatus', () => {

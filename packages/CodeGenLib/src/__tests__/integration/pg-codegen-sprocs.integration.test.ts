@@ -284,4 +284,86 @@ describeIfPG('PG CodeGen sprocs — integration', () => {
             }
         });
     });
+
+    /**
+     * EDS regression guard (PR #2449): spDeleteUnneededEntityFields must NOT prune the
+     * EntityFields of external-data-source entities (ExternalDataSourceID set, VirtualEntity =
+     * FALSE, no physical column in vwSQLColumnsAndEntityFields). Without the
+     * `AND e."ExternalDataSourceID" IS NULL` guard, every external field is silently deleted on
+     * each manageMetadata / R__RefreshMetadata run — EDS is non-functional on PG. Requires the EDS
+     * migration (Entity.ExternalDataSourceID + vwEntities exposing it); skips cleanly otherwise.
+     */
+    describe('spDeleteUnneededEntityFields — external-entity field preservation (EDS guard)', () => {
+        let edsReady = false;
+        beforeAll(async () => {
+            const r = await client.query(
+                `SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = $1 AND table_name = 'vwEntities' AND column_name = 'ExternalDataSourceID'`,
+                [SCHEMA]
+            );
+            edsReady = r.rowCount === 1;
+        });
+
+        it('preserves external-entity fields while still pruning genuine orphans', async (ctx) => {
+            if (!edsReady) {
+                // EDS migration not applied to this DB (vwEntities lacks ExternalDataSourceID) — skip.
+                ctx.skip();
+                return;
+            }
+            const typeId = 'ed500000-0000-0000-0000-000000000001';
+            const srcId = 'ed500000-0000-0000-0000-000000000002';
+            const extEntId = 'ed500000-0000-0000-0000-000000000003';
+            const extFieldId = 'ed500000-0000-0000-0000-000000000004';
+            const orphanFieldId = 'ed500000-0000-0000-0000-000000000005';
+
+            await client.query('SAVEPOINT eds_preserve');
+            try {
+                // a real, non-external, non-virtual entity to host the negative-control orphan field
+                const host = await client.query(
+                    `SELECT "ID" FROM __mj."Entity"
+                     WHERE "VirtualEntity" = FALSE AND "ExternalDataSourceID" IS NULL AND "BaseTable" IS NOT NULL
+                     LIMIT 1`
+                );
+                expect(host.rowCount, 'need a baseline non-external entity for the negative control').toBe(1);
+                const hostId = host.rows[0].ID as string;
+
+                await client.query(
+                    `INSERT INTO __mj."ExternalDataSourceType"("ID","Name","DriverClass") VALUES ($1,'ZZ PG Test Type','ZZTestDriver')`,
+                    [typeId]
+                );
+                await client.query(
+                    `INSERT INTO __mj."ExternalDataSource"("ID","Name","TypeID") VALUES ($1,'ZZ PG Test Source',$2)`,
+                    [srcId, typeId]
+                );
+                await client.query(
+                    `INSERT INTO __mj."Entity"("ID","Name","BaseTable","BaseView","ExternalDataSourceID")
+                     VALUES ($1,'ZZ External Test Entity','zz_ext_test','zz_ext_test_vw',$2)`,
+                    [extEntId, srcId]
+                );
+                // external field — no physical column exists, so without the guard it is a prune target
+                await client.query(
+                    `INSERT INTO __mj."EntityField"("ID","EntityID","Name","Type") VALUES ($1,$2,'ZZ_ExternalField','nvarchar')`,
+                    [extFieldId, extEntId]
+                );
+                // negative control — a genuine orphan on a real entity (no matching SQL column)
+                await client.query(
+                    `INSERT INTO __mj."EntityField"("ID","EntityID","Name","Type") VALUES ($1,$2,'ZZ_FakeOrphan','nvarchar')`,
+                    [orphanFieldId, hostId]
+                );
+
+                // run the prune, scoped to just these two entities (contained mirror of R__RefreshMetadata's sweep)
+                await client.query(
+                    `SELECT * FROM __mj."spDeleteUnneededEntityFields"(''::text, $1::text)`,
+                    [`${extEntId},${hostId}`]
+                );
+
+                const ext = await client.query(`SELECT 1 FROM __mj."EntityField" WHERE "ID" = $1`, [extFieldId]);
+                const orphan = await client.query(`SELECT 1 FROM __mj."EntityField" WHERE "ID" = $1`, [orphanFieldId]);
+                expect(ext.rowCount, 'external-entity field must survive the prune (the guard)').toBe(1);
+                expect(orphan.rowCount, 'a genuine orphan must still be pruned (guard is specific)').toBe(0);
+            } finally {
+                await client.query('ROLLBACK TO SAVEPOINT eds_preserve');
+            }
+        });
+    });
 });

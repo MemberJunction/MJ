@@ -24,11 +24,11 @@
 
     <!-- No-permission state -->
     @if (!IsLoading && LoadError && !HasAccess) {
-      <div class="rb-state rb-state-denied">
-        <i class="fa-solid fa-lock" aria-hidden="true"></i>
-        <h3>Access denied</h3>
-        <p>{{ LoadError }}</p>
-      </div>
+      <mj-empty-state
+        Variant="warning"
+        Icon="fa-solid fa-lock"
+        Title="Access denied"
+        [Message]="LoadError" />
     }
 
     <!-- Loading -->
@@ -38,21 +38,19 @@
 
     <!-- Generic error -->
     @if (!IsLoading && LoadError && HasAccess) {
-      <div class="rb-state rb-state-error">
-        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
-        <h3>Could not load deleted records</h3>
-        <p>{{ LoadError }}</p>
-      </div>
+      <mj-empty-state
+        Variant="error"
+        Icon="fa-solid fa-triangle-exclamation"
+        Title="Could not load deleted records"
+        [Message]="LoadError" />
     }
 
     <!-- Empty state -->
     @if (!IsLoading && !LoadError && HasAccess && Entries.length === 0) {
-      <div class="rb-state rb-state-empty">
-        <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
-        <h3>Recycle Bin is empty</h3>
-        <p>No records have been deleted from this entity, or change tracking
-          isn't enabled here.</p>
-      </div>
+      <mj-empty-state
+        Icon="fa-solid fa-trash-can"
+        Title="Recycle Bin is empty"
+        Message="No records have been deleted from this entity, or change tracking isn't enabled here." />
     }
 
     <!-- Entries -->

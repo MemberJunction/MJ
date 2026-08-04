@@ -1,0 +1,24 @@
+# Rendering showcase E2E: deep-link to the markdown-preview harness and confirm
+# the native renderers produce their expected output — prismjs-highlighted code,
+# the HTML->RN renderer, and the SVG charts — without a crash.
+appId: org.memberjunction.mobile
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Conversations"
+    timeout: 30000
+- openLink: "mjmobile:///markdown-preview"
+- runFlow:
+    when:
+      visible: "Open"
+    commands:
+      - tapOn: "Open"
+- extendedWaitUntil:
+    visible: "Pie chart"
+    timeout: 20000
+# HTML->RN renderer output.
+- assertVisible: "HTML artifact renderer"
+# prismjs code-highlighting section.
+- assertVisible: "Code highlighting (prismjs)"
+# SVG charts.
+- assertVisible: "Bar chart (react-native-svg)"

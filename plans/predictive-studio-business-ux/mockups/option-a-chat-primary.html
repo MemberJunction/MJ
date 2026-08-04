@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Predictive Studio · Ask Skip — Cascadia Professional Society</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+/* ============================================================================
+   MJ MOCKUP BASE — inlined verbatim.
+   ============================================================================ */
+:root{
+  color-scheme:light;
+  --mj-color-brand-50:#e6f3f9;--mj-color-brand-100:#b3dbed;--mj-color-brand-200:#80c3e1;--mj-color-brand-300:#4dabd5;--mj-color-brand-350:#3395c8;--mj-color-brand-400:#2699cc;--mj-color-brand-450:#1a88bf;--mj-color-brand-500:#0076b6;--mj-color-brand-600:#006aa3;--mj-color-brand-700:#005a8a;--mj-color-brand-800:#004a71;--mj-color-brand-900:#092340;
+  --mj-color-accent-50:#f0faff;--mj-color-accent-100:#e0f4fe;--mj-color-accent-200:#bae8fd;--mj-color-accent-300:#aae7fd;--mj-color-accent-400:#5cc0ed;--mj-color-accent-500:#38a9d9;--mj-color-accent-600:#2490c0;--mj-color-accent-700:#1d7299;--mj-color-accent-800:#1c5d7d;--mj-color-accent-900:#1b4d68;
+  --mj-color-tertiary-50:#ecfeff;--mj-color-tertiary-400:#22d3ee;--mj-color-tertiary-500:#06b6d4;--mj-color-tertiary-600:#0891b2;--mj-color-tertiary-700:#0e7490;
+  --mj-color-neutral-0:#ffffff;--mj-color-neutral-50:#f8fafc;--mj-color-neutral-100:#f1f5f9;--mj-color-neutral-200:#e2e8f0;--mj-color-neutral-300:#cbd5e1;--mj-color-neutral-400:#94a3b8;--mj-color-neutral-500:#64748b;--mj-color-neutral-600:#475569;--mj-color-neutral-700:#334155;--mj-color-neutral-800:#1e293b;--mj-color-neutral-900:#0f172a;--mj-color-neutral-950:#020617;
+  --mj-color-success-50:#f0fdf4;--mj-color-success-100:#dcfce7;--mj-color-success-400:#4ade80;--mj-color-success-500:#22c55e;--mj-color-success-600:#16a34a;--mj-color-success-700:#15803d;
+  --mj-color-warning-50:#fffbeb;--mj-color-warning-100:#fef3c7;--mj-color-warning-400:#fbbf24;--mj-color-warning-500:#f59e0b;--mj-color-warning-600:#d97706;--mj-color-warning-700:#b45309;
+  --mj-color-error-50:#fef2f2;--mj-color-error-100:#fee2e2;--mj-color-error-400:#f87171;--mj-color-error-500:#ef4444;--mj-color-error-600:#dc2626;--mj-color-error-700:#b91c1c;
+  --mj-color-info-50:#eff6ff;--mj-color-info-100:#dbeafe;--mj-color-info-500:#3b82f6;--mj-color-info-600:#2563eb;--mj-color-info-700:#1d4ed8;
+  --mj-color-violet-50:#f5f3ff;--mj-color-violet-100:#ede9fe;--mj-color-violet-400:#a78bfa;--mj-color-violet-500:#8b5cf6;--mj-color-violet-600:#7c3aed;
+  --mj-bg-page:var(--mj-color-neutral-50);--mj-bg-surface:var(--mj-color-neutral-0);--mj-bg-surface-elevated:var(--mj-color-neutral-0);--mj-bg-surface-card:var(--mj-color-neutral-50);--mj-bg-surface-sunken:var(--mj-color-neutral-100);--mj-bg-surface-hover:var(--mj-color-neutral-100);--mj-bg-surface-active:var(--mj-color-neutral-200);--mj-bg-overlay:rgba(15,23,42,.5);
+  --mj-text-primary:var(--mj-color-neutral-800);--mj-text-secondary:var(--mj-color-neutral-600);--mj-text-muted:var(--mj-color-neutral-500);--mj-text-disabled:var(--mj-color-neutral-400);--mj-text-inverse:var(--mj-color-neutral-0);--mj-text-link:var(--mj-color-brand-500);
+  --mj-border-default:var(--mj-color-neutral-200);--mj-border-subtle:var(--mj-color-neutral-100);--mj-border-strong:var(--mj-color-neutral-300);--mj-border-focus:var(--mj-color-brand-500);
+  --mj-brand-primary:var(--mj-color-brand-500);--mj-brand-primary-hover:var(--mj-color-brand-600);--mj-brand-primary-active:var(--mj-color-brand-700);--mj-brand-secondary:var(--mj-color-brand-900);--mj-brand-on-primary:var(--mj-color-neutral-0);
+  --mj-brand-accent:var(--mj-color-accent-400);--mj-brand-accent-subtle:var(--mj-color-accent-50);
+  --mj-status-success:var(--mj-color-success-500);--mj-status-success-bg:var(--mj-color-success-50);--mj-status-success-text:var(--mj-color-success-700);--mj-status-success-border:var(--mj-color-success-500);
+  --mj-status-warning:var(--mj-color-warning-500);--mj-status-warning-bg:var(--mj-color-warning-50);--mj-status-warning-text:var(--mj-color-warning-700);--mj-status-warning-border:var(--mj-color-warning-500);
+  --mj-status-error:var(--mj-color-error-500);--mj-status-error-bg:var(--mj-color-error-50);--mj-status-error-text:var(--mj-color-error-700);--mj-status-error-border:var(--mj-color-error-500);
+  --mj-status-info:var(--mj-color-info-500);--mj-status-info-bg:var(--mj-color-info-50);--mj-status-info-text:var(--mj-color-info-700);--mj-status-info-border:var(--mj-color-info-500);
+  --mj-font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mj-font-family-mono:'JetBrains Mono','SF Mono',Consolas,monospace;
+  --mj-radius-sm:4px;--mj-radius-md:8px;--mj-radius-lg:12px;--mj-radius-xl:16px;--mj-radius-2xl:24px;--mj-radius-full:9999px;
+  --mj-shadow-sm:0 1px 2px 0 rgba(0,0,0,.05);--mj-shadow-md:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);--mj-shadow-lg:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);--mj-shadow-xl:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);
+  --mj-shadow-brand-md:0 4px 12px rgba(0,118,182,.4);
+  --mj-transition-base:200ms ease;
+}
+[data-theme="dark"]{
+  color-scheme:dark;
+  --mj-bg-page:var(--mj-color-neutral-900);--mj-bg-surface:var(--mj-color-neutral-800);--mj-bg-surface-card:#253347;--mj-bg-surface-elevated:var(--mj-color-neutral-700);--mj-bg-surface-sunken:var(--mj-color-neutral-950);--mj-bg-surface-hover:var(--mj-color-neutral-600);--mj-bg-surface-active:var(--mj-color-neutral-500);--mj-bg-overlay:rgba(0,0,0,.7);
+  --mj-text-primary:var(--mj-color-neutral-100);--mj-text-secondary:var(--mj-color-neutral-300);--mj-text-muted:var(--mj-color-neutral-400);--mj-text-disabled:var(--mj-color-neutral-600);--mj-text-inverse:var(--mj-color-neutral-900);--mj-text-link:var(--mj-color-brand-300);
+  --mj-border-default:var(--mj-color-neutral-700);--mj-border-subtle:var(--mj-color-neutral-800);--mj-border-strong:var(--mj-color-neutral-600);--mj-border-focus:var(--mj-color-brand-400);
+  --mj-brand-primary:var(--mj-color-brand-400);--mj-brand-primary-hover:var(--mj-color-brand-300);--mj-brand-primary-active:var(--mj-color-brand-200);
+  --mj-brand-accent:var(--mj-color-accent-300);--mj-brand-accent-subtle:color-mix(in srgb,var(--mj-color-accent-400) 15%,transparent);
+  --mj-status-success-bg:rgba(34,197,94,.15);--mj-status-success-text:var(--mj-color-success-100);
+  --mj-status-warning-bg:rgba(245,158,11,.15);--mj-status-warning-text:var(--mj-color-warning-100);
+  --mj-status-error-bg:rgba(239,68,68,.15);--mj-status-error-text:var(--mj-color-error-100);
+  --mj-status-info-bg:rgba(59,130,246,.15);--mj-status-info-text:var(--mj-color-info-100);
+  --mj-shadow-sm:0 1px 2px 0 rgba(0,0,0,.3);--mj-shadow-md:0 4px 6px -1px rgba(0,0,0,.4);--mj-shadow-lg:0 10px 15px -3px rgba(0,0,0,.4);--mj-shadow-xl:0 20px 25px -5px rgba(0,0,0,.5);
+}
+/* ---- reset + base ---- */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--mj-font-family);background:var(--mj-bg-page);color:var(--mj-text-primary);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+h1,h2,h3,h4{font-weight:600;line-height:1.25;color:var(--mj-text-primary)}
+a{color:var(--mj-text-link);text-decoration:none}
+.muted{color:var(--mj-text-muted)}.secondary{color:var(--mj-text-secondary)}
+.mono{font-family:var(--mj-font-family-mono)}
+/* ---- MJ Explorer shell chrome (top app bar) ---- */
+.mj-shell{min-height:100vh;display:flex;flex-direction:column}
+.mj-topbar{height:56px;flex:0 0 56px;display:flex;align-items:center;gap:20px;padding:0 20px;background:var(--mj-bg-surface);border-bottom:1px solid var(--mj-border-default);position:sticky;top:0;z-index:200}
+.mj-logo{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--mj-brand-secondary)}
+.mj-logo .mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--mj-color-brand-500),var(--mj-color-brand-900));display:grid;place-items:center;color:#fff;font-size:15px}
+.mj-topnav{display:flex;gap:4px;align-items:center}
+.mj-topnav a{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:8px;color:var(--mj-text-secondary);font-weight:500;font-size:13px}
+.mj-topnav a.active{background:color-mix(in srgb,var(--mj-brand-primary) 12%,transparent);color:var(--mj-brand-primary)}
+.mj-topnav a:hover:not(.active){background:var(--mj-bg-surface-hover)}
+.mj-topbar .spacer{flex:1}
+.mj-search{display:flex;align-items:center;gap:8px;background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);border-radius:8px;padding:7px 12px;color:var(--mj-text-muted);min-width:240px;font-size:13px}
+.mj-iconbtn{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;color:var(--mj-text-secondary);background:transparent;border:none;cursor:pointer}
+.mj-iconbtn:hover{background:var(--mj-bg-surface-hover)}
+.mj-avatar{width:32px;height:32px;border-radius:50%;background:var(--mj-color-brand-700);color:#fff;display:grid;place-items:center;font-weight:600;font-size:12px}
+/* ---- cards / surfaces ---- */
+.mj-card{background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-lg);box-shadow:var(--mj-shadow-sm)}
+.mj-card-pad{padding:20px}
+/* ---- buttons (mirror mjButton directive) ---- */
+.mj-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:var(--mj-transition-base);font-family:inherit;white-space:nowrap}
+.mj-btn-sm{height:30px;padding:0 12px;font-size:12px}
+.mj-btn-lg{height:44px;padding:0 22px;font-size:15px}
+.mj-btn--primary{background:var(--mj-brand-primary);color:var(--mj-brand-on-primary)}
+.mj-btn--primary:hover{background:var(--mj-brand-primary-hover)}
+.mj-btn--secondary{background:var(--mj-bg-surface);color:var(--mj-text-primary);border-color:var(--mj-border-strong)}
+.mj-btn--secondary:hover{background:var(--mj-bg-surface-hover)}
+.mj-btn--flat{background:transparent;color:var(--mj-text-secondary)}
+.mj-btn--flat:hover{background:var(--mj-bg-surface-hover)}
+.mj-btn--success{background:var(--mj-status-success);color:#fff}
+/* ---- badges / pills ---- */
+.mj-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--mj-radius-full);font-size:12px;font-weight:600}
+.mj-badge--success{background:var(--mj-status-success-bg);color:var(--mj-status-success-text)}
+.mj-badge--warning{background:var(--mj-status-warning-bg);color:var(--mj-status-warning-text)}
+.mj-badge--error{background:var(--mj-status-error-bg);color:var(--mj-status-error-text)}
+.mj-badge--info{background:var(--mj-status-info-bg);color:var(--mj-status-info-text)}
+.mj-badge--neutral{background:var(--mj-bg-surface-sunken);color:var(--mj-text-secondary)}
+/* ---- inputs ---- */
+.mj-input{height:38px;padding:0 12px;border:1px solid var(--mj-border-default);border-radius:8px;background:var(--mj-bg-surface);color:var(--mj-text-primary);font-family:inherit;font-size:13px;width:100%}
+.mj-input:focus{outline:none;border-color:var(--mj-border-focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--mj-brand-primary) 15%,transparent)}
+/* ---- trust / risk semantic helpers (translate ML quality into plain colors) ---- */
+.trust-poor{--trust:var(--mj-status-error);--trust-bg:var(--mj-status-error-bg);--trust-text:var(--mj-status-error-text)}
+.trust-fair{--trust:var(--mj-status-warning);--trust-bg:var(--mj-status-warning-bg);--trust-text:var(--mj-status-warning-text)}
+.trust-good{--trust:var(--mj-status-success);--trust-bg:var(--mj-status-success-bg);--trust-text:var(--mj-status-success-text)}
+.trust-excellent{--trust:var(--mj-color-success-600);--trust-bg:var(--mj-status-success-bg);--trust-text:var(--mj-status-success-text)}
+.risk-high{color:var(--mj-status-error-text);background:var(--mj-status-error-bg)}
+.risk-medium{color:var(--mj-status-warning-text);background:var(--mj-status-warning-bg)}
+.risk-low{color:var(--mj-status-success-text);background:var(--mj-status-success-bg)}
+/* ---- Skip agent / conversation widget base (ng-conversations look) ---- */
+.skip-avatar{width:34px;height:34px;border-radius:50%;flex:0 0 34px;background:linear-gradient(135deg,var(--mj-color-accent-400),var(--mj-color-brand-500));display:grid;place-items:center;color:#fff;font-size:14px;box-shadow:var(--mj-shadow-sm)}
+.chat-msg{display:flex;gap:10px;align-items:flex-start;max-width:100%}
+.chat-bubble{padding:12px 14px;border-radius:14px;font-size:13.5px;line-height:1.55;max-width:560px}
+.chat-bubble.agent{background:var(--mj-bg-surface-card);border:1px solid var(--mj-border-subtle);border-top-left-radius:4px;color:var(--mj-text-primary)}
+.chat-bubble.user{background:var(--mj-brand-primary);color:#fff;border-top-right-radius:4px;margin-left:auto}
+.chat-row.user{flex-direction:row-reverse}
+.chat-input{display:flex;align-items:center;gap:10px;border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-full);padding:8px 8px 8px 16px;background:var(--mj-bg-surface)}
+.chat-input input{flex:1;border:none;background:transparent;outline:none;font-family:inherit;font-size:14px;color:var(--mj-text-primary)}
+.chat-send{width:38px;height:38px;border-radius:50%;border:none;background:var(--mj-brand-primary);color:#fff;cursor:pointer;display:grid;place-items:center}
+.suggestion{padding:7px 12px;border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-full);background:var(--mj-bg-surface);color:var(--mj-text-secondary);font-size:12.5px;cursor:pointer}
+.suggestion:hover{border-color:var(--mj-brand-primary);color:var(--mj-brand-primary)}
+/* ---- design-thesis banner (top of each mockup, NOT part of the product UI) ---- */
+.thesis{position:sticky;top:0;z-index:900;background:var(--mj-color-brand-900);color:#fff;padding:10px 20px;font-size:12.5px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.thesis b{color:var(--mj-color-accent-300)}
+.thesis .tag{background:rgba(255,255,255,.14);padding:2px 9px;border-radius:var(--mj-radius-full);font-weight:600}
+/* ---- utility ---- */
+.flex{display:flex}.col{flex-direction:column}.items-center{align-items:center}.between{justify-content:space-between}.gap-2{gap:8px}.gap-3{gap:12px}.gap-4{gap:16px}.wrap{flex-wrap:wrap}
+.grow{flex:1}.tnum{font-variant-numeric:tabular-nums}
+
+/* ============================================================================
+   OPTION A — CHAT-PRIMARY: component CSS (tokens only)
+   ============================================================================ */
+.conv-scroll{flex:1;overflow-y:auto;padding:28px 20px 150px;}
+.conv-col{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:22px;}
+
+/* greeting header */
+.skip-greeting{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:18px 0 6px;}
+.skip-greeting .skip-avatar{width:52px;height:52px;flex-basis:52px;font-size:21px;}
+.skip-greeting h2{font-size:19px;}
+.skip-greeting p{color:var(--mj-text-secondary);max-width:480px;font-size:13.5px;}
+.chips-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+
+/* chat rows */
+.chat-row{display:flex;gap:10px;align-items:flex-start;}
+.chat-row.user{flex-direction:row-reverse;}
+.chat-stamp{font-size:11px;color:var(--mj-text-muted);margin-top:5px;}
+
+/* inline artifact wrapper — makes a card feel like a first-class result */
+.artifact{margin:2px 0 2px 44px;animation:rise .4s ease both;}
+.artifact.full{margin-left:0;}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.artifact-tab{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--mj-text-muted);margin-bottom:8px;padding-left:2px;}
+.artifact-tab i{color:var(--mj-brand-primary);}
+
+/* ---- Trust verdict card (centerpiece) ---- */
+.trust-card{overflow:hidden;}
+.trust-head{display:flex;gap:18px;align-items:center;padding:22px 22px 18px;background:linear-gradient(135deg,color-mix(in srgb,var(--trust) 12%,var(--mj-bg-surface)),var(--mj-bg-surface));border-bottom:1px solid var(--mj-border-subtle);}
+.trust-grade{width:88px;height:88px;flex:0 0 88px;border-radius:var(--mj-radius-xl);background:var(--trust-bg);border:2px solid color-mix(in srgb,var(--trust) 45%,transparent);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;}
+.trust-grade .g-label{font-size:21px;font-weight:700;color:var(--trust-text);line-height:1;}
+.trust-grade .g-sub{font-size:9.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--trust-text);opacity:.8;}
+.trust-dots{display:flex;gap:4px;margin-top:3px;}
+.trust-dots i{font-size:9px;color:var(--trust);}
+.trust-dots i.empty{color:var(--mj-border-strong);}
+.trust-headline{flex:1;}
+.trust-headline .one-liner{font-size:18px;font-weight:700;color:var(--mj-text-primary);display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.trust-headline .one-liner .mj-badge{vertical-align:middle;}
+.trust-headline .verdict-sub{color:var(--mj-text-secondary);font-size:13px;margin-top:5px;line-height:1.5;}
+.trust-body{padding:16px 22px 20px;}
+.trust-evidence{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--mj-bg-surface-sunken);border-radius:var(--mj-radius-md);font-size:12.5px;color:var(--mj-text-secondary);}
+.trust-evidence i{color:var(--mj-brand-primary);font-size:14px;}
+.trust-evidence b{color:var(--mj-text-primary);font-variant-numeric:tabular-nums;}
+
+/* "For analysts" disclosure */
+.analysts{margin-top:14px;border-top:1px solid var(--mj-border-subtle);padding-top:12px;}
+.analysts-toggle{display:inline-flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--mj-text-secondary);padding:4px 0;}
+.analysts-toggle:hover{color:var(--mj-brand-primary);}
+.analysts-toggle i.chev{transition:transform var(--mj-transition-base);font-size:11px;}
+.analysts.open .analysts-toggle i.chev{transform:rotate(90deg);}
+.analysts-panel{display:none;margin-top:12px;}
+.analysts.open .analysts-panel{display:block;animation:rise .25s ease both;}
+.spec-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--mj-border-subtle);border:1px solid var(--mj-border-subtle);border-radius:var(--mj-radius-md);overflow:hidden;}
+.spec-cell{background:var(--mj-bg-surface);padding:11px 14px;}
+.spec-cell .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--mj-text-muted);font-weight:600;}
+.spec-cell .v{font-size:14px;font-weight:600;color:var(--mj-text-primary);margin-top:3px;font-family:var(--mj-font-family-mono);}
+
+/* ---- weak model safety chip ---- */
+.safety-note{display:flex;gap:12px;align-items:flex-start;margin-top:14px;padding:13px 15px;border:1px dashed color-mix(in srgb,var(--mj-status-error) 45%,transparent);border-radius:var(--mj-radius-md);background:color-mix(in srgb,var(--mj-status-error) 5%,var(--mj-bg-surface));}
+.safety-note .si{color:var(--mj-status-error);font-size:16px;margin-top:1px;}
+.safety-note .stxt{font-size:12.5px;color:var(--mj-text-secondary);line-height:1.5;}
+.safety-note .stxt b{color:var(--mj-text-primary);}
+.safety-mini{display:flex;align-items:center;gap:10px;margin-top:10px;padding:9px 12px;background:var(--mj-bg-surface-sunken);border-radius:var(--mj-radius-md);}
+.safety-mini .mj-badge{flex:0 0 auto;}
+.btn-disabled{opacity:.45;cursor:not-allowed!important;pointer-events:none;}
+
+/* ---- at-risk call list card ---- */
+.list-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--mj-border-subtle);}
+.list-head h3{font-size:15px;display:flex;align-items:center;gap:9px;}
+.list-head .sub{font-size:12px;color:var(--mj-text-muted);margin-top:2px;}
+.dist-bar{display:flex;height:7px;border-radius:var(--mj-radius-full);overflow:hidden;width:160px;}
+.dist-bar span{display:block;height:100%;}
+.dist-legend{display:flex;gap:12px;font-size:11px;color:var(--mj-text-muted);margin-top:6px;justify-content:flex-end;}
+.dist-legend i{font-size:8px;margin-right:4px;vertical-align:middle;}
+
+.member-row{display:grid;grid-template-columns:38px 1fr 132px;gap:14px;align-items:center;padding:13px 20px;border-bottom:1px solid var(--mj-border-subtle);transition:background var(--mj-transition-base);cursor:pointer;}
+.member-row:hover{background:var(--mj-bg-surface-hover);}
+.member-row:last-of-type{border-bottom:none;}
+.m-avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:13px;color:var(--mj-text-inverse);background:var(--mj-brand-primary);}
+.m-avatar.av-h1{background:var(--mj-color-error-700);}
+.m-avatar.av-h2{background:var(--mj-color-error-600);}
+.m-avatar.av-h3{background:var(--mj-color-warning-700);}
+.m-avatar.av-h4{background:var(--mj-color-warning-600);}
+.m-avatar.av-m1{background:var(--mj-color-warning-500);}
+.m-avatar.av-m2{background:var(--mj-color-warning-400);color:var(--mj-color-neutral-900);}
+.m-main .m-name{font-weight:600;font-size:14px;color:var(--mj-text-primary);}
+.m-main .m-meta{font-size:12px;color:var(--mj-text-muted);margin-top:1px;}
+.m-reasons{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
+.reason-chip{font-size:11px;padding:3px 9px;border-radius:var(--mj-radius-full);background:var(--mj-bg-surface-sunken);color:var(--mj-text-secondary);border:1px solid var(--mj-border-subtle);}
+.m-risk{text-align:right;}
+.m-risk .pct{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;}
+.m-risk .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--mj-text-muted);font-weight:600;margin-top:2px;}
+.risk-meter{height:6px;border-radius:var(--mj-radius-full);background:var(--mj-bg-surface-sunken);margin-top:6px;overflow:hidden;}
+.risk-meter span{display:block;height:100%;border-radius:var(--mj-radius-full);}
+.fill-high{background:var(--mj-status-error);}
+.fill-medium{background:var(--mj-status-warning);}
+.fill-low{background:var(--mj-status-success);}
+.txt-high{color:var(--mj-status-error-text);}
+.txt-medium{color:var(--mj-status-warning-text);}
+.txt-low{color:var(--mj-status-success-text);}
+.list-foot{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}
+.list-foot a{font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:6px;}
+
+/* ---- actions card ---- */
+.actions-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:18px 20px;}
+.action-tile{display:flex;gap:13px;align-items:flex-start;padding:15px;border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-md);background:var(--mj-bg-surface);cursor:pointer;transition:var(--mj-transition-base);}
+.action-tile:hover{border-color:var(--mj-brand-primary);box-shadow:var(--mj-shadow-md);transform:translateY(-1px);}
+.action-tile.primary{border-color:color-mix(in srgb,var(--mj-brand-primary) 55%,transparent);background:color-mix(in srgb,var(--mj-brand-primary) 6%,var(--mj-bg-surface));}
+.action-ico{width:40px;height:40px;flex:0 0 40px;border-radius:var(--mj-radius-md);display:grid;place-items:center;font-size:16px;background:color-mix(in srgb,var(--mj-brand-primary) 12%,transparent);color:var(--mj-brand-primary);}
+.action-tile.done .action-ico{background:var(--mj-status-success-bg);color:var(--mj-status-success-text);}
+.action-txt .at-title{font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:8px;}
+.action-txt .at-sub{font-size:12px;color:var(--mj-text-muted);margin-top:3px;line-height:1.45;}
+
+/* success confirmation chips */
+.confirm-row{display:flex;flex-wrap:wrap;gap:8px;padding:0 20px 18px;}
+.confirm-chip{display:inline-flex;align-items:center;gap:8px;padding:8px 13px;border-radius:var(--mj-radius-full);background:var(--mj-status-success-bg);color:var(--mj-status-success-text);font-size:12.5px;font-weight:600;}
+
+/* sticky composer */
+.composer-dock{position:sticky;bottom:0;background:linear-gradient(to top,var(--mj-bg-page) 62%,transparent);padding:14px 20px 22px;}
+.composer-inner{max-width:780px;margin:0 auto;}
+.composer-hint{text-align:center;font-size:11px;color:var(--mj-text-muted);margin-top:9px;}
+.chat-input{box-shadow:var(--mj-shadow-md);}
+
+.typing{display:inline-flex;gap:4px;align-items:center;}
+.typing span{width:6px;height:6px;border-radius:50%;background:var(--mj-text-muted);animation:blink 1.4s infinite both;}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.3}40%{opacity:1}}
+
+@media(max-width:640px){
+  .actions-grid,.spec-grid{grid-template-columns:1fr;}
+  .member-row{grid-template-columns:34px 1fr;}
+  .m-risk{grid-column:2;text-align:left;}
+  .artifact{margin-left:0;}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== DESIGN THESIS BANNER ===================== -->
+<div class="thesis">
+  <span class="tag">A ·</span>
+  <span><b>Chat-primary</b> — the embedded Skip conversation IS the whole surface. Trust, the at-risk list, and the four actions render as rich cards inside the thread. Best for: pure "just ask" simplicity. Tradeoff: scanning a long list inside a scroll.</span>
+</div>
+
+<div class="mj-shell">
+
+  <!-- ===================== TOP APP BAR ===================== -->
+  <header class="mj-topbar">
+    <div class="mj-logo">
+      <div class="mark"><i class="fa-solid fa-mountain-sun"></i></div>
+      <span>Cascadia Professional Society</span>
+    </div>
+    <nav class="mj-topnav">
+      <a href="#"><i class="fa-solid fa-house"></i> Home</a>
+      <a href="#"><i class="fa-solid fa-users"></i> Members</a>
+      <a href="#" class="active"><i class="fa-solid fa-wand-magic-sparkles"></i> Predictions</a>
+      <a href="#"><i class="fa-solid fa-chart-column"></i> Reports</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="mj-search">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <span>Ask anything…</span>
+    </div>
+    <button class="mj-iconbtn" id="themeToggle" title="Toggle dark mode"><i class="fa-solid fa-moon" id="themeIcon"></i></button>
+    <button class="mj-iconbtn" title="Notifications" style="position:relative">
+      <i class="fa-solid fa-bell"></i>
+    </button>
+    <div class="mj-avatar" title="Renée Calloway · Director of Membership">RC</div>
+  </header>
+
+  <!-- ===================== CONVERSATION THREAD ===================== -->
+  <div class="conv-scroll">
+    <div class="conv-col">
+
+      <!-- Skip greeting + suggestions -->
+      <div class="skip-greeting">
+        <div class="skip-avatar"><i class="fa-solid fa-robot"></i></div>
+        <div>
+          <h2>Hi Renée — what would you like to figure out?</h2>
+          <p>I can look across your members and predict things like who's likely to lapse, then hand you a ready-to-work list. Just ask in plain words.</p>
+        </div>
+        <div class="chips-row">
+          <button class="suggestion">Which members are likely to not renew this year?</button>
+          <button class="suggestion">Who should I call first to save renewals?</button>
+          <button class="suggestion">Which new members are most at risk?</button>
+          <button class="suggestion">What's driving members to lapse?</button>
+        </div>
+      </div>
+
+      <!-- USER asks -->
+      <div class="chat-row user">
+        <div class="mj-avatar" style="flex:0 0 32px">RC</div>
+        <div>
+          <div class="chat-bubble user">Which members are likely to not renew this year?</div>
+          <div class="chat-stamp" style="text-align:right">9:42 AM</div>
+        </div>
+      </div>
+
+      <!-- SKIP answers -->
+      <div class="chat-row">
+        <div class="skip-avatar"><i class="fa-solid fa-robot"></i></div>
+        <div>
+          <div class="chat-bubble agent">
+            I looked at your <b>1,284 members</b> up for renewal in the next 90 days. <b>318 look at-risk</b> (about 1 in 4). I'm right about <b>8 in 10 times</b> here, so this is a solid list to start your outreach from. Here's how much you can trust it 👇
+          </div>
+          <div class="chat-stamp">9:42 AM · looked at 1,284 members in a few seconds</div>
+        </div>
+      </div>
+
+      <!-- ====== INLINE ARTIFACT 1 — TRUST VERDICT (centerpiece) ====== -->
+      <div class="artifact">
+        <div class="artifact-tab"><i class="fa-solid fa-shield-halved"></i> How much to trust this</div>
+        <div class="mj-card trust-card trust-good">
+          <div class="trust-head">
+            <div class="trust-grade">
+              <span class="g-label">Good</span>
+              <span class="g-sub">Trust</span>
+              <div class="trust-dots">
+                <i class="fa-solid fa-circle"></i>
+                <i class="fa-solid fa-circle"></i>
+                <i class="fa-solid fa-circle"></i>
+                <i class="fa-solid fa-circle"></i>
+                <i class="fa-solid fa-circle empty"></i>
+              </div>
+            </div>
+            <div class="trust-headline">
+              <div class="one-liner">
+                Right about 8 out of 10 times
+                <span class="mj-badge mj-badge--success"><i class="fa-solid fa-circle-check"></i> Safe to use</span>
+              </div>
+              <div class="verdict-sub">Reliable enough to prioritize who to reach out to. For high-stakes or one-off decisions, use your judgment too.</div>
+            </div>
+          </div>
+          <div class="trust-body">
+            <div class="trust-evidence">
+              <i class="fa-solid fa-flask-vial"></i>
+              <span>How we know: I checked it against <b>2,137 past members</b> the model had never seen — and it got most of them right.</span>
+            </div>
+
+            <!-- For analysts disclosure -->
+            <div class="analysts" id="analysts">
+              <button class="analysts-toggle" onclick="toggleAnalysts()">
+                <i class="fa-solid fa-chevron-right chev"></i>
+                <i class="fa-solid fa-flask"></i>
+                For analysts
+              </button>
+              <div class="analysts-panel">
+                <div class="spec-grid">
+                  <div class="spec-cell"><div class="k">Holdout AUC</div><div class="v">0.78</div></div>
+                  <div class="spec-cell"><div class="k">Accuracy</div><div class="v">80%</div></div>
+                  <div class="spec-cell"><div class="k">Algorithm</div><div class="v">Gradient Boosting</div></div>
+                  <div class="spec-cell"><div class="k">Trained on</div><div class="v">3 yrs history</div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SAFETY: weak-model story -->
+            <div class="safety-note">
+              <i class="fa-solid fa-triangle-exclamation si"></i>
+              <div class="stxt">
+                <b>What if a model isn't good enough?</b> If a prediction can't be trusted, I won't let you act on it. Here's what that looks like — the actions stay locked:
+                <div class="safety-mini">
+                  <span class="mj-badge mj-badge--error"><i class="fa-solid fa-ban"></i> Not reliable yet — don't use for decisions</span>
+                  <span class="mj-btn mj-btn-sm mj-btn--secondary btn-disabled"><i class="fa-solid fa-lock"></i> Actions blocked</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SKIP follow-up -->
+      <div class="chat-row">
+        <div class="skip-avatar"><i class="fa-solid fa-robot"></i></div>
+        <div>
+          <div class="chat-bubble agent">Want to see who to call first?</div>
+          <div class="chat-stamp">9:43 AM</div>
+        </div>
+      </div>
+
+      <!-- USER yes -->
+      <div class="chat-row user">
+        <div class="mj-avatar" style="flex:0 0 32px">RC</div>
+        <div>
+          <div class="chat-bubble user">Yes, show me the top at-risk members.</div>
+          <div class="chat-stamp" style="text-align:right">9:43 AM</div>
+        </div>
+      </div>
+
+      <!-- ====== INLINE ARTIFACT 2 — AT-RISK CALL LIST ====== -->
+      <div class="artifact">
+        <div class="artifact-tab"><i class="fa-solid fa-phone-volume"></i> Your call list</div>
+        <div class="mj-card">
+          <div class="list-head">
+            <div>
+              <h3><i class="fa-solid fa-user-clock" style="color:var(--mj-status-error)"></i> Your call list — 318 members at risk</h3>
+              <div class="sub">Sorted by who's most likely to lapse · top 9 shown</div>
+            </div>
+            <div>
+              <div class="dist-bar">
+                <span style="flex:318;background:var(--mj-status-error)"></span>
+                <span style="flex:461;background:var(--mj-status-warning)"></span>
+                <span style="flex:505;background:var(--mj-status-success)"></span>
+              </div>
+              <div class="dist-legend">
+                <span><i class="fa-solid fa-circle" style="color:var(--mj-status-error)"></i>High 318</span>
+                <span><i class="fa-solid fa-circle" style="color:var(--mj-status-warning)"></i>Med 461</span>
+                <span><i class="fa-solid fa-circle" style="color:var(--mj-status-success)"></i>Low 505</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Member 1 -->
+          <div class="member-row">
+            <div class="m-avatar av-h1">MC</div>
+            <div class="m-main">
+              <div class="m-name">Margaret Chen</div>
+              <div class="m-meta">Individual Professional · member since 2016</div>
+              <div class="m-reasons">
+                <span class="reason-chip">No events attended in 14 months</span>
+                <span class="reason-chip">Auto-renew is off</span>
+                <span class="reason-chip">Stopped opening emails</span>
+              </div>
+            </div>
+            <div class="m-risk">
+              <div class="pct txt-high">88%</div>
+              <div class="lbl">likely to lapse</div>
+              <div class="risk-meter"><span class="fill-high" style="width:88%"></span></div>
+            </div>
+          </div>
+
+          <!-- Member 2 -->
+          <div class="member-row">
+            <div class="m-avatar av-h2">DO</div>
+            <div class="m-main">
+              <div class="m-name">David Okafor</div>
+              <div class="m-meta">Early Career Professional · member since 2024</div>
+              <div class="m-reasons">
+                <span class="reason-chip">First renewal coming up</span>
+                <span class="reason-chip">Low engagement</span>
+                <span class="reason-chip">Dues increased 12%</span>
+              </div>
+            </div>
+            <div class="m-risk">
+              <div class="pct txt-high">84%</div>
+              <div class="lbl">likely to lapse</div>
+              <div class="risk-meter"><span class="fill-high" style="width:84%"></span></div>
+            </div>
+          </div>
+
+          <!-- Member 3 -->
+          <div class="member-row">
+            <div class="m-avatar av-h3">SL</div>
+            <div class="m-main">
+              <div class="m-name">Sarah Lindqvist</div>
+              <div class="m-meta">Corporate · member since 2019</div>
+              <div class="m-reasons">
+                <span class="reason-chip">Primary contact left the company</span>
+                <span class="reason-chip">Portal logins down 60%</span>
+              </div>
+            </div>
+            <div class="m-risk">
+              <div class="pct txt-high">81%</div>
+              <div class="lbl">likely to lapse</div>
+              <div class="risk-meter"><span class="fill-high" style="width:81%"></span></div>
+            </div>
+          </div>
+
+          <!-- Member 4 -->
+          <div class="member-row">
+            <div class="m-avatar av-h4">JP</div>
+            <div class="m-main">
+              <div class="m-name">James Patterson</div>
+              <div class="m-meta">Retired Professional · member since 2012</div>
+              <div class="m-reasons">
+                <span class="reason-chip">Participation dropped off</span>
+                <span class="reason-chip">Asked about emeritus pricing</span>
+              </div>
+            </div>
+            <div class="m-risk">
+              <div class="pct txt-high">77%</div>
+              <div class="lbl">likely to lapse</div>
+              <div class="risk-meter"><span class="fill-high" style="width:77%"></span></div>
+            </div>
+          </div>
+
+          <!-- Member 5 -->
+          <div class="member-row">
+            <div class="m-avatar av-h2">AR</div>
+            <div class="m-main">
+              <div class="m-name">Aisha Rahman</div>
+              <div class="m-meta">Individual Professional · member since 2021</div>
+              <div class="m-reasons">
+                <span class="reason-chip">No committee involvement</span>
+                <span class="reason-chip">Hasn't attended the annual conference</span>
+              </div>
+            </div>
+            <div class="m-risk">
+              <div class="pct txt-high">74%</div>
+              <div class="lbl">likely to lapse</div>
+              <div class="risk-meter"><span class="fill-high" style="width:74%"></span></div>
+            </div>
+          </div>
+
+          <!-- Member 6 -->
+          <div class="member-row">
+            <div class="m-avatar av-m1">TH</div>
+            <div class="m-main">
+              <div class="m-name">Tomás Herrera</div>
+              <div class="m-meta">Corporate · member since 2020</div>
+              <div class="m-reasons">
+                <span class="reason-chip">Usage down 40%</span>
+                <span class="reason-chip">Renewal invoice unpaid 3 weeks</span>
+              </div>
+            </div>
+            <div class="m-risk">
+              <div class="pct txt-medium">71%</div>
+              <div class="lbl">likely to lapse</div>
+              <div class="risk-meter"><span class="fill-medium" style="width:71%"></span></div>
+            </div>
+          </div>
+
+          <!-- Member 7 -->
+          <div class="member-row">
+            <div class="m-avatar av-h3">PN</div>
+            <div class="m-main">
+              <div class="m-name">Priya Nair</div>
+              <div class="m-meta">Early Career Professional · member since 2023</div>
+              <div class="m-reasons">
+                <span class="reason-chip">Joined for one event</span>
+                <span class="reason-chip">No logins in 90 days</span>
+              </div>
+            </div>
+            <div class="m-risk">
+              <div class="pct txt-medium">68%</div>
+              <div class="lbl">likely to lapse</div>
+              <div class="risk-meter"><span class="fill-medium" style="width:68%"></span></div>
+            </div>
+          </div>
+
+          <!-- Member 8 -->
+          <div class="member-row">
+            <div class="m-avatar av-m1">RF</div>
+            <div class="m-main">
+              <div class="m-name">Robert Feldman</div>
+              <div class="m-meta">Individual Professional · member since 2015</div>
+              <div class="m-reasons">
+                <span class="reason-chip">Downgraded last year</span>
+                <span class="reason-chip">Email engagement falling</span>
+              </div>
+            </div>
+            <div class="m-risk">
+              <div class="pct txt-medium">64%</div>
+              <div class="lbl">likely to lapse</div>
+              <div class="risk-meter"><span class="fill-medium" style="width:64%"></span></div>
+            </div>
+          </div>
+
+          <!-- Member 9 -->
+          <div class="member-row">
+            <div class="m-avatar av-m2">GM</div>
+            <div class="m-main">
+              <div class="m-name">Grace Mbeki</div>
+              <div class="m-meta">Student · member since 2023</div>
+              <div class="m-reasons">
+                <span class="reason-chip">Graduating soon</span>
+                <span class="reason-chip">No transition-to-professional yet</span>
+              </div>
+            </div>
+            <div class="m-risk">
+              <div class="pct txt-medium">61%</div>
+              <div class="lbl">likely to lapse</div>
+              <div class="risk-meter"><span class="fill-medium" style="width:61%"></span></div>
+            </div>
+          </div>
+
+          <div class="list-foot">
+            <span class="muted" style="font-size:12.5px">Showing 9 of 318 at-risk members</span>
+            <a href="#">View all 318 <i class="fa-solid fa-arrow-right"></i></a>
+          </div>
+        </div>
+      </div>
+
+      <!-- SKIP offers next move -->
+      <div class="chat-row">
+        <div class="skip-avatar"><i class="fa-solid fa-robot"></i></div>
+        <div>
+          <div class="chat-bubble agent">Great — here's what you can do with this. Most people start by working the call list, then save the scores so the rest of your team sees them too.</div>
+          <div class="chat-stamp">9:44 AM</div>
+        </div>
+      </div>
+
+      <!-- ====== INLINE ARTIFACT 3 — ACTIONS ====== -->
+      <div class="artifact">
+        <div class="artifact-tab"><i class="fa-solid fa-bolt"></i> What you can do</div>
+        <div class="mj-card">
+          <div class="actions-grid">
+            <div class="action-tile primary">
+              <div class="action-ico"><i class="fa-solid fa-phone-volume"></i></div>
+              <div class="action-txt">
+                <div class="at-title">Review the call list</div>
+                <div class="at-sub">Open the ranked at-risk list and start working through your top renewals.</div>
+              </div>
+            </div>
+            <div class="action-tile done">
+              <div class="action-ico"><i class="fa-solid fa-floppy-disk"></i></div>
+              <div class="action-txt">
+                <div class="at-title">Save scores to member records <i class="fa-solid fa-circle-check" style="color:var(--mj-status-success)"></i></div>
+                <div class="at-sub">Writes a "Renewal Risk" value onto each member so staff &amp; automation can see it.</div>
+              </div>
+            </div>
+            <div class="action-tile">
+              <div class="action-ico"><i class="fa-solid fa-paper-plane"></i></div>
+              <div class="action-txt">
+                <div class="at-title">Send to a list / start outreach</div>
+                <div class="at-sub">Push the 318 at-risk members to a saved list or hand off to a campaign.</div>
+              </div>
+            </div>
+            <div class="action-tile">
+              <div class="action-ico"><i class="fa-solid fa-share-nodes"></i></div>
+              <div class="action-txt">
+                <div class="at-title">Share / export</div>
+                <div class="at-sub">A shareable summary or CSV/Excel export for leadership.</div>
+              </div>
+            </div>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-chip"><i class="fa-solid fa-circle-check"></i> Renewal Risk saved to 1,284 member records</span>
+            <span class="confirm-chip"><i class="fa-solid fa-circle-check"></i> Created list "At-Risk Renewals — Q3" with 318 members</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SKIP closing -->
+      <div class="chat-row">
+        <div class="skip-avatar"><i class="fa-solid fa-robot"></i></div>
+        <div>
+          <div class="chat-bubble agent">Done — scores are saved and your Q3 list is ready. Want me to draft a renewal outreach email for the top 50, or break this down by member type?</div>
+          <div class="chat-stamp">9:44 AM</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================== STICKY COMPOSER ===================== -->
+  <div class="composer-dock">
+    <div class="composer-inner">
+      <div class="chat-input">
+        <input type="text" placeholder="Ask Skip anything about your members…" aria-label="Message Skip">
+        <button class="chat-send" title="Send"><i class="fa-solid fa-arrow-up"></i></button>
+      </div>
+      <div class="composer-hint">Skip can make mistakes — predictions show a trust grade so you know when to rely on them.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Dark mode toggle
+  const root = document.documentElement;
+  const icon = document.getElementById('themeIcon');
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const dark = root.getAttribute('data-theme') === 'dark';
+    if (dark) { root.removeAttribute('data-theme'); icon.className = 'fa-solid fa-moon'; }
+    else { root.setAttribute('data-theme', 'dark'); icon.className = 'fa-solid fa-sun'; }
+  });
+
+  // "For analysts" disclosure
+  function toggleAnalysts(){
+    document.getElementById('analysts').classList.toggle('open');
+  }
+
+  // Light interactivity: clicking a suggestion drops it into the composer input
+  document.querySelectorAll('.suggestion').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const input = document.querySelector('.chat-input input');
+      input.value = chip.textContent.trim();
+      input.focus();
+    });
+  });
+</script>
+</body>
+</html>

@@ -58,15 +58,13 @@
   <div class="tile-resource-container">
     <!-- Show empty state if no items -->
     @if (items.length === 0 && !isEditingDashboard) {
-      <div class="empty-dashboard">
-        <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
-        <h3>This dashboard is empty</h3>
-        <p>Start by adding reports or user views to your dashboard</p>
-        <button mjButton variant="primary" (click)="addItem()">
-          <span class="fa-solid fa-plus"></span>
-          Add Item
-        </button>
-      </div>
+      <mj-empty-state class="empty-dashboard"
+        Icon="fa-solid fa-grip-vertical"
+        Title="This dashboard is empty"
+        Message="Start by adding reports or user views to your dashboard"
+        ActionText="Add Item"
+        ActionIcon="fa-solid fa-plus"
+        (Action)="addItem()" />
     }
 
     <!-- Show tile layout if there are items or if editing -->

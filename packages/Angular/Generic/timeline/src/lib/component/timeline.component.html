@@ -42,10 +42,9 @@ Structure:
     @if (emptyTemplate) {
       <ng-container *ngTemplateOutlet="emptyTemplate"></ng-container>
     } @else {
-      <div class="mj-timeline__empty">
-        <i [class]="emptyIcon" class="mj-timeline__empty-icon"></i>
-        <span class="mj-timeline__empty-text">{{ emptyMessage }}</span>
-      </div>
+      <mj-empty-state
+        [Icon]="emptyIcon"
+        [Title]="emptyMessage" />
     }
   }
 

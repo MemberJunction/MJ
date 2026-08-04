@@ -34,11 +34,9 @@
   @if (IsLoading) {
     <mj-loading text="Loading integrations..." size="medium"></mj-loading>
   } @else if (Summaries.length === 0) {
-    <div class="empty-state">
-      <i class="fa-solid fa-plug-circle-xmark"></i>
-      <h3>No Integrations Configured</h3>
-      <p>Set up your first integration using the Connection Studio to start syncing data.</p>
-    </div>
+    <mj-empty-state Icon="fa-solid fa-plug-circle-xmark"
+      Title="No Integrations Configured"
+      Message="Set up your first integration using the Connection Studio to start syncing data." />
   } @else {
     <!-- ====================================================================
          SECTION 1: Metric Strip

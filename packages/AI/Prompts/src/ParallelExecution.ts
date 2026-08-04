@@ -469,7 +469,6 @@ export interface IParallelExecutionCoordinator {
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressCallbacks?: ProgressCallbacksInterface,
-    agentRunId?: string,
   ): Promise<ParallelExecutionResult>;
 
   selectBestResult(

@@ -1,6 +1,6 @@
 # @memberjunction/codegen-lib
 
-The code generation engine for the MemberJunction platform. This library transforms database schema metadata into a complete, type-safe, full-stack application: TypeScript entity classes with Zod validation, Angular form components, SQL stored procedures and views, GraphQL resolvers, and Action subclasses -- all from a single `mj codegen` invocation.
+The code generation engine for the MemberJunction platform. This library transforms database schema metadata into a complete, type-safe, full-stack application: TypeScript entity classes with Zod validation, Angular form components, SQL stored procedures and views, GraphQL resolvers, Action subclasses, and **Remote Operation typed bases** (`RemoteOperationGeneratorBase` → `remote_operations.ts`, one `BaseRemotableOperation` subclass per `MJ: Remote Operations` row — Manual shells or complete AI/Default classes; see the [Remote Operations Guide](../../guides/REMOTE_OPERATIONS_GUIDE.md)) -- all from a single `mj codegen` invocation.
 
 ## Installation
 

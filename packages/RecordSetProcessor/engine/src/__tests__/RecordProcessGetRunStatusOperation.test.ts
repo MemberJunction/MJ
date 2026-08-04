@@ -6,7 +6,9 @@
 
 import { describe, it, expect } from 'vitest';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { RecordProcessGetRunStatusOperation } from '../operations/RecordProcessGetRunStatusOperation';
+// The hand-authored server subclass now extends the CodeGen-emitted base (which carries OperationKey /
+// ExecutionMode / RequiredScope from metadata) and supplies only the InternalExecute body.
+import { RecordProcessGetRunStatusServerOperation } from '../operations/RecordProcessGetRunStatusOperation';
 
 const USER = {} as UserInfo;
 
@@ -19,7 +21,7 @@ const ctx = (provider: IMetadataProvider) => ({ provider, user: USER, emitProgre
 
 describe('RecordProcessGetRunStatusOperation', () => {
     it('declares the operation key and required scope', () => {
-        const op = new RecordProcessGetRunStatusOperation();
+        const op = new RecordProcessGetRunStatusServerOperation();
         expect(op.OperationKey).toBe('RecordProcess.GetRunStatus');
         expect(op.RequiredScope).toBe('recordprocess:execute');
         expect(op.ExecutionMode).toBe('Sync');
@@ -35,14 +37,14 @@ describe('RecordProcessGetRunStatusOperation', () => {
             ErrorCount: 1,
             SkippedCount: 0,
         });
-        const result = await new RecordProcessGetRunStatusOperation().ExecuteServer({ processRunID: 'RUN-1' }, ctx(provider));
+        const result = await new RecordProcessGetRunStatusServerOperation().ExecuteServer({ processRunID: 'RUN-1' }, ctx(provider));
         expect(result.Success).toBe(true);
         expect(result.Output).toEqual({ status: 'Completed', processed: 5, total: 5, success: 4, error: 1, skipped: 0 });
     });
 
     it('fails with EXECUTION_ERROR when the run is not found', async () => {
         const provider = providerReturning({ Load: async () => false });
-        const result = await new RecordProcessGetRunStatusOperation().ExecuteServer({ processRunID: 'missing' }, ctx(provider));
+        const result = await new RecordProcessGetRunStatusServerOperation().ExecuteServer({ processRunID: 'missing' }, ctx(provider));
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('EXECUTION_ERROR');
         expect(result.ErrorMessage).toContain('not found');
@@ -50,7 +52,7 @@ describe('RecordProcessGetRunStatusOperation', () => {
 
     it('fails when processRunID is missing', async () => {
         const provider = providerReturning({ Load: async () => true });
-        const result = await new RecordProcessGetRunStatusOperation().ExecuteServer({ processRunID: '' }, ctx(provider));
+        const result = await new RecordProcessGetRunStatusServerOperation().ExecuteServer({ processRunID: '' }, ctx(provider));
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('processRunID is required');
     });

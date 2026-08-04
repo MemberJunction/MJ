@@ -2,22 +2,14 @@
   {
     "fields": {
       "Name": "Skip",
-      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
-      "Description": "Data analytics and reporting expert that can create charts, graphs, dashboards and provide insights on data",
-      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
-      "Status": "Active",
-      "DriverClass": "SkipProxyAgent",
-      "ExecutionOrder": 0,
-      "ExposeAsAction": true,
-      "IconClass": "mj-icon-skip",
-      "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Component"
+      "Status": "Disabled"
     },
     "primaryKey": {
       "ID": "A829FAAC-9E64-440C-B650-83F92A37E990"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:50.969Z",
-      "checksum": "34ed57a88dda13bef3ba6e0d902be422f8ddfc2cf2229b460e0e3d43aeace848"
+      "lastModified": "2026-07-08T17:58:11.385Z",
+      "checksum": "d81f3341552992527137129b3059ad3f80a95a74bd051756438f95b4f97d5cda"
     }
   }
 ]

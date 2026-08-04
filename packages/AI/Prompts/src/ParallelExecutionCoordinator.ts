@@ -164,7 +164,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param parentPromptRunId - Optional parent prompt run ID for hierarchical logging
    * @param cancellationToken - Optional cancellation token to abort execution
    * @param progressCallbacks - Optional callbacks for progress tracking
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ParallelExecutionResult> - Aggregated results from all executions
    */
   public async executeTasksInParallel(
@@ -174,7 +173,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressCallbacks?: ProgressCallbacksInterface, // Using interface to avoid circular dependency
-    agentRunId?: string,
   ): Promise<ParallelExecutionResult> {
     const startTime = new Date();
     const executionConfig = { ...this._defaultConfig, ...config };
@@ -214,7 +212,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       const progressTracker = new ParallelProgressTracker(tasks.length, executionGroups.length, progressCallbacks);
 
       // Execute groups sequentially, tasks within groups in parallel
-      const allResults = await this.executeGroupsSequentially(params, executionGroups, executionConfig, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
+      const allResults = await this.executeGroupsSequentially(params, executionGroups, executionConfig, parentPromptRunId, cancellationToken, progressTracker);
 
       // Aggregate results and calculate metrics
       const result = this.aggregateResults(allResults, startTime, new Date());
@@ -334,7 +332,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param parentPromptRunId - Optional parent prompt run ID for tracking
    * @param cancellationToken - Optional cancellation token to abort execution
    * @param progressTracker - Progress tracker for monitoring execution
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult[]> - All task results from all groups
    */
   private async executeGroupsSequentially(
@@ -344,7 +341,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressTracker?: ParallelProgressTracker,
-    agentRunId?: string,
   ): Promise<ExecutionTaskResult[]> {
     const allResults: ExecutionTaskResult[] = [];
 
@@ -371,7 +367,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       // Update progress tracker for current group
       progressTracker?.updateProgress(group.groupNumber);
 
-      const groupResults = await this.executeGroupInParallel(params, group, config, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
+      const groupResults = await this.executeGroupInParallel(params, group, config, parentPromptRunId, cancellationToken, progressTracker);
       allResults.push(...groupResults);
 
       // Check if we should fail fast
@@ -393,7 +389,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param parentPromptRunId - Optional parent prompt run ID for tracking
    * @param cancellationToken - Optional cancellation token to abort execution
    * @param progressTracker - Progress tracker for monitoring execution
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult[]> - Results from all tasks in the group
    */
   private async executeGroupInParallel(
@@ -403,7 +398,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressTracker?: ParallelProgressTracker,
-    agentRunId?: string,
   ): Promise<ExecutionTaskResult[]> {
     const maxConcurrent = Math.min(config.maxConcurrentExecutions, group.tasks.length);
     const results: ExecutionTaskResult[] = [];
@@ -437,7 +431,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       while (executing.length < maxConcurrent && taskIndex < group.tasks.length) {
         const task = group.tasks[taskIndex++];
         progressTracker?.addActiveTask(task.taskId);
-        const execution = this.executeTask(params, task, config, parentPromptRunId, executionOrder++, agentRunId);
+        const execution = this.executeTask(params, task, config, parentPromptRunId, executionOrder++);
         executing.push(execution);
       }
 
@@ -470,7 +464,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param config - Execution configuration
    * @param parentPromptRunId - Optional parent prompt run ID for hierarchical logging
    * @param executionOrder - Execution order for this task
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult> - Result of the task execution
    */
   private async executeTask(
@@ -479,7 +472,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     config: ParallelExecutionConfig,
     parentPromptRunId?: string,
     executionOrder?: number,
-    agentRunId?: string,
   ): Promise<ExecutionTaskResult> {
     const startTime = new Date();
     let lastError: Error | null = null;
@@ -508,7 +500,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
           LogStatus(`Retrying task ${task.taskId}, attempt ${attempt + 1}/${config.maxRetries + 1}`);
         }
 
-        const result = await this.executeSingleTask(params, task, config.taskTimeoutMS, parentPromptRunId, executionOrder, agentRunId);
+        const result = await this.executeSingleTask(params, task, config.taskTimeoutMS, parentPromptRunId, executionOrder);
         result.startTime = startTime;
         result.endTime = new Date();
 
@@ -543,10 +535,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param timeoutMS - Timeout for the execution in milliseconds
    * @param parentPromptRunId - Optional parent prompt run ID for hierarchical logging
    * @param executionOrder - Execution order for this task
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult> - Result of the task execution
    */
-  private async executeSingleTask(params: AIPromptParams, task: ExecutionTask, timeoutMS: number, parentPromptRunId?: string, executionOrder?: number, agentRunId?: string): Promise<ExecutionTaskResult> {
+  private async executeSingleTask(params: AIPromptParams, task: ExecutionTask, timeoutMS: number, parentPromptRunId?: string, executionOrder?: number): Promise<ExecutionTaskResult> {
     const startTime = new Date();
     let childPromptRun: MJAIPromptRunEntityExtended | null = null;
 
@@ -558,7 +549,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     try {
       // Create child prompt run log if parent ID is provided
       if (parentPromptRunId) {
-        childPromptRun = await this.createChildPromptRun(task, startTime, parentPromptRunId, executionOrder, agentRunId);
+        childPromptRun = await this.createChildPromptRun(task, startTime, parentPromptRunId, executionOrder);
       }
 
       // Delegate the actual model call to the inherited base executeModel — the SINGLE source of truth
@@ -566,7 +557,17 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       // selection, ChatParams construction (temperature/topP/effort/stop/response-format/prefill),
       // media handling, and streaming. The coordinator only layers the per-task timeout on top;
       // cancellation is handled inside executeModel via the task's cancellation token.
+      //
+      // TIMEOUT: a caller-supplied `AIPromptParams.timeoutMS` (or a runner-level
+      // DefaultPromptTimeoutMS) is the authoritative bound for a model call — the inherited
+      // executeModel enforces it on the composed abort signal. The coordinator's `taskTimeoutMS` is
+      // only a DEFAULT backstop for callers that request no timeout, so when a timeout IS requested
+      // we use that value here too. Otherwise a caller asking for 120s would still be truncated at
+      // the coordinator's 30s default — exactly the kind of divergence between the two paths we're
+      // eliminating.
       const perTaskParams = this.buildPerTaskParams(params, task);
+      const effectiveTimeoutMS = this.getEffectiveTimeoutMS(perTaskParams) ?? timeoutMS;
+      let taskTimer: ReturnType<typeof setTimeout> | undefined;
       const modelResult = (await Promise.race([
         this.executeModel(
           task.model,
@@ -580,8 +581,10 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
           task.vendorDriverClass,
           task.vendorApiName,
         ),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Task execution timeout')), timeoutMS)),
-      ])) as ChatResult;
+        new Promise<never>((_, reject) => {
+          taskTimer = setTimeout(() => reject(new Error('Task execution timeout')), effectiveTimeoutMS);
+        }),
+      ]).finally(() => clearTimeout(taskTimer))) as ChatResult;
 
       if (streamCbs?.OnComplete) {
         streamCbs.OnComplete(modelResult);
@@ -971,10 +974,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param startTime - When the execution started
    * @param parentPromptRunId - ID of the parent prompt run
    * @param executionOrder - Execution order within the parallel group
-   * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<MJAIPromptRunEntityExtended> - The created child prompt run
    */
-  private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number, agentRunId?: string): Promise<MJAIPromptRunEntityExtended> {
+  private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number): Promise<MJAIPromptRunEntityExtended> {
     try {
       const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', task.contextUser);
       promptRun.NewRecord();
@@ -987,11 +989,6 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       if (executionOrder !== undefined) {
         promptRun.ExecutionOrder = executionOrder;
-      }
-
-      // Set AgentRunID if provided for agent-prompt execution tracking
-      if (agentRunId) {
-        promptRun.AgentRunID = agentRunId;
       }
 
       // Set vendor ID from task if available (use task vendor ID which comes from vendor selection)

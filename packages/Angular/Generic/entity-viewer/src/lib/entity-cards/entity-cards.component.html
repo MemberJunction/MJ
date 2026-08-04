@@ -104,10 +104,10 @@
     }
 
     @if (effectiveRecords.length === 0) {
-      <div class="no-results">
-        <i class="fa-solid fa-inbox"></i>
-        <p>No records to display</p>
-      </div>
+      <mj-empty-state
+        class="no-results"
+        Variant="no-results"
+        Title="No records to display" />
     }
     </div>
   }

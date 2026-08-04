@@ -52,6 +52,21 @@ describe('BaseViewTypeDescriptor defaults', () => {
   it('defaults EnsureAvailabilityData to a resolved no-op', async () => {
     await expect(new PlainViewType().EnsureAvailabilityData()).resolves.toBeUndefined();
   });
+
+  it('defaults UsesCanonicalGridState to false (non-grid types keep opaque per-type config)', () => {
+    expect(new PlainViewType().UsesCanonicalGridState).toBe(false);
+  });
+
+  it('lets a subclass opt into the canonical grid-state store', () => {
+    class CanonicalViewType extends BaseViewTypeDescriptor {
+      readonly Name = 'CanonicalViewType';
+      readonly DisplayName = 'Canonical';
+      readonly Icon = 'fa-solid fa-table';
+      readonly RendererComponent = class {};
+      override readonly UsesCanonicalGridState = true;
+    }
+    expect(new CanonicalViewType().UsesCanonicalGridState).toBe(true);
+  });
 });
 
 describe('ViewTypeEngine', () => {

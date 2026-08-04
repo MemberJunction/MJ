@@ -1,7 +1,7 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
+import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
-import Groq from 'groq-sdk';
-import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam, ChatCompletionContentPart } from 'groq-sdk/resources/chat/completions';
+import Groq, { APIUserAbortError } from 'groq-sdk';
+import { ChatCompletion, ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam, ChatCompletionContentPart, ChatCompletionChunk } from 'groq-sdk/resources/chat/completions';
 
 /**
  * Groq implementation of the BaseLLM class
@@ -9,7 +9,12 @@ import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStrea
 @RegisterClass(BaseLLM, "GroqLLM")
 export class GroqLLM extends BaseLLM {
     private _client: Groq;
-    
+    /**
+     * Set when the in-flight streaming request was cancelled via ChatParams.cancellationToken.
+     * Reset at the start and end of every streaming request by resetStreamingState().
+     */
+    private streamCancelled: boolean = false;
+
     constructor(apiKey: string) {
         super(apiKey);
         this._client = new Groq({ apiKey: apiKey });
@@ -49,6 +54,92 @@ export class GroqLLM extends BaseLLM {
      */
     protected supportsThinkingModels(): boolean {
         return true;
+    }
+
+    /**
+     * Determines whether an error (or the current state of the signal) represents a caller-initiated
+     * cancellation rather than a genuine API failure. Groq's SDK raises APIUserAbortError when the
+     * request options carry a signal that aborts.
+     */
+    private isCancellation(error: unknown, signal?: AbortSignal): boolean {
+        if (signal?.aborted) {
+            return true;
+        }
+        if (error instanceof APIUserAbortError) {
+            return true;
+        }
+        return error instanceof Error && error.name === 'AbortError';
+    }
+
+    /**
+     * Builds the ChatResult returned when a request is cancelled through ChatParams.cancellationToken
+     * (caller abort or AIPromptRunner timeout). Marked Fatal / non-failover so no layer retries a request
+     * the caller explicitly gave up on.
+     */
+    private buildCancelledResult(startTime: Date): ChatResult {
+        const errorInfo: AIErrorInfo = {
+            errorType: 'Unknown',
+            severity: 'Fatal',
+            canFailover: false,
+            providerErrorCode: 'request_cancelled',
+            context: { provider: 'groq', cancelled: true }
+        };
+
+        const result = new ChatResult(false, startTime, new Date());
+        result.statusText = 'cancelled';
+        result.errorMessage = 'Request cancelled via cancellationToken';
+        result.exception = null;
+        result.errorInfo = errorInfo;
+        result.data = {
+            choices: [],
+            usage: new ModelUsage(0, 0)
+        };
+        return result;
+    }
+
+    /**
+     * Wraps the Groq stream so that an abort ends iteration cleanly (flagging the cancellation for
+     * finalizeStreamingResponse) instead of surfacing as a mid-stream exception that the base class
+     * would otherwise swallow and report as a truncated success.
+     */
+    private async *iterateWithCancellation(
+        stream: AsyncIterable<ChatCompletionChunk>,
+        signal?: AbortSignal
+    ): AsyncGenerator<ChatCompletionChunk> {
+        try {
+            for await (const chunk of stream) {
+                if (signal?.aborted) {
+                    this.streamCancelled = true;
+                    return;
+                }
+                yield chunk;
+            }
+            if (signal?.aborted) {
+                this.streamCancelled = true;
+            }
+        } catch (error) {
+            if (this.isCancellation(error, signal)) {
+                this.streamCancelled = true;
+                return;
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * An already-exhausted stream, used when the request was cancelled before it was sent.
+     */
+    private async *emptyStream(): AsyncGenerator<ChatCompletionChunk> {
+        // intentionally yields nothing
+    }
+
+    /**
+     * Clear per-request streaming state. Invoked by the base class at the start and end of every
+     * streaming request.
+     */
+    protected override resetStreamingState(): void {
+        super.resetStreamingState();
+        this.streamCancelled = false;
     }
 
     protected setGroqParamsEffortLevel(groqParams: any, params: ChatParams): void {
@@ -139,6 +230,11 @@ export class GroqLLM extends BaseLLM {
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
 
+        // Already cancelled before we even dial out — don't open a socket at all
+        if (params.cancellationToken?.aborted) {
+            return this.buildCancelledResult(startTime);
+        }
+
         // Convert to Groq-compatible message format with proper multimodal support
         const messages = this.convertToGroqMessages(params.messages);
 
@@ -204,7 +300,17 @@ export class GroqLLM extends BaseLLM {
                 break;
         }
 
-        const chatResponse = await this.client.chat.completions.create(groqParams);
+        // Forward the cancellation token to the Groq SDK's RequestOptions so an abort tears down the
+        // underlying HTTP socket rather than merely abandoning this promise.
+        let chatResponse: ChatCompletion;
+        try {
+            chatResponse = await this.client.chat.completions.create(groqParams, { signal: params.cancellationToken });
+        } catch (error) {
+            if (this.isCancellation(error, params.cancellationToken)) {
+                return this.buildCancelledResult(startTime);
+            }
+            throw error;
+        }
         const endTime = new Date();
 
         let choices: ChatResultChoice[] = chatResponse.choices.map((choice: any) => {
@@ -287,10 +393,17 @@ export class GroqLLM extends BaseLLM {
     /**
      * Create a streaming request for Groq
      */
-    protected async createStreamingRequest(params: ChatParams): Promise<any> {
+    protected async createStreamingRequest(params: ChatParams): Promise<AsyncIterable<ChatCompletionChunk>> {
         // Initialize streaming state for thinking extraction if supported
         if (this.supportsThinkingModels()) {
             this.initializeThinkingStreamState();
+        }
+
+        // Already cancelled before we dial out — hand back an empty stream; finalizeStreamingResponse
+        // will report the cancellation.
+        if (params.cancellationToken?.aborted) {
+            this.streamCancelled = true;
+            return this.emptyStream();
         }
 
         // Convert to Groq-compatible message format with proper multimodal support
@@ -347,9 +460,12 @@ export class GroqLLM extends BaseLLM {
                 break;
         }
         
-        return this.client.chat.completions.create(groqParams);
+        // Forward the cancellation token so an abort closes the streaming socket, and wrap the stream
+        // so the abort is reported as a cancellation rather than a truncated success.
+        const stream = await this.client.chat.completions.create(groqParams, { signal: params.cancellationToken });
+        return this.iterateWithCancellation(stream, params.cancellationToken);
     }
-    
+
     /**
      * Process a streaming chunk from Groq
      */
@@ -394,12 +510,18 @@ export class GroqLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
+        // If the stream was aborted via the cancellation token, report a cancellation instead of
+        // presenting whatever partial content we managed to accumulate as a successful response.
+        if (this.streamCancelled) {
+            return this.buildCancelledResult(new Date());
+        }
+
         // Extract finish reason from last chunk if available
         let finishReason = 'stop';
         if (lastChunk?.choices && lastChunk.choices.length > 0 && lastChunk.choices[0].finish_reason) {
             finishReason = lastChunk.choices[0].finish_reason;
         }
-        
+
         // For Groq, we don't have precise usage metrics from streaming
         // We'll use the accumulated ones or defaults
         const promptTokens = usage?.promptTokens || 0;

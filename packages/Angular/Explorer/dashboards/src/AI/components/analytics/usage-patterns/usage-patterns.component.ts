@@ -74,11 +74,9 @@ const FIELDS: string[] = [
                 <mj-loading text="Analyzing usage patterns..."></mj-loading>
             </div>
         } @else if (TotalRuns === 0) {
-            <div class="empty-state">
-                <i class="fa-solid fa-chart-line empty-state__icon"></i>
-                <div class="empty-state__title">No Data Available</div>
-                <div class="empty-state__subtitle">No prompt runs found in the last 30 days.</div>
-            </div>
+            <mj-empty-state Icon="fa-solid fa-chart-line"
+                Title="No Data Available"
+                Message="No prompt runs found in the last 30 days." />
         } @else {
             <!-- Heatmap -->
             <div class="panel">
@@ -228,33 +226,6 @@ const FIELDS: string[] = [
             justify-content: center;
             align-items: center;
             min-height: 300px;
-        }
-
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 60px 24px;
-            text-align: center;
-        }
-
-        .empty-state__icon {
-            font-size: 36px;
-            color: var(--mj-text-muted);
-            margin-bottom: 12px;
-        }
-
-        .empty-state__title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--mj-text-primary);
-            margin-bottom: 4px;
-        }
-
-        .empty-state__subtitle {
-            font-size: 13px;
-            color: var(--mj-text-muted);
         }
 
         /* ── Panels ── */

@@ -40,10 +40,8 @@
                          (dragover)="$event.preventDefault()"
                          (drop)="OnDropToRoot($event)">
                         @if (TaxFilteredNodes.length === 0) {
-                            <div class="at-empty-state">
-                                <i class="fa-solid fa-sitemap"></i>
-                                <p>No tags found</p>
-                            </div>
+                            <mj-empty-state Size="compact" Icon="fa-solid fa-sitemap"
+                                Title="No tags found" />
                         }
                         @for (node of TaxFilteredNodes; track node.ID) {
                             <div class="at-tax-tree-node"
@@ -388,10 +386,8 @@
                             </div>
                         }
                     } @else {
-                        <div class="at-empty-state" style="height: 100%;">
-                            <i class="fa-solid fa-hand-pointer"></i>
-                            <p>Select a tag from the tree to view details</p>
-                        </div>
+                        <mj-empty-state class="at-fill" Icon="fa-solid fa-hand-pointer"
+                            Title="Select a tag from the tree to view details" />
                     }
                 </div>
             </div>
@@ -436,10 +432,8 @@
             </div>
 
             @if (TaxDuplicates.length === 0) {
-                <div class="at-empty-state">
-                    <i class="fa-solid fa-check-circle"></i>
-                    <p>No duplicate tags detected</p>
-                </div>
+                <mj-empty-state Variant="success" Size="compact"
+                    Title="No duplicate tags detected" />
             }
 
             <div class="at-tax-dup-list">
@@ -500,10 +494,8 @@
             </div>
 
             @if (TaxOrphans.length === 0) {
-                <div class="at-empty-state">
-                    <i class="fa-solid fa-check-circle"></i>
-                    <p>No orphaned tags</p>
-                </div>
+                <mj-empty-state Variant="success" Size="compact"
+                    Title="No orphaned tags" />
             }
 
             <div class="at-tax-orphan-grid">
@@ -543,10 +535,8 @@
             </div>
 
             @if (TaxTreemapCells.length === 0) {
-                <div class="at-empty-state">
-                    <i class="fa-solid fa-chart-tree-map"></i>
-                    <p>No taxonomy data to visualize</p>
-                </div>
+                <mj-empty-state Size="compact" Icon="fa-solid fa-chart-tree-map"
+                    Title="No taxonomy data to visualize" />
             } @else {
                 <div class="at-tax-treemap-container">
                     @for (cell of TaxTreemapCells; track $index) {
@@ -656,10 +646,8 @@
             </div>
 
             @if (GetFilteredAuditEvents().length === 0) {
-                <div class="at-empty-state">
-                    <i class="fa-solid fa-scroll"></i>
-                    <p>No audit events match the current filters</p>
-                </div>
+                <mj-empty-state Variant="no-results" Size="compact" Icon="fa-solid fa-scroll"
+                    Title="No audit events match the current filters" />
             }
 
             <div class="at-tax-audit-timeline">

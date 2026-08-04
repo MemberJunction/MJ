@@ -102,7 +102,8 @@ const DONUT_COLORS = [
                     </div>
                     <div class="panel-body">
                         @if (TimeBuckets.length === 0) {
-                            <div class="panel-empty">No sessions in the selected period</div>
+                            <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-column"
+                                Title="No sessions in the selected period" />
                         } @else {
                             <div class="bars">
                                 @for (bucket of TimeBuckets; track bucket.Label) {
@@ -127,7 +128,8 @@ const DONUT_COLORS = [
                     </div>
                     <div class="panel-body">
                         @if (ChannelShares.length === 0) {
-                            <div class="panel-empty">No channels attached in the selected period</div>
+                            <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-pie"
+                                Title="No channels attached in the selected period" />
                         } @else {
                             <div class="donut-row">
                                 <div class="donut" [style.background]="DonutGradient"></div>
@@ -157,7 +159,8 @@ const DONUT_COLORS = [
                 </div>
                 <div class="panel-body">
                     @if (TopTargetAgents.length === 0) {
-                        <div class="panel-empty">No delegated runs in the selected period</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-diagram-project"
+                            Title="No delegated runs in the selected period" />
                     }
                     @for (bar of TopTargetAgents; track bar.Name) {
                         <div class="hbar-row">
@@ -301,13 +304,6 @@ const DONUT_COLORS = [
         }
 
         .panel-body { padding: 16px 18px; }
-
-        .panel-empty {
-            text-align: center;
-            padding: 24px;
-            color: var(--mj-text-disabled);
-            font-size: 13px;
-        }
 
         /* ── Vertical bars ── */
         .bars {

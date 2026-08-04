@@ -17,6 +17,11 @@ export class MistralEmbedding extends BaseEmbeddings {
     
         public get Client(): Mistral {return this._client;}
 
+    /** Native batch endpoint: Mistral embeds an array of inputs in one request. */
+    public override get SupportsBatchEmbeddings(): boolean {
+        return true;
+    }
+
     /**
      * Mistral AI embedding endpoint outputs vectors in 1024 dimensions
      */
@@ -25,6 +30,8 @@ export class MistralEmbedding extends BaseEmbeddings {
             const request: EmbeddingRequest = {
                 inputs: params.text,
                 model: params.model || "mistral-embed",
+                // Only effective on models that support output truncation (e.g. codestral-embed)
+                ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
             };
 
             params.model = params.model || "mistral-embed";
@@ -57,11 +64,13 @@ export class MistralEmbedding extends BaseEmbeddings {
     /**
      * Mistral AI embedding endpoint outputs vectors in 1024 dimensions
      */
-    public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+    protected override async embedBatch(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         try {
             const request: EmbeddingRequest = {
                 inputs: params.texts,
                 model: params.model || "mistral-embed",
+                // Only effective on models that support output truncation (e.g. codestral-embed)
+                ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
             };
 
             params.model = params.model || "mistral-embed";

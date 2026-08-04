@@ -1,5 +1,587 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-manager@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/clustering-engine@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-mcp-client@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/code-execution@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/communication-types@6.0.0
+  - @memberjunction/communication-engine@6.0.0
+  - @memberjunction/content-autotagging@6.0.0
+  - @memberjunction/external-change-detection@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/lists@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/react-linter@6.0.0
+  - @memberjunction/record-set-processor-base@6.0.0
+  - @memberjunction/record-set-processor@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/search-engine@6.0.0
+  - @memberjunction/esignature@6.0.0
+  - @memberjunction/geo-core@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/ai-betty-bot@6.0.0
+  - @memberjunction/lists-base@6.0.0
+  - @memberjunction/export-engine@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [c382605]
+- Updated dependencies [a8fc549]
+  - @memberjunction/ai-agents@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-agent-manager@5.51.0
+  - @memberjunction/record-set-processor@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/clustering-engine@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-mcp-client@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/ai-vector-sync@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/code-execution@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/communication-types@5.51.0
+  - @memberjunction/communication-engine@5.51.0
+  - @memberjunction/content-autotagging@5.51.0
+  - @memberjunction/external-change-detection@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/integration-engine@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/lists@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/core-entities-server@5.51.0
+  - @memberjunction/storage@5.51.0
+  - @memberjunction/react-linter@5.51.0
+  - @memberjunction/record-set-processor-base@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/search-engine@5.51.0
+  - @memberjunction/esignature@5.51.0
+  - @memberjunction/geo-core@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/ai-betty-bot@5.51.0
+  - @memberjunction/lists-base@5.51.0
+  - @memberjunction/export-engine@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [86832fa]
+- Updated dependencies [deb02b4]
+- Updated dependencies [8b4c6b2]
+- Updated dependencies [0686d52]
+- Updated dependencies [c7b6710]
+- Updated dependencies [764d6f6]
+- Updated dependencies [408e4bf]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [1e0008f]
+- Updated dependencies [03fc891]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-agents@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/content-autotagging@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/communication-types@5.50.0
+  - @memberjunction/search-engine@5.50.0
+  - @memberjunction/core-entities-server@5.50.0
+  - @memberjunction/integration-engine@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/ai-mcp-client@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/ai-agent-manager@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/clustering-engine@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/ai-vector-sync@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/communication-engine@5.50.0
+  - @memberjunction/external-change-detection@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/lists@5.50.0
+  - @memberjunction/react-linter@5.50.0
+  - @memberjunction/record-set-processor@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/esignature@5.50.0
+  - @memberjunction/geo-core@5.50.0
+  - @memberjunction/code-execution@5.50.0
+  - @memberjunction/interactive-component-types@5.50.0
+  - @memberjunction/record-set-processor-base@5.50.0
+  - @memberjunction/ai-betty-bot@5.50.0
+  - @memberjunction/lists-base@5.50.0
+  - @memberjunction/export-engine@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 7af258e: Fix duplicate class names in CoreActions, and export the concrete auth providers.
+
+  `find-candidate-actions.action.ts` and `find-candidate-agents.action.ts` were copy-pasted from their `find-best-*` siblings and the class name was never changed, so each pair declared the same TypeScript class name (`FindBestActionAction` / `FindBestAgentAction`) under **different** ClassFactory keys.
+
+  This was not cosmetic. A barrel can only export one class per name, so only the copy was exported — which meant `find-best-action` / `find-best-agent` were **absent from the ServerBootstrap class manifest** and therefore unprotected from tree-shaking. A shaken-out registration resolves to `BaseAction`, producing a hollow action rather than a hard failure. It also made the manifest's `FindBestActionAction` symbol resolve to the _candidate_ implementation, so the manifest was actively misleading.
+
+  Renamed the copies to match their files and registration keys (`FindCandidateActionsAction` / `FindCandidateAgentsAction`) and exported all four.
+
+  Also exports the six concrete auth providers (`Auth0Provider`, `CognitoProvider`, `GoogleProvider`, `MSALProvider`, `OktaProvider`, `WorkOSProvider`). They are `@RegisterClass` plugins resolved by key at runtime, so they were reachable through the factory but not importable by name — leaving downstream consumers unable to subclass or reference them. `MagicLinkProvider` was already exported; this brings the rest to parity.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [88d707b]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [6c910ef]
+- Updated dependencies [42a680a]
+- Updated dependencies [48fa886]
+- Updated dependencies [314f667]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [5473e9a]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [373c5f6]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [78a5e44]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-agents@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/core-entities-server@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/communication-types@5.49.0
+  - @memberjunction/communication-engine@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/ai-vector-sync@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/integration-engine@5.49.0
+  - @memberjunction/ai-betty-bot@5.49.0
+  - @memberjunction/search-engine@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/ai-agent-manager@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/clustering-engine@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/ai-mcp-client@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/code-execution@5.49.0
+  - @memberjunction/content-autotagging@5.49.0
+  - @memberjunction/external-change-detection@5.49.0
+  - @memberjunction/interactive-component-types@5.49.0
+  - @memberjunction/lists@5.49.0
+  - @memberjunction/storage@5.49.0
+  - @memberjunction/react-linter@5.49.0
+  - @memberjunction/record-set-processor-base@5.49.0
+  - @memberjunction/record-set-processor@5.49.0
+  - @memberjunction/esignature@5.49.0
+  - @memberjunction/geo-core@5.49.0
+  - @memberjunction/lists-base@5.49.0
+  - @memberjunction/export-engine@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
+## 5.48.0
+
+### Minor Changes
+
+- bda123a: Lists performance overhaul + bug fixes. Read path: the custom List form paginates its Items section (100/page) and resolves member display names in one batched `IN` query per page instead of one query per item (a 1,000-member list drops from ~1,000 requests to 3); the Lists Browse/My Lists dashboards and the Add-to-List panel compute per-list counts via batched count_only queries instead of downloading every List Detail row; single-list-detail export filters membership server-side via a vwListDetails subquery instead of a client-built giant IN clause. Write path: client-side removals batch through TransactionGroups; server-side ListOperations bulk insert/remove and the "Add Records to List" action run with bounded concurrency (10 in-flight) while preserving per-record error isolation. ListSource switches to keyset (AfterKey) pagination with legacy Offset-cursor resume support. DB migration dedupes ListDetail in-place (keeping the oldest row per pair), adds a UNIQUE composite (ListID, RecordID) index that covers the duplicate-check predicate and closes the concurrent-add race, and drops the redundant single-column ListID index. Bug fixes: Add Records dialog spinner never cleared without a user click (missing change-detection after async loads, fixed in both the List form and single-list-detail); the List form's open-record button did nothing; silently-skipped duplicate adds now surface in a result toast (new optional `summary` on `ListManagementResult`). Also: Browse favorites filter persists as a server-side user preference; entities without a NameField now display and search on a sensible fallback field (`ID — value`, new `GetRecordDisplayField` helper); set-operation membership loads and operand pickers carry defensive MaxRows caps with truncation flagging.
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [2143b98]
+- Updated dependencies [c20723a]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai-agents@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/lists@5.48.0
+  - @memberjunction/record-set-processor-base@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/core-entities-server@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-agent-manager@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/clustering-engine@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/ai-mcp-client@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-vector-sync@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/code-execution@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/communication-types@5.48.0
+  - @memberjunction/communication-engine@5.48.0
+  - @memberjunction/content-autotagging@5.48.0
+  - @memberjunction/external-change-detection@5.48.0
+  - @memberjunction/integration-engine@5.48.0
+  - @memberjunction/interactive-component-types@5.48.0
+  - @memberjunction/storage@5.48.0
+  - @memberjunction/react-linter@5.48.0
+  - @memberjunction/record-set-processor@5.48.0
+  - @memberjunction/search-engine@5.48.0
+  - @memberjunction/esignature@5.48.0
+  - @memberjunction/geo-core@5.48.0
+  - @memberjunction/ai-betty-bot@5.48.0
+  - @memberjunction/lists-base@5.48.0
+  - @memberjunction/export-engine@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+- Updated dependencies [936a286]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/sqlserver-dataprovider@5.47.0
+  - @memberjunction/ai-agent-manager@5.47.0
+  - @memberjunction/ai-agents@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/clustering-engine@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-mcp-client@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/ai-vector-sync@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/code-execution@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/communication-types@5.47.0
+  - @memberjunction/communication-engine@5.47.0
+  - @memberjunction/content-autotagging@5.47.0
+  - @memberjunction/external-change-detection@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/integration-engine@5.47.0
+  - @memberjunction/interactive-component-types@5.47.0
+  - @memberjunction/lists@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/core-entities-server@5.47.0
+  - @memberjunction/storage@5.47.0
+  - @memberjunction/react-linter@5.47.0
+  - @memberjunction/record-set-processor-base@5.47.0
+  - @memberjunction/record-set-processor@5.47.0
+  - @memberjunction/search-engine@5.47.0
+  - @memberjunction/esignature@5.47.0
+  - @memberjunction/geo-core@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/ai-betty-bot@5.47.0
+  - @memberjunction/lists-base@5.47.0
+  - @memberjunction/export-engine@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-agents@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-agent-manager@5.46.0
+  - @memberjunction/clustering-engine@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/ai-mcp-client@5.46.0
+  - @memberjunction/ai-vector-sync@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/code-execution@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/communication-types@5.46.0
+  - @memberjunction/communication-engine@5.46.0
+  - @memberjunction/content-autotagging@5.46.0
+  - @memberjunction/external-change-detection@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/integration-engine@5.46.0
+  - @memberjunction/interactive-component-types@5.46.0
+  - @memberjunction/lists@5.46.0
+  - @memberjunction/core-entities-server@5.46.0
+  - @memberjunction/storage@5.46.0
+  - @memberjunction/react-linter@5.46.0
+  - @memberjunction/record-set-processor-base@5.46.0
+  - @memberjunction/record-set-processor@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/search-engine@5.46.0
+  - @memberjunction/esignature@5.46.0
+  - @memberjunction/geo-core@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/ai-betty-bot@5.46.0
+  - @memberjunction/lists-base@5.46.0
+  - @memberjunction/export-engine@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ai-agent-manager@5.45.1
+  - @memberjunction/ai-agents@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/clustering-engine@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-vector-sync@5.45.1
+  - @memberjunction/content-autotagging@5.45.1
+  - @memberjunction/core-entities-server@5.45.1
+  - @memberjunction/record-set-processor@5.45.1
+  - @memberjunction/generic-database-provider@5.45.1
+  - @memberjunction/sqlserver-dataprovider@5.45.1
+  - @memberjunction/search-engine@5.45.1
+  - @memberjunction/communication-engine@5.45.1
+  - @memberjunction/external-change-detection@5.45.1
+  - @memberjunction/react-linter@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/ai-mcp-client@5.45.1
+  - @memberjunction/ai-betty-bot@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/code-execution@5.45.1
+  - @memberjunction/actions@5.45.1
+  - @memberjunction/communication-types@5.45.1
+  - @memberjunction/integration-engine@5.45.1
+  - @memberjunction/interactive-component-types@5.45.1
+  - @memberjunction/lists-base@5.45.1
+  - @memberjunction/lists@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/export-engine@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/storage@5.45.1
+  - @memberjunction/record-set-processor-base@5.45.1
+  - @memberjunction/sql-dialect@5.45.1
+  - @memberjunction/esignature@5.45.1
+  - @memberjunction/geo-core@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [19ec4b0]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [f99cbc1]
+- Updated dependencies [11d5b4e]
+- Updated dependencies [fbee64c]
+- Updated dependencies [81a8aa2]
+- Updated dependencies [82ca89b]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities-server@5.45.0
+  - @memberjunction/ai-agents@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/integration-engine@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-agent-manager@5.45.0
+  - @memberjunction/clustering-engine@5.45.0
+  - @memberjunction/ai-mcp-client@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-vector-sync@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/code-execution@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/communication-types@5.45.0
+  - @memberjunction/communication-engine@5.45.0
+  - @memberjunction/content-autotagging@5.45.0
+  - @memberjunction/external-change-detection@5.45.0
+  - @memberjunction/interactive-component-types@5.45.0
+  - @memberjunction/lists@5.45.0
+  - @memberjunction/storage@5.45.0
+  - @memberjunction/react-linter@5.45.0
+  - @memberjunction/record-set-processor-base@5.45.0
+  - @memberjunction/record-set-processor@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/search-engine@5.45.0
+  - @memberjunction/esignature@5.45.0
+  - @memberjunction/geo-core@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/ai-betty-bot@5.45.0
+  - @memberjunction/lists-base@5.45.0
+  - @memberjunction/export-engine@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [eb38a42]
+- Updated dependencies [3633fbb]
+- Updated dependencies [d88568e]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [91842c3]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [00997ee]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-agents@5.44.0
+  - @memberjunction/ai-engine-base@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core-entities-server@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/storage@5.44.0
+  - @memberjunction/esignature@5.44.0
+  - @memberjunction/ai-agent-manager@5.44.0
+  - @memberjunction/record-set-processor@5.44.0
+  - @memberjunction/clustering-engine@5.44.0
+  - @memberjunction/ai-prompts@5.44.0
+  - @memberjunction/ai-vector-sync@5.44.0
+  - @memberjunction/content-autotagging@5.44.0
+  - @memberjunction/generic-database-provider@5.44.0
+  - @memberjunction/sqlserver-dataprovider@5.44.0
+  - @memberjunction/search-engine@5.44.0
+  - @memberjunction/ai-mcp-client@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/actions@5.44.0
+  - @memberjunction/communication-types@5.44.0
+  - @memberjunction/communication-engine@5.44.0
+  - @memberjunction/external-change-detection@5.44.0
+  - @memberjunction/integration-engine@5.44.0
+  - @memberjunction/lists@5.44.0
+  - @memberjunction/react-linter@5.44.0
+  - @memberjunction/geo-core@5.44.0
+  - @memberjunction/code-execution@5.44.0
+  - @memberjunction/interactive-component-types@5.44.0
+  - @memberjunction/record-set-processor-base@5.44.0
+  - @memberjunction/ai-betty-bot@5.44.0
+  - @memberjunction/lists-base@5.44.0
+  - @memberjunction/export-engine@5.44.0
+  - @memberjunction/sql-dialect@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [aa21fef]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [a975e3d]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [4e05350]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/ai-agents@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/record-set-processor@5.43.0
+  - @memberjunction/ai-prompts@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/integration-engine@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/react-linter@5.43.0
+  - @memberjunction/sqlserver-dataprovider@5.43.0
+  - @memberjunction/ai-agent-manager@5.43.0
+  - @memberjunction/ai-engine-base@5.43.0
+  - @memberjunction/clustering-engine@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/ai-mcp-client@5.43.0
+  - @memberjunction/ai-vector-sync@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/code-execution@5.43.0
+  - @memberjunction/communication-types@5.43.0
+  - @memberjunction/communication-engine@5.43.0
+  - @memberjunction/content-autotagging@5.43.0
+  - @memberjunction/external-change-detection@5.43.0
+  - @memberjunction/generic-database-provider@5.43.0
+  - @memberjunction/interactive-component-types@5.43.0
+  - @memberjunction/lists@5.43.0
+  - @memberjunction/core-entities-server@5.43.0
+  - @memberjunction/storage@5.43.0
+  - @memberjunction/record-set-processor-base@5.43.0
+  - @memberjunction/search-engine@5.43.0
+  - @memberjunction/esignature@5.43.0
+  - @memberjunction/geo-core@5.43.0
+  - @memberjunction/ai-betty-bot@5.43.0
+  - @memberjunction/lists-base@5.43.0
+  - @memberjunction/export-engine@5.43.0
+
 ## 5.42.0
 
 ### Minor Changes

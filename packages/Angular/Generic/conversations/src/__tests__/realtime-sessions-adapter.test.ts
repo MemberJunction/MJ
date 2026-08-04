@@ -23,7 +23,7 @@ import { RealtimeSessionsAdapter } from '../lib/services/realtime-sessions-adapt
 
 /** Minimal RealtimeSessionService stub. Only the observables + the one getter
  *  RealtimeSessionsAdapter consumes. Any other API isn't needed for these tests. */
-function makeStubVoiceService() {
+function makeStubRealtimeService() {
     const sessionStarted$ = new Subject<{ sessionId: string; channelNames: string[] }>();
     const sessionEnded$ = new Subject<{ sessionId: string; reason: 'explicit' | 'error' }>();
     const activeChannels$ = new BehaviorSubject<Array<{ ChannelName: string }>>([]);
@@ -57,8 +57,8 @@ function makeStubVoiceService() {
 describe('RealtimeSessionsAdapter', () => {
     it('bridges SessionStarted$ to a session-started event PLUS synthetic open events per channel', () => {
         // Synthetic opens close the asymmetry caused by RealtimeSessionService emitting to
-        // ActiveChannels$ BEFORE agentSessionId is set during StartVoiceSession.
-        const stub = makeStubVoiceService();
+        // ActiveChannels$ BEFORE agentSessionId is set during StartRealtimeSession.
+        const stub = makeStubRealtimeService();
         const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
@@ -73,7 +73,7 @@ describe('RealtimeSessionsAdapter', () => {
     });
 
     it('SessionStarted$ with empty channelNames emits ONLY the started event (no synthetic opens)', () => {
-        const stub = makeStubVoiceService();
+        const stub = makeStubRealtimeService();
         const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
@@ -86,7 +86,7 @@ describe('RealtimeSessionsAdapter', () => {
     });
 
     it('bridges SessionEnded$ to a session-ended event with reason preserved', () => {
-        const stub = makeStubVoiceService();
+        const stub = makeStubRealtimeService();
         const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
@@ -104,7 +104,7 @@ describe('RealtimeSessionsAdapter', () => {
         // Simulates a channel plugging in DURING an already-started session.
         // SessionStarted$ has already fired and set the initial channels;
         // adding a new one mid-session goes through the ActiveChannels$ diff.
-        const stub = makeStubVoiceService();
+        const stub = makeStubRealtimeService();
         stub.setSessionId('sess-1');
         // Pre-condition: initial channel is already established (the synthetic-open
         // from SessionStarted$ already happened in real life; here we just seed
@@ -123,7 +123,7 @@ describe('RealtimeSessionsAdapter', () => {
     });
 
     it('mid-session: emits "open" for added channels and "closed" for removed channels', () => {
-        const stub = makeStubVoiceService();
+        const stub = makeStubRealtimeService();
         stub.setSessionId('sess-1');
         const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
@@ -145,7 +145,7 @@ describe('RealtimeSessionsAdapter', () => {
 
     it('real-world ordering: ActiveChannels$ during startChannels (sessionId null) skipped; SessionStarted$ then emits opens; teardown empties channels and emits closes', () => {
         // This is the canonical real-world scenario the synthetic-open fix exists for.
-        const stub = makeStubVoiceService();
+        const stub = makeStubRealtimeService();
         const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
         adapter.SessionLifecycle$.subscribe((e) => events.push(e));
@@ -181,7 +181,7 @@ describe('RealtimeSessionsAdapter', () => {
     });
 
     it('skips channel events while CurrentAgentSessionId is null', () => {
-        const stub = makeStubVoiceService();
+        const stub = makeStubRealtimeService();
         // No session id set — simulates the moment after teardown nulls agentSessionId
         // but ActiveChannels$ is still about to emit [], OR the initial startChannels
         // window before mintSession resolves.
@@ -196,7 +196,7 @@ describe('RealtimeSessionsAdapter', () => {
     });
 
     it('Dispose unsubscribes from all bridged observables', () => {
-        const stub = makeStubVoiceService();
+        const stub = makeStubRealtimeService();
         stub.setSessionId('sess-1');
         const adapter = new RealtimeSessionsAdapter(stub.service);
         const events: SessionLifecycleEvent[] = [];
@@ -214,7 +214,7 @@ describe('RealtimeSessionsAdapter', () => {
     });
 
     it('Dispose is idempotent', () => {
-        const stub = makeStubVoiceService();
+        const stub = makeStubRealtimeService();
         const adapter = new RealtimeSessionsAdapter(stub.service);
 
         expect(() => adapter.Dispose()).not.toThrow();

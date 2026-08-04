@@ -677,6 +677,15 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     this.saveUserPreferencesDebounced();
   }
 
+  /** Empty-state CTA: clear filters when the list is narrowed, otherwise create. */
+  public onEmptyStateAction(): void {
+    if (this.hasActiveFilters) {
+      this.clearFilters();
+    } else {
+      this.createNewModel();
+    }
+  }
+
   /** Reset only the popover filters — leave searchTerm (toolbar) untouched. */
   public resetPopoverFilters(): void {
     this.selectedVendor = 'all';

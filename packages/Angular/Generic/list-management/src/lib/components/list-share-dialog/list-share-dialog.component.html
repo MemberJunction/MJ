@@ -151,15 +151,11 @@
         }
         <!-- Empty state -->
         @if (currentShares.length === 0 && !loading) {
-          <div class="empty-state">
-            <i class="fa-solid fa-share-nodes empty-icon"></i>
-            <p>This list hasn't been shared with anyone yet.</p>
-            @if (canModifyShares) {
-              <p class="empty-hint">
-                Use the search above to find users or roles to share with.
-              </p>
-            }
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-share-nodes"
+            Title="Not shared yet"
+            [Message]="EmptyShareMessage"
+            Size="compact" />
         }
         <!-- Read-only notice -->
         @if (!canModifyShares) {

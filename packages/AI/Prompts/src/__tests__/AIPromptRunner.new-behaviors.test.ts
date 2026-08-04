@@ -2,8 +2,8 @@
  * Unit tests for the performance/observability behaviors added to AIPromptRunner:
  *  - resolveScalarInferenceParams() — prompt-default ⊕ additionalParameters precedence
  *  - getParsedOutputExample() — content-keyed parse cache (hit / miss / cached-failure)
- *  - queuePromptRunSave() + WaitForPendingPromptRunSaves() — fire-and-forget saves with
- *    instance-keyed ordering (INSERT before UPDATE) and non-fatal failure handling
+ *  - the BaseEntitySaveQueue wiring (_promptRunQueue) + WaitForPendingPromptRunSaves() —
+ *    fire-and-forget saves with instance-keyed ordering (INSERT before UPDATE) and non-fatal failures
  *
  * These instantiate the REAL AIPromptRunner and reach the private members via a typed
  * cast, so they validate the actual implementation rather than a re-implementation.
@@ -15,7 +15,7 @@ import { AIPromptRunner } from '../AIPromptRunner';
 type RunnerInternals = {
   resolveScalarInferenceParams(prompt: unknown, additionalParameters?: Record<string, unknown>): Record<string, unknown>;
   getParsedOutputExample(s: string): { parsed?: unknown; error?: string };
-  queuePromptRunSave(entity: unknown): Promise<boolean>;
+  _promptRunQueue: { Insert(e: unknown): void; Update(e: unknown): void };
 };
 function internals(r: AIPromptRunner): RunnerInternals {
   return r as unknown as RunnerInternals;
@@ -149,8 +149,8 @@ describe('AIPromptRunner — fire-and-forget prompt-run saves', () => {
     const entity = new FakePromptRun(log);
 
     // Simulate createPromptRun (INSERT) then updatePromptRun (UPDATE) on the same instance.
-    internals(runner).queuePromptRunSave(entity);
-    internals(runner).queuePromptRunSave(entity);
+    internals(runner)._promptRunQueue.Insert(entity);
+    internals(runner)._promptRunQueue.Update(entity);
 
     await runner.WaitForPendingPromptRunSaves();
 
@@ -163,24 +163,22 @@ describe('AIPromptRunner — fire-and-forget prompt-run saves', () => {
     const a = new FakePromptRun(log);
     const b = new FakePromptRun(log);
 
-    internals(runner).queuePromptRunSave(a);
-    internals(runner).queuePromptRunSave(b);
+    internals(runner)._promptRunQueue.Insert(a);
+    internals(runner)._promptRunQueue.Insert(b);
     await runner.WaitForPendingPromptRunSaves();
 
     // Both started before either finished => interleaved (concurrent), not serialized.
     expect(log.slice(0, 2).sort()).toEqual(['start:1', 'start:1']);
   });
 
-  it('a failed save is non-fatal: the chained promise resolves false and the flush still completes', async () => {
+  it('a failed save is non-fatal: the flush still completes and the chained UPDATE still runs', async () => {
     const log: string[] = [];
-    const entity = new FakePromptRun(log, [1]); // first save fails
+    const entity = new FakePromptRun(log, [1]); // first save (INSERT) fails
 
-    const p1 = internals(runner).queuePromptRunSave(entity); // INSERT fails
-    const p2 = internals(runner).queuePromptRunSave(entity); // UPDATE still runs after
+    internals(runner)._promptRunQueue.Insert(entity); // INSERT fails (non-fatal, logged + counted)
+    internals(runner)._promptRunQueue.Update(entity); // UPDATE still chains + runs after
 
-    await expect(p1).resolves.toBe(false);
-    await expect(p2).resolves.toBe(true);
-    await runner.WaitForPendingPromptRunSaves();
+    await expect(runner.WaitForPendingPromptRunSaves()).resolves.toBeUndefined();
     expect(log).toEqual(['start:1', 'end:1', 'start:2', 'end:2']);
   });
 

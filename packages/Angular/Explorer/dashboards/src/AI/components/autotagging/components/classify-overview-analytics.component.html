@@ -8,10 +8,8 @@
   @if (IsLoading) {
     <mj-loading text="Loading analytics..." size="small"></mj-loading>
   } @else if (!HasData) {
-    <div class="coa-empty">
-      <i class="fa-solid fa-chart-pie"></i>
-      <p>No classification data yet. Run the pipeline to populate analytics.</p>
-    </div>
+    <mj-empty-state class="coa-empty" Icon="fa-solid fa-chart-pie"
+      Title="No classification data yet" Message="Run the pipeline to populate analytics." />
   } @else {
     <div class="coa-charts">
 

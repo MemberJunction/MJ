@@ -374,54 +374,12 @@
 }
 
 /* ========================================
-   Collapsible Section
+   Config-panel accordion body
+   (the collapsible sections now use <mj-accordion-panel>;
+    this only lays out the form-groups inside the projected body)
    ======================================== */
 
-.collapsible-section {
-    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.collapsible-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 12px 16px;
-    border: none;
-    background: var(--mj-bg-page);
-    cursor: pointer;
-    transition: background 0.2s ease;
-}
-
-.collapsible-header:hover {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-}
-
-.collapsible-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-}
-
-.collapsible-title i {
-    color: var(--mj-brand-primary);
-    font-size: 14px;
-}
-
-.collapsible-chevron {
-    color: var(--mj-text-muted);
-    font-size: 12px;
-    transition: transform 0.2s ease;
-}
-
-.collapsible-content {
-    padding: 16px;
-    border-top: 1px solid color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+.config-section-body {
     display: flex;
     flex-direction: column;
     gap: 16px;

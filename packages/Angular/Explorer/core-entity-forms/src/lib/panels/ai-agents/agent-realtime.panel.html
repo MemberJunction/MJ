@@ -8,7 +8,7 @@
     @if (Loading) {
         <mj-loading text="Loading realtime setup..."></mj-loading>
     } @else if (LoadError) {
-        <div class="rt-error"><i class="fa-solid fa-triangle-exclamation"></i> {{ LoadError }}</div>
+        <mj-alert Variant="error">{{ LoadError }}</mj-alert>
     } @else {
         <p class="rt-intro">
             A one-place summary of this agent's realtime / bridge setup — its co-agent pairings, its

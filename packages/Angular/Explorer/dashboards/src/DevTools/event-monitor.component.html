@@ -153,21 +153,8 @@
         </div>
 
         @if (FilteredEvents.length === 0) {
-            <div class="em-empty">
-                @if (Stats.captured === 0) {
-                    <i class="fa-solid fa-radio em-empty-icon"></i>
-                    <div class="em-empty-title">Listening for events…</div>
-                    <div class="em-empty-sub">Trigger an action — saves, navigation, AI events all show up here.</div>
-                } @else if (Paused) {
-                    <i class="fa-solid fa-pause em-empty-icon"></i>
-                    <div class="em-empty-title">Capture is paused</div>
-                    <div class="em-empty-sub">{{ Stats.captured }} events fired since you paused. Click Resume to start collecting again.</div>
-                } @else {
-                    <i class="fa-solid fa-filter em-empty-icon"></i>
-                    <div class="em-empty-title">No events match your filter</div>
-                    <div class="em-empty-sub">{{ Stats.kept }} events in buffer · clear filters to see them.</div>
-                }
-            </div>
+            <mj-empty-state [Variant]="EmptyVariant" [Icon]="EmptyIcon"
+                [Title]="EmptyTitle" [Message]="EmptyMessage" />
         } @else {
             @for (evt of FilteredEvents; track TrackBySeq($index, evt)) {
                 <div class="em-row" [class.em-row--expanded]="evt.expanded">

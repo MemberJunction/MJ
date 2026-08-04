@@ -119,10 +119,6 @@ export class SchedulingOverviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  public GetAlertIcon(severity: string): string {
-    return severity === 'error' ? 'fa-solid fa-circle-xmark' : 'fa-solid fa-triangle-exclamation';
-  }
-
   public FormatDuration(ms: number | undefined): string {
     if (ms == null) return '-';
     const seconds = Math.floor(ms / 1000);

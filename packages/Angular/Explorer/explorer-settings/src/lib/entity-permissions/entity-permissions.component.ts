@@ -345,6 +345,31 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   public clearAllAppliedFilters(): void {
     this.updateFilter({ accessLevel: 'all', roleId: null });
   }
+
+  /** True when search and/or panel filters are narrowing the list — gates the
+   *  no-results empty-state "Reset filters" CTA. */
+  public get IsListNarrowed(): boolean {
+    return this.filters$.value.entitySearch !== '' || this.TotalActiveFilterCount > 0;
+  }
+
+  /** Reset everything narrowing the list (search + Access level + Role) and
+   *  refresh immediately. Wired to the no-results empty-state CTA. Unlike
+   *  clearAllAppliedFilters(), this also clears the search box. */
+  public resetAllFiltersAndSearch(): void {
+    this.filters$.next({ entitySearch: '', accessLevel: 'all', roleId: null });
+    this.applyFilters();
+    this.cdr.markForCheck();
+  }
+
+  /** Empty-state CTA handler: reset filters when the list is narrowed,
+   *  otherwise reload the data (the original "Refresh" affordance). */
+  public onEmptyStateAction(): void {
+    if (this.IsListNarrowed) {
+      this.resetAllFiltersAndSearch();
+    } else {
+      this.refreshData();
+    }
+  }
   
   public toggleEntityExpansion(entityId: string): void {
     this.expandedEntityId = this.expandedEntityId === entityId ? null : entityId;

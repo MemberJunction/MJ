@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -7,16 +7,23 @@ import {
     CascadeDeleteContext,
     FullTextSearchResult,
     PhasedExecutionResult,
+    DataSourceResult,
 } from '../../codeGenDatabaseProvider';
-import { configInfo } from '../../../Config/config';
-import { logError, logWarning } from '../../../Misc/status_logging';
+import { configInfo, mj_core_schema } from '../../../Config/config';
+import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
 } from '@memberjunction/generic-database-provider';
-import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from '@memberjunction/postgresql-dataprovider';
+import {
+    POSTGRESQL_PROCEDURE_PARAM_LIMIT,
+    PostgreSQLDataProvider,
+    PostgreSQLProviderConfigData,
+} from '@memberjunction/postgresql-dataprovider';
+import { PGConnection, getPgConfig } from '../../../Config/pg-connection';
+import { PostgreSQLCodeGenConnection } from './PostgreSQLCodeGenConnection';
 import * as fs from 'fs';
 import path from 'path';
 import { executeWithFallback } from './viewFallback';
@@ -42,6 +49,78 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
     /** @inheritdoc */
     get PlatformKey(): DatabasePlatform {
         return 'postgresql';
+    }
+
+    /**
+     * PostgreSQL implementation of {@link CodeGenDatabaseProvider.SetupDataSource}.
+     *
+     * Acquires the module-cached `pg.Pool` via {@link PGConnection} (so repeated
+     * CodeGen operations reuse the same pool — matching SQL Server's behavior),
+     * wires up `PostgreSQLDataProvider`, registers it as the active provider,
+     * and loads the audit user.
+     *
+     * **User-loading asymmetry** — SQL Server uses `UserCache.Instance.Refresh(pool)`
+     * which is hard-typed to `mssql.ConnectionPool` in `@memberjunction/sqlserver-dataprovider`.
+     * Refactoring it to be cross-platform would touch that package's public
+     * API; until then PG hand-queries `vwUsers`/`vwUserRoles` here. Same
+     * audit-user semantics (find Owner, else first user), just a different
+     * load path. Tracked for follow-up: unify behind a platform-agnostic
+     * cache that takes a `CodeGenConnection`.
+     *
+     * **Env var resolution** — PG_HOST / PG_PORT / PG_DATABASE / PG_USERNAME /
+     * PG_PASSWORD now flow through `configInfo.{dbHost,dbPort,dbDatabase,codeGenLogin,codeGenPassword}`
+     * via `DEFAULT_CODEGEN_CONFIG` (see `Config/config.ts`). The provider just
+     * reads `configInfo`.
+     */
+    async SetupDataSource(): Promise<DataSourceResult> {
+        startSpinner('Initializing database connection...');
+        const pool = await PGConnection();
+        const pgConfig = getPgConfig()!;
+        const coreSchema = mj_core_schema();
+
+        const dpConfig = new PostgreSQLProviderConfigData(
+            {
+                Host: pgConfig.Host,
+                Port: pgConfig.Port ?? 5432,
+                Database: pgConfig.Database,
+                User: pgConfig.User,
+                Password: pgConfig.Password,
+            },
+            coreSchema,
+            1, // checkRefreshIntervalSeconds: must be > 0 to trigger initial metadata load
+        );
+        const provider = new PostgreSQLDataProvider();
+        await provider.Config(dpConfig);
+        SetProvider(provider);
+
+        const conn = new PostgreSQLCodeGenConnection(pool);
+
+        const usersResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUsers"');
+        const rolesResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUserRoles"');
+
+        const userInfos: UserInfo[] = usersResult.recordset.map((user: Record<string, unknown>) => {
+            (user as Record<string, unknown>).UserRoles = rolesResult.recordset.filter(
+                (role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string),
+            );
+            return new UserInfo(provider, user);
+        });
+
+        const userMatch = userInfos.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
+        const currentUser = userMatch ?? userInfos[0];
+        if (!currentUser) {
+            throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
+        }
+
+        // Run MJ startup with the same 'task' entry-point default as the SQL Server path
+        // (where setupSQLServerClient runs this internally). Previously the PG path skipped
+        // Startup() entirely — adding it initializes LocalCacheManager and makes an
+        // MJ_STARTUP_MODE=full opt-up actually pre-warm engines on PG too.
+        const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'task' });
+        await StartupManager.Instance.Startup(false, currentUser, provider, { mode: startupMode.mode });
+
+        const connectionInfo = `${pgConfig.Host}:${pgConfig.Port ?? 5432}/${pgConfig.Database}`;
+        succeedSpinner('PostgreSQL connection initialized: ' + connectionInfo);
+        return { provider, connection: conn, currentUser, connectionInfo };
     }
 
     /**
@@ -721,8 +800,8 @@ ${permissions}
         const paramString = this.generateCRUDParamString(entity.Fields, true);
         const permissions = this.generateCRUDPermissions(entity, fnName, CRUDType.Update);
         const updateFields = this.generateUpdateFieldString(entity.Fields);
-        const whereClause = this.buildPrimaryKeyWhereClause(entity, 'p_');
-        const selectWhereClause = this.buildPrimaryKeyWhereClause(entity, 'p_');
+        const whereClause = this.buildPrimaryKeyWhereClause(entity);
+        const selectWhereClause = this.buildPrimaryKeyWhereClause(entity);
 
         const trigger = this.generateTimestampTrigger(entity);
 
@@ -865,20 +944,28 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
      * convention and are truncated to 63 characters (PostgreSQL's maximum identifier length).
      * Skips primary key columns and virtual fields.
      */
-    generateForeignKeyIndexes(entity: EntityInfo): string[] {
-        const indexes: string[] = [];
-        for (const field of entity.Fields) {
-            if (field.RelatedEntityID && !field.IsPrimaryKey && !field.IsVirtual) {
-                const indexName = `idx_auto_mj_fkey_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}`;
-                // Truncate to 63 chars (PG max identifier length)
-                const truncatedName = indexName.length > 63 ? indexName.substring(0, 63) : indexName;
-                indexes.push(
-                    `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(truncatedName)}\n` +
-                    `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${pgDialect.QuoteIdentifier(field.Name)});`
-                );
-            }
-        }
-        return indexes;
+    protected indexPrefix(): string {
+        return 'idx_auto_mj_fkey_';
+    }
+
+    /** PostgreSQL's maximum identifier length. */
+    protected maxIdentifierLength(): number {
+        return 63;
+    }
+
+    protected tableToken(entity: EntityInfo): string {
+        return this.toSnakeCase(entity.BaseTable);
+    }
+
+    protected columnToken(f: EntityFieldInfo): string {
+        return this.toSnakeCase(f.Name);
+    }
+
+    protected formatIndexStatement(entity: EntityInfo, f: EntityFieldInfo, indexName: string): string {
+        return (
+            `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
+            `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${pgDialect.QuoteIdentifier(f.Name)});`
+        );
     }
 
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
@@ -1352,7 +1439,11 @@ END $$;
             varDecls.push(`${varName} ${sqlType}`);
             selectFlds.push(pgDialect.QuoteIdentifier(pk.Name));
             fetchVars.push(varName);
-            routineParamParts.push(`p_${this.toSnakeCase(pk.CodeName)} := ${varName}`);
+            // Param NAME must use the canonical flat builder (ParameterRef → `p_<lower>`) so it
+            // matches the CRUD routine's declared signature; only the local VARIABLE (v_…) uses
+            // snake_case. Using toSnakeCase here produced `p_record_key` for a multi-word PK while
+            // the routine declared `p_recordkey`, breaking cascade delete/update-to-NULL on PG.
+            routineParamParts.push(`${pgDialect.ParameterRef(pk.CodeName)} := ${varName}`);
         }
 
         return {
@@ -1723,16 +1814,6 @@ ORDER BY ordinal_position`;
      * `PG_PASSWORD`) with fallback to `configInfo` values.
      */
     async executeSQLFileViaShell(filePath: string): Promise<boolean> {
-        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
-        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
-        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
-        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
-        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
-
-        if (!pgUser || !pgPassword || !pgDatabase) {
-            throw new Error('PostgreSQL user, password, and database must be provided in the configuration or environment variables');
-        }
-
         const absoluteFilePath = path.resolve(process.cwd(), filePath);
         let sql: string;
         try {
@@ -1743,17 +1824,11 @@ ORDER BY ordinal_position`;
         }
         if (!sql.trim()) return true;
 
-        const pgModule = await import('pg');
-        const client = new pgModule.default.Client({
-            host: pgHost,
-            port: pgPort,
-            user: pgUser,
-            password: pgPassword,
-            database: pgDatabase,
-        });
-
+        // [Large Schema Series] pooled client (was `new pg.Client()` per file) —
+        // reuses a physical connection instead of a fresh handshake every call.
+        let client: Awaited<ReturnType<typeof this.acquireCodeGenClient>> | undefined;
         try {
-            await client.connect();
+            client = await this.acquireCodeGenClient();
             // Postgres executes a multi-statement script in a single query call. A single
             // statement error aborts the rest of the batch server-side (simple query
             // protocol) — so silently converting that to `return true` hid real data loss:
@@ -1773,7 +1848,7 @@ ORDER BY ordinal_position`;
             logError(`[CodeGen] Failed to execute SQL file ${absoluteFilePath}: ${e instanceof Error ? e.message : e}`);
             return false;
         } finally {
-            try { await client.end(); } catch { /* best-effort cleanup */ }
+            if (client) client.release();
         }
     }
 
@@ -1810,28 +1885,8 @@ WHERE p.prokind IN ('f', 'p')
         viewSQL: string,
         willRegenerate?: Set<string>
     ): Promise<void> {
-        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
-        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
-        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
-        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
-        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
-
-        if (!pgUser || !pgPassword || !pgDatabase) {
-            throw new Error(
-                'PostgreSQL user, password, and database must be provided in the configuration or environment variables'
-            );
-        }
-
-        const pgModule = await import('pg');
-        const client = new pgModule.default.Client({
-            host: pgHost,
-            port: pgPort,
-            user: pgUser,
-            password: pgPassword,
-            database: pgDatabase,
-        });
-
-        await client.connect();
+        // [Large Schema Series] pooled client (was `new pg.Client()` per entity).
+        const client = await this.acquireCodeGenClient();
         try {
             // PG-only: emit recursive-FK root-ID helpers ahead of the view.
             //
@@ -1881,7 +1936,7 @@ WHERE p.prokind IN ('f', 'p')
                 baseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
             });
         } finally {
-            try { await client.end(); } catch { /* best-effort cleanup */ }
+            client.release();
         }
     }
 
@@ -1908,28 +1963,9 @@ WHERE p.prokind IN ('f', 'p')
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult> {
-        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
-        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
-        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
-        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
-        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
-
-        if (!pgUser || !pgPassword || !pgDatabase) {
-            throw new Error(
-                'PostgreSQL user, password, and database must be provided in the configuration or environment variables'
-            );
-        }
-
-        const pgModule = await import('pg');
-        const client = new pgModule.default.Client({
-            host: pgHost,
-            port: pgPort,
-            user: pgUser,
-            password: pgPassword,
-            database: pgDatabase,
-        });
-
-        await client.connect();
+        // [Large Schema Series] pooled client (was `new pg.Client()` per entity —
+        // the per-entity handshake that dominated manageSQLScriptsAndExecution).
+        const client = await this.acquireCodeGenClient();
         try {
             // ── Phase 0: root-ID TVFs ────────────────────────────────────
             // The base view references these helper functions; PG rejects
@@ -1999,13 +2035,40 @@ WHERE p.prokind IN ('f', 'p')
 
             return { success: true, phase: null };
         } finally {
-            try { await client.end(); } catch { /* best-effort cleanup */ }
+            client.release();
         }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // PRIVATE HELPERS
     // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * [Large Schema Series] Acquire a POOLED PG client for a per-entity codegen
+     * operation, replacing the previous `new pg.Client()` + connect + end that
+     * ran once PER ENTITY. On a large-schema run that was ~one full connection
+     * handshake per entity (≈2,000 on a 2k-table install) — a dominant cost of
+     * the manageSQLScriptsAndExecution phase. The module-cached pool (via
+     * {@link PGConnection}) hands back a reused physical connection AND applies
+     * the codegen `statement_timeout` GUC that the ad-hoc clients never set.
+     *
+     * Callers MUST `release()` the returned client in a `finally`. The connection
+     * is always transaction-clean at release time: `executeWithFallback` issues
+     * its own BEGIN/COMMIT and rolls back internally on error, and the other
+     * callers only run autonomous simple-query statements that never open a
+     * transaction — so a normal `release()` (not `release(err)`) is correct on
+     * every path and no poisoned connection is returned to the pool.
+     *
+     * Env-var precedence is already resolved into `configInfo` upstream (see
+     * CLAUDE.md — PG_* wins on the PostgreSQL platform, resolved once in
+     * Config/config.ts), so the pool targets the same host/db the per-entity
+     * clients did; the previous `process.env.PG_* ?? configInfo.*` reads here
+     * were redundant.
+     */
+    private async acquireCodeGenClient() {
+        const pool = await PGConnection();
+        return pool.connect();
+    }
 
     /**
      * Converts a PascalCase or camelCase string to snake_case.
@@ -2091,9 +2154,13 @@ WHERE p.prokind IN ('f', 'p')
     }
 
     /** Builds a WHERE clause using primary key fields with a parameter prefix */
-    private buildPrimaryKeyWhereClause(entity: EntityInfo, prefix: string): string {
+    private buildPrimaryKeyWhereClause(entity: EntityInfo): string {
+        // Param name via the canonical flat builder (ParameterRef → `p_<lower>`), NOT toSnakeCase,
+        // so the WHERE matches the CRUD function's declared parameter. A `p_${toSnakeCase}` here
+        // emitted `p_record_key` for a multi-word PK while the signature declared `p_recordkey`,
+        // so every UPDATE failed on PostgreSQL with `column "p_record_key" does not exist`.
         return entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = ${prefix}${this.toSnakeCase(k.CodeName)}`
+            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
         ).join(' AND ');
     }
 
@@ -2118,7 +2185,7 @@ WHERE p.prokind IN ('f', 'p')
         }
 
         if ((firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' || firstKey.Type.toLowerCase().trim() === 'uuid') && entity.PrimaryKeys.length === 1) {
-            const paramName = `p_${this.toSnakeCase(firstKey.CodeName)}`;
+            const paramName = pgDialect.ParameterRef(firstKey.CodeName);
             const hasNonPkFields = insertColumns.trim().length > 0;
             return {
                 preInsert: `v_new_id := COALESCE(${paramName}, gen_random_uuid());\n    `,
@@ -2133,7 +2200,7 @@ WHERE p.prokind IN ('f', 'p')
 
         // Composite keys or non-auto, non-UUID PKs
         const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = p_${this.toSnakeCase(k.CodeName)}`
+            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
         ).join(' AND ');
 
         // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
@@ -2148,7 +2215,7 @@ WHERE p.prokind IN ('f', 'p')
                 .map((k: EntityFieldInfo) => pgDialect.QuoteIdentifier(k.Name))
                 .join(',\n            ');
             const pkValues = entity.PrimaryKeys
-                .map((k: EntityFieldInfo) => `p_${this.toSnakeCase(k.CodeName)}`)
+                .map((k: EntityFieldInfo) => pgDialect.ParameterRef(k.CodeName))
                 .join(',\n            ');
             const hasNonPkColumns = insertColumns.trim().length > 0;
             finalColumns = hasNonPkColumns ? `${pkColumns},\n            ${insertColumns}` : pkColumns;
@@ -2176,14 +2243,14 @@ WHERE p.prokind IN ('f', 'p')
         const nullParts: string[] = [];
 
         for (const k of entity.PrimaryKeys) {
-            const paramName = `p_${this.toSnakeCase(k.CodeName)}`;
+            const paramName = pgDialect.ParameterRef(k.CodeName);
             paramParts.push(`${paramName} ${this.mapSQLType(k.SQLFullType)}`);
             selectParts.push(`${paramName} AS ${pgDialect.QuoteIdentifier(k.Name)}`);
             nullParts.push(`NULL::${this.mapSQLType(k.SQLFullType)} AS ${pgDialect.QuoteIdentifier(k.Name)}`);
         }
 
         const whereClause = entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = p_${this.toSnakeCase(k.CodeName)}`
+            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
         ).join(' AND ');
 
         let deleteBody: string;
@@ -2222,7 +2289,7 @@ WHERE p.prokind IN ('f', 'p')
         }
 
         const updateFnName = this.getCRUDRoutineName(relatedEntity, CRUDType.Update);
-        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = p_${this.toSnakeCase(parentEntity.FirstPrimaryKey.CodeName)}`;
+        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = ${pgDialect.ParameterRef(parentEntity.FirstPrimaryKey.CodeName)}`;
 
         return `    -- Cascade: Set ${relatedEntity.Name}.${fkField.Name} to NULL
     FOR v_rec IN
@@ -2245,7 +2312,7 @@ WHERE p.prokind IN ('f', 'p')
         }
 
         const deleteFnName = this.getCRUDRoutineName(relatedEntity, CRUDType.Delete);
-        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = p_${this.toSnakeCase(parentEntity.FirstPrimaryKey.CodeName)}`;
+        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = ${pgDialect.ParameterRef(parentEntity.FirstPrimaryKey.CodeName)}`;
 
         return `    -- Cascade: Delete ${relatedEntity.Name} records via ${fkField.Name}
     FOR v_rec IN

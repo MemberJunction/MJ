@@ -52,10 +52,10 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
           </div>
         }
         @if (!isLoading && filteredCollections.length === 0) {
-          <div class="empty-state">
-            <i class="fas fa-folder-open"></i>
-            <p>{{ searchQuery ? 'No collections found' : 'No collections yet' }}</p>
-          </div>
+          <mj-empty-state
+            [Variant]="searchQuery ? 'no-results' : 'empty'"
+            Icon="fa-solid fa-folder-open"
+            [Title]="searchQuery ? 'No collections found' : 'No collections yet'" />
         }
         @if (!isLoading && filteredCollections.length > 0) {
           <div class="library-folders">
@@ -201,7 +201,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       padding: 24px;
     }
 
-    .loading-state, .empty-state {
+    .loading-state {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -210,15 +210,8 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       color: #9CA3AF;
     }
 
-    .empty-state i {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .empty-state p {
-      margin: 0;
-      font-size: 14px;
+    .collections-content mj-empty-state {
+      height: 100%;
     }
 
     .library-folders {

@@ -318,6 +318,17 @@ export class APIKeyListComponent extends BaseAngularComponent implements OnInit,
         this.applyFilters();
     }
 
+    /** Dynamic title for the empty state — reflects search vs filter vs truly-empty. */
+    public get EmptyStateTitle(): string {
+        if (this.SearchText) {
+            return `No keys matching "${this.SearchText}"`;
+        }
+        if (this.Filter !== 'all') {
+            return `No ${this.Filter} keys found`;
+        }
+        return 'No API keys created yet';
+    }
+
     /**
      * Set filter
      */

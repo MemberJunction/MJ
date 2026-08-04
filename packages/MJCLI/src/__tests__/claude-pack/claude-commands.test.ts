@@ -339,6 +339,15 @@ describe('install:claude via spawned bin/run.js — --json purity', () => {
     let packDir: string;
     const BIN = path.resolve(__dirname, '..', '..', '..', 'bin', 'run.js');
 
+    // Spawning the full compiled CLI cold — no warm FS cache, immediately after
+    // the build step writes thousands of files, under parallel-test CPU/IO
+    // contention — can take far longer than vitest's 30s default in CI, even
+    // though the command itself runs in ~0.1s warm. Give the subprocess a hard
+    // spawnSync timeout (so a genuine hang fails fast and loud instead of
+    // silently eating the test budget) and a per-test timeout above it.
+    const SPAWN_TIMEOUT_MS = 60_000;
+    const TEST_TIMEOUT_MS = 90_000;
+
     beforeEach(() => {
         target = mkdtempSync(path.join(tmpdir(), 'mj-cmd-bin-target-'));
         packDir = mkdtempSync(path.join(tmpdir(), 'mj-cmd-bin-pack-'));
@@ -391,8 +400,10 @@ describe('install:claude via spawned bin/run.js — --json purity', () => {
         const res = spawnSync(
             process.execPath,
             [BIN, 'install:claude', '--dir', target, '--from', packDir, '--dry-run', '--json'],
-            { encoding: 'utf8' }
+            { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS }
         );
+        // Surface a real hang distinctly from an assertion failure.
+        expect(res.error, `CLI subprocess errored/timed out: ${res.error?.message}`).toBeUndefined();
         expect(res.status).toBe(0);
 
         // The contract: stdout is parseable JSON, end of story.
@@ -412,20 +423,22 @@ describe('install:claude via spawned bin/run.js — --json purity', () => {
         // Defensive: assert the banner string is absent from stdout
         expect(res.stdout).not.toContain('~ M e m b e r J u n c t i o n ~');
         expect(res.stdout).not.toContain('MemberJunction'); // figlet banner on wide terminals
-    });
+    }, TEST_TIMEOUT_MS);
 
     it('pretty mode (no --json) DOES include the banner — regression-safe', () => {
         if (!existsSync(BIN)) return;
         const res = spawnSync(
             process.execPath,
             [BIN, 'install:claude', '--dir', target, '--from', packDir, '--dry-run'],
-            { encoding: 'utf8' }
+            { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS }
         );
+        // Surface a real hang distinctly from an assertion failure.
+        expect(res.error, `CLI subprocess errored/timed out: ${res.error?.message}`).toBeUndefined();
         expect(res.status).toBe(0);
         // One of the two banner forms must be present
         const hasBanner =
             res.stdout.includes('~ M e m b e r J u n c t i o n ~') ||
             res.stdout.includes('MemberJunction');
         expect(hasBanner).toBe(true);
-    });
+    }, TEST_TIMEOUT_MS);
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { RealtimeClientUsage } from '@memberjunction/ai-realtime-client';
-import { RealtimeSessionService, VoiceDelegationResult } from '../lib/services/realtime-session.service';
+import { RealtimeSessionService, RealtimeDelegationResult } from '../lib/services/realtime-session.service';
 
 /**
  * The explicit delegation-CANCEL channel ({@link RealtimeSessionService.CancelDelegation} /
@@ -30,8 +30,8 @@ function internals(service: RealtimeSessionService): RealtimeSessionCancelUsageI
   return service as unknown as RealtimeSessionCancelUsageInternals;
 }
 
-function collectResults(service: RealtimeSessionService): VoiceDelegationResult[] {
-  const results: VoiceDelegationResult[] = [];
+function collectResults(service: RealtimeSessionService): RealtimeDelegationResult[] {
+  const results: RealtimeDelegationResult[] = [];
   service.DelegationResult$.subscribe(r => results.push(r));
   return results;
 }

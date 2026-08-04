@@ -127,10 +127,11 @@ export interface TimelineViewConfig {
         (afterEventClick)="OnTimelineEventClick($event)">
       </mj-timeline>
     } @else {
-      <div class="timeline-view-empty">
-        <i class="fa-solid fa-calendar-xmark"></i>
-        <span>This entity has no date fields to plot on a timeline.</span>
-      </div>
+      <mj-empty-state
+        class="timeline-view-empty-fill"
+        Variant="warning"
+        Icon="fa-solid fa-calendar-xmark"
+        Title="This entity has no date fields to plot on a timeline." />
     }
   `,
   styles: [
@@ -226,21 +227,10 @@ export interface TimelineViewConfig {
         box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-text-primary) 10%, transparent);
       }
 
-      .timeline-view-empty {
+      /* Flex-fill so the empty-state placeholder occupies the timeline area
+         (the host centers its content but does not grow to fill the parent). */
+      .timeline-view-empty-fill {
         flex: 1 1 auto;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        color: var(--mj-text-muted);
-        padding: 32px;
-        text-align: center;
-      }
-
-      .timeline-view-empty i {
-        font-size: 32px;
-        opacity: 0.6;
       }
     `,
   ],

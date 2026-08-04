@@ -807,9 +807,7 @@ function matchViaTableQualifier(
     const entityEntry = aliasToEntity.get(selectCol.TableQualifier.toLowerCase());
     if (!entityEntry) return undefined;
 
-    const entityField = entityEntry.entity.Fields.find(
-        f => f.Name.toLowerCase() === selectCol.SourceColumn.toLowerCase()
-    );
+    const entityField = entityEntry.entity.FieldByName(selectCol.SourceColumn);
 
     if (entityField) {
         return { field: entityField, entityName: entityEntry.entity.Name };

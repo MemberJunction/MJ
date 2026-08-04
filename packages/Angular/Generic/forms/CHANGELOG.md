@@ -1,5 +1,108 @@
 # @memberjunction/ng-forms
 
+## 6.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@6.0.0
+- @memberjunction/ng-markdown@6.0.0
+- @memberjunction/ng-ui-components@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.51.0
+- @memberjunction/ng-markdown@5.51.0
+- @memberjunction/ng-ui-components@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [623dfc5]
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ng-markdown@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [b52ffa8]
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ng-markdown@5.49.0
+  - @memberjunction/ng-ui-components@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.48.0
+- @memberjunction/ng-markdown@5.48.0
+- @memberjunction/ng-ui-components@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.47.0
+- @memberjunction/ng-markdown@5.47.0
+- @memberjunction/ng-ui-components@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.46.0
+- @memberjunction/ng-markdown@5.46.0
+- @memberjunction/ng-ui-components@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ng-markdown@5.45.1
+  - @memberjunction/ng-ui-components@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [13716e4]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/ng-markdown@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [1e5e449]
+- Updated dependencies [0476455]
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/ng-ui-components@5.44.0
+  - @memberjunction/ng-markdown@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [9f6aa87]
+- Updated dependencies [54183aa]
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/ng-ui-components@5.43.0
+
 ## 5.42.0
 
 ### Patch Changes

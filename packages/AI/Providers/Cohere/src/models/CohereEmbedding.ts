@@ -53,6 +53,11 @@ export class CohereEmbedding extends BaseEmbeddings {
         return this._client;
     }
 
+    /** Native batch endpoint: Cohere's embed API takes an array of texts in one request. */
+    public override get SupportsBatchEmbeddings(): boolean {
+        return true;
+    }
+
     /**
      * Cohere embed-v4 accepts images via the v2 `inputs`/`image_url` path — and that path only
      * supports PNG/JPEG/WebP/GIF (the API errors "only PNG, JPEG, WebP, and GIF are supported").
@@ -77,6 +82,7 @@ export class CohereEmbedding extends BaseEmbeddings {
                 inputType: this.inputType,
                 embeddingTypes: ['float'],
                 texts: [params.text],
+                ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
             });
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: response.embeddings.float?.[0] ?? [] };
         } catch (error) {
@@ -85,7 +91,7 @@ export class CohereEmbedding extends BaseEmbeddings {
         }
     }
 
-    public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+    protected override async embedBatch(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         const model = params.model || DEFAULT_MODEL;
         try {
             const response = await this._client.v2.embed({
@@ -93,6 +99,7 @@ export class CohereEmbedding extends BaseEmbeddings {
                 inputType: this.inputType,
                 embeddingTypes: ['float'],
                 texts: params.texts,
+                ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
             });
             return { object: 'list', model, ModelUsage: new ModelUsage(0, 0), vectors: response.embeddings.float ?? [] };
         } catch (error) {
@@ -116,6 +123,7 @@ export class CohereEmbedding extends BaseEmbeddings {
                 inputType: this.inputType,
                 embeddingTypes: ['float'],
                 inputs: [this.mapContentToEmbedInput(params.content)],
+                ...(params.dimensions ? { outputDimension: params.dimensions } : {}),
             });
             return { object: 'object', model, ModelUsage: new ModelUsage(0, 0), vector: response.embeddings.float?.[0] ?? [] };
         } catch (error) {

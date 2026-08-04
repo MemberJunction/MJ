@@ -13,7 +13,10 @@ import {
   MJFilterChipComponent,
   MJRefreshButtonComponent,
   MJStatBadgeComponent,
-  MJViewToggleComponent
+  MJViewToggleComponent,
+  MJEmptyStateComponent,
+  MJAlertComponent,
+  MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
@@ -32,6 +35,7 @@ import { SettingsComponent } from './settings/settings.component';
 // User-facing components
 import { UserProfileSettingsComponent } from './user-profile-settings/user-profile-settings.component';
 import { UserAppConfigComponent } from './user-app-config/user-app-config.component';
+import { UserAppConfigContentComponent } from './user-app-config/user-app-config-content.component';
 import { NotificationPreferencesComponent } from './notification-preferences/notification-preferences.component';
 
 // New user settings components
@@ -60,6 +64,7 @@ import { ApplicationDialogComponent } from './application-management/application
     // User-facing components
     UserProfileSettingsComponent,
     UserAppConfigComponent,
+    UserAppConfigContentComponent,
     NotificationPreferencesComponent,
     // New user settings components
     GeneralSettingsComponent,
@@ -99,7 +104,10 @@ import { ApplicationDialogComponent } from './application-management/application
     MJFilterChipComponent,
     MJRefreshButtonComponent,
     MJStatBadgeComponent,
-    MJViewToggleComponent
+    MJViewToggleComponent,
+    MJEmptyStateComponent,
+    MJAlertComponent,
+    MJAccordionModule
   ],
   exports: [
     // Main settings container
@@ -107,6 +115,7 @@ import { ApplicationDialogComponent } from './application-management/application
     // User-facing components
     UserProfileSettingsComponent,
     UserAppConfigComponent,
+    UserAppConfigContentComponent,
     NotificationPreferencesComponent,
     // New user settings components
     GeneralSettingsComponent,

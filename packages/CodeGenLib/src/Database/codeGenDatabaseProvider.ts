@@ -1,4 +1,5 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
@@ -142,6 +143,24 @@ export interface CodeGenConnection {
     beginTransaction(): Promise<CodeGenTransaction>;
 }
 
+/**
+ * Bundle returned by {@link CodeGenDatabaseProvider.SetupDataSource} that
+ * gives the orchestrator everything it needs to begin a CodeGen run:
+ * the per-platform metadata provider, a dialect-aware connection, the
+ * "owner" user used as the audit principal for generated rows, and a
+ * human-readable connection-info string for log output.
+ */
+export interface DataSourceResult {
+    /** The configured per-platform metadata provider (SQL Server or PostgreSQL). */
+    provider: IMetadataProvider;
+    /** Database-agnostic connection used by all platform-neutral CodeGen code. */
+    connection: CodeGenConnection;
+    /** The "owner" user (or the first available user) used for audit fields. */
+    currentUser: UserInfo;
+    /** Display-only connection summary (e.g. `host:port/database`). */
+    connectionInfo: string;
+}
+
 
 /**
  * Union type for stored procedure / function types (Create, Update, Delete).
@@ -241,6 +260,35 @@ export abstract class CodeGenDatabaseProvider {
     abstract get PlatformKey(): DatabasePlatform;
 
     /**
+     * Set up the per-platform data source for a CodeGen run: open a
+     * connection pool, configure the metadata provider, build the
+     * {@link CodeGenConnection}, and resolve the audit user.
+     *
+     * **Where this lives and why** — the orchestrator (`RunCodeGenBase`)
+     * used to switch on `configInfo.dbPlatform` inline and call private
+     * `setupSQLServerDataSource()` / `setupPostgreSQLDataSource()` methods.
+     * That bypassed the existing factory pattern (see e.g.
+     * `manage-metadata.ts`'s `get dbProvider()`, which dispatches via
+     * `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, platform)`)
+     * and meant adding a third platform would require touching the
+     * orchestrator. Moving the setup here puts it behind the same
+     * factory: subclasses register via `@RegisterClass(CodeGenDatabaseProvider, '<platform>')`
+     * and the orchestrator just resolves + calls.
+     *
+     * Subclasses are responsible for:
+     *  - opening their pool (typically via a module-cached helper such as
+     *    `MSSQLConnection()` / `PGConnection()` so multiple `setupDataSource()`
+     *    calls reuse the same pool)
+     *  - configuring + setting their metadata provider via `SetProvider(...)`
+     *    when appropriate
+     *  - loading the audit user (currently SQL Server uses `UserCache`,
+     *    PostgreSQL hand-queries `vwUsers`/`vwUserRoles` — see implementations
+     *    for the deliberate asymmetry note)
+     *  - emitting spinner status via `status_logging` helpers when desired
+     */
+    abstract SetupDataSource(): Promise<DataSourceResult>;
+
+    /**
      * Whether this dialect can handle a base view that LEFT-JOINs itself to read
      * a virtual computed column (e.g. `vwRecordChanges` joining to itself for the
      * `RestoredFromID` virtual NameField lookup).
@@ -328,8 +376,92 @@ export abstract class CodeGenDatabaseProvider {
     /**
      * Generates CREATE INDEX statements for all foreign key columns on an entity.
      * Returns an array of individual index DDL strings.
+     *
+     * This is a template method: every dialect-INDEPENDENT decision (which fields qualify
+     * as indexable foreign keys, and how the index name is composed and truncated) lives
+     * here so it cannot drift between providers. Dialects supply only the genuinely
+     * different pieces via {@link formatIndexStatement}, {@link tableToken},
+     * {@link columnToken}, {@link indexPrefix}, and {@link maxIdentifierLength}.
+     *
+     * Previously this was `abstract`, so each provider reimplemented the whole thing and
+     * they drifted in a way that was not dialect-specific — SQL Server omitted the
+     * primary-key/virtual-field exclusions that PostgreSQL had. See
+     * {@link isIndexableForeignKey}.
      */
-    abstract generateForeignKeyIndexes(entity: EntityInfo): string[];
+    generateForeignKeyIndexes(entity: EntityInfo): string[] {
+        return entity.Fields
+            .filter((f) => this.isIndexableForeignKey(f))
+            .map((f) => this.formatIndexStatement(entity, f, this.foreignKeyIndexName(entity, f)));
+    }
+
+    /**
+     * Decides whether a field should get an automatic foreign-key index. Dialect-independent.
+     *
+     * A field qualifies when it points at another entity and is a real, materialized column:
+     * - `RelatedEntityID` — the field is a foreign key. This is the base-table column that
+     *   actually stores the relationship. (The sibling `RelatedEntity` field is a *view* join
+     *   on that ID, not a base column; the two never disagree in practice — verified 0/793
+     *   divergence across the FK fields in the reference database — so keying off the ID is
+     *   both equivalent and more direct.)
+     * - `!IsPrimaryKey` — a primary key is already covered by its own index. In 1:1
+     *   extension-table patterns the child's PK is also an FK to the parent, and indexing it
+     *   again would be pure overhead.
+     * - `!IsVirtual` — virtual fields have no underlying column, so `CREATE INDEX` on one
+     *   would reference a column that does not exist.
+     *
+     * The PK/virtual exclusions previously existed only on the PostgreSQL side; hoisting them
+     * here applies them to every dialect by construction. Current real-world exposure is zero
+     * (no FK field in the reference database is also a primary key or virtual), so this is a
+     * guard against a future case rather than a change in today's generated output.
+     */
+    protected isIndexableForeignKey(f: EntityFieldInfo): boolean {
+        return !!f.RelatedEntityID && !f.IsPrimaryKey && !f.IsVirtual;
+    }
+
+    /**
+     * Composes the automatic foreign-key index name and enforces the dialect's identifier
+     * length limit. Dialect-independent in shape — `{prefix}{table}_{column}` — while the
+     * casing of the prefix, the table/column token spelling, and the length cap come from
+     * the dialect hooks.
+     *
+     * NOTE: the resulting names are deliberately NOT unified across dialects. SQL Server
+     * names from `BaseTableCodeName`/`CodeName`, PostgreSQL from snake-cased
+     * `BaseTable`/`Name`. Changing either would orphan every existing index in deployed
+     * databases (CodeGen would create new ones alongside the old), so the token hooks
+     * preserve each dialect's historical spelling exactly.
+     */
+    protected foreignKeyIndexName(entity: EntityInfo, f: EntityFieldInfo): string {
+        const name = `${this.indexPrefix()}${this.tableToken(entity)}_${this.columnToken(f)}`;
+        const max = this.maxIdentifierLength();
+        return name.length > max ? name.substring(0, max) : name;
+    }
+
+    /**
+     * Renders one complete index statement for the dialect — quoting, and the
+     * "create only if absent" idempotency form (SQL Server wraps a `sys.indexes` check
+     * around a bare `CREATE INDEX`; PostgreSQL uses `CREATE INDEX IF NOT EXISTS`).
+     *
+     * The index NAME is supplied pre-composed and pre-truncated; implementations must use
+     * it verbatim. The indexed COLUMN, by contrast, is referenced from the field's real
+     * column name — which is not necessarily the token used to build the name.
+     */
+    protected abstract formatIndexStatement(entity: EntityInfo, f: EntityFieldInfo, indexName: string): string;
+
+    /** The table portion of an automatic FK index name, in this dialect's spelling. */
+    protected abstract tableToken(entity: EntityInfo): string;
+
+    /** The column portion of an automatic FK index name, in this dialect's spelling. */
+    protected abstract columnToken(f: EntityFieldInfo): string;
+
+    /** Prefix for automatic FK index names. Dialects override to match their casing convention. */
+    protected indexPrefix(): string {
+        return 'IDX_AUTO_MJ_FKEY_';
+    }
+
+    /** Maximum identifier length for this dialect; FK index names are truncated to it. */
+    protected maxIdentifierLength(): number {
+        return 128;
+    }
 
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
 
@@ -1214,4 +1346,36 @@ export interface PhasedExecutionResult {
     phase: 'tvf' | 'view' | 'functions' | 'permissions' | null;
     /** Underlying error when `success` is false. */
     error?: Error;
+}
+
+/**
+ * Resolve the concrete {@link CodeGenDatabaseProvider} registered for a given
+ * platform via `MJGlobal.Instance.ClassFactory`. This is the single source of
+ * truth for platform dispatch — the orchestrator (`RunCodeGenBase.setupDataSource()`)
+ * delegates to this function rather than re-implementing the lookup. Tests
+ * import this function directly so they exercise the real dispatch logic
+ * instead of a transcribed copy.
+ *
+ * `ClassFactory.CreateInstance` returns the abstract base class itself on a
+ * missed registration lookup (it does not throw). We disambiguate by checking
+ * `constructor === CodeGenDatabaseProvider` and throw a descriptive error so
+ * the failure mode reads as "no provider registered" instead of a cryptic
+ * "is not a constructor" / "is not a function" downstream.
+ *
+ * @param platform The `dbPlatform` key — typically `'sqlserver'` or `'postgresql'`.
+ * @returns The resolved provider subclass instance.
+ * @throws Error if no provider is registered for the given platform.
+ */
+export function resolveCodeGenDatabaseProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
+    const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+        CodeGenDatabaseProvider,
+        platform,
+    );
+    if (!provider || provider.constructor === CodeGenDatabaseProvider) {
+        throw new Error(
+            `CodeGen database provider for dbPlatform='${platform}' not found. Ensure the corresponding ` +
+            `provider class is registered via @RegisterClass(CodeGenDatabaseProvider, '${platform}').`,
+        );
+    }
+    return provider;
 }

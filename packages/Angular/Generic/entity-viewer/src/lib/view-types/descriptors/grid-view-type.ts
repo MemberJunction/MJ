@@ -16,6 +16,21 @@ export class GridViewType extends BaseViewTypeDescriptor {
   readonly Icon = 'fa-solid fa-table';
   readonly RendererComponent: Type<unknown> = GridViewRendererComponent;
 
+  /**
+   * The grid renders the view's canonical columns, so its `config.gridState` is backed by the
+   * canonical `UserView.GridState` store (shared with `MJUserViewEntity.Columns`, the server-side
+   * field list, the config panel, and export) — NOT an opaque per-view-type blob. See
+   * {@link IViewTypeDescriptor.UsesCanonicalGridState}.
+   */
+  override readonly UsesCanonicalGridState = true;
+
+  /**
+   * The grid renderer has its own in-toolbar "Export" button (full result set + format/sampling
+   * dialog), so hosts should NOT add a duplicate fallback Export button when the grid is active.
+   * See {@link IViewTypeDescriptor.ProvidesOwnExport}.
+   */
+  override readonly ProvidesOwnExport = true;
+
   // IsAvailableFor inherits the base "always available" behavior.
 }
 

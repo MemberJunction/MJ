@@ -138,17 +138,11 @@
         <mj-loading text="Loading components..." size="small"></mj-loading>
       </div>
     } @else if (State.FilteredComponents.length === 0) {
-      <div class="empty-state">
-        @if (State.AllComponents.length === 0) {
-          <i class="fa-solid fa-puzzle-piece empty-icon"></i>
-          <p class="empty-title">No components found</p>
-          <p class="empty-subtitle">Create a new component or import one to get started.</p>
-        } @else {
-          <i class="fa-solid fa-filter empty-icon"></i>
-          <p class="empty-title">No matching components</p>
-          <p class="empty-subtitle">Try adjusting your search or filters.</p>
-        }
-      </div>
+      <mj-empty-state
+        [Variant]="State.AllComponents.length === 0 ? 'empty' : 'no-results'"
+        [Icon]="State.AllComponents.length === 0 ? 'fa-solid fa-puzzle-piece' : 'fa-solid fa-filter'"
+        [Title]="State.AllComponents.length === 0 ? 'No components found' : 'No matching components'"
+        [Message]="State.AllComponents.length === 0 ? 'Create a new component or import one to get started.' : 'Try adjusting your search or filters.'" />
     } @else {
       @for (component of State.FilteredComponents; track TrackByComponentId($index, component)) {
         <div class="component-card"

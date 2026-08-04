@@ -6,7 +6,7 @@ import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse, VectorizeProgressUpdate } from '../generic/vectorSync.types';
 import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocumentFieldConfig } from '../generic/entityDocumentConfig.types';
@@ -126,12 +126,18 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorCreator = this.createVectorCreator(
       template, templateContent, obj.embedding, obj.embeddingModelAPIName, delayTimeMS,
       params.VectorizeBatchCount || pipelineConfig?.vectorizeBatchSize,
-      pipelineConfig?.maxConcurrentEmbeddings
+      pipelineConfig?.maxConcurrentEmbeddings,
+      vectorIndexEntity.Dimensions ?? undefined
     );
+
+    // Parse the VectorIndex's ProviderConfig (opaque JSON blob) so Pinecone and
+    // other drivers can read driver-specific settings (e.g. namespaceField).
+    const vectorIndexProviderConfig = this.parseProviderConfig(vectorIndexEntity.ProviderConfig);
 
     const vectorUpserter = this.createVectorUpserter(
       entityDocument, templateContent, obj.vectorDB, vectorIndexEntity.Name, delayTimeMS,
-      params.UpsertBatchCount || pipelineConfig?.upsertBatchSize
+      params.UpsertBatchCount || pipelineConfig?.upsertBatchSize,
+      vectorIndexProviderConfig
     );
 
     const erdUpserter = new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
@@ -293,13 +299,14 @@ export class EntityVectorSyncer extends VectorBase {
     embeddingModelAPIName: string,
     delayTimeMS: number,
     batchSize?: number,
-    concurrencyLimit?: number
+    concurrencyLimit?: number,
+    embeddingDimensions?: number
   ): AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData> {
     return new AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData>({
       batchSize: batchSize || 50,
       concurrencyLimit: concurrencyLimit ?? 2,
       processBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
-        this.renderAndEmbedBatch(batch, template, templateContent, embedding, embeddingModelAPIName, delayTimeMS),
+        this.renderAndEmbedBatch(batch, template, templateContent, embedding, embeddingModelAPIName, delayTimeMS, embeddingDimensions),
     });
   }
 
@@ -314,13 +321,14 @@ export class EntityVectorSyncer extends VectorBase {
     vectorDB: VectorDBBase,
     indexName: string,
     delayTimeMS: number,
-    batchSize?: number
+    batchSize?: number,
+    providerConfig?: Record<string, unknown>
   ): AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData> {
     return new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
       batchSize: batchSize || 50,
       concurrencyLimit: 2,
       processBatch: (batch: EmbeddingData[]): Promise<EmbeddingData[]> =>
-        this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, indexName, delayTimeMS),
+        this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, indexName, delayTimeMS, providerConfig),
     });
   }
 
@@ -335,7 +343,8 @@ export class EntityVectorSyncer extends VectorBase {
     templateContent: MJTemplateContentEntity,
     embedding: BaseEmbeddings,
     embeddingModelAPIName: string,
-    delayTimeMS: number
+    delayTimeMS: number,
+    embeddingDimensions?: number
   ): Promise<EmbeddingData[]> {
     TemplateEngineServer.Instance.SetupNunjucks();
     const validEntries: { text: string; record: Record<string, unknown> }[] = [];
@@ -358,7 +367,7 @@ export class EntityVectorSyncer extends VectorBase {
       return [];
     }
 
-    const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: validEntries.map(e => e.text), model: embeddingModelAPIName });
+    const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: validEntries.map(e => e.text), model: embeddingModelAPIName, dimensions: embeddingDimensions });
     await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
 
     return embeddings.vectors.map((vector: number[], index: number) => ({
@@ -381,6 +390,23 @@ export class EntityVectorSyncer extends VectorBase {
   private static readonly DEFAULT_LARGE_FIELD_TRUNCATION = 1000;
 
   /**
+   * Parse a provider config JSON string into a plain object.
+   * Returns undefined if the value is null/empty or invalid JSON.
+   */
+  private parseProviderConfig(raw: string | null | undefined): Record<string, unknown> | undefined {
+    if (!raw) return undefined;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? parsed as Record<string, unknown>
+          : undefined;
+    } catch {
+      LogError(`Invalid JSON in VectorIndex.ProviderConfig, ignoring`);
+      return undefined;
+    }
+  }
+
+  /**
    * Parse the EntityDocumentConfiguration JSON from an entity document.
    * Returns an empty object if the Configuration column is null or invalid JSON.
    */
@@ -395,43 +421,51 @@ export class EntityVectorSyncer extends VectorBase {
     }
   }
 
+  /** Column types that can never be stored in vector metadata, even by explicit inclusion */
+  private static readonly UNSTORABLE_TYPES = new Set(['varbinary', 'image', 'binary', 'timestamp', 'rowversion']);
+
   /**
    * Get fields to include in vector metadata for display in search results.
    * Respects EntityDocumentConfiguration.metadata.fieldStrategy and per-field overrides.
    *
    * Default behavior (no config or fieldStrategy = "all"):
-   *   Include all fields except PKs, binary types, and system (__mj_*) fields.
+   *   Include all fields except PKs, uniqueidentifiers, binary types, and system (__mj_*) fields.
    *
-   * "include" strategy: only fields explicitly listed in config.metadata.fields with included=true.
+   * "include" / "explicit" strategy: only fields listed in config.metadata.fields with
+   *   included=true. Explicit inclusion wins over the implicit-eligibility heuristics —
+   *   the candidate set is the entity's FULL field list, so uniqueidentifiers, PKs, and
+   *   __mj_* fields can be included by name. Only genuinely unstorable binary types are
+   *   refused (with a logged warning, never a silent drop).
    * "exclude" strategy: all eligible fields except those listed with included=false.
    */
   private getDisplayFields(entityInfo: EntityInfo | undefined, metadataConfig?: EntityDocumentMetadataConfig): EntityFieldInfo[] {
     if (!entityInfo) return [];
 
-    const skipTypes = new Set(['uniqueidentifier', 'varbinary', 'image', 'binary', 'timestamp', 'rowversion']);
+    const strategy = metadataConfig?.fieldStrategy ?? 'all';
+    const fieldOverrides: Record<string, EntityDocumentFieldConfig> = metadataConfig?.fields ?? {};
+
+    if (strategy === 'include' || strategy === 'explicit') {
+      return entityInfo.Fields.filter(f => {
+        if (fieldOverrides[f.Name]?.included !== true) return false;
+        if (EntityVectorSyncer.UNSTORABLE_TYPES.has(f.Type.toLowerCase())) {
+          LogError(`Field "${f.Name}" is a binary type (${f.Type}) and cannot be stored in vector metadata — ignoring its explicit inclusion`);
+          return false;
+        }
+        return true;
+      });
+    }
+
+    // Implicit strategies ('all' / 'exclude'): keep the conservative default diet —
+    // no PKs, no uniqueidentifiers, no binary types, no system fields.
+    const skipTypes = new Set(['uniqueidentifier', ...EntityVectorSyncer.UNSTORABLE_TYPES]);
     const allEligible = entityInfo.Fields.filter(f =>
       !f.IsPrimaryKey &&
       !f.Name.startsWith('__mj_') &&
       !skipTypes.has(f.Type.toLowerCase())
     );
 
-    const strategy = metadataConfig?.fieldStrategy ?? 'all';
-    const fieldOverrides: Record<string, EntityDocumentFieldConfig> = metadataConfig?.fields ?? {};
-
-    switch (strategy) {
-      case 'include':
-        // Only include fields explicitly marked as included
-        return allEligible.filter(f => fieldOverrides[f.Name]?.included === true);
-
-      case 'exclude':
-        // Include all except those explicitly excluded
-        return allEligible.filter(f => fieldOverrides[f.Name]?.included !== false);
-
-      case 'all':
-      default:
-        // Include everything, but respect individual field exclusions
-        return allEligible.filter(f => fieldOverrides[f.Name]?.included !== false);
-    }
+    // Include all eligible fields, respecting individual exclusions
+    return allEligible.filter(f => fieldOverrides[f.Name]?.included !== false);
   }
 
   /**
@@ -454,29 +488,197 @@ export class EntityVectorSyncer extends VectorBase {
     return metadataConfig?.defaultTruncationLimit ?? EntityVectorSyncer.DEFAULT_LARGE_FIELD_TRUNCATION;
   }
 
+  /** SQL column types stored as JS numbers in vector metadata without an explicit storeAs */
+  private static readonly NUMERIC_SQL_TYPES = new Set([
+    'int', 'bigint', 'smallint', 'tinyint',
+    'float', 'real', 'decimal', 'numeric', 'money', 'smallmoney',
+  ]);
+
+  /** Pinecone's vector ID limit; the most restrictive among supported providers */
+  private static readonly MAX_VECTOR_ID_BYTES = 512;
+
+  /**
+   * Build the vector database record ID for one embedding item, honoring
+   * EntityDocumentConfiguration.vectorIdStrategy.
+   *
+   * - 'hash' (default): SHA-1 of `<entityDocumentID>_<compositeKey>` — deterministic,
+   *   collision-safe across entity documents sharing an index, and always 40 chars.
+   * - 'recordId': the primary key value(s) directly. UUID values are normalized to
+   *   lowercase so IDs stay identical across SQL Server (uppercase GUIDs) and
+   *   PostgreSQL (lowercase). Composite PK values are joined with '||'. Fails loudly
+   *   on empty keys or IDs exceeding the provider limit — a silent hash fallback
+   *   would defeat the portability this strategy exists for.
+   */
+  private buildVectorId(entityDocumentID: string, compositeKey: string, strategy: 'hash' | 'recordId'): string {
+    if (strategy === 'recordId') {
+      if (!compositeKey) {
+        throw new Error(`vectorIdStrategy 'recordId': record has no composite key value — cannot build a vector ID`);
+      }
+      // compositeKey format is "Field|Value" or "F1|V1||F2|V2" — extract the value(s)
+      const values = compositeKey.split('||').map(pair => {
+        const sep = pair.indexOf('|');
+        const value = sep >= 0 ? pair.substring(sep + 1) : pair;
+        return IsValidUUID(value) ? NormalizeUUID(value) : value;
+      });
+      const id = values.join('||');
+      if (Buffer.byteLength(id, 'utf8') > EntityVectorSyncer.MAX_VECTOR_ID_BYTES) {
+        throw new Error(
+          `vectorIdStrategy 'recordId': ID for record "${compositeKey}" exceeds the ${EntityVectorSyncer.MAX_VECTOR_ID_BYTES}-byte ` +
+          `vector ID limit. Use the 'hash' strategy for this entity document.`
+        );
+      }
+      return id;
+    }
+
+    // Default 'hash' strategy — stays under provider ID limits (40 chars) and
+    // namespaces by entity document so re-syncing upserts in place (no duplicates)
+    return createHash('sha1').update(`${entityDocumentID}_${compositeKey}`).digest('hex');
+  }
+
+  /**
+   * Build the vector metadata object for one embedding item.
+   *
+   * Under 'all' / 'include' / 'exclude' strategies (the historical behavior), the
+   * system keys RecordID / Entity / TemplateID are always present, and EntityIcon /
+   * __mj_UpdatedAt default ON (opt-out via includeEntityIcon / includeUpdatedAt).
+   *
+   * Under the 'explicit' strategy, metadata contains EXACTLY the configured fields:
+   * no system keys, and EntityIcon / __mj_UpdatedAt flip to opt-in (default false).
+   *
+   * `protected` and decomposed into focused `add*Metadata` steps (each also `protected`)
+   * so a subclass can override just the piece it cares about — e.g. a custom EntityIcon
+   * resolution, or different chunk-aware display-field handling — without having to
+   * reimplement this whole method.
+   */
+  protected buildVectorMetadata(
+    embeddingItem: EmbeddingData,
+    entityDocument: MJEntityDocumentEntity,
+    templateContent: MJTemplateContentEntity,
+    entityInfo: EntityInfo | undefined,
+    displayFields: EntityFieldInfo[],
+    metadataConfig?: EntityDocumentMetadataConfig
+  ): Record<string, string | number | boolean> {
+    const explicit = metadataConfig?.fieldStrategy === 'explicit';
+    const record = embeddingItem.EntityData as Record<string, unknown>;
+    const metadata: Record<string, string | number | boolean> = {};
+
+    this.addSystemMetadata(metadata, embeddingItem, entityDocument, templateContent, explicit);
+    this.addEntityIconMetadata(metadata, entityInfo, metadataConfig, explicit);
+    this.addUpdatedAtMetadata(metadata, record, metadataConfig, explicit);
+    this.addDisplayFieldsMetadata(metadata, record, displayFields, metadataConfig);
+
+    return metadata;
+  }
+
+  /**
+   * Adds the system-injected RecordID / Entity / TemplateID keys — omitted entirely
+   * under the 'explicit' strategy, where metadata contains only configured fields.
+   */
+  protected addSystemMetadata(
+    metadata: Record<string, string | number | boolean>,
+    embeddingItem: EmbeddingData,
+    entityDocument: MJEntityDocumentEntity,
+    templateContent: MJTemplateContentEntity,
+    explicit: boolean
+  ): void {
+    if (explicit) return;
+    metadata['RecordID'] = String(embeddingItem.__mj_compositeKey ?? '');
+    metadata['Entity'] = entityDocument.Entity;
+    metadata['TemplateID'] = templateContent.ID;
+  }
+
+  /** Adds EntityIcon: opt-out by default, opt-in under the 'explicit' strategy. */
+  protected addEntityIconMetadata(
+    metadata: Record<string, string | number | boolean>,
+    entityInfo: EntityInfo | undefined,
+    metadataConfig: EntityDocumentMetadataConfig | undefined,
+    explicit: boolean
+  ): void {
+    const includeIcon = explicit ? metadataConfig?.includeEntityIcon === true : metadataConfig?.includeEntityIcon !== false;
+    if (entityInfo?.Icon && includeIcon) {
+      metadata['EntityIcon'] = entityInfo.Icon;
+    }
+  }
+
+  /** Adds __mj_UpdatedAt for recency sorting: opt-out by default, opt-in under the 'explicit' strategy. */
+  protected addUpdatedAtMetadata(
+    metadata: Record<string, string | number | boolean>,
+    record: Record<string, unknown>,
+    metadataConfig: EntityDocumentMetadataConfig | undefined,
+    explicit: boolean
+  ): void {
+    const includeUpdatedAt = explicit ? metadataConfig?.includeUpdatedAt === true : metadataConfig?.includeUpdatedAt !== false;
+    if (record['__mj_UpdatedAt'] && includeUpdatedAt) {
+      metadata['__mj_UpdatedAt'] = String(record['__mj_UpdatedAt']);
+    }
+  }
+
+  /**
+   * Adds configured display fields with type-aware storage: numeric SQL types stay
+   * numeric, date fields can convert to epoch seconds/milliseconds via `storeAs`,
+   * uniqueidentifier values are lowercase-normalized, and long strings are truncated.
+   */
+  protected addDisplayFieldsMetadata(
+    metadata: Record<string, string | number | boolean>,
+    record: Record<string, unknown>,
+    displayFields: EntityFieldInfo[],
+    metadataConfig?: EntityDocumentMetadataConfig
+  ): void {
+    for (const field of displayFields) {
+      const val = record[field.Name];
+      if (val == null) continue;
+
+      const fieldCfg = metadataConfig?.fields?.[field.Name];
+      const storeAs  = fieldCfg?.storeAs;
+      const fieldType = field.Type?.toLowerCase() ?? '';
+      const isNumericType = EntityVectorSyncer.NUMERIC_SQL_TYPES.has(fieldType);
+
+      if (storeAs === 'epochSeconds' || storeAs === 'epochMilliseconds') {
+        const ms = new Date(String(val)).getTime();
+        if (!Number.isNaN(ms)) {
+          metadata[field.Name] = storeAs === 'epochSeconds' ? Math.floor(ms / 1000) : ms;
+        }
+      } else if (storeAs === 'number' || (storeAs == null && isNumericType)) {
+        const n = Number(val);
+        if (!Number.isNaN(n)) metadata[field.Name] = n;
+      } else if (storeAs === 'boolean') {
+        metadata[field.Name] = Boolean(val);
+      } else if (fieldType === 'uniqueidentifier' && IsValidUUID(String(val))) {
+        // Normalize UUID casing so metadata filters behave identically across
+        // SQL Server (uppercase GUIDs) and PostgreSQL (lowercase)
+        metadata[field.Name] = NormalizeUUID(String(val));
+      } else {
+        const strVal = String(val);
+        const limit  = this.getFieldTruncationLimit(field, metadataConfig);
+        metadata[field.Name] = strVal.length > limit ? strVal.substring(0, limit) : strVal;
+      }
+    }
+  }
+
   private async upsertBatchToVectorDB(
     batch: EmbeddingData[],
     entityDocument: MJEntityDocumentEntity,
     templateContent: MJTemplateContentEntity,
     vectorDB: VectorDBBase,
     indexName: string,
-    delayTimeMS: number
+    delayTimeMS: number,
+    providerConfig?: Record<string, unknown>
   ): Promise<EmbeddingData[]> {
+    // Parse entity document configuration for ID strategy + metadata enrichment settings
+    const docConfig = this.parseDocumentConfig(entityDocument);
+    const metadataConfig = docConfig.metadata;
+    const idStrategy = docConfig.vectorIdStrategy ?? 'hash';
+
     // Short-circuit for read-only providers (e.g. SimpleVectorServiceProvider,
     // which reads vectors directly from MJ: Entity Record Documents.VectorJSON
     // — there is no remote store to upsert into). Still stamp VectorIDs on the
     // batch so the downstream ERD upserter has consistent record IDs to write.
     if (vectorDB.IsReadOnly) {
       for (const embeddingItem of batch) {
-        const raw = `${entityDocument.ID}_${embeddingItem.__mj_compositeKey}`;
-        embeddingItem.VectorID = createHash('sha1').update(raw).digest('hex');
+        embeddingItem.VectorID = this.buildVectorId(entityDocument.ID, String(embeddingItem.__mj_compositeKey ?? ''), idStrategy);
       }
       return batch;
     }
-
-    // Parse entity document configuration for metadata enrichment settings
-    const docConfig = this.parseDocumentConfig(entityDocument);
-    const metadataConfig = docConfig.metadata;
 
     // Get entity metadata for enriching vector metadata with display fields
     const md = this.ProviderToUse;
@@ -484,50 +686,21 @@ export class EntityVectorSyncer extends VectorBase {
     const displayFields = this.getDisplayFields(entityInfo, metadataConfig);
 
     const vectorRecords: VectorRecord[] = batch.map((embeddingItem: EmbeddingData) => {
-      // Deterministic vector ID: SHA-1 hash of entityDocumentID + compositeKey
-      // ensures re-syncing upserts in place (no duplicates) and stays under
-      // Pinecone's 512-byte ID limit (hash is 40 chars)
-      const raw = `${entityDocument.ID}_${embeddingItem.__mj_compositeKey}`;
-      const hash = createHash('sha1').update(raw).digest('hex');
-      const vectorId: string = hash;
+      const vectorId = this.buildVectorId(entityDocument.ID, String(embeddingItem.__mj_compositeKey ?? ''), idStrategy);
       embeddingItem.VectorID = vectorId;
 
-      // Build enriched metadata with display fields from the record
-      const metadata: Record<string, string> = {
-        RecordID: String(embeddingItem.__mj_compositeKey ?? ''),
-        Entity: entityDocument.Entity,
-        TemplateID: templateContent.ID,
-      };
-
-      // Add entity icon if available (respects includeEntityIcon config, default true)
-      if (entityInfo?.Icon && (metadataConfig?.includeEntityIcon !== false)) {
-        metadata['EntityIcon'] = entityInfo.Icon;
-      }
-
-      // Add __mj_UpdatedAt for recency sorting (respects includeUpdatedAt config, default true)
+      const metadata = this.buildVectorMetadata(embeddingItem, entityDocument, templateContent, entityInfo, displayFields, metadataConfig);
       const record = embeddingItem.EntityData as Record<string, unknown>;
-      if (record['__mj_UpdatedAt'] && (metadataConfig?.includeUpdatedAt !== false)) {
-        metadata['__mj_UpdatedAt'] = String(record['__mj_UpdatedAt']);
-      }
-
-      // Add display fields with appropriate truncation (respects config overrides)
-      for (const field of displayFields) {
-        const val = record[field.Name];
-        if (val != null) {
-          const strVal = String(val);
-          const limit = this.getFieldTruncationLimit(field, metadataConfig);
-          metadata[field.Name] = strVal.length > limit ? strVal.substring(0, limit) : strVal;
-        }
-      }
 
       return {
         id: vectorId,
         values: embeddingItem.Vector,
-        metadata
+        metadata,
+        providerTemporaryDirectives: vectorDB.BuildProviderDirectives(record, providerConfig ?? {}),
       };
     });
 
-    const response: BaseResponse = await vectorDB.CreateRecords(vectorRecords, indexName);
+    const response: BaseResponse = await vectorDB.CreateRecords(vectorRecords, indexName, providerConfig);
     if (!response.success) {
       const message = response.message || 'Unknown vector database error';
       LogError('Unable to save records to vector database', undefined, message);
@@ -909,7 +1082,7 @@ export class EntityVectorSyncer extends VectorBase {
       );
     }
 
-    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexById(entityDocument.VectorIndexID);
+    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(entityDocument.VectorIndexID);
     if (!vectorIndex) {
       throw new Error(
         `Vector Index with ID "${entityDocument.VectorIndexID}" not found for Entity Document "${entityDocument.Name}". ` +
@@ -1180,7 +1353,7 @@ export class EntityVectorSyncer extends VectorBase {
     contextUser: UserInfo
   ): Promise<void> {
     const vectorIndexID: string = String(embeddingData.VectorIndexID);
-    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexById(vectorIndexID);
+    const vectorIndex = KnowledgeHubMetadataEngine.Instance.GetVectorIndexByID(vectorIndexID);
     if (!vectorIndex) {
       LogError(`Vector Index with ID ${vectorIndexID} not found in KnowledgeHubMetadataEngine cache`);
       return;

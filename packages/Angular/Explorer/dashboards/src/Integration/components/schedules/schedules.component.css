@@ -198,7 +198,7 @@
   width: 12px;
   height: 12px;
   background: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 /* Now line */
@@ -474,7 +474,7 @@
 
 .interval-input:focus {
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .interval-unit {
@@ -511,7 +511,7 @@
 
 .cron-input:focus {
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .cron-description {
@@ -598,22 +598,6 @@
    Empty State
    -------------------------------------------------------------------------- */
 
-.empty-state {
-  text-align: center;
-  padding: 60px 24px;
-  color: var(--mj-text-disabled);
-}
-
-.empty-state i {
-  font-size: 48px;
-  margin-bottom: 16px;
-  display: block;
-}
-
-.empty-state p {
-  font-size: 15px;
-  margin: 0;
-}
 
 /* --------------------------------------------------------------------------
    Responsive

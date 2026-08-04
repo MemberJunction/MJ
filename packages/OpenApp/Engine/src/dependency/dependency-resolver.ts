@@ -16,9 +16,10 @@ import type { ResolvedDependency } from '../types/open-app-types.js';
 import { CheckDependencyVersionCompatibility } from './version-checker.js';
 
 /**
- * Dependency value: either a plain semver range string or an object with version and repository.
+ * Dependency value: either a plain semver range string or an object with version,
+ * repository, and (for a dependency that lives in a multi-app repo) an optional in-repo subpath.
  */
-export type DependencyValue = string | { version: string; repository: string };
+export type DependencyValue = string | { version: string; repository: string; subpath?: string };
 
 /**
  * A node in the dependency graph, representing one app and its requirements.

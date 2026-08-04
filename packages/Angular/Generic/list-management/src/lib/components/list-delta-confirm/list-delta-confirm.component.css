@@ -73,33 +73,11 @@
   color: var(--mj-text-muted);
 }
 
-.delta-banner {
-  display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 12.5px;
-  align-items: flex-start;
-}
-
 .delta-banner__copy {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.delta-banner--safe {
-  background: var(--mj-status-success-bg);
-  border: 1px solid var(--mj-status-success-border);
-  color: var(--mj-status-success-text);
-  align-items: center;
-}
-
-.delta-banner--danger {
-  background: var(--mj-status-error-bg);
-  border: 1px solid var(--mj-status-error-border);
-  color: var(--mj-status-error-text);
 }
 
 .delta-banner__ack {

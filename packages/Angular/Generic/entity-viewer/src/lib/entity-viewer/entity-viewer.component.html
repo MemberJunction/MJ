@@ -67,17 +67,21 @@
     </div>
 
     <!-- Empty state: no entity selected -->
-    <div class="empty-state" [hidden]="!!EffectiveEntity">
-      <i class="fa-solid fa-database"></i>
-      <p>Select an entity to view records</p>
-    </div>
+    @if (!EffectiveEntity) {
+      <mj-empty-state
+        class="empty-state-fill"
+        Icon="fa-solid fa-database"
+        Title="Select an entity to view records" />
+    }
 
     <!-- Empty state: no records found. Suppressed while a plug-in is active — every plug-in renders
          its own empty/loading state, so the container never shows a generic "no records" over it. -->
-    <div class="empty-state" [hidden]="!EffectiveEntity || FilteredRecords.length > 0 || IsLoading || IsDynamicViewActive">
-      <i class="fa-solid fa-inbox"></i>
-      <p>{{ DebouncedFilterText ? 'No matching records' : 'No records found' }}</p>
-    </div>
+    @if (EffectiveEntity && FilteredRecords.length === 0 && !IsLoading && !IsDynamicViewActive) {
+      <mj-empty-state
+        class="empty-state-fill"
+        [Variant]="IsNoRecordsFiltered ? 'no-results' : 'empty'"
+        [Title]="NoRecordsTitle" />
+    }
 
     <!-- Plug-in (dynamic) view renderer host — the ONLY render path. The active descriptor's
          RendererComponent is created into #dynamicViewHost via ViewContainerRef and fed the generic

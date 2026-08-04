@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Predictive Studio — Mockup Review</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root{
+    --bg:#0e1726; --panel:#142036; --line:rgba(255,255,255,.08);
+    --txt:#e7edf6; --muted:#90a0ba; --accent:#3a6df0; --accent2:#7b3ff0;
+    --chip:#1d2c47; --chip-hover:#26385a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:var(--bg);color:var(--txt);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  header{padding:14px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px}
+  .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;color:#fff;font-size:16px}
+  header h1{font-size:16px;margin:0;font-weight:700}
+  header .sub{font-size:12px;color:var(--muted)}
+  header .spacer{flex:1}
+  .hint{font-size:12px;color:var(--muted)}
+  .openbtn{display:inline-flex;align-items:center;gap:7px;text-decoration:none;color:var(--txt);background:var(--chip);border:1px solid var(--line);padding:7px 12px;border-radius:8px;font-size:12.5px;font-weight:600}
+  .openbtn:hover{background:var(--chip-hover)}
+
+  .tabs{display:flex;gap:6px;padding:10px 18px;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;padding:9px 14px;border-radius:9px;background:transparent;border:1px solid transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer}
+  .tab i{font-size:13px}
+  .tab:hover{background:var(--chip);color:var(--txt)}
+  .tab.active{background:linear-gradient(135deg,rgba(58,109,240,.25),rgba(123,63,240,.18));color:#fff;border-color:rgba(123,143,240,.4)}
+
+  .optrow{display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--line);background:var(--panel)}
+  .opts{display:flex;gap:8px}
+  .opt{display:flex;flex-direction:column;gap:1px;min-width:230px;text-align:left;padding:8px 13px;border-radius:9px;background:var(--chip);border:1px solid var(--line);color:var(--txt);cursor:pointer}
+  .opt:hover{background:var(--chip-hover)}
+  .opt.active{border-color:var(--accent);background:linear-gradient(135deg,rgba(58,109,240,.22),rgba(58,109,240,.05));box-shadow:0 0 0 1px rgba(58,109,240,.4) inset}
+  .opt .ot{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .opt .ot .n{width:18px;height:18px;border-radius:5px;background:var(--accent);display:grid;place-items:center;font-size:11px;color:#fff}
+  .opt .od{font-size:11.5px;color:var(--muted);line-height:1.35}
+  .optrow .spacer{flex:1}
+  .areaName{font-size:12.5px;color:var(--muted);font-weight:600}
+
+  .frameWrap{flex:1;position:relative;background:#f4f6fa}
+  iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#f4f6fa}
+  .count{font-size:11.5px;color:var(--muted);margin-left:4px}
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+    <div>
+      <h1>Predictive Studio — UI Mockups</h1>
+      <div class="sub">7 areas · 3 design options each · 21 full-screen concepts to review</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="hint" id="filehint"></span>
+    <a class="openbtn" id="openraw" href="#" target="_blank" rel="noopener"><i class="fa-solid fa-up-right-from-square"></i> Open standalone</a>
+  </header>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <div class="optrow">
+    <span class="areaName" id="areaName"></span>
+    <div class="opts" id="opts"></div>
+    <div class="spacer"></div>
+    <span class="count">Tip: use ← / → for options, ↑ / ↓ for areas</span>
+  </div>
+
+  <div class="frameWrap"><iframe id="frame" title="mockup preview"></iframe></div>
+
+<script>
+  const AREAS = [
+    { key:'home', label:'Home', icon:'fa-gauge-high', opts:[
+      ['Executive dashboard','KPI row across the top, then recent models + active experiments in a 2-column grid.'],
+      ['Action-forward','A hero “Build a model” band with 3 entry paths, then a vertical activity/timeline feed.'],
+      ['Command-center','Dense KPI rail with sparklines, a live leaderboard + chart center, “needs attention” panel right.'],
+    ]},
+    { key:'algorithms', label:'Algorithm Catalog', icon:'fa-shapes', opts:[
+      ['Matrix-first','The 6×7 colored recommendation grid is the hero, with a detail drawer per algorithm.'],
+      ['Card gallery + Guide-me','Rich algorithm cards plus a scenario picker that highlights the recommendations.'],
+      ['Decision-support split','Pick a scenario on the left → algorithms ranked with level chips + rationale on the right.'],
+    ]},
+    { key:'pipelines', label:'Pipeline Builder', icon:'fa-diagram-project', opts:[
+      ['Visual DAG canvas','Foblex-style flow: sources → feature steps → embedding → algorithm, with a node inspector.'],
+      ['Linear step-list','Ordered step list + a live feature-matrix preview + right-side config (as-of / leakage / validation).'],
+      ['Guided wizard','Source → Features → Target → Algorithm → Validation stepper with a mini-DAG summary.'],
+    ]},
+    { key:'experiments', label:'Experiments', icon:'fa-flask', opts:[
+      ['Leaderboard-centric','Big ranked leaderboard, budget gauges + pause/cancel sidebar, live in-flight ticker.'],
+      ['Kanban','Iteration cards in Running / Completed / Pruned columns + leaderboard strip + budget bars.'],
+      ['Analytics dashboard','AUC-over-iterations line chart hero, budget gauges, compact leaderboard, “what’s next”.'],
+    ]},
+    { key:'models', label:'Model Registry', icon:'fa-cubes', opts:[
+      ['Table + detail drawer','Model list with a slide-in detail (lifecycle stepper, metrics, importance, lineage, promote).'],
+      ['Registry board','Models as cards grouped into Draft / Validated / Published / Archived lifecycle columns.'],
+      ['Master–detail','Model list left, rich detail right: big stepper, train-vs-holdout, lineage graph, sign-off gate.'],
+    ]},
+    { key:'compare', label:'Compare Runs', icon:'fa-chart-column', opts:[
+      ['Side-by-side columns','One column per model with aligned metric rows + per-column feature-importance bars.'],
+      ['Overlay charts','Grouped metric bars, a combined 3-curve ROC, grouped importance, and a diff table.'],
+      ['Champion vs challenger','Incumbent vs candidate with delta callouts and a promote/hold recommendation.'],
+    ]},
+    { key:'agent', label:'Model Dev Agent', icon:'fa-robot', opts:[
+      ['Chat thread','Full-width conversation: sub-agent turns, inline plan-approval card, leakage gate, results artifact.'],
+      ['Split workspace','Chat left + a live ModelingPlanSpec filling in section-by-section with the approval gate, right.'],
+      ['Results-artifact focused','Slim chat rail + the rich ML Experiment Results artifact center stage (the “after it ran” view).'],
+    ]},
+  ];
+
+  let ai = 0, oi = 0;
+  const tabsEl = document.getElementById('tabs');
+  const optsEl = document.getElementById('opts');
+  const frame = document.getElementById('frame');
+  const areaName = document.getElementById('areaName');
+  const openRaw = document.getElementById('openraw');
+  const fileHint = document.getElementById('filehint');
+
+  AREAS.forEach((a,i)=>{
+    const t = document.createElement('button');
+    t.className = 'tab'+(i===0?' active':'');
+    t.innerHTML = `<i class="fa-solid ${a.icon}"></i> ${a.label}`;
+    t.onclick = ()=>{ ai=i; oi=0; render(); };
+    tabsEl.appendChild(t);
+  });
+
+  function render(){
+    [...tabsEl.children].forEach((t,i)=>t.classList.toggle('active', i===ai));
+    const a = AREAS[ai];
+    areaName.textContent = a.label;
+    optsEl.innerHTML = '';
+    a.opts.forEach((o,i)=>{
+      const b = document.createElement('button');
+      b.className = 'opt'+(i===oi?' active':'');
+      b.innerHTML = `<span class="ot"><span class="n">${i+1}</span>${o[0]}</span><span class="od">${o[1]}</span>`;
+      b.onclick = ()=>{ oi=i; render(); };
+      optsEl.appendChild(b);
+    });
+    const file = `${a.key}-${oi+1}.html`;
+    frame.src = file;
+    openRaw.href = file;
+    fileHint.textContent = file;
+  }
+
+  document.addEventListener('keydown', e=>{
+    if(e.key==='ArrowRight'){ oi=(oi+1)%3; render(); }
+    else if(e.key==='ArrowLeft'){ oi=(oi+2)%3; render(); }
+    else if(e.key==='ArrowDown'){ ai=(ai+1)%AREAS.length; oi=0; render(); }
+    else if(e.key==='ArrowUp'){ ai=(ai-1+AREAS.length)%AREAS.length; oi=0; render(); }
+  });
+
+  render();
+</script>
+</body>
+</html>

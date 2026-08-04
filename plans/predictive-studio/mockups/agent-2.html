@@ -1,0 +1,176 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Model Dev Agent</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .split { display:grid; grid-template-columns:1fr 460px; gap:0; height:calc(100vh - 53px); }
+  @media (max-width:1100px){ .split { grid-template-columns:1fr; height:auto; } }
+  .chat-pane { padding:22px 24px; overflow-y:auto; }
+  .spec-pane { border-left:1px solid var(--mj-border-default); background:var(--mj-bg-surface-card); overflow-y:auto; display:flex; flex-direction:column; }
+  .role { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:2px 9px; border-radius:999px; margin-bottom:7px; }
+  .role.analyst { background:#eef0ff; color:#3a3fa6; }
+  .role.scout   { background:#e6f6ee; color:#137a41; }
+  .role.designer{ background:#fcf1e1; color:#9a5a07; }
+  .role.loop    { background:#f0e9fd; color:#6a2fb0; }
+  .bubble p { margin:0 0 8px; } .bubble p:last-child { margin-bottom:0; }
+  .src-list { list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:5px; }
+  .src-list li { display:flex; align-items:flex-start; gap:9px; font-size:12.5px; }
+  .src-list li i { width:16px; text-align:center; color:var(--mj-text-muted); margin-top:2px; }
+
+  /* spec pane */
+  .spec-head { padding:16px 18px; border-bottom:1px solid var(--mj-border-default); background:var(--mj-bg-surface); position:sticky; top:0; z-index:2; }
+  .spec-head h2 { font-size:15px; display:flex; align-items:center; gap:9px; }
+  .spec-head .meta { font-size:12px; color:var(--mj-text-muted); margin-top:3px; }
+  .spec-prog { height:6px; border-radius:999px; background:var(--mj-bg-surface-sunken); overflow:hidden; margin-top:11px; }
+  .spec-prog > span { display:block; height:100%; background:linear-gradient(90deg,#1f9d57,#3a6df0); width:62%; }
+  .spec-body { padding:14px 16px; flex:1; }
+  .sec { border:1px solid var(--mj-border-default); border-radius:10px; background:var(--mj-bg-surface); margin-bottom:11px; overflow:hidden; }
+  .sec.pending { border-style:dashed; opacity:.92; }
+  .sec-h { display:flex; align-items:center; gap:9px; padding:10px 13px; font-weight:650; font-size:13px; border-bottom:1px solid var(--mj-border-subtle); }
+  .sec.pending .sec-h { border-bottom:0; }
+  .sec-h .chk { width:20px; height:20px; border-radius:50%; display:grid; place-items:center; font-size:11px; flex:0 0 auto; }
+  .chk.ok { background:var(--mj-success); color:#fff; }
+  .chk.run { background:var(--mj-warning-bg); color:var(--mj-warning-text); }
+  .chk.wait { background:var(--mj-bg-surface-sunken); color:var(--mj-text-disabled); }
+  .sec-h .spacer { flex:1; }
+  .sec-b { padding:11px 13px; font-size:12.5px; color:var(--mj-text-secondary); }
+  .sec-b .kv { display:grid; grid-template-columns:118px 1fr; gap:6px; padding:3px 0; }
+  .sec-b .kv .k { color:var(--mj-text-muted); font-weight:600; }
+  .tag { margin:0 4px 4px 0; }
+  .gate { margin:auto 0 0; padding:16px; border-top:1px solid var(--mj-border-default); background:var(--mj-bg-surface); position:sticky; bottom:0; }
+  .gate .ttl { font-weight:700; font-size:13px; display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .gate .btns { display:flex; gap:9px; margin-top:11px; }
+  .gate .btns .btn { flex:1; justify-content:center; }
+  .pulse { width:8px; height:8px; border-radius:50%; background:var(--mj-warning); box-shadow:0 0 0 0 rgba(217,130,19,.5); animation:pl 1.6s infinite; }
+  @keyframes pl { 0%{box-shadow:0 0 0 0 rgba(217,130,19,.45)} 70%{box-shadow:0 0 0 7px rgba(217,130,19,0)} 100%{box-shadow:0 0 0 0 rgba(217,130,19,0)} }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav">
+  <div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div>
+  <a><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a><i class="fa-solid fa-cubes"></i> Model Registry</a>
+  <a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div>
+  <a class="active"><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><h1>Model Dev Agent</h1><div class="crumb">Conversation · Live ModelingPlanSpec workspace</div></div>
+  <div class="spacer"></div>
+  <span class="badge amber"><span class="pulse"></span> Drafting spec · awaiting approval</span>
+  <button class="btn ghost sm"><i class="fa-solid fa-clock-rotate-left"></i> History</button>
+</div>
+
+<div class="split">
+
+  <!-- LEFT: chat -->
+  <div class="chat-pane">
+    <div class="chat">
+
+      <div class="msg user"><div class="ava">AN</div><div class="bubble"><p>Help me predict which members won't renew this year.</p></div></div>
+
+      <div class="msg agent"><div class="ava"><i class="fa-solid fa-bullseye"></i></div><div class="bubble">
+        <span class="role analyst"><i class="fa-solid fa-bullseye"></i> Goal Analyst</span>
+        <p>Got it. This is a <strong>binary classification</strong> task — target <span class="tag">Renewed</span> (1 = renews, 0 = lapses). I'll measure success by <strong>Holdout AUC</strong> and build features <strong>as-of 90 days before renewal</strong> so nothing from the future sneaks in.</p>
+        <p class="muted small"><i class="fa-solid fa-arrow-right"></i> Filled <strong>Goal</strong> &amp; <strong>Target</strong> in the spec →</p>
+      </div></div>
+
+      <div class="msg agent"><div class="ava"><i class="fa-solid fa-magnifying-glass"></i></div><div class="bubble">
+        <span class="role scout"><i class="fa-solid fa-magnifying-glass"></i> Data Scout</span>
+        <p>Pulled candidate sources from approved <strong>MJ: Queries</strong>, DBAutoDoc, and prior Agent Notes:</p>
+        <ul class="src-list">
+          <li><i class="fa-solid fa-table"></i><span><strong>Members</strong> — tenure, type, region</span></li>
+          <li><i class="fa-solid fa-database"></i><span><strong>Event Attendance</strong> — <span class="mono">qry_member_event_attend</span> <span class="badge green">Approved</span></span></li>
+          <li><i class="fa-solid fa-vector-square"></i><span><strong>Member-summary embedding</strong></span></li>
+        </ul>
+        <p style="margin-top:9px"><i class="fa-solid fa-triangle-exclamation" style="color:var(--mj-warning)"></i> Excluded <span class="mono">RenewalPaymentDate</span> — it's post-outcome (<strong>leakage</strong>). Also drafted <span class="mono">qry_member_engagement_decay</span>, left <span class="badge amber">Pending</span> for your approval.</p>
+        <p class="muted small"><i class="fa-solid fa-arrow-right"></i> Filled <strong>Sources</strong> &amp; <strong>Leakage</strong> →</p>
+      </div></div>
+
+      <div class="msg agent"><div class="ava"><i class="fa-solid fa-flask"></i></div><div class="bubble">
+        <span class="role designer"><i class="fa-solid fa-flask"></i> Experiment Designer</span>
+        <p>Now ranking experiments and setting a budget. Drafting the <strong>Experiments</strong> and <strong>Budget</strong> sections in the spec panel — almost ready for your approval.</p>
+        <div class="callout info" style="margin-top:6px"><i class="fa-solid fa-arrows-rotate"></i><div>Loop continues until the ModelingPlanSpec is complete and you approve the gate on the right.</div></div>
+      </div></div>
+
+    </div>
+  </div>
+
+  <!-- RIGHT: live spec panel -->
+  <div class="spec-pane">
+    <div class="spec-head">
+      <h2><i class="fa-solid fa-file-contract" style="color:var(--mj-brand-primary)"></i> ModelingPlanSpec</h2>
+      <div class="meta">Renewal Propensity FY25 · filling in as the agent reasons</div>
+      <div class="spec-prog"><span></span></div>
+      <div class="muted small" style="margin-top:6px">4 of 6 sections complete</div>
+    </div>
+
+    <div class="spec-body">
+
+      <div class="sec">
+        <div class="sec-h"><span class="chk ok"><i class="fa-solid fa-check"></i></span> Goal <span class="spacer"></span><span class="badge green">Done</span></div>
+        <div class="sec-b">Predict members at risk of not renewing this fiscal year, surfaced 90 days before their renewal date.</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><span class="chk ok"><i class="fa-solid fa-check"></i></span> Target <span class="spacer"></span><span class="badge green">Done</span></div>
+        <div class="sec-b">
+          <div class="kv"><div class="k">Field</div><div><span class="tag">Renewed</span></div></div>
+          <div class="kv"><div class="k">Problem</div><div>Binary classification</div></div>
+          <div class="kv"><div class="k">As-of point</div><div>Renewal date − 90 days</div></div>
+          <div class="kv"><div class="k">Metric</div><div>Holdout AUC</div></div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><span class="chk ok"><i class="fa-solid fa-check"></i></span> Sources &amp; Features <span class="spacer"></span><span class="badge green">Done</span></div>
+        <div class="sec-b">
+          <div style="margin-bottom:6px"><span class="tag">Members</span><span class="tag">Event Attendance</span><span class="tag">Summary Embedding</span></div>
+          <div class="muted small">Tenure · Membership type · Event attendance (12 mo) · Engagement decay · Region · Embedding (384-d)</div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><span class="chk ok"><i class="fa-solid fa-check"></i></span> Leakage Exclusions <span class="spacer"></span><span class="badge amber">2 flagged</span></div>
+        <div class="sec-b">
+          <span class="tag" style="background:var(--mj-warning-bg);color:var(--mj-warning-text)">RenewalPaymentDate</span>
+          <span class="tag" style="background:var(--mj-warning-bg);color:var(--mj-warning-text)">RenewedFlag_raw</span>
+          <div class="muted small" style="margin-top:5px">Post-outcome fields removed before any run.</div>
+        </div>
+      </div>
+
+      <div class="sec pending">
+        <div class="sec-h"><span class="chk run"><i class="fa-solid fa-circle-notch fa-spin"></i></span> Proposed Experiments <span class="spacer"></span><span class="badge blue">Drafting…</span></div>
+        <div class="sec-b">
+          <div class="kv"><div class="k">1 · Primary</div><div>XGBoost · engagement features</div></div>
+          <div class="kv"><div class="k">2 · Strong</div><div>LightGBM · full set</div></div>
+          <div class="kv"><div class="k">3 · Viable</div><div>Logistic Regression · interpretable</div></div>
+          <div class="muted small" style="margin-top:6px">Validation: stratified 5-fold + FY25 holdout</div>
+        </div>
+      </div>
+
+      <div class="sec pending">
+        <div class="sec-h"><span class="chk wait"><i class="fa-solid fa-clock"></i></span> Budget <span class="spacer"></span><span class="badge gray">Queued</span></div>
+      </div>
+
+    </div>
+
+    <!-- approval gate -->
+    <div class="gate">
+      <div class="ttl"><span class="pulse"></span> Approval Gate</div>
+      <div class="muted small">Once the spec is complete, approve to lock it and start deterministic execution. Pending queries still require human sign-off.</div>
+      <div class="btns">
+        <button class="btn primary"><i class="fa-solid fa-check"></i> Approve &amp; run</button>
+        <button class="btn"><i class="fa-solid fa-pen"></i> Edit spec</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</main>
+</div></body></html>

@@ -1,0 +1,139 @@
+import { describe, it, expect } from 'vitest';
+import { Component, EventEmitter, forwardRef, Input, Output } from '@angular/core';
+import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR, ReactiveFormsModule } from '@angular/forms';
+import { renderComponentFixture, query, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import type { MCPConnectionData, MCPServerData } from '../mcp-dashboard.component';
+import { MCPConnectionDialogComponent, ConnectionDialogResult } from './mcp-connection-dialog.component';
+
+/**
+ * DOM coverage for <mj-mcp-connection-dialog> — the create/edit MCP connection dialog. Module-declared
+ * (standalone:false), FormBuilder-driven ReactiveForm; on init it loads credential/company dropdowns via
+ * RunViews through ProviderToUse (a fake provider returns empty rows — no backend). MJ UI elements are
+ * replaced with lightweight standalone stubs (the credential sub-dialog is only rendered when
+ * ShowCredentialDialog is true, so it needs no stub here). We test title/edit-mode, the active-server
+ * filter, save/cancel outputs, and the "New credential" toggle. Single sync render per test.
+ */
+
+class NoopCva implements ControlValueAccessor {
+  writeValue(): void {}
+  registerOnChange(): void {}
+  registerOnTouched(): void {}
+}
+@Component({ selector: 'mj-dialog', standalone: true, template: '<ng-content></ng-content>' })
+class StubDialog {
+  @Input() Visible = false;
+  @Input() Title = '';
+  @Input() Width = 0;
+  @Output() Close = new EventEmitter<void>();
+}
+@Component({ selector: 'mj-dialog-actions', standalone: true, template: '<ng-content></ng-content>' })
+class StubDialogActions {}
+@Component({ selector: 'mj-alert', standalone: true, template: '<ng-content></ng-content>' })
+class StubAlert {
+  @Input() Variant = '';
+}
+@Component({
+  selector: 'mj-dropdown',
+  standalone: true,
+  template: '<ng-content></ng-content>',
+  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubDropdown), multi: true }],
+})
+class StubDropdown extends NoopCva {
+  @Input() Data: unknown;
+  @Input() TextField = '';
+  @Input() ValueField = '';
+  @Input() ValuePrimitive = false;
+  @Input() DefaultItem: unknown;
+  @Output() ValueChange = new EventEmitter<unknown>();
+}
+@Component({
+  selector: 'mj-numeric-input',
+  standalone: true,
+  template: '',
+  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubNumeric), multi: true }],
+})
+class StubNumeric extends NoopCva {
+  @Input() Min = 0;
+  @Input() Max = 0;
+  @Input() Step = 0;
+}
+// Rendered only when ShowCredentialDialog is true (the "New credential" toggle).
+@Component({ selector: 'mj-credential-dialog', standalone: true, template: '' })
+class StubCredentialDialog {
+  @Input() Visible = false;
+  @Output() close = new EventEmitter<unknown>();
+}
+
+const SERVERS: MCPServerData[] = [
+  { ID: 's1', Name: 'GitHub', Status: 'Active' } as unknown as MCPServerData,
+  { ID: 's2', Name: 'Retired', Status: 'Inactive' } as unknown as MCPServerData,
+];
+const CONNECTION: MCPConnectionData = {
+  ID: 'c1',
+  MCPServerID: 's1',
+  Name: 'Prod GitHub',
+  Description: 'desc',
+  CompanyID: null,
+  CredentialID: null,
+  AutoSyncTools: true,
+  LogToolCalls: true,
+  Status: 'Active',
+} as unknown as MCPConnectionData;
+
+const render = (inputs: { connection?: MCPConnectionData | null; visible?: boolean } = {}) =>
+  renderComponentFixture(MCPConnectionDialogComponent, {
+    declarations: [MCPConnectionDialogComponent],
+    imports: [ReactiveFormsModule, FormsModule, StubDialog, StubDialogActions, StubAlert, StubDropdown, StubNumeric, StubCredentialDialog],
+    inputs: {
+      Provider: createFakeProvider({ runViewResults: [] }),
+      servers: SERVERS,
+      connection: inputs.connection ?? null,
+      visible: inputs.visible ?? true,
+    },
+  });
+
+describe('MCPConnectionDialogComponent (DOM)', () => {
+  it('renders nothing when not visible', () => {
+    expect(query(render({ visible: false }), 'mj-dialog')).toBeNull();
+  });
+
+  it('shows the "Add" title + Create button in create mode', () => {
+    const fixture = render({ connection: null });
+    expect(fixture.componentInstance.DialogTitle).toBe('Add Connection');
+    expect(fixture.componentInstance.IsEditMode).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('Create');
+  });
+
+  it('shows the "Edit" title + Update button in edit mode', () => {
+    const fixture = render({ connection: CONNECTION });
+    expect(fixture.componentInstance.DialogTitle).toBe('Edit Connection');
+    expect(fixture.componentInstance.IsEditMode).toBe(true);
+    expect(fixture.nativeElement.textContent).toContain('Update');
+  });
+
+  it('exposes only Active servers via the ActiveServers getter', () => {
+    const fixture = render({ connection: null });
+    expect(fixture.componentInstance.ActiveServers.map((s) => s.ID)).toEqual(['s1']);
+  });
+
+  it('renders the server + name form controls', () => {
+    const fixture = render({ connection: CONNECTION });
+    expect(query(fixture, 'input[formControlName="Name"]')).not.toBeNull();
+    expect(query(fixture, 'textarea[formControlName="Description"]')).not.toBeNull();
+  });
+
+  it('emits close({saved:false}) when Cancel is invoked', () => {
+    const fixture = render({ connection: CONNECTION });
+    const closed = capture<ConnectionDialogResult>(fixture.componentInstance.close);
+    fixture.componentInstance.cancel();
+    expect(closed).toEqual([{ saved: false }]);
+  });
+
+  it('toggles the credential creation dialog flag via openCredentialDialog()', () => {
+    const fixture = render({ connection: CONNECTION });
+    expect(fixture.componentInstance.ShowCredentialDialog).toBe(false);
+    fixture.componentInstance.openCredentialDialog();
+    fixture.detectChanges(false);
+    expect(fixture.componentInstance.ShowCredentialDialog).toBe(true);
+  });
+});

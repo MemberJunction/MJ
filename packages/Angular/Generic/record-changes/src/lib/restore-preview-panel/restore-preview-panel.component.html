@@ -36,10 +36,9 @@
 
       <!-- Empty state -->
       @if (Rows.length === 0) {
-        <div class="rpp-empty">
-          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-          <p>No fields could be parsed from this snapshot.</p>
-        </div>
+        <mj-empty-state class="rpp-empty" Size="compact"
+          Icon="fa-solid fa-circle-info"
+          Title="No fields could be parsed from this snapshot." />
       }
 
       <!-- Action bar (select all / deselect all) -->

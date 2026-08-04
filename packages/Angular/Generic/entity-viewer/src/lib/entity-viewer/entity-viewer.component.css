@@ -224,26 +224,9 @@
   display: none !important;
 }
 
-/* Empty State */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+/* Empty State — fill the content pane vertically */
+.empty-state-fill {
   height: 100%;
-  color: var(--mj-text-disabled);
-  text-align: center;
-}
-
-.empty-state i {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
 }
 
 /* Hide the dynamic host when no plug-in is mounted (no entity) */

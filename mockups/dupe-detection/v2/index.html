@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dupe Detection — v2 Mockups (grounded in the existing UI)</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+    .wrap{max-width:1080px;margin:0 auto;padding:34px 26px 70px}
+    h1.title{font-size:26px;margin:0 0 6px;letter-spacing:-.4px}
+    .lede{color:var(--mj-text-secondary);font-size:15px;max-width:790px}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:28px 0}
+    .pcard{display:flex;flex-direction:column;padding:0;overflow:hidden;text-decoration:none;color:inherit}
+    .pcard:hover{box-shadow:var(--mj-shadow-md);transform:translateY(-2px);transition:.15s}
+    .pcard .thumb{height:120px;display:flex;align-items:center;justify-content:center;font-size:38px;color:#fff}
+    .pcard.a .thumb{background:linear-gradient(135deg,#0076b6,#0ea5e9)}
+    .pcard.b .thumb{background:linear-gradient(135deg,#16a34a,#0d9488)}
+    .pcard.c .thumb{background:linear-gradient(135deg,#7c3aed,#a855f7)}
+    .pcard .body{padding:15px 17px}
+    .pcard h3{margin:0 0 4px;font-size:16px}
+    .pcard .tagline{font-size:12.5px;font-weight:700;color:var(--mj-text-link);text-transform:uppercase;letter-spacing:.4px}
+    .pcard p{font-size:13px;color:var(--mj-text-secondary);margin:8px 0 0}
+    .pcard .risk{margin-top:11px;font-size:12px;color:var(--mj-text-muted)}
+    .pcard .risk b{color:var(--mj-text-secondary)}
+    .panel{padding:20px 22px;margin:20px 0}
+    .panel h2{font-size:15px;margin:0 0 12px}
+    ul.clean{margin:0;padding-left:18px;color:var(--mj-text-secondary);font-size:13px}
+    ul.clean li{margin:6px 0}
+    .banner{display:flex;gap:13px;align-items:center;padding:13px 16px;border-radius:var(--mj-radius);background:var(--mj-status-info-bg);border:1px solid var(--mj-status-info-border);color:var(--mj-status-info-text);font-size:13px;margin-bottom:8px}
+    table.feat{width:100%;border-collapse:collapse;font-size:13px}
+    table.feat th,table.feat td{padding:9px 11px;border-bottom:1px solid var(--mj-border-subtle);text-align:left}
+    table.feat th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mj-text-muted)}
+    table.feat .yes{color:var(--rec-merge);font-weight:700}
+    table.feat .lo{color:var(--rec-merge);font-weight:700}
+    table.feat .mid{color:var(--rec-uncertain);font-weight:700}
+    table.feat .hi{color:var(--rec-notdupe);font-weight:700}
+</style>
+</head>
+<body>
+
+<div class="mock-nav">
+    <div class="brand"><span class="dot"></span> Dupe Detection <small>· v2 mockups</small></div>
+    <div class="links">
+        <a href="index.html" class="active">v2 Overview</a>
+        <a href="a-augment-in-place.html">A · Augment</a>
+        <a href="b-recommendation-board.html">B · Reco Board</a>
+        <a href="c-reasoning-copilot.html">C · Copilot</a>
+        <a href="../index.html">↩ v1 (greenfield)</a>
+    </div>
+    <div class="spacer"></div>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="tlabel">Dark</span></button>
+</div>
+
+<div class="wrap">
+    <h1 class="title">v2 — three ways to layer reasoning onto the UI we already have</h1>
+    <div class="banner">
+        <span style="font-size:20px">ℹ️</span>
+        <span><b>Different from v1.</b> v1 reimagined the UX from a blank page. v2 is grounded in the <b>real</b> <span class="mono">DuplicateDetectionResourceComponent</span> — its Kanban (Pending/Approved/Rejected) and slide-in side-by-side comparison grid (records as columns, fields as rows, per-field survivor radios, dependency preview, merge-confirm). Each v2 pattern is a distinct <b>philosophy for integrating the LLM layer into that existing structure</b>.</span>
+    </div>
+    <p class="lede">All three keep the comparison grid + Kanban DNA and the existing merge mechanics; they differ in <i>how invasively</i> reasoning shows up. Same scenario as v1 (Accounts run #1842, the Acme 3-way match across Local/Salesforce/HubSpot). LLM elements use a distinct accent so they read as a separate layer over the vector metrics.</p>
+
+    <div class="grid">
+        <a class="pcard card a" href="a-augment-in-place.html">
+            <div class="thumb">➕</div>
+            <div class="body">
+                <div class="tagline">A · Decorate</div>
+                <h3>Augment in place</h3>
+                <p>The exact comparison grid we ship today, plus three additions: a reasoning banner, per-match vec/LLM chips + survivor-recommendation badge, and per-field “LLM ✓” picks that preload <span class="mono">SelectedColumnIndex</span>.</p>
+                <div class="risk"><b>Effort/risk:</b> lowest — additive only. Fastest to ship.</div>
+            </div>
+        </a>
+        <a class="pcard card b" href="b-recommendation-board.html">
+            <div class="thumb">🗂️</div>
+            <div class="body">
+                <div class="tagline">B · Reorganize</div>
+                <h3>Recommendation board</h3>
+                <p>Reshape the Kanban to triage by LLM verdict (Merge / Uncertain / Not-dup lanes), with a group-by toggle, confidence filter, “conflicts only”, bulk auto-merge, and a disagreements-need-a-human strip. Grid is the drill-in.</p>
+                <div class="risk"><b>Effort/risk:</b> medium — reworks the board, reuses the grid.</div>
+            </div>
+        </a>
+        <a class="pcard card c" href="c-reasoning-copilot.html">
+            <div class="thumb">💬</div>
+            <div class="body">
+                <div class="tagline">C · Converse</div>
+                <h3>Reasoning copilot</h3>
+                <p>Grid on the left, a docked conversational reasoning panel on the right: verdict, explanation, the Agent's tool-investigation trace, applied memory notes, and “ask about this match”. Leans into Agent mode.</p>
+                <div class="risk"><b>Effort/risk:</b> higher — new panel; best showcases Agent mode.</div>
+            </div>
+        </a>
+    </div>
+
+    <div class="panel card">
+        <h2>How invasively does each touch the existing component?</h2>
+        <table class="feat">
+            <thead><tr><th>Aspect</th><th>A · Augment</th><th>B · Reco board</th><th>C · Copilot</th></tr></thead>
+            <tbody>
+                <tr><td>Comparison grid reused as-is</td><td class="yes">Yes</td><td class="yes">Yes (drill-in)</td><td class="yes">Yes (condensed)</td></tr>
+                <tr><td>Kanban board changed</td><td>No</td><td class="hi">Re-laned by verdict</td><td>No</td></tr>
+                <tr><td>New UI surface</td><td>Banner + chips</td><td>Toolbar + lanes</td><td>Full copilot panel</td></tr>
+                <tr><td>Best at surfacing disagreement</td><td class="mid">Badge</td><td class="yes">Lane + filter</td><td class="mid">In conversation</td></tr>
+                <tr><td>Showcases Agent mode (tools/memory)</td><td>—</td><td class="mid">Notes</td><td class="yes">Trace + chat</td></tr>
+                <tr><td>Relative build effort</td><td class="lo">Low</td><td class="mid">Medium</td><td class="hi">Higher</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="panel card">
+        <h2>A likely real build</h2>
+        <ul class="clean">
+            <li><b>Ship A first</b> — it's purely additive on the working grid and matches the dual-provider Phase 1 (solo-prompt default).</li>
+            <li><b>Layer B's triage</b> when run volumes grow and disagreement-first review pays off.</li>
+            <li><b>Reserve C</b> for entities promoted to Agent mode, where the tool trace + memory + Q&amp;A actually have something to show.</li>
+            <li>All three honor the spec: reasoning is annotation over the vector pass, survivor/field choices resolve to the existing <span class="mono">FieldMap</span>, and the merge path is unchanged.</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+function toggleTheme(){ const d=document.documentElement.classList.toggle('dark'); document.getElementById('tlabel').textContent=d?'Light':'Dark'; }
+if (matchMedia('(prefers-color-scheme: dark)').matches){ toggleTheme(); }
+</script>
+</body>
+</html>

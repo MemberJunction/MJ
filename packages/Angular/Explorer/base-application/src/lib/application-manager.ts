@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager, IMetadataProvider } from '@memberjunction/core';
+import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager, IMetadataProvider, PermissionConstrainedError } from '@memberjunction/core';
 import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
@@ -185,6 +185,7 @@ export class ApplicationManager {
   private syncFromEngine(): void {
     const allApps = this.allApplications$.value;
     const engine = UserInfoEngine.Instance;
+    if (engine.IsPermissionConstrained) return; // No data available — nothing to sync
     const userApps = engine.UserApplications;
 
     // Build a map for quick lookup
@@ -350,6 +351,15 @@ export class ApplicationManager {
 
     // Load user's UserApplication records using UserInfoEngine for caching
     const engine = UserInfoEngine.Instance;
+
+    // If the engine can't read user application data, skip the self-healing path —
+    // a permission-denied user is NOT the same as a new user with no records.
+    if (engine.IsPermissionConstrained) {
+      LogStatus(`${this.constructor.name}: UserInfoEngine is permission-constrained, skipping application config load`);
+      this.userAppConfigs$.next([]);
+      this.applications$.next([]);
+      return;
+    }
 
     let userApps: MJUserApplicationEntity[] = engine.UserApplications;
 

@@ -8,10 +8,7 @@
   <mj-page-body>
 
   @if (ErrorMessage) {
-    <div class="message error-message">
-      <i class="fa-solid fa-circle-exclamation"></i>
-      <span>{{ ErrorMessage }}</span>
-    </div>
+    <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
   }
 
   <div class="selector-row wrap">
@@ -66,15 +63,13 @@
   @if (IsLoading) {
     <mj-loading text="Looking up grantees..." size="medium"></mj-loading>
   } @else if (!LastQueryLabel) {
-    <div class="empty-state">
-      <i class="fa-solid fa-cube"></i>
-      <p>Pick a domain and enter a resource type + ID, then press Lookup to see who has access.</p>
-    </div>
+    <mj-empty-state Icon="fa-solid fa-cube"
+      Title="No lookup yet"
+      Message="Pick a domain and enter a resource type + ID, then press Lookup to see who has access." />
   } @else if (ResourceAccessRows.length === 0) {
-    <div class="empty-state">
-      <i class="fa-solid fa-user-slash"></i>
-      <p>No grantees found for <strong>{{ LastQueryLabel }}</strong>.</p>
-    </div>
+    <mj-empty-state Variant="no-results" Icon="fa-solid fa-user-slash"
+      Title="No grantees found"
+      [Message]="NoGranteesMessage" />
   } @else {
     <div class="total-summary">
       <strong>{{ ResourceAccessRows.length }}</strong> grantee{{ ResourceAccessRows.length === 1 ? '' : 's' }}

@@ -1,6 +1,6 @@
 import { CompositeKey, DataSnapshot } from "@memberjunction/core";
 import { BaseEventArgs } from "./component-events";
-import { SimpleAITools, SimpleDataContext, SimpleGeoDataEngine, SimpleMetadata, SimpleRunQuery, SimpleRunView, SimpleSearch } from "./shared";
+import { SimpleAITools, SimpleDataContext, SimpleGeoDataEngine, SimpleMetadata, SimpleMLTools, SimpleRunQuery, SimpleRunView, SimpleSearch } from "./shared";
 
 /**
  * Callbacks a component can use.
@@ -48,8 +48,9 @@ export interface ComponentStyles {
         // Primary palette
         primary: string // '#5B4FE9',
         primaryHover: string // '#4940D4',
+        primaryActive?: string // '#3E37B8' — pressed/active state (maps to --mj-brand-primary-active)
         primaryLight?: string // '#E8E6FF',
-        
+
         // Secondary palette
         secondary: string // '#64748B',
         secondaryHover?: string // '#475569',
@@ -74,7 +75,11 @@ export interface ComponentStyles {
         textSecondary: string // '#64748B',
         textTertiary?: string // '#94A3B8',
         textInverse?: string // '#FFFFFF',
-        
+
+        // Link colors
+        link?: string // '#5B4FE9' — maps to --mj-text-link
+        linkHover?: string // '#4940D4' — maps to --mj-text-link-hover
+
         // Border colors
         border: string // '#E2E8F0',
         borderLight?: string // '#F1F5F9',
@@ -167,11 +172,19 @@ export interface ComponentStyles {
         fast?: string // '150ms ease-in-out',
         normal?: string // '250ms ease-in-out',
         slow?: string // '350ms ease-in-out',
-        
+
         // Allow additional custom transitions
         [key: string]: string | undefined;
     }
     overflow: string
+    /**
+     * Categorical color palette for multi-series charts/visualizations.
+     * Populated from the host theme's `--mj-viz-*` tokens by the theme bridge
+     * (falling back to the built-in defaults from `SetupStyles()`). Components
+     * should read series colors from here instead of hardcoding a hex array, so
+     * chart series follow the active theme/brand.
+     */
+    chartPalette?: string[]
 }
 
 
@@ -287,5 +300,12 @@ export interface ComponentUtilities {
      * Used by map components to resolve lat/lng to country/state via point-in-polygon.
      * This will not always be available — ensure component code has fallbacks when undefined.
      */
-    geoDataEngine?: SimpleGeoDataEngine
+    geoDataEngine?: SimpleGeoDataEngine,
+    /**
+     * Access to the host's trained predictive models — list available models and score records
+     * with them so a component can fold predictions into its charts/tables. Scoring is marshalled
+     * to the server's Predictive Studio engine; no training machinery runs in the browser.
+     * This will not always be available — ensure component code has fallbacks when undefined.
+     */
+    ml?: SimpleMLTools
 }

@@ -217,6 +217,10 @@ describe('BaseScheduledJob', () => {
             expect(result).toHaveProperty('Success');
         });
 
+        it('IsHighFrequencyByDesign defaults to false (ordinary jobs stay subject to the warning)', () => {
+            expect(job.IsHighFrequencyByDesign).toBe(false);
+        });
+
         it('should have FormatNotification method', () => {
             const context = {} as ScheduledJobExecutionContext;
             const jobResult = { Success: true };

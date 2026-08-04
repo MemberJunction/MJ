@@ -754,6 +754,20 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         this.cdr.markForCheck();
     }
 
+    /**
+     * Applies the expanded/collapsed state emitted by an mj-accordion-panel for a
+     * field group. Sets (not flips) the value so it stays in sync with the panel,
+     * and marks for check (OnPush change detection).
+     */
+    public onFieldGroupExpandedChange(groupId: string, expanded: boolean): void {
+        if (expanded) {
+            this.expandedFieldGroups.add(groupId);
+        } else {
+            this.expandedFieldGroups.delete(groupId);
+        }
+        this.cdr.markForCheck();
+    }
+
     public isFieldGroupExpanded(groupId: string): boolean {
         return this.expandedFieldGroups.has(groupId);
     }

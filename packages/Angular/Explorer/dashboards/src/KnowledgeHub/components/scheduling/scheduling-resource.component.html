@@ -112,11 +112,9 @@
             }
         </div>
     } @else {
-        <div class="empty-state">
-            <i class="fa-regular fa-calendar-xmark"></i>
-            <p>No Knowledge Hub schedules found</p>
-            <span>Create a new schedule to automate classification and vector sync</span>
-        </div>
+        <mj-empty-state Icon="fa-regular fa-calendar-xmark"
+            Title="No Knowledge Hub schedules found"
+            Message="Create a new schedule to automate classification and vector sync" />
     }
 
     <!-- Link to full Scheduling App -->

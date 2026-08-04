@@ -6,7 +6,7 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialEditPanelComponent } from '@memberjunction/ng-credentials';
-import { FilterFieldConfig, ViewToggleOption } from '@memberjunction/ng-ui-components';
+import { FilterFieldConfig, ViewToggleOption, MJConfirmService } from '@memberjunction/ng-ui-components';
 type ViewMode = 'grid' | 'list';
 type StatusFilter = '' | 'active' | 'inactive' | 'expired' | 'expiring';
 
@@ -103,7 +103,8 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     }
 
     constructor(
-        private cdr: ChangeDetectorRef
+        private cdr: ChangeDetectorRef,
+        private confirm: MJConfirmService
     ) {
         super();
     }
@@ -297,7 +298,11 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             return;
         }
 
-        const confirmed = confirm(`Are you sure you want to delete "${credential.Name}"? This action cannot be undone.`);
+        const confirmed = await this.confirm.ConfirmDelete({
+            title: 'Delete credential',
+            message: `Delete "${credential.Name}"?`,
+            detail: 'This action cannot be undone.',
+        });
         if (!confirmed) return;
 
         try {
@@ -395,7 +400,11 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         if (!this.UserCanDelete || this.selectedCredentials.size === 0) return;
 
         const count = this.selectedCredentials.size;
-        const confirmed = confirm(`Are you sure you want to delete ${count} credential(s)? This action cannot be undone.`);
+        const confirmed = await this.confirm.ConfirmDelete({
+            title: 'Delete credentials',
+            message: `Delete ${count} credential(s)?`,
+            detail: 'This action cannot be undone.',
+        });
         if (!confirmed) return;
 
         const toDelete = Array.from(this.selectedCredentials)
@@ -457,6 +466,20 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         this.selectedStatusFilter = '';
         this.showActiveOnly = false;
         this.applyFilters();
+    }
+
+    /** True when search and/or any filter narrow the list. */
+    public get IsListNarrowed(): boolean {
+        return !!(this.searchText || this.selectedTypeFilter || this.selectedStatusFilter);
+    }
+
+    /** Empty-state CTA: reset filters when narrowed, otherwise create. */
+    public onEmptyStateAction(): void {
+        if (this.IsListNarrowed) {
+            this.clearFilters();
+        } else {
+            this.createNewCredential();
+        }
     }
 
     public get hasActiveFilters(): boolean {
@@ -739,7 +762,11 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
         if (!this.UserCanDelete || this.selectedCredentials.size === 0) return;
 
         const count = this.selectedCredentials.size;
-        const confirmed = confirm(`Are you sure you want to delete ${count} credential(s)? This action cannot be undone.`);
+        const confirmed = await this.confirm.ConfirmDelete({
+            title: 'Delete credentials',
+            message: `Delete ${count} credential(s)?`,
+            detail: 'This action cannot be undone.',
+        });
         if (!confirmed) return;
 
         const toDelete = Array.from(this.selectedCredentials)

@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, Input, Output, OnInit, OnDestroy, ChangeDetectorRef, inject
+  Component, EventEmitter, Input, Output, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
@@ -25,33 +25,29 @@ import { ParsedDelegationArtifact } from '../../services/delegation-result-parse
 const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.v1';
 
 /**
- * The call overlay's TABBED SURFACE PANEL (the right panel) — per the approved
- * `plans/realtime/mockups/whiteboard.html` mockup:
+ * The call overlay's TABBED SURFACE PANEL (the right panel) — decluttered redesign:
  *
- *  - **Activity** — always the first tab; hosts the existing
- *    {@link RealtimeActivityRailComponent} unchanged (in `Embedded` mode, since this panel
- *    owns the chrome + collapse).
- *  - **One tab per artifact** produced by delegated runs: when a delegation result carries
- *    artifacts, a tab is auto-opened, FOCUSED, and briefly flashed violet. The pane reuses
- *    the standard `mj-artifact-viewer-panel` (read-only embed: no header/tabs/actions),
- *    loading by ArtifactID — the latest version, i.e. the one the run just produced.
- *  - **Channel tabs** — rendered ONLY once a channel registers via
- *    {@link RegisterChannelTab}. The overlay shell registers one per registry-resolved
- *    {@link BaseRealtimeChannelClient} plugin; the pane creates the plugin's surface
- *    component dynamically (via `mj-realtime-channel-pane`). Until a registration supplies
- *    a plugin (or legacy template), the pane shows the "coming online…" placeholder;
- *    re-registering the same key swaps the real surface in.
+ *  - **Channel tabs** (LEFT cluster) — one per channel that has come into play. The whiteboard
+ *    tabs immediately at session start; every other channel tabs only once the agent first
+ *    USES it. Each carries a distinct accent color + its plugin icon. The pane creates the
+ *    plugin's surface component dynamically (via `mj-realtime-channel-pane`); a placeholder
+ *    shows the "coming online…" state until a plugin/template is supplied.
+ *  - **Activity** (RIGHT-aligned, pinned LAST) — gated: appears only once ≥1 agent run has
+ *    occurred (or in review mode). Hosts {@link RealtimeActivityRailComponent}, which now also
+ *    renders inline artifact previews and a split-pane artifact viewer. Styled distinctly from
+ *    channel tabs (activity-pulse icon + its own accent) and separated from the channel cluster
+ *    by a flex spacer.
  *
- * Panes are kept ALIVE while hidden (CSS `display:none`, mirroring the mockup's
- * `.s-pane.active`) so switching tabs never reloads an artifact or resets the rail.
- * The whole panel collapses to a slim strip via the chevron at the tab strip's end —
- * the collapse-to-strip behavior that used to live on the rail, lifted to the panel.
+ * Artifacts NO LONGER get their own tab — they live inside the Activity tab (cleaner than a
+ * row of per-artifact tabs).
  *
- * SIZING IS EXTERNAL: the overlay shell hosts this panel in a fixed-width flex item
- * and owns the width (user drag via the resize handle + persisted preference +
- * default tiers). This panel just fills it and REPORTS the layout signals the shell sizes from:
- * {@link CollapsedChange} (slim-strip toggle) and {@link WideChanged} (a content tab
- * is focused → the default width tier widens).
+ * Panes are kept ALIVE while hidden (CSS `display:none`) so switching tabs never reloads a
+ * channel surface or resets the rail. The whole panel collapses to a slim strip via the chevron.
+ *
+ * SIZING IS EXTERNAL: the overlay shell hosts this panel in a fixed-width flex item and owns
+ * the width. This panel just fills it and REPORTS the layout signals the shell sizes from:
+ * {@link CollapsedChange} (slim-strip toggle) and {@link WideChanged} (a channel tab is focused
+ * → the default width tier widens).
  */
 @Component({
   standalone: true,
@@ -64,7 +60,7 @@ const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.
   styleUrl: './realtime-surface-tabs.component.css'
 })
 export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
-  /** How long a just-arrived tab keeps its violet flash highlight. */
+  /** How long a just-revealed channel tab keeps its flash highlight. */
   private static readonly FlashDurationMs = 1400;
 
   /** Shared live-session state, owned by the overlay shell (feeds the Activity rail). */
@@ -86,6 +82,30 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   /** The active environment id, threaded to the artifact viewer panel. */
   @Input() EnvironmentID = '';
 
+  /**
+   * Extra (review-carryover) artifacts to surface in the Activity tab, NOT tied to a live
+   * activity card. Forwarded to the rail's "Session artifacts" group. Empty for a live session.
+   */
+  @Input() ExtraArtifacts: ParsedDelegationArtifact[] = [];
+
+  /**
+   * Whether the gated Activity tab should be shown — driven by the overlay shell once ≥1
+   * agent run has occurred (or in review mode). A getter/setter so a late "first run" flips
+   * the tab into the strip reactively.
+   */
+  private _showActivityTab = false;
+  @Input()
+  set ShowActivityTab(value: boolean) {
+    if (value !== this._showActivityTab) {
+      this._showActivityTab = value;
+      this.Model.SetShowActivityTab(value);
+      this.cdr.markForCheck();
+    }
+  }
+  get ShowActivityTab(): boolean {
+    return this._showActivityTab;
+  }
+
   /** Re-emitted from the Activity rail's dev "Open run" links. */
   @Output() OpenRunRequested = new EventEmitter<string>();
 
@@ -96,7 +116,7 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   @Output() CollapsedChange = new EventEmitter<boolean>();
 
   /**
-   * Emitted when {@link IsWide} flips (a content tab gained / lost focus) — the
+   * Emitted when {@link IsWide} flips (a channel tab gained / lost focus) — the
    * overlay shell widens the panel's DEFAULT split-area size while wide (only when
    * the user has never dragged an explicit width).
    */
@@ -108,8 +128,9 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   /** Whether the panel is collapsed to its slim strip. */
   public Collapsed = false;
 
-  /** Artifact version ids already turned into tabs (guards the State rescan). */
-  private tabbedVersionIds = new Set<string>();
+  /** The embedded Activity rail (owns the inline artifact previews + the split-pane viewer). */
+  @ViewChild(RealtimeActivityRailComponent) private activityRail?: RealtimeActivityRailComponent;
+
   private flashTimer: ReturnType<typeof setTimeout> | null = null;
   private subs: Subscription[] = [];
   private lastWide = false;
@@ -129,17 +150,15 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     return this.Model.ActiveTab;
   }
 
-  /** Wide presentation when a content tab (artifact / channel) is focused. */
+  /** Wide presentation when a channel tab is focused (the Activity tab keeps the normal tier). */
   public get IsWide(): boolean {
-    return !this.Collapsed && this.ActiveTab.Kind !== 'activity';
+    return !this.Collapsed && this.ActiveTab.Kind === 'channel';
   }
 
   ngOnInit(): void {
     this.subs.push(
-      this.State.Changed$.subscribe(() => this.onStateChanged()),
       this.Model.Changed$.subscribe(() => this.onModelChanged())
     );
-    this.syncArtifactTabs();
   }
 
   ngOnDestroy(): void {
@@ -167,7 +186,7 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Emits {@link WideChanged} when the wide tier flips (content tab focus / collapse). */
+  /** Emits {@link WideChanged} when the wide tier flips (channel tab focus / collapse). */
   private syncWide(): void {
     const wide = this.IsWide;
     if (wide !== this.lastWide) {
@@ -182,23 +201,31 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Focuses (opening if needed) the tab for an artifact — the "View →" affordance target
-   * on done delegation cards and rail entries. Expands the panel if it was collapsed.
+   * Focuses the Activity tab and opens the given artifact in the rail's split-pane viewer —
+   * the "View →" affordance target on done delegation cards / thread entries. Expands the
+   * panel if it was collapsed. Replaces the old "open a tab per artifact" behavior.
    */
   public FocusArtifact(artifact: ParsedDelegationArtifact): void {
-    this.tabbedVersionIds.add(artifact.ArtifactVersionID);
-    this.Model.OpenArtifactTab(artifact, true);
     this.setCollapsed(false);
+    // An artifact implies a run happened — ensure the Activity tab is present before focusing it.
+    this.Model.SetShowActivityTab(true);
+    this.Model.Focus(RealtimeSurfaceTabsModel.ActivityTabKey);
+    // The rail may not be created yet (panel just expanded) — defer so it exists.
+    if (this.activityRail) {
+      this.activityRail.OpenArtifact(artifact);
+    } else {
+      setTimeout(() => this.activityRail?.OpenArtifact(artifact));
+    }
     this.cdr.markForCheck();
   }
 
   /**
-   * Registers (or updates) an interactive-channel tab — one per registry-resolved channel
-   * plugin, forwarded from `RealtimeSessionOverlayComponent.RegisterChannelTab`.
+   * Registers (or updates) an interactive-channel tab — one per used channel plugin,
+   * forwarded from `RealtimeSessionOverlayComponent.RegisterChannelTab`.
    */
   public RegisterChannelTab(registration: RealtimeChannelTabRegistration): void {
     // Microtask defer: the overlay forwards this while handling agent/channel activity, which can
-    // land mid change-detection. Adding a tab to Model.Tabs synchronously then trips NG0100 on the
+    // land mid change-detection. Adding a tab to Model synchronously then trips NG0100 on the
     // tab-strip bindings (s-tab--active). A microtask lands the mutation in a fresh CD turn —
     // imperceptible for an async reveal, and ordered with any follow-on RevealChannel.
     Promise.resolve().then(() => {
@@ -209,9 +236,8 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
 
   /**
    * AUTO-REVEALS a channel surface the moment the agent first acts on it: expands the
-   * panel if collapsed, focuses the channel's tab and flashes it violet — so the user
-   * discovers the whiteboard (or any channel) exists the instant it comes alive,
-   * instead of having to find the tab themselves. No-op for unknown keys.
+   * panel if collapsed, focuses the channel's tab and flashes it — so the user discovers
+   * the whiteboard (or any channel) exists the instant it comes alive. No-op for unknown keys.
    */
   public RevealChannel(key: string): void {
     // Microtask defer (same NG0100 reason as RegisterChannelTab): the agent-activity reveal mutates
@@ -227,10 +253,10 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Removes a tab from the panel (Activity is irremovable; focus falls back to Activity —
-   * see {@link RealtimeSurfaceTabsModel.RemoveTab}). Used by the overlay shell on a
-   * review→live continuation whose live channel set resolved WITHOUT the channel a stale
-   * review tab represents (e.g. no Whiteboard channel → drop the read-only review board tab).
+   * Removes a tab from the panel (Activity is irremovable; focus falls back per the model's
+   * rules). Used by the overlay shell on a review→live continuation whose live channel set
+   * resolved WITHOUT the channel a stale review tab represents (e.g. no Whiteboard channel →
+   * drop the read-only review board tab).
    *
    * @returns `true` when a tab was removed.
    */
@@ -243,22 +269,16 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Registers an artifact tab WITHOUT stealing focus (default) — the SESSION REVIEW /
-   * resume-carryover path, where a reviewed session's (and its prior legs') history
-   * artifacts are surfaced as tabs the user can visit, as opposed to the live
-   * auto-open-on-arrival behavior. Idempotent per artifact version; the registered tab
-   * survives the review→live transition (tabs are never cleared on resume).
+   * Registers the reviewed chain's history artifacts so they surface inside the Activity tab.
+   * In the redesign there are no per-artifact tabs — the rail picks artifacts up from the
+   * session state's cards, so this only needs to ensure the Activity tab is shown (review
+   * mode always shows it) and, when `focus` is set, open the artifact in the split viewer.
    */
   public RegisterArtifactTab(artifact: ParsedDelegationArtifact, focus: boolean = false): void {
-    this.tabbedVersionIds.add(artifact.ArtifactVersionID);
-    // History carryover is context, not news — never marked unseen (no glow).
-    this.Model.OpenArtifactTab(artifact, focus, false);
-    this.cdr.markForCheck();
-  }
-
-  /** On session-state changes: open tabs for newly-arrived artifacts, then re-render. */
-  private onStateChanged(): void {
-    this.syncArtifactTabs();
+    this.Model.SetShowActivityTab(true);
+    if (focus) {
+      this.FocusArtifact(artifact);
+    }
     this.cdr.markForCheck();
   }
 
@@ -331,28 +351,6 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
         : {};
     } catch {
       return {};
-    }
-  }
-
-  /**
-   * Scans the session's delegation cards for artifacts that don't have a tab yet and
-   * adds one per artifact — UNFOCUSED, with the brief violet flash plus the persistent
-   * unseen glow. Per product direction a finished artifact never steals the screen
-   * (only the agent's first channel activity auto-reveals); the glowing tab is the
-   * invitation, the user opens it when they want it.
-   */
-  private syncArtifactTabs(): void {
-    for (const card of this.State.Cards) {
-      if (!card.Done || !card.Artifacts) {
-        continue;
-      }
-      for (const artifact of card.Artifacts) {
-        if (this.tabbedVersionIds.has(artifact.ArtifactVersionID)) {
-          continue;
-        }
-        this.tabbedVersionIds.add(artifact.ArtifactVersionID);
-        this.Model.OpenArtifactTab(artifact, false);
-      }
     }
   }
 

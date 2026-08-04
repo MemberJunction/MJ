@@ -3,15 +3,16 @@
  * @module @memberjunction/ng-react/utilities
  */
 
-import { 
-  Metadata, 
-  RunView, 
-  RunQuery, 
-  RunViewParams, 
+import {
+  Metadata,
+  RunView,
+  RunQuery,
+  RunViewParams,
   RunQueryParams,
   LogError,
   BaseEntity,
-  IEntityDataProvider
+  IEntityDataProvider,
+  UserInfo
 } from '@memberjunction/core';
 
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
@@ -21,6 +22,10 @@ import {
   SimpleAITools,
   SimpleGeoDataEngine,
   SimpleMetadata,
+  SimpleMLTools,
+  SimpleMLModelInfo,
+  SimpleMLListModelsFilter,
+  SimpleMLScoreResult,
   SimpleRunQuery,
   SimpleRunView,
   SimpleExecutePromptParams,
@@ -30,6 +35,11 @@ import {
 } from '@memberjunction/interactive-component-types';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
+import {
+  MJMLModelEntity,
+  PredictiveStudioScoreRecordSetOperation,
+  PredictiveStudioScoreRecordSetInput
+} from '@memberjunction/core-entities';
 
 /**
  * Base class for providing runtime utilities to React components in Angular.
@@ -61,7 +71,8 @@ export class RuntimeUtilities {
       rv: this.CreateSimpleRunView(rv),
       rq: this.CreateSimpleRunQuery(rq),
       ai: this.CreateSimpleAITools(),
-      geoDataEngine: this.CreateSimpleGeoDataEngine()
+      geoDataEngine: this.CreateSimpleGeoDataEngine(),
+      ml: this.CreateSimpleMLTools()
     };
     return u;
   }
@@ -141,6 +152,168 @@ export class RuntimeUtilities {
       
       VectorService: new SimpleVectorService()
     };
+  }
+
+  /**
+   * Creates the ML tools surface for components — listing trained models and scoring records.
+   * `listModels` reads the `MJ: ML Models` catalog via RunView; `score` marshals the
+   * `PredictiveStudio.ScoreRecordSet` Remote Operation over GraphQL to the server engine (the
+   * Python sidecar lives server-side and cannot run in the browser). Returns `undefined` when no
+   * GraphQL provider is available, so the `ml` capability degrades cleanly.
+   */
+  private CreateSimpleMLTools(): SimpleMLTools | undefined {
+    const provider = BaseEntity.Provider;
+    // Scoring requires a GraphQL provider to route the Remote Operation to the server engine.
+    if (!(provider instanceof GraphQLDataProvider)) {
+      return undefined;
+    }
+    const graphQLProvider = provider as GraphQLDataProvider;
+
+    return {
+      listModels: (filter?: SimpleMLListModelsFilter, contextUser?: UserInfo): Promise<SimpleMLModelInfo[]> =>
+        this.listMLModels(filter, contextUser),
+
+      score: (
+        modelId: string,
+        records: Array<Record<string, unknown> | string>,
+        options?: { primaryKeyField?: string; contextUser?: UserInfo }
+      ): Promise<SimpleMLScoreResult> => this.scoreMLRecords(graphQLProvider, modelId, records, options)
+    };
+  }
+
+  /**
+   * Loads the trained-model catalog from `MJ: ML Models`, newest version first, mapping each row
+   * to a {@link SimpleMLModelInfo}. Resilient — logs and returns `[]` on any failure.
+   */
+  private async listMLModels(filter?: SimpleMLListModelsFilter, contextUser?: UserInfo): Promise<SimpleMLModelInfo[]> {
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<MJMLModelEntity>(
+        {
+          EntityName: 'MJ: ML Models',
+          ExtraFilter: this.buildMLModelsFilter(filter),
+          OrderBy: 'Version DESC',
+          MaxRows: filter?.maxResults,
+          ResultType: 'entity_object'
+        },
+        contextUser
+      );
+      if (!result.Success) {
+        console.error(`❌ listModels failed for MJ: ML Models: ${result.ErrorMessage}`);
+        return [];
+      }
+      return result.Results.map((m) => this.mapMLModel(m));
+    } catch (error) {
+      LogError(error);
+      return [];
+    }
+  }
+
+  /**
+   * Builds the ExtraFilter clause for {@link listMLModels}. Defaults to `Status='Published'` so
+   * components only see promoted models unless the caller overrides the status.
+   */
+  private buildMLModelsFilter(filter?: SimpleMLListModelsFilter): string {
+    const clauses: string[] = [];
+    const status = filter?.status ?? 'Published';
+    clauses.push(`Status='${this.escapeSqlLiteral(status)}'`);
+    if (filter?.targetVariable) {
+      clauses.push(`TargetVariable='${this.escapeSqlLiteral(filter.targetVariable)}'`);
+    }
+    return clauses.join(' AND ');
+  }
+
+  /** Maps a single `MJ: ML Models` row to the component-facing {@link SimpleMLModelInfo} shape. */
+  private mapMLModel(m: MJMLModelEntity): SimpleMLModelInfo {
+    return {
+      id: m.ID,
+      pipeline: m.Pipeline,
+      version: m.Version,
+      targetVariable: m.TargetVariable,
+      problemType: m.ProblemType,
+      status: m.Status,
+      metrics: this.parseMLMetrics(m.Metrics),
+      holdoutMetrics: this.parseMLMetrics(m.HoldoutMetrics)
+    };
+  }
+
+  /** Defensively parses a JSON metrics blob; returns `undefined` for null/empty/invalid JSON. */
+  private parseMLMetrics(raw: string | null): Record<string, unknown> | undefined {
+    if (!raw) {
+      return undefined;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Scores records with a trained model by invoking the `PredictiveStudio.ScoreRecordSet` Remote
+   * Operation. Normalizes `records` to primary-key strings, requests ephemeral predictions (no
+   * write-back), and maps the result. Resilient — logs and returns a zeroed result with the input
+   * records counted as failed on any error.
+   */
+  private async scoreMLRecords(
+    provider: GraphQLDataProvider,
+    modelId: string,
+    records: Array<Record<string, unknown> | string>,
+    options?: { primaryKeyField?: string; contextUser?: UserInfo }
+  ): Promise<SimpleMLScoreResult> {
+    const keys = this.normalizeRecordKeys(records, options?.primaryKeyField ?? 'ID');
+    try {
+      const input: PredictiveStudioScoreRecordSetInput = {
+        modelId,
+        scope: { records: keys }
+        // No writeBack → predictions are returned ephemerally.
+      };
+      const op = new PredictiveStudioScoreRecordSetOperation();
+      const result = await op.Execute(input, { provider, user: options?.contextUser });
+      if (!result.Success || !result.Output) {
+        console.error(`❌ score failed for model ${modelId}: ${result.ErrorMessage}`);
+        return { scoredCount: 0, failedCount: keys.length, skippedCount: 0, predictions: [] };
+      }
+      const out = result.Output;
+      return {
+        scoredCount: out.scored,
+        failedCount: out.failed,
+        skippedCount: out.skipped,
+        predictions: (out.predictions ?? []).map((p) => ({
+          recordId: p.recordId,
+          score: p.score,
+          class: p.class
+        }))
+      };
+    } catch (error) {
+      LogError(error);
+      return { scoredCount: 0, failedCount: keys.length, skippedCount: 0, predictions: [] };
+    }
+  }
+
+  /**
+   * Normalizes a mixed array of primary-key strings and row objects into an array of primary-key
+   * strings, reading `primaryKeyField` from objects. Drops entries without a resolvable key.
+   */
+  private normalizeRecordKeys(records: Array<Record<string, unknown> | string>, primaryKeyField: string): string[] {
+    const keys: string[] = [];
+    for (const r of records) {
+      if (typeof r === 'string') {
+        keys.push(r);
+      } else if (r != null) {
+        const value = r[primaryKeyField];
+        if (value != null) {
+          keys.push(String(value));
+        }
+      }
+    }
+    return keys;
+  }
+
+  /** Escapes single quotes for safe inlining into a RunView ExtraFilter SQL string literal. */
+  private escapeSqlLiteral(value: string): string {
+    return value.replace(/'/g, "''");
   }
 
   private CreateSimpleMetadata(md: Metadata): SimpleMetadata {

@@ -234,7 +234,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
      * NOT NULL string fields get empty string; nullable fields get null.
      */
     private GetEmptyValueForField(context: ArchiveRecordContext, fieldName: string): string | null {
-        const fieldInfo = context.Record.EntityInfo.Fields.find(f => f.Name === fieldName);
+        const fieldInfo = context.Record.EntityInfo.FieldByName(fieldName);
         if (fieldInfo && !fieldInfo.AllowsNull) {
             return '';
         }

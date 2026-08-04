@@ -9,8 +9,9 @@ import {
   MJDropdownComponent,
   MJNumericInputComponent,
   MJSwitchComponent,
-  MJAccordionPanelComponent,
-  MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent
+  MJAccordionModule,
+  MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent,
+  MJEmptyStateComponent
 } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 
@@ -55,10 +56,11 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     MJDropdownComponent,
     MJNumericInputComponent,
     MJSwitchComponent,
-    MJAccordionPanelComponent,
+    MJAccordionModule,
     MJDialogComponent,
     MJDialogTitlebarComponent,
     MJDialogActionsComponent,
+    MJEmptyStateComponent,
     AngularSplitModule,
     // MemberJunction
     ContainerDirectivesModule,

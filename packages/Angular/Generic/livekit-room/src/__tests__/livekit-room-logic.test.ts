@@ -90,6 +90,15 @@ describe('selectSpotlight', () => {
     expect(selectSpotlight(state({ Local: view('me', { IsLocal: true }) }), null, true)?.Identity).toBe('me');
     expect(selectSpotlight(state(), null, true)).toBeNull();
   });
+  it('features a SPEAKING agent via IsSpeaking even when ActiveSpeakerIdentities omits it (server-published agent)', () => {
+    const s = state({
+      Local: view('me', { IsLocal: true }),
+      Remote: [view('human'), view('bot', { Role: 'agent', IsSpeaking: true })],
+      ActiveSpeakerIdentities: [], // native dominant-speaker list misses the server-published agent
+    });
+    // Without the IsSpeaking fallback this would pick 'human' (first remote); with it, the speaking bot wins.
+    expect(selectSpotlight(s, null, true)?.Identity).toBe('bot');
+  });
 });
 
 describe('selectFilmstrip', () => {

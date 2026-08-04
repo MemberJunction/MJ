@@ -1,26 +1,30 @@
 import { Subject } from 'rxjs';
 import type { TemplateRef } from '@angular/core';
 import type { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ChannelTabColor } from './realtime-surface-tab-style';
 
 /**
  * The kind of a surface-panel tab:
- *  - `activity` — the always-present first tab hosting the session activity rail.
- *  - `artifact` — one tab per artifact produced by a delegated run (auto-opened on arrival).
+ *  - `activity` — the session-activity tab (pinned LAST, right-aligned). Hosts the activity
+ *    rail AND, since the artifact redesign, the inline artifact previews + the split-pane
+ *    artifact viewer. Shown only once ≥1 agent run has occurred (see
+ *    {@link RealtimeSurfaceTabsModel.SetShowActivityTab}).
  *  - `channel`  — an interactive-channel surface (e.g. the Whiteboard). Registered per
- *    registry-resolved plugin via {@link RealtimeSurfaceTabsModel.RegisterChannelTab};
- *    renders the plugin's dynamically-created surface component (or a registered template
- *    for legacy/template-based panes), with the "coming online…" placeholder until either
+ *    used channel via {@link RealtimeSurfaceTabsModel.RegisterChannelTab}; renders the
+ *    plugin's dynamically-created surface component (or a registered template for
+ *    legacy/template-based panes), with the "coming online…" placeholder until either
  *    is supplied.
+ *
+ * NOTE: artifacts NO LONGER get their own tab. A delegated run's artifacts now render
+ * INSIDE the Activity tab (inline previews + an `as-split` viewer pane) — see
+ * `RealtimeActivityRailComponent`.
  */
-export type RealtimeSurfaceTabKind = 'activity' | 'artifact' | 'channel';
+export type RealtimeSurfaceTabKind = 'activity' | 'channel';
 
 /**
  * Per-kind payload carried on a {@link RealtimeSurfaceTab}.
  */
 export interface RealtimeSurfaceTabData {
-  /** For `artifact` tabs: the artifact this tab views (loaded by ArtifactID, latest version). */
-  Artifact?: ParsedDelegationArtifact;
   /**
    * For `channel` tabs: the channel PLUGIN whose surface component the pane creates
    * dynamically (and binds back to the plugin) — the registry-driven path every real
@@ -36,27 +40,32 @@ export interface RealtimeSurfaceTabData {
 }
 
 /**
- * One tab on the call overlay's tabbed surface panel (the right panel): Activity, an
- * artifact viewer, or an interactive-channel surface.
+ * One tab on the call overlay's tabbed surface panel (the right panel): a channel surface
+ * (left cluster) or the session-activity tab (right-aligned).
  */
 export interface RealtimeSurfaceTab {
-  /** Stable unique key (`activity`, `artifact:<versionId>`, or the channel's registered key). */
+  /** Stable unique key (`activity`, or the channel's registered key). */
   Key: string;
-  /** Tab strip label (artifact tabs use the artifact's name). */
+  /** Tab strip label (channel name, or "Activity"). */
   Title: string;
-  /** Font Awesome icon class for the tab strip (e.g. `fa-solid fa-file-lines`). */
+  /** Font Awesome icon class for the tab strip (e.g. `fa-solid fa-chalkboard`). */
   Icon: string;
   /** What the tab renders. */
   Kind: RealtimeSurfaceTabKind;
+  /**
+   * Accent color for the tab's dot + active underline. Channel tabs carry a distinct color
+   * (plugin-supplied or a deterministic hash of the name); the Activity tab uses its own
+   * fixed accent in CSS, so its `Color` is left undefined.
+   */
+  Color?: string;
   /** Kind-specific payload. */
   Data?: RealtimeSurfaceTabData;
 }
 
 /**
  * Registration for an interactive-channel tab. The overlay shell registers one per
- * registry-resolved channel plugin (supplying {@link Plugin}); supplying {@link Plugin}
- * or {@link Content} later under the same `Key` upgrades a placeholder tab to the real
- * surface.
+ * USED channel plugin (supplying {@link Plugin}); supplying {@link Plugin} or
+ * {@link Content} later under the same `Key` upgrades a placeholder tab to the real surface.
  */
 export interface RealtimeChannelTabRegistration {
   /** Stable channel key (the plugin's `ChannelName`, e.g. `Whiteboard`). Re-registering the same key updates the tab. */
@@ -65,6 +74,11 @@ export interface RealtimeChannelTabRegistration {
   Title: string;
   /** Font Awesome icon class (e.g. `fa-solid fa-chalkboard`). */
   Icon: string;
+  /**
+   * Optional explicit accent color for the tab. When omitted, a deterministic color is
+   * derived from {@link Key} so every channel tab still reads as a distinct surface.
+   */
+  Color?: string | null;
   /** The channel plugin whose surface the pane creates + binds. Preferred over {@link Content}. */
   Plugin?: BaseRealtimeChannelClient;
   /** A template-based pane body (legacy/bespoke panes). Omit both to show the "coming online…" placeholder. */
@@ -75,111 +89,102 @@ export interface RealtimeChannelTabRegistration {
 
 /**
  * Framework-free state for the call overlay's tabbed surface panel: the ordered tab list
- * (CHANNEL tabs first — the marquee surfaces — then artifact tabs in arrival order, with
- * Activity pinned LAST), the active tab, the transient "flash" highlight for a
- * just-arrived tab, and the persistent UNSEEN glow for content that arrived without
- * stealing focus (an artifact tab glows until the user visits it).
+ * (CHANNEL tabs first — the marquee surfaces, left cluster — with the session-activity tab
+ * pinned LAST and right-aligned by the strip), the active tab, and the transient "flash"
+ * highlight for a just-revealed channel tab.
+ *
+ * The Activity tab is GATED: it isn't listed until {@link SetShowActivityTab}(true) — i.e.
+ * once ≥1 agent run has occurred (or in review mode). Channel tabs appear only as channels
+ * come into play (the whiteboard up-front; every other channel on first use), so an
+ * idle voice-first session shows an empty/near-empty strip rather than a row of unused tabs.
  *
  * Owned by `RealtimeSurfaceTabsComponent`; kept free of Angular runtime imports so the
- * add / focus / dedupe / flash / unseen logic is unit-testable in isolation. All
- * collections are REPLACED (never mutated) on change, and every change emits {@link Changed$}.
+ * add / focus / dedupe / flash logic is unit-testable in isolation. All collections are
+ * REPLACED (never mutated) on change, and every change emits {@link Changed$}.
  */
 export class RealtimeSurfaceTabsModel {
-  /** The fixed key of the always-present Activity tab (pinned as the LAST tab). */
+  /** The fixed key of the session-activity tab (pinned LAST, right-aligned). */
   public static readonly ActivityTabKey = 'activity';
 
-  /** The ordered tabs (channels… · artifacts… · Activity last). Replaced immutably on every change. */
-  public Tabs: RealtimeSurfaceTab[] = [
-    { Key: RealtimeSurfaceTabsModel.ActivityTabKey, Title: 'Activity', Icon: 'fa-solid fa-list-check', Kind: 'activity' }
-  ];
+  /** The activity tab definition, appended last whenever {@link showActivity} is true. */
+  private static readonly ActivityTab: RealtimeSurfaceTab = {
+    Key: RealtimeSurfaceTabsModel.ActivityTabKey,
+    Title: 'Activity',
+    Icon: 'fa-solid fa-wave-square',
+    Kind: 'activity'
+  };
+
+  /** Channel tabs (left cluster), in registration order. Replaced immutably on change. */
+  private channelTabs: RealtimeSurfaceTab[] = [];
+
+  /** Whether the gated Activity tab is currently shown (≥1 agent run, or review mode). */
+  private showActivity = false;
 
   /** Key of the currently focused tab. */
   public ActiveKey: string = RealtimeSurfaceTabsModel.ActivityTabKey;
 
   /**
-   * Key of the tab currently "flashing" (the brief violet highlight a just-arrived
-   * artifact tab gets, per the mockup). Cleared by the owning component after a beat
-   * via {@link ClearFlash}.
+   * Key of the tab currently "flashing" (the brief highlight a just-revealed channel tab
+   * gets when the agent first acts on it). Cleared by the owning component after a beat via
+   * {@link ClearFlash}.
    */
   public FlashKey: string | null = null;
-
-  /**
-   * Tabs holding content the user hasn't visited yet (the persistent glow): an artifact
-   * tab that arrived WITHOUT stealing focus stays marked until it is focused. Replaced
-   * immutably on change.
-   */
-  private unseenKeys: ReadonlySet<string> = new Set<string>();
 
   /** Emits after every model change so the owning component can mark for check. */
   public readonly Changed$ = new Subject<void>();
 
-  /** The currently focused tab (always resolvable — Activity is never removed). */
-  public get ActiveTab(): RealtimeSurfaceTab {
-    return this.Tabs.find(t => t.Key === this.ActiveKey)
-      ?? this.Tabs.find(t => t.Key === RealtimeSurfaceTabsModel.ActivityTabKey)
-      ?? this.Tabs[0];
+  /**
+   * The ordered tabs: channel tabs (left), then the Activity tab LAST when shown. The strip
+   * right-aligns the Activity tab via a flex spacer, so this order also matches reading order.
+   */
+  public get Tabs(): RealtimeSurfaceTab[] {
+    return this.showActivity
+      ? [...this.channelTabs, RealtimeSurfaceTabsModel.ActivityTab]
+      : [...this.channelTabs];
   }
 
-  /** True while the tab with `key` holds content the user hasn't visited (glow state). */
-  public IsUnseen(key: string): boolean {
-    return this.unseenKeys.has(key);
-  }
-
-  /** The stable tab key for an artifact (one tab per produced artifact VERSION). */
-  public static ArtifactTabKey(artifact: ParsedDelegationArtifact): string {
-    return `artifact:${artifact.ArtifactVersionID}`;
+  /** Whether the Activity tab is currently part of the strip. */
+  public get IsActivityShown(): boolean {
+    return this.showActivity;
   }
 
   /**
-   * Opens (or re-focuses) the tab for an artifact a delegated run produced.
-   *
-   * First arrival: inserts an `artifact` tab AFTER existing channel/artifact tabs but
-   * BEFORE the pinned-last Activity tab, marks it as the {@link FlashKey}, and — unless
-   * `focus` is true — leaves focus alone and marks the tab UNSEEN (it glows until
-   * visited; per product direction a finished artifact never steals the screen, only the
-   * agent's first channel activity does). Subsequent calls for the same artifact version
-   * just (optionally) focus the existing tab — no duplicate, no re-flash.
-   *
-   * @param artifact The produced artifact (id + version id + display name).
-   * @param focus Whether to focus the tab (default `false` — glow, don't grab).
-   * @param markUnseen Whether an unfocused first arrival glows (default `true`). Pass
-   *   `false` for HISTORY artifacts (session-review carryover) — they're context, not news.
-   * @returns The (new or existing) tab.
+   * The currently focused tab. Resolves to the active key when it still exists, else falls
+   * back to the Activity tab (when shown), else the first channel tab, else the Activity tab
+   * definition (so a consumer always has SOMETHING to render even on an empty strip).
    */
-  public OpenArtifactTab(artifact: ParsedDelegationArtifact, focus: boolean = false, markUnseen: boolean = true): RealtimeSurfaceTab {
-    const key = RealtimeSurfaceTabsModel.ArtifactTabKey(artifact);
-    const existing = this.Tabs.find(t => t.Key === key);
-    if (existing) {
-      if (focus) {
-        this.Focus(key);
-      }
-      return existing;
+  public get ActiveTab(): RealtimeSurfaceTab {
+    const tabs = this.Tabs;
+    return tabs.find(t => t.Key === this.ActiveKey)
+      ?? tabs.find(t => t.Key === RealtimeSurfaceTabsModel.ActivityTabKey)
+      ?? tabs[0]
+      ?? RealtimeSurfaceTabsModel.ActivityTab;
+  }
+
+  /**
+   * Shows or hides the gated Activity tab. Turning it ON when an empty strip was implicitly
+   * focusing Activity keeps focus on Activity; turning it OFF while it was focused falls
+   * focus back to the first channel tab (if any). No-op (no emission) when unchanged.
+   *
+   * @param show Whether ≥1 agent run has occurred (or review mode) — the gate.
+   */
+  public SetShowActivityTab(show: boolean): void {
+    if (this.showActivity === show) {
+      return;
     }
-    const tab: RealtimeSurfaceTab = {
-      Key: key,
-      Title: artifact.Name,
-      Icon: 'fa-solid fa-file-lines',
-      Kind: 'artifact',
-      Data: { Artifact: artifact }
-    };
-    // Insert before the pinned-last Activity tab: channels… | artifacts… | Activity.
-    const at = this.activityIndex();
-    this.Tabs = [...this.Tabs.slice(0, at), tab, ...this.Tabs.slice(at)];
-    this.FlashKey = key;
-    if (focus) {
-      this.ActiveKey = key;
-    } else if (markUnseen) {
-      this.unseenKeys = new Set([...this.unseenKeys, key]);
+    this.showActivity = show;
+    if (!show && this.ActiveKey === RealtimeSurfaceTabsModel.ActivityTabKey) {
+      this.ActiveKey = this.channelTabs[0]?.Key ?? RealtimeSurfaceTabsModel.ActivityTabKey;
     }
     this.Changed$.next();
-    return tab;
   }
 
   /**
    * Registers (or updates) an interactive-channel tab. Re-registering an existing key
-   * replaces its title/icon/plugin/content in place (this is how a placeholder upgrades
-   * to the real surface once the channel comes online). New channel tabs lead the strip
-   * (before artifact tabs and the pinned-last Activity tab) — the marquee surfaces.
+   * replaces its title/icon/color/plugin/content in place (this is how a placeholder
+   * upgrades to the real surface once the channel comes online). New channel tabs join the
+   * left cluster in registration order. A registration without an explicit {@link
+   * RealtimeChannelTabRegistration.Color} gets a deterministic color from its key.
    *
    * @param registration The channel tab registration.
    * @returns The (new or updated) tab.
@@ -190,60 +195,38 @@ export class RealtimeSurfaceTabsModel {
       Title: registration.Title,
       Icon: registration.Icon,
       Kind: 'channel',
+      Color: registration.Color ?? ChannelTabColor(registration.Key),
       Data: { Plugin: registration.Plugin, Content: registration.Content }
     };
-    const idx = this.Tabs.findIndex(t => t.Key === registration.Key);
+    const idx = this.channelTabs.findIndex(t => t.Key === registration.Key);
     if (idx >= 0) {
-      const next = [...this.Tabs];
+      const next = [...this.channelTabs];
       next[idx] = tab;
-      this.Tabs = next;
+      this.channelTabs = next;
     } else {
-      // Insert after existing channel tabs, before artifacts and the pinned-last Activity.
-      const firstNonChannel = this.Tabs.findIndex(t => t.Kind !== 'channel');
-      const at = firstNonChannel >= 0 ? firstNonChannel : this.Tabs.length;
-      this.Tabs = [...this.Tabs.slice(0, at), tab, ...this.Tabs.slice(at)];
+      this.channelTabs = [...this.channelTabs, tab];
     }
     if (registration.Focus) {
       this.ActiveKey = tab.Key;
-      this.markSeen(tab.Key);
     }
     this.Changed$.next();
     return tab;
   }
 
-  /** Focuses the tab with `key` (no-op when it doesn't exist); visiting clears its unseen glow. */
+  /** Focuses the tab with `key` (no-op when it doesn't exist or is already active). */
   public Focus(key: string): void {
-    if (!this.Tabs.some(t => t.Key === key)) {
+    if (!this.Tabs.some(t => t.Key === key) || this.ActiveKey === key) {
       return;
     }
-    const changed = this.ActiveKey !== key || this.unseenKeys.has(key);
     this.ActiveKey = key;
-    this.markSeen(key);
-    if (changed) {
-      this.Changed$.next();
-    }
-  }
-
-  /** The index of the pinned-last Activity tab (insertion boundary for content tabs). */
-  private activityIndex(): number {
-    const idx = this.Tabs.findIndex(t => t.Key === RealtimeSurfaceTabsModel.ActivityTabKey);
-    return idx >= 0 ? idx : this.Tabs.length;
-  }
-
-  /** Clears a tab's unseen glow (no emission of its own — callers emit). */
-  private markSeen(key: string): void {
-    if (this.unseenKeys.has(key)) {
-      const next = new Set(this.unseenKeys);
-      next.delete(key);
-      this.unseenKeys = next;
-    }
+    this.Changed$.next();
   }
 
   /**
-   * Marks the tab with `key` as the {@link FlashKey} (the brief violet "just arrived"
-   * highlight) WITHOUT changing focus — used by the auto-reveal path when the agent first
-   * acts on a channel, so the user's eye lands on the tab that just came alive. No-op for
-   * unknown keys; the owning component clears it after a beat via {@link ClearFlash}.
+   * Marks the tab with `key` as the {@link FlashKey} (the brief "just arrived" highlight)
+   * WITHOUT changing focus — used by the auto-reveal path when the agent first acts on a
+   * channel, so the user's eye lands on the tab that just came alive. No-op for unknown
+   * keys; the owning component clears it after a beat via {@link ClearFlash}.
    */
   public FlashTab(key: string): void {
     if (this.FlashKey === key || !this.Tabs.some(t => t.Key === key)) {
@@ -254,27 +237,29 @@ export class RealtimeSurfaceTabsModel {
   }
 
   /**
-   * Removes the tab with `key`. Rules:
-   *  - the Activity tab is IRREMOVABLE (always the panel's first tab) — removing it is a no-op;
+   * Removes the channel tab with `key`. Rules:
+   *  - the Activity tab is IRREMOVABLE — removing it is a no-op;
    *  - an unknown key is a no-op (returns `false`);
-   *  - when the removed tab was focused, focus falls back to the Activity tab;
+   *  - when the removed tab was focused, focus falls back to the Activity tab (if shown),
+   *    else the first remaining channel tab;
    *  - a pending flash on the removed tab is cleaned up so the highlight can't dangle.
    *
    * @param key The tab key to remove.
    * @returns `true` when a tab was removed.
    */
   public RemoveTab(key: string): boolean {
-    if (key === RealtimeSurfaceTabsModel.ActivityTabKey || !this.Tabs.some(t => t.Key === key)) {
+    if (key === RealtimeSurfaceTabsModel.ActivityTabKey || !this.channelTabs.some(t => t.Key === key)) {
       return false;
     }
-    this.Tabs = this.Tabs.filter(t => t.Key !== key);
+    this.channelTabs = this.channelTabs.filter(t => t.Key !== key);
     if (this.ActiveKey === key) {
-      this.ActiveKey = RealtimeSurfaceTabsModel.ActivityTabKey;
+      this.ActiveKey = this.showActivity
+        ? RealtimeSurfaceTabsModel.ActivityTabKey
+        : (this.channelTabs[0]?.Key ?? RealtimeSurfaceTabsModel.ActivityTabKey);
     }
     if (this.FlashKey === key) {
       this.FlashKey = null;
     }
-    this.markSeen(key); // a removed tab can't dangle an unseen glow
     this.Changed$.next();
     return true;
   }
@@ -298,8 +283,6 @@ export class RealtimeSurfaceTabsModel {
  *  - review mode actually registered a whiteboard tab (otherwise there is nothing stale);
  *  - the live session's resolved channel set has NO Whiteboard channel — when it HAS one, the
  *    live plugin re-registers the same tab key and upgrades the pane in place instead.
- *
- * Review ARTIFACT tabs are deliberately NOT removed — they are wanted carryover.
  *
  * Kept framework-free (like the model) so the rule is unit-testable in isolation.
  */

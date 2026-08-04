@@ -1,11 +1,14 @@
 import { defineProject, mergeConfig } from 'vitest/config';
-import sharedConfig from '../../../../vitest.shared';
+import domSharedConfig from '../../../../vitest.dom.shared';
 
+// Single DOM preset. forms has only pure-logic class-level specs under src/__tests__
+// (none mock '@angular/core'), so they run fine under the jsdom/Angular-compile path
+// alongside the new *.component.dom.test.ts specs. See guides/ANGULAR_TESTING_GUIDE.md §3b.
 export default mergeConfig(
-  sharedConfig,
+  domSharedConfig,
   defineProject({
     test: {
-      environment: 'node',
+      name: '@memberjunction/ng-forms',
     },
   })
 );

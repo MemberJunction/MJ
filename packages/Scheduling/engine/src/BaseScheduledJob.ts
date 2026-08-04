@@ -79,6 +79,17 @@ export interface ScheduledJobExecutionContext {
  */
 export abstract class BaseScheduledJob {
     /**
+     * Whether this driver is a BY-DESIGN high-frequency poller — a dispatcher that
+     * sweeps a work queue on a tight cron (e.g. every minute) and does bounded work
+     * per sweep. Overriding to `true` exempts jobs of this type from the engine's
+     * high-frequency cron warning banner. Leave `false` for ordinary jobs: the
+     * warning exists because a tight cron on a *work* job is usually a design smell.
+     */
+    public get IsHighFrequencyByDesign(): boolean {
+        return false;
+    }
+
+    /**
      * Execute the scheduled job
      *
      * This is the main entry point for job execution. The plugin should:

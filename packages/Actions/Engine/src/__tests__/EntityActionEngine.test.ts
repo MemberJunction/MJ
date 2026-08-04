@@ -7,13 +7,18 @@ const { mockClassFactory } = vi.hoisted(() => ({
         GetAllRegistrations: vi.fn().mockReturnValue([]),
     },
 }));
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    // Real MJLruCache — EntityActionInvocationTypes' script cache (and its caching tests) need the real one.
+    MJLruCache: (await importOriginal<typeof import('@memberjunction/global')>()).MJLruCache,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,
         },
     },
     RegisterClass: () => (target: Function) => target,
+    // No-op decorator factory — some classes in the ActionEngine module graph declare
+    // `@RequiresSubclass()`; the mock must expose it or module init throws on the missing export.
+    RequiresSubclass: () => (target: Function) => target,
     SafeJSONParse: vi.fn((str: string) => {
         try { return JSON.parse(str); } catch { return null; }
     }),

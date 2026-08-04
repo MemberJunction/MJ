@@ -1,6 +1,6 @@
 import { Observable, Subject, Subscription } from 'rxjs';
 import {
-  VoiceCaption, VoiceDelegationProgress, VoiceDelegationResult, VoiceDelegationNarration
+  RealtimeCaption, RealtimeDelegationProgress, RealtimeDelegationResult, RealtimeDelegationNarration
 } from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 
@@ -11,13 +11,13 @@ import { ParsedDelegationArtifact } from '../../services/delegation-result-parse
  */
 export interface RealtimeSessionStreams {
   /** Growing user/assistant caption list. */
-  Captions$: Observable<VoiceCaption[]>;
+  Captions$: Observable<RealtimeCaption[]>;
   /** Progress updates from delegated agent runs. */
-  DelegationProgress$: Observable<VoiceDelegationProgress>;
+  DelegationProgress$: Observable<RealtimeDelegationProgress>;
   /** Terminal delegation results. */
-  DelegationResult$: Observable<VoiceDelegationResult>;
+  DelegationResult$: Observable<RealtimeDelegationResult>;
   /** Ephemeral spoken progress narrations. */
-  DelegationNarration$: Observable<VoiceDelegationNarration>;
+  DelegationNarration$: Observable<RealtimeDelegationNarration>;
 }
 
 /**
@@ -248,7 +248,7 @@ export class RealtimeSessionState {
   }
 
   /** Appends any newly-arrived captions, keeping order relative to delegation cards. */
-  private onCaptions(captions: VoiceCaption[]): void {
+  private onCaptions(captions: RealtimeCaption[]): void {
     if (captions.length <= this.placedCaptionCount) {
       // Captions are cleared on a fresh session — reset all merge state.
       if (captions.length < this.placedCaptionCount) {
@@ -267,7 +267,7 @@ export class RealtimeSessionState {
   }
 
   /** Inserts a new working card, or immutably replaces the existing one for this CallID. */
-  private onProgress(progress: VoiceDelegationProgress): void {
+  private onProgress(progress: RealtimeDelegationProgress): void {
     const existing = this.cardsByCallId.get(progress.CallID);
     if (existing) {
       this.replaceCard({
@@ -283,7 +283,7 @@ export class RealtimeSessionState {
   }
 
   /** Creates a working card for a first-seen CallID and appends it to the thread tail. */
-  private insertCard(progress: VoiceDelegationProgress): void {
+  private insertCard(progress: RealtimeDelegationProgress): void {
     const card: RealtimeDelegationCardVM = {
       CallID: progress.CallID,
       AgentName: this.AgentName,
@@ -302,7 +302,7 @@ export class RealtimeSessionState {
   }
 
   /** Flips the card for a finished delegation to Done/Failed with its real result. */
-  private onResult(result: VoiceDelegationResult): void {
+  private onResult(result: RealtimeDelegationResult): void {
     const existing = this.cardsByCallId.get(result.CallID);
     if (!existing) {
       return; // non-delegation tool result (no card was ever created) — ignore
@@ -324,7 +324,7 @@ export class RealtimeSessionState {
   }
 
   /** Latest narration REPLACES the previous one (never accumulated). */
-  private onNarration(narration: VoiceDelegationNarration): void {
+  private onNarration(narration: RealtimeDelegationNarration): void {
     this.Narration = narration.Text;
     this.Changed$.next();
   }

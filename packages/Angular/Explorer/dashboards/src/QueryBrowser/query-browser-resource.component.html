@@ -72,18 +72,15 @@
 
       <!-- Empty -->
       @if (!isLoading && queries.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-database empty-icon"></i>
-          <p>No queries available</p>
-        </div>
+        <mj-empty-state Size="compact" Icon="fa-solid fa-database"
+          Title="No queries available" />
       }
 
       <!-- No results -->
       @if (!isLoading && searchText && filteredQueries.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-search empty-icon"></i>
-          <p>No queries match "{{ searchText }}"</p>
-        </div>
+        <mj-empty-state Size="compact" Variant="no-results"
+          Title="No queries found"
+          [Message]="NoQueryResultsMessage" />
       }
 
       <!-- Category Tree -->
@@ -108,16 +105,12 @@
   <div class="query-viewer-panel">
     <!-- No query selected -->
     @if (!selectedQuery) {
-      <div class="no-selection">
-        <i class="fa-solid fa-hand-pointer no-selection-icon"></i>
-        <p class="no-selection-message">Select a query from the list</p>
-        <p class="no-selection-hint">Click on a query to view and run it</p>
-        @if (CanCreateQuery) {
-          <button class="no-selection-create-btn" (click)="OpenCreateDrawer()">
-            <i class="fa-solid fa-plus"></i> New Query
-          </button>
-        }
-      </div>
+      <mj-empty-state class="no-selection" Icon="fa-solid fa-hand-pointer"
+        Title="Select a query from the list"
+        Message="Click on a query to view and run it"
+        [ActionText]="CanCreateQuery ? 'New Query' : ''"
+        ActionIcon="fa-solid fa-plus"
+        (Action)="OpenCreateDrawer()" />
     }
 
     <!-- Query Viewer -->
@@ -156,7 +149,8 @@
         (EntityLinkClick)="onEntityLinkClick($event)"
         (RowDoubleClick)="onRowDoubleClick($event)"
         (OpenQueryRecord)="onOpenQueryRecord($event)"
-        (CompositionTokenClick)="onCompositionTokenClick($event)">
+        (CompositionTokenClick)="onCompositionTokenClick($event)"
+        (QueryComplete)="onViewerQueryComplete($event)">
       </mj-query-viewer>
     }
   </div>

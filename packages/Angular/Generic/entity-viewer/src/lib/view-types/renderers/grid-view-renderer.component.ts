@@ -113,11 +113,13 @@ export interface GridViewConfig {
       #grid
       [Provider]="Provider"
       [Data]="records"
+      [ExportDataProvider]="exportDataProvider"
       [Params]="effectiveParams"
       [FilterText]="filterText ?? ''"
       [GridState]="config.gridState ?? null"
       [Height]="'auto'"
       [AllowLoad]="false"
+      [AutoLoadEntityActions]="AutoLoadEntityActions"
       [ShowToolbar]="effectiveShowToolbar"
       [ToolbarConfig]="config.toolbarConfig ?? {}"
       [SelectionMode]="effectiveSelectionMode"
@@ -137,6 +139,7 @@ export interface GridViewConfig {
       (AddToListRequested)="onAddToListRequested($event)"
       (ForeignKeyClick)="onForeignKeyClick($event)"
       (PageChange)="onPageChange($event)"
+      (ManageColumnsRequested)="configureRequested.emit()"
     >
     </mj-entity-data-grid>
 
@@ -191,6 +194,12 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   /** The records to render (already loaded / filtered / paged by the host). Fed into `[Data]`. */
   @Input() records: Record<string, unknown>[] = [];
 
+  /**
+   * Optional full-result-set fetcher supplied by the host, forwarded to the grid's ExportDataProvider
+   * so exports cover every matching row rather than just the loaded page (bug C1).
+   */
+  @Input() exportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
+
   /** Primary-key string of the currently selected record, if any. */
   @Input() selectedRecordId: string | null = null;
 
@@ -199,6 +208,13 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
 
   /** Opaque per-view configuration. Seeds the grid bindings; mutated + re-emitted on grid changes. */
   @Input() config: GridViewConfig = {};
+
+  /**
+   * When true (default), the grid self-loads the entity's active EntityActions and shows them — buttons
+   * appear only for entities that actually have actions (data-driven). Actions whose invocation names a
+   * `RuntimeUXDriverClass` mount that interactive driver (e.g. the Record Process runner) in-place.
+   */
+  @Input() AutoLoadEntityActions = true;
 
   // ---- IViewRenderer generic data-context inputs ----
 
@@ -229,6 +245,14 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   @Output() dataRequest = new EventEmitter<ViewDataRequest>();
 
   /**
+   * Ask the host to open this view's configuration UI. Raised when the grid emits
+   * `ManageColumnsRequested` (its "Manage Columns" toolbar affordance). Part of the generic
+   * {@link IViewRenderer} contract; the container forwards it to the workspace, which opens the
+   * config panel (Columns tab) — the canonical column editor.
+   */
+  @Output() configureRequested = new EventEmitter<void>();
+
+  /**
    * NAVIGATION: open a related record on a (possibly different) entity from a foreign-key cell click.
    * Routing lives in the outer app, so this is one of the few signals that legitimately bubbles up.
    */
@@ -242,6 +266,23 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * selection is mapped from the {@link records} input rather than read from the grid, per contract.
    */
   @ViewChild('grid') protected grid?: EntityDataGridComponent;
+
+  /**
+   * IMPERATIVE export entry point ({@link IViewRenderer.exportRecords}). Lets the host trigger
+   * an export programmatically (ultimately for the AI agent) by delegating to the hosted grid's
+   * self-contained {@link EntityDataGridComponent.Export} (which downloads the file). The grid's
+   * toolbar export button remains the interactive path; this is the no-UI equivalent.
+   *
+   * @param format optional output format; the grid defaults to 'excel' when omitted.
+   * @returns true when the export succeeded, false when the grid isn't ready or the export failed.
+   */
+  async exportRecords(format?: 'csv' | 'excel' | 'json'): Promise<boolean> {
+    if (!this.grid) {
+      return false;
+    }
+    const result = await this.grid.Export(format ? { format } : undefined, true);
+    return !!result?.success;
+  }
 
   // ================================================================
   // Self-contained dialog state (never surfaced to the host)

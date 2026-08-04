@@ -8,10 +8,12 @@ import { UserInfo } from '@memberjunction/core';
 import { SuiteFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
-import { loadCLIConfig } from '../utils/config-loader';
+import { loadMJConfig, loadCLIConfig } from '../utils/config-loader';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 import { parseVariableFlags } from '../utils/variable-parser';
 import { loadOraclesModule } from '../utils/oracle-module-loader';
+import { loadCheckModules } from '../utils/check-module-loader';
+import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
 
 /**
  * Suite command - Execute a test suite
@@ -28,6 +30,45 @@ export class SuiteCommand {
      */
     async execute(suiteId: string | undefined, flags: SuiteFlags, contextUser?: UserInfo): Promise<void> {
         try {
+            // Integration tests must install the instrumented cache as the FIRST caller
+            // (before any provider setup) or its counters are a silent no-op. Opt-in via
+            // MJ_INTEGRATION_TEST=1 so every other suite run is byte-for-byte unchanged.
+            // A null return means the cache was ALREADY initialized elsewhere — fail fast with an
+            // actionable message rather than proceeding uninstrumented and failing later with a
+            // confusing "cache not installed first" error (S10).
+            if (process.env.MJ_INTEGRATION_TEST === '1') {
+                const installed = await installInstrumentedCacheFirst();
+                if (installed === null) {
+                    console.error(OutputFormatter.formatError(
+                        'MJ_INTEGRATION_TEST=1 but the local cache was already initialized by another component, ' +
+                        'so the instrumented cache could not be installed first. Run integration tests in a dedicated ' +
+                        'process (they cannot run inside a live MJAPI).'
+                    ));
+                    process.exit(2);
+                }
+            }
+
+            // Preload integration-check modules — the seam that lets this PUBLISHED CLI run
+            // check bundles living in packages it must not depend on (MJ's own suite is the
+            // private @memberjunction/integration-test-suite). Durable form: mj.config.cjs
+            // `testing.checkModules`; ad-hoc form: --checks-module. Runs AFTER the
+            // instrumented-cache install (first-caller invariant) and BEFORE the provider +
+            // engine so bundles are registered by the time the driver resolves them.
+            const mjConfig = await loadMJConfig();
+            const checkModuleSpecifiers = [
+                ...(mjConfig?.testing?.checkModules ?? []),
+                ...(flags.checksModule ? [flags.checksModule] : []),
+            ];
+            if (checkModuleSpecifiers.length > 0) {
+                const checkSummary = await loadCheckModules(checkModuleSpecifiers);
+                if (checkSummary.loaded.length > 0) {
+                    console.log(`Loaded check modules: ${checkSummary.loaded.join(', ')} (bundles added: ${checkSummary.newBundles.length})`);
+                }
+                for (const f of checkSummary.failed) {
+                    console.warn(`Check module '${f.specifier}' failed to load: ${f.error}`);
+                }
+            }
+
             // Initialize MJ provider (database connection and metadata)
             console.log('Initializing MJ provider...');
             await initializeMJProvider();
@@ -71,6 +112,12 @@ export class SuiteCommand {
                 console.log(`Looking for suite by ID: ${suiteId}`);
                 suite = engine.GetTestSuiteByID(suiteId);
                 if (!suite) {
+                    // DX fallback: the positional arg is documented as accepting a suite NAME
+                    // too (`mj test suite "Integration Tests — Deterministic"`). A name is never
+                    // a valid ID, so trying the name lookup on ID-miss is unambiguous.
+                    suite = engine.GetTestSuiteByName(suiteId);
+                }
+                if (!suite) {
                     console.error(OutputFormatter.formatError(`Test suite not found: ${suiteId}`));
                     console.error(`Available suites: ${engine.TestSuites?.map(s => s.Name).join(', ') || 'none'}`);
                     process.exit(1);
@@ -99,12 +146,18 @@ export class SuiteCommand {
                 : '';
             this.spinner.start(`Running test suite: ${suite.Name}${flakyMsg}...`);
 
+            // Integration tests share process-global singletons (LocalCacheManager, its
+            // instrumented counters, UserCache, Metadata.Provider). Two bundles running
+            // concurrently in one process would corrupt each other's counters and cache slots,
+            // so integration suites MUST run strictly serially (CANONICAL D). Force serial
+            // execution under MJ_INTEGRATION_TEST=1 regardless of any --parallel flag.
+            const integrationSerial = process.env.MJ_INTEGRATION_TEST === '1';
             const result = await engine.RunSuite(suite.ID, {
                 verbose: flags.verbose,
                 variables,
                 delayBetweenTests: flags.delay,
-                parallel: flags.parallel,
-                maxParallel: flags.maxParallel,
+                parallel: integrationSerial ? false : flags.parallel,
+                maxParallel: integrationSerial ? 1 : flags.maxParallel,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
             }, contextUser);
 

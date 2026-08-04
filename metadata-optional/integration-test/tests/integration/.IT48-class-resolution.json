@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT48 - ClassFactory Resolution Contracts",
+    "Description": "ClassFactory resolution contracts over the real registry: known entity subclass resolution, key-miss fallback, RequiresSubclass hard-fail, OptionalKeyedSpecialization silent probes. Read-only. Server transport (registry breadth).",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "ClassFactory resolution contracts over the real registry: known entity subclass resolution, key-miss fallback, RequiresSubclass hard-fail, OptionalKeyedSpecialization silent probes. Read-only. Server transport (registry breadth)."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "class-resolution"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "29C8F2FB-52B8-4983-B0B8-FF2DD1093C97"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T12:49:20.693Z",
+    "checksum": "138d7898bb676ddc49b021e4cf144adc9d7d161b3cc5288a354053b532ae0081"
+  }
+}

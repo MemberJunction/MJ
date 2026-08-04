@@ -131,6 +131,16 @@ describe('ConversationUtility', () => {
         it('should pass through text without tokens unchanged', () => {
             expect(ConversationUtility.ToPlainText('Regular text')).toBe('Regular text');
         });
+
+        it('should use a # prefix for entity mentions', () => {
+            const text = '@{"_mode":"mention","type":"entity","id":"e1","name":"Accounts"}';
+            expect(ConversationUtility.ToPlainText(text, agents, users)).toBe('#Accounts');
+        });
+
+        it('should use a # prefix for query mentions (matching entities, not @)', () => {
+            const text = '@{"_mode":"mention","type":"query","id":"q1","name":"Sales Pipeline"}';
+            expect(ConversationUtility.ToPlainText(text, agents, users)).toBe('#Sales Pipeline');
+        });
     });
 
     describe('ToAgentContext', () => {
@@ -159,6 +169,13 @@ describe('ConversationUtility', () => {
             expect(result).toContain('User submitted form with:');
             expect(result).toContain('"action":"create"');
         });
+
+        it('should mark query mentions with name and ID so a follow-up can act on them', () => {
+            const text = '@{"_mode":"mention","type":"query","id":"q1","name":"Sales Pipeline"}';
+            const result = ConversationUtility.ToAgentContext(text);
+
+            expect(result).toBe('query "Sales Pipeline" (ID: q1)');
+        });
     });
 
     describe('CreateMention', () => {
@@ -177,6 +194,15 @@ describe('ConversationUtility', () => {
 
             expect(result).toContain('"configurationId":"cfg1"');
             expect(result).toContain('"configurationName":"Config Name"');
+        });
+
+        it('should create entity and query mention tokens', () => {
+            const entity = ConversationUtility.CreateMention('entity', 'e1', 'Accounts');
+            expect(entity).toContain('"type":"entity"');
+
+            const query = ConversationUtility.CreateMention('query', 'q1', 'Sales Pipeline');
+            expect(query).toContain('"type":"query"');
+            expect(query).toContain('"name":"Sales Pipeline"');
         });
     });
 

@@ -1,0 +1,50 @@
+---
+title: MemberJunction
+description: The open-source, AI-native data platform. Unify your data, add intelligence, and build AI-native apps on top of it.
+template: splash
+editUrl: false
+hero:
+  tagline: The open-source, AI-native data platform. Unify your data. Add intelligence. Build AI-native apps on top of it.
+  image:
+    light: ../../assets/MJ_logo.webp
+    dark: ../../assets/MJ_logo_dark.png
+  actions:
+    - text: Get Started
+      link: ./getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: Skip the ops — run MJ on MJ Central
+      link: https://central.memberjunction.com
+      icon: rocket
+      variant: secondary
+    - text: GitHub
+      link: https://github.com/MemberJunction/MJ
+      icon: github
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+  <Card title="What is MemberJunction?" icon="information">
+    A metadata-driven platform that turns your database into a full application — typed entities, GraphQL APIs, Angular UI, validation, and audit trails, all generated. [Read the overview](./overview/).
+  </Card>
+  <Card title="Developer Guides" icon="open-book">
+    Forty-plus cross-cutting guides rendered straight from the repo — caching, dashboards, permissions, agent memory, and more. [Browse the guides](./guides/).
+  </Card>
+  <Card title="AI &amp; Agents" icon="seti:pipeline">
+    Fifteen-plus AI providers behind one abstraction, an agent framework, prompt engine, and published agent skills. [Explore AI &amp; Agents](./ai-and-agents/).
+  </Card>
+  <Card title="Package Directory" icon="seti:npm">
+    290+ modular TypeScript packages that work together or independently, each documented from its own README. [See all packages](./packages/).
+  </Card>
+  <Card title="API Reference" icon="document">
+    Full TypeDoc reference for every published package, regenerated on each release. [Open the API reference](./api/).
+  </Card>
+  <Card title="Ecosystem" icon="puzzle">
+    Skyway migrations, the Forge SQL GUI, the VSCode extension, and BizApps. [Meet the ecosystem](./ecosystem/).
+  </Card>
+  <Card title="Release Notes" icon="seti:clock">
+    What changed in each MemberJunction release, including the current LTS line. [See all releases](./releases/).
+  </Card>
+</CardGrid>

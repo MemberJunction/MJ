@@ -22,7 +22,9 @@ export class EntityPermissionsSelectorWithGridComponent extends BaseAngularCompo
 
   public entityList: EntityInfo[] = [];
   public ngOnInit(): void {
-    this.entityList = this.ProviderToUse.Entities.sort((a, b) => a.Name.localeCompare(b.Name));
+    // Copy before sorting — provider.Entities is the provider's live (shared) metadata
+    // array; Array.prototype.sort would reorder it in place for every consumer.
+    this.entityList = [...this.ProviderToUse.Entities].sort((a, b) => a.Name.localeCompare(b.Name));
     if (this.entityList?.length > 0)
       this.CurrentEntity = this.entityList[0];
   }

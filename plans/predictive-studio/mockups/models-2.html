@@ -1,0 +1,186 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Model Registry Board</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 1280px){ .board { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 760px){ .board { grid-template-columns: 1fr; } }
+  .lane { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 240px; }
+  .lane-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--mj-border-subtle); position: sticky; top: 86px; background: var(--mj-bg-surface-card); border-radius: var(--radius) var(--radius) 0 0; z-index: 1; }
+  .lane-head .ic { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font-size: 12px; color: #fff; }
+  .lane-head h3 { font-size: 13px; }
+  .lane-head .ct { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--mj-text-muted); background: var(--mj-bg-surface-sunken); border-radius: 999px; padding: 2px 9px; }
+  .lane.draft     .lane-head .ic { background: #98a4b6; }
+  .lane.validated .lane-head .ic { background: #2050c8; }
+  .lane.published .lane-head .ic { background: #1f9d57; }
+  .lane.archived  .lane-head .ic { background: #7a8aa0; }
+  .lane-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; flex: 1; }
+  .mcard { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); padding: 13px 13px 11px; position: relative; }
+  .mcard:hover { box-shadow: var(--shadow); border-color: var(--mj-border-strong); }
+  .mcard.archived { opacity: .82; }
+  .mcard .top { display: flex; align-items: flex-start; gap: 8px; }
+  .mcard .mname { font-weight: 650; font-size: 13.5px; line-height: 1.25; color: var(--mj-text-primary); }
+  .mcard .sub { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 1px; }
+  .mcard .ver { margin-left: auto; }
+  .mcard .meta { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
+  .mcard .auc { margin-top: 11px; display: flex; align-items: baseline; gap: 8px; padding-top: 10px; border-top: 1px solid var(--mj-border-subtle); }
+  .mcard .auc .big { font-size: 22px; font-weight: 720; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .mcard .auc .lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); font-weight: 700; }
+  .mcard .auc .train { margin-left: auto; font-size: 11px; color: var(--mj-text-muted); font-variant-numeric: tabular-nums; }
+  .mcard .gap { font-size: 11px; color: var(--mj-text-muted); margin-top: 3px; }
+  .mcard .gap b.ok { color: var(--mj-success-text); } .mcard .gap b.warn { color: var(--mj-warning-text); }
+  .promote { display: flex; align-items: center; gap: 7px; margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--mj-border-default); }
+  .promote .lbl { font-size: 11px; color: var(--mj-text-muted); font-weight: 600; }
+  .promote .btn { margin-left: auto; }
+  .leak { margin-top: 10px; }
+  .leak .callout { padding: 9px 11px; }
+  .leak .callout i { font-size: 13px; } .leak .callout .small { line-height: 1.35; }
+  .legend { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; font-size: 12px; color: var(--mj-text-secondary); }
+  .legend .it { display: flex; align-items: center; gap: 7px; }
+  .legend .sw { width: 10px; height: 10px; border-radius: 3px; }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a><a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a><a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div><a><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a class="active"><i class="fa-solid fa-cubes"></i> Model Registry</a>
+  <a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><h1>Model Registry</h1><div class="crumb">Board view · lifecycle Draft → Validated → Published → Archived · immutable + versioned</div></div>
+  <div class="spacer"></div>
+  <button class="btn ghost sm"><i class="fa-solid fa-table-list"></i> List</button>
+  <button class="btn ghost sm"><i class="fa-solid fa-filter"></i> Filter</button>
+  <button class="btn primary"><i class="fa-solid fa-cube"></i> Register Model</button>
+</div><div class="ps-content">
+
+ <div class="legend">
+   <span class="muted small" style="font-weight:600">Each card shows its honest <b style="color:var(--mj-text-secondary)">Holdout AUC</b> — measured out-of-sample, never the optimistic train score.</span>
+   <span class="spacer" style="flex:1"></span>
+   <span class="it"><span class="sw" style="background:#98a4b6"></span> Draft</span>
+   <span class="it"><span class="sw" style="background:#2050c8"></span> Validated</span>
+   <span class="it"><span class="sw" style="background:#1f9d57"></span> Published</span>
+   <span class="it"><span class="sw" style="background:#7a8aa0"></span> Archived</span>
+ </div>
+
+ <div class="board">
+
+  <!-- DRAFT -->
+  <section class="lane draft">
+   <div class="lane-head"><span class="ic"><i class="fa-regular fa-pen-to-square"></i></span><h3>Draft</h3><span class="ct">1</span></div>
+   <div class="lane-body">
+     <article class="mcard">
+       <div class="top">
+         <div><div class="mname">Lead Score Model</div><div class="sub">conversion probability</div></div>
+         <span class="tag mono ver">v1</span>
+       </div>
+       <div class="meta"><span class="badge gray">Random Forest</span><span class="badge gray"><i class="fa-regular fa-pen-to-square"></i> Draft</span></div>
+       <div class="auc">
+         <div><div class="lbl">Holdout AUC</div><div class="big">0.790</div></div>
+         <span class="train">train 0.842</span>
+       </div>
+       <div class="gap">Train–holdout gap <b class="warn">0.052</b> · review before validating</div>
+       <div class="promote">
+         <span class="lbl">Not yet validated</span>
+         <button class="btn primary sm"><i class="fa-solid fa-vial-circle-check"></i> Validate</button>
+       </div>
+     </article>
+   </div>
+  </section>
+
+  <!-- VALIDATED -->
+  <section class="lane validated">
+   <div class="lane-head"><span class="ic"><i class="fa-solid fa-vial-circle-check"></i></span><h3>Validated</h3><span class="ct">2</span></div>
+   <div class="lane-body">
+     <article class="mcard">
+       <div class="top">
+         <div><div class="mname">Event Return Predictor</div><div class="sub">re-attendance likelihood</div></div>
+         <span class="tag mono ver">v1</span>
+       </div>
+       <div class="meta"><span class="badge blue">XGBoost</span><span class="badge blue"><i class="fa-solid fa-vial-circle-check"></i> Validated</span></div>
+       <div class="auc">
+         <div><div class="lbl">Holdout AUC</div><div class="big">0.880</div></div>
+         <span class="train">train 0.905</span>
+       </div>
+       <div class="gap">Train–holdout gap <b class="ok">0.025</b> · clean generalization</div>
+       <div class="promote">
+         <span class="lbl">Ready to publish</span>
+         <button class="btn primary sm"><i class="fa-solid fa-arrow-up-right-dots"></i> Publish</button>
+       </div>
+     </article>
+
+     <article class="mcard">
+       <div class="top">
+         <div><div class="mname">Lapse Risk Scorer</div><div class="sub">churn risk</div></div>
+         <span class="tag mono ver">v2</span>
+       </div>
+       <div class="meta"><span class="badge amber">LightGBM</span><span class="badge blue"><i class="fa-solid fa-vial-circle-check"></i> Validated</span></div>
+       <div class="auc">
+         <div><div class="lbl">Holdout AUC</div><div class="big">0.830</div></div>
+         <span class="train">train 0.858</span>
+       </div>
+       <div class="gap">Train–holdout gap <b class="ok">0.028</b> · within tolerance</div>
+       <div class="leak">
+         <div class="callout warn"><i class="fa-solid fa-triangle-exclamation"></i><div class="small"><b>Leakage sign-off required.</b> Feature <span class="mono">last_payment_lag</span> at <b>0.64</b> dominates — confirm it isn't a proxy for the label before publishing.</div></div>
+       </div>
+       <div class="promote">
+         <span class="lbl">Gate blocked</span>
+         <button class="btn sm" disabled style="opacity:.55;cursor:not-allowed"><i class="fa-solid fa-lock"></i> Publish</button>
+       </div>
+     </article>
+   </div>
+  </section>
+
+  <!-- PUBLISHED -->
+  <section class="lane published">
+   <div class="lane-head"><span class="ic"><i class="fa-solid fa-circle-check"></i></span><h3>Published</h3><span class="ct">1</span></div>
+   <div class="lane-body">
+     <article class="mcard" style="border-color:var(--mj-success);box-shadow:0 0 0 1px var(--mj-success-bg)">
+       <div class="top">
+         <div><div class="mname">Member Renewal Predictor</div><div class="sub">renewal probability · live</div></div>
+         <span class="tag mono ver">v4</span>
+       </div>
+       <div class="meta"><span class="badge blue">XGBoost</span><span class="badge green"><i class="fa-solid fa-circle-check"></i> Published</span><span class="badge gray"><i class="fa-solid fa-link"></i> 2 bindings</span></div>
+       <div class="auc">
+         <div><div class="lbl">Holdout AUC</div><div class="big" style="color:var(--mj-success-text)">0.864</div></div>
+         <span class="train">train 0.901</span>
+       </div>
+       <div class="gap">Train–holdout gap <b class="ok">0.037</b> · no overfitting flag · serving since 2h ago</div>
+       <div class="promote">
+         <span class="lbl">In production</span>
+         <button class="btn sm"><i class="fa-solid fa-box-archive"></i> Archive</button>
+       </div>
+     </article>
+   </div>
+  </section>
+
+  <!-- ARCHIVED -->
+  <section class="lane archived">
+   <div class="lane-head"><span class="ic"><i class="fa-solid fa-box-archive"></i></span><h3>Archived</h3><span class="ct">1</span></div>
+   <div class="lane-body">
+     <article class="mcard archived">
+       <div class="top">
+         <div><div class="mname">Member Renewal Predictor</div><div class="sub">superseded by v4</div></div>
+         <span class="tag mono ver">v3</span>
+       </div>
+       <div class="meta"><span class="badge blue">XGBoost</span><span class="badge gray"><i class="fa-solid fa-box-archive"></i> Archived</span></div>
+       <div class="auc">
+         <div><div class="lbl">Holdout AUC</div><div class="big">0.851</div></div>
+         <span class="train">train 0.889</span>
+       </div>
+       <div class="gap">Immutable · retained for lineage &amp; rollback</div>
+       <div class="promote">
+         <span class="lbl">9d ago</span>
+         <button class="btn ghost sm"><i class="fa-solid fa-rotate-left"></i> Restore</button>
+       </div>
+     </article>
+   </div>
+  </section>
+
+ </div>
+</div></main>
+</div></body></html>

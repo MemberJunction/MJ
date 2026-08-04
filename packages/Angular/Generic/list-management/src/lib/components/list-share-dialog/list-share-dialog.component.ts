@@ -43,6 +43,17 @@ export class ListShareDialogComponent extends BaseAngularComponent implements On
   @Input() config!: ListShareDialogConfig;
 
   /**
+   * Supporting message for the empty-state shown when a list has no shares.
+   * Appends a usage hint when the current user can manage shares.
+   */
+  public get EmptyShareMessage(): string {
+    const base = "This list hasn't been shared with anyone yet.";
+    return this.canModifyShares
+      ? `${base} Use the search above to find users or roles to share with.`
+      : base;
+  }
+
+  /**
    * Controls dialog visibility
    */
   @Input()

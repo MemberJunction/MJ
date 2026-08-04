@@ -201,13 +201,10 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
     
       <!-- Empty State -->
       @if (!hasAnyData()) {
-        <div class="empty-state">
-          <div class="empty-icon">
-            <i class="fas fa-server"></i>
-          </div>
-          <h3>No Execution Context</h3>
-          <p>Execution context information is not available for this run.</p>
-        </div>
+        <mj-empty-state
+          Icon="fa-solid fa-server"
+          Title="No Execution Context"
+          Message="Execution context information is not available for this run." />
       }
     </div>
     `,
@@ -368,41 +365,6 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
     .ci-provider-name {
       font-size: 16px;
       font-weight: 600;
-    }
-
-    /* Empty State */
-    .empty-state {
-      text-align: center;
-      padding: 48px 24px;
-      color: var(--mj-text-muted);
-    }
-
-    .empty-icon {
-      width: 64px;
-      height: 64px;
-      margin: 0 auto 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 50%;
-      background: var(--mj-bg-surface-card);
-    }
-
-    .empty-icon i {
-      font-size: 28px;
-      color: var(--mj-text-disabled);
-    }
-
-    .empty-state h3 {
-      margin: 0 0 8px;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--mj-text-primary);
-    }
-
-    .empty-state p {
-      margin: 0;
-      font-size: 14px;
     }
 
     /* Node.js icon color */

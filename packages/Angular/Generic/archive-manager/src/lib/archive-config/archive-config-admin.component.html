@@ -47,10 +47,10 @@
           }
 
           @if (Configs.length === 0) {
-            <div class="config-empty">
-              <i class="fa-solid fa-folder-open"></i>
-              <p>No configurations found. Create one to get started.</p>
-            </div>
+            <mj-empty-state class="config-empty" Size="compact"
+              Icon="fa-solid fa-folder-open"
+              Title="No configurations found"
+              Message="Create one to get started." />
           }
         </div>
       </div>
@@ -58,10 +58,10 @@
       <!-- Right panel: Detail -->
       <div class="config-detail-panel">
         @if (!SelectedConfig) {
-          <div class="config-detail-placeholder">
-            <i class="fa-solid fa-hand-pointer"></i>
-            <p>Select a configuration to view details</p>
-          </div>
+          <mj-empty-state class="config-detail-placeholder"
+            Icon="fa-solid fa-hand-pointer"
+            Title="No configuration selected"
+            Message="Select a configuration to view details" />
         }
 
         @if (SelectedConfig) {
@@ -270,9 +270,8 @@
                 }
 
                 @if (ConfigEntities.length === 0) {
-                  <div class="entity-empty">
-                    <p>No entities configured. Click "Add Entity" to add one.</p>
-                  </div>
+                  <mj-empty-state class="entity-empty" Size="compact"
+                    Icon="" Title="No entities configured. Click &quot;Add Entity&quot; to add one." />
                 }
               </div>
 

@@ -246,24 +246,10 @@
   padding: 16px;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+/* Empty state — fill the diff content area */
+.empty-state-fill {
   height: 100%;
   min-height: 300px;
-  color: var(--mj-text-muted);
-  gap: 16px;
-}
-
-.empty-state i {
-  opacity: 0.2;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: var(--mj-text-base);
 }
 
 /* Diff Tree */

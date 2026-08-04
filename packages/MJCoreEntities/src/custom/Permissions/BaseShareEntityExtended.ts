@@ -1,4 +1,4 @@
-import { BaseEntity, EntityPermissionType, EntitySaveOptions, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, EntityPermissionType, EntitySaveOptions, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 
 import { CreateShareNotification, ShareNotificationInput } from './shareNotification';
@@ -168,6 +168,10 @@ function failSave(entity: BaseEntity, user: UserInfo, reason: string): false {
     if (latest) {
         latest.Success = false;
         latest.Message = reason;
+    } else {
+        // The gate fires before super.Save(), so a new entity has no result history yet
+        // (LatestResult is null) — push one so the reason reaches callers/resolvers.
+        entity.ResultHistory.push(new BaseEntityResult(false, reason, 'create'));
     }
     return false;
 }

@@ -1,7 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy } from '@memberjunction/ai';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
-import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { BaseEntitySaveQueue, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -9,6 +9,7 @@ import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
+import { AIPromptTimeoutError } from './AIPromptTimeoutError';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -18,7 +19,11 @@ import {
     ChildPromptParam,
     AIPromptParams
 } from '@memberjunction/ai-core-plus';
-import * as JSON5 from 'json5';
+// json5 is a CJS module: under this package's ESM output its import namespace has no
+// `parse` — only the default export does. `import * as JSON5` made JSON5.parse
+// undefined at runtime ("JSON5.parse is not a function"), silently disabling the
+// local JSON-repair tier and forcing every malformed payload onto the AI-repair path.
+import JSON5 from 'json5';
 
 /**
  * Best-guess MIME family for a ChatMessage content block type when the block
@@ -33,6 +38,25 @@ function mimeFromBlockType(type: string): string {
         case 'file_url': return 'application/octet-stream';
         default: return 'application/octet-stream';
     }
+}
+
+/**
+ * The composed bound applied to a single model call: the caller's cancellation token (if any) merged
+ * with the prompt's configured `AIPrompt.TimeoutMS` (if any).
+ *
+ * Produced by `AIPromptRunner.createExecutionBound` and consumed by the bounded ChatCompletion race.
+ * `Dispose()` MUST be called when the call settles so the timeout timer and abort listener are
+ * released.
+ */
+export interface ExecutionBound {
+    /** Merged abort signal; `undefined` when there is neither a caller token nor a prompt timeout. */
+    Signal?: AbortSignal;
+    /** The prompt-configured timeout in ms, when one applies. */
+    TimeoutMS?: number;
+    /** True once the TIMEOUT (not the caller's token) fired — used to build the right error. */
+    TimedOut: () => boolean;
+    /** Releases the timer and the caller-token listener. Safe to call multiple times. */
+    Dispose: () => void;
 }
 
 
@@ -63,7 +87,6 @@ function mimeFromBlockType(type: string): string {
  * sub-templates, creating sophisticated prompts through hierarchical template inheritance.
  * 
  * ## Agent Integration
- * - Links executions to agent runs via `agentRunId` parameter
  * - Supports agent decision-making workflows with structured JSON responses
  * - Enables hierarchical template patterns in AI agents
  * 
@@ -190,15 +213,15 @@ export class AIPromptRunner {
   private _provider: IMetadataProvider | null = null;
 
   /**
-   * Instance-keyed chain of in-flight AIPromptRun saves. Mirrors the BaseAgent step-save pattern:
-   * prompt-run persistence is fire-and-forget so the execution path never blocks on a DB
-   * round-trip, but saves for the SAME entity are sequenced — the initial 'Running' INSERT always
-   * completes before the finalize UPDATE, so a slow INSERT can never clobber the finalized row.
-   * Keyed by the entity INSTANCE (stable), not its ID. See {@link queuePromptRunSave}.
+   * Fire-and-forget AIPromptRun persistence. Prompt-run logging never blocks the execution path on a
+   * DB round-trip; the shared {@link BaseEntitySaveQueue} sequences saves for the SAME entity (the
+   * initial 'Running' INSERT always completes before the finalize UPDATE, and the finalize mutation
+   * runs INSIDE the post-INSERT task so a slow INSERT can never clobber the finalized row). Failures
+   * stay in this runner's structured log stream via the queue's `onError` hook.
    */
-  private _promptRunSaveChains = new Map<MJAIPromptRunEntityExtended, Promise<boolean>>();
-  /** All queued prompt-run save promises, for optional flushing via {@link WaitForPendingPromptRunSaves}. */
-  private _pendingPromptRunSaves: Promise<boolean>[] = [];
+  private _promptRunQueue = new BaseEntitySaveQueue({
+    onError: (message) => this.logError(message, { category: 'PromptRunSave' }),
+  });
 
   /**
    * Process-wide cache of parsed `OutputExample` JSON, keyed by the raw example string.
@@ -892,7 +915,10 @@ export class AIPromptRunner {
         errorMessage: error.message,
         promptRun,
         executionTimeMS,
-        chatResult: { success: false, errorMessage: error.message, errorInfo } as ChatResult,
+        // Preserve the original exception on the ChatResult so typed failures (e.g.
+        // AIPromptTimeoutError from an exceeded AIPrompt.TimeoutMS) survive to the caller
+        // instead of being flattened into a string.
+        chatResult: { success: false, errorMessage: error.message, errorInfo, exception: error } as ChatResult,
         tokensUsed: 0,
         combinedTokensUsed: 0
       };
@@ -1119,7 +1145,7 @@ export class AIPromptRunner {
     }
 
     // Execute tasks in parallel
-    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken, undefined, params.agentRunId);
+    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken);
 
     if (!parallelResult.success) {
       throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
@@ -1232,8 +1258,10 @@ export class AIPromptRunner {
     consolidatedPromptRun.Status = parallelResult.successCount > 0 ? 'Completed' : 'Failed';
     consolidatedPromptRun.WasSelectedResult = true; // This is the consolidated result chosen by judge
 
-    // Persist the consolidated run fire-and-forget; chains after its INSERT via the save queue.
-    this.queuePromptRunSave(consolidatedPromptRun);
+    // Persist the consolidated run fire-and-forget; the finalize UPDATE chains after its INSERT via
+    // the save queue. These fields are set after all the awaited parallel work, so the INSERT has long
+    // landed — a plain Update (no post-INSERT callback) is race-safe here.
+    this._promptRunQueue.Update(consolidatedPromptRun);
 
     // Create additional results from all other successful results (excluding the best one)
     const additionalResults: AIPromptRunResult<T>[] = [];
@@ -2745,52 +2773,12 @@ export class AIPromptRunner {
   }
 
   /**
-   * Queues a fire-and-forget `Save()` for a prompt-run entity. Saves for the same instance are
-   * chained (via {@link _promptRunSaveChains}) so the initial INSERT always completes before any
-   * finalize UPDATE — guaranteeing a slow INSERT can't overwrite the finalized row. The whole
-   * chain runs independently of the execution flow (callers do NOT await it), so the model call
-   * is never delayed by a DB write.
-   *
-   * Save failures are logged (non-fatal): the AIPromptRun record is observability, not part of the
-   * prompt's success contract, so a rare persistence failure must not fail the prompt. The chained
-   * promise is tracked in {@link _pendingPromptRunSaves} so {@link WaitForPendingPromptRunSaves}
-   * can flush them when determinism is required (e.g. tests, or a caller that needs the rows
-   * durably written). Returns that promise.
-   */
-  private queuePromptRunSave(promptRun: MJAIPromptRunEntityExtended): Promise<boolean> {
-    const previous = this._promptRunSaveChains.get(promptRun) ?? Promise.resolve(true);
-    const current = previous
-      .then(async () => {
-        const ok = await promptRun.Save();
-        if (!ok) {
-          this.logError(`Failed to save AIPromptRun ${promptRun.ID || '(unsaved)'}: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`, {
-            category: 'PromptRunSave',
-            metadata: { promptRunId: promptRun.ID }
-          });
-        }
-        return ok;
-      })
-      .catch((err) => {
-        // Infrastructure-level throw (network, etc.) — log and swallow so the fire-and-forget
-        // promise never surfaces as an unhandled rejection.
-        this.logError(err instanceof Error ? err : new Error(String(err)), {
-          category: 'PromptRunSave',
-          metadata: { promptRunId: promptRun.ID }
-        });
-        return false;
-      });
-    this._promptRunSaveChains.set(promptRun, current);
-    this._pendingPromptRunSaves.push(current);
-    return current;
-  }
-
-  /**
-   * Awaits all in-flight prompt-run saves queued by this runner instance. The normal execution
-   * path does NOT call this — prompt-run persistence is intentionally fire-and-forget. Exposed for
-   * tests and for callers that need the AIPromptRun rows durably written before proceeding.
+   * Awaits all in-flight prompt-run saves queued by this runner instance. The normal execution path
+   * does NOT call this — prompt-run persistence is intentionally fire-and-forget. Exposed for tests
+   * and for callers that need the AIPromptRun rows durably written before proceeding.
    */
   public async WaitForPendingPromptRunSaves(): Promise<void> {
-    await Promise.allSettled(this._pendingPromptRunSaves);
+    await this._promptRunQueue.Flush();
   }
 
   private async createPromptRun(
@@ -2890,11 +2878,6 @@ export class AIPromptRunner {
       promptRun.ConfigurationID = params.configurationId;
       promptRun.RunAt = startTime;
       
-      // Set AgentRunID if provided for agent-prompt execution tracking
-      if (params.agentRunId) {
-        promptRun.AgentRunID = params.agentRunId;
-      }
-
       // Resolve and save the effort level used (same precedence as ChatParams resolution)
       if (params.effortLevel !== undefined && params.effortLevel !== null) {
         promptRun.EffortLevel = params.effortLevel;
@@ -2939,8 +2922,10 @@ export class AIPromptRunner {
         promptRun.StopSequences = JSON.stringify(params.additionalParameters.stopSequences);
       }
 
-      // Store the input data/context as JSON in Messages field
-      if (params.data || params.templateData || systemPromptText) {
+      // Store the input data/context as JSON in Messages field.
+      // Also capture callers that supply conversationMessages directly (e.g. templateMessageRole='none',
+      // no rendered system prompt) — otherwise their assembled prompt would never be persisted.
+      if (params.data || params.templateData || systemPromptText || (params.conversationMessages?.length ?? 0) > 0) {
         const messages: ChatMessage[] = [];
         if (systemPromptText) {
           // Build the system prompt content, including prefill fallback if applicable
@@ -2954,8 +2939,10 @@ export class AIPromptRunner {
             role: 'system',
             content: systemContent
           });
-          messages.push(...params.conversationMessages || []);
         }
+        // Always include any caller-supplied conversation messages (previously only recorded when a
+        // template system prompt was present, which dropped them for the pure-conversationMessages path).
+        messages.push(...(params.conversationMessages || []));
         promptRun.Messages = JSON.stringify({
           data: params.data,
           templateData: params.templateData,
@@ -2976,7 +2963,7 @@ export class AIPromptRunner {
       // NewRecord() above, so callers (and the onPromptRunCreated callback) have it immediately —
       // we don't block the model call on the INSERT. The finalize UPDATE chains after this INSERT
       // via the instance-keyed save queue, so ordering is guaranteed.
-      this.queuePromptRunSave(promptRun);
+      this._promptRunQueue.Insert(promptRun);
 
       // Invoke callback if provided. The ID is available without awaiting the save (client-generated
       // by NewRecord()), so agent-run/step linking that depends on it works immediately.
@@ -3461,6 +3448,12 @@ export class AIPromptRunner {
     let llm: BaseLLM;
     let chatParams: ChatParams;
 
+    // Compose the caller's cancellation token (if any) with the resolved model-call timeout (if any)
+    // into a SINGLE signal that bounds this model call. Both bounds always apply — whichever fires
+    // first aborts the call. This is the ONE place the timeout is enforced, so the single-model path
+    // and the parallel path (which delegates here) can never diverge.
+    const executionBound = this.createExecutionBound(prompt, params, cancellationToken);
+
     try {
       // Get verbose flag for logging
       const verbose = params.verbose === true || IsVerboseLoggingEnabled();
@@ -3519,7 +3512,10 @@ export class AIPromptRunner {
         throw new Error(`No API name found for model ${model.Name}. Please ensure the model or its vendor configuration includes an APIName.`);
       }
       chatParams.model = apiName;
-      chatParams.cancellationToken = cancellationToken;
+      // Hand the driver the COMPOSED signal (caller token ∪ prompt timeout), not the raw caller
+      // token, so any driver that learns to honor ChatParams.cancellationToken aborts the HTTP
+      // request on timeout too — not just on caller cancellation.
+      chatParams.cancellationToken = executionBound.Signal;
 
       // Apply scalar inference params (prompt defaults overridden by additionalParameters) via the
       // shared resolver so ChatParams and the persisted AIPromptRun never drift.
@@ -3571,9 +3567,12 @@ export class AIPromptRunner {
       }
       // If none are set, effortLevel remains undefined and providers use their defaults
 
-      // Apply response format from prompt settings
-      if (prompt.ResponseFormat && prompt.ResponseFormat !== 'Any') {
-        chatParams.responseFormat = prompt.ResponseFormat //as 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific';
+      // Apply response format. A scope-level override (additionalParameters.responseFormat, populated
+      // by ApplyScopedPromptConfig from a ScopedPromptConfig row) takes precedence over the prompt
+      // default; 'Any' from either source stays silent so providers use their own default.
+      const effectiveResponseFormat = this.resolveEffectiveResponseFormat(prompt.ResponseFormat, params.additionalParameters);
+      if (effectiveResponseFormat) {
+        chatParams.responseFormat = effectiveResponseFormat as typeof prompt.ResponseFormat;
 
         if (prompt.ModelSpecificResponseFormat) {
           try {
@@ -3583,7 +3582,7 @@ export class AIPromptRunner {
           }
         }
       } else {
-        // if chatParams.responseFormat is not set or set to Any, stay silent on response format
+        // if response format is not set or set to Any (prompt or override), stay silent
         chatParams.responseFormat = undefined;
       }
 
@@ -3618,25 +3617,8 @@ export class AIPromptRunner {
         };
       }
 
-      // Execute the model with cancellation support
-      if (cancellationToken) {
-        // If cancellation token is provided, wrap the execution to handle cancellation
-        return await Promise.race([
-          llm.ChatCompletion(chatParams),
-          new Promise<never>((_, reject) => {
-            if (cancellationToken.aborted) {
-              reject(new Error('Chat completion was cancelled'));
-            } else {
-              cancellationToken.addEventListener('abort', () => {
-                reject(new Error('Chat completion was cancelled'));
-              });
-            }
-          }),
-        ]);
-      } else {
-        // No cancellation token, execute normally
-        return await llm.ChatCompletion(chatParams);
-      }
+      // Execute the model bounded by the composed abort signal (caller cancellation + prompt TimeoutMS)
+      return await this.runChatCompletionBounded(llm, chatParams, executionBound);
     } catch (error) {
       const errorInfo = ErrorAnalyzer.analyzeError(error, driverClass)
       this.logError(error, {
@@ -3649,7 +3631,143 @@ export class AIPromptRunner {
         maxErrorLength: params.maxErrorLength
       });
       throw error;
+    } finally {
+      // Always release the timeout timer + abort listener, whether the call succeeded, failed,
+      // timed out, or was cancelled. Without this a long-lived process would accumulate timers.
+      executionBound.Dispose();
     }
+  }
+
+  /**
+   * Engine-level default model-call timeout, in milliseconds, applied when the caller supplies no
+   * `AIPromptParams.timeoutMS`. `undefined` (the default) means NO implicit bound — a prompt run
+   * with neither a timeout nor a cancellation token stays unbounded, exactly as before, so this
+   * change is behavior-preserving for existing callers.
+   *
+   * Subclasses (or a host application's runner subclass) can override this to impose a global
+   * safety ceiling on every prompt call.
+   */
+  protected get DefaultPromptTimeoutMS(): number | undefined {
+    return undefined;
+  }
+
+  /**
+   * Resolves the per-model-call timeout: the caller's `AIPromptParams.timeoutMS`, else the runner's
+   * {@link DefaultPromptTimeoutMS}. Non-positive / non-numeric values mean "no timeout".
+   *
+   * The bound is applied PER MODEL CALL (not per prompt execution), which mirrors the parallel
+   * path's existing `taskTimeoutMS` semantics: each failover candidate / validation retry gets a
+   * fresh budget rather than sharing one wall-clock window.
+   *
+   * NOTE (issue #3064): there is deliberately NO prompt-entity source here yet — the `AIPrompt`
+   * table has no `TimeoutMS` column today. Once a migration adds one and CodeGen regenerates the
+   * entity, this becomes `prompt.TimeoutMS ?? params.timeoutMS ?? this.DefaultPromptTimeoutMS`
+   * and every bound below starts honoring the per-prompt configuration with no other change.
+   */
+  protected getEffectiveTimeoutMS(params: AIPromptParams): number | undefined {
+    const timeoutMS = params.timeoutMS ?? this.DefaultPromptTimeoutMS;
+    return typeof timeoutMS === 'number' && timeoutMS > 0 ? timeoutMS : undefined;
+  }
+
+  /**
+   * Composes the caller-supplied cancellation token with the resolved model-call timeout into a
+   * single {@link AbortSignal} that bounds one model call. NEITHER bound is discarded:
+   *
+   * - caller token only  → the caller's signal is used directly (behavior unchanged)
+   * - timeout only       → an internal controller aborts after the timeout elapses
+   * - both               → an internal controller relays the caller's abort AND fires on timeout;
+   *                        whichever happens first wins
+   * - neither            → `Signal` is undefined and the call runs unbounded (legacy behavior)
+   *
+   * Implemented with an AbortController + relay listener rather than `AbortSignal.any()` so it works
+   * on Node 18 (where `AbortSignal.any` does not exist — it landed in Node 20.3).
+   */
+  protected createExecutionBound(prompt: MJAIPromptEntityExtended, params: AIPromptParams, cancellationToken?: AbortSignal): ExecutionBound {
+    const timeoutMS = this.getEffectiveTimeoutMS(params);
+    if (timeoutMS === undefined) {
+      // No prompt timeout: use the caller's token as-is (or nothing at all).
+      return { Signal: cancellationToken, TimeoutMS: undefined, TimedOut: () => false, Dispose: () => { /* nothing to release */ } };
+    }
+
+    const controller = new AbortController();
+    let timedOut = false;
+
+    const relayCallerAbort = () => {
+      if (!controller.signal.aborted) {
+        controller.abort(cancellationToken?.reason ?? 'Chat completion was cancelled');
+      }
+    };
+    if (cancellationToken) {
+      if (cancellationToken.aborted) {
+        relayCallerAbort();
+      } else {
+        cancellationToken.addEventListener('abort', relayCallerAbort, { once: true });
+      }
+    }
+
+    const timer = setTimeout(() => {
+      if (!controller.signal.aborted) {
+        timedOut = true;
+        controller.abort(new AIPromptTimeoutError(prompt.Name, timeoutMS));
+      }
+    }, timeoutMS);
+
+    return {
+      Signal: controller.signal,
+      TimeoutMS: timeoutMS,
+      TimedOut: () => timedOut,
+      Dispose: () => {
+        clearTimeout(timer);
+        cancellationToken?.removeEventListener('abort', relayCallerAbort);
+      },
+    };
+  }
+
+  /**
+   * Runs the model call, racing it against the composed execution bound so a hung provider surfaces
+   * as a rejected promise the caller's failover/retry logic can act on.
+   *
+   * A timeout rejects with a typed {@link AIPromptTimeoutError} (classified by ErrorAnalyzer as a
+   * retriable NetworkError); a caller cancellation rejects with the same
+   * `'Chat completion was cancelled'` error the previous implementation produced, so cancellation
+   * semantics are unchanged.
+   *
+   * NOTE: `Promise.race` ignores the losing `ChatCompletion()` promise's eventual result, but the
+   * underlying request IS torn down — the composed signal is on `ChatParams.cancellationToken`, and
+   * all 19 drivers now forward it to their SDK/HTTP layer, so aborting the signal (which is exactly
+   * what makes the model call lose the race on a timeout or cancellation) aborts the socket rather
+   * than leaving it open until the provider closes it.
+   */
+  private async runChatCompletionBounded(llm: BaseLLM, chatParams: ChatParams, bound: ExecutionBound): Promise<ChatResult> {
+    const signal = bound.Signal;
+    if (!signal) {
+      // Neither a caller token nor a prompt timeout — execute unbounded (legacy behavior).
+      return await llm.ChatCompletion(chatParams);
+    }
+
+    return await Promise.race([
+      llm.ChatCompletion(chatParams),
+      new Promise<never>((_, reject) => {
+        const fail = () => reject(this.buildAbortError(signal, bound));
+        if (signal.aborted) {
+          fail();
+        } else {
+          signal.addEventListener('abort', fail, { once: true });
+        }
+      }),
+    ]);
+  }
+
+  /**
+   * Builds the rejection error for an aborted model call — a typed {@link AIPromptTimeoutError} when
+   * the prompt's TimeoutMS fired, otherwise the legacy cancellation error.
+   */
+  private buildAbortError(signal: AbortSignal, bound: ExecutionBound): Error {
+    if (bound.TimedOut()) {
+      const reason = signal.reason;
+      return reason instanceof AIPromptTimeoutError ? reason : new Error('Chat completion timed out');
+    }
+    return new Error('Chat completion was cancelled');
   }
 
   /**
@@ -3916,6 +4034,21 @@ export class AIPromptRunner {
    * - `true` means "force enable" (overrides code default)
    * - `false` means "force disable" (overrides code default, even if the driver says yes)
    */
+  /**
+   * Resolves the effective response format for a run. A scope-level override — `additionalParameters.
+   * responseFormat`, set by `ApplyScopedPromptConfig` from a `ScopedPromptConfig` row — takes precedence
+   * over the prompt's own `ResponseFormat`. `'Any'` (or absent) from either source resolves to
+   * `undefined`, i.e. stay silent so the provider uses its own default.
+   */
+  private resolveEffectiveResponseFormat(
+    promptResponseFormat: string | null | undefined,
+    additionalParameters: Record<string, unknown> | undefined,
+  ): string | undefined {
+    const override = additionalParameters?.responseFormat as string | undefined;
+    const effective = override ?? promptResponseFormat ?? undefined;
+    return effective && effective !== 'Any' ? effective : undefined;
+  }
+
   /**
    * Decides whether a prompt's StopSequences should be sent to the model.
    *
@@ -5042,7 +5175,6 @@ export class AIPromptRunner {
         // Run the repair prompt
         const repairResult = await this.ExecutePrompt({
           parentPromptRunId: currentPromptRun.ID,
-          agentRunId: currentPromptRun.AgentRunID,
           contextUser: params.contextUser,
           prompt: repairPrompt,
           data: {
@@ -5229,14 +5361,35 @@ export class AIPromptRunner {
       totalCost: number;
     },
   ): Promise<void> {
-    try {
-      // Ensure the initial 'Running' INSERT (and its BaseEntity.finalizeSave post-save reload, which does
-      // init() + SetMany(insertedRow)) has fully landed BEFORE we mutate the final state. Mutating while the
-      // INSERT is still in flight lets the reload revert these values, and the chained UPDATE then persists
-      // the stale 'Running' row (the same race fixed in the agent-run-step queue and action-execution-log).
-      // The model call between create and update almost always covers this; a fast-failing prompt could not.
-      await this._promptRunSaveChains.get(promptRun);
+    // Fire-and-forget finalize UPDATE. The field mutations run INSIDE the post-INSERT task (after the
+    // 'Running' INSERT + its finalizeSave reload land), so the reload can never revert them and the
+    // chained UPDATE persists the finalized state — the "stuck at Running" race is structurally
+    // impossible. The execution flow does NOT await the save.
+    this._promptRunQueue.Update(promptRun, () =>
+      this.applyFinalizedPromptRunFields(promptRun, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens),
+    );
+  }
 
+  /**
+   * Populates a prompt-run's finalized fields (result, tokens, cost, timing, rollups) from the model
+   * result. Runs INSIDE the post-INSERT save task — see {@link updatePromptRun}. Errors here are
+   * logged (non-fatal): the AIPromptRun is observability, not part of the prompt's success contract.
+   */
+  private applyFinalizedPromptRunFields(
+    promptRun: MJAIPromptRunEntityExtended,
+    prompt: MJAIPromptEntityExtended,
+    modelResult: ChatResult,
+    parsedResult: { result: unknown; validationResult?: ValidationResult },
+    endTime: Date,
+    executionTimeMS: number,
+    validationAttempts?: ValidationAttempt[],
+    cumulativeTokens?: {
+      promptTokens: number;
+      completionTokens: number;
+      totalCost: number;
+    },
+  ): void {
+    try {
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
 
@@ -5443,10 +5596,6 @@ export class AIPromptRunner {
         promptRun.TotalCost = promptRun.Cost;
       }
 
-      // Finalize fire-and-forget. Chains after the initial INSERT (same entity instance) so the
-      // 'Running' INSERT can never overwrite this finalized 'Completed'/'Failed' state. The
-      // execution flow does NOT await this — see queuePromptRunSave / WaitForPendingPromptRunSaves.
-      this.queuePromptRunSave(promptRun);
     } catch (error) {
       this.logError(error, {
         category: 'PromptRunUpdate',

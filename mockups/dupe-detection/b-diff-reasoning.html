@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dupe Detection · B — Diff + Reasoning Rail</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+    .layout { display:grid; grid-template-columns: 1fr 380px; height: calc(100vh - 53px); }
+    .main { overflow:auto; padding:20px 24px 60px; }
+    .rail { border-left:1px solid var(--mj-border-default); background:var(--mj-bg-surface); overflow-y:auto; }
+
+    .crumb { font-size:12.5px; color:var(--mj-text-muted); margin-bottom:14px; }
+    .crumb b { color:var(--mj-text-secondary); }
+
+    .matchhead { display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+    .matchhead h1 { font-size:18px; margin:0; }
+    .matchhead .spacer { flex:1; }
+
+    /* comparison grid */
+    .cmp { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-radius:var(--mj-radius); overflow:hidden; }
+    .cmp th, .cmp td { padding:11px 13px; text-align:left; border-bottom:1px solid var(--mj-border-subtle); vertical-align:top; }
+    .cmp thead th { position:sticky; top:0; background:var(--mj-bg-surface); z-index:3; border-bottom:1px solid var(--mj-border-default); }
+    .cmp .fcol { width:165px; }
+    .colhead { display:flex; flex-direction:column; gap:7px; }
+    .colhead .rname { font-weight:700; font-size:13.5px; display:flex; align-items:center; gap:7px; }
+    .colhead .badges { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .colhead.surv { }
+    th.surv-col, td.surv-col { background:color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); }
+    th.surv-col { box-shadow: inset 0 3px 0 var(--mj-brand-primary); }
+
+    .fieldname { color:var(--mj-text-muted); font-weight:600; }
+    .fieldname .diffdot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--rec-uncertain); margin-right:7px; }
+
+    .cell { display:flex; align-items:flex-start; gap:8px; cursor:pointer; border-radius:6px; padding:3px 5px; margin:-3px -5px; }
+    .cell:hover { background:var(--mj-bg-surface-hover); }
+    .cell .radio { width:15px; height:15px; border-radius:50%; border:2px solid var(--mj-border-strong); margin-top:2px; flex:0 0 auto; }
+    .cell.kept .radio { border-color:var(--rec-merge); background:radial-gradient(circle, var(--rec-merge) 0 4px, transparent 5px); }
+    .cell.kept { background:color-mix(in srgb, var(--mj-status-success) 11%, transparent); font-weight:600; }
+    .cell .llm-pick { font-size:9.5px; font-weight:800; color:var(--mj-brand-primary); letter-spacing:.4px; margin-left:auto; align-self:center; }
+
+    .identical-toggle { padding:11px 13px; color:var(--mj-text-link); font-weight:600; font-size:12.5px; cursor:pointer; }
+    .identical-toggle:hover { background:var(--mj-bg-surface-hover); }
+
+    .deps-row td { background:var(--mj-bg-surface-card); }
+    .deps-chiprow { display:flex; gap:7px; flex-wrap:wrap; }
+
+    .footbar { display:flex; align-items:center; gap:12px; margin-top:18px; padding:14px 0 0; }
+    .footbar .grow { flex:1; }
+
+    /* ---- reasoning rail ---- */
+    .rail-sec { padding:18px 18px; border-bottom:1px solid var(--mj-border-default); }
+    .rail-sec h3 { margin:0 0 12px; font-size:11px; text-transform:uppercase; letter-spacing:.7px; color:var(--mj-text-muted); }
+    .verdict-card { padding:14px 15px; border-radius:var(--mj-radius); border:1px solid; }
+    .verdict-card.merge { border-color:var(--rec-merge); background:color-mix(in srgb,var(--rec-merge) 9%,var(--mj-bg-surface)); }
+    .verdict-card .v { font-size:18px; font-weight:800; color:var(--rec-merge); }
+    .verdict-card .v.notdupe { color:var(--rec-notdupe); }
+
+    .scoreline { display:flex; align-items:center; gap:9px; margin:12px 0 0; font-size:12px; }
+    .scoreline .lbl { width:48px; color:var(--mj-text-muted); font-weight:600; }
+    .scoreline .bar { flex:1; }
+    .scoreline .pct { width:36px; font-weight:700; text-align:right; }
+
+    .rationale { font-size:13px; color:var(--mj-text-secondary); }
+    .rationale p { margin:0 0 10px; }
+
+    .fieldnote { display:flex; gap:9px; padding:9px 0; border-bottom:1px dashed var(--mj-border-subtle); font-size:12.5px; }
+    .fieldnote .f { font-weight:700; color:var(--mj-text-primary); width:96px; flex:0 0 auto; }
+    .fieldnote .why { color:var(--mj-text-muted); }
+
+    .disagree-box { display:flex; gap:10px; padding:12px 13px; border-radius:var(--mj-radius); background:var(--mj-status-warning-bg); border:1px solid var(--mj-status-warning-border); color:var(--mj-status-warning-text); font-size:12.5px; }
+    .memchip { display:flex; gap:8px; align-items:flex-start; font-size:12px; color:var(--mj-text-muted); padding:7px 0; }
+    .memchip .tag { color:var(--vector-accent); font-weight:700; flex:0 0 auto; }
+</style>
+</head>
+<body>
+
+<div class="mock-nav">
+    <div class="brand"><span class="dot"></span> Duplicate Detection <small>· mockups</small></div>
+    <div class="links">
+        <a href="index.html">Overview</a>
+        <a href="a-triage-queue.html">A · Triage Queue</a>
+        <a href="b-diff-reasoning.html" class="active">B · Diff + Reasoning</a>
+        <a href="c-confidence-map.html">C · Confidence Map</a>
+    </div>
+    <div class="spacer"></div>
+    <span class="pattern-tag">Pattern B — precision / field-level adjudication w/ reasoning rail</span>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="tlabel">Dark</span></button>
+</div>
+
+<div class="layout">
+    <!-- ============ MAIN: side-by-side ============ -->
+    <div class="main">
+        <div class="crumb">Accounts · <b>Run #1842</b> · Match-set <b>1 of 184</b> · <span class="mono">Acme Corporation</span></div>
+
+        <div class="matchhead">
+            <h1>Compare &amp; merge</h1>
+            <span class="chip vector">vector 0.96</span>
+            <span class="chip merge">LLM: Merge 0.98</span>
+            <div class="spacer"></div>
+            <label class="tiny muted" style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+                <input type="checkbox" checked> Show differing fields only
+            </label>
+        </div>
+
+        <table class="cmp">
+            <thead>
+                <tr>
+                    <th class="fcol">Field</th>
+                    <th class="surv-col">
+                        <div class="colhead surv">
+                            <span class="rname">Acme Corporation <span class="chip brand tiny">★ Survivor</span></span>
+                            <span class="badges"><span class="prov local"><span class="swatch"></span>Local</span><span class="tiny muted">47 dependents</span></span>
+                        </div>
+                    </th>
+                    <th>
+                        <div class="colhead">
+                            <span class="rname">Acme Corp</span>
+                            <span class="badges"><span class="prov sf"><span class="swatch"></span>Salesforce</span><span class="tiny muted">12 deps</span></span>
+                        </div>
+                    </th>
+                    <th>
+                        <div class="colhead">
+                            <span class="rname">Acme Corporation LLC</span>
+                            <span class="badges"><span class="prov hubspot"><span class="swatch"></span>HubSpot</span><span class="tiny muted">5 deps</span></span>
+                        </div>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="fieldname"><span class="diffdot"></span>Phone</td>
+                    <td class="surv-col"><div class="cell"><span class="radio"></span><span>555-0100</span></div></td>
+                    <td><div class="cell kept"><span class="radio"></span><span>+1 (555) 010-0100</span><span class="llm-pick">LLM ✓</span></div></td>
+                    <td><div class="cell"><span class="radio"></span><span>555.0100</span></div></td>
+                </tr>
+                <tr>
+                    <td class="fieldname"><span class="diffdot"></span>Billing Address</td>
+                    <td class="surv-col"><div class="cell"><span class="radio"></span><span>123 Main St</span></div></td>
+                    <td><div class="cell kept"><span class="radio"></span><span>123 Main Street, Suite 400</span><span class="llm-pick">LLM ✓</span></div></td>
+                    <td><div class="cell"><span class="radio"></span><span>123 Main St</span></div></td>
+                </tr>
+                <tr>
+                    <td class="fieldname"><span class="diffdot"></span>Annual Revenue</td>
+                    <td class="surv-col"><div class="cell kept"><span class="radio"></span><span>$12.4M</span><span class="llm-pick">LLM ✓</span></div></td>
+                    <td><div class="cell"><span class="radio"></span><span class="muted">— empty —</span></div></td>
+                    <td><div class="cell"><span class="radio"></span><span>$11.9M</span></div></td>
+                </tr>
+                <tr>
+                    <td class="fieldname"><span class="diffdot"></span>Account Name</td>
+                    <td class="surv-col"><div class="cell kept"><span class="radio"></span><span>Acme Corporation</span><span class="llm-pick">LLM ✓</span></div></td>
+                    <td><div class="cell"><span class="radio"></span><span>Acme Corp</span></div></td>
+                    <td><div class="cell"><span class="radio"></span><span>Acme Corporation LLC</span></div></td>
+                </tr>
+                <tr>
+                    <td class="fieldname"><span class="diffdot"></span>City</td>
+                    <td class="surv-col"><div class="cell kept"><span class="radio"></span><span>San Francisco</span><span class="llm-pick">LLM ✓</span></div></td>
+                    <td><div class="cell"><span class="radio"></span><span>San Francisco</span></div></td>
+                    <td><div class="cell"><span class="radio"></span><span>SF</span></div></td>
+                </tr>
+                <tr><td colspan="4" class="identical-toggle">▸ Show 18 identical fields (Domain, Owner, Industry, Created…)</td></tr>
+                <tr class="deps-row">
+                    <td class="fieldname">Dependents to re-point</td>
+                    <td class="surv-col"><span class="tiny muted">survivor — keeps its 47</span></td>
+                    <td><div class="deps-chiprow"><span class="chip ghost tiny">8 Contacts</span><span class="chip ghost tiny">3 Deals</span><span class="chip ghost tiny">1 Activity</span></div></td>
+                    <td><div class="deps-chiprow"><span class="chip ghost tiny">4 Contacts</span><span class="chip ghost tiny">1 Deal</span></div></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="footbar">
+            <button class="btn success">✓ Merge with selected survivor &amp; fields</button>
+            <button class="btn danger-ghost">Reject — not duplicates</button>
+            <button class="btn">Defer</button>
+            <div class="grow"></div>
+            <span class="tiny muted">2 field overrides · 17 dependents re-pointed · transactional, rolls back on any failure</span>
+        </div>
+    </div>
+
+    <!-- ============ REASONING RAIL ============ -->
+    <div class="rail">
+        <div class="rail-sec">
+            <h3>LLM recommendation</h3>
+            <div class="verdict-card merge">
+                <div class="v">Merge</div>
+                <div class="tiny muted" style="margin-top:2px;">solo prompt · gemini-3-flash · shared core instructions</div>
+                <div class="scoreline"><span class="lbl">Vector</span><div class="bar vector"><span style="width:96%"></span></div><span class="pct" style="color:var(--vector-accent)">.96</span></div>
+                <div class="scoreline"><span class="lbl">LLM</span><div class="bar llm"><span style="width:98%"></span></div><span class="pct" style="color:var(--mj-brand-primary)">.98</span></div>
+            </div>
+        </div>
+
+        <div class="rail-sec">
+            <h3>Rationale</h3>
+            <div class="rationale">
+                <p>All three records resolve to the same legal entity: shared domain <span class="mono">acme.com</span>, identical primary address, and matching owner. The variants differ only by legal suffix (“LLC”), abbreviation (“Corp”), and field formatting.</p>
+                <p>Phone digits are identical across all three — only formatting differs. No signal contradicts a merge.</p>
+            </div>
+        </div>
+
+        <div class="rail-sec">
+            <h3>Per-field survivor choices</h3>
+            <div class="fieldnote"><span class="f">Phone</span><span class="why">Kept Salesforce value — E.164-formatted &amp; most recently verified (2026-05).</span></div>
+            <div class="fieldnote"><span class="f">Billing Addr</span><span class="why">Kept Salesforce — includes suite; survivor's is a truncated subset.</span></div>
+            <div class="fieldnote"><span class="f">Revenue</span><span class="why">Kept survivor's $12.4M — HubSpot value is stale by 2 quarters.</span></div>
+            <div class="memchip"><span class="tag">⟲ memory</span><span>Entity note applied: “prefer most-recently-verified contact fields over the highest-dependency record.”</span></div>
+        </div>
+
+        <div class="rail-sec">
+            <h3>Provenance &amp; merge posture</h3>
+            <p class="tiny muted" style="margin:0 0 9px;">This set spans 3 source systems — <b>Mixed</b> data-source scope.</p>
+            <div class="disagree-box" style="background:var(--mj-status-info-bg);border-color:var(--mj-status-info-border);color:var(--mj-status-info-text);">
+                <span>ℹ️</span>
+                <span>Survivor is <b>Local</b> → local hard-merge. The Salesforce &amp; HubSpot source rows will be flagged via <span class="mono">WriteBackViaSync</span> (future phase) — not deleted at source.</span>
+            </div>
+        </div>
+
+        <div class="rail-sec" style="border-bottom:none;">
+            <h3>Audit</h3>
+            <div class="tiny muted" style="line-height:1.8">
+                AI Prompt Run · <span class="mono">a4f0…91c</span><br>
+                1,204 tokens · 380 ms · $0.00021<br>
+                Logged to <span class="mono">DuplicateRunDetailMatch.LLMReasoning</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleTheme(){ const d=document.documentElement.classList.toggle('dark'); document.getElementById('tlabel').textContent=d?'Light':'Dark'; }
+if (matchMedia('(prefers-color-scheme: dark)').matches){ toggleTheme(); }
+</script>
+</body>
+</html>

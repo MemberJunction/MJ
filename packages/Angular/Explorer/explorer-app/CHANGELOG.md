@@ -1,5 +1,321 @@
 # @memberjunction/ng-explorer-app
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-client@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/ng-bootstrap@6.0.0
+  - @memberjunction/ng-auth-services@6.0.0
+  - @memberjunction/ng-base-application@6.0.0
+  - @memberjunction/ng-explorer-core@6.0.0
+  - @memberjunction/ng-shared@6.0.0
+  - @memberjunction/ng-workspace-initializer@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-conversations@6.0.0
+  - @memberjunction/ng-feedback@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-agent-client@6.0.0
+  - @memberjunction/ng-explorer-service-worker@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [1e048ef]
+- Updated dependencies [a8fc549]
+  - @memberjunction/ng-bootstrap@5.51.0
+  - @memberjunction/ng-explorer-core@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ng-shared@5.51.0
+  - @memberjunction/ng-workspace-initializer@5.51.0
+  - @memberjunction/ai-agent-client@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/ng-auth-services@5.51.0
+  - @memberjunction/ng-base-application@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-conversations@5.51.0
+  - @memberjunction/ng-feedback@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ng-agent-client@5.51.0
+  - @memberjunction/ng-explorer-service-worker@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [1c991f7]
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [28c1dcd]
+- Updated dependencies [d36131a]
+- Updated dependencies [8580aef]
+- Updated dependencies [35fb5e3]
+- Updated dependencies [abab5dc]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [fe1b8e7]
+- Updated dependencies [dd04a24]
+  - @memberjunction/ng-explorer-core@5.50.0
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/ng-conversations@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ng-bootstrap@5.50.0
+  - @memberjunction/ng-workspace-initializer@5.50.0
+  - @memberjunction/ng-base-application@5.50.0
+  - @memberjunction/ng-shared@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-notifications@5.50.0
+  - @memberjunction/ai-agent-client@5.50.0
+  - @memberjunction/ng-auth-services@5.50.0
+  - @memberjunction/ng-feedback@5.50.0
+  - @memberjunction/ng-agent-client@5.50.0
+  - @memberjunction/ng-explorer-service-worker@5.50.0
+
+## 5.49.0
+
+### Minor Changes
+
+- c220620: Extend Instance Config coverage to the remaining Explorer shell chrome so white-labeled deployments can hide developer chrome through metadata instead of CSS. New `Shell.Notifications.Enabled`, `Shell.AppSwitcher.Enabled`, `Shell.AppNav.Enabled`, and `Shell.UpdateToasts.Enabled` keys (all default `true`, gating both desktop and mobile), following the existing `Shell.SearchBar.Enabled` pattern; the floating chat-overlay bubble is wired to the pre-existing-but-unread `Shell.ChatOverlay.Enabled` key rather than a new one. Home quick-launch is deliberately excluded (already controllable via Applications metadata/roles).
+
+### Patch Changes
+
+- Updated dependencies [d3f9d77]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [02c8a15]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [14e2117]
+- Updated dependencies [3993034]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [c220620]
+- Updated dependencies [70c658c]
+  - @memberjunction/ng-explorer-core@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/ng-conversations@5.49.0
+  - @memberjunction/ng-bootstrap@5.49.0
+  - @memberjunction/ng-workspace-initializer@5.49.0
+  - @memberjunction/ng-feedback@5.49.0
+  - @memberjunction/ai-agent-client@5.49.0
+  - @memberjunction/ng-auth-services@5.49.0
+  - @memberjunction/ng-base-application@5.49.0
+  - @memberjunction/ng-shared@5.49.0
+  - @memberjunction/ng-base-types@5.49.0
+  - @memberjunction/ng-notifications@5.49.0
+  - @memberjunction/ng-agent-client@5.49.0
+  - @memberjunction/ng-explorer-service-worker@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+- Updated dependencies [d1e1a15]
+  - @memberjunction/ng-conversations@5.48.0
+  - @memberjunction/ng-explorer-core@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ng-shared@5.48.0
+  - @memberjunction/ng-bootstrap@5.48.0
+  - @memberjunction/ng-workspace-initializer@5.48.0
+  - @memberjunction/ai-agent-client@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/ng-auth-services@5.48.0
+  - @memberjunction/ng-base-application@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/ng-feedback@5.48.0
+  - @memberjunction/ng-notifications@5.48.0
+  - @memberjunction/ng-agent-client@5.48.0
+  - @memberjunction/ng-explorer-service-worker@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-agent-client@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/ng-bootstrap@5.47.0
+  - @memberjunction/ng-auth-services@5.47.0
+  - @memberjunction/ng-base-application@5.47.0
+  - @memberjunction/ng-explorer-core@5.47.0
+  - @memberjunction/ng-shared@5.47.0
+  - @memberjunction/ng-workspace-initializer@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-conversations@5.47.0
+  - @memberjunction/ng-feedback@5.47.0
+  - @memberjunction/ng-notifications@5.47.0
+  - @memberjunction/ng-agent-client@5.47.0
+  - @memberjunction/ng-explorer-service-worker@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/ai-agent-client@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/ng-bootstrap@5.46.0
+  - @memberjunction/ng-auth-services@5.46.0
+  - @memberjunction/ng-base-application@5.46.0
+  - @memberjunction/ng-explorer-core@5.46.0
+  - @memberjunction/ng-shared@5.46.0
+  - @memberjunction/ng-workspace-initializer@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-conversations@5.46.0
+  - @memberjunction/ng-feedback@5.46.0
+  - @memberjunction/ng-notifications@5.46.0
+  - @memberjunction/ng-agent-client@5.46.0
+  - @memberjunction/ng-explorer-service-worker@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ng-conversations@5.45.1
+  - @memberjunction/ng-bootstrap@5.45.1
+  - @memberjunction/ng-explorer-core@5.45.1
+  - @memberjunction/ng-shared@5.45.1
+  - @memberjunction/ng-workspace-initializer@5.45.1
+  - @memberjunction/ai-agent-client@5.45.1
+  - @memberjunction/ng-feedback@5.45.1
+  - @memberjunction/ng-notifications@5.45.1
+  - @memberjunction/ng-agent-client@5.45.1
+  - @memberjunction/ng-auth-services@5.45.1
+  - @memberjunction/ng-base-application@5.45.1
+  - @memberjunction/ng-explorer-service-worker@5.45.1
+  - @memberjunction/ng-base-types@5.45.1
+  - @memberjunction/core@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [6e10f66]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/ng-bootstrap@5.45.0
+  - @memberjunction/ng-conversations@5.45.0
+  - @memberjunction/ng-explorer-core@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/ai-agent-client@5.45.0
+  - @memberjunction/ng-auth-services@5.45.0
+  - @memberjunction/ng-base-application@5.45.0
+  - @memberjunction/ng-shared@5.45.0
+  - @memberjunction/ng-workspace-initializer@5.45.0
+  - @memberjunction/ng-base-types@5.45.0
+  - @memberjunction/ng-feedback@5.45.0
+  - @memberjunction/ng-notifications@5.45.0
+  - @memberjunction/ng-agent-client@5.45.0
+  - @memberjunction/ng-explorer-service-worker@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [914acd4]
+- Updated dependencies [18b5bf0]
+- Updated dependencies [be5ab50]
+- Updated dependencies [45df197]
+- Updated dependencies [aa9102d]
+- Updated dependencies [0476455]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-agent-client@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/ng-conversations@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/ng-explorer-core@5.44.0
+  - @memberjunction/ng-shared@5.44.0
+  - @memberjunction/ng-auth-services@5.44.0
+  - @memberjunction/ng-bootstrap@5.44.0
+  - @memberjunction/ng-agent-client@5.44.0
+  - @memberjunction/ng-workspace-initializer@5.44.0
+  - @memberjunction/ng-feedback@5.44.0
+  - @memberjunction/ng-notifications@5.44.0
+  - @memberjunction/ng-base-application@5.44.0
+  - @memberjunction/ng-base-types@5.44.0
+  - @memberjunction/ng-explorer-service-worker@5.44.0
+
+## 5.43.0
+
+### Patch Changes
+
+- a95ef89: fix(open-app): `mj app` runtime-load + lifecycle correctness, plus installer/Explorer fixes
+
+  The next-applicable subset of the OpenApp lifecycle audit — runtime-load and install/upgrade/remove correctness — across four packages:
+  - **`@memberjunction/open-app-engine`.** Makes an installed Open App actually take effect and the lifecycle reversible/repeatable: installed server packages load at boot from `dynamicPackages.server[]` (and their generated GraphQL resolvers enter the live schema), and installed client packages are recorded in `dynamicPackages.client[]`; install status + reinstall correctness (npm-install failure leaves the app `Disabled` not falsely `Active`; an `Error`-state app is reinstallable; rollback drops only a schema we created; migrations baseline so a `V1` migration is never skipped); atomic upgrade dependency rewrite; and remove data-safety (DB-first ordering, co-tenant shared-schema guard, and metadata cleanup committed in one transaction on PostgreSQL). Also removes an app's **own `Application` row on uninstall** — an app's metadata-sync migration registers an `Application` (fixed UUID) grouping its entities; removal previously left it orphaned, so a reinstall's migration re-`INSERT`ed the same UUID and failed on `PK_Application_ID`. Removal now deletes an Application **wholly owned** by the removed schema (best-effort, after the atomic metadata commit; an Application that also groups other apps' entities, or one with user-added dependents, is left intact and reused). +unit tests.
+  - **`@memberjunction/cli`.** The Open App client load mechanism now lives in distributed packages instead of bespoke MJExplorer files. `mj codegen manifest` gains `--open-app-client-bootstrap`: after generating the class-registrations manifest, it appends a managed, idempotent block of side-effect imports — one per installed Open App client package recorded in `dynamicPackages.client[]` — so the apps' `@RegisterClass` decorators run when the client bundle loads. The block is rebuilt on every run, so it tracks install/remove/enable/disable (each of which edits `dynamicPackages.client`). This lets MJExplorer drop its hand-written `ensure-open-app-bootstrap.mjs` script, the separate generated bootstrap file, and the extra `app.module.ts` import — keeping the app paper-thin (changes there don't auto-distribute like npm packages). +unit tests for the pure block transform.
+  - **`@memberjunction/installer`.** The configure phase wrote a real `.env` (DB credentials, API keys) but emitted no `.gitignore`, so a freshly scaffolded project could commit secrets via `git init && git add .`. It now guarantees a `.gitignore` ignoring `.env`/`.env.*` (keeping `.env.example`); idempotent — appends only missing entries, never rewriting user lines.
+  - **`@memberjunction/ng-explorer-app`.** Fixes an MJExplorer login crash where `MJNotificationService.Instance` was read before DI constructed the singleton (surfaced by magic-link's instant, no-redirect login) — the service is now injected into `MJExplorerAppComponent` so it's constructed before `handleLogin` runs.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [3eaa05a]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/ng-conversations@5.43.0
+  - @memberjunction/ai-agent-client@5.43.0
+  - @memberjunction/ng-bootstrap@5.43.0
+  - @memberjunction/ng-auth-services@5.43.0
+  - @memberjunction/ng-base-application@5.43.0
+  - @memberjunction/ng-explorer-core@5.43.0
+  - @memberjunction/ng-shared@5.43.0
+  - @memberjunction/ng-workspace-initializer@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-feedback@5.43.0
+  - @memberjunction/ng-notifications@5.43.0
+  - @memberjunction/ng-agent-client@5.43.0
+  - @memberjunction/ng-explorer-service-worker@5.43.0
+
 ## 5.42.0
 
 ### Patch Changes

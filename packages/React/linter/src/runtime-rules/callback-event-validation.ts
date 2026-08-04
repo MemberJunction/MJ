@@ -9,7 +9,7 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * The set of methods allowed on the ComponentCallbacks interface.
  * Any access to `callbacks.X` where X is not in this set is a violation.
  */
-const ALLOWED_CALLBACK_METHODS = new Set(['OpenEntityRecord', 'RegisterMethod', 'CreateSimpleNotification']);
+const ALLOWED_CALLBACK_METHODS = new Set(['OpenEntityRecord', 'RegisterMethod', 'CreateSimpleNotification', 'NotifyEvent']);
 
 /** Valid notification style values for CreateSimpleNotification. */
 const VALID_NOTIFICATION_STYLES = ['none', 'success', 'error', 'warning', 'info'];

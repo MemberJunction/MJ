@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- test mocks return minimal cast fixtures for the SDK/engine seams */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type BridgeOps } from '../livekit-agent-room-coordinator';
 import { LiveKitEgressService, wsToHttpUrl, type EgressClientLike } from '../livekit-egress-service';
 import { LiveKitTokenService } from '../livekit-token-service';
@@ -9,17 +9,23 @@ const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSec
 /** A bridge-ops mock that captures the StartBridgeSession params and returns a canned active session. */
 function makeBridgeOps(providerFound = true) {
   const startCalls: Record<string, unknown>[] = [];
+  const reconfigureCalls: Array<{ id: string }> = [];
+  let seq = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ops = {
     Config: vi.fn(async () => undefined),
     ProviderByDriverClass: vi.fn(() => (providerFound ? ({ ID: 'p1', DriverClass: LIVEKIT_BRIDGE_DRIVER_CLASS } as any) : undefined)),
     StartBridgeSession: vi.fn(async (params: Record<string, unknown>) => {
       startCalls.push(params);
-      return { SessionBridgeID: 'bridge-1' } as any;
+      return { SessionBridgeID: `bridge-${++seq}` } as any;
     }),
     StopBridgeSession: vi.fn(async () => true),
+    ReconfigureSessionToMeeting: vi.fn((id: string) => {
+      reconfigureCalls.push({ id });
+      return true;
+    }),
   } satisfies BridgeOps;
-  return { ops, startCalls };
+  return { ops, startCalls, reconfigureCalls };
 }
 
 describe('LiveKitAgentRoomCoordinator', () => {
@@ -30,6 +36,11 @@ describe('LiveKitAgentRoomCoordinator', () => {
     coordinator.SetTokenService(new LiveKitTokenService(CONFIG));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     coordinator.SetSessionFactory(async () => ({}) as any); // stub IRealtimeSession
+  });
+
+  // Meeting/moderator mode is opt-in via MJ_REALTIME_MODERATOR_MODE=on; restore env after each test.
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('is a process-wide singleton exposing the LiveKit driver key', () => {
@@ -88,6 +99,7 @@ describe('LiveKitAgentRoomCoordinator', () => {
   });
 
   it('multi-agent room: the FIRST agent is solo 1:1, a SECOND agent joins in MEETING mode (auto-response off + addressed-only)', async () => {
+    vi.stubEnv('MJ_REALTIME_MODERATOR_MODE', 'on'); // meeting mode is gated behind the moderator opt-in
     const { ops, startCalls } = makeBridgeOps(true);
     coordinator.SetBridgeOps(ops);
     const factoryCtx: Record<string, unknown>[] = [];
@@ -111,6 +123,23 @@ describe('LiveKitAgentRoomCoordinator', () => {
     expect(factoryCtx[1].MeetingMode).toBe(true);
     expect(factoryCtx[1].SelfNames).toEqual(['Marketing', 'Marketing Agent']);
     expect((startCalls[1].TurnMatcher as object).constructor.name).toBe('RegexAddressedMatcher');
+  });
+
+  it('re-gates the agents already in the room when it becomes multi-agent', async () => {
+    vi.stubEnv('MJ_REALTIME_MODERATOR_MODE', 'on'); // meeting mode is gated behind the moderator opt-in
+    const { ops, reconfigureCalls } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+
+    const room = 'regate-room-1';
+    // First agent → solo: nobody to re-gate yet.
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'g1', RoomName: room, AgentName: 'Sage', AgentAliases: ['Sage AI'] });
+    expect(reconfigureCalls.length).toBe(0);
+
+    // Second agent joins → the FIRST agent (bridge-1) is retroactively re-gated to meeting mode.
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'g2', RoomName: room, AgentName: 'Marketing' });
+    expect(reconfigureCalls.map((c) => c.id)).toContain('bridge-1');
+    // The re-gate matcher carries the first agent's names (built into a RegexAddressedMatcher).
+    expect(ops.ReconfigureSessionToMeeting).toHaveBeenCalledWith('bridge-1', expect.anything());
   });
 });
 
@@ -162,5 +191,75 @@ describe('LiveKitEgressService', () => {
     const list = await svc.ListActiveRecordings('room-1');
     expect(list).toHaveLength(1);
     expect(list[0].EgressID).toBe('eg-1');
+  });
+
+  // --- Output surfacing from EgressInfo.fileResults (stop/complete) -------------
+  // The SDK reports size/duration as bigint and duration in NANOseconds; toRecordingInfo
+  // normalizes both. These are the values a caller copies into MJStorage + the Conversation.
+
+  /** A stop client whose stopEgress returns the given EgressInfo-shaped payload. */
+  function makeStopClient(info: Record<string, unknown>): EgressClientLike {
+    return {
+      startRoomCompositeEgress: vi.fn(async () => ({}) as never),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stopEgress: vi.fn(async () => info as any),
+      listEgress: vi.fn(async () => []),
+    } satisfies EgressClientLike;
+  }
+
+  it('surfaces OutputLocation/OutputSizeBytes/OutputDurationMs (ns→ms) from fileResults[0] on stop', async () => {
+    const client = makeStopClient({
+      egressId: 'eg-9',
+      roomName: 'room-9',
+      status: 'EGRESS_COMPLETE',
+      // duration is NANOseconds (90s = 90_000_000_000 ns); size is a bigint byte count.
+      fileResults: [{ filename: 'room-9/2026.mp4', size: BigInt(1234567), duration: BigInt(90_000_000_000) }],
+    });
+    const svc = new LiveKitEgressService(CONFIG, client);
+    const info = await svc.StopRecording('eg-9');
+
+    expect(info.OutputLocation).toBe('room-9/2026.mp4');
+    expect(info.OutputSizeBytes).toBe(1234567);
+    expect(info.OutputDurationMs).toBe(90000); // 90_000_000_000 ns / 1_000_000 = 90_000 ms
+  });
+
+  it('rounds a sub-millisecond-precision nanosecond duration to the nearest ms', async () => {
+    const client = makeStopClient({
+      egressId: 'eg-r',
+      roomName: 'room-r',
+      status: 'EGRESS_COMPLETE',
+      // 1500ms expressed in ns, plus 600000 ns (0.6ms) → rounds up to 1501.
+      fileResults: [{ filename: 'f.mp4', size: BigInt(10), duration: BigInt(1_500_600_000) }],
+    });
+    const svc = new LiveKitEgressService(CONFIG, client);
+    const info = await svc.StopRecording('eg-r');
+    expect(info.OutputDurationMs).toBe(1501);
+  });
+
+  it('leaves output fields undefined while the recording is in progress (no fileResults yet)', async () => {
+    const client = makeStopClient({ egressId: 'eg-2', roomName: 'room-2', status: 'EGRESS_ACTIVE' });
+    const svc = new LiveKitEgressService(CONFIG, client);
+    const info = await svc.StopRecording('eg-2');
+
+    expect(info.Status).toBe('EGRESS_ACTIVE');
+    expect(info.OutputLocation).toBeUndefined();
+    expect(info.OutputSizeBytes).toBeUndefined();
+    expect(info.OutputDurationMs).toBeUndefined();
+  });
+
+  it('tolerates a partial fileResult — only the present fields are surfaced', async () => {
+    const client = makeStopClient({
+      egressId: 'eg-3',
+      roomName: 'room-3',
+      status: 'EGRESS_COMPLETE',
+      // filename present, but no size/duration reported (empty file edge / early result).
+      fileResults: [{ filename: 'partial.mp4' }],
+    });
+    const svc = new LiveKitEgressService(CONFIG, client);
+    const info = await svc.StopRecording('eg-3');
+
+    expect(info.OutputLocation).toBe('partial.mp4');
+    expect(info.OutputSizeBytes).toBeUndefined();
+    expect(info.OutputDurationMs).toBeUndefined();
   });
 });

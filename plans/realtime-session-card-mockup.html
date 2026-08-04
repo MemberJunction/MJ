@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Realtime Session Card — Redesign Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ════════════════════════════════════════════════════════════════════════════
+   MOCKUP-LOCAL TOKEN DEFINITIONS — names mirror MJ's _tokens.scss so this CSS
+   translates 1:1 into realtime-session-timeline-card.component.css.
+   ════════════════════════════════════════════════════════════════════════════ */
+:root[data-theme="dark"] {
+  --mj-bg-page: #101a26;
+  --mj-bg-surface: #16222f;
+  --mj-bg-surface-card: #1a2836;
+  --mj-bg-surface-sunken: #0e1822;
+  --mj-bg-surface-elevated: #20303f;
+  --mj-bg-surface-hover: #223344;
+  --mj-text-primary: #e8eef4;
+  --mj-text-secondary: #aebccb;
+  --mj-text-muted: #7d8fa3;
+  --mj-text-inverse: #ffffff;
+  --mj-border-default: #2b3d4f;
+  --mj-border-subtle: #223344;
+  --mj-border-strong: #3d5266;
+  --mj-brand-primary: #1b84ff;
+  --mj-brand-primary-hover: #3d97ff;
+  --mj-status-success: #23a55a;
+  --mj-status-success-bg: rgba(35, 165, 90, 0.14);
+  --mj-status-success-text: #4ade80;
+  --mj-status-success-border: rgba(35, 165, 90, 0.35);
+  --mj-status-error: #e5484d;
+  --mj-status-error-bg: rgba(229, 72, 77, 0.14);
+  --mj-status-error-text: #ff8589;
+  --mj-status-error-border: rgba(229, 72, 77, 0.35);
+  --mj-status-warning: #f59e0b;
+  --mj-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --wave-idle: #33475c;
+}
+:root[data-theme="light"] {
+  --mj-bg-page: #f2f5f8;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #f8fafc;
+  --mj-bg-surface-sunken: #eef2f6;
+  --mj-bg-surface-elevated: #ffffff;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-text-primary: #1e2a36;
+  --mj-text-secondary: #47586a;
+  --mj-text-muted: #7d8fa3;
+  --mj-text-inverse: #ffffff;
+  --mj-border-default: #dbe3ea;
+  --mj-border-subtle: #e8eef4;
+  --mj-border-strong: #c3cfda;
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #0d8ad1;
+  --mj-status-success: #16a34a;
+  --mj-status-success-bg: rgba(22, 163, 74, 0.1);
+  --mj-status-success-text: #15803d;
+  --mj-status-success-border: rgba(22, 163, 74, 0.3);
+  --mj-status-error: #dc2626;
+  --mj-status-error-bg: rgba(220, 38, 38, 0.08);
+  --mj-status-error-text: #b91c1c;
+  --mj-status-error-border: rgba(220, 38, 38, 0.28);
+  --mj-status-warning: #d97706;
+  --mj-shadow-md: 0 4px 14px rgba(30, 42, 54, 0.10);
+  --wave-idle: #cdd9e3;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Poppins', -apple-system, sans-serif;
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+/* ── mockup chrome ─────────────────────────────────────────────────────────── */
+.mock-header {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px;
+  background: color-mix(in srgb, var(--mj-bg-surface) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+.mock-header h1 { font-size: 15px; font-weight: 600; }
+.mock-header h1 span { color: var(--mj-text-muted); font-weight: 400; }
+.theme-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; font: inherit; font-size: 12.5px; font-weight: 500;
+  color: var(--mj-text-secondary); background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default); border-radius: 999px; cursor: pointer;
+}
+.theme-toggle:hover { color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+
+.section { max-width: 1060px; margin: 0 auto; padding: 40px 28px 12px; }
+.section-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--mj-brand-primary); margin-bottom: 6px;
+}
+.section-sub { font-size: 13px; color: var(--mj-text-muted); margin-bottom: 22px; max-width: 640px; line-height: 1.55; }
+
+/* ── replica chat context ──────────────────────────────────────────────────── */
+.chat-frame {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--mj-shadow-md);
+}
+.chat-titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; border-bottom: 1px solid var(--mj-border-subtle);
+}
+.chat-titlebar b { font-size: 14.5px; font-weight: 600; }
+.chat-titlebar .fake-actions { display: flex; gap: 8px; }
+.chat-titlebar .fake-actions span {
+  font-size: 11.5px; color: var(--mj-text-muted); border: 1px solid var(--mj-border-default);
+  padding: 5px 11px; border-radius: 8px;
+}
+.chat-scroll { padding: 20px 24px 26px; display: flex; flex-direction: column; gap: 18px; }
+
+/* message rows — replicates the real chat grid: 36px avatar rail + 12px gap   */
+.msg { display: flex; gap: 12px; }
+.msg-avatar {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 15px;
+  background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted);
+  border: 1px solid var(--mj-border-subtle);
+}
+.msg-avatar.agent { background: var(--mj-brand-primary); color: #fff; border: none; }
+.msg-body { min-width: 0; flex: 1; }
+.msg-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+.msg-name { font-size: 13px; font-weight: 600; }
+.msg-time { font-size: 11px; color: var(--mj-text-muted); }
+.msg-text { font-size: 13.5px; line-height: 1.55; color: var(--mj-text-secondary); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   THE REDESIGNED SESSION CARD
+   Key moves vs. current implementation:
+   1. GRID-ALIGNED — the broadcast badge sits exactly in the 36px avatar rail,
+      content aligns with message text. No more full-row box with alien margins.
+   2. VOICE IDENTITY — a live waveform strip is the card's signature. Animated
+      + green while live; frozen brand-tinted "fossil" when ended.
+   3. LAYERED HIERARCHY — eyebrow (VOICE SESSION) → title (agent) → stats row
+      (duration chip · time range · turns) → transcript peek → actions.
+   4. TRANSCRIPT PEEK — last turns render as real mini-bubbles, expandable
+      in place; "Open" remains for the full review overlay.
+   ════════════════════════════════════════════════════════════════════════════ */
+.vs-row { display: flex; gap: 12px; }
+
+/* rail badge — replaces msg avatar slot, carries the live pulse ring */
+.vs-badge {
+  position: relative; width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 14px; color: #fff;
+  background: linear-gradient(140deg, var(--mj-brand-primary), color-mix(in srgb, var(--mj-brand-primary) 55%, #7c3aed));
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+}
+.vs-badge.live::after {
+  content: ''; position: absolute; inset: -4px; border-radius: 13px;
+  border: 2px solid var(--mj-status-success);
+  animation: vs-ring 2s ease-out infinite;
+}
+@keyframes vs-ring {
+  0%   { opacity: 0.9; transform: scale(0.92); }
+  70%  { opacity: 0;   transform: scale(1.22); }
+  100% { opacity: 0; }
+}
+
+.vs-card {
+  flex: 1; min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-border-default));
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface-card)) 0%,
+      var(--mj-bg-surface-card) 55%);
+  overflow: hidden;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.vs-card:hover {
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
+  transform: translateY(-1px);
+}
+
+/* header band */
+.vs-head { display: flex; align-items: center; gap: 12px; padding: 13px 16px 0; }
+.vs-titles { flex: 1; min-width: 0; }
+.vs-eyebrow {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--mj-brand-primary) 80%, var(--mj-text-muted));
+  display: flex; align-items: center; gap: 6px;
+}
+.vs-title {
+  font-size: 14px; font-weight: 600; color: var(--mj-text-primary);
+  margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* status chips */
+.vs-chip {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; line-height: 1; padding: 5px 10px;
+  border-radius: 999px; border: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-secondary); background: var(--mj-bg-surface-sunken);
+}
+.vs-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.vs-chip--live {
+  color: var(--mj-status-success-text); background: var(--mj-status-success-bg);
+  border-color: var(--mj-status-success-border);
+}
+.vs-chip--live .dot { animation: vs-blink 1.4s ease-in-out infinite; }
+@keyframes vs-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.vs-chip--error {
+  color: var(--mj-status-error-text); background: var(--mj-status-error-bg);
+  border-color: var(--mj-status-error-border);
+}
+
+/* waveform strip — the card's voice signature */
+.vs-wave {
+  display: flex; align-items: center; gap: 3px; height: 34px;
+  padding: 0 16px; margin-top: 10px;
+}
+.vs-wave i {
+  flex: 1; border-radius: 2px; background: var(--wave-idle);
+  height: calc(var(--h) * 1%); min-height: 3px; max-width: 5px;
+  transition: background 0.3s ease;
+}
+/* ended: frozen brand-tinted fossil, taller bars accented */
+.vs-card.ended .vs-wave i:nth-child(3n) { background: color-mix(in srgb, var(--mj-brand-primary) 55%, var(--wave-idle)); }
+/* live: green, animated */
+.vs-card.live .vs-wave i {
+  background: var(--mj-status-success);
+  animation: vs-eq 1.1s ease-in-out calc(var(--d) * 1ms) infinite alternate;
+}
+@keyframes vs-eq { from { height: 12%; } to { height: calc(var(--h) * 1%); } }
+/* error: flatline */
+.vs-card.error .vs-wave i { background: color-mix(in srgb, var(--mj-status-error) 45%, var(--wave-idle)); height: 8%; }
+.vs-card.error .vs-wave i:nth-child(-n+8) { height: calc(var(--h) * 0.7%); }
+
+/* stats row */
+.vs-stats {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 7px 16px;
+  padding: 10px 16px 0; font-size: 12px; color: var(--mj-text-muted);
+}
+.vs-stat { display: inline-flex; align-items: center; gap: 6px; }
+.vs-stat i { font-size: 10.5px; opacity: 0.75; }
+.vs-stat b {
+  font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 11.5px;
+  color: var(--mj-text-secondary);
+}
+
+/* transcript peek — real mini bubbles, expandable in place */
+.vs-peek { padding: 12px 16px 0; display: flex; flex-direction: column; gap: 8px; }
+.vs-turn { display: flex; gap: 8px; align-items: flex-start; }
+.vs-turn-avatar {
+  width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; margin-top: 1px;
+  display: grid; place-items: center; font-size: 9px;
+  background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted);
+  border: 1px solid var(--mj-border-subtle);
+}
+.vs-turn.agent .vs-turn-avatar { background: color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-bg-surface-sunken)); color: var(--mj-brand-primary); border: none; }
+.vs-turn-bubble {
+  font-size: 12.5px; line-height: 1.5; color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-subtle);
+  padding: 6px 11px; border-radius: 10px; border-top-left-radius: 3px;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.vs-turn.agent .vs-turn-bubble { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface-sunken)); }
+.vs-peek .hidden-turn { display: none; }
+.vs-card.expanded .vs-peek .hidden-turn { display: flex; }
+
+/* footer: expander + actions */
+.vs-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px 13px;
+}
+.vs-expand {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: inherit; font-size: 12px; font-weight: 500;
+  color: var(--mj-text-muted); background: none; border: none; cursor: pointer;
+  padding: 4px 0;
+}
+.vs-expand:hover { color: var(--mj-brand-primary); }
+.vs-expand i { font-size: 10px; transition: transform 0.2s ease; }
+.vs-card.expanded .vs-expand i { transform: rotate(180deg); }
+.vs-actions { display: flex; gap: 8px; }
+.vs-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 7px 14px; border-radius: 9px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+  background: transparent; color: var(--mj-brand-primary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.vs-btn:hover { background: var(--mj-brand-primary); color: #fff; }
+.vs-btn--primary { background: var(--mj-brand-primary); color: #fff; border-color: transparent; }
+.vs-btn--primary:hover { background: var(--mj-brand-primary-hover); }
+.vs-btn--rejoin {
+  background: var(--mj-status-success); color: #fff; border-color: transparent;
+}
+.vs-btn--rejoin:hover { background: color-mix(in srgb, var(--mj-status-success) 82%, #fff); color: #fff; }
+
+/* ── state gallery grid ────────────────────────────────────────────────────── */
+.state-grid { display: grid; grid-template-columns: 1fr; gap: 22px; }
+.state-item .state-name {
+  font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.state-item .state-name i { color: var(--mj-brand-primary); font-size: 11px; }
+
+/* design-notes footer */
+.notes {
+  margin: 34px auto 60px; max-width: 1060px; padding: 0 28px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px;
+}
+.note {
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-subtle);
+  border-radius: 12px; padding: 16px;
+}
+.note i { color: var(--mj-brand-primary); font-size: 14px; }
+.note h4 { font-size: 12.5px; font-weight: 600; margin: 8px 0 4px; }
+.note p { font-size: 12px; line-height: 1.55; color: var(--mj-text-muted); }
+</style>
+</head>
+<body>
+
+<header class="mock-header">
+  <h1>Realtime Session Card <span>— conversation timeline redesign</span></h1>
+  <button class="theme-toggle" onclick="toggleTheme()">
+    <i class="fa-solid fa-circle-half-stroke"></i><span id="themeLabel">Light mode</span>
+  </button>
+</header>
+
+<!-- ═══════════ SECTION A — IN CONTEXT ═══════════ -->
+<div class="section">
+  <div class="section-label">In context</div>
+  <p class="section-sub">
+    The card now lives on the <b>same grid as chat messages</b> — its broadcast badge occupies the
+    avatar rail, its content aligns with message text. A live session announces itself with a
+    pulsing ring, an animated waveform, and a Rejoin action.
+  </p>
+
+  <div class="chat-frame">
+    <div class="chat-titlebar">
+      <b>System Identity and Mode</b>
+      <div class="fake-actions"><span>Text ▾</span><span>Auto ▾</span><span>Export</span><span>Share</span></div>
+    </div>
+    <div class="chat-scroll">
+
+      <div class="msg">
+        <div class="msg-avatar"><i class="fa-solid fa-user"></i></div>
+        <div class="msg-body">
+          <div class="msg-head"><span class="msg-name">da-robot-tester@bluecypress.io</span><span class="msg-time">7/1/26, 5:35 PM</span></div>
+          <div class="msg-text">which libs are included</div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="msg-avatar agent"><i class="fa-solid fa-leaf"></i></div>
+        <div class="msg-body">
+          <div class="msg-head"><span class="msg-name">Sage</span><span class="msg-time">7/1/26, 5:35 PM</span></div>
+          <div class="msg-text">The configuration includes the libraries “es2022” and “dom” (specified in the “lib” array under “compilerOptions”).</div>
+        </div>
+      </div>
+
+      <!-- ── THE NEW CARD — LIVE ── -->
+      <div class="vs-row">
+        <div class="vs-badge live"><i class="fa-solid fa-tower-broadcast"></i></div>
+        <div class="vs-card live" id="ctxCard">
+          <div class="vs-head">
+            <div class="vs-titles">
+              <div class="vs-eyebrow"><i class="fa-solid fa-waveform-lines" style="display:none"></i>Voice session</div>
+              <div class="vs-title">Realtime Co-Agent</div>
+            </div>
+            <span class="vs-chip vs-chip--live"><span class="dot"></span>Live</span>
+          </div>
+
+          <div class="vs-wave" data-bars="44"></div>
+
+          <div class="vs-stats">
+            <span class="vs-stat"><i class="fa-regular fa-clock"></i><b>5:36 PM</b>&nbsp;started</span>
+            <span class="vs-stat"><i class="fa-solid fa-stopwatch"></i><b id="liveTimer">04:12</b>&nbsp;elapsed</span>
+            <span class="vs-stat"><i class="fa-solid fa-arrows-rotate"></i><b>7</b>&nbsp;turns</span>
+          </div>
+
+          <div class="vs-peek">
+            <div class="vs-turn hidden-turn agent">
+              <div class="vs-turn-avatar"><i class="fa-solid fa-robot"></i></div>
+              <div class="vs-turn-bubble">Sure — I’ll walk you through the search flow. Watch the highlighted box on your screen.</div>
+            </div>
+            <div class="vs-turn hidden-turn">
+              <div class="vs-turn-avatar"><i class="fa-solid fa-user"></i></div>
+              <div class="vs-turn-bubble">Got it, I see it highlighted now.</div>
+            </div>
+            <div class="vs-turn agent">
+              <div class="vs-turn-avatar"><i class="fa-solid fa-robot"></i></div>
+              <div class="vs-turn-bubble">Okay, why don’t you try now? Use the search box again.</div>
+            </div>
+          </div>
+
+          <div class="vs-foot">
+            <button class="vs-expand" onclick="togglePeek('ctxCard', this)">
+              <i class="fa-solid fa-chevron-down"></i><span>Show recent turns</span>
+            </button>
+            <div class="vs-actions">
+              <button class="vs-btn"><i class="fa-solid fa-up-right-from-square"></i>Open</button>
+              <button class="vs-btn vs-btn--rejoin"><i class="fa-solid fa-phone"></i>Rejoin</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="msg">
+        <div class="msg-avatar"><i class="fa-solid fa-user"></i></div>
+        <div class="msg-body">
+          <div class="msg-head"><span class="msg-name">da-robot-tester@bluecypress.io</span><span class="msg-time">7/1/26, 5:41 PM</span></div>
+          <div class="msg-text">that voice walkthrough was helpful, thanks!</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ SECTION B — STATES ═══════════ -->
+<div class="section">
+  <div class="section-label">States</div>
+  <p class="section-sub">
+    Ended sessions freeze the waveform into a brand-tinted “fossil” and lead with duration.
+    Error closes flatline it. All chips map 1:1 to the existing <code>StatusChip</code> logic
+    (Live / Idle / Ended / Timed out / Error / Server shutdown).
+  </p>
+
+  <div class="state-grid">
+
+    <!-- ENDED -->
+    <div class="state-item">
+      <div class="state-name"><i class="fa-solid fa-circle-check"></i>Ended (CloseReason = Explicit) — collapsed default</div>
+      <div class="vs-row">
+        <div class="vs-badge"><i class="fa-solid fa-tower-broadcast"></i></div>
+        <div class="vs-card ended" id="endedCard">
+          <div class="vs-head">
+            <div class="vs-titles">
+              <div class="vs-eyebrow">Voice session</div>
+              <div class="vs-title">Realtime Co-Agent</div>
+            </div>
+            <span class="vs-chip">Ended</span>
+          </div>
+          <div class="vs-wave" data-bars="44"></div>
+          <div class="vs-stats">
+            <span class="vs-stat"><i class="fa-solid fa-stopwatch"></i><b>4 min 42 s</b></span>
+            <span class="vs-stat"><i class="fa-regular fa-clock"></i><b>Jul 1, 5:36 → 5:41 PM</b></span>
+            <span class="vs-stat"><i class="fa-solid fa-arrows-rotate"></i><b>7</b>&nbsp;turns</span>
+          </div>
+          <div class="vs-peek">
+            <div class="vs-turn hidden-turn">
+              <div class="vs-turn-avatar"><i class="fa-solid fa-user"></i></div>
+              <div class="vs-turn-bubble">Where do I find advanced search?</div>
+            </div>
+            <div class="vs-turn agent">
+              <div class="vs-turn-avatar"><i class="fa-solid fa-robot"></i></div>
+              <div class="vs-turn-bubble">Okay, why don’t you try now? Use the search box again.</div>
+            </div>
+          </div>
+          <div class="vs-foot">
+            <button class="vs-expand" onclick="togglePeek('endedCard', this)">
+              <i class="fa-solid fa-chevron-down"></i><span>Show recent turns</span>
+            </button>
+            <div class="vs-actions">
+              <button class="vs-btn vs-btn--primary"><i class="fa-solid fa-up-right-from-square"></i>Open session</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ERROR -->
+    <div class="state-item">
+      <div class="state-name"><i class="fa-solid fa-triangle-exclamation"></i>Closed with error (CloseReason = Error)</div>
+      <div class="vs-row">
+        <div class="vs-badge" style="background: linear-gradient(140deg, var(--mj-status-error), color-mix(in srgb, var(--mj-status-error) 55%, #7c3aed)); box-shadow: 0 3px 10px var(--mj-status-error-bg);"><i class="fa-solid fa-tower-broadcast"></i></div>
+        <div class="vs-card error">
+          <div class="vs-head">
+            <div class="vs-titles">
+              <div class="vs-eyebrow" style="color: var(--mj-status-error-text);">Voice session</div>
+              <div class="vs-title">Realtime Co-Agent</div>
+            </div>
+            <span class="vs-chip vs-chip--error"><i class="fa-solid fa-triangle-exclamation" style="font-size:9px;"></i>Error</span>
+          </div>
+          <div class="vs-wave" data-bars="44"></div>
+          <div class="vs-stats">
+            <span class="vs-stat"><i class="fa-solid fa-stopwatch"></i><b>0 min 38 s</b></span>
+            <span class="vs-stat"><i class="fa-regular fa-clock"></i><b>Jul 1, 2:03 → 2:04 PM</b></span>
+            <span class="vs-stat"><i class="fa-solid fa-arrows-rotate"></i><b>1</b>&nbsp;turn</span>
+          </div>
+          <div class="vs-foot">
+            <span style="font-size:12px; color: var(--mj-status-error-text);"><i class="fa-solid fa-circle-info" style="font-size:11px;"></i>&nbsp;Connection dropped — transcript preserved</span>
+            <div class="vs-actions">
+              <button class="vs-btn"><i class="fa-solid fa-up-right-from-square"></i>Open</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NO META / minimal -->
+    <div class="state-item">
+      <div class="state-name"><i class="fa-solid fa-circle-question"></i>Degraded (no session meta — generic label, no chip, no preview)</div>
+      <div class="vs-row">
+        <div class="vs-badge"><i class="fa-solid fa-tower-broadcast"></i></div>
+        <div class="vs-card ended">
+          <div class="vs-head" style="padding-bottom: 2px;">
+            <div class="vs-titles">
+              <div class="vs-eyebrow">Voice session</div>
+              <div class="vs-title">Realtime session</div>
+            </div>
+          </div>
+          <div class="vs-wave" data-bars="44"></div>
+          <div class="vs-stats" style="padding-bottom: 13px;">
+            <span class="vs-stat"><i class="fa-regular fa-clock"></i><b>Jul 1, 5:36 PM</b></span>
+            <span class="vs-stat"><i class="fa-solid fa-arrows-rotate"></i><b>7</b>&nbsp;turns</span>
+            <span style="flex:1"></span>
+            <button class="vs-btn" style="margin-top:-4px;"><i class="fa-solid fa-up-right-from-square"></i>Open</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════ SECTION C — EXPANDED ═══════════ -->
+<div class="section">
+  <div class="section-label">Expanded transcript peek</div>
+  <p class="section-sub">
+    Clicking “Show recent turns” reveals the last few turns as mini-bubbles <b>in place</b> —
+    no navigation. “Open session” still launches the full review overlay for the complete
+    transcript with Resume / Close controls.
+  </p>
+
+  <div class="vs-row">
+    <div class="vs-badge"><i class="fa-solid fa-tower-broadcast"></i></div>
+    <div class="vs-card ended expanded" id="expandedCard">
+      <div class="vs-head">
+        <div class="vs-titles">
+          <div class="vs-eyebrow">Voice session</div>
+          <div class="vs-title">Realtime Co-Agent</div>
+        </div>
+        <span class="vs-chip">Ended</span>
+      </div>
+      <div class="vs-wave" data-bars="44"></div>
+      <div class="vs-stats">
+        <span class="vs-stat"><i class="fa-solid fa-stopwatch"></i><b>4 min 42 s</b></span>
+        <span class="vs-stat"><i class="fa-regular fa-clock"></i><b>Jul 1, 5:36 → 5:41 PM</b></span>
+        <span class="vs-stat"><i class="fa-solid fa-arrows-rotate"></i><b>7</b>&nbsp;turns</span>
+      </div>
+      <div class="vs-peek">
+        <div class="vs-turn hidden-turn">
+          <div class="vs-turn-avatar"><i class="fa-solid fa-user"></i></div>
+          <div class="vs-turn-bubble">Where do I find advanced search?</div>
+        </div>
+        <div class="vs-turn hidden-turn agent">
+          <div class="vs-turn-avatar"><i class="fa-solid fa-robot"></i></div>
+          <div class="vs-turn-bubble">Sure — I’ll walk you through the search flow. Watch the highlighted box on your screen.</div>
+        </div>
+        <div class="vs-turn hidden-turn">
+          <div class="vs-turn-avatar"><i class="fa-solid fa-user"></i></div>
+          <div class="vs-turn-bubble">Got it, I see it highlighted now.</div>
+        </div>
+        <div class="vs-turn agent">
+          <div class="vs-turn-avatar"><i class="fa-solid fa-robot"></i></div>
+          <div class="vs-turn-bubble">Okay, why don’t you try now? Use the search box again.</div>
+        </div>
+      </div>
+      <div class="vs-foot">
+        <button class="vs-expand" onclick="togglePeek('expandedCard', this)">
+          <i class="fa-solid fa-chevron-down"></i><span>Hide recent turns</span>
+        </button>
+        <div class="vs-actions">
+          <button class="vs-btn vs-btn--primary"><i class="fa-solid fa-up-right-from-square"></i>Open session</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ DESIGN NOTES ═══════════ -->
+<div class="notes">
+  <div class="note"><i class="fa-solid fa-table-columns"></i>
+    <h4>Grid alignment</h4>
+    <p>The badge occupies the exact 36px avatar rail; card content shares the message text column. The old card ignored the rail — the “margins look off” root cause.</p>
+  </div>
+  <div class="note"><i class="fa-solid fa-wave-square"></i>
+    <h4>Voice signature</h4>
+    <p>The waveform strip instantly says “this was audio.” Animated green while live, brand-tinted fossil when ended, flatline on error. Pure CSS — ~44 divs, zero canvas.</p>
+  </div>
+  <div class="note"><i class="fa-solid fa-comments"></i>
+    <h4>Transcript peek</h4>
+    <p>Last turns render as mini-bubbles expandable in place (maps to existing Group turn data). “Open” keeps launching the full review overlay — unchanged contract.</p>
+  </div>
+  <div class="note"><i class="fa-solid fa-palette"></i>
+    <h4>Token-pure</h4>
+    <p>Every color is an --mj-* token or color-mix() of tokens — passes the CI hex gate, adapts to dark/light automatically. Try the theme toggle ↑</p>
+  </div>
+</div>
+
+<script>
+/* waveform bars — deterministic pseudo-random heights so every render matches */
+function seedBars() {
+  document.querySelectorAll('.vs-wave').forEach(wave => {
+    const n = parseInt(wave.dataset.bars || '44', 10);
+    let s = 7;
+    for (let i = 0; i < n; i++) {
+      s = (s * 16807) % 2147483647;
+      const h = 18 + (s % 72);            /* 18–90% height */
+      const d = (s % 900);                /* stagger for live anim */
+      const bar = document.createElement('i');
+      bar.style.setProperty('--h', h);
+      bar.style.setProperty('--d', d);
+      wave.appendChild(bar);
+    }
+  });
+}
+function togglePeek(id, btn) {
+  const card = document.getElementById(id);
+  card.classList.toggle('expanded');
+  btn.querySelector('span').textContent =
+    card.classList.contains('expanded') ? 'Hide recent turns' : 'Show recent turns';
+}
+function toggleTheme() {
+  const root = document.documentElement;
+  const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  root.dataset.theme = next;
+  document.getElementById('themeLabel').textContent = next === 'dark' ? 'Light mode' : 'Dark mode';
+}
+/* live elapsed ticker for the in-context card */
+(function tick() {
+  let sec = 252;
+  setInterval(() => {
+    sec++;
+    const m = String(Math.floor(sec / 60)).padStart(2, '0');
+    const s = String(sec % 60).padStart(2, '0');
+    const el = document.getElementById('liveTimer');
+    if (el) el.textContent = `${m}:${s}`;
+  }, 1000);
+})();
+seedBars();
+</script>
+</body>
+</html>

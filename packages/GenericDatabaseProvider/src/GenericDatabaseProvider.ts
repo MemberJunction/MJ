@@ -42,6 +42,7 @@ import {
     RunQueryWithCacheCheckParams,
     RunQueriesWithCacheCheckResponse,
     RunQueryWithCacheCheckResult,
+    QueryCacheAuthorization,
     QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
@@ -65,6 +66,9 @@ import {
     SaveSQLResult,
     AfterKeyNotSupportedError,
     IsKeysetPaginationOrderableType,
+    ExternalDataSourceReadRouter,
+    resolveQueryResultEnricher,
+    QueryInfo,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -75,7 +79,7 @@ import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect } from '@memberjunction/sql-dialect';
 // QueryCompositionEngine is now owned by RenderPipeline
-import { RenderPipeline } from './renderPipeline.js';
+import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
 import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
@@ -705,10 +709,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): Promise<Record<string, unknown>[]> {
         if (!rows || rows.length === 0) return rows;
 
-        // Step 1: Platform-specific datetime adjustment (virtual hook)
+        // Step 1: Platform-specific datetime adjustment (virtual hook).
+        // SKIP for external entities: AdjustDatetimeFields applies THIS provider's platform correction
+        // (e.g. SQL Server appends 'Z' to compensate for how tedious marshals datetimes from the LOCAL
+        // MJ database). External rows come from a different engine whose own driver already normalized
+        // datetimes to proper Date objects — re-applying the local correction would double-shift them.
         const datetimeFields = entityInfo.DatetimeFields; // memoized on EntityInfo (was Fields.filter per query)
         let processedRows: Record<string, unknown>[] = rows;
-        if (datetimeFields.length > 0) {
+        if (datetimeFields.length > 0 && !entityInfo.ExternalDataSourceID) {
             processedRows = await this.AdjustDatetimeFields(processedRows, datetimeFields, entityInfo);
         }
 
@@ -1068,9 +1076,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // framework-internal read for SQL parameter building, so it deliberately bypasses
             // entity.Get(), which would assert active status (deprecation warning / disabled throw)
             // for what is NOT user use of the field. (EntityField.Value itself never asserts.)
-            const theField = entity.Fields.find(
-                (field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase(),
-            );
+            const theField = entity.GetFieldByName(f.Name);
             const rawValue = theField?.Value;
 
             // PK-on-CREATE with no explicit value: omit so the SP default fires.
@@ -1446,6 +1452,34 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             this.CheckUserReadPermissions(entityInfo.Name, user);
+
+            // ── External data source dispatch ──
+            // Entities backed by an external data source are proxied live through a
+            // driver and have no view/sproc in the MJ DB, so delegate before any SQL
+            // generation. This is a no-op for every MJ-DB entity (ExternalDataSourceID null).
+            if (entityInfo.ExternalDataSourceID) {
+                // Refuse rather than silently bypass Row-Level Security — a remote system can't
+                // enforce MJ's RLS WHERE clauses, so returning unfiltered rows would be a data leak.
+                this.assertExternalReadAllowedUnderRLS(entityInfo, user);
+                // Refuse params we can't honor remotely rather than silently dropping them — most
+                // importantly AfterKey, which would otherwise return the same page on every call.
+                this.assertExternalRunViewParamsSupported(params, entityInfo.Name);
+                // A saved view's stored WhereClause/OrderBy live on viewEntity, not params, and the
+                // normal SQL path that applies them runs below this early return — so fold them in
+                // here, else a UserView over an external entity silently returns unfiltered rows.
+                const externalParams = await this.mergeExternalViewParams(params, viewEntity, user);
+                const externalRouter = this.resolveExternalReadRouterOrThrow(`Entity '${entityInfo.Name}'`);
+                const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, externalParams, user, this);
+                // Apply the same row post-processing MJ-DB reads get (field decryption + datetime
+                // normalization). Without this, an Encrypt-flagged external field surfaces as ciphertext.
+                if (externalResult.Success && externalResult.Results && externalResult.Results.length > 0) {
+                    // Generic-erasure boundary: PostProcessRows operates on Record<string,unknown>[]
+                    // but Results is typed T[]; the double-cast bridges that erasure (not a lazy `any`).
+                    const rows = externalResult.Results as unknown as Record<string, unknown>[];
+                    externalResult.Results = (await this.PostProcessRows(rows, entityInfo, user)) as unknown as T[];
+                }
+                return externalResult;
+            }
 
             // ── Parameters (transform user-provided SQL clauses for platform compatibility) ──
             const extraFilter: string = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
@@ -2049,6 +2083,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             for (let i = 0; i < params.length; i++) {
                 // Shallow-clone: widening must never leak into the caller's objects
                 params[i] = { ...params[i], params: { ...params[i].params } };
+                // ── PreRunView data hooks (same enforcement seam as the standard
+                // PreRunView/PreRunViews pipeline) ──
+                // This path executes queries via buildWhereClauseForCacheCheck and
+                // InternalRunView directly, so registered hooks (e.g. tenant-filter
+                // middleware injecting scoping into ExtraFilter) would otherwise be
+                // SKIPPED for every CacheLocal read — and this operation is directly
+                // client-invokable over GraphQL. Apply them here, once per item,
+                // BEFORE the cache-currency WHERE clause is built and before any
+                // execution leg, so the currency check and the returned rows always
+                // agree with what the hooked non-cached path would produce.
+                // PlatformSQL resolves first (hooks expect plain-string filters),
+                // mirroring PreRunView's ordering.
+                this.ResolvePlatformSQLInParams(params[i].params);
+                params[i].params = await this.RunPreRunViewHooks(params[i].params, user);
                 const p = params[i].params;
                 const widenEntity = p.EntityName ? this.EntityByName(p.EntityName) : null;
                 if (widenEntity && this.runViewCacheEligible(p)) {
@@ -2090,17 +2138,32 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
+                // Read-permission gate for EVERY entity (external + local) up front. This must run before
+                // the external routing below: external entities are served from the server cache on a hit
+                // WITHOUT re-entering InternalRunView, so if the CanRead check only lived on the cache-miss
+                // path a user lacking permission could receive rows another user warmed into the cache.
                 try {
                     this.CheckUserReadPermissions(entityInfo.Name, user);
-                    itemsNeedingValidation.push({ index: i, item, entityInfo });
                 } catch (e) {
                     errorResults.push({ viewIndex: i, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
+                    continue;
                 }
+
+                // External-data-source entities can't participate in DB-side cache validation
+                // (no MJ base view / __mj_UpdatedAt to COUNT/MAX against). Route them to the
+                // standard execution path, which dispatches to the external driver and TTL-caches
+                // correctly via runFullQueryAndCacheResult. Mirrors the AfterKey bypass above.
+                if (entityInfo.ExternalDataSourceID) {
+                    itemsWithoutCacheCheck.push({ index: i, item });
+                    continue;
+                }
+
+                itemsNeedingValidation.push({ index: i, item, entityInfo });
             }
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
-            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
             const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
@@ -2166,7 +2229,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -2213,6 +2276,43 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fullQueryResults = await Promise.all(queryPromises);
             const allResults = [...errorResults, ...currentResults, ...fullQueryResults];
             allResults.sort((a, b) => a.viewIndex - b.viewIndex);
+
+            // ── PostRunView data hooks (OUTPUT half of the enforcement seam) ──
+            // The Pre hooks were applied to each item's params up front; the
+            // matching Post hooks (data masking / audit) run HERE, once per
+            // row-bearing item at the outbound boundary — mirroring
+            // ProviderBase.PostRunViews — so rows returned via ANY leg (fresh
+            // query, server-cache serve, or differential) get the same masking
+            // the hooked non-cached path applies. Applied AFTER projection
+            // (item.results is already the caller's shape) and PER REQUEST, so
+            // masking is never baked into the shared cache. 'current' and
+            // 'error' items carry no rows: a 'current' client keeps its own
+            // cache, which was masked when an earlier 'stale'/'differential'
+            // response populated it. Uses params[viewIndex] — the same hooked
+            // params object the Pre hooks produced.
+            for (const item of allResults) {
+                const rowBearing = item as { viewIndex: number; results?: T[]; rowCount?: number };
+                if (!Array.isArray(rowBearing.results)) {
+                    continue;
+                }
+                const viewParams = params[rowBearing.viewIndex]?.params;
+                if (!viewParams) {
+                    continue;
+                }
+                const hooked = await this.RunPostRunViewHooks(
+                    viewParams,
+                    {
+                        Success: true,
+                        Results: rowBearing.results,
+                        RowCount: rowBearing.results.length,
+                        TotalRowCount: rowBearing.rowCount ?? rowBearing.results.length,
+                    } as unknown as RunViewResult<T>,
+                    user,
+                );
+                if (hooked && Array.isArray(hooked.Results)) {
+                    rowBearing.results = hooked.Results as T[];
+                }
+            }
 
             const entities = params.map(p => p.params.EntityName || 'unknown').join(', ');
             const totalServerCacheHits = (itemsNeedingValidation.length - serverCacheMissItems.length) + noCacheStatusServedFromCache.length;
@@ -2314,7 +2414,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return { viewIndex, status: 'error', errorMessage: result.ErrorMessage || 'Unknown error executing view' };
         }
         const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
-        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.TotalRowCount };
+        // aggregateResults must ride along (B40): InternalRunView computed them, the contract
+        // type declares the field, but this return omitted them — so every CacheLocal request
+        // that took the cache-check transport got Success with NO aggregates, even on a cold
+        // miss. The subset/aggregate differential gate routes aggregate-bearing params through
+        // THIS path, which makes the omission total rather than occasional.
+        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.TotalRowCount, aggregateResults: result.AggregateResults };
     }
 
     /**
@@ -2334,10 +2439,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // eligibility gate matters: BypassCache/AfterKey/count_only results were
             // never widened and must NOT be written under the superset fingerprint.
             if (this.runViewCacheEligible(params) && LocalCacheManager.Instance.IsInitialized) {
-                const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
-                const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-                await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this);
+                // External entities cache with a TTL (no BaseEntity events to invalidate them);
+                // MJ-DB entities get undefined (event-invalidated as before). A 0 means the
+                // external source has caching disabled — skip the write to avoid stale data.
+                const ttlMs = await this.resolveExternalCacheTTLMs(params, contextUser);
+                if (ttlMs !== 0) {
+                    const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
+                    const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
+                    // Pass the aggregates (B38-family omission #4). This slot is ALSO written by
+                    // InternalRunView's normal PostRunView path WITH aggregates — two writers,
+                    // one slot, and this one dropped them. Whichever write landed last won, so a
+                    // later server-cache hit served rows with or without aggregates depending on
+                    // a write race. That is exactly the standalone-passes / aggregator-fails
+                    // flake client-cache C13 exhibited.
+                    await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, result.aggregateResults, result.rowCount, this, ttlMs);
+                }
             }
             // Project the response down to the caller's requested shape AFTER the
             // cache write — the cache keeps the superset, the caller gets their fields.
@@ -2346,6 +2463,131 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
         return result;
+    }
+
+    /**
+     * Resolves the cache TTL (in ms) for a RunView's entity, or `undefined` for MJ-DB entities
+     * (which use event-based cache invalidation, not TTL). External-data-source entities MUST be
+     * time-bounded — their remote data changes never emit BaseEntity events — so this returns the
+     * data source's DefaultCacheTTLSeconds (via the external router) in ms, or `0` to signal "do
+     * not cache" (TTL disabled on the source, or no router available to resolve one).
+     */
+    protected async resolveExternalCacheTTLMs(params: RunViewParams, contextUser?: UserInfo): Promise<number | undefined> {
+        if (!params.EntityName) return undefined;
+        const entityInfo = this.EntityByName(params.EntityName);
+        if (!entityInfo?.ExternalDataSourceID) return undefined; // MJ-DB entity — event-invalidated, no TTL
+        // Must check GetRegistration, not CreateInstance's return: CreateInstance returns an instance of
+        // the ABSTRACT base (never null) when unregistered, so a `!router` check would be dead code.
+        const cf = MJGlobal.Instance.ClassFactory;
+        if (!cf.GetRegistration(ExternalDataSourceReadRouter)) return 0; // no router — don't cache (avoid stale-forever)
+        const router = cf.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter)!;
+        const ttlSeconds = await router.GetCacheTTLSeconds(entityInfo.ExternalDataSourceID, contextUser, this);
+        return ttlSeconds > 0 ? ttlSeconds * 1000 : 0;
+    }
+
+    /**
+     * Resolve the External Data Sources read router, or throw a CLEAR error when the EDS engine isn't
+     * loaded. IMPORTANT: `ClassFactory.CreateInstance` returns an instance of the ABSTRACT base class
+     * (not null) when no concrete class is registered, so a `if (!router)` guard is dead code and the
+     * caller would instead hit a cryptic "router.X is not a function" TypeError. Gate on GetRegistration.
+     */
+    private resolveExternalReadRouterOrThrow(context: string): ExternalDataSourceReadRouter {
+        const cf = MJGlobal.Instance.ClassFactory;
+        if (!cf.GetRegistration(ExternalDataSourceReadRouter)) {
+            throw new Error(`${context} is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
+        }
+        return cf.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter)!;
+    }
+
+    /**
+     * Guards external-data-source reads against silently bypassing Row-Level Security. A remote
+     * system can't enforce MJ's RLS WHERE clauses, so if RLS would filter this user's rows we
+     * refuse the read with a clear error rather than returning unfiltered data. Users exempt from
+     * RLS (e.g. admins) get an empty clause and pass through — RLS wouldn't restrict them on an
+     * MJ-DB entity either. Called from the external RunView and Load dispatch points.
+     */
+    protected assertExternalReadAllowedUnderRLS(entityInfo: EntityInfo, user: UserInfo): void {
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        if (rlsWhereClause && rlsWhereClause.length > 0) {
+            throw new Error(
+                `Entity '${entityInfo.Name}' is backed by an external data source and has Row-Level Security that applies ` +
+                `to this user. RLS cannot be enforced on a remote system, so external reads are refused for RLS-protected ` +
+                `entities to avoid returning unfiltered data. Remove the RLS filter, or do not back this entity with an external data source.`,
+            );
+        }
+    }
+
+    /**
+     * Rejects RunView params an external data source can't honor, rather than silently dropping
+     * them. Most important is AfterKey (keyset pagination): the external read path only supports
+     * offset paging, so a silently-dropped AfterKey would return the same page on every call — an
+     * infinite loop / duplicate processing in deep-pagination jobs. Aggregates and a non-empty
+     * UserSearchString likewise can't be evaluated remotely. Throws a clear error naming the param.
+     */
+    protected assertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
+        if (params.AfterKey) {
+            throw new Error(`Keyset pagination (AfterKey) is not supported for external-data-source entity '${entityName}'. Use StartRow/MaxRows offset paging instead.`);
+        }
+        if (params.Aggregates && params.Aggregates.length > 0) {
+            throw new Error(`Aggregates are not supported for external-data-source entity '${entityName}'. Author an external MJ Query for aggregate results instead.`);
+        }
+        if (typeof params.UserSearchString === 'string' && params.UserSearchString.trim().length > 0) {
+            throw new Error(`UserSearchString is not supported for external-data-source entity '${entityName}'. Use ExtraFilter instead.`);
+        }
+        // Apply the same forbidden-keyword screen the MJ-DB path runs on caller-supplied SQL
+        // clauses before they're passed to the remote driver. The driver still parameterizes
+        // values, but this blocks obvious injection of statement-terminating / DDL keywords.
+        // NOTE: this is a deliberately conservative cross-dialect pre-filter applied to EVERY
+        // external source, including MongoDB (whose real parser is MongoFilterTranslator) — a Mongo
+        // filter containing a SQL-ish token is screened here even though Mongo never builds SQL.
+        // Acceptable belt-and-suspenders; scope to SQL drivers if it ever proves noisy.
+        const extraFilter = (params.ExtraFilter as string) || '';
+        if (extraFilter && !this.ValidateUserProvidedSQLClause(extraFilter)) {
+            throw new Error(`Invalid ExtraFilter clause for external-data-source entity '${entityName}': contains one or more forbidden keywords.`);
+        }
+        const orderBy = (params.OrderBy as string) || '';
+        if (orderBy && !this.ValidateUserProvidedSQLClause(orderBy)) {
+            throw new Error(`Invalid OrderBy clause for external-data-source entity '${entityName}': contains one or more forbidden keywords.`);
+        }
+    }
+
+    /**
+     * Folds a saved view's stored WhereClause and OrderByClause into the RunView params before
+     * external dispatch. The external branch returns before the normal SQL path that applies
+     * them, so without this a UserView over an external entity would silently return unfiltered,
+     * unordered rows. The view's WhereClause is ANDed with any caller ExtraFilter; the view's
+     * OrderByClause is used only when the caller supplied no OrderBy. Returns params unchanged
+     * when there is no saved view.
+     */
+    protected async mergeExternalViewParams(
+        params: RunViewParams,
+        viewEntity: MJUserViewEntityExtended | null,
+        user: UserInfo,
+    ): Promise<RunViewParams> {
+        if (!viewEntity) return params;
+        const merged: RunViewParams = { ...params };
+        const callerFilter = (params.ExtraFilter as string) || '';
+        if (viewEntity.WhereClause && viewEntity.WhereClause.length > 0) {
+            const renderedWhere = (await this.RenderViewWhereClause(viewEntity, user))?.trim();
+            if (renderedWhere) {
+                merged.ExtraFilter = callerFilter ? `(${callerFilter}) AND (${renderedWhere})` : renderedWhere;
+            }
+        }
+        if ((!params.OrderBy || (params.OrderBy as string).length === 0) && viewEntity.OrderByClause) {
+            merged.OrderBy = viewEntity.OrderByClause;
+        }
+        // The view's WhereClause/OrderByClause weren't covered by the pre-merge screen in
+        // assertExternalRunViewParamsSupported — validate the MERGED clauses before they reach the
+        // remote driver (mirrors the MJ-DB path, which validates the post-merge OrderBy).
+        const mergedFilter = (merged.ExtraFilter as string) || '';
+        if (mergedFilter && !this.ValidateUserProvidedSQLClause(mergedFilter)) {
+            throw new Error(`Invalid effective filter for external-data-source view '${viewEntity.Name}': the saved view's WhereClause contains one or more forbidden keywords.`);
+        }
+        const mergedOrderBy = (merged.OrderBy as string) || '';
+        if (mergedOrderBy && !this.ValidateUserProvidedSQLClause(mergedOrderBy)) {
+            throw new Error(`Invalid effective OrderBy for external-data-source view '${viewEntity.Name}': the saved view's OrderByClause contains one or more forbidden keywords.`);
+        }
+        return merged;
     }
 
     /**
@@ -2382,7 +2624,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
-        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number },
+        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] },
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         // The server cache stores the full-width superset — project down to the
@@ -2398,6 +2640,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             results: results as T[],
             maxUpdatedAt: serverCached.maxUpdatedAt,
             rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
+            // Carry aggregates through (B40-family, 4th drop). The server slot stores them and
+            // GetRunViewResult returns them, but this serve-leg's inline serverCached type omitted
+            // the field, so TypeScript could not flag the drop. Both callers (noCacheStatus + stale)
+            // now widen their type to match, so the field flows.
+            aggregateResults: serverCached.aggregateResults,
         };
     }
 
@@ -2460,6 +2707,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const projectedRows = callerFields
                 ? ProjectRowsToFields(updatedRows as Record<string, unknown>[], callerFields) as T[]
                 : updatedRows;
+
+            // Never OFFER a differential the client is structurally unable to merge.
+            //
+            // The client refuses a delta merge for MaxRows/StartRow (subset) and aggregate-bearing
+            // slots — the row window and the aggregate are not derivable from a row delta in JS.
+            // But its decline path THROWS, inside a Promise.all over the whole batch, with no
+            // refetch available (a differential reply carries only a delta). So one such slot
+            // fails the caller's entire RunViews call.
+            //
+            // Verified reachable, not theoretical: a CacheLocal slot with `Aggregates`, and one
+            // with a merely DEFENSIVE `MaxRows: 50` over 3 rows (a cap that does not even
+            // truncate), both threw after a single external change. A returning browser with a
+            // persistent IndexedDB slot is the ordinary path in.
+            //
+            // Deciding it HERE is the right seam: the server is the only party that can still
+            // produce full data at this point, and runFullQueryAndCacheResult is the same
+            // fallback the implied-deletes validation above already uses. The client then takes
+            // its 'stale' branch, which carries a complete result set.
+            const isSubsetShape = (params.MaxRows != null && params.MaxRows > 0)
+                || (params.StartRow != null && params.StartRow > 0);
+            const hasAggregateShape = !!params.Aggregates && params.Aggregates.length > 0;
+            if (isSubsetShape || hasAggregateShape) {
+                LogStatus(`Differential skipped for ${entityInfo.Name}: ${isSubsetShape ? 'subset (MaxRows/StartRow)' : 'aggregate-bearing'} params cannot be merged from a delta. Falling back to full refresh.`);
+                return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
+            }
 
             return {
                 viewIndex,
@@ -2645,6 +2917,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * B45 override of the RunQuery cache-serve seam — enforce the SAME authorization on a
+     * cache HIT that the miss path enforces. Resolution uses `resolveQuery()` (QueryEngine as
+     * the single source of truth, with CategoryPath disambiguation of same-named queries — the
+     * B46 pairing), and authorization is the FULL `MJQueryEntityExtended.UserCanRun` (roles +
+     * entity CanRead + recursive composition) — exactly the check `ValidateQueryForExecution`
+     * applies before a real execution. The base's roles-only check would let a user read cached
+     * rows of a query whose underlying entities they cannot read.
+     *
+     * Non-throwing by contract: any resolution error degrades to `resolvable: false`, which the
+     * gate treats as "fall through to authorized execution" — one extra query run, never an
+     * unauthorized serve and never a crashed cache path.
+     */
+    protected override ResolveQueryCacheAuthorization(params: RunQueryParams, user?: UserInfo): QueryCacheAuthorization {
+        try {
+            const query = this.resolveQuery(params);
+            if (!query) {
+                return { resolvable: false, authorized: false };
+            }
+            return {
+                resolvable: true,
+                authorized: !user || query.UserCanRun(user).canRun,
+                categoryPath: query.CategoryPath,
+                queryName: query.Name
+            };
+        } catch (e) {
+            LogStatusEx({ message: `ResolveQueryCacheAuthorization: resolution failed (${e instanceof Error ? e.message : String(e)}) — treating as unresolvable.`, verboseOnly: true });
+            return { resolvable: false, authorized: false };
+        }
+    }
+
+    /**
      * Resolves a query from RunQueryParams (by ID or Name+CategoryPath).
      * Uses QueryEngine as the single source of truth for query metadata.
      */
@@ -2821,12 +3124,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return this.ExecuteAdhocQuery(params, contextUser);
         }
 
+        let finalSQL: string | undefined;
         try {
             // Find and validate query
             const query = this.findAndValidateQuery(params, contextUser);
 
             // Process parameters (composition + Nunjucks templates)
-            const { finalSQL, appliedParameters } = this.processQueryParameters(query, params.Parameters, contextUser);
+            const resolved = this.processQueryParameters(query, params.Parameters, contextUser);
+            finalSQL = resolved.finalSQL;
+            const appliedParameters = resolved.appliedParameters;
+
+            // ── External data source dispatch ──
+            // Queries bound to an external data source execute their (now fully-rendered)
+            // native SQL via the driver, not the MJ DB. No-op for MJ-DB queries.
+            //
+            // NOTE (RLS asymmetry — intentional): unlike the external RunView/Load paths, which REFUSE
+            // to run when an entity has a Row-Level-Security clause (assertExternalReadAllowedUnderRLS,
+            // since RLS can't be enforced on the remote system), the Query path does NOT apply that
+            // refusal. This matches MJ's general model that a saved Query is trusted, admin-authored
+            // raw SQL gated by query-level permissions — not by per-entity RLS. If a source backs an
+            // RLS-protected entity, the query author is responsible for scoping the SQL (and the source
+            // credential should be least-privilege). Do not assume EDS RLS covers the Query path.
+            if (query.ExternalDataSourceID) {
+                const externalRouter = this.resolveExternalReadRouterOrThrow(`Query '${query.Name}'`);
+                return await this.runExternalQueryWithCache(query, finalSQL, params, externalRouter, contextUser);
+            }
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
             const useSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
@@ -2882,6 +3204,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 void this.cacheQueryResults(query, params.Parameters || {}, fullResult);
             }
 
+            // Optional, additive post-query enrichment (e.g. append an ML prediction
+            // column). Awaited so the appended columns are present in the response.
+            // Fully decoupled + resilient: resolves the enricher via the ClassFactory
+            // (no-op when none is registered — i.e. the providing package isn't loaded),
+            // and on ANY failure logs and leaves the rows untouched so a scoring problem
+            // never breaks the query. Runs after paging so only the returned page is scored.
+            if (params.Enrichment?.EnricherKey) {
+                paginatedResult = await this.enrichQueryResults(paginatedResult, params, query, contextUser);
+            }
+
             // Handle audit logging (fire-and-forget)
             this.auditQueryExecution(query, params, finalSQL, paginatedResult.length, totalRowCount, executionTime, contextUser);
 
@@ -2897,6 +3229,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
                 AppliedParameters: appliedParameters,
+                RenderedSQL: finalSQL,
                 CacheHit: false
             };
         } catch (e) {
@@ -2915,6 +3248,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 TotalRowCount: 0,
                 ExecutionTime: 0,
                 ErrorMessage: errorMessage,
+                RenderedSQL: finalSQL,
             };
         }
     }
@@ -2981,6 +3315,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Finds a query from RunQueryParams and validates user permissions.
      * Uses `resolveQuery()` for lookup and `ValidateQueryForExecution()` for permissions.
      */
+    /**
+     * A saved query is "external" when it resolves to a Query bound to an external data source.
+     * Used by the base RunQuery CacheLocal layer to defer external-query caching to
+     * InternalRunQuery's runExternalQueryWithCache. Non-throwing — resolves from cached metadata.
+     */
+    protected override IsExternalQuery(params: RunQueryParams): boolean {
+        if (params.SQL || (!params.QueryID && !params.QueryName)) return false; // ad-hoc SQL is never external-cached here
+        return !!this.resolveQuery(params)?.ExternalDataSourceID;
+    }
+
     protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): MJQueryEntityExtended {
         const query = this.resolveQuery(params);
         if (!query) {
@@ -3013,7 +3357,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         query: MJQueryEntityExtended,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
-    ): { finalSQL: string; appliedParameters: Record<string, string> } {
+    ): { finalSQL: string; appliedParameters: Record<string, string>; renderResult: RenderResult } {
         const result = RenderPipeline.Run(
             query.GetPlatformSQL(this.PlatformKey),
             {
@@ -3033,7 +3377,111 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
         }
 
-        return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters };
+        return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters, renderResult: result };
+    }
+
+    /**
+     * Checks the columns an external-data-source query returned against the fields the Query
+     * *declares* (its QueryField metadata) and logs a warning naming any declared field that
+     * is missing — the signature of a remote object whose columns have drifted (renamed or
+     * dropped).
+     *
+     * Per the External Data Sources plan this is intentionally NON-FATAL: the rows are still
+     * returned unchanged. Drift is surfaced for diagnosis, not treated as a hard failure —
+     * the declared field metadata can legitimately lag the remote schema, and the plan calls
+     * for "a warning logged, rows still returned." Matching is case-insensitive because remote
+     * dialects differ in column casing (e.g. Snowflake uppercases unquoted identifiers). No-op
+     * when the query declares no fields or returned no rows (columns can't be inspected without
+     * a row, and an empty result is legitimate). Extra columns beyond the declared set are fine.
+     */
+    /**
+     * Executes an external-data-source query with TTL-based result caching keyed off the data
+     * source's DefaultCacheTTLSeconds. External queries can't be event-invalidated (their data
+     * lives on a remote system), so a time-bounded cache is the read-cost mitigation the plan
+     * calls for — notably for warehouses like Snowflake. The data source's TTL is the source of
+     * truth (a TTL of <= 0 disables caching for the source); field-drift warnings still apply to
+     * freshly-fetched rows. Ad-hoc SQL (params.SQL) is never cached.
+     */
+    protected async runExternalQueryWithCache(
+        query: MJQueryEntityExtended,
+        finalSQL: string,
+        params: RunQueryParams,
+        router: ExternalDataSourceReadRouter,
+        contextUser?: UserInfo,
+    ): Promise<RunQueryResult> {
+        const externalDataSourceID = query.ExternalDataSourceID!;
+        const ttlSeconds = await router.GetCacheTTLSeconds(externalDataSourceID, contextUser, this);
+        const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized;
+
+        let fingerprint: string | undefined;
+        if (cacheable) {
+            // MaxRows/StartRow shape the result set, and the data source ID disambiguates slots.
+            const fingerprintParams: Record<string, unknown> = {
+                ...(params.Parameters ?? {}),
+                __maxRows: params.MaxRows ?? -1,
+                __startRow: params.StartRow ?? 0,
+                __eds: externalDataSourceID,
+            };
+            fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString, query.CategoryPath);
+            const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint); // TTL-enforced
+            if (cached) {
+                return {
+                    QueryID: cached.queryId ?? query.ID,
+                    QueryName: query.Name,
+                    Success: true,
+                    Results: cached.results as RunQueryResult['Results'],
+                    RowCount: cached.results.length,
+                    TotalRowCount: cached.rowCount ?? cached.results.length,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    CacheHit: true,
+                    CacheKey: fingerprint,
+                };
+            }
+        }
+
+        const externalResult = await router.RunQueryExternal(externalDataSourceID, query.ID, query.Name, finalSQL, params, contextUser, this);
+        const checked = this.warnIfExternalQueryFieldsMissing(query, externalResult);
+        if (!checked.Success) {
+            return checked;
+        }
+
+        // The external router returns the FULL result set (drivers don't apply Query paging), so honor
+        // StartRow/MaxRows here in-memory — otherwise every "page" returned the entire set (StartRow was
+        // silently ignored). The fingerprint already varies by __startRow/__maxRows, so we cache the
+        // per-page slice; TotalRowCount carries the full count.
+        const { paginatedResult, totalRowCount } = this.applyQueryPagination(checked.Results as Record<string, unknown>[], params);
+
+        if (cacheable && fingerprint) {
+            // Fire-and-forget store with the data source's TTL (ms).
+            LocalCacheManager.Instance.SetRunQueryResult(
+                fingerprint, query.Name, paginatedResult, '', totalRowCount, query.ID, ttlSeconds * 1000,
+            ).catch(e => LogError(`External RunQuery cache write failed: ${e}`));
+        }
+        return { ...checked, Results: paginatedResult as RunQueryResult['Results'], RowCount: paginatedResult.length, TotalRowCount: totalRowCount };
+    }
+
+    protected warnIfExternalQueryFieldsMissing(query: MJQueryEntityExtended, result: RunQueryResult): RunQueryResult {
+        if (!result.Success || !result.Results || result.Results.length === 0) {
+            return result;
+        }
+        const declaredFields = query.QueryFields;
+        if (!declaredFields || declaredFields.length === 0) {
+            return result;
+        }
+        const presentKeys = new Set(
+            Object.keys(result.Results[0] as Record<string, unknown>).map(k => k.trim().toLowerCase()),
+        );
+        const missing = declaredFields
+            .map(f => f.Name)
+            .filter(name => name && !presentKeys.has(name.trim().toLowerCase()));
+        if (missing.length > 0) {
+            LogStatus(
+                `Warning: external query '${query.Name}' returned rows missing declared field(s): ${missing.join(', ')}. ` +
+                `The remote object's columns may have drifted from the query's field metadata. Rows are returned as-is.`,
+            );
+        }
+        return result;
     }
 
     /**
@@ -3052,8 +3500,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         spec: QueryExecutionSpec,
         contextUser?: UserInfo,
     ): Promise<RunQueryResult> {
+        let finalSQL: string | undefined;
         try {
-            const { finalSQL, appliedParameters } = this.resolveSpecParameters(spec, contextUser);
+            const resolved = this.resolveSpecParameters(spec, contextUser);
+            finalSQL = resolved.finalSQL;
 
             // Execute
             const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
@@ -3067,7 +3517,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 TotalRowCount: result?.length ?? 0,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
-                AppliedParameters: appliedParameters,
+                AppliedParameters: resolved.appliedParameters,
+                RenderedSQL: finalSQL,
             };
         } catch (e) {
             LogError(e);
@@ -3081,6 +3532,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 TotalRowCount: 0,
                 ExecutionTime: 0,
                 ErrorMessage: errorMessage,
+                RenderedSQL: finalSQL,
             };
         }
     }
@@ -3094,7 +3546,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private resolveSpecParameters(
         spec: QueryExecutionSpec,
         contextUser?: UserInfo,
-    ): { finalSQL: string; appliedParameters: Record<string, string> } {
+    ): { finalSQL: string; appliedParameters: Record<string, string>; renderResult: RenderResult } {
         // QueryExecutionSpec.ParameterDefinitions is QueryParameterInfo[] (MJCore),
         // while RenderContext expects MJQueryParameterEntity[] (core-entities).
         // Both share the structural shape the processor needs (Name, DataType, IsRequired).
@@ -3117,7 +3569,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
         }
 
-        return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters };
+        return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters, renderResult: result };
     }
 
     // wrapWithMaxRows is now handled by RenderPipeline.applyMaxRows
@@ -3184,6 +3636,63 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         return { paginatedResult, totalRowCount };
+    }
+
+    /**
+     * Optional, additive post-query enrichment step. Resolves the {@link QueryResultEnricherBase}
+     * registered under `params.Enrichment.EnricherKey` via the MJGlobal ClassFactory and awaits
+     * it on the result rows, returning whatever (column-appended) rows it produces.
+     *
+     * Fully decoupled + resilient by design:
+     * - **Decoupled**: the enricher is resolved by string key through the ClassFactory, so this
+     *   provider takes no static dependency on any concrete enricher (e.g. Predictive Studio's
+     *   ML-scoring enricher). When no enricher is registered under the key — i.e. the providing
+     *   package isn't loaded — {@link resolveQueryResultEnricher} returns `null` and we no-op,
+     *   returning the original rows.
+     * - **Resilient**: the whole call is wrapped in try/catch. On ANY failure (resolution,
+     *   scorer error, bad config) we LogError and return the ORIGINAL un-enriched rows. A
+     *   scoring problem must NEVER break the underlying query.
+     *
+     * The loaded {@link QueryInfo} (when resolvable from the executed query's id) is passed
+     * through so an enricher can read the query's associated entity/fields.
+     *
+     * @param rows the assembled, paginated result rows to enrich
+     * @param params the run params carrying the {@link RunQueryEnrichment} directive
+     * @param query the executed query entity (used to resolve its {@link QueryInfo} metadata)
+     * @param contextUser the request user, threaded through for isolation/audit
+     * @returns the enriched rows on success, or the original rows on any failure / no-op
+     */
+    protected async enrichQueryResults(
+        rows: Record<string, unknown>[],
+        params: RunQueryParams,
+        query: MJQueryEntityExtended,
+        contextUser?: UserInfo,
+    ): Promise<Record<string, unknown>[]> {
+        const enrichment = params.Enrichment;
+        if (!enrichment?.EnricherKey) {
+            return rows;
+        }
+        try {
+            const enricher = resolveQueryResultEnricher(enrichment.EnricherKey);
+            if (!enricher) {
+                // No enricher registered under this key (providing package not loaded) — no-op.
+                return rows;
+            }
+            // Resolve the QueryInfo metadata for the executed query (best-effort; an enricher
+            // can use it to find the query's associated entity). Undefined is acceptable.
+            const queryInfo: QueryInfo | undefined = this.Queries.find(q => UUIDsEqual(q.ID, query.ID));
+            return await enricher.EnrichResults({
+                rows,
+                config: enrichment.Config ?? {},
+                query: queryInfo,
+                contextUser,
+                provider: this,
+            });
+        } catch (e) {
+            LogError(e);
+            // A scoring/enrichment failure must never break the query — return the original rows.
+            return rows;
+        }
     }
 
     /**
@@ -3255,6 +3764,35 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     ): Promise<Record<string, unknown> | null> {
         const entityInfo = entity.EntityInfo;
 
+        // ── External data source dispatch ──
+        // Entities backed by an external data source have no MJ view/sproc, so proxy the
+        // single-record load through the external router's LoadExternalRecord, which builds a
+        // quoted, parameter-bound primary-key predicate at the driver boundary (composite-key
+        // aware; mixed-case / reserved-word PK columns work on case-sensitive dialects). No-op
+        // for every MJ-DB entity (ExternalDataSourceID null). Relationship loading is intentionally
+        // not supported for external entities (they are read-only leaf records);
+        // entityRelationshipsToLoad is ignored here.
+        if (entityInfo.ExternalDataSourceID) {
+            // Refuse rather than silently bypass Row-Level Security (a remote system can't enforce it).
+            this.assertExternalReadAllowedUnderRLS(entityInfo, user);
+            const externalRouter = this.resolveExternalReadRouterOrThrow(`Entity '${entityInfo.Name}'`);
+            const externalResult = await externalRouter.LoadExternalRecord<Record<string, unknown>>(
+                entityInfo,
+                compositeKey,
+                user,
+                this,
+            );
+            if (!externalResult.Success) {
+                throw new Error(`External Load failed for '${entityInfo.Name}': ${externalResult.ErrorMessage}`);
+            }
+            if (externalResult.Results && externalResult.Results.length > 0) {
+                // Same post-processing MJ-DB Load applies (field decryption + datetime normalization).
+                const processed = await this.PostProcessRows(externalResult.Results as Record<string, unknown>[], entityInfo, user);
+                return processed.length > 0 ? processed[0] : null;
+            }
+            return null;
+        }
+
         // Build WHERE from composite key
         const where = compositeKey.KeyValuePairs.map(val => {
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
@@ -3302,6 +3840,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     const relEntityInfo = this.EntityByName(relInfo.RelatedEntity);
                     if (!relEntityInfo) continue;
 
+                    // The related entity may itself be external-data-source-backed (no local base view to
+                    // query). Running the SELECT below against the local DB would fail (view doesn't exist)
+                    // and abort the whole parent-record load. Loading external relationships isn't supported
+                    // in this pass, so skip with a warning rather than throw. (Consistent with external
+                    // records not auto-loading their own relationships.)
+                    if (relEntityInfo.ExternalDataSourceID) {
+                        LogStatus(`[GenericDatabaseProvider] Skipping relationship '${rel}' on '${entityInfo.Name}': related entity '${relEntityInfo.Name}' is external-data-source-backed (relationship loading not supported for external entities).`);
+                        continue;
+                    }
+
                     const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
                     const pkValue = ret[entity.FirstPrimaryKey.Name];
                     let relSql: string;
@@ -3345,7 +3893,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         const pkWhere = entity.PrimaryKeys.map(pk => {
-            const fieldInfo = entityInfo.Fields.find(f => f.Name === pk.Name);
+            const fieldInfo = entityInfo.FieldByName(pk.Name);
             const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
             return `${this.QuoteIdentifier(pk.Name)}=${quotes}${pk.Value}${quotes}`;
         }).join(' AND ');
@@ -3476,6 +4024,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const entityName = String(item['Entity']);
             const entityID = String(item['EntityID']);
             const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
+
+            // External-data-source entities have no MJ base view — their data is proxied live and
+            // can't be served through the dataset's batched MJ-DB SQL path. Fail loud for that item
+            // rather than silently querying a non-existent (or wrongly same-named) local view.
+            const itemEntity = this.EntityByName(entityName);
+            if (itemEntity?.ExternalDataSourceID) {
+                errorResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: undefined,
+                    Status: `Dataset item '${code}' references external-data-source entity '${entityName}', which is not supported in datasets (its data is proxied live, not stored in MJ).`,
+                    Success: false,
+                });
+                continue;
+            }
 
             // Build effective filter (WhereClause + optional runtime ItemFilter)
             let effectiveFilter = whereClause;
@@ -3838,7 +4403,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (entity) {
                 const invalidColumns: string[] = [];
                 specifiedColumns.forEach(col => {
-                    if (!entity.Fields.find(f => f.Name.trim().toLowerCase() === col.trim().toLowerCase())) {
+                    if (!entity.FieldByName(col)) {
                         invalidColumns.push(col);
                     }
                 });
@@ -3850,7 +4415,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Ensure DateFieldToCheck is included
             const dateField = item['DateFieldToCheck'] ? String(item['DateFieldToCheck']).trim() : '';
             if (dateField.length > 0 && specifiedColumns.indexOf(dateField) === -1) {
-                if (!entity || entity.Fields.find(f => f.Name.trim().toLowerCase() === dateField.toLowerCase()))
+                if (!entity || entity.FieldByName(dateField))
                     specifiedColumns.push(dateField);
             }
         }

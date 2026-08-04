@@ -222,20 +222,15 @@
       <!-- Empty state overlay -->
       @if (Nodes.length === 0) {
         <div class="mj-flow-editor-empty">
-          <div class="mj-flow-editor-empty-content">
-            <i class="fa-solid fa-diagram-project mj-flow-editor-empty-icon"></i>
-            @if (!ReadOnly) {
-              <p class="mj-flow-editor-empty-title">Drag steps from the palette to start building your flow</p>
-            }
-            @if (ReadOnly) {
-              <p class="mj-flow-editor-empty-title">No steps defined for this flow</p>
-            }
+          <mj-empty-state
+            Icon="fa-solid fa-diagram-project"
+            [Title]="EmptyStateTitle">
             @if (!ReadOnly) {
               <p class="mj-flow-editor-empty-subtitle">
                 Or use auto-layout after adding steps to arrange them automatically
               </p>
             }
-          </div>
+          </mj-empty-state>
         </div>
       }
     </div>

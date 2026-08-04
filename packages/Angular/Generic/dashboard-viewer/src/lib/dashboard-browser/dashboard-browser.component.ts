@@ -384,6 +384,13 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     /**
+     * Message shown in the search no-results empty state, echoing the search term.
+     */
+    public get NoResultsMessage(): string {
+        return `No dashboards or folders match "${this.SearchText}". Try a different search term.`;
+    }
+
+    /**
      * Handle category filter change
      */
     public OnCategoryChange(categoryId: string | null): void {

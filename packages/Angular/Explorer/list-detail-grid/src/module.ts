@@ -5,6 +5,7 @@ import { RouterModule } from '@angular/router';
 // MemberJunction modules
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 import { ListDetailGridComponent } from './lib/ng-list-detail-grid.component';
 
@@ -16,7 +17,8 @@ import { ListDetailGridComponent } from './lib/ng-list-detail-grid.component';
     CommonModule,
     RouterModule,
     EntityViewerModule,
-    SharedGenericModule
+    SharedGenericModule,
+    MJEmptyStateComponent
   ],
   exports: [
     ListDetailGridComponent

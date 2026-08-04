@@ -56,9 +56,7 @@ import { UUIDsEqual } from '@memberjunction/global';
             </table>
           }
           @if (Steps.length === 0) {
-            <div class="mj-step-list-empty">
-              No steps defined
-            </div>
+            <mj-empty-state class="mj-step-list-empty" Size="compact" Icon="" Title="No steps defined" />
           }
         </div>
       </div>
@@ -92,9 +90,7 @@ import { UUIDsEqual } from '@memberjunction/global';
             </table>
           }
           @if (Paths.length === 0) {
-            <div class="mj-step-list-empty">
-              No paths defined
-            </div>
+            <mj-empty-state class="mj-step-list-empty" Size="compact" Icon="" Title="No paths defined" />
           }
         </div>
       </div>

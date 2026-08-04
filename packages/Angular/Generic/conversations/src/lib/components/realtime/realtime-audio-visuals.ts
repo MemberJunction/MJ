@@ -17,7 +17,7 @@ import { RealtimeAudioActivity } from '@memberjunction/ai-realtime-client';
  */
 
 /** Who is audibly speaking right now (drives the orb/EQ direction color). */
-export type RealtimeVoiceDirection = 'agent' | 'user' | 'none';
+export type RealtimeDirection = 'agent' | 'user' | 'none';
 
 /** One smoothed, render-ready visual frame. */
 export interface RealtimeAudioVisualFrame {
@@ -28,7 +28,7 @@ export interface RealtimeAudioVisualFrame {
   /** Smoothed spectrum bins (length {@link AUDIO_VISUAL_BIN_COUNT}) of the dominant direction. */
   Bins: number[];
   /** Resolved speaking direction (hysteresis-stable). */
-  Direction: RealtimeVoiceDirection;
+  Direction: RealtimeDirection;
 }
 
 /** Number of EQ bars the hero renders (matches the meter's bin count). */
@@ -85,7 +85,7 @@ export class RealtimeAudioVisualSmoother {
   private outputLevel = 0;
   private inputLevel = 0;
   private bins: number[] = new Array<number>(AUDIO_VISUAL_BIN_COUNT).fill(0);
-  private direction: RealtimeVoiceDirection = 'none';
+  private direction: RealtimeDirection = 'none';
   /** Last time (ms) the current direction's level was at/above the presence floor. */
   private directionHeldAt = 0;
 
@@ -158,7 +158,7 @@ export class RealtimeAudioVisualSmoother {
     const out = this.outputLevel;
     const inp = this.inputLevel;
     const audible = out >= AUDIO_PRESENCE_FLOOR || inp >= AUDIO_PRESENCE_FLOOR;
-    const louder: RealtimeVoiceDirection = out >= inp ? 'agent' : 'user';
+    const louder: RealtimeDirection = out >= inp ? 'agent' : 'user';
 
     if (this.direction === 'none') {
       if (audible) {

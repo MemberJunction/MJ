@@ -37,6 +37,8 @@ vi.mock('@memberjunction/core', async () => {
 import { SearchEngine } from '../generic/SearchEngine';
 import type { SearchResultItem } from '../generic/search.types';
 import type { UserInfo, EntityInfo, IMetadataProvider } from '@memberjunction/core';
+import { SearchScopePermissionResolver } from '../permissions/SearchScopePermissionResolver';
+import type { SearchScopePermissionSource } from '../permissions/SearchScopePermissionResolver';
 
 class TestSearchEngine extends SearchEngine {
     public async TestFilterByPermissions(
@@ -235,6 +237,91 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
             const out = await engine.TestFilterByPermissions([fileResult], user);
             expect(out).toHaveLength(1);
             expect(out[0].RecordID).toBe('file-1');
+        });
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase D — the SKILL principal, and time/tenant scoping on a grant.
+//
+// A skill is a principal in the same sense an agent is, so these mirror the agent rules
+// exactly. The pure helpers (window + tenant applicability) are asserted directly because
+// they are where an off-by-one or a null-handling slip would silently widen a grant.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('SearchScopePermissionResolver — skill principal and grant scoping', () => {
+    class TestResolver extends SearchScopePermissionResolver {
+        public InWindow(row: unknown, now: Date) {
+            return (this as unknown as { isGrantInWindow: (r: unknown, n: Date) => boolean })
+                .isGrantInWindow(row, now);
+        }
+        public ForTenant(row: unknown, tenant: string | null) {
+            return (this as unknown as { isGrantForTenant: (r: unknown, t: string | null) => boolean })
+                .isGrantForTenant(row, tenant);
+        }
+        public Applicable(rows: unknown[], tenant: string | null, now: Date) {
+            return (this as unknown as { applicableGrants: (r: unknown[], t: string | null, n: Date) => unknown[] })
+                .applicableGrants(rows, tenant, now);
+        }
+    }
+    const r = new TestResolver();
+    const NOW = new Date('2026-07-27T12:00:00Z');
+    const ORG_A = 'AAAAAAAA-0000-4000-8000-000000000001';
+    const ORG_B = 'BBBBBBBB-0000-4000-8000-000000000002';
+
+    describe('time window', () => {
+        it('a grant with no window is always in force (every pre-existing row)', () => {
+            expect(r.InWindow({}, NOW)).toBe(true);
+            expect(r.InWindow({ StartAt: null, EndAt: null }, NOW)).toBe(true);
+        });
+        it('honours an open window and rejects one not yet started or already ended', () => {
+            expect(r.InWindow({ StartAt: '2026-07-01T00:00:00Z', EndAt: '2026-08-01T00:00:00Z' }, NOW)).toBe(true);
+            expect(r.InWindow({ StartAt: '2026-08-01T00:00:00Z' }, NOW)).toBe(false);
+            expect(r.InWindow({ EndAt: '2026-07-01T00:00:00Z' }, NOW)).toBe(false);
+        });
+        it('treats a half-open window correctly', () => {
+            expect(r.InWindow({ StartAt: '2026-07-01T00:00:00Z' }, NOW)).toBe(true);
+            expect(r.InWindow({ EndAt: '2026-08-01T00:00:00Z' }, NOW)).toBe(true);
+        });
+    });
+
+    describe('tenant applicability', () => {
+        it('a grant with no tenant applies everywhere, including to an untenanted search', () => {
+            expect(r.ForTenant({ PrimaryScopeRecordID: null }, ORG_A)).toBe(true);
+            expect(r.ForTenant({}, null)).toBe(true);
+        });
+        it('a tenant-scoped grant applies ONLY to that tenant', () => {
+            expect(r.ForTenant({ PrimaryScopeRecordID: ORG_A }, ORG_A)).toBe(true);
+            expect(r.ForTenant({ PrimaryScopeRecordID: ORG_A }, ORG_B)).toBe(false);
+        });
+        it('a tenant-scoped grant does NOT apply when the search supplies no tenant', () => {
+            // "This grant is for org A" cannot be honoured by an untenanted search, so the safe
+            // reading is that it does not apply.
+            expect(r.ForTenant({ PrimaryScopeRecordID: ORG_A }, null)).toBe(false);
+        });
+        it('matches tenants case-insensitively (uuid casing varies by source)', () => {
+            expect(r.ForTenant({ PrimaryScopeRecordID: ORG_A.toLowerCase() }, ORG_A.toUpperCase())).toBe(true);
+        });
+    });
+
+    describe('applicableGrants composes both filters', () => {
+        it('keeps only rows in force for this tenant', () => {
+            const rows = [
+                { ID: 'keep-untenanted-unwindowed' },
+                { ID: 'keep-matching-tenant', PrimaryScopeRecordID: ORG_A },
+                { ID: 'drop-other-tenant', PrimaryScopeRecordID: ORG_B },
+                { ID: 'drop-expired', EndAt: '2026-01-01T00:00:00Z' },
+                { ID: 'drop-future', StartAt: '2027-01-01T00:00:00Z' },
+            ];
+            const kept = r.Applicable(rows, ORG_A, NOW).map((x) => (x as { ID: string }).ID);
+            expect(kept).toEqual(['keep-untenanted-unwindowed', 'keep-matching-tenant']);
+        });
+    });
+
+    describe('skill sources mirror the agent sources', () => {
+        it('exposes SkillNone / SkillAssignedNotListed / SkillUnscopedAll', () => {
+            // Compile-time assertion that the union grew; a typo here fails the build.
+            const sources: SearchScopePermissionSource[] = ['SkillNone', 'SkillAssignedNotListed', 'SkillUnscopedAll'];
+            expect(sources).toHaveLength(3);
         });
     });
 });

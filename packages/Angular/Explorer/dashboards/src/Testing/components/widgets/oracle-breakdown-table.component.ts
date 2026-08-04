@@ -98,10 +98,8 @@ export interface OracleResult {
             </div>
           </div>
         } @else {
-          <div class="no-results">
-            <i class="fa-solid fa-inbox"></i>
-            <p>No oracle results available</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+            Title="No oracle results available" />
         }
       </div>
     </div>
@@ -286,25 +284,6 @@ export interface OracleResult {
       color: var(--mj-text-primary);
     }
 
-    .no-results {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      color: var(--mj-text-disabled);
-      gap: 12px;
-    }
-
-    .no-results i {
-      font-size: 36px;
-      color: var(--mj-border-default);
-    }
-
-    .no-results p {
-      margin: 0;
-      font-size: 13px;
-    }
 
     @media (max-width: 768px) {
       .table-header,

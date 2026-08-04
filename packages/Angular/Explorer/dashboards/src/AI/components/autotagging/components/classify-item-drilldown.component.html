@@ -1,8 +1,6 @@
 @if (!ItemID) {
-  <div class="cid-empty">
-    <i class="fa-solid fa-arrow-pointer"></i>
-    <p>Select an item to inspect its tags, reasoning, and provenance.</p>
-  </div>
+  <mj-empty-state class="cid-empty" Icon="fa-solid fa-arrow-pointer"
+    Title="No item selected" Message="Select an item to inspect its tags, reasoning, and provenance." />
 } @else if (IsLoading) {
   <mj-loading text="Loading item detail..." size="small"></mj-loading>
 } @else {

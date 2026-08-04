@@ -19,10 +19,9 @@
       @if (IsLoading) {
         <mj-loading text="Loading records..."></mj-loading>
       } @else if (Records.length === 0) {
-        <div class="drilldown-empty">
-          <i class="fa-solid fa-inbox"></i>
-          <p>No records found</p>
-        </div>
+        <mj-empty-state class="drilldown-empty" Size="compact"
+          Icon="fa-solid fa-inbox"
+          Title="No records found" />
       } @else {
         @for (record of Records; track TrackByRecord($index, record)) {
           <div class="drilldown-item" (click)="OnOpen(record)">

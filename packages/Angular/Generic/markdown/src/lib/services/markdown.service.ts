@@ -1,20 +1,14 @@
 import { Injectable } from '@angular/core';
-import { Marked } from 'marked';
-import { markedHighlight } from 'marked-highlight';
-import { gfmHeadingId, getHeadingList } from 'marked-gfm-heading-id';
-import markedAlert from 'marked-alert';
-import { markedSmartypants } from 'marked-smartypants';
 import Prism from 'prismjs';
 import mermaid from 'mermaid';
 import {
+  MarkdownEngine,
   MarkdownConfig,
   DEFAULT_MARKDOWN_CONFIG,
+  ResolvedMarkdownConfig,
   HeadingInfo,
-  MarkdownRenderEvent
-} from '../types/markdown.types';
-import { createCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension';
-import { createSvgRendererExtension } from '../extensions/svg-renderer.extension';
-import { createHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension';
+  HighlightFunction
+} from '@memberjunction/markdown-core';
 
 // Import common Prism language components
 // Additional languages can be imported by the consuming application
@@ -33,116 +27,84 @@ import 'prismjs/components/prism-yaml';
 import 'prismjs/components/prism-markdown';
 import 'prismjs/components/prism-graphql';
 
-// Type for config with optional autoExpandLevels
-type ResolvedMarkdownConfig = Required<Omit<MarkdownConfig, 'autoExpandLevels'>> & { autoExpandLevels?: number[] };
-
 /**
- * Service for parsing and rendering markdown content.
- * Uses marked.js with various extensions for syntax highlighting,
- * diagrams, alerts, and more.
+ * Service for parsing and rendering markdown content on the web.
+ *
+ * The parsing/configuration work (marked setup, custom extensions, HTML and
+ * token output) is owned by the framework-agnostic `@memberjunction/markdown-core`
+ * {@link MarkdownEngine}. This Angular service is the web shell around it: it
+ * injects a Prism-based highlighter into the engine and keeps the browser-only
+ * concerns here — Mermaid rendering, copy buttons, and the DOM-based fixup of
+ * HTML that marked miscoded as a code block.
  */
 @Injectable({
   providedIn: 'root'
 })
 export class MarkdownService {
-  private marked: Marked;
+  private engine = new MarkdownEngine();
   private mermaidInitialized = false;
   private lastMermaidTheme: string | null = null;
   private currentConfig: ResolvedMarkdownConfig = { ...DEFAULT_MARKDOWN_CONFIG };
-  private headingList: HeadingInfo[] = [];
+
+  /**
+   * Prism-backed highlight function injected into the core engine. The engine
+   * itself has no Prism dependency — it calls this for the HTML output path.
+   */
+  private prismHighlight: HighlightFunction = (code: string, lang: string): string => {
+    if (lang && Prism.languages[lang]) {
+      try {
+        return Prism.highlight(code, Prism.languages[lang], lang);
+      } catch (e) {
+        console.warn(`Prism highlighting failed for language: ${lang}`, e);
+      }
+    }
+    // Return code as-is if language not found or highlighting fails
+    return code;
+  };
 
   constructor() {
-    this.marked = new Marked();
     this.configureMarked(this.currentConfig);
   }
 
   /**
-   * Configure the marked instance with the provided options
+   * Configure the underlying engine with the provided options.
    */
   public configureMarked(config: MarkdownConfig): void {
     this.currentConfig = { ...DEFAULT_MARKDOWN_CONFIG, ...config };
+    this.engine.configureMarked(this.currentConfig, { highlightFn: this.prismHighlight });
+  }
 
-    // Create a fresh Marked instance
-    this.marked = new Marked();
+  /**
+   * Parse markdown to HTML.
+   * @param markdown The markdown string to parse
+   * @param config Optional config overrides for this parse operation
+   * @returns The rendered HTML string
+   */
+  public parse(markdown: string, config?: Partial<MarkdownConfig>): string {
+    if (!markdown) return '';
 
-    // Configure base options
-    this.marked.setOptions({
-      gfm: true,
-      breaks: true
-    });
-
-    // Apply extensions based on config
-    const extensions: any[] = [];
-
-    // Repair HTML blocks split by a blank line (e.g. PRD mockups) so embedded
-    // raw HTML renders instead of showing as an escaped code block. Always on -
-    // precisely scoped to misparsed HTML, leaves prose and fenced code untouched.
-    extensions.push(createHtmlBlockRepairExtension());
-
-    // SVG code block renderer - MUST be before syntax highlighting
-    // so it can intercept svg blocks before Prism processes them
-    if (this.currentConfig.enableSvgRenderer) {
-      extensions.push(createSvgRendererExtension());
+    // Apply config overrides if provided (re-injects the Prism highlighter)
+    if (config) {
+      this.configureMarked({ ...this.currentConfig, ...config });
     }
 
-    // Syntax highlighting with Prism
-    if (this.currentConfig.enableHighlight) {
-      extensions.push(
-        markedHighlight({
-          langPrefix: 'language-',
-          highlight: (code: string, lang: string) => {
-            // Skip SVG blocks - they're handled by the SVG renderer
-            if (lang === 'svg' && this.currentConfig.enableSvgRenderer) {
-              return code;
-            }
-            if (lang && Prism.languages[lang]) {
-              try {
-                return Prism.highlight(code, Prism.languages[lang], lang);
-              } catch (e) {
-                console.warn(`Prism highlighting failed for language: ${lang}`, e);
-              }
-            }
-            // Return code as-is if language not found or highlighting fails
-            return code;
-          }
-        })
-      );
+    let html = this.engine.parseToHtml(markdown);
+
+    // When HTML passthrough is enabled, fix incorrectly code-wrapped HTML.
+    // marked sometimes wraps inline HTML in <pre><code> blocks. This is a
+    // DOM-based fixup so it stays in the web service, not the core engine.
+    if (this.currentConfig.enableHtml) {
+      html = this.unwrapMiscodedHtml(html);
     }
 
-    // GitHub-style heading IDs
-    if (this.currentConfig.enableHeadingIds) {
-      extensions.push(
-        gfmHeadingId({
-          prefix: this.currentConfig.headingIdPrefix
-        })
-      );
-    }
+    return html;
+  }
 
-    // GitHub-style alerts
-    if (this.currentConfig.enableAlerts) {
-      extensions.push(markedAlert());
-    }
-
-    // Collapsible headings (custom extension)
-    if (this.currentConfig.enableCollapsibleHeadings) {
-      extensions.push(
-        createCollapsibleHeadingsExtension({
-          startLevel: this.currentConfig.collapsibleHeadingLevel,
-          defaultExpanded: this.currentConfig.collapsibleDefaultExpanded,
-          autoExpandLevels: this.currentConfig.autoExpandLevels
-        })
-      );
-    }
-
-    // Smartypants for typography (curly quotes, em/en dashes, ellipses)
-    if (this.currentConfig.enableSmartypants) {
-      extensions.push(markedSmartypants());
-    }
-
-    // Apply all extensions
-    if (extensions.length > 0) {
-      this.marked.use(...extensions);
-    }
+  /**
+   * Parse markdown asynchronously (useful for large documents)
+   */
+  public async parseAsync(markdown: string, config?: Partial<MarkdownConfig>): Promise<string> {
+    return this.parse(markdown, config);
   }
 
   /**
@@ -180,55 +142,6 @@ export class MarkdownService {
 
     this.mermaidInitialized = true;
     this.lastMermaidTheme = effectiveTheme;
-  }
-
-  /**
-   * Parse markdown to HTML
-   * @param markdown The markdown string to parse
-   * @param config Optional config overrides for this parse operation
-   * @returns The rendered HTML string
-   */
-  public parse(markdown: string, config?: Partial<MarkdownConfig>): string {
-    if (!markdown) return '';
-
-    // Apply config overrides if provided
-    if (config) {
-      this.configureMarked({ ...this.currentConfig, ...config });
-    }
-
-    try {
-      // Preprocess markdown to fix indentation in HTML blocks
-      // This prevents marked from treating indented HTML as code blocks
-      let processedMarkdown = markdown;
-      if (this.currentConfig.enableHtml) {
-        processedMarkdown = this.normalizeHtmlBlockIndentation(markdown);
-      }
-
-      let html = this.marked.parse(processedMarkdown) as string;
-
-      // Capture heading list after parsing
-      if (this.currentConfig.enableHeadingIds) {
-        this.headingList = getHeadingList() as HeadingInfo[];
-      }
-
-      // When HTML passthrough is enabled, fix incorrectly code-wrapped HTML
-      // marked sometimes wraps inline HTML in <pre><code> blocks
-      if (this.currentConfig.enableHtml) {
-        html = this.unwrapMiscodedHtml(html);
-      }
-
-      return html;
-    } catch (error) {
-      console.error('Markdown parsing error:', error);
-      return `<pre class="markdown-error">${this.escapeHtml(markdown)}</pre>`;
-    }
-  }
-
-  /**
-   * Parse markdown asynchronously (useful for large documents)
-   */
-  public async parseAsync(markdown: string, config?: Partial<MarkdownConfig>): Promise<string> {
-    return this.parse(markdown, config);
   }
 
   /**
@@ -358,14 +271,14 @@ export class MarkdownService {
    * Useful for building table of contents
    */
   public getHeadingList(): HeadingInfo[] {
-    return this.headingList;
+    return this.engine.getHeadingList();
   }
 
   /**
    * Get the current configuration
    */
   public getConfig(): ResolvedMarkdownConfig {
-    return { ...this.currentConfig };
+    return this.engine.getConfig();
   }
 
   /**
@@ -389,15 +302,6 @@ export class MarkdownService {
     return Object.keys(Prism.languages).filter(
       lang => typeof Prism.languages[lang] === 'object'
     );
-  }
-
-  /**
-   * Escape HTML entities for safe display
-   */
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   /**
@@ -507,123 +411,5 @@ export class MarkdownService {
     if (content.includes('&lt;') || content.includes('&gt;')) return false;
 
     return true;
-  }
-
-  /**
-   * Normalize indentation in HTML blocks to prevent marked from treating
-   * indented HTML as code blocks (4 spaces = code block in markdown).
-   *
-   * This finds HTML blocks (starting with common block-level tags) and
-   * removes ALL leading whitespace from lines within those blocks to ensure
-   * marked doesn't interpret any nested content as code blocks.
-   */
-  private normalizeHtmlBlockIndentation(markdown: string): string {
-    // Match HTML blocks that start with common block-level tags
-    // These tags indicate structural HTML that should be rendered, not code
-    const htmlBlockTags = [
-      'div', 'table', 'thead', 'tbody', 'tr', 'td', 'th',
-      'ul', 'ol', 'li', 'p', 'section', 'article', 'header',
-      'footer', 'nav', 'main', 'aside', 'form', 'svg', 'figure'
-    ];
-
-    const tagPattern = htmlBlockTags.join('|');
-    // Match opening tag at start of line (possibly with leading whitespace)
-    const htmlBlockStartRegex = new RegExp(`^[ \\t]*<(${tagPattern})\\b`, 'i');
-
-    const lines = markdown.split('\n');
-    const result: string[] = [];
-    let inHtmlBlock = false;
-    let tagStack: string[] = [];
-
-    for (const line of lines) {
-      const trimmedLine = line.trimStart();
-
-      if (!inHtmlBlock) {
-        // Check if this line starts an HTML block
-        const match = trimmedLine.match(htmlBlockStartRegex);
-        if (match) {
-          inHtmlBlock = true;
-          const tag = match[1].toLowerCase();
-
-          // Push to stack if it's not a self-closing tag on this line
-          if (!this.isSelfClosingLine(trimmedLine, tag)) {
-            tagStack.push(tag);
-          }
-
-          // Remove leading indentation
-          result.push(trimmedLine);
-          continue;
-        }
-        result.push(line);
-      } else {
-        // We're inside an HTML block - remove ALL leading whitespace
-        // to prevent any nested content from being treated as code blocks
-
-        // Track tag stack for proper nesting
-        this.updateTagStack(trimmedLine, tagStack, htmlBlockTags);
-
-        // Remove leading whitespace from this line
-        result.push(trimmedLine);
-
-        // Check if we've closed all HTML blocks
-        if (tagStack.length === 0) {
-          inHtmlBlock = false;
-        }
-      }
-    }
-
-    return result.join('\n');
-  }
-
-  /**
-   * Check if a line contains a self-closing tag or opens and closes the same tag
-   */
-  private isSelfClosingLine(line: string, tag: string): boolean {
-    // Check for self-closing syntax: <tag ... />
-    if (new RegExp(`<${tag}[^>]*/>`,'i').test(line)) {
-      return true;
-    }
-    // Check if tag opens and closes on same line: <tag>...</tag>
-    const openCount = (line.match(new RegExp(`<${tag}\\b`, 'gi')) || []).length;
-    const closeCount = (line.match(new RegExp(`</${tag}>`, 'gi')) || []).length;
-    return openCount > 0 && openCount === closeCount;
-  }
-
-  /**
-   * Update the tag stack based on opening/closing tags in the line
-   */
-  private updateTagStack(line: string, tagStack: string[], validTags: string[]): void {
-    // Find all opening tags
-    const openTagRegex = /<(\w+)\b[^>]*(?<!\/)>/gi;
-    const closeTagRegex = /<\/(\w+)>/gi;
-
-    let match;
-
-    // Process closing tags first (they might close tags opened earlier)
-    while ((match = closeTagRegex.exec(line)) !== null) {
-      const tag = match[1].toLowerCase();
-      const idx = tagStack.lastIndexOf(tag);
-      if (idx !== -1) {
-        tagStack.splice(idx, 1);
-      }
-    }
-
-    // Process opening tags
-    while ((match = openTagRegex.exec(line)) !== null) {
-      const tag = match[1].toLowerCase();
-      // Only track block-level tags we care about
-      if (validTags.includes(tag)) {
-        // Don't add if it's self-closing or closed on same line
-        if (!this.isSelfClosingLine(line, tag)) {
-          // Check if there's a closing tag for this specific opening
-          const closeRegex = new RegExp(`</${tag}>`, 'gi');
-          const opens = (line.match(new RegExp(`<${tag}\\b`, 'gi')) || []).length;
-          const closes = (line.match(closeRegex) || []).length;
-          if (opens > closes) {
-            tagStack.push(tag);
-          }
-        }
-      }
-    }
   }
 }

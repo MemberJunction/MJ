@@ -29,6 +29,7 @@ interface TextQuestionType {
     type: 'text' | 'textarea' | 'email';  // Type of text input:
     placeholder?: string;  // Optional placeholder text shown in empty input
     maxLength?: number;  // Maximum number of characters allowed
+    markdown?: boolean;  // Textarea only: when true, the UI renders the current value as formatted
 }
 
 interface NumberQuestionType {

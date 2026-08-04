@@ -1,5 +1,5 @@
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
-import { OpenAI } from "openai";
+import { AIErrorInfo, BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
+import { APIUserAbortError, OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam } from "openai/resources";
 
@@ -11,6 +11,11 @@ import { ChatCompletionAssistantMessageParam, ChatCompletionMessageParam, ChatCo
 export class FireworksLLM extends BaseLLM {
     private _client: OpenAI;
     private static readonly DEFAULT_BASE_URL = 'https://api.fireworks.ai/inference/v1';
+    /**
+     * Set when the in-flight streaming request was cancelled via ChatParams.cancellationToken.
+     * Reset at the start and end of every streaming request by resetStreamingState().
+     */
+    private streamCancelled: boolean = false;
 
     constructor(apiKey: string, baseURL?: string) {
         super(apiKey);
@@ -37,12 +42,103 @@ export class FireworksLLM extends BaseLLM {
     }
 
     /**
+     * Determines whether an error (or the current state of the signal) represents a caller-initiated
+     * cancellation rather than a genuine API failure. The OpenAI SDK (used against the Fireworks
+     * endpoint) raises APIUserAbortError when the request options carry a signal that aborts.
+     */
+    private isCancellation(error: unknown, signal?: AbortSignal): boolean {
+        if (signal?.aborted) {
+            return true;
+        }
+        if (error instanceof APIUserAbortError) {
+            return true;
+        }
+        return error instanceof Error && error.name === 'AbortError';
+    }
+
+    /**
+     * Builds the ChatResult returned when a request is cancelled through ChatParams.cancellationToken
+     * (caller abort or AIPromptRunner timeout). Marked Fatal / non-failover so no layer retries a request
+     * the caller explicitly gave up on.
+     */
+    private buildCancelledResult(startTime: Date): ChatResult {
+        const errorInfo: AIErrorInfo = {
+            errorType: 'Unknown',
+            severity: 'Fatal',
+            canFailover: false,
+            providerErrorCode: 'request_cancelled',
+            context: { provider: 'fireworks', cancelled: true }
+        };
+
+        const result = new ChatResult(false, startTime, new Date());
+        result.statusText = 'cancelled';
+        result.errorMessage = 'Request cancelled via cancellationToken';
+        result.exception = null;
+        result.errorInfo = errorInfo;
+        result.data = {
+            choices: [],
+            usage: new ModelUsage(0, 0)
+        };
+        return result;
+    }
+
+    /**
+     * Wraps the Fireworks stream so that an abort ends iteration cleanly (flagging the cancellation for
+     * finalizeStreamingResponse) instead of surfacing as a mid-stream exception that the base class
+     * would otherwise swallow and report as a truncated success.
+     */
+    private async *iterateWithCancellation(
+        stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>,
+        signal?: AbortSignal
+    ): AsyncGenerator<OpenAI.Chat.Completions.ChatCompletionChunk> {
+        try {
+            for await (const chunk of stream) {
+                if (signal?.aborted) {
+                    this.streamCancelled = true;
+                    return;
+                }
+                yield chunk;
+            }
+            if (signal?.aborted) {
+                this.streamCancelled = true;
+            }
+        } catch (error) {
+            if (this.isCancellation(error, signal)) {
+                this.streamCancelled = true;
+                return;
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * An already-exhausted stream, used when the request was cancelled before it was sent.
+     */
+    private async *emptyStream(): AsyncGenerator<OpenAI.Chat.Completions.ChatCompletionChunk> {
+        // intentionally yields nothing
+    }
+
+    /**
+     * Clear per-request streaming state. Invoked by the base class at the start and end of every
+     * streaming request.
+     */
+    protected override resetStreamingState(): void {
+        super.resetStreamingState();
+        this.streamCancelled = false;
+    }
+
+    /**
      * Implementation of non-streaming chat completion for Fireworks.ai
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
-        const formattedMessages = this.ConvertMJToOpenAIChatMessages(params.messages);
-
         const startTime = new Date();
+
+        // Already cancelled before we even dial out — don't open a socket at all
+        if (params.cancellationToken?.aborted) {
+            return this.buildCancelledResult(startTime);
+        }
+
+        const formattedMessages = this.ConvertMJToOpenAIChatMessages(params.messages);
         const fireworksParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
             model: params.model,
             messages: formattedMessages,
@@ -87,7 +183,17 @@ export class FireworksLLM extends BaseLLM {
                 break;
         }
 
-        const result = await this.Client.chat.completions.create(fireworksParams);
+        // Forward the cancellation token to the OpenAI SDK's request options so an abort tears down the
+        // underlying HTTP socket rather than merely abandoning this promise.
+        let result: OpenAI.Chat.Completions.ChatCompletion;
+        try {
+            result = await this.Client.chat.completions.create(fireworksParams, { signal: params.cancellationToken });
+        } catch (error) {
+            if (this.isCancellation(error, params.cancellationToken)) {
+                return this.buildCancelledResult(startTime);
+            }
+            throw error;
+        }
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();
 
@@ -148,6 +254,13 @@ export class FireworksLLM extends BaseLLM {
      * Create a streaming request for Fireworks.ai
      */
     protected async createStreamingRequest(params: ChatParams): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> {
+        // Already cancelled before we dial out — hand back an empty stream; finalizeStreamingResponse
+        // will report the cancellation.
+        if (params.cancellationToken?.aborted) {
+            this.streamCancelled = true;
+            return this.emptyStream();
+        }
+
         const formattedMessages = this.ConvertMJToOpenAIChatMessages(params.messages);
 
         const fireworksParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
@@ -190,7 +303,10 @@ export class FireworksLLM extends BaseLLM {
                 break;
         }
 
-        return this.Client.chat.completions.create(fireworksParams);
+        // Forward the cancellation token so an abort closes the streaming socket, and wrap the stream
+        // so the abort is reported as a cancellation rather than a truncated success.
+        const stream = await this.Client.chat.completions.create(fireworksParams, { signal: params.cancellationToken });
+        return this.iterateWithCancellation(stream, params.cancellationToken);
     }
 
     /**
@@ -227,6 +343,12 @@ export class FireworksLLM extends BaseLLM {
         lastChunk: OpenAI.Chat.Completions.ChatCompletionChunk | null | undefined,
         usage: { promptTokens: number; completionTokens: number; totalTokens: number } | null | undefined
     ): ChatResult {
+        // If the stream was aborted via the cancellation token, report a cancellation instead of
+        // presenting whatever partial content we managed to accumulate as a successful response.
+        if (this.streamCancelled) {
+            return this.buildCancelledResult(new Date());
+        }
+
         const content = accumulatedContent || '';
         const promptTokens = usage?.promptTokens || 0;
         const completionTokens = usage?.completionTokens || 0;

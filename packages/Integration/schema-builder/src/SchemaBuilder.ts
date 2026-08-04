@@ -30,6 +30,7 @@ import { MetadataEmitter } from './MetadataEmitter.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { SchemaEvolution } from './SchemaEvolution.js';
 import { IsIntegrationWriteAllowed } from './AccessControl.js';
+import { GetDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Main entry point for the Integration Schema Builder.
@@ -84,6 +85,11 @@ export class SchemaBuilder {
         // blocks __mj by default. Integration access control is handled in Step 1 above.
         const ddlGen = new GenericDDLGenerator();
         for (const config of newConfigs) {
+            // Dialect-aware row-size guard: a dialect with a hard in-row size limit (SQL Server's
+            // ~8060 bytes) makes very wide tables (600+ columns) impossible to INSERT into — cap to a
+            // fitting core subset + warn, rather than emit a doomed table. No-op on dialects with no
+            // in-row limit (PostgreSQL/TOAST). Mutates config.Columns.
+            output.Warnings.push(...this.CapColumnsForRowSize(config, input.Platform));
             const tableDef = this.ConvertToTableDefinition(config, input.Platform);
             // IfNotExists: integration Create-Tables must be idempotent — a physical table
             // may already exist with no MJ entity yet (e.g. a prior run created the table but
@@ -139,9 +145,14 @@ export class SchemaBuilder {
             const existingContent = this.ReadFileIfExists(input.AdditionalSchemaInfoPath);
             const existingConfig = this.SoftFKEmitter.ParseExistingConfig(existingContent);
             const withPKs = this.SoftFKEmitter.MergeSoftPKs(existingConfig, allConfigs);
+            // This run's PK/FK resolution REPLACES the prior run's entries for the
+            // tables it covers (adds new, removes gone) — clear their FKs before the rebuild so
+            // a stale FK never outlives the resolution that once declared it. Clearing happens
+            // even when allSoftFKs is empty (a table that lost every FK ends clear).
+            const cleared = this.SoftFKEmitter.ClearForeignKeysForTables(withPKs, allConfigs);
             const merged = allSoftFKs.length > 0
-                ? this.SoftFKEmitter.MergeSchemaConfig(withPKs, allSoftFKs)
-                : withPKs;
+                ? this.SoftFKEmitter.MergeSchemaConfig(cleared, allSoftFKs)
+                : cleared;
             output.AdditionalSchemaInfoUpdate = this.SoftFKEmitter.EmitConfigFile(
                 input.AdditionalSchemaInfoPath, merged
             );
@@ -215,9 +226,17 @@ export class SchemaBuilder {
         // Step 2: Build RSU pipeline input from SchemaBuilder output
         const rsuInput = this.BuildRSUInput(schemaOutput, input, rsuOptions);
 
-        // Step 3: Execute the RSU pipeline
+        // Step 3: Execute the RSU pipeline.
+        //
+        // Retrying wrapper, not the bare RunPipeline: this is the path every `ApplyAll` /
+        // `ApplyAllBatch` install runs through, and its expensive middle steps
+        // (ExecuteMigration, RunCodeGen, CompileTypeScript, RestartMJAPI) fail transiently —
+        // a dropped connection during the migration, an EBUSY during compile, an MJAPI that
+        // isn't back up yet. `RunPipelineWithRetry` already whitelists exactly those four
+        // steps and refuses to retry validation or git; the callers simply never used it, so
+        // an install died on a hiccup that a 5s backoff would have absorbed.
         const rsm = RuntimeSchemaManager.Instance;
-        const pipelineResult = await rsm.RunPipeline(rsuInput);
+        const pipelineResult = await rsm.RunPipelineWithRetry(rsuInput);
 
         return { SchemaOutput: schemaOutput, PipelineResult: pipelineResult };
     }
@@ -229,7 +248,7 @@ export class SchemaBuilder {
     public BuildRSUInput(
         schemaOutput: SchemaBuilderOutput,
         input: SchemaBuilderInput,
-        rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean }
+        rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean; AdditionalSchemaInfoAuthoritative?: boolean }
     ): RSUPipelineInput {
         // Combine all migration file contents into a single SQL block
         const migrationSQL = schemaOutput.MigrationFiles
@@ -252,6 +271,7 @@ export class SchemaBuilder {
             Description: `Integration: ${input.SourceType} — ${affectedTables.join(', ')}`,
             AffectedTables: affectedTables,
             AdditionalSchemaInfo: schemaOutput.AdditionalSchemaInfoUpdate?.Content,
+            AdditionalSchemaInfoAuthoritative: rsuOptions?.AdditionalSchemaInfoAuthoritative,
             MetadataFiles: metadataFiles.length > 0 ? metadataFiles : undefined,
             SkipGitCommit: rsuOptions?.SkipGitCommit,
             SkipRestart: rsuOptions?.SkipRestart,
@@ -289,6 +309,77 @@ export class SchemaBuilder {
             DefaultValue: col.DefaultValue ?? undefined,
             Description: col.Description,
         };
+    }
+
+    /**
+     * Dialect-aware row-size guard. A dialect that reports a hard in-row size limit
+     * ({@link SQLDialect.MaxInRowSizeBytes} — e.g. SQL Server's ~8060 bytes) pushes only
+     * variable-length values off-row, leaving a small in-row pointer. A very wide table (hundreds of
+     * columns — e.g. a 600+ field CRM object) can exceed that limit with the pointers alone, so NO row
+     * can ever be inserted: every INSERT fails with a cryptic "Cannot create a row of size N ..." error
+     * and the table is dead on arrival. Rather than emit such a doomed table, we cap the materialized
+     * columns to a declared-priority CORE SUBSET that fits — always keeping the primary-key columns —
+     * and return a structured warning naming the deferred fields. The deferred fields still sync to the
+     * source and land in __mj_integration_CustomOverflow (not lost); they are simply not persisted as
+     * typed columns. Dialects with no in-row limit (PostgreSQL/TOAST) only get a soft advisory as the
+     * hard column-count cap nears. The per-type in-row footprint and both limits come from the dialect,
+     * so there is no platform branching here. Mutates config.Columns in place to the kept subset so all
+     * downstream steps (DDL, soft FK, metadata) operate on the columns that actually exist.
+     */
+    private CapColumnsForRowSize(config: TargetTableConfig, platform: DatabasePlatform): string[] {
+        const dialect = GetDialect(platform);
+        const maxRowBytes = dialect.MaxInRowSizeBytes;
+        const maxCols = dialect.MaxColumnCount;
+
+        // Dialects with no in-row size limit (e.g. PostgreSQL/TOAST) can never have a doomed-row table;
+        // only advise as the hard column-count cap nears (no graceful subset needed — rare).
+        if (maxRowBytes == null) {
+            if (maxCols != null && config.Columns.length > maxCols - 100) {
+                return [`Table ${config.SchemaName}.${config.TableName} has ${config.Columns.length} columns, approaching the ${maxCols}-column hard limit. Consider splitting the object.`];
+            }
+            return [];
+        }
+
+        const BUDGET = maxRowBytes - 60; // safety margin under the dialect's hard in-row limit
+        const SYNC_RESERVE = 400; // generous in-row floor for ID + __mj timestamps + the __mj_integration_* sync columns
+        const totalCols = config.Columns.length;
+        const pkSet = new Set((config.PrimaryKeyFields ?? []).map(p => p.toLowerCase()));
+
+        let used = SYNC_RESERVE;
+        const keptNames = new Set<string>();
+        const deferred: string[] = [];
+
+        // Pass 1 — primary-key columns are identity; always kept, counted first.
+        for (const col of config.Columns) {
+            if (pkSet.has(col.TargetColumnName.toLowerCase())) {
+                keptNames.add(col.TargetColumnName);
+                used += dialect.EstimateInRowBytes(col.TargetSqlType);
+            }
+        }
+        // Pass 2 — remaining columns in declared order until the budget is exhausted.
+        for (const col of config.Columns) {
+            if (pkSet.has(col.TargetColumnName.toLowerCase())) continue;
+            const w = dialect.EstimateInRowBytes(col.TargetSqlType);
+            if (used + w <= BUDGET) {
+                keptNames.add(col.TargetColumnName);
+                used += w;
+            } else {
+                deferred.push(col.TargetColumnName);
+            }
+        }
+
+        if (deferred.length === 0) return [];
+
+        // Keep declared order for stable, reviewable DDL.
+        config.Columns = config.Columns.filter(c => keptNames.has(c.TargetColumnName));
+        const sample = deferred.slice(0, 20).join(', ');
+        const more = deferred.length > 20 ? `, … (+${deferred.length - 20} more)` : '';
+        return [
+            `Table ${config.SchemaName}.${config.TableName}: deferred ${deferred.length} of ${totalCols} columns to stay within the ${maxRowBytes}-byte in-row row-size limit ` +
+            `(in-row row-overflow pointers alone would exceed it). Materialized a ${config.Columns.length}-column core subset; all primary-key columns retained. ` +
+            `Deferred fields still sync and are captured in __mj_integration_CustomOverflow, but are not persisted as typed columns. ` +
+            `Deferred: ${sample}${more}.`,
+        ];
     }
 
     /** Integration-specific sync columns added to every integration table. */

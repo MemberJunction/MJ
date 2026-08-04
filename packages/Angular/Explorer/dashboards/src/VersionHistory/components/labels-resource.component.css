@@ -196,39 +196,6 @@
     font-size: 12px;
 }
 
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    text-align: center;
-}
-
-.empty-icon {
-    font-size: 48px;
-    color: var(--mj-text-muted);
-    margin-bottom: 16px;
-}
-
-.empty-state h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-    margin: 0 0 8px 0;
-}
-
-.empty-state p {
-    font-size: 14px;
-    color: var(--mj-text-secondary);
-    margin: 0;
-    max-width: 400px;
-}
-
-.empty-cta {
-    margin-top: 20px;
-}
 
 /* ==================================================================== */
 /* Create Label Dialog */

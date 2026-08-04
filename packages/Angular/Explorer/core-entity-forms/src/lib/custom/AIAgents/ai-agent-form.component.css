@@ -521,31 +521,6 @@
     color: var(--mj-text-disabled);
 }
 
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--mj-text-muted);
-}
-
-.empty-state i {
-    font-size: 48px;
-    color: var(--mj-border-default);
-    margin-bottom: 16px;
-}
-
-.empty-state h4 {
-    color: var(--mj-text-secondary);
-    font-weight: 600;
-    margin-bottom: 8px;
-}
-
-.empty-state p {
-    font-size: 15px;
-    line-height: 1.6;
-    max-width: 400px;
-    margin: 0 auto;
-}
-
 /* Loading State */
 .loading-overlay {
     position: absolute;
@@ -1568,37 +1543,6 @@
 
 .btn-primary i {
     font-size: 12px;
-}
-
-/* Enhanced Empty States */
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--mj-text-muted);
-    background: var(--mj-bg-surface-card);
-    border-radius: 12px;
-    border: 2px dashed var(--mj-border-default);
-    margin-top: 16px;
-}
-
-.empty-state i {
-    font-size: 48px;
-    color: var(--mj-border-default);
-    margin-bottom: 16px;
-}
-
-.empty-state h4 {
-    color: var(--mj-text-secondary);
-    font-weight: 600;
-    margin-bottom: 8px;
-    font-size: 18px;
-}
-
-.empty-state p {
-    font-size: 15px;
-    line-height: 1.6;
-    max-width: 400px;
-    margin: 0 auto 20px auto;
 }
 
 /* Responsive Design */
@@ -2653,13 +2597,6 @@
     margin: 0;
     font-size: 12px;
     color: var(--mj-text-secondary);
-}
-
-.empty-state-actions {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    margin-top: 16px;
 }
 
 /* Responsive adjustments for sub-agent filters */

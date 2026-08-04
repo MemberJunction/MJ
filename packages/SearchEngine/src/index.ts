@@ -10,6 +10,10 @@ export * from './generic/SearchEngine';
 export * from './generic/BaseReRanker';
 export * from './generic/NoopReRanker';
 export * from './generic/ScopeTemplateRenderer';
+export * from './generic/ScopeFilterGuard';
+export * from './generic/ScopeValueEscaper';
+export * from './generic/ScopeDimensionResolver';
+export * from './generic/ScopeExplanation';
 export * from './permissions/SearchScopePermissionResolver';
 
 // Phase 2D real rerankers — exported here so consumers' module evaluation runs the
@@ -27,3 +31,4 @@ export * from './providers/ElasticsearchSearchProvider';
 export * from './providers/TypesenseSearchProvider';
 export * from './providers/AzureAISearchProvider';
 export * from './providers/OpenSearchSearchProvider';
+export * from './generic/ExternalHitMapper';

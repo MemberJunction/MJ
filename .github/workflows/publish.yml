@@ -108,8 +108,17 @@ jobs:
         env:
           REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
 
+      - name: Check for version override in commit message
+        id: commit_override
+        run: |
+          COMMIT_MSG=$(git log -1 --format=%B)
+          if [[ "$COMMIT_MSG" =~ \[version:([0-9]+\.[0-9]+\.[0-9]+)\] ]]; then
+            echo "VERSION_OVERRIDE=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+            echo "Found version override in commit message: ${BASH_REMATCH[1]}"
+          fi
+
       - name: Determine next expected version
-        if: ${{ env.BRANCH == 'main' && !github.event.inputs.targetVersion }}
+        if: ${{ env.BRANCH == 'main' && !github.event.inputs.targetVersion && !steps.commit_override.outputs.VERSION_OVERRIDE }}
         id: version_check
         run: |
           git fetch --tags
@@ -128,7 +137,7 @@ jobs:
       - name: Update version and check against expected
         if: ${{ env.BRANCH == 'main' }}
         run: |
-          EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
+          EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.commit_override.outputs.VERSION_OVERRIDE || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
           npm run version
 
           NEXT_VERSION=$(jq -r .version packages/MJServer/package.json)
@@ -141,8 +150,36 @@ jobs:
       - name: Build packages
         run: npm run build
 
+      # LTS process (plans/lts-process.md §4.2): no publish ever omits its explicit
+      # --tag. The channel is derived from the version grammar itself — an -edge.N
+      # prerelease goes to the `edge` dist-tag. Unsuffixed versions are era-gated:
+      # era-5 (classic grammar, the bootstrap) publishes to `latest` — today's
+      # behavior, unchanged. From era 6 on, an unsuffixed version is a candidate or
+      # certified build and this routine path REFUSES it: `latest` moves only at
+      # certification (ci/dist-tag-all.mjs), and candidates publish via the
+      # candidate-cut flow / publish-lts.yml (§15 items 4 and 6). Without this gate
+      # a cycle-2 candidate cut transiting here would seize `latest` uncertified.
+      - name: Determine release channel from version grammar
+        id: channel
+        run: |
+          VERSION=$(jq -r .version packages/MJServer/package.json)
+          MAJOR=${VERSION%%.*}
+          if [[ "$VERSION" == *-edge.* ]]; then
+            NPM_TAG=edge
+            PRERELEASE=true
+          elif [[ "$MAJOR" -le 5 ]]; then
+            NPM_TAG=latest
+            PRERELEASE=false
+          else
+            echo "::error::Unsuffixed version $VERSION on the routine publish path. Post-era-open, normal versions are candidate/certified builds: publish via the candidate-cut flow (publish-lts.yml); 'latest' moves only at certification via ci/dist-tag-all.mjs."
+            exit 1
+          fi
+          echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "PRERELEASE=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "::notice::Publishing $VERSION to npm dist-tag $NPM_TAG (prerelease: $PRERELEASE)"
+
       - name: Publish to npm
-        run: npm run change publish
+        run: npm run change publish -- --tag ${{ steps.channel.outputs.NPM_TAG }}
         env:
           NPM_TOKEN: ''
 
@@ -161,6 +198,22 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: npm run commitpush
+
+      # LTS process §4.3: routine releases never claim the repo's "latest release"
+      # flag — certification marks the certified build as latest afterward
+      # (gh release edit vX.Y.Z --latest), so "newest GH release" surfaces always
+      # point at certified bits. Edge prereleases are additionally flagged as such.
+      - name: Create GitHub Release (never latest; certification promotes)
+        if: ${{ env.BRANCH == 'main' }}
+        env:
+          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          EXTRA_FLAGS=""
+          if [ "${{ steps.channel.outputs.PRERELEASE }}" = "true" ]; then
+            EXTRA_FLAGS="--prerelease"
+          fi
+          gh release create "$VERSION" --title "$VERSION" --generate-notes --latest=false $EXTRA_FLAGS --repo "${{ github.repository }}"
 
       - name: Merge main into next and update package-lock
         if: ${{ env.BRANCH == 'main' }}

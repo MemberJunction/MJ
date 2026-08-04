@@ -32,9 +32,8 @@
             <i class="fa-solid fa-spinner fa-spin"></i> Loading labels...
           </div>
         } @else if (RecordLabels.length === 0) {
-          <div class="rc-labels-empty">
-            No version labels for this record yet.
-          </div>
+          <mj-empty-state class="rc-labels-empty" Size="compact"
+            Icon="" Title="No version labels for this record yet." />
         } @else {
           <div class="rc-labels-list">
             @for (label of RecordLabels; track label.ID) {
@@ -53,20 +52,16 @@
 
       @if (viewData.length === 0) {
         <!-- Empty state -->
-        <div class="rc-empty-state">
-          <div class="rc-empty-state-icon">
-            <i class="fa-solid fa-clock-rotate-left"></i>
-          </div>
-          <h3 class="rc-empty-state-title">No Change History</h3>
-          <p class="rc-empty-state-description">
-            This record doesn't have any tracked changes yet.
-            Changes will appear here automatically as edits are made.
-          </p>
+        <mj-empty-state
+          Icon="fa-solid fa-clock-rotate-left"
+          Title="No Change History"
+          Message="This record doesn't have any tracked changes yet. Changes will appear here automatically as edits are made."
+          Size="large">
           <div class="rc-empty-state-hint">
             <i class="fa-solid fa-shield-halved"></i>
             <span>Record change tracking is managed at the entity level</span>
           </div>
-        </div>
+        </mj-empty-state>
       } @else {
         <!-- Page Header -->
         <div class="rc-page-header">
@@ -171,13 +166,13 @@
         <!-- Timeline -->
         <div class="rc-timeline" [attr.aria-label]="'Timeline of changes for ' + record.EntityInfo.Name + ' record'">
           @if (filteredData.length === 0) {
-            <div class="rc-no-results">
-              <i class="fa-solid fa-filter" aria-hidden="true"></i>
-              <p>No changes match your current filters.</p>
-              <button class="rc-clear-filters-btn" (click)="ClearFilters()">
-                <i class="fa-solid fa-xmark"></i> Clear Filters
-              </button>
-            </div>
+            <mj-empty-state
+              Variant="no-results"
+              Icon="fa-solid fa-filter"
+              Title="No changes match your current filters"
+              ActionText="Clear filters"
+              ActionIcon="fa-solid fa-rotate-left"
+              (Action)="ClearFilters()" />
           } @else {
             @for (group of dateGroups; track group.label) {
               <div class="rc-date-group">

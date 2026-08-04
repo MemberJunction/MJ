@@ -214,6 +214,8 @@
     padding: 24px 12px;
     color: var(--mj-text-muted);
     font-size: 13px;
+    /* <mj-empty-state> host must span the rail so its content centers */
+    width: 100%;
 }
 
 .fb-rail-empty i {
@@ -461,6 +463,8 @@
     text-align: center;
     padding: 64px 16px;
     color: var(--mj-text-muted);
+    /* <mj-empty-state> host must fill the pane so its content centers */
+    width: 100%;
 }
 
 .fb-empty i {
@@ -839,6 +843,10 @@
   text-align: center;
   max-width: 380px;
   color: var(--mj-text-secondary);
+  /* center the width-capped <mj-empty-state> host within the preview pane */
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 .fb-preview-empty i {
   font-size: 24px;
@@ -1566,6 +1574,9 @@ mj-code-editor.fb-code-editor {
 /* Empty state — landing card -------------------------------------- */
 .fb-empty--landing {
   max-width: 520px;
+  /* center the 520px-capped landing host within the canvas */
+  margin-left: auto;
+  margin-right: auto;
 }
 .fb-empty-recent {
   margin-top: 24px;

@@ -305,10 +305,10 @@
                                                         [messages]="chatMessages">
                                                     </mj-chat-message-viewer>
                                                 } @else {
-                                                    <div class="empty-state">
-                                                        <i class="fa-solid fa-comment-slash"></i>
-                                                        <p>No chat messages found</p>
-                                                    </div>
+                                                    <mj-empty-state
+                                                        Size="compact"
+                                                        Icon="fa-solid fa-comment-slash"
+                                                        Title="No chat messages found" />
                                                 }
                                             </div>
                                         </mj-accordion-panel>
@@ -356,10 +356,10 @@
                                                         </mj-code-editor>
                                                     </div>
                                                 } @else {
-                                                    <div class="empty-state">
-                                                        <i class="fa-solid fa-database"></i>
-                                                        <p>No data object found</p>
-                                                    </div>
+                                                    <mj-empty-state
+                                                        Size="compact"
+                                                        Icon="fa-solid fa-database"
+                                                        Title="No data object found" />
                                                 }
                                             </div>
                                         </mj-accordion-panel>
@@ -406,14 +406,14 @@
                                         </mj-accordion-panel>
                                     </div>
                                 } @else {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-comment-slash"></i>
-                                        <p>No input messages recorded</p>
-                                    </div>
+                                    <mj-empty-state
+                                        Size="compact"
+                                        Icon="fa-solid fa-comment-slash"
+                                        Title="No input messages recorded" />
                                 }
                             </div>
                     </mj-accordion-panel>
-                    
+
                     <!-- Result Panel -->
                     <mj-accordion-panel [Expanded]="resultExpanded" (ExpandedChange)="onResultPanelToggle($event)" style="margin-bottom: 8px;">
                         <ng-template mjAccordionTitle>
@@ -467,9 +467,10 @@
                                         </mj-code-editor>
                                     </div>
                                 } @else if (!record.ErrorMessage) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-inbox"></i>
-                                        <p>No result data recorded</p>
+                                    <mj-empty-state
+                                        Size="compact"
+                                        Icon="fa-solid fa-inbox"
+                                        Title="No result data recorded">
                                         @if (record.CompletedAt && (record.Status === 'Failed' || record.Success === false)) {
                                             <div class="error-info">
                                                 @if (record.Status) {
@@ -505,7 +506,7 @@
                                                 }
                                             </div>
                                         }
-                                    </div>
+                                    </mj-empty-state>
                                 }
                             </div>
                     </mj-accordion-panel>

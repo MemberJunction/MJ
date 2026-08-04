@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, ViewChild, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
+import { RunView } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLLiveKitClient, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
 import { LiveKitRoomComponent, type LiveKitRoomLayout } from '@memberjunction/ng-livekit-room';
+import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import type {
   LiveKitDataMessage,
   LiveKitDisconnectedEvent,
@@ -47,8 +49,19 @@ export interface AgentInRoom {
   selector: 'mj-livekit-agent-room',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LiveKitRoomComponent],
+  imports: [LiveKitRoomComponent, MJStorageMediaPlayerComponent],
   template: `
+    @if (recordingFileId && showRecordingPanel) {
+      <div class="mj-lk-recording">
+        <div class="mj-lk-recording__head">
+          <span class="mj-lk-recording__title"><i class="fa-solid fa-circle-play"></i> Meeting recording</span>
+          <button type="button" class="mj-lk-recording__close" title="Dismiss" (click)="showRecordingPanel = false">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <mj-storage-media-player [FileID]="recordingFileId" [Provider]="Provider"></mj-storage-media-player>
+      </div>
+    }
     @if (loading) {
       <div class="mj-lk-status">
         <i class="fa-solid fa-spinner fa-spin"></i>
@@ -92,8 +105,10 @@ export interface AgentInRoom {
         [E2EEPassphrase]="E2EEPassphrase"
         [E2EEWorker]="E2EEWorker"
         [AgentAvatarUrl]="AgentAvatarUrl"
+        [CanEndForAll]="EnableEndForAll && !!resolvedRoomName"
         (Connected)="Connected.emit($event)"
         (Disconnected)="Disconnected.emit($event)"
+        (EndForAll)="EndMeeting()"
         (ParticipantJoined)="ParticipantJoined.emit($event)"
         (ParticipantLeft)="ParticipantLeft.emit($event)"
         (DataReceived)="DataReceived.emit($event)"
@@ -325,6 +340,43 @@ export interface AgentInRoom {
         font-size: 0.75rem;
         color: var(--mj-status-error-text, var(--mj-status-error));
       }
+      .mj-lk-recording {
+        margin-bottom: 12px;
+        padding: 12px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 10px;
+        background: var(--mj-bg-surface-card, var(--mj-bg-surface));
+      }
+      .mj-lk-recording__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .mj-lk-recording__title {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--mj-text-primary);
+      }
+      .mj-lk-recording__title i {
+        color: var(--mj-brand-primary);
+      }
+      .mj-lk-recording__close {
+        width: 28px;
+        height: 28px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--mj-text-muted);
+        background: transparent;
+      }
+      .mj-lk-recording__close:hover {
+        color: var(--mj-text-primary);
+        background: var(--mj-bg-surface-hover);
+      }
     `,
   ],
 })
@@ -357,6 +409,12 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public EnableAgentManagement = true;
   /** Show the "Invite" pill that copies a join link to this room. */
   @Input() public EnableInvite = true;
+  /**
+   * Offer "End meeting for everyone" in the control bar's Zoom-style leave menu. When on (default) and a
+   * room is resolved, ending tears down every agent in the room server-side (by name — so it works even
+   * when this client only *joined*). Set `false` for contexts where only the local user should ever leave.
+   */
+  @Input() public EnableEndForAll = true;
   /** Target agents the user can ADD in-room (id + name). The host (e.g. the Explorer resource) supplies these. */
   @Input() public AvailableAgents: { ID: string; Name: string }[] = [];
 
@@ -392,6 +450,11 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public addingAgent = false;
   /** Last add error, shown under the picker. */
   public addError: string | null = null;
+  /** True while an "End meeting" (stop all agents + leave) is in flight. */
+  public endingMeeting = false;
+
+  /** The inner Generic room — used to trigger the local disconnect when ending/leaving the meeting. */
+  @ViewChild(LiveKitRoomComponent) private roomComponent?: LiveKitRoomComponent;
 
   /** Available agents not already in the room (by target id) — the "Add" picker options. */
   public get availableToAdd(): { ID: string; Name: string }[] {
@@ -506,9 +569,22 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   /** The active egress id, when recording. */
   private currentEgressId: string | null = null;
 
+  /**
+   * The `MJ: Files` id of this room's meeting recording, when one exists — set when a recording is STOPPED
+   * (the server registers the egress MP4 and returns its file id) or resolved for an already-recorded room
+   * on join. Drives the {@link MJStorageMediaPlayerComponent} playback panel.
+   */
+  public recordingFileId: string | null = null;
+  /** Whether the recording playback panel is shown (dismissable). */
+  public showRecordingPanel = true;
+
   public ngOnInit(): void {
     if (this.AutoStart) {
       void this.Start();
+    }
+    // If this room already has a registered recording (e.g. joining/reviewing a past room), surface it.
+    if (this.RoomName) {
+      void this.loadExistingRecording(this.RoomName);
     }
   }
 
@@ -587,6 +663,8 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     this.serverUrl = result.ServerUrl;
     this.token = result.ClientToken;
     this.resolvedRoomName = result.RoomName;
+    // Surface a prior recording for this resolved room (the server may have generated the room name).
+    void this.loadExistingRecording(result.RoomName);
     // Track the agent we just brought in as the first entry in the in-room roster.
     this.agentsInRoom = [
       { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.TargetAgentID, Name: this.AgentName ?? 'Agent' },
@@ -665,6 +743,35 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
+   * **End meeting** (the Zoom/Teams "End for all", reached from the control-bar leave menu): tears down EVERY
+   * agent in the room server-side — *by room name*, so it works even when this client only **joined** the room
+   * and never tracked the bridge ids locally — then disconnects the local user. Contrast with **Leave** (the
+   * other menu item → {@link LiveKitRoomComponent.Leave}), which only disconnects YOU and lets the meeting
+   * continue; the server then auto-leaves the agents once the last human is gone, so neither path strands
+   * billable agent sessions in an empty room.
+   */
+  public async EndMeeting(): Promise<void> {
+    if (this.endingMeeting) {
+      return;
+    }
+    this.endingMeeting = true;
+    this.cdr.markForCheck();
+    try {
+      if (this.resolvedRoomName) {
+        const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+        await client.EndRoom(this.resolvedRoomName);
+      }
+      this.agentsInRoom = [];
+    } catch {
+      /* best-effort — fall through and still disconnect the local user */
+    } finally {
+      await this.roomComponent?.Leave();
+      this.endingMeeting = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
    * Builds the shareable invite URL for THIS room: the current page URL with a `room=<roomName>` query
    * param. Opening it lands the invitee on the Live Room in join mode for the same room.
    */
@@ -723,11 +830,48 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
         this.fail(result.ErrorMessage ?? 'Failed to start recording.');
       }
     } else if (this.currentEgressId) {
-      await client.StopRecording(this.currentEgressId);
+      const stopped = await client.StopRecording(this.currentEgressId);
       this.isRecording = false;
       this.currentEgressId = null;
+      // The server registers the egress MP4 as an MJ: Files row on stop and returns its id — surface it
+      // in the playback panel. Absent when meeting-recording storage isn't configured server-side.
+      if (stopped.Success && stopped.RecordingFileID) {
+        this.recordingFileId = stopped.RecordingFileID;
+        this.showRecordingPanel = true;
+      }
     }
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Resolves this room's already-registered meeting recording (if any) — the `MJ: Conversations` of
+   * `Type='Meeting Room'` keyed by the room name carries the `RecordingFileID`. Best-effort: any failure
+   * just leaves the playback panel hidden.
+   *
+   * @param roomName The LiveKit room name (= the Meeting-Room Conversation's `ExternalID`).
+   */
+  private async loadExistingRecording(roomName: string): Promise<void> {
+    try {
+      const escaped = roomName.replace(/'/g, "''");
+      const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<{ RecordingFileID: string | null }>(
+        {
+          EntityName: 'MJ: Conversations',
+          ExtraFilter: `ExternalID='${escaped}' AND Type='Meeting Room' AND RecordingFileID IS NOT NULL`,
+          Fields: ['RecordingFileID'],
+          OrderBy: '__mj_CreatedAt DESC',
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        this.ProviderToUse.CurrentUser,
+      );
+      const fileId = result.Success ? result.Results[0]?.RecordingFileID ?? null : null;
+      if (fileId) {
+        this.recordingFileId = fileId;
+        this.cdr.markForCheck();
+      }
+    } catch {
+      // best-effort — no recording panel
+    }
   }
 
   /** Records a failure and emits an error event. */

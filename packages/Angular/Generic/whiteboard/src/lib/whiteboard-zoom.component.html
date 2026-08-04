@@ -1,18 +1,18 @@
 <div class="zoom-cluster">
-  <button type="button" title="Zoom out (hold for continuous)"
+  <button type="button" title="Zoom out (hold for continuous)" aria-label="Zoom out"
           (pointerdown)="OnZoomPressStart($event, -1)"
           (pointerup)="OnZoomPressEnd()"
           (pointerleave)="OnZoomPressEnd()"
           (pointercancel)="OnZoomPressEnd()"
-          (click)="OnZoomClick(-1)"><i class="fa-solid fa-minus"></i></button>
+          (click)="OnZoomClick(-1)"><i class="fa-solid fa-minus" aria-hidden="true"></i></button>
   <span class="zoom-pct">{{ ZoomPercent }}%</span>
-  <button type="button" title="Zoom in (hold for continuous)"
+  <button type="button" title="Zoom in (hold for continuous)" aria-label="Zoom in"
           (pointerdown)="OnZoomPressStart($event, 1)"
           (pointerup)="OnZoomPressEnd()"
           (pointerleave)="OnZoomPressEnd()"
           (pointercancel)="OnZoomPressEnd()"
-          (click)="OnZoomClick(1)"><i class="fa-solid fa-plus"></i></button>
+          (click)="OnZoomClick(1)"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
   <span class="zoom-sep"></span>
-  <button type="button" title="Fit to content" (click)="Fit.emit()"><i class="fa-solid fa-compress"></i></button>
-  <button type="button" title="Mini-map" [class.on]="MinimapOpen" (click)="ToggleMinimap.emit()"><i class="fa-regular fa-map"></i></button>
+  <button type="button" title="Fit to content" aria-label="Fit to content" (click)="Fit.emit()"><i class="fa-solid fa-compress" aria-hidden="true"></i></button>
+  <button type="button" title="Mini-map" aria-label="Toggle mini-map" [class.on]="MinimapOpen" (click)="ToggleMinimap.emit()"><i class="fa-regular fa-map" aria-hidden="true"></i></button>
 </div>

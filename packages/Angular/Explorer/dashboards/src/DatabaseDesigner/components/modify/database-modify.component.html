@@ -9,10 +9,7 @@
 
   <!-- ── Error ─────────────────────────────────────────────────────────── -->
   @if (LoadError) {
-    <div class="modify-error" role="alert">
-      <i class="fa-solid fa-circle-exclamation"></i>
-      {{ LoadError }}
-    </div>
+    <mj-alert Variant="error" class="modify-error">{{ LoadError }}</mj-alert>
   }
 
   <!-- ── Main view ─────────────────────────────────────────────────────── -->

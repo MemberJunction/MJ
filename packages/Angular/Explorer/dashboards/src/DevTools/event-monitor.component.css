@@ -271,7 +271,7 @@
 .em-row-type[data-type="LoginFailed"],
 .em-row-type[data-type="LogoutFailed"]                   { background: color-mix(in srgb, var(--mj-status-error) 14%, transparent); color: color-mix(in srgb, var(--mj-status-error) 70%, var(--mj-text-primary)); }
 .em-row-type[data-type="DisplaySimpleNotificationRequest"] { background: color-mix(in srgb, var(--mj-status-warning) 14%, transparent); color: color-mix(in srgb, var(--mj-status-warning) 70%, var(--mj-text-primary)); }
-.em-row-type[data-type="ManualResizeRequest"]            { background: color-mix(in srgb, #7c3aed 12%, transparent); color: #5b21b6; }
+.em-row-type[data-type="ManualResizeRequest"]            { background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: color-mix(in srgb, var(--mj-brand-primary) 70%, var(--mj-text-primary)); }
 
 .em-row-code {
     font-family: 'SF Mono', Menlo, Consolas, monospace;
@@ -344,32 +344,6 @@
     max-height: 280px;
 }
 .em-row-payload code { white-space: pre-wrap; word-break: break-word; }
-
-/* Empty state */
-.em-empty {
-    padding: 80px 40px;
-    text-align: center;
-    color: var(--mj-text-muted);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-}
-.em-empty-icon {
-    font-size: 36px;
-    opacity: 0.4;
-    color: var(--mj-brand-primary);
-}
-.em-empty-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-}
-.em-empty-sub {
-    font-size: 12.5px;
-    max-width: 380px;
-    line-height: 1.5;
-}
 
 @media (max-width: 800px) {
     .em-stats { flex-wrap: wrap; }

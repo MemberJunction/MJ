@@ -32,6 +32,18 @@ export class ComponentPropsValidationRule extends BaseLintRule {
     // React special props that are automatically provided by React
     const reactSpecialProps = new Set(['children']);
 
+    // Form-role components receive a fixed set of host props (FormHostProps) from the
+    // InteractiveFormComponent host — these are part of the form contract, not undeclared
+    // props. Mirror the host's form detection: componentRole OR type === 'form' (componentRole
+    // isn't set until post-generation finalization, so type carries it during generation).
+    const role = componentSpec?.componentRole;
+    const specType = typeof componentSpec?.type === 'string' ? componentSpec.type.toLowerCase() : '';
+    if (role === 'form' || specType === 'form') {
+      for (const hostProp of ['entityName', 'primaryKey', 'record', 'entityMetadata', 'mode', 'canEdit', 'canDelete', 'canCreate']) {
+        standardProps.add(hostProp);
+      }
+    }
+
     // Build set of allowed props: standard props + React special props + componentSpec properties + events
     const allowedProps = new Set([...standardProps, ...reactSpecialProps]);
 

@@ -192,11 +192,14 @@
         }
 
         @if (filteredApplications.length === 0) {
-          <div class="empty-state">
-            <i class="fa-solid fa-cubes empty-icon" aria-hidden="true"></i>
-            <p class="empty-text">No applications found</p>
-            <p class="empty-subtext">Try adjusting your filters or create a new application</p>
-          </div>
+          <mj-empty-state
+            [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+            Icon="fa-solid fa-cubes"
+            Title="No applications found"
+            Message="Try adjusting your filters or create a new application"
+            [ActionText]="IsListNarrowed ? 'Reset filters' : ''"
+            ActionIcon="fa-solid fa-rotate-left"
+            (Action)="resetAllFiltersAndSearch()" />
         }
     </div>
   }
@@ -235,10 +238,7 @@
         </div>
         <div class="modal-body" id="delete-dialog-description">
           <p>Are you sure you want to delete the application <strong>{{ selectedApp.Name }}</strong>?</p>
-          <p class="text-warning">
-            <i class="fa-solid fa-warning" aria-hidden="true"></i>
-            This will remove all entity associations for this application.
-          </p>
+          <mj-alert Variant="warning" Message="This will remove all entity associations for this application." />
         </div>
         <div class="modal-footer">
           <!-- Primary action (Delete) on LEFT per MD3 design guide -->

@@ -527,6 +527,8 @@ This is the first question a reviewer asks, because Actions already share ~80% o
 
 Because the machinery overlaps ~80% with Actions, the build **must reuse, not fork**: the same `JSONType` emit path (`entity_subclasses_codegen.ts`), the same `CodeApprovalStatus` / auto-reset-on-change logic (`MJActionEntityServer`), and the same ClassFactory registration-order override convention serve both. The deliverable is a thin Remote Operations *profile* over shared dispatch / codegen / approval / transport code — differing from the Action profile only in **input model** (typed object vs. param bag) and **consumer orientation** (code-facing vs. agent-facing). Two near-identical metadata+codegen+approval+dispatch systems drifting apart in maintenance is the explicit anti-goal: the RO-2 emitter and the Action emitter **share a common base**. *(Cost owned: extracting that shared base means refactoring the existing, working Action codegen — added RO-2 scope and a regression surface on Actions; see §17.)*
 
+> **DECISION (2026-06-23) — NOT shared; this "common base" goal is CLOSED.** RO-2 shipped a *separate* `RemoteOperationGeneratorBase` (`@memberjunction/codegen-lib`) and `MJRemoteOperationEntityServer`, which **mirror** (not fork) the Action approval-reset / library-context / `@RegisterClass` patterns — so we got the pattern reuse and the genuinely-shared runtime pieces (`AIPromptRunner`, `DocumentationEngine` library context) without the risky base-class surgery. Extracting a true shared emitter/approval base would mean refactoring the working, load-bearing Action codegen — a real regression surface on Actions — purely to de-duplicate two ~150-line generators that rarely change. Judged not worth it; revisit only if the two emitters begin changing in lockstep frequently.
+
 Every piece below **reuses an existing, shipping mechanism** — nothing here is novel infrastructure:
 - typed I/O interfaces from metadata → the **`EntityField.JSONType*`** AST-prefix-and-emit path (`entity_subclasses_codegen.ts:199-296`);
 - per-row generated class → the **Action subclass generator** (`action_subclasses_codegen.ts:102-136`);
@@ -730,7 +732,7 @@ Phased, each phase a gateable PR that builds the affected package(s) and runs th
 
 **Interleave with the facade phases (§13):** `P0–P4 ∥ RO-0–RO-3 → P5 (uses RO ops) → P6 (Run viewer) → (P7–P8 ∥ RO-4 ∥ RO-5 ∥ RO-6)`. RO-0…RO-3 are hard prerequisites for P5/P6 — the facade has **no non-RO path**.
 
-**Open RO decisions (carry into build):** whether `Default`-plumbing generation is worth shipping in RO-2 or deferred; the final showcase-refactor target; the persisted-notification entity for detached completion (reuse existing notifications vs. new); the **contract-fingerprint** format for stale-client rejection (§16.12); and how aggressively to share the **Action emitter base** in RO-2 vs. accept documented short-term duplication.
+**Open RO decisions (carry into build):** whether `Default`-plumbing generation is worth shipping in RO-2 or deferred; the final showcase-refactor target; the persisted-notification entity for detached completion (reuse existing notifications vs. new); the **contract-fingerprint** format for stale-client rejection (§16.12); and how aggressively to share the **Action emitter base** in RO-2 vs. accept documented short-term duplication **(RESOLVED 2026-06-23 — accept the duplication: separate `RemoteOperationGeneratorBase` + `MJRemoteOperationEntityServer` that mirror the Action patterns; no shared base extraction. See the DECISION note in §16.1.)**.
 
 ---
 

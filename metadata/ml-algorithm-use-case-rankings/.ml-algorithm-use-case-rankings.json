@@ -1,0 +1,674 @@
+[
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=XGBoost",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Binary classification (yes/no)",
+      "SuitabilityScore": 5,
+      "RecommendationLevel": "Primary",
+      "Rationale": "The go-to choice for yes/no predictions on typical business data — it routinely delivers the highest accuracy on the kind of mixed numeric-and-categorical tables most teams have. Expect top results once you've spent a little time tuning it."
+    },
+    "primaryKey": {
+      "ID": "2E4F8B41-D3AB-441D-88C5-1A81D2434337"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.084Z",
+      "checksum": "ba5eae6a0a27e1715802fb2e859c50fc2ab255f30cf99a22ad832a50ce15bc30"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=LightGBM",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Binary classification (yes/no)",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Matches XGBoost's accuracy on yes/no problems while training noticeably faster, making it a strong pick when you have lots of rows. The slight edge usually goes to XGBoost on smaller, messier data, so it lands just behind."
+    },
+    "primaryKey": {
+      "ID": "FC15375B-EDBC-4048-AC6D-CFFE7AB12CC4"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.100Z",
+      "checksum": "4338dd8bbf3d39849b5c2b9493d9a33cc16510a7d613735b30a10810d37fc676"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Logistic Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Binary classification (yes/no)",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "A solid, transparent baseline for yes/no decisions — it gives clean odds you can explain to stakeholders. It trails the tree-based models when relationships in the data are complex or non-linear."
+    },
+    "primaryKey": {
+      "ID": "410AD120-B4BE-409F-87A2-21E9CD35C0FA"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.114Z",
+      "checksum": "017b59202b04d2863c6552b162cbc79292fcb330a622e275b00f727f597d54ba"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Random Forest",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Binary classification (yes/no)",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Reliably accurate on yes/no problems and very forgiving of default settings, so it performs well with little tuning effort. It usually lands a step below XGBoost on peak accuracy but is harder to get badly wrong."
+    },
+    "primaryKey": {
+      "ID": "DF728989-3C87-4284-AE68-5430D56BE71D"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.127Z",
+      "checksum": "358f46849c4347f838e2f608b8202fe0a0d7b17c9c1e3754709a3cfa5222adf6"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Ridge Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Binary classification (yes/no)",
+      "SuitabilityScore": 1,
+      "RecommendationLevel": "NotRecommended",
+      "Rationale": "Ridge Regression predicts continuous numbers, not yes/no outcomes — it has no built-in way to produce a clean classification. For a yes/no question, use Logistic Regression or one of the tree-based models instead."
+    },
+    "primaryKey": {
+      "ID": "C7A5CEBC-6DDB-4D56-BE53-8DDEE30F2061"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.140Z",
+      "checksum": "37149a5cd2004310ca3449069dad5213fe309e54bffd4957b6146258f3928c08"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Multilayer Perceptron",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Binary classification (yes/no)",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "A neural network can classify yes/no outcomes well, but it needs more data and careful tuning to beat the tree-based models on ordinary business tables. Reasonable to try, rarely the first pick unless your features are dense or embedding-based."
+    },
+    "primaryKey": {
+      "ID": "E53482F4-B7D4-4318-90C3-7A26BC2EA5CB"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.057Z",
+      "checksum": "deeaad04ab0fa173e0002caed8ae48767902f0d74e56a2c15a9a26061e36adea"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=XGBoost",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Regression (predict a number)",
+      "SuitabilityScore": 5,
+      "RecommendationLevel": "Primary",
+      "Rationale": "The strongest all-around choice for predicting a number (price, demand, score) from typical business data, capturing complex patterns competitors miss. Plan for a bit of tuning to reach its best results."
+    },
+    "primaryKey": {
+      "ID": "ED6CE496-7D70-4F33-9B14-F25792917E87"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.153Z",
+      "checksum": "83e756d8816fa180082659459e51167f217d3997a5df58d7928af26116e64733"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=LightGBM",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Regression (predict a number)",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Predicts numeric values about as accurately as XGBoost but trains much faster, which pays off on larger datasets. It edges just behind only because XGBoost tends to be slightly steadier on small or noisy data."
+    },
+    "primaryKey": {
+      "ID": "D8FF83EC-FD49-4EAD-93F7-898004B9A488"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.166Z",
+      "checksum": "cf7d067b6cd4e64bd2ae5ec324e2916e775af090e9bbf64bbeaf95361c594f22"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Logistic Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Regression (predict a number)",
+      "SuitabilityScore": 1,
+      "RecommendationLevel": "NotRecommended",
+      "Rationale": "Despite its name, Logistic Regression answers yes/no questions — it cannot predict a continuous number like revenue or quantity. For numeric predictions, use Ridge Regression or a tree-based model instead."
+    },
+    "primaryKey": {
+      "ID": "FD500C04-EE50-4E66-99A2-1CD1394C28A7"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.181Z",
+      "checksum": "84685828b058cdc3c663fffd18eb887d83cbc41d0e138678e2b6deda5938c27d"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Random Forest",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Regression (predict a number)",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Produces accurate numeric predictions with very little setup and rarely fails badly, making it a dependable workhorse. It typically trails XGBoost slightly on peak accuracy but is more forgiving out of the box."
+    },
+    "primaryKey": {
+      "ID": "83983C1B-3E66-40C9-8B57-9A7C515CBBFD"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.195Z",
+      "checksum": "3a8d5caf9aca9c17a9d9c43a990cb261a6556236e6306ee9cb7a0c88d3a86136"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Ridge Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Regression (predict a number)",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Purpose-built for predicting numbers when the relationship is roughly a straight line, and it stays stable even with many correlated inputs. It loses ground only when the true pattern is highly non-linear, where tree-based models pull ahead."
+    },
+    "primaryKey": {
+      "ID": "E6F85BFF-0B66-4051-AC0D-505117A868E9"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.218Z",
+      "checksum": "5adeaa2b7c9b854bfe70cad75d0e8c97129d4bff9f9e8efe0d144c817d334b6b"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Multilayer Perceptron",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Regression (predict a number)",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "A neural network can model intricate numeric relationships, but it needs ample data and tuning to outperform the simpler tree-based options on standard tables. Worth a look when your inputs are dense or embedding-derived, otherwise a secondary choice."
+    },
+    "primaryKey": {
+      "ID": "E90A0A47-5F66-4F9D-B3FC-238A9F88713B"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.235Z",
+      "checksum": "97ebd12592fde629d353a3b58d2f896a6d83c76b7fae9be3fd47f72c11066699"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=XGBoost",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Interpretability required",
+      "SuitabilityScore": 2,
+      "RecommendationLevel": "Weak",
+      "Rationale": "Gives useful feature-importance rankings but not simple, plain-English coefficients — if a stakeholder needs to see exactly why each prediction was made, prefer Logistic or Ridge. Choose it here only when accuracy clearly outweighs the need to explain."
+    },
+    "primaryKey": {
+      "ID": "07FAEC73-7E81-4CC1-9A98-61425BBA8A26"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.277Z",
+      "checksum": "9132f54d1764476c9f87daa08f36c3d2c30f805ab6e46d6edf9739e5a436034a"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=LightGBM",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Interpretability required",
+      "SuitabilityScore": 2,
+      "RecommendationLevel": "Weak",
+      "Rationale": "Like XGBoost, it can rank which inputs mattered most but can't give the clear per-factor explanation regulators or executives often want. When you must defend each decision, reach for Logistic or Ridge instead."
+    },
+    "primaryKey": {
+      "ID": "AA525202-567D-46CA-8C38-68ED1A6F9C47"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.293Z",
+      "checksum": "1dbe4120e2a397e53c196008f3226e945a6b18365d904c93081e30de650867d8"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Logistic Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Interpretability required",
+      "SuitabilityScore": 5,
+      "RecommendationLevel": "Primary",
+      "Rationale": "The gold standard when you must explain a yes/no decision — each input gets a clear weight you can state in a sentence (\"every extra year of tenure raises retention odds by X\"). Ideal for audits, compliance, and executive sign-off."
+    },
+    "primaryKey": {
+      "ID": "3C23ECF6-D248-4AC9-842D-46A86D0836C1"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.309Z",
+      "checksum": "671a434c5a9d1ff04037f81178d5697f6c2f829af1f729de72455651788b31cd"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Random Forest",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Interpretability required",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "Offers honest feature-importance scores that show which factors drive predictions, which is enough for many internal reviews. It still can't produce the precise per-factor explanation that Logistic or Ridge give, so it lands in the middle."
+    },
+    "primaryKey": {
+      "ID": "9AFBC0AA-AAD3-4C34-B9C6-6209BABB174E"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.323Z",
+      "checksum": "7a608937d9cf5f5c965236a80ea6de58120f1685358209a5330ba6c83e9a02f2"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Ridge Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Interpretability required",
+      "SuitabilityScore": 5,
+      "RecommendationLevel": "Primary",
+      "Rationale": "For numeric predictions that must be explainable, it gives each input a stable, readable weight you can quote directly to stakeholders. Its built-in smoothing keeps those weights sensible even when inputs overlap, making the story easy to defend."
+    },
+    "primaryKey": {
+      "ID": "33C87346-9377-4C59-BE63-3CD8EE69555E"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.337Z",
+      "checksum": "b72a3ca3d9058a6693795f057dfd8e7a9ede04df9acfc12b59dfa5cfff1e75b4"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Multilayer Perceptron",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Interpretability required",
+      "SuitabilityScore": 1,
+      "RecommendationLevel": "NotRecommended",
+      "Rationale": "Neural networks are effectively a black box — there's no straightforward way to tell a stakeholder why any single prediction came out the way it did. If explainability matters, avoid this and use Logistic or Ridge."
+    },
+    "primaryKey": {
+      "ID": "B4FCB5A8-69BC-4FDF-8D7A-BF2DF50EFE65"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.352Z",
+      "checksum": "10f971df9834d1e52b059fc09150fa22bd8a3739d3dce06c17b21938d46cc5f0"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=XGBoost",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Minimal tuning (business-user)",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "Powerful but it rewards careful tuning, so a business user accepting the defaults may leave accuracy on the table. Usable hands-off, but Random Forest or the linear models are friendlier when no one is dialing in settings."
+    },
+    "primaryKey": {
+      "ID": "7612436F-AA1A-4472-9DC5-85922D774172"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.365Z",
+      "checksum": "a71dbd782e134e446154be909061d40be170ed62aed601f415e69f719c7592f2"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=LightGBM",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Minimal tuning (business-user)",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "Fast and capable, but its many knobs mean default settings can underperform or occasionally overfit without supervision. Fine for a quick run, though it isn't the most set-and-forget option for a non-specialist."
+    },
+    "primaryKey": {
+      "ID": "9BF75311-D6D6-4113-BC55-B41070154F22"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.378Z",
+      "checksum": "ffc5e0316ba24ce50821bfa500089e1f7d80b432486ffb0d54cc74ee933770cf"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Logistic Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Minimal tuning (business-user)",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Has very few settings to worry about, so a business user gets a sensible, stable yes/no model with almost no configuration. It won't match a well-tuned tree model on complex data, but it rarely misbehaves."
+    },
+    "primaryKey": {
+      "ID": "058C7310-0AA1-4B1E-BF9B-BD38F93296C3"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.395Z",
+      "checksum": "efe258a10de4262afcffb9fd350e5c7a8769ae5f4a6ad77fe3d6a424c4ac3f16"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Random Forest",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Minimal tuning (business-user)",
+      "SuitabilityScore": 5,
+      "RecommendationLevel": "Primary",
+      "Rationale": "The most forgiving choice for hands-off use — it delivers strong accuracy with default settings and is very hard to break, even without expertise. The best fit when a business user needs good results without fiddling."
+    },
+    "primaryKey": {
+      "ID": "286D688D-EF3A-433A-A9AC-B616861F3F0D"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.409Z",
+      "checksum": "c7a5518f48ea4bdfc910b6f443614a19b5b0b30875b2c18a5fd52302da1cb986"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Ridge Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Minimal tuning (business-user)",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Simple to run with only one main dial, and its built-in smoothing guards against the obvious mistakes, so defaults usually work well. Great low-effort option for numeric predictions, just behind Random Forest in raw flexibility."
+    },
+    "primaryKey": {
+      "ID": "C1AF6918-A875-49AF-9343-46EB2116AB9E"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.424Z",
+      "checksum": "70e56f1432c83e314e84f322189f86fc2827ba83193bc1604beca4e2db080364"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Multilayer Perceptron",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Minimal tuning (business-user)",
+      "SuitabilityScore": 2,
+      "RecommendationLevel": "Weak",
+      "Rationale": "Neural networks are the most setting-sensitive of the bunch — without careful tuning they can train poorly or unpredictably, which is risky for a non-specialist. Best left to cases where someone can supervise the configuration."
+    },
+    "primaryKey": {
+      "ID": "3F3975CD-D986-41D2-9559-4F6BE210BCCB"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.441Z",
+      "checksum": "d46ce3abc418213f32fd27724c1bc97f7cf351296f55f97fe9fa8a95be5d92f4"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=XGBoost",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Large/wide dataset (speed)",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Scales well to large datasets and stays accurate, but its training is heavier than LightGBM's, so very big jobs take longer. A strong performer when speed matters, just not the fastest in its class."
+    },
+    "primaryKey": {
+      "ID": "B604E024-C453-4FCE-BC3F-B710EA6BF86C"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.472Z",
+      "checksum": "171a8b6152db8363b96193af590715e66a8a537649eeeaedccb3588a73e4b8e4"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=LightGBM",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Large/wide dataset (speed)",
+      "SuitabilityScore": 5,
+      "RecommendationLevel": "Primary",
+      "Rationale": "Built specifically for speed on large, wide datasets — it trains dramatically faster than the alternatives while keeping top-tier accuracy. The clear first pick when you have millions of rows or many columns and limited time."
+    },
+    "primaryKey": {
+      "ID": "3AE868A9-3CF1-4C84-B101-7567BC736C8D"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.490Z",
+      "checksum": "88ff24938e482d5040954f00d563a6c5e8452c115facaae8882f80e3d8ebfbc9"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Logistic Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Large/wide dataset (speed)",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Extremely fast and lightweight, so it handles huge, wide datasets with ease and trains in seconds. It gives up some accuracy on complex patterns, but for sheer speed it's hard to beat."
+    },
+    "primaryKey": {
+      "ID": "2FA1C958-D06C-4ABF-AE86-398937B27735"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.507Z",
+      "checksum": "6e2c6d86968ec1ce731daadaf83a61c4c961406e56f8cc08dfae15f8b6b14f59"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Random Forest",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Large/wide dataset (speed)",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "Handles large data acceptably but builds many full trees, so it grows slow and memory-hungry as rows and columns pile up. Workable, though LightGBM or the linear models are far quicker at scale."
+    },
+    "primaryKey": {
+      "ID": "E09EAA69-B29C-47B4-B8B9-219ED9C94313"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.525Z",
+      "checksum": "c8f2fb58ddb9a67301fa90fe2cb89ab5539026bedb7a1c3c69a8b2472061fc25"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Ridge Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Large/wide dataset (speed)",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Very fast on big, wide datasets and its smoothing keeps it stable even with thousands of columns, so it scales gracefully. A strong speed option for numeric predictions, limited only when the pattern is highly non-linear."
+    },
+    "primaryKey": {
+      "ID": "23B20547-E87B-46D8-A997-173B861DC100"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.542Z",
+      "checksum": "6c4733817c8dc3ae456af6e5431bf8b5aba508899f780d44070f01310ede5f9d"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Multilayer Perceptron",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Large/wide dataset (speed)",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "Can take advantage of large datasets to learn richer patterns, but training is compute-intensive and slower without specialized hardware. Reasonable when you have the volume and time, otherwise the gradient-boosting or linear options are quicker."
+    },
+    "primaryKey": {
+      "ID": "D65C371B-31FE-4A01-88F7-7F24F64DF3FF"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.559Z",
+      "checksum": "325f1fb4c7a758186d48c23f7421e7a71e02d00cd75f05ce40bc145dd36b1715"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=XGBoost",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Embedding/LLM-feature-heavy",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Handles the many dense columns that come from LLM embeddings well and stays accurate, making it a strong choice for these features. A neural network often squeezes a bit more from embedding geometry, so it lands just behind there."
+    },
+    "primaryKey": {
+      "ID": "0FAEB146-12DD-40E4-821C-E1459E01AAC5"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.657Z",
+      "checksum": "1e4cc4ceeb0782d24fe4ee224892c043d3cc138627fcaa8b6d979f2567b109ae"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=LightGBM",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Embedding/LLM-feature-heavy",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Copes well with the wide, dense feature sets that embeddings produce and trains fast, so it's a practical strong option. Like XGBoost, it trails a neural network slightly at exploiting the fine structure of embedding vectors."
+    },
+    "primaryKey": {
+      "ID": "A555F5B6-8170-4E29-8E02-0A8828C12E18"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.671Z",
+      "checksum": "7fb77c09151d30581b2ddf3e7d8502ef92c9d2cf0758d170cb93ec38133592bf"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Logistic Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Embedding/LLM-feature-heavy",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "Embeddings are often roughly linearly separable, so a simple, fast linear model can do surprisingly well on them for yes/no tasks. It misses the more complex interactions that tree-based or neural models capture, keeping it a middle option."
+    },
+    "primaryKey": {
+      "ID": "219F423D-3589-4722-A7EC-928E9DCD5027"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.683Z",
+      "checksum": "575bf1409d4e14f716d0f78bc22e7261e0dbd84ca344675bcbf2f500e1f7aa23"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Random Forest",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Embedding/LLM-feature-heavy",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "Works with embedding features but its tree splits don't naturally exploit the smooth, directional structure of these vectors, so it leaves accuracy on the table. Serviceable, yet gradient boosting or a neural network usually does better here."
+    },
+    "primaryKey": {
+      "ID": "69637A33-0BC0-48B0-AC1A-23321A942CD1"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.697Z",
+      "checksum": "da3f3feddf681e8cda069139605fd88886bfd085908cbfb02c35e84c39d16eb0"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Ridge Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Embedding/LLM-feature-heavy",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "Its smoothing handles the many correlated dimensions in embeddings gracefully, giving a stable numeric model with little fuss. It captures only the linear signal, though, so richer models edge it out when patterns are complex."
+    },
+    "primaryKey": {
+      "ID": "C3B25A25-2CFE-4B28-9CE8-4F59799F0F84"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.709Z",
+      "checksum": "7673cb1143d65f55b64bf8249ad9410b58e57cffea76b5890e8a143bacc46b99"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Multilayer Perceptron",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Embedding/LLM-feature-heavy",
+      "SuitabilityScore": 5,
+      "RecommendationLevel": "Primary",
+      "Rationale": "Neural networks are tailor-made for embedding inputs — they read the dense, directional geometry of LLM features better than any other option here. The top choice when your model is built mainly on embeddings."
+    },
+    "primaryKey": {
+      "ID": "0D194447-D106-430A-B30A-7DF5A202EC26"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.723Z",
+      "checksum": "5f4d96cc50a85474683ed028735e9e428a4b6b699b9d309133318846c09cd556"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=XGBoost",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Small dataset",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "Capable on small data but its flexibility makes it prone to overfitting when there aren't many rows, so it needs careful restraint. Usable, though the simpler linear models or Random Forest are safer with limited examples."
+    },
+    "primaryKey": {
+      "ID": "651C52C3-8F23-4C4C-A06E-8B7D2EA80F7D"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.587Z",
+      "checksum": "738292b4370685456c6cb41727271ff9dad97a7faeabb4a4b353d35ba2333496"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=LightGBM",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Small dataset",
+      "SuitabilityScore": 3,
+      "RecommendationLevel": "Viable",
+      "Rationale": "Its speed advantage doesn't help much on small data, where its complexity can memorize noise instead of learning the real pattern. Workable with caution, but linear models tend to generalize better when examples are scarce."
+    },
+    "primaryKey": {
+      "ID": "3CDC510D-7560-4F57-A07A-7D63F7A69CEB"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.607Z",
+      "checksum": "5ab86feff4d5e784178f7f98fa70b65bf5c1a999e6177afe601207579d9bfa0c"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Logistic Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Small dataset",
+      "SuitabilityScore": 5,
+      "RecommendationLevel": "Primary",
+      "Rationale": "Its simplicity is a real strength on small data — with few inputs to fit, it generalizes reliably instead of memorizing the handful of examples. The dependable first pick for yes/no problems when data is limited."
+    },
+    "primaryKey": {
+      "ID": "439D25BF-1352-4216-824C-179224060381"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.623Z",
+      "checksum": "415736de53225b4338678530650485ddb55262263b88011c5bb62d91e6a90e0e"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Random Forest",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Small dataset",
+      "SuitabilityScore": 4,
+      "RecommendationLevel": "Strong",
+      "Rationale": "Averaging many trees naturally curbs overfitting, so it stays fairly robust even when you have few rows. A strong, low-risk option on small data, just behind the linear models in stability."
+    },
+    "primaryKey": {
+      "ID": "4E64E608-49A9-411A-A92E-9557A8F3C3C0"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.636Z",
+      "checksum": "f7f5d34391fc536f365be622502673e38b039f50260f72aff37c8a6b882d5102"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Ridge Regression",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Small dataset",
+      "SuitabilityScore": 5,
+      "RecommendationLevel": "Primary",
+      "Rationale": "Built-in smoothing actively protects against overfitting, which is exactly what you want when predicting a number from few examples. The reliable first choice for numeric predictions on small datasets."
+    },
+    "primaryKey": {
+      "ID": "59604597-6CCD-4AF7-A775-194B6D379B50"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.739Z",
+      "checksum": "25c5d3784f0c0f0c6c67186951a464352a3cb8673281732025e9eb94ed49e456"
+    }
+  },
+  {
+    "fields": {
+      "MLAlgorithmID": "@lookup:MJ: ML Algorithms.Name=Multilayer Perceptron",
+      "MLAlgorithmUseCaseID": "@lookup:MJ: ML Algorithm Use Cases.Name=Small dataset",
+      "SuitabilityScore": 2,
+      "RecommendationLevel": "Weak",
+      "Rationale": "Neural networks are data-hungry and tend to overfit badly when given only a small number of examples, producing unreliable results. With limited data, prefer the linear models or Random Forest instead."
+    },
+    "primaryKey": {
+      "ID": "8A27817A-F6E4-4D6A-BEAC-6C968F68C7A0"
+    },
+    "sync": {
+      "lastModified": "2026-07-01T17:33:31.754Z",
+      "checksum": "96f41122b4eda4fa2f784f511196680fe4f286f4641a18b8662b8d80d7c04ed4"
+    }
+  }
+]

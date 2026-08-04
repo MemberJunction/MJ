@@ -182,10 +182,6 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
         this.emitConfigChanged();
     }
 
-    public toggleAdvancedOptions(): void {
-        this.showAdvancedOptions = !this.showAdvancedOptions;
-    }
-
     public getParameterLayoutDescription(): string {
         switch (this.parameterLayout) {
             case 'sidebar':

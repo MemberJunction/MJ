@@ -1,0 +1,13 @@
+# Boot smoke: the authenticated app cold-launches to the Conversations home.
+#
+# Precondition: the app is already authenticated (valid token in secure-store),
+# with Metro + MJAPI running. See .maestro/README.md.
+appId: org.memberjunction.mobile
+---
+- launchApp
+# Cold launch re-runs the auth boot (token load + GraphQL client setup), which
+# can take ~10-15s, so wait generously for the home screen to settle.
+- extendedWaitUntil:
+    visible: "Conversations"
+    timeout: 30000
+- assertVisible: "New conversation"

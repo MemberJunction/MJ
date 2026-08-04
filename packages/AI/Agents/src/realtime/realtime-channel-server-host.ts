@@ -36,6 +36,7 @@ import {
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { isRealtimeChannelServerDataAware } from './realtime-channel-server-data-context';
 
 /** Entity name — kept in sync with the session machinery's `MJ:`-prefix convention. */
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
@@ -239,7 +240,7 @@ export class RealtimeChannelServerHost extends BaseSingleton<RealtimeChannelServ
                 return;
             }
             const rows = await this.fetchChannelDefinitions(contextUser, provider);
-            const plugins = await this.instantiateSessionPlugins(rows, ctx);
+            const plugins = await this.instantiateSessionPlugins(rows, ctx, contextUser, provider);
             if (plugins.size > 0) {
                 this.sessions.set(key, { plugins, disposeTimer: null });
             }
@@ -363,6 +364,8 @@ export class RealtimeChannelServerHost extends BaseSingleton<RealtimeChannelServ
     private async instantiateSessionPlugins(
         rows: RealtimeChannelServerDefinitionRow[],
         ctx: RealtimeChannelServerContext,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
     ): Promise<Map<string, BaseRealtimeChannelServer>> {
         const plugins = new Map<string, BaseRealtimeChannelServer>();
         for (const row of rows) {
@@ -372,6 +375,11 @@ export class RealtimeChannelServerHost extends BaseSingleton<RealtimeChannelServ
             }
             try {
                 plugin.Initialize(ctx);
+                // Hand the session's MJ data context to channels that need DB access at start
+                // (e.g. the Media channel resolving an agent's media kit), BEFORE OnSessionStarted.
+                if (isRealtimeChannelServerDataAware(plugin)) {
+                    plugin.SetSessionDataContext(contextUser, provider);
+                }
                 await plugin.OnSessionStarted();
                 plugins.set(this.channelKey(row.Name), plugin);
             } catch (error) {

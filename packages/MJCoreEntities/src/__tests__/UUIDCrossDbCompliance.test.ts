@@ -36,6 +36,9 @@ vi.mock('@memberjunction/core', () => {
             return MockBaseEngine._instances.get(ctor) as T;
         }
         Config() { return Promise.resolve(); }
+        protected GetConfigData<E>(propertyName: string): E[] {
+            return ((this as Record<string, unknown>)[propertyName] as E[]) ?? [];
+        }
     }
     return {
         BaseEngine: MockBaseEngine,

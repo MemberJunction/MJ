@@ -80,6 +80,26 @@ export type JSONObject = { [key: string]: JSONValue };
  *
  * @abstract
  */
+
+/**
+ * Emits a realtime-driver diagnostic line, but ONLY when verbose logging is enabled
+ * (`MJ_VERBOSE=true|1|yes`). These traces — turn boundaries, activity windows, response gating,
+ * barge-in — are invaluable when debugging a live session but far too chatty for normal operation,
+ * so they stay dark unless verbose mode is explicitly turned on. Shared here so every realtime driver
+ * and its session twin (OpenAI, Gemini, …) gate diagnostics through one consistent switch. The truthy
+ * set matches `@memberjunction/core`'s `IsVerboseLoggingEnabled` so a single `MJ_VERBOSE` flag governs
+ * verbose output across the whole stack.
+ *
+ * @param message The diagnostic message, already prefixed by the caller (e.g. `[GeminiRealtime][diag] …`).
+ */
+export function RealtimeDiagLog(message: string): void {
+    const v = (process.env.MJ_VERBOSE ?? '').toLowerCase();
+    if (v === 'true' || v === '1' || v === 'yes') {
+        // eslint-disable-next-line no-console
+        console.log(message);
+    }
+}
+
 export abstract class BaseRealtimeModel extends BaseModel {
     /**
      * Opens a stateful duplex session with the provider.
@@ -167,6 +187,26 @@ export abstract class BaseRealtimeModel extends BaseModel {
     }
 }
 
+/**
+ * The MJ-side Config-bag keys shared across the realtime driver family that are NEVER provider
+ * wire fields: feature knobs the OpenAI-protocol family translates (and gates per profile) plus
+ * transport settings for self-hosted/proxied drivers. NON-OpenAI-protocol drivers (Gemini,
+ * ElevenLabs, AssemblyAI, Inworld) MUST scrub these before forwarding an open config bag to their
+ * SDK/wire — a co-agent config carrying them must be safe on every provider.
+ */
+export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
+    'effortLevel',
+    'reasoningEffort',
+    'parallelToolCalls',
+    'mcpTools',
+    'inputTranscriptionModel',
+    'voice',
+    'disableAutoResponse',
+    'endpoint',
+    'sampleRate',
+    'proxyBaseUrl',
+] as const;
+
 /** A selectable provider-native voice — `ID` is sent to the provider, `Name` is the human label. */
 export interface RealtimeVoiceOption {
     /** The provider-native voice id (e.g. `echo`) — what gets written to the session config. */
@@ -228,6 +268,26 @@ export interface ClientRealtimeSessionConfig {
      * opaquely and never read or rewrite its fields.
      */
     SessionConfig: JSONObject;
+}
+
+/**
+ * Static capability flags of a live {@link IRealtimeSession}, for container introspection (the realtime-
+ * session analogue of `IBridgeProviderFeatures`). Grow this as providers gain runtime abilities — each new
+ * flag defaults to "unsupported" for any driver that hasn't declared it, so the container stays safe.
+ */
+export interface RealtimeSessionCapabilities {
+    /**
+     * Whether the session can change its turn-taking / auto-response mode on a **live** socket (no
+     * reconnect) via {@link IRealtimeSession.Reconfigure}. `true` for providers with a runtime-mutable
+     * session config (OpenAI `session.update`); `false` where it's fixed at connect (Gemini Live).
+     */
+    CanReconfigureTurnMode: boolean;
+}
+
+/** Parameters for {@link IRealtimeSession.Reconfigure} — a live turn-taking change. */
+export interface RealtimeReconfigureParams {
+    /** Switch the model's blind auto-response OFF (meeting mode) or ON (1:1). */
+    DisableAutoResponse?: boolean;
 }
 
 /**
@@ -382,8 +442,34 @@ export interface IRealtimeSession {
      * mid-session omit the member, and callers must feature-detect before invoking.
      *
      * @param instructions Instructions for the single spoken update (tone, brevity, content).
+     * @returns `true` when a response was actually triggered, `false` when it was skipped (e.g. a response
+     *   is already in flight). A bridge that claimed the speaking floor for this turn uses this to release the
+     *   floor immediately on a skip — otherwise a skipped trigger would wedge the room until the safety timer.
+     *   `void`/`undefined` from legacy drivers is treated as "triggered" for backward compatibility.
      */
-    RequestSpokenUpdate?(instructions: string): void;
+    RequestSpokenUpdate?(instructions: string): boolean | void;
+
+    /**
+     * **Capability introspection.** A small, static description of what THIS live session can do, so the
+     * container can ask "is it safe to call X?" instead of invoking optional methods that silently no-op (or
+     * can't be supported) on some providers — the same role `IBridgeProviderFeatures` plays for bridges and
+     * {@link BaseRealtimeModel.SupportsClientDirect} plays for minting. Optional: a driver that hasn't
+     * declared its capabilities is treated **conservatively** (everything unsupported). As models gain
+     * abilities, drivers just flip a flag — no container changes.
+     */
+    Capabilities?: RealtimeSessionCapabilities;
+
+    /**
+     * **Optional capability** (gate on {@link RealtimeSessionCapabilities.CanReconfigureTurnMode}) —
+     * reconfigures a **live** session's turn-taking without reconnecting: e.g. switch a 1:1 agent to
+     * meeting mode (auto-response off) when its room becomes multi-agent. Providers whose runtime config is
+     * mutable mid-socket (OpenAI: `session.update`) implement this and report the capability `true`;
+     * providers whose turn config is fixed at connect (Gemini Live's activity detection) report `false` and
+     * omit the method. The container **must** check the capability before calling — never blind-invoke.
+     *
+     * @param params The reconfiguration to apply (e.g. `DisableAutoResponse`).
+     */
+    Reconfigure?(params: RealtimeReconfigureParams): void;
 
     /**
      * Registers a handler for provider-detected interruptions (barge-in).
@@ -483,6 +569,22 @@ export interface RealtimeSessionParams {
      * so it stays serializable and inspectable.
      */
     Config?: JSONObject;
+
+    /**
+     * Optional server-authoritative hard ceiling on the session's wall-clock duration, in seconds.
+     * Set for abuse-sensitive deployments (e.g. a public web-widget guest's `VoiceMaxSessionMinutes`).
+     * Drivers that support a provider-side session-duration / token-expiry bound SHOULD apply
+     * `min(providerDefault, MaxSessionSeconds)` so the provider drops the connection at the cap;
+     * drivers that don't simply ignore it. Independently, the server stamps the absolute deadline on
+     * the session and the session janitor hard-closes (finalizing runs) at the cap regardless of
+     * driver support, so this is enforced server-side even when the provider can't be told.
+     *
+     * When unset (`undefined`/null) there is NO MJ-imposed duration cap: drivers apply no `min(...)`
+     * bound and the janitor stamps no extra deadline, so the session runs under the provider's own
+     * default session/token limits and MJ's normal session lifecycle (manual end, disconnect, idle
+     * cleanup). This is the default for authenticated/internal sessions, which don't need an abuse cap.
+     */
+    MaxSessionSeconds?: number;
 }
 
 /**
@@ -506,6 +608,14 @@ export interface RealtimeTranscript {
      * Whether this is the final transcript for the turn (`true`) or an interim delta (`false`).
      */
     IsFinal: boolean;
+
+    /**
+     * When true, this FINAL transcript REPLACES the previous final for the same in-flight turn —
+     * providers that STREAM their "completed" transcription (each event carrying the full growing
+     * text, e.g. Grok) set this so consumers collapse the stream into one in-place-updating turn
+     * instead of a stack of growing duplicates. Absent/false: a normal, append-worthy final.
+     */
+    ReplacesPrevious?: boolean;
 }
 
 /**
@@ -565,6 +675,35 @@ export interface RealtimeUsage {
      * Number of output tokens reported in this usage update.
      */
     OutputTokens: number;
+
+    /**
+     * Per-modality breakdown of the input tokens, when the provider reports one. Realtime models
+     * bill audio and text tokens at very different rates (e.g. GPT Realtime 2.1: $32/M audio in
+     * vs $4/M text in), so cost attribution REQUIRES this split — the totals alone force a wrong
+     * blended rate. Absent when the provider reports only totals.
+     */
+    InputTokenDetails?: RealtimeUsageModalityDetail;
+
+    /**
+     * Per-modality breakdown of the output tokens, when the provider reports one.
+     * See {@link RealtimeUsage.InputTokenDetails}.
+     */
+    OutputTokenDetails?: RealtimeUsageModalityDetail;
+}
+
+/**
+ * Per-modality token counts inside a {@link RealtimeUsage} update. All fields optional — providers
+ * report different subsets (OpenAI GA: text/audio/cached on input, text/audio on output).
+ */
+export interface RealtimeUsageModalityDetail {
+    /** Text-modality tokens. */
+    TextTokens?: number;
+    /** Audio-modality tokens. */
+    AudioTokens?: number;
+    /** Image-modality tokens (input only on current providers). */
+    ImageTokens?: number;
+    /** Tokens served from the provider's prompt cache (billed at the cached rate). */
+    CachedTokens?: number;
 }
 
 /**

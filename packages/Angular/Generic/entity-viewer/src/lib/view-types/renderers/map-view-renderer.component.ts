@@ -79,10 +79,10 @@ export interface MapViewConfig {
       >
       </mj-map-view>
     } @else {
-      <div class="map-view-renderer-empty">
-        <i class="fa-solid fa-map-location-dot"></i>
-        <span>No entity selected to map.</span>
-      </div>
+      <mj-empty-state
+        class="map-view-renderer-empty-fill"
+        Icon="fa-solid fa-map-location-dot"
+        Title="No entity selected to map." />
     }
   `,
   styles: [
@@ -91,20 +91,9 @@ export interface MapViewConfig {
         display: block;
         height: 100%;
       }
-      .map-view-renderer-empty {
+      /* Fill the map area (the host centers its content but does not grow). */
+      .map-view-renderer-empty-fill {
         height: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        color: var(--mj-text-muted);
-        padding: 32px;
-        text-align: center;
-      }
-      .map-view-renderer-empty i {
-        font-size: 32px;
-        opacity: 0.6;
       }
     `,
   ],

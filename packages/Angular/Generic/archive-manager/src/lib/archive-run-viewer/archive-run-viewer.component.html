@@ -55,10 +55,9 @@
       <h3 class="run-list-title">Run History</h3>
 
       @if (Runs.length === 0) {
-        <div class="run-empty">
-          <i class="fa-solid fa-inbox"></i>
-          <p>No archive runs found.</p>
-        </div>
+        <mj-empty-state class="run-empty" Size="compact"
+          Icon="fa-solid fa-inbox"
+          Title="No archive runs found." />
       }
 
       @for (run of Runs; track run.ID) {
@@ -169,7 +168,7 @@
         }
 
         @if (!IsDrawerLoading && RunDetails.length === 0) {
-          <p class="drawer-details-empty">No detail records found.</p>
+          <mj-empty-state class="drawer-details-empty" Size="compact" Icon="" Title="No detail records found." />
         }
 
         @if (!IsDrawerLoading && RunDetails.length > 0) {

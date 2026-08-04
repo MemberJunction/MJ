@@ -1,0 +1,38 @@
+{
+  "entity": "MJ: Actions",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "CategoryID": "@lookup:MJ: Action Categories.Name=Predictive Studio?create&Description=Actions for MemberJunction Predictive Studio — thin boundaries over the training / scoring / experiment / promotion engine."
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".predictive-studio-actions.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "CategoryID IN (SELECT ID FROM [__mj].vwActionCategories WHERE Name = 'Predictive Studio')",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "MJ: Action Categories",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: Action Params": {
+        "entity": "MJ: Action Params",
+        "foreignKey": "ActionID"
+      },
+      "MJ: Action Result Codes": {
+        "entity": "MJ: Action Result Codes",
+        "foreignKey": "ActionID"
+      }
+    }
+  }
+}

@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
 // MJ UI Components
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 // MemberJunction
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
@@ -25,6 +25,7 @@ import { ActionGalleryDialogService } from './lib/action-gallery-dialog.service'
     ReactiveFormsModule,
     // MJ UI
     MJButtonDirective,
+    MJEmptyStateComponent,
     // MemberJunction
     AITestHarnessModule,
     SharedGenericModule
