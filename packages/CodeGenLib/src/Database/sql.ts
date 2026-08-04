@@ -222,7 +222,18 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
       let sqlCommand: string = '';
 
       if (this.dbProvider.NeedsViewRefresh) {
-        // Refresh custom views first so they're up to date before generated views are processed
+        // Refresh custom views first so they're up to date before generated views are processed.
+        //
+        // LAYERED entities need their INNER view refreshed BEFORE the outer one. The custom view
+        // selects `g.*` from the generated view, and SQL Server caches a view's column list when the
+        // view is created: refreshing the outer against a stale inner re-caches the OLD column set,
+        // so a newly added column stays missing. That failure is indistinguishable from the column
+        // never having been added at all, which is why the order is explicit rather than incidental.
+        for (const entity of customViewEntities) {
+          if (entity.HasLayeredBaseView) {
+            sqlCommand += this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.GeneratedViewName);
+          }
+        }
         for (const entity of customViewEntities) {
           sqlCommand += this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
         }
@@ -264,8 +275,11 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
 
  public getBaseViewFiles(entity: EntityInfo): string[] {
     const files: string[] = [];
-    const baseViewFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
-    const baseViewPermissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
+    // The VIEW file holds what CodeGen wrote — the inner view for a layered entity. The PERMISSIONS
+    // file targets the PUBLIC view, because that is the object consumers read.
+    const isGenerated = entity.BaseViewGenerated || entity.HasLayeredBaseView;
+    const baseViewFile = this.getDBObjectFileName('view', entity.SchemaName, entity.GeneratedViewName, false, isGenerated);
+    const baseViewPermissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, isGenerated);
     const baseViewFilePath = path.join(outputDir('SQL', true)!, baseViewFile);
     const baseViewPermissionsFilePath = path.join(outputDir('SQL', true)!, baseViewPermissionsFile);
     if (fs.existsSync(baseViewFilePath)) {

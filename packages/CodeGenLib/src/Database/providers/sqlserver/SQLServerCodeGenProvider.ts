@@ -121,7 +121,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
      */
     generateBaseView(context: BaseViewGenerationContext): string {
         const entity = context.entity;
-        const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
+        const viewName = entity.GeneratedViewName;
         const alias = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const whereClause = entity.DeleteType === 'Soft'
             ? `WHERE\n    ${alias}.[${EntityInfo.DeletedAtFieldName}] IS NULL\n`

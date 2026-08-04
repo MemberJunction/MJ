@@ -1450,6 +1450,59 @@ export class EntityInfo extends BaseInfo {
      */
     public BaseViewGenerated: boolean = null
     /**
+     * When set, CodeGen generates the entity's full base view under THIS name instead of
+     * {@link BaseView}, and the application owns `BaseView` — which is expected to wrap it:
+     *
+     * ```sql
+     * CREATE VIEW vwOrderHeaders AS
+     * SELECT g.*, CASE WHEN ... END AS IsOverdue
+     * FROM   vwOrderHeadersGenerated g
+     * ```
+     *
+     * This is how an entity gets a custom base view WITHOUT inheriting the generated SQL. With
+     * `BaseViewGenerated = 0` alone the application takes over the whole view — every related-entity
+     * display join, the geo join, the recursive root-ID apply — and must hand-maintain it forever;
+     * a foreign key added later then silently never appears, because nothing regenerates the join.
+     * Naming an inner view keeps all of that regenerating underneath a thin, reviewable custom layer.
+     *
+     * NULL (the default, and every pre-existing entity) preserves the original behaviour exactly:
+     * `BaseViewGenerated` alone decides whether CodeGen writes `BaseView`, and there is no second view.
+     *
+     * `BaseView` remains the public surface either way — field discovery, permissions and the
+     * generated CRUD procedures all target it, so a column added by the custom layer becomes a
+     * first-class virtual `EntityField`.
+     */
+    public GeneratedBaseViewName: string = null
+
+    /**
+     * The view CodeGen actually WRITES for this entity.
+     *
+     * Normally {@link BaseView}. When {@link GeneratedBaseViewName} is set, the generated SQL goes
+     * there instead and `BaseView` belongs to the application, which layers over it — see
+     * {@link HasLayeredBaseView}.
+     *
+     * Resolved in ONE place because the two names must never drift: several call sites decide where
+     * to write the view, what to call the emitted file, and which object to refresh, and a
+     * disagreement between any two of them produces a view that exists under a name nothing reads.
+     */
+    get GeneratedViewName(): string {
+        const layered = this.GeneratedBaseViewName?.trim();
+        if (layered) return layered;
+        return this.BaseView ? this.BaseView : `vw${this.CodeName}`;
+    }
+
+    /**
+     * True when this entity has a generated inner view with an application-owned `BaseView` on top.
+     *
+     * In that arrangement CodeGen still generates everything — related-entity display fields, geo
+     * columns, recursive root-ID columns — into {@link GeneratedViewName}, so the custom layer stays
+     * thin and does not go stale when the schema gains a foreign key.
+     */
+    get HasLayeredBaseView(): boolean {
+        const layered = this.GeneratedBaseViewName?.trim();
+        return !!layered && layered.toLowerCase() !== (this.BaseView ?? '').toLowerCase();
+    }
+    /**
      * Database schema that contains this entity's table and view
      */
     SchemaName: string = null

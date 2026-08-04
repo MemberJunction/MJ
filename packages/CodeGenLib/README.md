@@ -565,6 +565,76 @@ The form layout system enforces stability to prevent unnecessary churn:
 - Existing fields cannot be moved to newly created categories (prevents renaming)
 - Per-field `AutoUpdateCategory` and `AutoUpdateDisplayName` flags provide granular control
 
+## Base Views: Generated, Custom, or Layered
+
+Every entity has a `BaseView` — the object everything reads. Entity field discovery, permissions and
+the generated CRUD routines all target it, so whatever columns it exposes become first-class
+`EntityField` rows.
+
+There are three arrangements, chosen by two columns on `Entity`:
+
+| `BaseViewGenerated` | `GeneratedBaseViewName` | Result |
+|---|---|---|
+| `1` | `NULL` | **Generated.** CodeGen writes `BaseView`. The default, and almost every entity. |
+| `0` | `NULL` | **Fully custom.** CodeGen writes nothing; the application owns `BaseView` entirely. |
+| `0` | `vwFooGenerated` | **Layered.** CodeGen writes the *inner* view; the application owns `BaseView` and wraps it. |
+
+### Why layered exists
+
+Fully custom is all-or-nothing. To add one computed column an application inherits the whole
+generated view — every related-entity display join, the geo join, the recursive root-ID `OUTER
+APPLY`, the soft-delete predicate — and must hand-maintain it from then on.
+
+That is not a one-time cost. Add a foreign key later and its display field simply never appears,
+because nothing regenerates the join. The failure is **silent**: the column is absent rather than
+wrong, so nothing errors and no test notices until somebody asks why a name is blank. It also freezes
+the entity at whatever CodeGen produced the day the view was copied — geo columns and root-ID columns
+both arrived after custom views existed in the wild.
+
+Layering keeps CodeGen generating underneath a thin custom layer:
+
+```sql
+-- CodeGen owns this, and keeps it current
+CREATE VIEW [orders].[vwOrderHeadersGenerated] AS
+SELECT o.*, MJCompany_CompanyID.[Name] AS [Company], ... -- 80 lines, regenerated
+
+-- The application owns this, and it stays reviewable
+CREATE VIEW [orders].[vwOrderHeaders] AS
+SELECT g.*,
+       CASE WHEN g.Balance > 0 AND g.DueDate < CAST(GETUTCDATE() AS date) THEN 1 ELSE 0 END AS IsOverdue
+FROM   [orders].[vwOrderHeadersGenerated] g;
+```
+
+`IsOverdue` becomes a virtual `EntityField` like any other — typed on the entity class, filterable in
+`RunView`, visible in Explorer — and is returned by `spCreate`/`spUpdate`/`spDelete`, because those
+select from `BaseView`.
+
+### Setting it up
+
+1. Set `GeneratedBaseViewName` on the entity (and `BaseViewGenerated = 0`, since the application owns
+   `BaseView`).
+2. Run CodeGen. It writes the inner view.
+3. Create your `BaseView` in a migration that runs **after** CodeGen output, since it selects from the
+   inner view — and may reference generated root-ID functions.
+4. Run CodeGen again so the new columns are discovered as `EntityField` rows.
+
+### Things worth knowing
+
+- **A view caches its column list.** The custom layer does `SELECT g.*`, so when the schema changes,
+  the inner view must be refreshed **before** the outer one. CodeGen emits `sp_refreshview` in that
+  order automatically (SQL Server only; PostgreSQL does not need it). Refreshing the outer against a
+  stale inner re-caches the *old* columns, and the new one stays missing — indistinguishable from
+  never having been added.
+- **The names must differ.** A view cannot select from itself. A CHECK constraint on `Entity` refuses
+  equal names, and `EntityInfo.HasLayeredBaseView` compares case-insensitively so `VWFOO` and `vwFoo`
+  are treated as the same object.
+- **Permissions target `BaseView`.** The inner view needs no separate grants: it is in the same schema
+  with the same owner, so ownership chaining covers it.
+- **`EntityInfo.GeneratedViewName`** is the single resolution of "which view does CodeGen write". Use
+  it rather than re-deriving from `BaseView`; several call sites decide where to write the view, what
+  to name the emitted file, and which object to refresh, and any two disagreeing produce a view under
+  a name nothing reads.
+
 ## Force Regeneration
 
 Regenerate specific SQL objects without schema changes using surgical filtering:

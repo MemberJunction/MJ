@@ -775,11 +775,16 @@ export class SQLCodeGenBase {
         // base view references. These MUST exist before phase 1 (view) runs;
         // otherwise PG raises `function does not exist` and phase 2 (CRUD)
         // gets gated off.
-        const tvfSQL = entity.BaseViewGenerated && !entity.VirtualEntity
-            ? this.generateRecursiveFKTVFs(entity)
-            : '';
+        // A LAYERED entity still generates. `BaseViewGenerated = 0` means "do not write BaseView",
+        // and when GeneratedBaseViewName is set that is exactly the intent — the application owns
+        // BaseView while CodeGen keeps writing the inner view underneath it. Gating on
+        // BaseViewGenerated alone would skip the inner view and leave the custom layer selecting
+        // from an object that does not exist.
+        const generatesView = (entity.BaseViewGenerated || entity.HasLayeredBaseView) && !entity.VirtualEntity;
 
-        const viewPieces = entity.BaseViewGenerated && !entity.VirtualEntity
+        const tvfSQL = generatesView ? this.generateRecursiveFKTVFs(entity) : '';
+
+        const viewPieces = generatesView
             ? await this.generateBaseViewPieces(pool, entity)
             : { viewSQL: '', viewPermSQL: '' };
 
@@ -861,7 +866,7 @@ export class SQLCodeGenBase {
         }
 
         try {
-            const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
+            const viewName = entity.GeneratedViewName;
 
             // PostgreSQL: pg_get_viewdef() returns a heavily reformatted definition (re-qualified
             // columns, normalized whitespace/casing, re-ordered expressions) that never byte-matches
@@ -1136,10 +1141,14 @@ export class SQLCodeGenBase {
             }
 
             // BASE VIEW AND RELATED TVFs
-            // Only generate if BaseViewGenerated is true (respects custom views where it's false)
-            // forceRegeneration.baseViews only forces regeneration of views where BaseViewGenerated=true
+            // Generate when the entity has a view for CodeGen to write: either BaseViewGenerated
+            // (the ordinary case, writing BaseView) or a LAYERED entity, where BaseViewGenerated is
+            // false because the application owns BaseView while CodeGen still writes the inner view
+            // underneath it. Gating on BaseViewGenerated alone would leave the custom layer selecting
+            // from an object that was never created.
+            // forceRegeneration.baseViews only forces regeneration of views CodeGen owns.
             if (!options.onlyPermissions &&
-                options.entity.BaseViewGenerated &&
+                (options.entity.BaseViewGenerated || options.entity.HasLayeredBaseView) &&
                 !options.entity.VirtualEntity) {
 
                 // ROOT ID FUNCTIONS (TVFs) + BASE VIEW
@@ -1163,7 +1172,7 @@ export class SQLCodeGenBase {
                 }
 
                 // Generate the base view (which may reference the TVFs created above)
-                const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
+                const s = this.generateSingleEntitySQLFileHeader(options.entity, options.entity.GeneratedViewName) + await this.generateBaseView(options.pool, options.entity)
 
                 // Compare generated view SQL against what's currently in the database.
                 // If the SELECT body differs, force-log just this base view via the forceLog flag
@@ -1180,7 +1189,7 @@ export class SQLCodeGenBase {
                     }
                 }
 
-                const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
+                const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.GeneratedViewName, false, true));
                 if (options.writeFiles) {
                     this.writeFileIfChanged(filePath, s);
                     this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
@@ -1206,6 +1215,14 @@ export class SQLCodeGenBase {
                 // so that SQL Server picks up schema changes (new columns from migrations) before we
                 // grant permissions. Developers no longer need to remember to add this manually.
                 if (this._dbProvider.NeedsViewRefresh && !options.entity.VirtualEntity) {
+                    // INNER BEFORE OUTER for a layered entity: the custom view selects `g.*` from the
+                    // generated one, and a view caches its column list — refreshing the outer against a
+                    // stale inner re-caches the OLD columns, so a new column stays missing and looks
+                    // exactly like it was never added.
+                    if (options.entity.HasLayeredBaseView) {
+                        sRet += this._dbProvider.generateViewRefreshSQL(options.entity.SchemaName, options.entity.GeneratedViewName)
+                             + '\n' + this._dbProvider.BatchSeparator + '\n';
+                    }
                     const refreshSQL = this._dbProvider.generateViewRefreshSQL(options.entity.SchemaName, options.entity.BaseView);
                     sRet += refreshSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
                 }

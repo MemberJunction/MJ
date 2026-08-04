@@ -215,7 +215,11 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      */
     generateBaseView(context: BaseViewGenerationContext): string {
         const { entity } = context;
-        const viewName = this.getBaseViewName(entity);
+        // The GENERATED view — `GeneratedViewName` is BaseView unless the entity layers a custom view
+        // over an inner generated one, in which case CodeGen writes the inner name. The CRUD
+        // routines keep using getBaseViewName(): they return rows from the PUBLIC view, so a
+        // column added by a custom layer comes back on create/update like any other.
+        const viewName = entity.GeneratedViewName;
         const alias = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const whereClause = this.buildSoftDeleteWhereClause(entity, alias);
 

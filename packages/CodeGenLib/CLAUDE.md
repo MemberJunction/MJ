@@ -25,6 +25,42 @@ class-registration manifest system.
 
 4. **Server APIs** (`packages/MJServer/src/generated/generated.ts`)
 
+## Base views: generated, custom, or LAYERED
+
+An entity's `BaseView` is its public surface — field discovery, permissions and the generated CRUD
+routines all target it. Two `Entity` columns decide who writes it:
+
+| `BaseViewGenerated` | `GeneratedBaseViewName` | Result |
+|---|---|---|
+| `1` | `NULL` | CodeGen writes `BaseView`. The default. |
+| `0` | `NULL` | The app owns `BaseView` entirely; CodeGen writes nothing. |
+| `0` | `vwFooGenerated` | **Layered** — CodeGen writes the inner view, the app wraps it. |
+
+**Prefer LAYERED over fully custom.** Fully custom means the application inherits ~80 lines of
+generated SQL — every display join, the geo join, the recursive root-ID apply — to add one column,
+and must hand-maintain it forever. A foreign key added later then **silently** never appears: the
+column is absent rather than wrong, so nothing errors and no test notices. Layering keeps all of that
+regenerating underneath:
+
+```sql
+CREATE VIEW [orders].[vwOrderHeaders] AS
+SELECT g.*, CASE WHEN ... END AS IsOverdue
+FROM   [orders].[vwOrderHeadersGenerated] g;
+```
+
+Rules if you touch this:
+
+- **Use `EntityInfo.GeneratedViewName`**, never re-derive from `BaseView`. It is the one answer to
+  "which view does CodeGen write"; several call sites decide where to write, what to name the file,
+  and what to refresh, and any two disagreeing produce a view under a name nothing reads.
+- **`EntityInfo.HasLayeredBaseView`** is the layering test. It compares names case-insensitively —
+  a view cannot select from itself, and a CHECK constraint on `Entity` refuses equal names too.
+- **Refresh inner before outer.** The custom layer does `SELECT g.*` and a view caches its column
+  list; refreshing the outer against a stale inner re-caches the old columns and the new one stays
+  missing. CodeGen already emits `sp_refreshview` in that order — keep it that way.
+- **CRUD routines stay on `BaseView`.** They return the affected row, so custom columns come back on
+  create/update/delete. Do not point them at the inner view.
+
 ## When CodeGen runs
 
 CodeGen runs when:
