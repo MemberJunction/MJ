@@ -19,9 +19,27 @@ export interface SchemaRefreshSummaryLike {
     RunID: string;
     /** True ⇒ launched detached and still running; every count below is a placeholder zero. */
     InProgress: boolean;
+    /**
+     * Whether the pipeline itself succeeded. A pipeline that fails at ConnectionTest RETURNS rather
+     * than throwing, with every count at zero — so counts alone read identically to a clean
+     * no-op refresh. Reporting that as "0 created, 0 updated" tells an operator the vendor had
+     * nothing new when in fact the credentials were never accepted.
+     */
+    Succeeded: boolean;
+    /** The pipeline's own failure reason, when `Succeeded` is false. */
+    FailureMessage?: string;
     ObjectsCreated: number;
     ObjectsUpdated: number;
     UnresolvedObjects: string[];
+}
+
+/** The counts clause, or an explicit failure clause when the pipeline did not succeed. */
+function describeFinishedRefresh(summary: SchemaRefreshSummaryLike): string {
+    if (!summary.Succeeded) {
+        return `schema refresh FAILED (${summary.FailureMessage ?? 'no reason reported'}) — see run ${summary.RunID}`;
+    }
+    return `schema refresh: ${summary.ObjectsCreated} created, ` +
+        `${summary.ObjectsUpdated} updated, ${summary.UnresolvedObjects.length} PK-unresolved`;
 }
 
 /**
@@ -38,8 +56,16 @@ export function BuildCreateConnectionMessage(
     const created = `Connection created${testConnection ? ', test passed' : ''}`;
     // Never report a detached run's placeholder counts as findings — point at the run stream instead.
     if (summary.InProgress) return `${created}, schema refresh running — tail run ${summary.RunID}`;
-    return `${created}, schema refresh: ${summary.ObjectsCreated} created, ` +
-        `${summary.ObjectsUpdated} updated, ${summary.UnresolvedObjects.length} PK-unresolved`;
+    return `${created}, ${describeFinishedRefresh(summary)}`;
+}
+
+/**
+ * Builds the human-facing `Message` for IntegrationUpdateConnection's blocking-refresh path.
+ * Shares {@link describeFinishedRefresh} with create so a failed refresh can never be reported as
+ * a clean zero-count run on one path and honestly on the other.
+ */
+export function BuildUpdateConnectionMessage(summary: SchemaRefreshSummaryLike): string {
+    return `Updated, ${describeFinishedRefresh(summary)}`;
 }
 
 /**

@@ -54,7 +54,7 @@ import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
-import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage } from "../integration/SchemaRefreshLaunch.js";
+import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -566,6 +566,15 @@ class CreateConnectionPipelineSummary {
      * (or the IntegrationProgress subscription, kind='ConnectorCreation') for the real outcome.
      */
     @Field() InProgress: boolean;
+    /**
+     * Whether the refresh pipeline itself succeeded. A pipeline that fails at ConnectionTest still
+     * RETURNS (it does not throw), with every count at zero — so counts alone cannot distinguish
+     * "found nothing to change" from "never got past the credential check". Always false while
+     * `InProgress` is true: a detached run's outcome is not known yet.
+     */
+    @Field() Succeeded: boolean;
+    /** The pipeline's own failure reason when `Succeeded` is false and the run has finished. */
+    @Field({ nullable: true }) FailureMessage?: string;
     @Field() ObjectsCreated: number;
     @Field() ObjectsUpdated: number;
     @Field() FieldsCreated: number;
@@ -2409,6 +2418,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         return {
             RunID: result.RunID,
             InProgress: false,
+            Succeeded: result.Success,
+            FailureMessage: result.FailureMessage,
             ObjectsCreated: result.PersistResult?.ObjectsCreated ?? 0,
             ObjectsUpdated: result.PersistResult?.ObjectsUpdated ?? 0,
             FieldsCreated: result.PersistResult?.FieldsCreated ?? 0,
@@ -2447,14 +2458,20 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         universalPKConvention?: string,
     ): CreateConnectionPipelineSummary {
         const runID = IntegrationProgressEmitter.newRunID('connector');
-        // Deliberately not awaited. Every outcome, success or failure, is already recorded on this
-        // run's artifact stream under `runID` — the catch exists only so a rejection can never become
-        // an unhandled promise rejection, and to leave a server-log breadcrumb next to the run ID.
+        // Deliberately not awaited. Once the pipeline is running it records every outcome on this
+        // run's artifact stream under `runID` itself — but it can also throw BEFORE it ever
+        // constructs its emitter (connector-driver resolution, a missing Integration row), and in
+        // the blocking path that throw surfaced in the mutation's Message. Detached, the caller has
+        // already been handed `runID` and has nothing but the stream to watch, so a pre-emitter
+        // throw must be published onto that stream — otherwise the run never appears at all and a
+        // tailer waits forever on a run ID that will never produce an event.
         void this.runSchemaRefreshPipeline(companyIntegrationID, user, provider, universalPKConvention, runID)
-            .catch(err => LogError(`Detached schema refresh (run ${runID}) failed: ${this.formatError(err)}`));
+            .catch(err => this.publishDetachedLaunchFailure(runID, companyIntegrationID, err));
         return {
             RunID: runID,
             InProgress: true,
+            // Not known yet — the run has only just been launched.
+            Succeeded: false,
             ObjectsCreated: 0,
             ObjectsUpdated: 0,
             FieldsCreated: 0,
@@ -2462,6 +2479,40 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             UnresolvedObjects: [],
             PKVerdicts: [],
         };
+    }
+
+    /**
+     * Terminates a detached run that failed BEFORE the pipeline could open its own artifact stream.
+     *
+     * The pipeline constructs its emitter inside `Run()`, so anything that throws on the way there —
+     * connector-driver resolution (`No connector registered for driver class "X"`), a missing
+     * Integration row, a CompanyIntegration that vanished — produces no run directory at all. In the
+     * blocking path that throw surfaced in the mutation's Message. Detached, the caller has already
+     * been handed the run ID and has only the stream to watch, so the failure has to be published
+     * there or the run is invisible forever.
+     *
+     * Only ever called on the rejection path: if the pipeline got far enough to build its own emitter
+     * it terminates its own run, and a pipeline that completed never reaches here.
+     */
+    private publishDetachedLaunchFailure(runID: string, companyIntegrationID: string, err: unknown): void {
+        const message = this.formatError(err);
+        LogError(`Detached schema refresh (run ${runID}) failed: ${message}`);
+        try {
+            const emitter = new IntegrationProgressEmitter({
+                runID,
+                runKind: 'ConnectorCreation',
+                companyIntegrationID,
+                triggerType: 'Manual',
+                startedAt: new Date().toISOString(),
+            });
+            emitter.runStart('Detached schema refresh launch');
+            emitter.stageError('Launch', message, { code: 'schema-refresh-launch-failed' });
+            void emitter.fail(`Schema refresh could not start: ${message}`, 'schema-refresh-launch-failed')
+                .catch(e => LogError(`Detached schema refresh (run ${runID}): failure artifact write failed — ${e}`));
+        } catch (e) {
+            // Progress reporting must never mask the original failure, which is already logged above.
+            LogError(`Detached schema refresh (run ${runID}): could not open failure artifact — ${e}`);
+        }
     }
 
     /**
@@ -2804,10 +2855,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     const refreshResult = await this.runSchemaRefreshPipeline(
                         companyIntegrationID, user, md, universalPKConvention
                     );
-                    return {
-                        Success: true,
-                        Message: `Updated, schema refresh: ${refreshResult.ObjectsCreated} created, ${refreshResult.ObjectsUpdated} updated, ${refreshResult.UnresolvedObjects.length} PK-unresolved`,
-                    };
+                    return { Success: true, Message: BuildUpdateConnectionMessage(refreshResult) };
                 } catch (refreshErr) {
                     LogError(`IntegrationUpdateConnection: pipeline error — ${refreshErr}`);
                     return { Success: true, Message: `Updated (schema refresh failed: ${this.formatError(refreshErr)})` };

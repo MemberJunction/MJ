@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage } from '../integration/SchemaRefreshLaunch.js';
+import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildUpdateConnectionMessage } from '../integration/SchemaRefreshLaunch.js';
 import type { SchemaRefreshSummaryLike } from '../integration/SchemaRefreshLaunch.js';
 
 /**
@@ -11,6 +11,7 @@ function summary(over: Partial<SchemaRefreshSummaryLike> = {}): SchemaRefreshSum
     return {
         RunID: 'connector-1783000000000-abc123',
         InProgress: false,
+        Succeeded: true,
         ObjectsCreated: 12,
         ObjectsUpdated: 3,
         UnresolvedObjects: ['Widgets'],
@@ -58,6 +59,49 @@ describe('BuildCreateConnectionMessage', () => {
     it('counts PK-unresolved objects, not just reports presence', () => {
         const msg = BuildCreateConnectionMessage(false, summary({ UnresolvedObjects: ['A', 'B', 'C'] }));
         expect(msg).toContain('3 PK-unresolved');
+    });
+});
+
+/**
+ * A pipeline that fails at ConnectionTest RETURNS — it does not throw — with every count at zero.
+ * Verified live: a real HubSpot refresh whose credential check failed produced
+ * "Updated, schema refresh: 0 created, 0 updated, 0 PK-unresolved", indistinguishable from a clean
+ * no-op run. These tests pin the distinction.
+ */
+describe('failed-refresh reporting', () => {
+    const failed = summary({
+        Succeeded: false,
+        FailureMessage: 'ConnectionTest failed: No HubSpot credentials found',
+        ObjectsCreated: 0,
+        ObjectsUpdated: 0,
+        UnresolvedObjects: [],
+    });
+
+    it('never reports a failed refresh as a zero-count success (create)', () => {
+        const msg = BuildCreateConnectionMessage(true, failed);
+        expect(msg).toMatch(/FAILED/);
+        expect(msg).toContain('No HubSpot credentials found');
+        expect(msg).not.toMatch(/0 created/);
+    });
+
+    it('never reports a failed refresh as a zero-count success (update)', () => {
+        const msg = BuildUpdateConnectionMessage(failed);
+        expect(msg).toMatch(/FAILED/);
+        expect(msg).toContain('No HubSpot credentials found');
+        expect(msg).not.toMatch(/0 created/);
+    });
+
+    it('points at the run when the pipeline reported no reason', () => {
+        const msg = BuildUpdateConnectionMessage(summary({ Succeeded: false, FailureMessage: undefined }));
+        expect(msg).toContain('connector-1783000000000-abc123');
+        expect(msg).toMatch(/no reason reported/);
+    });
+
+    it('still reports counts for a refresh that genuinely succeeded (update)', () => {
+        const msg = BuildUpdateConnectionMessage(summary());
+        expect(msg).toContain('12 created');
+        expect(msg).toContain('3 updated');
+        expect(msg).not.toMatch(/FAILED/);
     });
 });
 
