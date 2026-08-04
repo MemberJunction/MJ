@@ -38,6 +38,7 @@
     }
   },
   "dependencies": {
+    "@memberjunction/ng-base-types": "6.0.0",
     "@memberjunction/ng-ui-components": "6.0.0",
     "@memberjunction/core": "6.0.0",
     "rxjs": "~7.8.2",
