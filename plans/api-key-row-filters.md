@@ -27,7 +27,10 @@
 > (M3) new cache invariant INV-3: fingerprint and WHERE must be computed for the same principal. (M4) the legacy RLS method
 > is deprecated with a no-new-callers repo guard. (M6) the `ReportResolver` injection upgraded to its own ticket. §9.8 ack
 > adopted with the error-message condition (key-wide deny must name cause + remedy); §9.4: `ActingCompanyIDs` registered
-> **list-capable** — cardinality treated as a one-way door. Four tickets enumerated in §5.10.
+> **list-capable** — cardinality treated as a one-way door. Four tickets enumerated in §5.10. *Follow-up (same review
+> thread):* list-token elements sort into canonical order before rendering (INV-2 extended to cover it), and the
+> `MarkupFilterText` hardening carries a §3.5-style blast-radius note + release-changeset callout — negation-shaped role
+> filters move from permissive to restrictive.
 >
 > **v2.2 changelog — post-review (PR #3409, cadam11).** All four review observations verified against source and adopted:
 > (1) §5.9's coverage claim was overstated — `query:run`/`query:test`/`dataset:read`/`report:run` bypass RLS entirely
@@ -405,7 +408,8 @@ Tokens `{{ActingOrganizationID}}`, `{{ActingPersonID}}`, `{{ActingScopeID}}`, an
 `Col = '{{ActingCompanyID}}'`, and moving to a set later breaks every filter already authored against it. Accounting-style
 workloads (consolidated views, shared-services users across several companies) need sets on day one. So `ActingCompanyIDs`
 is **list-capable from the start**: `Col IN ({{ActingCompanyIDs}})`, with the registered validator checking each element
-(GUID), quoting and `''`-escaping each, and resolving an **empty or absent set to `(1=0)`** — same composition as §5.4's
+(GUID), quoting and `''`-escaping each, **sorting elements into canonical order before rendering** (so the same set always
+produces the same clause bytes — INV-2), and resolving an **empty or absent set to `(1=0)`** — same composition as §5.4's
 unresolved-token rule. The three scalar tokens stay scalar; that is now an explicit, documented one-way door for each.
 (`ActingCustomerID` was considered and rejected: customers modeled as organizations are covered by `ActingOrganizationID`.)
 
@@ -495,6 +499,15 @@ function also never `''`-escapes `String(val)`, so a user-sourced value containi
 substitutes it — the same defect class WS2 fixes for the tenant header. WS3 therefore hardens `MarkupFilterText` itself:
 treat `undefined` exactly like `null` (unresolved), and `''`-escape every substituted scalar. Both changes are
 behavior-tightening for role RLS too and get their own regression tests.
+
+**Blast radius of the hardening — same treatment as §3.5, because this is behavior-affecting for existing role-RLS
+deployments.** Narrower than it first looks: for the common `Col = '{{UserX}}'` shape nothing changes — an unresolved
+token yielded no matching rows before and yields none after. The shift is confined to **negation-shaped filters**
+(`<>`, `NOT IN`, `NOT LIKE`), which move from permissive (matching nearly everything) to restrictive (matching nothing).
+That is the correct direction and the entire point — but a deployment unknowingly relying on the old behavior will
+experience it as *users losing access after an upgrade*, not as a security fix. Call it out in the release changeset
+explicitly: "role-RLS filters with negation shapes over unresolved or undefined tokens previously matched broadly and now
+match nothing; audit filters using `<>`/`NOT IN`/`NOT LIKE` against `{{User*}}` tokens before upgrading."
 
 ### 5.5 🚨 Composition — and why it cannot live inside `GetUserRowLevelSecurityWhereClause`
 
@@ -662,8 +675,10 @@ principals collide and read each other's rows?
   filters. This is the single highest-consequence implementation constraint in WS3.
 - **INV-2.** The clause used for the fingerprint and the clause used in the WHERE must be byte-identical. They are computed by
   two independent calls today (`providerBase.ts:2195` vs `GenericDatabaseProvider.ts:1590`). Any nondeterminism —
-  role-iteration order, `Set` ordering, whitespace — silently splits or merges cache slots. Make the composition
-  deterministic (stable ordering of the OR terms and the AND layers) and assert it.
+  role-iteration order, `Set` ordering, whitespace, **or list-token element order** — silently splits or merges cache
+  slots. Make the composition deterministic (stable ordering of the OR terms, the AND layers, and the elements of any
+  list token: `{{ActingCompanyIDs}}` sorts its elements before rendering the `IN` list, so the same set always produces
+  the same clause bytes) and assert it.
 
 - **INV-3** (added per review, finding M3): the fingerprint clause and the WHERE clause must be computed **for the same
   principal**. `ComputeRunViewRLSWhereClause` resolves `contextUser ?? this.CurrentUser` (`providerBase.ts:2191`) while
