@@ -1,5 +1,5 @@
 -- ============================================================================
--- MemberJunction PostgreSQL Migration — V202608021623__v5.52.x__APIKey_Scope_RowFilterID.sql
+-- MemberJunction PostgreSQL Migration — V202608041553__v6.1.x__APIKey_Scope_RowFilterID.sql
 -- PG counterpart of the T-SQL migration adding API-key-scoped row-filter storage.
 -- Design: plans/api-key-row-filters.md. Hand-authored (simple additive DDL —
 -- two nullable FK columns + comments; no CodeGen objects in this migration).

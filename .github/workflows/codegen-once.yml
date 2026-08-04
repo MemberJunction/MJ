@@ -1,0 +1,110 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TEMPORARY, BRANCH-SCOPED workflow — DELETE BEFORE MERGE.
+#
+# Purpose: run `mj codegen` against a real SQL Server with the v6.1
+# APIKey_Scope_RowFilterID migration applied, and commit the generated
+# artifacts (regenerated entity classes + CodeGen SQL output) back to this
+# branch. The dev session driving PR #3409 has no route to a SQL Server
+# (the sandbox denies mcr.microsoft.com and packages.microsoft.com), and
+# hand-authoring CodeGen artifacts is against repo doctrine — so CodeGen runs
+# here, where CI already provisions SQL Server for the integration lane.
+#
+# Trigger: only when `.codegen-request` changes on this branch — ordinary
+# code pushes do not re-run it, and its own artifact commit doesn't touch the
+# marker so it cannot self-trigger.
+# ─────────────────────────────────────────────────────────────────────────────
+name: CodeGen artifacts (temporary)
+
+on:
+  push:
+    branches: [claude/api-key-row-filters-98ev39]
+    paths: ['.codegen-request']
+
+permissions:
+  contents: write
+
+jobs:
+  codegen:
+    name: Run mj codegen and commit artifacts
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: localhost
+      DB_DATABASE: test
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+    steps:
+      - name: Checkout repo (with push credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Create docker network
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Wait for SQL Server to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            echo "Waiting for SQL Server... (attempt $i/30)"
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
+
+      - name: Create SQL database
+        run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CLI graph
+        run: npx turbo build --filter=@memberjunction/cli
+
+      - name: Migrate — apply committed migrations (including v6.1) to the fresh DB
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: node packages/MJCLI/bin/run.js migrate
+
+      - name: Sync push — reconcile committed metadata
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+
+      - name: Run CodeGen
+        run: node packages/MJCLI/bin/run.js codegen
+
+      - name: Commit generated artifacts back to the branch
+        run: |
+          git config user.name "codegen-once[bot]"
+          git config user.email "codegen-once@users.noreply.github.com"
+          git add -A
+          git status --short | head -50
+          if git diff --cached --quiet; then
+            echo "::warning::CodeGen produced no changes — nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore(codegen): artifacts from CI codegen run for v6.1 RowFilterID migration
+
+Generated on a fresh SQL Server with all committed migrations (incl.
+V202608041553__v6.1.x__APIKey_Scope_RowFilterID) and committed metadata
+applied. Produced by the temporary codegen-once workflow; see its header
+for why CodeGen could not run in the dev session."
+          git push origin HEAD:claude/api-key-row-filters-98ev39
