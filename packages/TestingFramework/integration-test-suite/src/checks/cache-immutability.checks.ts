@@ -445,6 +445,9 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             const baseline = await rv.RunView(makeParams(), ctx.User);
             Assert(baseline.Success, `baseline failed: ${baseline.ErrorMessage}`);
             const baselineCount = baseline.Results.length;
+            // Counter watermark AFTER the baseline read (which may itself have been a
+            // cache-writing miss): everything above this is not the save event's doing.
+            const setsAfterBaseline = ctx.Storage.SetCount('RunViewCache');
 
             const setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', ctx.User);
             setting.UserID = ctx.User.ID;
@@ -456,10 +459,20 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
                 // The cache maintains itself off BaseEntity events; give them time to land
                 // (same 2s settle the server-cache bundle's in-place checks use).
                 await new Promise(resolve => setTimeout(resolve, 2000));
+                // Detect in-place maintenance from the STORAGE COUNTERS, sampled BEFORE the
+                // follow-up read — event-driven maintenance (storeCachedResults → SetItem) has
+                // already written by now, whereas an invalidation only writes during the read
+                // itself. F9/F10 were rewritten off ExecutionTime for exactly this reason: a
+                // sub-millisecond DB read also reports 0, which made that probe claim "cache
+                // hit" for uncached results. Cross-slot writes during the settle could inflate
+                // the counter, but misdetection is benign: the follow-up read then MISSES, and
+                // the miss path freezes and returns the same post-save shape, so every
+                // assertion below still holds.
+                const writesDuringSettle = ctx.Storage.SetCount('RunViewCache') - setsAfterBaseline;
                 const after = await rv.RunView(makeParams(), ctx.User);
                 Assert(after.Success, `post-save read failed: ${after.ErrorMessage}`);
 
-                if (after.ExecutionTime === 0 && after.Results.length === baselineCount + 1) {
+                if (writesDuringSettle > 0 && after.Results.length === baselineCount + 1) {
                     // The slot was maintained in place — this is the storeCachedResults funnel.
                     Assert(Object.isFrozen(after.Results), 'the maintained slot\'s array must be frozen');
                     const upserted = (after.Results as Record<string, unknown>[]).find(r => String(r['ID']) === setting.ID);
@@ -473,7 +486,7 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
                     Assert(
                         true,
                         `the slot was invalidated rather than maintained in place here ` +
-                        `(ExecutionTime=${after.ExecutionTime}, rows=${after.Results.length} vs baseline ${baselineCount}); nothing shared to freeze`
+                        `(RunViewCache writes during settle=${writesDuringSettle}, rows=${after.Results.length} vs baseline ${baselineCount}); nothing shared to freeze`
                     );
                 }
             } finally {

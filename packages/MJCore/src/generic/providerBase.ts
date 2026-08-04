@@ -756,8 +756,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Cache miss — execute query, then post-process (stores in cache)
             LogStatusEx({ message: `  🔍 [Cache MISS] RunView "${params.EntityName || params.ViewName || 'unknown'}" — querying database`, verboseOnly: true });
             const result = await this.InternalRunView<T>(params, contextUser);
-            await this.PostRunView(result, params, preResult, contextUser);
-            return result;
+            // Use PostRunView's return: a PostRunViewHook may REPLACE the result, and
+            // returning the pre-hook reference here silently dropped that replacement.
+            return (await this.PostRunView(result, params, preResult, contextUser)) as RunViewResult<T>;
         }
 
         // Client-side: delegate to RunViews which uses the smart cache check
@@ -1844,6 +1845,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     QueryID: cached.queryId ?? params.QueryID ?? '',
                     QueryName: params.QueryName ?? '',
                     Success: true,
+                    // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
+                    // rows) while the outbound Results is mutable — the runtime freeze is the
+                    // enforcement. Same cast as the RunView hit paths above.
                     Results: cached.results as RunQueryResult['Results'],
                     RowCount: cached.results.length,
                     TotalRowCount: cached.rowCount ?? cached.results.length,
@@ -2911,13 +2915,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param params - The view parameters
      * @param preResult - The pre-processing result
      * @param contextUser - Optional user context
+     * @returns The result to hand to the caller — a PostRunView hook may REPLACE the result
+     *   (`PostRunViewHook` returns a `RunViewResult`), so callers must use this return value,
+     *   not the reference they passed in. The batch path already honors replacement via
+     *   `results[i] = ...`; returning it here gives the singular path the same contract.
      */
     protected async PostRunView(
         result: RunViewResult,
         params: RunViewParams,
         preResult: typeof this._preRunViewResultType,
         contextUser?: UserInfo
-    ): Promise<void> {
+    ): Promise<RunViewResult> {
         // Store in local cache BEFORE entity transformation — the cache needs
         // plain JSON-serializable objects. BaseEntity objects contain RxJS Subjects
         // with circular subscriber references that break JSON.stringify.
@@ -2988,6 +2996,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 success: result.Success
             });
         }
+
+        return result;
     }
 
     /**

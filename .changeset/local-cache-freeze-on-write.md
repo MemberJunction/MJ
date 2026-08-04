@@ -27,22 +27,29 @@ to return). So the cache now defends itself:
   provider hands back live references (the in-memory providers) or serialized copies
   (IndexedDB, localStorage, Redis, MMKV). It is required rather than optional so every
   implementation must state its isolation semantics instead of inheriting a default that may be
-  wrong for it.
+  wrong for it. ⚠️ **Breaking for external `ILocalStorageProvider` implementations** — add the
+  property to compile against this version (`true` if your store shares references, `false` if
+  it serializes).
 - **`LocalCacheManager` deep-freezes row data at write time** — rows, their nested values, and
   the array itself — but only when the provider shares references. Mutations then throw a
   `TypeError` at the offending line instead of silently corrupting shared state, and cache
   **hits cost nothing extra** (the freeze is a one-time per-write cost). Applied at both write
   funnels: `SetRunViewResult` / `SetRunQueryResult` and `storeCachedResults`, the in-place
   slot-maintenance path that bypasses the first. Serializing providers are untouched, so
-  client behavior is unchanged.
+  client behavior is unchanged. The deep-freeze skips **binary payloads**
+  (`Buffer`/TypedArray/`ArrayBuffer`, e.g. `varbinary` columns — `Object.freeze` throws on
+  non-empty views by spec), freezes parent-first so cycles terminate, and a freeze failure of
+  any kind degrades to a logged, unfrozen store — it can never fail a `RunView`/`RunQuery`.
 - **`CacheWriteOptions.ProviderInternalScaffolding`** exempts slots whose only consumer is the
-  provider that wrote them. Metadata bootstrap needs this: `GetDatasetByName` caches dataset
-  items through this cache, and `PostProcessEntityMetadata` hydrates its object graph by
-  sorting that row array in place and attaching child collections onto each row. The flag is
-  persisted and carried forward through slot maintenance so a later save cannot re-freeze the
-  slot.
+  provider that wrote them — scoped to the **`MJ_Metadata` dataset only** at its single write
+  site. Metadata bootstrap needs this: the provider's own assembly (`PostProcessEntityMetadata`,
+  plus `GetAllMetadata`'s Applications assembly) hydrates its object graph by mutating those
+  rows in place. Every **other** dataset's cached rows are frozen shared state like any RunView
+  result, because `GetDatasetByName` serves them to arbitrary consumers (`BaseEngine.Load` hands
+  the live arrays to every engine subclass). The flag is persisted and carried forward through
+  slot maintenance so a later save cannot re-freeze the slot.
 
-Two pre-existing consumer bugs were surfaced by the freeze and fixed:
+Pre-existing consumer bugs surfaced by the freeze and fixed:
 
 - **`BaseEntity.Get()` wrote to its own source row.** The raw-mode fast path keeps the caller's
   row by reference and `Get()` wrote back into it to memoize a converted `Date` or an rtrimmed
@@ -53,10 +60,19 @@ Two pre-existing consumer bugs were surfaced by the freeze and fixed:
 - **`GenericDatabaseProvider.serveFromServerCache` and the smart-cache legs** duplicated
   `CachedRunViewResult` as four inline structural types, which had already caused one silent
   field drop; they now share the canonical type.
+- **The singular server RunView path silently dropped a `PostRunView` hook's returned
+  replacement result** (`PostRunView` reassigned a local; `RunView` returned the pre-hook
+  reference), while the client and batch paths honored it. The freeze un-masked this: with
+  in-place row mutation now throwing, no signature-conformant result-modifying hook worked on
+  that path at all. `PostRunView` now returns the hook-chained result and `RunView` uses it.
+  Hook docs (`PostRunViewHook`, `BaseServerMiddleware.PostRunView`) now state that rows may be
+  frozen shared cache state: modify by mapping onto copies
+  (`results.Results = results.Results.map(r => ({ ...r, ... }))`) or return a new result —
+  never mutate rows in place.
 
-`CachedRunViewData.results` / `CachedRunViewResult.results` are typed `readonly` so
-cache-adjacent code gets a compile-time signal matching the runtime freeze. `RunViewResult.Results`
-remains a mutable `T[]` for ordinary callers.
+`CachedRunViewData.results` / `CachedRunViewResult.results` (and `GetRunQueryResult`'s return)
+are typed `readonly` so cache-adjacent code gets a compile-time signal matching the runtime
+freeze. `RunViewResult.Results` remains a mutable `T[]` for ordinary callers.
 
 Consumer-facing contract, documented in `guides/CACHING_AND_PUBSUB_GUIDE.md`: **treat rows from
 `RunView`/`RunViews`/`RunQuery` as read-only** unless you produced them. Copy before mutating —

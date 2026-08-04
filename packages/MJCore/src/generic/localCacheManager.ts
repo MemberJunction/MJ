@@ -23,22 +23,27 @@ function LogStatusVerbose(message: string): void {
  * Freezing the ARRAY matters as much as the rows: `results.sort()` / `.push()` on a live
  * cache array silently reorders or grows the cached slot for every later reader.
  *
- * No cycle guard is needed — rows are stored BEFORE any BaseEntity transformation, so they
- * are plain JSON-shaped data. The `isFrozen` short-circuit both skips already-frozen
+ * Freezes BEFORE recursing, so the `isFrozen` short-circuit both skips already-frozen
  * subtrees (cheap re-entry for in-place slot maintenance, which carries existing rows
- * forward by reference) and, as a side effect, would terminate on a cycle.
+ * forward by reference) and terminates cycles.
  *
- * Note: `Object.freeze` cannot protect a `Date`'s internal slots — `setHours` and friends
- * still work. Accepted: no realistic consumer mutates a row's date in place.
+ * Two value kinds are skipped, not frozen — accepted residuals:
+ * - Binary payloads (`Buffer`/TypedArray/`ArrayBuffer`, e.g. `varbinary` columns): the spec
+ *   makes `Object.freeze` THROW on a non-empty view, so attempting it would turn a cache
+ *   write into a crash.
+ * - `Date` internal slots: `Object.freeze` cannot protect them — `setHours` and friends
+ *   still work.
  */
 function deepFreezeCacheValue<T>(value: T): T {
-    if (value === null || typeof value !== 'object' || Object.isFrozen(value)) {
+    if (value === null || typeof value !== 'object' || Object.isFrozen(value)
+        || ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
         return value;
     }
+    Object.freeze(value);
     for (const nested of Object.values(value)) {
         deepFreezeCacheValue(nested);
     }
-    return Object.freeze(value);
+    return value;
 }
 
 // ============================================================================
@@ -1698,7 +1703,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *                  the same reference is returned for call-site convenience.
      */
     private freezeRowDataIfProviderSharesReferences<T>(payload: T): T {
-        return this._storageProvider?.SharesReferences ? deepFreezeCacheValue(payload) : payload;
+        if (!this._storageProvider?.SharesReferences) {
+            return payload;
+        }
+        try {
+            return deepFreezeCacheValue(payload);
+        } catch (e) {
+            // The freeze is protective, never load-bearing — an exotic value Object.freeze
+            // rejects (beyond the guarded binary kinds) must degrade to an unfrozen write,
+            // not take down the read path it defends.
+            LogError(`LocalCacheManager: freeze-on-write failed; storing unfrozen. ${e}`);
+            return payload;
+        }
     }
 
     /**
@@ -2534,7 +2550,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @returns The cached results, maxUpdatedAt, rowCount, and queryId, or null if not found
      */
     public async GetRunQueryResult(fingerprint: string): Promise<{
-        results: unknown[];
+        /**
+         * The cached result rows — `readonly` for the same reason as
+         * {@link CachedRunViewData.results}: under a reference-sharing storage provider these
+         * are the deep-frozen shared objects every reader of this slot holds.
+         */
+        results: readonly unknown[];
         maxUpdatedAt: string;
         rowCount: number;
         queryId?: string;

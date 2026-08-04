@@ -25,6 +25,9 @@ import { DatabaseProviderBase } from '../generic/databaseProviderBase';
 // In-memory local storage provider that tracks calls for spying
 // ---------------------------------------------------------------------------
 class SpyableLocalStorageProvider implements ILocalStorageProvider {
+    /** `true` — the Map stores values as-is, so this spy shares references like the production in-memory provider. */
+    public readonly SharesReferences = true;
+
     private _store = new Map<string, string>();
 
     async GetItem(key: string): Promise<string | null> {

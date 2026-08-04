@@ -3434,6 +3434,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     QueryID: cached.queryId ?? query.ID,
                     QueryName: query.Name,
                     Success: true,
+                    // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
+                    // rows) while the outbound Results is mutable — the runtime freeze is the
+                    // enforcement. Same cast as the RunView hit paths in ProviderBase.
                     Results: cached.results as RunQueryResult['Results'],
                     RowCount: cached.results.length,
                     TotalRowCount: cached.rowCount ?? cached.results.length,
@@ -4149,15 +4152,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();
                 const syntheticParams = { EntityName: entityName } as RunViewParams;
-                // ProviderInternalScaffolding: these dataset-item rows are consumed only by this
-                // provider's own assembly steps — most importantly GetAllMetadata(), whose
-                // PostProcessEntityMetadata hydrates a graph by sorting the row array in place and
-                // attaching child collections onto each entity/field row. They are never handed to
-                // arbitrary callers, so they are exempt from the consumer-corruption freeze; with
-                // the freeze applied, metadata bootstrap throws and the process starts blind.
+                // ProviderInternalScaffolding — for the MJ_Metadata dataset ONLY. Those rows are
+                // consumed by this provider's own assembly steps, which mutate them in place by
+                // design: PostProcessEntityMetadata sorts the entity array and attaches child
+                // collections onto each entity/field row, and GetAllMetadata's Applications
+                // assembly writes ApplicationEntities/ApplicationSettings onto Application rows.
+                // Freezing them makes metadata bootstrap throw and the process starts blind.
+                //
+                // Every OTHER dataset is served to arbitrary consumers (BaseEngine.Load hands
+                // item.Results — these very arrays — to every engine subclass), so those slots
+                // must stay under the defensive deep-freeze like any RunView result.
+                const isMetadataScaffolding = datasetName === ProviderBase._mjMetadataDatasetName;
                 await cache.SetRunViewResult(
                     uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt,
-                    undefined, undefined, this, undefined, { ProviderInternalScaffolding: true }
+                    undefined, undefined, this, undefined,
+                    isMetadataScaffolding ? { ProviderInternalScaffolding: true } : undefined
                 );
             }
 
