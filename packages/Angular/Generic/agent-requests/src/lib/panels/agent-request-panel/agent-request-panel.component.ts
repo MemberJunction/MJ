@@ -11,6 +11,7 @@ import {
     ChangeDetectionStrategy, OnInit, OnDestroy, HostListener, ViewChild, ElementRef
 } from '@angular/core';
 import { MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RunView } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -42,7 +43,7 @@ export interface AgentRequestPanelResult {
     styleUrls: ['./agent-request-panel.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AgentRequestPanelComponent implements OnInit, OnDestroy {
+export class AgentRequestPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Input() Request: MJAIAgentRequestEntity | null = null;
     @Input() RequestTypes: MJAIAgentRequestTypeEntity[] = [];
     @Input() IsOpen = false;
@@ -82,7 +83,8 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
     constructor(
         private cdr: ChangeDetectorRef,
         private notificationService: MJNotificationService
-    ) {}
+    ) {
+        super();}
 
     ngOnInit(): void {
         this.loadPanelWidth();
@@ -284,7 +286,7 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<{ ID: string; Name: string; Email: string }>({
                 EntityName: 'Users',
                 ExtraFilter: `(Name LIKE '%${term.replace(/'/g, "''")}%' OR Email LIKE '%${term.replace(/'/g, "''")}%')`,

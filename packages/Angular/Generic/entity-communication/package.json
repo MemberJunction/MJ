@@ -24,8 +24,7 @@
   "peerDependencies": {
     "@angular/common": "21.1.3",
     "@angular/core": "21.1.3",
-    "@angular/forms": "21.1.3",
-    "@angular/router": "21.1.3"
+    "@angular/forms": "21.1.3"
   },
   "dependencies": {
     "@memberjunction/communication-types": "6.0.0",
@@ -34,8 +33,8 @@
     "@memberjunction/entity-communications-base": "6.0.0",
     "@memberjunction/entity-communications-client": "6.0.0",
     "@memberjunction/global": "6.0.0",
+    "@memberjunction/ng-base-types": "6.0.0",
     "@memberjunction/ng-container-directives": "6.0.0",
-    "@memberjunction/ng-shared": "6.0.0",
     "@memberjunction/ng-shared-generic": "6.0.0",
     "@memberjunction/ng-ui-components": "6.0.0",
     "@memberjunction/templates-base-types": "6.0.0",
@@ -45,5 +44,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
-  }
+  },
+  "mjUILayer": "widgets"
 }
