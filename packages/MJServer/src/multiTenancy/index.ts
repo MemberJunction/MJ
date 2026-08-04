@@ -12,6 +12,7 @@ import type { PreRunViewHook, PreSaveHook } from '@memberjunction/core';
 import { Metadata, type UserInfo, type TenantContext } from '@memberjunction/core';
 import type { MultiTenancyConfig } from '../config.js';
 import type { UserPayload } from '../types.js';
+import { cloneUserInfoForSession } from '../userInfoSession.js';
 
 /** Custom tenant context extractor signature */
 export type TenantContextExtractor = (
@@ -20,18 +21,36 @@ export type TenantContextExtractor = (
 ) => Promise<{ TenantID: string } | null>;
 
 /**
+ * Tenant ids must be a bounded, punctuation-free identifier (GUIDs included). Enforced at the
+ * boundary in `attachTenantContext` — a malformed id is rejected outright rather than degrading
+ * to an unscoped session. See WS2 plan §4.1 fix (1).
+ */
+const TENANT_ID_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
+
+/** Thrown by `attachTenantContext` when `tenantId` fails the boundary validation. */
+export class TenantContextValidationError extends Error {}
+
+/**
  * Creates Express middleware that resolves and attaches TenantContext
  * to the authenticated user's UserInfo for each request.
  *
  * This middleware runs in the post-auth slot (after `createUnifiedAuthMiddleware`)
  * so `req.userPayload` is available. It reads the tenant ID from the configured
- * source and attaches it directly to `userPayload.userRecord.TenantContext`.
+ * source and attaches it to a per-request clone of `userPayload.userRecord`.
  *
  * By the time GraphQL resolvers or REST handlers run, the contextUser already
  * has TenantContext set — no deferred pickup via `req['__mj_tenantId']` needed.
+ *
+ * `userPayload.userRecord` may be the shared `UserCache` instance (true for both JWT and
+ * API-key sessions — see `context.ts`), so TenantContext is stamped onto a fresh clone
+ * (`cloneUserInfoForSession`), never the shared instance — otherwise concurrent requests for
+ * the same user with different tenant headers would race on one object. See WS2 plan §4.2.
+ *
+ * A malformed/oversized header is rejected with 400 and the request never proceeds — it must
+ * never fall through to `next()` with an unscoped session (WS2 plan §4.1 fix (1)).
  */
 export function createTenantMiddleware(config: MultiTenancyConfig): RequestHandler {
-  return (req, _res, next) => {
+  return (req, res, next) => {
     const userPayload = (req as { userPayload?: UserPayload }).userPayload;
     if (!userPayload?.userRecord) {
       // No authenticated user — skip tenant resolution
@@ -40,9 +59,22 @@ export function createTenantMiddleware(config: MultiTenancyConfig): RequestHandl
     }
 
     if (config.contextSource === 'header') {
-      const tenantId = req.headers[config.tenantHeader.toLowerCase()] as string | undefined;
-      if (tenantId) {
-        attachTenantContext(userPayload.userRecord as UserInfo, tenantId, 'header');
+      const rawHeader = req.headers[config.tenantHeader.toLowerCase()];
+      // A repeated header arrives as string[] — ambiguous which value is authoritative, so
+      // reject rather than silently pick one.
+      if (Array.isArray(rawHeader)) {
+        res.status(400).json({ error: `Malformed ${config.tenantHeader} header: expected a single value.` });
+        return;
+      }
+      if (rawHeader) {
+        const sessionUser = cloneUserInfoForSession(userPayload.userRecord as UserInfo, Metadata.Provider);
+        try {
+          attachTenantContext(sessionUser, rawHeader, 'header');
+        } catch (err) {
+          res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid tenant context header.' });
+          return;
+        }
+        userPayload.userRecord = sessionUser;
       }
     }
     next();
@@ -52,12 +84,22 @@ export function createTenantMiddleware(config: MultiTenancyConfig): RequestHandl
 /**
  * Attaches TenantContext to a UserInfo object.
  * Called from the GraphQL context function after authentication.
+ *
+ * Validates `tenantId` against `TENANT_ID_PATTERN` regardless of `source` — the boundary check
+ * lives here so every caller (header today; a future `linkedEntity`/`custom` source tomorrow)
+ * gets it, not just `createTenantMiddleware`. Throws `TenantContextValidationError` and leaves
+ * `user.TenantContext` untouched on failure — never a partial/degraded assignment.
  */
 export function attachTenantContext(
   user: UserInfo,
   tenantId: string,
   source: TenantContext['Source']
 ): void {
+  if (typeof tenantId !== 'string' || !TENANT_ID_PATTERN.test(tenantId)) {
+    throw new TenantContextValidationError(
+      `Invalid tenant id from source '${source}': must be 1-128 characters matching [A-Za-z0-9_.-].`
+    );
+  }
   user.TenantContext = { TenantID: tenantId, Source: source };
 }
 
@@ -99,6 +141,49 @@ function isAdminUser(user: UserInfo, adminRoles: string[]): boolean {
   );
 }
 
+/** Narrow capability this hook needs from the resolved metadata provider. */
+interface IdentifierQuotingProvider {
+  QuoteIdentifier(name: string): string;
+}
+
+function providesIdentifierQuoting(provider: object): provider is IdentifierQuotingProvider {
+  return 'QuoteIdentifier' in provider && typeof (provider as IdentifierQuotingProvider).QuoteIdentifier === 'function';
+}
+
+/**
+ * Builds the `<quoted column> = '<escaped tenant id>'` predicate for `createTenantPreRunViewHook`.
+ *
+ * Defense in depth beyond the `attachTenantContext` boundary check (WS2 plan §4.1 fix (2)):
+ * escapes the tenant id here too, so a future caller reaching `attachTenantContext` from a
+ * `'linkedEntity'`/`'custom'` source can't reintroduce the injection hole by construction alone.
+ * Verifies `tenantColumn` resolves to a real, non-virtual field (fix (3)) and quotes it via the
+ * provider's own `QuoteIdentifier` rather than hardcoded `[...]` bracket syntax, which is invalid
+ * on PostgreSQL (fix (4)). Throws — never returns an unfiltered/best-guess predicate — when the
+ * entity, column, or a usable provider can't be resolved; the calling hook aborts the request.
+ */
+function buildTenantFilterClause(entityName: string, tenantColumn: string, tenantId: string): string {
+  const md = Metadata.Provider; // global-provider-ok: same rationale as isEntityScoped above
+  const entity = md?.EntityByName(entityName);
+  if (!entity) {
+    throw new Error(`[MultiTenancy] Cannot scope entity '${entityName}': entity not found in metadata.`);
+  }
+  const field = entity.Fields.find(
+    f => f.Name.trim().toLowerCase() === tenantColumn.trim().toLowerCase() && !f.IsVirtual
+  );
+  if (!field) {
+    throw new Error(
+      `[MultiTenancy] Cannot scope entity '${entityName}': tenant column '${tenantColumn}' does not resolve to a real, non-virtual field.`
+    );
+  }
+  if (!md || !providesIdentifierQuoting(md)) {
+    throw new Error(
+      `[MultiTenancy] Cannot scope entity '${entityName}': no database provider available to quote the tenant column identifier.`
+    );
+  }
+  const safeTenantId = tenantId.replace(/'/g, "''");
+  return `${md.QuoteIdentifier(field.Name)} = '${safeTenantId}'`;
+}
+
 /**
  * Creates a PreRunViewHook that auto-injects tenant WHERE clauses
  * into RunView queries for scoped entities.
@@ -120,7 +205,7 @@ export function createTenantPreRunViewHook(config: MultiTenancyConfig): PreRunVi
 
     // Determine which column holds the tenant ID
     const tenantColumn = config.entityColumnMappings[entityName] ?? config.defaultTenantColumn;
-    const tenantFilter = `[${tenantColumn}] = '${contextUser.TenantContext.TenantID}'`;
+    const tenantFilter = buildTenantFilterClause(entityName, tenantColumn, contextUser.TenantContext.TenantID);
 
     // Inject the tenant filter
     if (params.ExtraFilter && typeof params.ExtraFilter === 'string' && params.ExtraFilter.trim().length > 0) {

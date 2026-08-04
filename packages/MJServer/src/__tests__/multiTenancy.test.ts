@@ -4,17 +4,26 @@ import type { MultiTenancyConfig } from '../config.js';
 import type { RunViewParams } from '@memberjunction/core';
 
 // Mock @memberjunction/core Metadata for entity schema lookup.
-// Use a class-based mock so `new Metadata().Entities` works reliably.
+// Use a class-based mock so `new Metadata().Entities` works reliably, and a
+// static `Provider` carrying `EntityByName` + `QuoteIdentifier` (the WS2 fix
+// resolves the tenant column against real entity metadata and quotes via the
+// provider — see multiTenancy.security.test.ts for the injection-focused suite).
 vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
 
+  const ENTITIES = [
+    { Name: 'Customers', SchemaName: 'dbo', Fields: [{ Name: 'OrganizationID', IsVirtual: false }, { Name: 'TenantID', IsVirtual: false }] },
+    { Name: 'Orders', SchemaName: 'dbo', Fields: [{ Name: 'OrganizationID', IsVirtual: false }, { Name: 'TenantID', IsVirtual: false }] },
+    { Name: 'AI Models', SchemaName: '__mj', Fields: [{ Name: 'OrganizationID', IsVirtual: false }] },
+    { Name: 'Users', SchemaName: '__mj', Fields: [{ Name: 'OrganizationID', IsVirtual: false }] },
+  ];
+
   class MockMetadata {
-    Entities = [
-      { Name: 'Customers', SchemaName: 'dbo' },
-      { Name: 'Orders', SchemaName: 'dbo' },
-      { Name: 'AI Models', SchemaName: '__mj' },
-      { Name: 'Users', SchemaName: '__mj' },
-    ];
+    Entities = ENTITIES;
+    static Provider = {
+      EntityByName: (name: string) => ENTITIES.find(e => e.Name.trim().toLowerCase() === name.trim().toLowerCase()),
+      QuoteIdentifier: (name: string) => `[${name}]`,
+    };
   }
 
   return {
@@ -49,7 +58,7 @@ function makeUser(tenantId?: string, roles: string[] = []) {
 
 describe('Multi-Tenancy Hooks', () => {
   describe('createTenantPreRunViewHook', () => {
-    it('should inject tenant filter for scoped entity', () => {
+    it('should inject tenant filter for scoped entity, quoted via the provider (not hardcoded brackets)', () => {
       const hook = createTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser('tenant-abc');
@@ -141,6 +150,16 @@ describe('Multi-Tenancy Hooks', () => {
       const params2 = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const result2 = hook(params2, user);
       expect((result2 as RunViewParams).ExtraFilter).toContain('OrganizationID');
+    });
+
+    it('throws (fails closed) when the tenant column does not resolve to a real field on the entity', () => {
+      const hook = createTenantPreRunViewHook(makeConfig({
+        entityColumnMappings: { 'Customers': 'NoSuchColumn' },
+      }));
+      const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
+      const user = makeUser('tenant-abc');
+
+      expect(() => hook(params, user)).toThrow(/does not resolve to a real, non-virtual field/);
     });
   });
 

@@ -77,7 +77,21 @@ import { QueryPagingEngine } from './queryPagingEngine.js';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
-import { SQLDialect } from '@memberjunction/sql-dialect';
+import {
+    SQLDialect,
+    IsBooleanSQLType,
+    IsStringSQLType,
+    IsDateSQLType,
+    IsIntegerSQLType,
+    IsFloatSQLType,
+    IsUuidSQLType,
+    IsBinarySQLType,
+    IsJsonSQLType,
+    IsCurrencySQLType,
+    IsIntervalSQLType,
+    IsNetworkSQLType,
+} from '@memberjunction/sql-dialect';
+import { SQLParser } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
@@ -3917,6 +3931,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**
      * Checks whether a new record's field values pass the Create RLS filter.
      * Builds a synthetic single-row subquery from entity field values, then tests the RLS filter against it.
+     *
+     * Called twice in the save flow (see `databaseProviderBase.ts` Save()): once before
+     * `OnBeforeSaveExecute`, unchanged from the original behavior, and again after — since a
+     * before-save hook can mutate a filter-referenced field between the two, and only the
+     * post-hook values are what actually get written. Idempotent and side-effect-free, so
+     * calling it twice is safe.
      */
     protected override async CheckCreateRLS(
         entity: BaseEntity,
@@ -3928,22 +3948,87 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return true;
         }
 
-        const projections = this.BuildCreateRLSProjections(entity, entityInfo);
+        const projections = this.BuildRLSProjections(entity, entityInfo, false);
         const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
         const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
         return result && result.length > 0 && Number(result[0]['pass']) === 1;
     }
 
     /**
-     * Builds field projections for the Create RLS synthetic row subquery.
-     * Only includes non-virtual fields that have non-null values.
+     * Checks whether an existing record's PENDING (post-image) field values pass the Update RLS
+     * filter — the values about to be written, not the values currently in the database.
+     *
+     * `databaseProviderBase.ts` Save() already runs `CheckRecordRLS` against the pre-image (the
+     * row as it exists today) before `OnBeforeSaveExecute`. That check alone allows an update to
+     * move a row OUT of the caller's filter — e.g. reassigning `OrganizationID` away from the
+     * caller's org — because it never inspects the values being written. This method closes that
+     * gap: it runs after before-save hooks (which can mutate filter-referenced fields) and
+     * validates the same synthetic-row technique `CheckCreateRLS` uses, against the Update filter.
+     *
+     * Cost control: when the resolved filter fully decomposes into a conjunction of simple
+     * `Column <op> <literal>` terms and none of the referenced fields are dirty, the post-image
+     * cannot differ from the pre-image for that filter, so the check is skipped. Any filter shape
+     * the parser cannot fully prove decomposed (OR, function-wrapped columns, subqueries, no
+     * dialect wired, a parse failure) always runs the check — "not fully understood" means run it.
      */
-    private BuildCreateRLSProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
+    protected override async CheckUpdateRLSPostImage(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean> {
+        const entityInfo = entity.EntityInfo;
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Update, '');
+        if (!rlsWhereClause || rlsWhereClause.length === 0) {
+            return true;
+        }
+
+        const decomposedFields = this.DecomposeSimpleAndClause(rlsWhereClause);
+        if (decomposedFields) {
+            const anyReferencedFieldDirty = entity.Fields.some(
+                f => f.Dirty && decomposedFields.has(f.Name.trim().toLowerCase())
+            );
+            if (!anyReferencedFieldDirty) {
+                // None of the columns the filter reads have changed — the post-image can't
+                // differ from the already-passing pre-image for this filter.
+                return true;
+            }
+        }
+
+        const projections = this.BuildRLSProjections(entity, entityInfo, true);
+        const sql = `SELECT CASE WHEN (${rlsWhereClause}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, user);
+        return result && result.length > 0 && Number(result[0]['pass']) === 1;
+    }
+
+    /**
+     * Builds field projections for an RLS synthetic-row subquery (`CheckCreateRLS` /
+     * `CheckUpdateRLSPostImage`).
+     *
+     * `includeNulls=false` (create) skips null-valued fields — a filter over a brand-new record
+     * has nothing meaningful to say about a column that was never set. `includeNulls=true`
+     * (update post-image) emits every non-virtual field, including nulls, as a typed
+     * `CAST(NULL AS <sqltype>) AS <Col>` — a bare `SELECT NULL AS Col` is untyped and a filter
+     * referencing a column the caller just nulled must see a real NULL, not a missing projection.
+     *
+     * Throws (causing the save to fail) rather than emit unsafe SQL when a field's SQL type can't
+     * be resolved to a known type, or when a non-quoted (numeric/boolean) field's value doesn't
+     * parse as a finite number.
+     */
+    private BuildRLSProjections(entity: BaseEntity, entityInfo: EntityInfo, includeNulls: boolean): string {
         const parts: string[] = [];
         for (const field of entityInfo.Fields) {
             if (field.IsVirtual) continue;
             const val = entity.Get(field.Name);
-            if (val == null) continue;
+
+            if (val == null) {
+                if (!includeNulls) continue;
+                if (!this.IsResolvableRLSProjectionType(field.Type)) {
+                    throw new Error(
+                        `Cannot build RLS projection for ${entityInfo.Name}.${field.Name}: unresolvable SQL type '${field.Type}'.`
+                    );
+                }
+                parts.push(`CAST(NULL AS ${field.SQLFullType}) AS ${this.QuoteIdentifier(field.Name)}`);
+                continue;
+            }
 
             let sqlVal: string;
             if (typeof val === 'boolean') {
@@ -3951,11 +4036,121 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             } else if (field.NeedsQuotes) {
                 sqlVal = `'${String(val).replace(/'/g, "''")}'`;
             } else {
-                sqlVal = String(val);
+                const num = Number(val);
+                if (!Number.isFinite(num)) {
+                    throw new Error(
+                        `Cannot build RLS projection for ${entityInfo.Name}.${field.Name}: value '${String(val)}' is not a valid number.`
+                    );
+                }
+                sqlVal = String(num);
             }
             parts.push(`${sqlVal} AS ${this.QuoteIdentifier(field.Name)}`);
         }
         return parts.join(', ');
+    }
+
+    /**
+     * True if `type` is a SQL type name recognized by any registered dialect's classification
+     * predicates — the same set CodeGen and the rest of MJ use to reason about column types.
+     * An unrecognized type means we can't construct a safe `CAST(NULL AS ...)` target, so the
+     * caller must fail rather than guess.
+     */
+    private IsResolvableRLSProjectionType(type: string): boolean {
+        return (
+            IsBooleanSQLType(type) ||
+            IsStringSQLType(type) ||
+            IsDateSQLType(type) ||
+            IsIntegerSQLType(type) ||
+            IsFloatSQLType(type) ||
+            IsUuidSQLType(type) ||
+            IsBinarySQLType(type) ||
+            IsJsonSQLType(type) ||
+            IsCurrencySQLType(type) ||
+            IsIntervalSQLType(type) ||
+            IsNetworkSQLType(type)
+        );
+    }
+
+    /** SQL comparison operators `DecomposeSimpleAndClause` accepts as a "simple term". */
+    private static readonly RLS_DECOMPOSABLE_OPERATORS = new Set([
+        '=', '<>', '!=', '<', '>', '<=', '>=', 'LIKE', 'NOT LIKE', 'IN', 'NOT IN',
+    ]);
+
+    /** node-sql-parser literal node `.type` values treated as a safe comparison operand. */
+    private static readonly RLS_LITERAL_NODE_TYPES = new Set([
+        'single_quote_string', 'string', 'double_quote_string', 'number', 'bigint', 'bool', 'null',
+    ]);
+
+    /**
+     * Attempts to prove a resolved RLS WHERE clause fully decomposes into a conjunction (AND-only)
+     * of simple `Column <op> <literal>` terms, with no qualified/aliased columns, functions,
+     * subqueries, or OR. Returns the lower-cased set of referenced column names on success, or
+     * `null` when decomposition cannot be proven — callers MUST treat `null` as "run the full
+     * check"; this is a cost-control optimization on an authorization path, never a fail-open one.
+     */
+    private DecomposeSimpleAndClause(whereClause: string): Set<string> | null {
+        const dialect = this.getDialect();
+        if (!dialect) return null;
+
+        let astResult: ReturnType<typeof SQLParser.Astify>;
+        try {
+            astResult = SQLParser.Astify(`SELECT 1 WHERE ${whereClause}`, dialect);
+        } catch {
+            return null;
+        }
+        if (!astResult.astParsed || !astResult.ast) return null;
+
+        const selectNode = Array.isArray(astResult.ast) ? astResult.ast[0] : astResult.ast;
+        const whereNode = (selectNode as unknown as Record<string, unknown>)?.['where'];
+        if (!whereNode || typeof whereNode !== 'object') return null;
+
+        const fields = new Set<string>();
+        return this.decomposeRLSExpr(whereNode as Record<string, unknown>, fields) ? fields : null;
+    }
+
+    /** Recursive AND-tree walker for `DecomposeSimpleAndClause`. Mutates `fields` on success. */
+    private decomposeRLSExpr(node: Record<string, unknown>, fields: Set<string>): boolean {
+        if (!node || node['type'] !== 'binary_expr') return false;
+
+        const operator = String(node['operator'] ?? '').toUpperCase();
+        const left = node['left'] as Record<string, unknown> | undefined;
+        const right = node['right'] as Record<string, unknown> | undefined;
+
+        if (operator === 'AND') {
+            return !!left && !!right && this.decomposeRLSExpr(left, fields) && this.decomposeRLSExpr(right, fields);
+        }
+        if (!GenericDatabaseProvider.RLS_DECOMPOSABLE_OPERATORS.has(operator)) return false;
+
+        // Exactly one side must be an unqualified column reference; the other a literal (or, for
+        // IN/NOT IN, a literal list). Qualified columns (table.column) are rejected — the RLS
+        // clause is generated with an empty prefix (see GetUserRowLevelSecurityWhereClause call
+        // sites), so a qualifier here means something this parser doesn't model.
+        const leftIsColumn = left?.['type'] === 'column_ref' && !left['table'];
+        const rightIsColumn = right?.['type'] === 'column_ref' && !right['table'];
+
+        if (leftIsColumn && !rightIsColumn && right && this.isRLSLiteralOrList(right)) {
+            fields.add(String(left['column']).trim().toLowerCase());
+            return true;
+        }
+        if (rightIsColumn && !leftIsColumn && left && this.isRLSLiteralOrList(left)) {
+            fields.add(String(right['column']).trim().toLowerCase());
+            return true;
+        }
+        return false;
+    }
+
+    /** True if `node` is a literal, or (for IN/NOT IN) an `expr_list` of literals. */
+    private isRLSLiteralOrList(node: Record<string, unknown>): boolean {
+        if (!node) return false;
+        if (GenericDatabaseProvider.RLS_LITERAL_NODE_TYPES.has(String(node['type']))) return true;
+        if (node['type'] === 'expr_list') {
+            const values = node['value'];
+            return (
+                Array.isArray(values) &&
+                values.every(v => GenericDatabaseProvider.RLS_LITERAL_NODE_TYPES.has(String((v as Record<string, unknown>)?.['type'])))
+            );
+        }
+        return false;
     }
 
     /**************************************************************************/

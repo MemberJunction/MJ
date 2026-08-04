@@ -1351,6 +1351,31 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     await this.OnBeforeSaveExecute(entity, user, options, saveContext);
                 }
 
+                // Step 3b: Row-Level Security post-image check. Step 2b validates the state
+                // BEFORE OnBeforeSaveExecute; a before-save hook can mutate a filter-referenced
+                // field, so the values Step 2b validated may not be the values actually written.
+                // This step re-validates the final, post-hook values and is additive — Step 2b's
+                // checks and messages are unchanged; this is a second, authoritative gate.
+                if (!bReplay) {
+                    if (bNewRecord) {
+                        const createRLSPostHookPass = await this.CheckCreateRLS(entity, user);
+                        if (!createRLSPostHookPass) {
+                            entityResult.Success = false;
+                            entityResult.EndedAt = new Date();
+                            entityResult.Message = `Access denied for new ${entity.EntityInfo.Name} record: a before-save hook produced field values that no longer pass row-level security`;
+                            throw new Error(entityResult.Message);
+                        }
+                    } else {
+                        const updateRLSPostImagePass = await this.CheckUpdateRLSPostImage(entity, user);
+                        if (!updateRLSPostImagePass) {
+                            entityResult.Success = false;
+                            entityResult.EndedAt = new Date();
+                            entityResult.Message = `Access denied: the updated ${entity.EntityInfo.Name} record would no longer pass row-level security`;
+                            throw new Error(entityResult.Message);
+                        }
+                    }
+                }
+
                 // Step 4: Generate provider-specific SQL
                 const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user);
 
@@ -1593,6 +1618,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Subclasses must implement the actual RLS check logic.
      */
     protected abstract CheckCreateRLS(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean>;
+
+    /**
+     * Checks whether an existing record's PENDING (post-image) field values — the values about
+     * to be written, after before-save hooks have run — pass the Update RLS filter. Closes the
+     * gap where `CheckRecordRLS`'s pre-image check alone allows an update to move a row out of
+     * the caller's filter. Subclasses must implement the actual RLS check logic.
+     */
+    protected abstract CheckUpdateRLSPostImage(
         entity: BaseEntity,
         user: UserInfo
     ): Promise<boolean>;

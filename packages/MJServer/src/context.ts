@@ -16,7 +16,8 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, UserRoleInfo, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
+import { cloneUserInfoForSession } from './userInfoSession.js';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -221,7 +222,7 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
   }
 
   // Anonymous: synthesize the claimed role(s) (persisted nowhere). Named: keep real DB roles.
-  let synthesizedRoles: { UserID: string; RoleID: string; RoleName: string }[] | undefined;
+  let synthesizedRoles: UserRoleInfo[] | undefined;
   if (isAnon) {
     const roleNames = new Set<string>();
     if (Array.isArray(scopes)) {
@@ -238,7 +239,7 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
     for (const rn of roleNames) {
       const role = md?.Roles.find((r) => r.Name?.trim().toLowerCase() === rn.trim().toLowerCase());
       if (role) {
-        synthesizedRoles.push({ UserID: userRecord.ID, RoleID: role.ID, RoleName: role.Name });
+        synthesizedRoles.push(new UserRoleInfo({ UserID: userRecord.ID, RoleID: role.ID, Role: role.Name }));
       }
     }
   }
@@ -257,11 +258,7 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
     return userRecord;
   }
 
-  const sessionUser = new UserInfo(md, {
-    ...userRecord,
-    _UserRoles: undefined,
-    UserRoles: isAnon ? synthesizedRoles : userRecord.UserRoles,
-  });
+  const sessionUser = cloneUserInfoForSession(userRecord, md, isAnon ? synthesizedRoles : undefined);
   if (scope) {
     sessionUser.MagicLinkScope = scope;
   }
