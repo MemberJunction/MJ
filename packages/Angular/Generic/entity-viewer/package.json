@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-entity-viewer",
-  "version": "5.51.0",
+  "version": "6.0.0",
   "description": "MemberJunction: Angular components for viewing entity data in multiple formats (grid, cards) with filtering, selection, and shared data management",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "build": "ngc",
     "test:watch": "vitest"
   },
@@ -26,7 +27,7 @@
   "devDependencies": {
     "@angular/compiler": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
-    "@memberjunction/ng-test-utils": "5.51.0",
+    "@memberjunction/ng-test-utils": "6.0.0",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
@@ -38,23 +39,23 @@
     "ag-grid-community": "^35.0.1"
   },
   "dependencies": {
-    "@memberjunction/actions-base": "5.51.0",
-    "@memberjunction/core": "5.51.0",
-    "@memberjunction/core-entities": "5.51.0",
-    "@memberjunction/export-engine": "5.51.0",
-    "@memberjunction/global": "5.51.0",
-    "@memberjunction/ng-base-types": "5.51.0",
-    "@memberjunction/ng-entity-action-ux": "5.51.0",
-    "@memberjunction/ng-export-service": "5.51.0",
-    "@memberjunction/ng-filter-builder": "5.51.0",
-    "@memberjunction/ng-list-management": "5.51.0",
-    "@memberjunction/ng-map-view": "5.51.0",
-    "@memberjunction/ng-notifications": "5.51.0",
-    "@memberjunction/ng-pagination": "5.51.0",
-    "@memberjunction/ng-record-changes": "5.51.0",
-    "@memberjunction/ng-shared-generic": "5.51.0",
-    "@memberjunction/ng-timeline": "5.51.0",
-    "@memberjunction/ng-ui-components": "5.51.0",
+    "@memberjunction/actions-base": "6.0.0",
+    "@memberjunction/core": "6.0.0",
+    "@memberjunction/core-entities": "6.0.0",
+    "@memberjunction/export-engine": "6.0.0",
+    "@memberjunction/global": "6.0.0",
+    "@memberjunction/ng-base-types": "6.0.0",
+    "@memberjunction/ng-entity-action-ux": "6.0.0",
+    "@memberjunction/ng-export-service": "6.0.0",
+    "@memberjunction/ng-filter-builder": "6.0.0",
+    "@memberjunction/ng-list-management": "6.0.0",
+    "@memberjunction/ng-map-view": "6.0.0",
+    "@memberjunction/ng-notifications": "6.0.0",
+    "@memberjunction/ng-pagination": "6.0.0",
+    "@memberjunction/ng-record-changes": "6.0.0",
+    "@memberjunction/ng-shared-generic": "6.0.0",
+    "@memberjunction/ng-timeline": "6.0.0",
+    "@memberjunction/ng-ui-components": "6.0.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1"
   },
@@ -62,5 +63,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
-  }
+  },
+  "mjUILayer": "widgets"
 }

@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ChangeDetectorRef } from '@angular/core';
+import { RecordNavigationAdapter } from '@memberjunction/ng-base-types';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -7,7 +8,6 @@ import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
-import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -2515,9 +2515,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      */
     navigateToRun(event: { runId: string; runType: 'agent' | 'prompt' }) {
         if (event.runType === 'agent') {
-            SharedService.Instance.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(event.runId));
+            RecordNavigationAdapter.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(event.runId));
         } else {
-            SharedService.Instance.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(event.runId));
+            RecordNavigationAdapter.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(event.runId));
         }
         
         // Emit event so parent window can minimize
@@ -3088,7 +3088,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      */
     public navigateToAgentRun({runId, runType}: {runId: string, runType: 'agent' | 'prompt'}) {
         if (runId && runType==='agent') {
-            SharedService.Instance.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(runId));
+            RecordNavigationAdapter.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(runId));
             // Request minimization from our container
             this.minimizeRequested.emit();
         }

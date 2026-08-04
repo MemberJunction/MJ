@@ -10,7 +10,8 @@ import {
     ActionResultSimple,
     RunActionParams,
     RuntimeActionConfigurationSchema,
-    RuntimeActionBridgeBuilder
+    RuntimeActionBridgeBuilder,
+    RedactParamsToJSON
 } from "@memberjunction/actions-base";
 import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
 import type { BridgeHandlerMap } from "@memberjunction/code-execution";
@@ -109,6 +110,10 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    }
 
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
+      // Snapshot the inputs BEFORE anything can run — see SnapshotInputParams. Threaded down every
+      // path (validation failure, filter refusal, timeout, normal run) so all four write the same
+      // as-called values into ActionExecutionLog.Params.
+      const inputSnapshot = this.SnapshotInputParams(params);
       const validInputs: boolean = await this.ValidateInputs(params);
       if(!validInputs){
          const result: ActionResult = {
@@ -119,8 +124,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             RunParams: params
          };
 
-         if(!params.SkipActionLog){
-            result.LogEntry = await this.StartAndEndActionLog(params, result);
+         if(this.ShouldLogOutcome(params, result)){
+            result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
          }
 
          return result;
@@ -137,12 +142,12 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             RunParams: params
          };
 
-         if(!params.SkipActionLog){
-            result.LogEntry = await this.StartAndEndActionLog(params, result);
+         if(this.ShouldLogOutcome(params, result)){
+            result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
          }
       }
 
-      return await this.RunActionWithTimeout(params);
+      return await this.RunActionWithTimeout(params, inputSnapshot);
    }
 
    /**
@@ -157,7 +162,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * (e.g. when being run from a Runtime-action bridge that has its own
     * abort), we chain to it so either source can trigger cancellation.
     */
-   protected async RunActionWithTimeout(params: RunActionParams): Promise<ActionResult> {
+   protected async RunActionWithTimeout(params: RunActionParams, inputSnapshot?: string): Promise<ActionResult> {
       const actionTimeoutMS = params.Action.MaxExecutionTimeMS ?? this.DefaultActionTimeoutMS;
 
       // Chain with any upstream AbortSignal (e.g. Runtime-action bridge).
@@ -199,7 +204,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          });
 
          try {
-            return await Promise.race([this.InternalRunAction(params), timeoutPromise]);
+            return await Promise.race([this.InternalRunAction(params, inputSnapshot), timeoutPromise]);
          } catch (err) {
             // Timeout or upstream abort — return a standard TIMEOUT result.
             // Result is left undefined (we don't guarantee a 'TIMEOUT' ActionResultCode
@@ -218,8 +223,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
                   RunParams: params,
                   Result: undefined
                };
-               if (!params.SkipActionLog) {
-                  timeoutResult.LogEntry = await this.StartAndEndActionLog(params, timeoutResult);
+               if (this.ShouldLogOutcome(params, timeoutResult)) {
+                  timeoutResult.LogEntry = await this.StartAndEndActionLog(params, timeoutResult, inputSnapshot);
                }
                return timeoutResult;
             }
@@ -305,10 +310,13 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       // temp stub above, replace with code that will run the filter      
    }
 
-   protected async InternalRunAction(params: RunActionParams): Promise<ActionResult> {
+   protected async InternalRunAction(params: RunActionParams, inputSnapshot?: string): Promise<ActionResult> {
+      const loggingMode = this.ResolveLoggingMode(params);
       let logEntry: MJActionExecutionLogEntity | undefined;
-      if(!params.SkipActionLog){
-         logEntry = await this.StartActionLog(params);
+      if(!params.SkipActionLog && loggingMode !== 'None'){
+         // Under 'FailuresOnly' the row is built but the 'started' INSERT is withheld: if the run
+         // succeeds nothing is ever written, and if it fails EndActionLog's force-persist inserts it.
+         logEntry = await this.StartActionLog(params, loggingMode === 'All', inputSnapshot);
       }
 
       try {
@@ -332,8 +340,13 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             Result: resultCodeEntity
          };
 
-         if(logEntry){
+         if(logEntry && this.ShouldLogOutcome(params, result)){
             await this.EndActionLog(logEntry, params, result);
+         }
+         else if (logEntry) {
+            // 'FailuresOnly' + success: the row was never inserted, so drop it rather than return a
+            // LogEntry pointing at a row that does not exist.
+            result.LogEntry = undefined;
          }
 
          return result;
@@ -354,6 +367,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          };
 
          if(logEntry){
+            // An exception is always a failure, so every logging mode except 'None' records it —
+            // and 'None' never produced a logEntry in the first place.
             await this.EndActionLog(logEntry, params, result);
          }
 
@@ -488,7 +503,55 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       };
    }
 
-   protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true): Promise<MJActionExecutionLogEntity> {
+   /**
+    * The as-called input parameters, redacted and serialized, for `ActionExecutionLog.Params`.
+    *
+    * Taken **once, at the top of {@link RunAction}**, before the action can mutate its own parameter
+    * array. Custom and Generated actions write outputs back into the very array they were handed, so a
+    * snapshot taken any later — inside `StartActionLog`, or on the timeout path — is a post-hoc capture
+    * of a mutated array masquerading as "what it was called with".
+    *
+    * Every value passes through {@link RedactParamsToJSON} first: this method is the only producer of
+    * the `Params` column, so redaction here is what makes the column safe by construction.
+    */
+   protected SnapshotInputParams(params: RunActionParams): string {
+      return RedactParamsToJSON(params.Params, this.ParamDefinitionsFor(params), params.Provenance?.EntityActionParams);
+   }
+
+   /**
+    * The `ActionParam` definition rows for the action being run — the source of each parameter's
+    * `LogValue` flag. Read from the shared ActionEngineBase cache rather than off `params.Action`,
+    * which is typed as the plain entity and carries no params collection.
+    */
+   protected ParamDefinitionsFor(params: RunActionParams): MJActionParamEntity[] {
+      return params.Action ? this.ActionParams.filter(p => UUIDsEqual(p.ActionID, params.Action.ID)) : [];
+   }
+
+   /**
+    * How much of this run to log, from the Entity Action binding that dispatched it. Direct
+    * invocations have no binding and therefore always log — the pre-existing behaviour.
+    */
+   protected ResolveLoggingMode(params: RunActionParams): 'All' | 'FailuresOnly' | 'None' {
+      return params.Provenance?.LoggingMode ?? 'All';
+   }
+
+   /**
+    * Whether a completed run should leave a log row, honouring both the caller's `SkipActionLog` and
+    * the binding's `LoggingMode`. `FailuresOnly` exists for high-frequency bindings whose successful
+    * runs would otherwise dominate the log table; a failure is always written.
+    */
+   protected ShouldLogOutcome(params: RunActionParams, result: ActionResult): boolean {
+      if (params.SkipActionLog) {
+         return false;
+      }
+      const mode = this.ResolveLoggingMode(params);
+      if (mode === 'None') {
+         return false;
+      }
+      return mode !== 'FailuresOnly' || !result.Success;
+   }
+
+   protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true, inputSnapshot?: string): Promise<MJActionExecutionLogEntity> {
       // this is where the log entry for the action run will be created
       const md = params.Provider ?? new Metadata();
       const logEntity = await md.GetEntityObject<MJActionExecutionLogEntity>('MJ: Action Execution Logs', this.ContextUser);
@@ -496,8 +559,12 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       logEntity.ActionID = params.Action.ID;
       logEntity.StartedAt = new Date();
       logEntity.UserID = this.ContextUser.ID;
-      // we will save this again in the EndActionLog, this is the initial state, and the action could add/modify the params
-      logEntity.Params = JSON.stringify(params.Params);
+      // The as-called inputs. Written once and never overwritten — EndActionLog writes the final
+      // merged set to ResultParams instead. `inputSnapshot` is supplied by RunAction; the fallback
+      // covers callers that reach StartActionLog directly.
+      logEntity.Params = inputSnapshot ?? this.SnapshotInputParams(params);
+
+      this.StampProvenance(logEntity, params);
 
       if (saveRecord){
          // Fire-and-forget the 'started' INSERT (unless the caller opts out) — the action runs
@@ -518,7 +585,15 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       // from the sandbox executor that lives on `result.Params`, so logging `params.Params` would lose
       // every new output key. Custom/Generated actions mutate `params.Params` in place, and
       // `result.Params` falls back to that same reference, so they remain equivalent.
-      const finalParams = JSON.stringify(result.Params ?? params.Params);
+      //
+      // This goes to ResultParams, NOT Params: Params holds the as-called inputs captured at the top of
+      // RunAction and is deliberately never overwritten, so a run's inputs stay recoverable even though
+      // the action mutated the array they arrived in.
+      const finalParams = RedactParamsToJSON(
+         result.Params ?? params.Params,
+         this.ParamDefinitionsFor(params),
+         params.Provenance?.EntityActionParams
+      );
       const resultCode = result.Result?.ResultCode;
       const message = result.Message;
       // Fire-and-forget — the action's caller never blocks on the 'ended' UPDATE. The mutation runs
@@ -526,17 +601,33 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       // the INSERT's reload. The queue is self-bounding, so no flush is needed on this long-lived singleton.
       this._logQueue.Update(logEntity, () => {
          logEntity.EndedAt = endedAt;
-         logEntity.Params = finalParams;
+         logEntity.ResultParams = finalParams;
          logEntity.ResultCode = resultCode;
          logEntity.Message = message;
       });
    }
 
-   protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult): Promise<MJActionExecutionLogEntity> {
+   protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult, inputSnapshot?: string): Promise<MJActionExecutionLogEntity> {
       // No separate INSERT — the single 'ended' UPDATE (force-persist on a never-inserted NewRecord) inserts.
-      const logEntity: MJActionExecutionLogEntity = await this.StartActionLog(params, false);
+      const logEntity: MJActionExecutionLogEntity = await this.StartActionLog(params, false, inputSnapshot);
       await this.EndActionLog(logEntity, params, result);
       return logEntity;
+   }
+
+   /**
+    * Writes the Entity Action provenance onto a log row: which binding fired, from which lifecycle
+    * event, against which record. All four columns are NULL for a direct invocation, and that NULL is
+    * meaningful — it is how "nobody configured this, some code called it" reads in the log.
+    */
+   protected StampProvenance(logEntity: MJActionExecutionLogEntity, params: RunActionParams): void {
+      const provenance = params.Provenance;
+      if (!provenance) {
+         return;
+      }
+      logEntity.EntityActionID = provenance.EntityActionID ?? null;
+      logEntity.EntityActionInvocationTypeID = provenance.EntityActionInvocationTypeID ?? null;
+      logEntity.TargetEntityID = provenance.TargetEntityID ?? null;
+      logEntity.TargetRecordID = provenance.TargetRecordID ?? null;
    }
 }
 

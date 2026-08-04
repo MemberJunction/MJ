@@ -31,6 +31,7 @@ import {
 } from '@angular/core';
 
 import { Subject } from 'rxjs';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { takeUntil, debounceTime } from 'rxjs/operators';
 
 import {
@@ -141,7 +142,7 @@ const DEFAULT_ICONS = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None
 })
-export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewInit {
+export class TimelineComponent<T = any> extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   // ============================================================================
   // INPUTS - DATA
   // ============================================================================
@@ -517,7 +518,8 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
     private cdr: ChangeDetectorRef,
     private elementRef: ElementRef,
     private ngZone: NgZone
-  ) {}
+  ) {
+        super();}
 
   // ============================================================================
   // LIFECYCLE HOOKS
@@ -1176,7 +1178,7 @@ export class TimelineComponent<T = any> implements OnInit, OnDestroy, AfterViewI
   private async loadFromEntity(group: TimelineGroup<T>): Promise<T[]> {
     try {
       const { RunView } = await import('@memberjunction/core');
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       const result = await rv.RunView({
         EntityName: group.EntityName,
