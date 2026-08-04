@@ -7,7 +7,7 @@ import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { SearchService } from '@memberjunction/ng-search';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { MentionSuggestion } from '@memberjunction/ng-composer';
-import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
 import { OmnibarPaletteComponent } from './omnibar-palette.component';
 import { OmnibarProvider } from './omnibar-provider';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
@@ -87,6 +87,20 @@ const render = () =>
     providers: PROVIDERS(),
   });
 
+/** Fixture with real installed apps, so the '/' (Go to App) provider produces rows. */
+const renderWithApps = (nav: NavigationService) =>
+  renderComponentFixture(OmnibarPaletteComponent, {
+    imports: [CommonModule, FormsModule],
+    declarations: [OmnibarPaletteComponent],
+    providers: [
+      { provide: NavigationService, useValue: nav },
+      { provide: ApplicationManager, useValue: { Applications: of(APPS) } },
+      { provide: SearchService, useValue: fakeSearch() },
+      { provide: CommandPaletteService, useValue: { TrackAppAccess: () => Promise.resolve(), GetRecentApps: () => Promise.resolve([]) } },
+      { provide: FileOpenService, useValue: {} },
+    ],
+  });
+
 describe('OmnibarPaletteComponent (DOM)', () => {
   it('renders nothing while closed (IsOpen defaults false)', () => {
     const fixture = render();
@@ -153,19 +167,6 @@ describe('OmnibarPaletteComponent (DOM)', () => {
    * empty-query state, which is the only state that renders them).
    */
   describe('stale result invalidation', () => {
-    const renderWithApps = (nav: NavigationService) =>
-      renderComponentFixture(OmnibarPaletteComponent, {
-        imports: [CommonModule, FormsModule],
-        declarations: [OmnibarPaletteComponent],
-        providers: [
-          { provide: NavigationService, useValue: nav },
-          { provide: ApplicationManager, useValue: { Applications: of(APPS) } },
-          { provide: SearchService, useValue: fakeSearch() },
-          { provide: CommandPaletteService, useValue: { TrackAppAccess: () => Promise.resolve(), GetRecentApps: () => Promise.resolve([]) } },
-          { provide: FileOpenService, useValue: {} },
-        ],
-      });
-
     it("settles once the seeded '/' mode's app suggestions arrive", async () => {
       const { svc } = fakeNavigation();
       const fixture = renderWithApps(svc);
@@ -298,6 +299,124 @@ describe('OmnibarPaletteComponent (DOM)', () => {
       expect(fixture.componentInstance.EffectiveQuery).toBe('Admin');
       expect(fixture.componentInstance.Rows.map((r) => r.Suggestion.displayName)).toEqual(['Admin']);
       expect(fixture.componentInstance.Rows.every((r) => r.Suggestion.type === 'app')).toBe(true);
+    });
+  });
+
+  /**
+   * The empty state is the only thing on screen when nothing matched, and it makes a
+   * PROMISE: "press ↵ to search everything". Two ways that promise used to be false.
+   *
+   * 1. `IsLoading` was assigned only in the default-mode branch of `runQuery`, so a
+   *    trigger-mode fetch showed no spinner — and because a mode change now clears
+   *    `Rows`, the palette asserted "No matches" for the whole debounce, before it had
+   *    looked at anything.
+   * 2. The Enter fallback was gated on `ActiveTriggerChar === ''`, so in a trigger mode
+   *    the promise was never kept at all. Before the selectableRows fix Enter ran an
+   *    off-screen recent; after it, Enter did nothing.
+   *
+   * `CanEscapeToFullSearch` now drives BOTH the wording and the handler, so they cannot
+   * disagree. It is deliberately asymmetric — see its doc comment.
+   */
+  describe('empty state ↔ escape hatch agreement', () => {
+    const enter = () => new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+
+    it('shows the spinner, not "No matches", while a trigger-mode fetch is outstanding', () => {
+      const { svc } = fakeNavigation();
+      const fixture = renderWithApps(svc);
+      fixture.componentInstance.Open();
+      fixture.componentInstance.OnQueryChange('/zz');
+      fixture.detectChanges(false);
+
+      // Trigger modes used to skip the IsLoading assignment entirely.
+      expect(fixture.componentInstance.IsLoading).toBe(true);
+      expect(query(fixture, '.ob-loading')).not.toBeNull();
+      expect(query(fixture, '.ob-empty')).toBeNull();
+    });
+
+    it('renders the settled no-match state, promising the escape hatch, once the fetch lands', async () => {
+      const { svc } = fakeNavigation();
+      const fixture = renderWithApps(svc);
+      fixture.componentInstance.Open();
+      fixture.componentInstance.OnQueryChange('/zz');
+      await settle(250);
+      fixture.detectChanges(false);
+
+      expect(fixture.componentInstance.IsLoading).toBe(false);
+      expect(fixture.componentInstance.Rows).toEqual([]);
+      expect(fixture.componentInstance.CanEscapeToFullSearch).toBe(true);
+      expect(text(fixture, '.ob-empty')).toContain('search everything');
+    });
+
+    it('escapes to full search from a settled trigger mode, with the trigger char stripped', async () => {
+      const { svc, switched, searched } = fakeNavigation();
+      const fixture = renderWithApps(svc);
+      fixture.componentInstance.Open();
+      fixture.componentInstance.OnQueryChange('/zz');
+      await settle(250);
+
+      fixture.componentInstance.OnInputKeydown(enter());
+
+      // 'zz', NOT '/zz' — the trigger char is a mode selector, not part of the query.
+      expect(searched).toEqual(['zz']);
+      expect(switched).toEqual([]);
+    });
+
+    /**
+     * The hazard the settled-state gate exists for: escaping early would substitute a
+     * global search for the app the user was three keystrokes into naming.
+     */
+    it('refuses to escape while a trigger-mode fetch is still outstanding', async () => {
+      const { svc, switched, searched } = fakeNavigation();
+      const fixture = renderWithApps(svc);
+      fixture.componentInstance.Open();
+      fixture.componentInstance.OnQueryChange('/Adm');
+
+      expect(fixture.componentInstance.Rows).toEqual([]);
+      fixture.componentInstance.OnInputKeydown(enter());
+      expect(searched).toEqual([]);
+      expect(switched).toEqual([]);
+
+      // Waiting is what the user wanted: the app they were naming shows up.
+      await settle(250);
+      expect(fixture.componentInstance.Rows.map((r) => r.Suggestion.displayName)).toEqual(['Admin']);
+    });
+
+    /**
+     * DEFAULT mode keeps submitting immediately, and that asymmetry is intentional: full
+     * search IS this mode's action (the See-All row navigates to the same place), so early
+     * and late submits can't diverge — whereas a search box that ignores Enter for 300 ms
+     * reads as broken.
+     */
+    it('still submits immediately in default mode, where full search is the mode\'s own action', () => {
+      const { svc, searched } = fakeNavigation();
+      const fixture = renderWithApps(svc);
+      fixture.componentInstance.Open();
+      fixture.componentInstance.OnQueryChange('Admin');
+
+      expect(fixture.componentInstance.IsLoading).toBe(true);
+      fixture.componentInstance.OnInputKeydown(enter());
+      expect(searched).toEqual(['Admin']);
+    });
+
+    /**
+     * A one-character query can't reach full search (pre-existing `length > 1` floor), so
+     * the empty state must not offer it. This is the coupling under test: one getter, so a
+     * future change to either side moves both.
+     */
+    it('never promises an escape hatch it would refuse to take', async () => {
+      const { svc, searched } = fakeNavigation();
+      const fixture = renderWithApps(svc);
+      fixture.componentInstance.Open();
+      fixture.componentInstance.OnQueryChange('/z');
+      await settle(250);
+      fixture.detectChanges(false);
+
+      expect(fixture.componentInstance.Rows).toEqual([]);
+      expect(fixture.componentInstance.CanEscapeToFullSearch).toBe(false);
+      expect(text(fixture, '.ob-empty')).not.toContain('search everything');
+
+      fixture.componentInstance.OnInputKeydown(enter());
+      expect(searched).toEqual([]);
     });
   });
 });

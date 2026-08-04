@@ -71,7 +71,14 @@
           </div>
         }
       } @else if (Rows.length === 0) {
-        <div class="ob-empty">No matches — press <kbd class="ob-kbd">↵</kbd> to search everything for “{{ EffectiveQuery }}”.</div>
+        <!-- Only promise the Enter escape hatch when Enter will actually take it —
+             CanEscapeToFullSearch gates both, so the two can't drift apart. It's false for
+             a 1-char query, and in a trigger mode until the fetch settles. -->
+        @if (CanEscapeToFullSearch) {
+          <div class="ob-empty">No matches — press <kbd class="ob-kbd">↵</kbd> to search everything for “{{ EffectiveQuery }}”.</div>
+        } @else {
+          <div class="ob-empty">No matches for “{{ EffectiveQuery }}”.</div>
+        }
       } @else {
         <div id="ob-listbox" role="listbox" aria-label="Suggestions">
         @for (row of Rows; track row.Suggestion.id; let i = $index) {

@@ -161,6 +161,28 @@ export class OmnibarPaletteComponent implements OnDestroy {
     }
 
     /**
+     * Whether <kbd>Enter</kbd> on a rowless palette may fall through to the full Search
+     * Results workspace for the typed text. Drives BOTH the key handler and the empty
+     * state's wording, so the promise on screen and the behavior can't diverge.
+     *
+     * Default mode is unconditional: full search IS this mode's action — the See-All row
+     * navigates to exactly the same place — so submitting early can't diverge from
+     * submitting late, and a search box that ignores Enter for 300 ms reads as broken.
+     *
+     * Trigger modes require a SETTLED query. There, full search is a *different* action
+     * from what the rows would have offered (switch app, open record), so escaping while
+     * a fetch is outstanding would substitute a global search for the app the user was
+     * three keystrokes into naming — the same class of wrong-action bug as selecting an
+     * unrendered row.
+     */
+    public get CanEscapeToFullSearch(): boolean {
+        if (this.EffectiveQuery.trim().length <= 1) {
+            return false;
+        }
+        return this.ActiveTriggerChar === '' || !this.IsLoading;
+    }
+
+    /**
      * ARIA combobox wiring: the input keeps DOM focus while this points at the
      * virtually-highlighted option row, so screen readers announce selection moves.
      */
@@ -256,8 +278,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
                 const row = rows[this.SelectedIndex];
                 if (row) {
                     this.Execute(row.Suggestion);
-                } else if (this.ActiveTriggerChar === '' && this.EffectiveQuery.trim().length > 1) {
-                    // No rows yet (still loading / no matches): honest escape hatch to full search.
+                } else if (this.CanEscapeToFullSearch) {
                     this.openFullSearch(this.EffectiveQuery.trim());
                 }
                 break;
@@ -532,16 +553,21 @@ export class OmnibarPaletteComponent implements OnDestroy {
             this.Rows = [];
         }
 
+        // An empty `Rows` must mean "nothing matched", never "we haven't looked yet" — the
+        // empty state asserts "No matches" and offers Enter as an escape hatch, and both
+        // claims are false while a fetch is outstanding. Loading is therefore per-QUERY,
+        // not default-mode-only: trigger modes used to skip this assignment entirely, so
+        // the mode-change clear above rendered "No matches" for the whole debounce.
+        // `Rows.length === 0` keeps same-mode refinement flicker-free — rows already on
+        // screen stay, and no spinner appears.
+        this.IsLoading = this.Rows.length === 0;
+        this.cdr.markForCheck();
+
+        // Shorter debounce in trigger mode: entity matching is in-memory, but record
+        // suggestions issue a RunView per keystroke — debouncing collapses a typing burst
+        // into one backend query.
         const fire = () => void this.fetchSuggestions(provider, query, generation);
-        if (isTriggerMode) {
-            // Short debounce: entity matching is in-memory, but record suggestions issue a
-            // RunView per keystroke — debouncing collapses a typing burst into one backend query.
-            this.debounceHandle = setTimeout(fire, TRIGGER_DEBOUNCE_MS);
-        } else {
-            this.IsLoading = this.Rows.length === 0;
-            this.cdr.markForCheck();
-            this.debounceHandle = setTimeout(fire, SEARCH_DEBOUNCE_MS);
-        }
+        this.debounceHandle = setTimeout(fire, isTriggerMode ? TRIGGER_DEBOUNCE_MS : SEARCH_DEBOUNCE_MS);
     }
 
     private async fetchSuggestions(provider: OmnibarProvider, query: string, generation: number): Promise<void> {
