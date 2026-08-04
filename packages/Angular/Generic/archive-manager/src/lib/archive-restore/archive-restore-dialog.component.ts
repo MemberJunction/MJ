@@ -9,6 +9,7 @@ import {
   inject,
 } from '@angular/core';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /** Represents a single archived version of a record */
@@ -37,7 +38,7 @@ export type RestoreStatus = 'idle' | 'loading' | 'restoring' | 'success' | 'erro
   styleUrls: ['./archive-restore-dialog.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ArchiveRestoreDialogComponent implements OnDestroy {
+export class ArchiveRestoreDialogComponent extends BaseAngularComponent implements OnDestroy {
   private cdr = inject(ChangeDetectorRef);
 
   /** All available versions for this record */
@@ -212,7 +213,7 @@ export class ArchiveRestoreDialogComponent implements OnDestroy {
 
   /** Fetch version records from the server */
   private async fetchVersionRecords(): Promise<{ Success: boolean; Results: VersionDetailRecord[] }> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const escapedEntity = this._entityName.replace(/'/g, "''");
     const escapedRecord = this._recordID.replace(/'/g, "''");
 

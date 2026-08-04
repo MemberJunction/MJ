@@ -50,7 +50,18 @@ Use for agent prompt seeding (swap "here's the whole 1500-entity catalog" for "h
 
 **Singular** = one entity. **Plural** = many entities in one call (one GraphQL round-trip on the client; `Promise.all` fan-out on the server).
 
-See **[ENTITY_SEARCH_GUIDE.md](./ENTITY_SEARCH_GUIDE.md)** for configuration, the seeded `MJ: Entities` example, weighted-RRF tuning, and how to enable on your own entities.
+**Canonical examples.** The standardized Search EntityDocuments are the reference implementations — each backs a real, daily-synced semantic index:
+
+| Search EntityDocument | Entity | Replaces the old bespoke path |
+|---|---|---|
+| `Actions Search` | `MJ: Actions` | `AIEngine.ActionEmbeddingService` / `FindSimilarActions` |
+| `AI Agents Search` | `MJ: AI Agents` | `AIEngine.AgentEmbeddingService` / `FindSimilarAgents` |
+| `AI Prompts Search` | `MJ: AI Prompts` | (new — no prior bespoke path) |
+| `Queries Search` | `MJ: Queries` | `QueryEngineServer.FindSimilarQueries` |
+
+The "Find Best Action", "Find Candidate Actions", "Find Best Agent", "Find Candidate Agents", and "Search Query Catalog" actions are now thin, backward-compatible wrappers around `Provider.SearchEntity` (semantic mode). **New callers should use the generic "Search Entity" action — or `Provider.SearchEntity` directly — rather than the entity-specific wrappers.**
+
+See **[ENTITY_SEARCH_GUIDE.md](./ENTITY_SEARCH_GUIDE.md)** for configuration, the seeded examples above, weighted-RRF tuning, and how to enable on your own entities.
 
 ### 3. `FullTextSearch` — multi-entity DB-level text search
 
