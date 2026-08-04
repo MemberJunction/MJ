@@ -19,6 +19,7 @@ class GridStub {
   @Input() QueryInfo: MJQueryEntityExtended | null = null;
   @Input() Data: unknown; @Input() TotalRowCount = 0; @Input() PageNumber = 1; @Input() PageSize = 100;
   @Input() SelectionMode = ''; @Input() ShowToolbar = true; @Input() VisualConfig: unknown; @Input() IsLoading = false;
+  @Input() ExportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
   @Output() PageChange = new EventEmitter<unknown>();
   @Output() EntityLinkClick = new EventEmitter<QueryEntityLinkClickEvent>();
   @Output() RowDoubleClick = new EventEmitter<unknown>();
