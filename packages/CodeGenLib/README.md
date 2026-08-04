@@ -609,6 +609,28 @@ FROM   [orders].[vwOrderHeadersGenerated] g;
 `RunView`, visible in Explorer — and is returned by `spCreate`/`spUpdate`/`spDelete`, because those
 select from `BaseView`.
 
+### SQL Server only
+
+**Layering is rejected on PostgreSQL.** CodeGen throws when it encounters an entity with
+`GeneratedBaseViewName` set on a PG install, naming the entity and both views.
+
+The reason is that PG cannot deliver the feature's whole point. Everything above depends on the
+outer view's `SELECT g.*` being re-resolved after the inner view regenerates — that is what makes a
+late-added foreign key appear on its own. SQL Server does that with `sp_refreshview`. PostgreSQL
+expands `*` into a fixed column list at creation and freezes it, has no refresh equivalent, and
+CodeGen does not own the outer view, so nothing recreates it.
+
+The resulting behaviour would not even be consistently broken. Adding a column — the common case —
+leaves the outer view stale, because `CREATE OR REPLACE` on the inner view never touches dependents.
+Renaming a column or changing its type raises `42P16`, which sends CodeGen down its
+capture/`DROP CASCADE`/replay path; that incidentally recreates the outer view, which then *does*
+pick the new columns up. Same feature, opposite outcomes, decided by which kind of schema change
+happened to land that day. Since silent staleness is the exact failure layering exists to eliminate,
+PG refuses it outright rather than shipping a documented footgun.
+
+On PostgreSQL, use a fully custom base view (`BaseViewGenerated = 0`, `GeneratedBaseViewName` left
+`NULL`) and accept that it must be hand-maintained as the schema changes.
+
 ### Setting it up
 
 1. Set `GeneratedBaseViewName` on the entity (and `BaseViewGenerated = 0`, since the application owns
@@ -618,13 +640,18 @@ select from `BaseView`.
    inner view — and may reference generated root-ID functions.
 4. Run CodeGen again so the new columns are discovered as `EntityField` rows.
 
+Step 2 necessarily runs while `BaseView` does not yet exist — it selects from the inner view that
+step 2 is creating, so it could not have been created earlier. CodeGen handles this: the
+`sp_refreshview` and `GRANT` it emits against the application-owned view are wrapped in an
+`IF OBJECT_ID(...) IS NOT NULL` guard, so the bootstrap pass skips them and every later pass behaves
+as if the guard were not there. You do not need to order the migrations around it.
+
 ### Things worth knowing
 
 - **A view caches its column list.** The custom layer does `SELECT g.*`, so when the schema changes,
   the inner view must be refreshed **before** the outer one. CodeGen emits `sp_refreshview` in that
-  order automatically (SQL Server only; PostgreSQL does not need it). Refreshing the outer against a
-  stale inner re-caches the *old* columns, and the new one stays missing — indistinguishable from
-  never having been added.
+  order automatically. Refreshing the outer against a stale inner re-caches the *old* columns, and
+  the new one stays missing — indistinguishable from never having been added.
 - **The names must differ.** A view cannot select from itself. A CHECK constraint on `Entity` refuses
   equal names, and `EntityInfo.HasLayeredBaseView` compares case-insensitively so `VWFOO` and `vwFoo`
   are treated as the same object.

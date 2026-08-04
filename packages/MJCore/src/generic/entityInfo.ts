@@ -1484,10 +1484,16 @@ export class EntityInfo extends BaseInfo {
      * Resolved in ONE place because the two names must never drift: several call sites decide where
      * to write the view, what to call the emitted file, and which object to refresh, and a
      * disagreement between any two of them produces a view that exists under a name nothing reads.
+     *
+     * Derived FROM {@link HasLayeredBaseView} rather than re-testing `GeneratedBaseViewName`, so the
+     * two getters cannot disagree by construction. Testing the raw column here would diverge on a
+     * name that differs from `BaseView` only by case: `HasLayeredBaseView` would say "not layered"
+     * (it compares case-insensitively, because SQL Server object names are) while this getter
+     * returned the differently-cased string — leaving CodeGen writing to one object while every
+     * layering-gated code path believed there was no second view at all.
      */
     get GeneratedViewName(): string {
-        const layered = this.GeneratedBaseViewName?.trim();
-        if (layered) return layered;
+        if (this.HasLayeredBaseView) return this.GeneratedBaseViewName.trim();
         return this.BaseView ? this.BaseView : `vw${this.CodeName}`;
     }
 

@@ -219,6 +219,11 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
         !e.VirtualEntity &&
         (!excludeEntities || !excludeEntities.includes(e.Name)));
 
+      // LAYERED entities are a subset of the above — BaseViewGenerated is false because the
+      // application owns BaseView, but CodeGen still writes the INNER view, so unlike a fully
+      // custom view that inner half CAN be regenerated when it fails to refresh.
+      const layeredEntities = customViewEntities.filter(e => e.HasLayeredBaseView);
+
       let sqlCommand: string = '';
 
       if (this.dbProvider.NeedsViewRefresh) {
@@ -229,13 +234,22 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
         // view is created: refreshing the outer against a stale inner re-caches the OLD column set,
         // so a newly added column stays missing. That failure is indistinguishable from the column
         // never having been added at all, which is why the order is explicit rather than incidental.
-        for (const entity of customViewEntities) {
-          if (entity.HasLayeredBaseView) {
-            sqlCommand += this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.GeneratedViewName);
-          }
+        //
+        // Both halves are guarded on existence, because on the first run after layering is enabled
+        // NEITHER exists yet: the inner view is created later in this same run, and the outer one
+        // only afterwards by an application migration that selects from it. An unguarded refresh
+        // would fail the whole run on the one pass that is supposed to bootstrap the arrangement.
+        // The missing inner view is not lost — identifyFailedViewRefreshes below detects and
+        // regenerates it.
+        for (const entity of layeredEntities) {
+          sqlCommand += this.dbProvider.generateIfViewExistsSQL(entity.SchemaName, entity.GeneratedViewName,
+            this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.GeneratedViewName));
         }
         for (const entity of customViewEntities) {
-          sqlCommand += this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
+          const refreshSQL = this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
+          sqlCommand += entity.HasLayeredBaseView
+            ? this.dbProvider.generateIfViewExistsSQL(entity.SchemaName, entity.BaseView, refreshSQL)
+            : refreshSQL;
         }
         for (const entity of l) {
           // if an excludeEntities variable was provided, skip this entity if it's in the list
@@ -248,9 +262,10 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
       // Execute the initial refresh attempts (custom views + generated views together)
       bSuccess = await this.executeSQLScript(ds, sqlCommand, false) && bSuccess;
 
-      // Now check which *generated* views failed to refresh and regenerate them.
-      // Custom views are not in this list — we can't regenerate a custom view.
-      const failedEntities = await this.identifyFailedViewRefreshes(ds, l);
+      // Now check which CodeGen-OWNED views failed to refresh and regenerate them. A fully custom
+      // view is not in this list — we can't regenerate one. A layered entity IS, because the view
+      // CodeGen writes for it is the inner one, and `GeneratedViewName` resolves to exactly that.
+      const failedEntities = await this.identifyFailedViewRefreshes(ds, [...l, ...layeredEntities]);
       if (failedEntities.length > 0) {
         logMessage(`Detected ${failedEntities.length} views that failed to refresh. Attempting to regenerate view definitions...`, 'Info');
         
@@ -331,10 +346,13 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
 
    for (const entity of entities) {
      try {
-       const testQuery = this.dbProvider.generateViewTestQuerySQL(entity.SchemaName, entity.BaseView);
+       // GeneratedViewName, not BaseView: for a layered entity the object CodeGen can actually
+       // rebuild is the inner view. Testing the application-owned outer view instead would report
+       // failures regeneration cannot fix. Identical to BaseView for every non-layered entity.
+       const testQuery = this.dbProvider.generateViewTestQuerySQL(entity.SchemaName, entity.GeneratedViewName);
        await ds.query(testQuery);
      } catch (e) {
-       logMessage(`View ${entity.SchemaName}.${entity.BaseView} is invalid and will be regenerated`, 'Warning');
+       logMessage(`View ${entity.SchemaName}.${entity.GeneratedViewName} is invalid and will be regenerated`, 'Warning');
        failedEntities.push(entity);
      }
    }
@@ -365,7 +383,9 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
    // restoring dependents that CodeGen is about to rebuild with a fresh
    // definition — the stale captured definition could otherwise be
    // incompatible with the newly-regenerated target.
-   const willRegenerate = new Set(entities.map(e => `${e.SchemaName}.${e.BaseView}`));
+   // Keyed on the view CodeGen writes — the inner view for a layered entity — since that is the
+   // object about to be rebuilt with a fresh definition.
+   const willRegenerate = new Set(entities.map(e => `${e.SchemaName}.${e.GeneratedViewName}`));
 
    for (const entity of entities) {
      try {

@@ -47,14 +47,22 @@ GO
 -- A view cannot select from itself. Equal names would be an infinite recursion
 -- that SQL Server reports at query time, far from the metadata that caused it,
 -- so it is refused where it is written.
+--
+-- The BaseView IS NOT NULL arm is not redundant. `X <> NULL` evaluates to UNKNOWN,
+-- and a CHECK constraint PASSES on UNKNOWN — so without it a row could name an
+-- inner view while leaving the public surface NULL. That row is "layered" by every
+-- runtime test, but permissions and the CRUD procedures target BaseView, so CodeGen
+-- would emit GRANT/SELECT against [schema].[null]. Layering requires a public view
+-- to layer onto.
 ALTER TABLE [${flyway:defaultSchema}].[Entity]
     ADD CONSTRAINT [CK_Entity_GeneratedBaseViewName_NotBaseView]
-    CHECK ([GeneratedBaseViewName] IS NULL OR [GeneratedBaseViewName] <> [BaseView]);
+    CHECK ([GeneratedBaseViewName] IS NULL
+           OR ([BaseView] IS NOT NULL AND [GeneratedBaseViewName] <> [BaseView]));
 GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'When set, CodeGen generates the entity''s full base view under THIS name instead of BaseView, and the application owns BaseView — which is expected to wrap it (SELECT g.*, <extras> FROM <GeneratedBaseViewName> g). This gives an entity a custom base view WITHOUT inheriting the generated SQL: related-entity display joins, geo columns and recursive root-ID columns keep regenerating underneath, so a foreign key added later still appears. NULL (the default, and every pre-existing row) means the previous all-or-nothing behaviour: BaseViewGenerated alone decides whether CodeGen writes BaseView, and there is no second view. BaseView remains the public surface — entity field discovery, permissions and the generated CRUD procedures all target it.',
+    @value = N'When set, CodeGen generates the entity''s full base view under THIS name instead of BaseView, and the application owns BaseView — which is expected to wrap it (SELECT g.*, <extras> FROM <GeneratedBaseViewName> g). This gives an entity a custom base view WITHOUT inheriting the generated SQL: related-entity display joins, geo columns and recursive root-ID columns keep regenerating underneath, so a foreign key added later still appears. NULL (the default, and every pre-existing row) means the previous all-or-nothing behaviour: BaseViewGenerated alone decides whether CodeGen writes BaseView, and there is no second view. BaseView remains the public surface — entity field discovery, permissions and the generated CRUD procedures all target it. SQL SERVER ONLY: layering relies on sp_refreshview to re-resolve the application-owned outer view''s SELECT * against a regenerated inner view. PostgreSQL freezes a view''s column list at creation and has no refresh equivalent, so CodeGen rejects this column on PostgreSQL rather than let the outer view go silently stale.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'Entity',
     @level2type = N'COLUMN', @level2name = N'GeneratedBaseViewName';

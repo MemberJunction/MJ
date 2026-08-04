@@ -1284,6 +1284,18 @@ ORDER BY
     }
 
     /** @inheritdoc */
+    generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string {
+        // sp_executesql rather than the statements inline: the guarded body includes GRANT, and
+        // routing everything through one dynamic-SQL call keeps the emitted shape uniform no matter
+        // which statement types a caller passes. Doubling single quotes escapes the N'...' literal.
+        // BEGIN/END rather than a bare single-statement IF: callers concatenate these into a script
+        // with no separator between entries, and an explicit block makes it impossible for whatever
+        // follows to read as the guarded statement. Trailing newline for the same reason.
+        const escaped = innerSQL.replace(/'/g, "''");
+        return `IF OBJECT_ID('[${schema}].[${viewName}]', 'V') IS NOT NULL\nBEGIN\n    EXEC sp_executesql N'${escaped}';\nEND\n`;
+    }
+
+    /** @inheritdoc */
     generateViewTestQuerySQL(schema: string, viewName: string): string {
         return `SELECT TOP 1 * FROM [${schema}].[${viewName}]`;
     }
