@@ -3284,6 +3284,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private async openLandingApp(apps: BaseApplication[]): Promise<void> {
     for (const candidate of this.landingCandidates(apps)) {
       try {
+        // CreateDefaultTab() runs TWICE on this path by design: once here as a pure
+        // validation probe (the result is discarded), and again in the ActiveApp
+        // subscription, which opens the tab. That's safe while CreateDefaultTab stays
+        // a side-effect-free builder over cached nav items — if it ever gains side
+        // effects, this validate-then-rebuild pattern must change with it.
         const tabRequest = await candidate.CreateDefaultTab();
         if (!tabRequest) {
           LogError(`Landing app "${candidate.Name}" could not create a default tab, trying next candidate`);

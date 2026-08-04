@@ -473,7 +473,11 @@ export class ApplicationManager {
     if (apps.length === 0) {
       return null;
     }
-    return apps.reduce((best, app) => (app.DefaultSequence < best.DefaultSequence ? app : best));
+    // Mirror UserInfoEngine.applicationDefaultSequence's missing-value guard (?? 100):
+    // the constructor's Object.assign can overwrite the class default with undefined,
+    // and a NaN comparison would make this reduce silently order-dependent.
+    const defaultSequence = (app: BaseApplication): number => (Number.isFinite(app.DefaultSequence) ? app.DefaultSequence : 100);
+    return apps.reduce((best, app) => (defaultSequence(app) < defaultSequence(best) ? app : best));
   }
 
   /**

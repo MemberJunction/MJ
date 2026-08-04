@@ -450,6 +450,10 @@ describe('ApplicationManager.GetDefaultLandingApp', () => {
   });
 
   it('keeps the earlier app in Sequence order when DefaultSequence ties (degrades to first app)', async () => {
+    // applications$ is fed [Bravo, Alpha] directly to probe reduce stability on a tie.
+    // In production this list arrives comparator-sorted (Sequence → DefaultSequence →
+    // name), so the same data would surface as [Alpha, Bravo] and land on Alpha — the
+    // assertion is about tie stability (first-in-list wins), not production ordering.
     const manager = await makeManagerWithApps([
       { ID: 'app-b', Name: 'Bravo', DefaultSequence: 100 },
       { ID: 'app-a', Name: 'Alpha', DefaultSequence: 100 },
