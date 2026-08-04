@@ -433,6 +433,10 @@ async function verifyTokenSignature(
   return new Promise((resolve, reject) => {
     const verifyOptions: jwt.VerifyOptions = {
       clockTolerance: 30, // Allow 30 seconds of clock skew
+      // SECURITY: pin the accepted signature algorithms to the asymmetric family. The signing
+      // key is resolved from the issuer's JWKS (an RSA/EC public key); an explicit allow-list
+      // prevents `alg=none` and RS256->HS256 confusion attacks should the key format change.
+      algorithms: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'PS256'],
     };
 
     // jwt.verify() natively accepts string | string[] for audience.
