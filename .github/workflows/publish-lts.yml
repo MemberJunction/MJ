@@ -1,0 +1,151 @@
+name: Publish LTS line release
+
+# The one-button line release (guides/RELEASE_ENGINEERING_RUNBOOK.md, operation 3;
+# plans/lts-process.md section 5.2 rule 3 / section 14.1). Run it FROM a line branch:
+# Actions -> "Publish LTS line release" -> pick the lts/* branch -> Run workflow.
+#
+# Automates the dry-check-verified manual sequence: changeset version (normal, non-pre
+# mode) -> lockfile refresh -> build -> changeset publish --tag lts-<line> -> push the
+# release commit + git tag back to the line branch -> GitHub Release (never latest).
+# `latest` NEVER moves here - certification moves it via ci/dist-tag-all.mjs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_branch:
+        description: "Type the line branch name (e.g. lts/5) to confirm you selected the right ref above"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: "publish"
+  cancel-in-progress: false
+
+jobs:
+  publish-line:
+    name: Version, build, and publish from the line branch
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard - must run from an lts/* branch, confirmed
+        run: |
+          REF="${{ github.ref_name }}"
+          if [[ "$REF" != lts/* ]]; then
+            echo "::error::This workflow must be dispatched from an lts/* branch (got '$REF'). Use the branch picker in the Run workflow dialog."
+            exit 1
+          fi
+          if [ "${{ github.event.inputs.confirm_branch }}" != "$REF" ]; then
+            echo "::error::Confirmation mismatch: dialog ran on '$REF' but you typed '${{ github.event.inputs.confirm_branch }}'. Re-run with matching values."
+            exit 1
+          fi
+
+      - name: Checkout line branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Guard - line branch must NOT be in prerelease mode
+        run: |
+          if [ -f .changeset/pre.json ]; then
+            echo "::error::.changeset/pre.json exists on ${{ github.ref_name }} - pre-mode state leaked from next. Fix the branch before publishing."
+            exit 1
+          fi
+
+      - name: Guard - there must be changesets to release
+        run: |
+          count=$(ls .changeset/*.md 2>/dev/null | grep -cv 'README.md' || true)
+          if [ "$count" = "0" ]; then
+            echo "::error::No changesets on ${{ github.ref_name }} - nothing to release. Backported fixes carry their changeset files; did the backport PR merge?"
+            exit 1
+          fi
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Pin npm to 11.6.4
+        run: npm install -g npm@11.6.4
+
+      - name: Validate migration filenames
+        run: ./.github/scripts/validate-migration-filenames.sh
+
+      - name: Validate package-lock.json case-sensitivity
+        run: ./.github/scripts/validate-package-lock-case.sh
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate package repository.url for npm provenance
+        run: ./.github/scripts/validate-package-repository.sh
+
+      - name: Set up git credentials
+        env:
+          REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"
+          git remote set-url origin "https://$REPO_PAT@github.com/${GITHUB_REPOSITORY}"
+
+      - name: Version (normal mode) and refresh lockfile
+        id: version
+        run: |
+          npm run version
+          npm install
+          if ! git diff --quiet package-lock.json; then
+            git add package-lock.json
+            git commit -m "chore: lockfile for line release [skip ci]"
+          fi
+          VERSION=$(jq -r .version packages/MJServer/package.json)
+          if [[ "$VERSION" == *-* ]]; then
+            echo "::error::Line release produced a prerelease version ($VERSION) - refusing."
+            exit 1
+          fi
+          LINE="${{ github.ref_name }}"
+          NPM_TAG="lts-${LINE#lts/}"
+          echo "VERSION=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "::notice::Publishing $VERSION from $LINE to npm dist-tag $NPM_TAG"
+
+      - name: Record latest dist-tag before publish
+        id: before
+        run: echo "LATEST=$(npm view @memberjunction/core dist-tags.latest)" >> "$GITHUB_OUTPUT"
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Publish to npm (line tag, never latest)
+        run: npm run change publish -- --tag ${{ steps.version.outputs.NPM_TAG }}
+        env:
+          NPM_TOKEN: ''
+
+      - name: Verify latest did not move
+        run: |
+          NOW=$(npm view @memberjunction/core dist-tags.latest)
+          if [ "$NOW" != "${{ steps.before.outputs.LATEST }}" ]; then
+            echo "::error::npm 'latest' moved during a line publish (${{ steps.before.outputs.LATEST }} -> $NOW). Investigate immediately; restore with ci/dist-tag-all.mjs from the certified tag."
+            exit 1
+          fi
+
+      - name: Push release commit and tag to the line branch
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          git push origin "HEAD:${{ github.ref_name }}"
+          git tag "$VERSION"
+          git push origin "refs/tags/$VERSION"
+
+      - name: Create GitHub Release (never latest; certification promotes)
+        env:
+          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          gh release create "$VERSION" --title "$VERSION" --generate-notes --latest=false \
+            --target "${{ github.ref_name }}" --repo "${{ github.repository }}"

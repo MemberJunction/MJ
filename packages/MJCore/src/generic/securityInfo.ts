@@ -467,8 +467,9 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
             for (let i = 0; i < keys.length; i++) {
                 const key = keys[i];
                 const val = (user as unknown as Record<string, unknown>)[key]
-                if (val !== null && typeof val !== 'object') {
-                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), String(val))
+                if (val !== null && val !== undefined && typeof val !== 'object') {
+                    const safeVal = String(val).replace(/'/g, "''")
+                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), safeVal)
                 }
             }
             // Per-session magic-link resource scope. Fail-closed: an absent scope resolves

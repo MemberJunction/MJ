@@ -363,7 +363,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
         const startTime = performance.now();
 
         try {
-            const runQuery = new RunQuery();
+            const runQuery = this.RunQueryToUse;
             const runParams: RunQueryParams = {
                 QueryID: this._queryId,
                 Parameters: normalizedParams as Record<string, unknown>

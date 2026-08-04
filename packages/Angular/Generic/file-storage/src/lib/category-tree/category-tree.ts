@@ -1,7 +1,7 @@
 import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RunView } from '@memberjunction/core';
 import { MJFileCategoryEntity } from '@memberjunction/core-entities';
-import { SharedService } from '@memberjunction/ng-shared';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -35,7 +35,7 @@ export class CategoryTreeComponent extends BaseAngularComponent implements OnIni
 
   private get md() { return this.ProviderToUse; }
 
-  constructor(private sharedService: SharedService) { super(); }
+  constructor(private notifications: MJNotificationService) { super(); }
 
   ngOnInit(): void {
     this.Refresh();
@@ -142,7 +142,7 @@ export class CategoryTreeComponent extends BaseAngularComponent implements OnIni
     const success = await fileCategory.Delete();
     if (!success) {
       console.error('Unable to delete file category:', fileCategory);
-      this.sharedService.CreateSimpleNotification(`Unable to delete category '${fileCategory.Name}'`, 'error');
+      this.notifications.CreateSimpleNotification(`Unable to delete category '${fileCategory.Name}'`, 'error');
       this.isLoading = false;
       return;
     }
