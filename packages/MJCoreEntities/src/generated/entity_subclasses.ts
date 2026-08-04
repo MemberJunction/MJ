@@ -12184,12 +12184,12 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.`),
     StartMs: z.number().nullable().describe(`
         * * Field Name: StartMs
-        * * Display Name: Start Time (ms)
+        * * Display Name: Start Milliseconds
         * * SQL Data Type: int
         * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.`),
     EndMs: z.number().nullable().describe(`
         * * Field Name: EndMs
-        * * Display Name: End Time (ms)
+        * * Display Name: End Milliseconds
         * * SQL Data Type: int
         * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.`),
     PageNumber: z.number().nullable().describe(`
@@ -12225,15 +12225,15 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Optional self-reference to another chunk of the same Content Item that is the parent of this one, expressing a chapter to sub-chapter hierarchy — for example a five-minute chapter of a recording and the individual speaker turns within it, or a document section and its subsections. NULL for top-level segments.`),
     ContentItem: z.string().nullable().describe(`
         * * Field Name: ContentItem
-        * * Display Name: Content Item Reference
+        * * Display Name: Content Item Name
         * * SQL Data Type: nvarchar(250)`),
     ParentChunk: z.string().nullable().describe(`
         * * Field Name: ParentChunk
-        * * Display Name: Parent Chunk Reference
+        * * Display Name: Parent Chunk Name
         * * SQL Data Type: nvarchar(500)`),
     RootParentChunkID: z.string().nullable().describe(`
         * * Field Name: RootParentChunkID
-        * * Display Name: Root Parent Chunk ID
+        * * Display Name: Root Parent Chunk
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -16155,7 +16155,7 @@ export const MJEntitySchema = z.object({
         * * Description: Database schema containing this entity's table and view.`),
     VirtualEntity: z.boolean().describe(`
         * * Field Name: VirtualEntity
-        * * Display Name: Virtual Entity
+        * * Display Name: Is Virtual Entity
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this is a virtual entity without a physical database table.`),
@@ -16410,7 +16410,7 @@ export const MJEntitySchema = z.object({
         * * Description: An optional ORDER BY clause for row packing when RowsToPackWithSchema is set to Sample. Allows custom ordering for selected entity data when using top n and bottom n.`),
     AutoRowCountFrequency: z.number().nullable().describe(`
         * * Field Name: AutoRowCountFrequency
-        * * Display Name: Auto-Row Count Frequency
+        * * Display Name: Auto Row Count Frequency
         * * SQL Data Type: int
         * * Description: Frequency in hours for automatically performing row counts on this entity. If NULL, automatic row counting is disabled. If greater than 0, schedules recurring SELECT COUNT(*) queries at the specified interval.`),
     RowCount: z.number().nullable().describe(`
@@ -16453,7 +16453,7 @@ export const MJEntitySchema = z.object({
         * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.`),
     AutoUpdateAllowUserSearchAPI: z.boolean().describe(`
         * * Field Name: AutoUpdateAllowUserSearchAPI
-        * * Display Name: Auto-Update Allow User Search API
+        * * Display Name: Auto-Update Search API
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.`),
@@ -44315,14 +44315,14 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     * @method
     */
     public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
-    	if (this.CompactionTriggerPercent != null && (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"CompactionTriggerPercent",
-    			"Compaction trigger percentage must be between 1 and 100.",
-    			this.CompactionTriggerPercent,
-    			ValidationErrorType.Failure
-    		));
-    	}
+        if (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100) {
+            result.Errors.push(new ValidationErrorInfo(
+                "CompactionTriggerPercent",
+                "Compaction trigger percentage must be between 1 and 100.",
+                this.CompactionTriggerPercent,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
@@ -65534,7 +65534,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: StartMs
-    * * Display Name: Start Time (ms)
+    * * Display Name: Start Milliseconds
     * * SQL Data Type: int
     * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.
     */
@@ -65547,7 +65547,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: EndMs
-    * * Display Name: End Time (ms)
+    * * Display Name: End Milliseconds
     * * SQL Data Type: int
     * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.
     */
@@ -65639,7 +65639,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: ContentItem
-    * * Display Name: Content Item Reference
+    * * Display Name: Content Item Name
     * * SQL Data Type: nvarchar(250)
     */
     get ContentItem(): string | null {
@@ -65648,7 +65648,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: ParentChunk
-    * * Display Name: Parent Chunk Reference
+    * * Display Name: Parent Chunk Name
     * * SQL Data Type: nvarchar(500)
     */
     get ParentChunk(): string | null {
@@ -65657,7 +65657,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: RootParentChunkID
-    * * Display Name: Root Parent Chunk ID
+    * * Display Name: Root Parent Chunk
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentChunkID(): string | null {
@@ -76409,40 +76409,25 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * Validate() method override for MJ: Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Direct SQL deletion is only permitted if the delete type is configured as 'Hard' delete, ensuring data integrity is maintained for soft-deleted entities.
     * * Table-Level: This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
-    * * Table-Level: Direct SQL operations (Insert, Update, or Delete) cannot be enabled if either record change tracking or complete server cache trust is enabled.
-    * * Table-Level: If a Generated Base View Name is specified, a Base View must also be defined, and the Generated Base View Name cannot be the same as the Base View name to prevent naming conflicts.
+    * * Table-Level: If direct SQL deletion is allowed, the delete type must be set to 'Hard' to ensure data integrity.
+    * * Table-Level: Direct SQL operations (Insert, Update, and Delete) must be disabled if Track Record Changes or Trust Server Cache Completely is enabled, ensuring that cache integrity and change tracking are not bypassed.
+    * * Table-Level: If the base view is marked as generated, the generated base view name must be null. A generated base view name can only be set when the base view is not marked as generated.
+    * * Table-Level: If a generated base view name is specified, a base view must also be defined, and the generated base view name cannot be the same as the base view name to prevent naming conflicts.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateAllowDirectSQLDeleteAndDeleteType(result);
         this.ValidateAllowRecordMergeForSoftDeleteAPI(result);
-        this.ValidateDirectSQLAndCacheTracking(result);
-        this.ValidateGeneratedBaseViewNameComparedToBaseView(result);
+        this.ValidateDeleteTypeForDirectSQLDelete(result);
+        this.ValidateDirectSQLAndTrackingConstraints(result);
+        this.ValidateGeneratedBaseViewNameAndBaseViewGenerated(result);
+        this.ValidateGeneratedBaseViewNameDifferentFromBaseView(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
-    }
-
-    /**
-    * Direct SQL deletion is only permitted if the delete type is configured as 'Hard' delete, ensuring data integrity is maintained for soft-deleted entities.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateAllowDirectSQLDeleteAndDeleteType(result: ValidationResult) {
-    	if (this.AllowDirectSQLDelete && this.DeleteType !== "Hard") {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"AllowDirectSQLDelete",
-    			"Direct SQL Delete can only be allowed when the Delete Type is set to 'Hard'.",
-    			this.AllowDirectSQLDelete,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**
@@ -76458,19 +76443,33 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
-    * Direct SQL operations (Insert, Update, or Delete) cannot be enabled if either record change tracking or complete server cache trust is enabled.
+    * If direct SQL deletion is allowed, the delete type must be set to 'Hard' to ensure data integrity.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateDirectSQLAndCacheTracking(result: ValidationResult) {
-        const hasDirectSQL = this.AllowDirectSQLInsert || this.AllowDirectSQLUpdate || this.AllowDirectSQLDelete;
-        const hasTrackingOrCache = this.TrackRecordChanges || this.TrustServerCacheCompletely;
-    
-        if (hasDirectSQL && hasTrackingOrCache) {
+    public ValidateDeleteTypeForDirectSQLDelete(result: ValidationResult) {
+    	if (this.AllowDirectSQLDelete && this.DeleteType !== "Hard") {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DeleteType",
+    			"Delete Type must be 'Hard' if Allow Direct SQL Delete is enabled.",
+    			this.DeleteType,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Direct SQL operations (Insert, Update, and Delete) must be disabled if Track Record Changes or Trust Server Cache Completely is enabled, ensuring that cache integrity and change tracking are not bypassed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDirectSQLAndTrackingConstraints(result: ValidationResult) {
+        if ((this.AllowDirectSQLInsert || this.AllowDirectSQLUpdate || this.AllowDirectSQLDelete) && (this.TrackRecordChanges || this.TrustServerCacheCompletely)) {
             result.Errors.push(new ValidationErrorInfo(
                 "AllowDirectSQLInsert",
-                "Direct SQL operations (Insert, Update, Delete) cannot be enabled at the same time as Record Change Tracking or Trust Server Cache Completely.",
+                "Direct SQL operations (Insert, Update, Delete) cannot be enabled when Track Record Changes or Trust Server Cache Completely is enabled.",
                 this.AllowDirectSQLInsert,
                 ValidationErrorType.Failure
             ));
@@ -76478,14 +76477,31 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
-    * If a Generated Base View Name is specified, a Base View must also be defined, and the Generated Base View Name cannot be the same as the Base View name to prevent naming conflicts.
+    * If the base view is marked as generated, the generated base view name must be null. A generated base view name can only be set when the base view is not marked as generated.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateGeneratedBaseViewNameComparedToBaseView(result: ValidationResult) {
-    	if (this.GeneratedBaseViewName !== null && this.GeneratedBaseViewName !== undefined && this.GeneratedBaseViewName !== "") {
-    		if (this.BaseView === null || this.BaseView === undefined || this.BaseView === "") {
+    public ValidateGeneratedBaseViewNameAndBaseViewGenerated(result: ValidationResult) {
+        if (this.GeneratedBaseViewName != null && this.BaseViewGenerated) {
+            result.Errors.push(new ValidationErrorInfo(
+                "GeneratedBaseViewName",
+                "Generated Base View Name must be empty when Base View Generated is enabled.",
+                this.GeneratedBaseViewName,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * If a generated base view name is specified, a base view must also be defined, and the generated base view name cannot be the same as the base view name to prevent naming conflicts.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateGeneratedBaseViewNameDifferentFromBaseView(result: ValidationResult) {
+    	if (this.GeneratedBaseViewName != null && this.GeneratedBaseViewName.trim() !== "") {
+    		if (this.BaseView == null || this.BaseView.trim() === "") {
     			result.Errors.push(new ValidationErrorInfo(
     				"GeneratedBaseViewName",
     				"A Base View must be specified when a Generated Base View Name is provided.",
@@ -76495,7 +76511,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     		} else if (this.GeneratedBaseViewName === this.BaseView) {
     			result.Errors.push(new ValidationErrorInfo(
     				"GeneratedBaseViewName",
-    				"The Generated Base View Name cannot be the same as the Base View Name.",
+    				"The Generated Base View Name cannot be the same as the Base View name.",
     				this.GeneratedBaseViewName,
     				ValidationErrorType.Failure
     			));
@@ -76631,7 +76647,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: VirtualEntity
-    * * Display Name: Virtual Entity
+    * * Display Name: Is Virtual Entity
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this is a virtual entity without a physical database table.
@@ -77216,7 +77232,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoRowCountFrequency
-    * * Display Name: Auto-Row Count Frequency
+    * * Display Name: Auto Row Count Frequency
     * * SQL Data Type: int
     * * Description: Frequency in hours for automatically performing row counts on this entity. If NULL, automatic row counting is disabled. If greater than 0, schedules recurring SELECT COUNT(*) queries at the specified interval.
     */
@@ -77315,7 +77331,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateAllowUserSearchAPI
-    * * Display Name: Auto-Update Allow User Search API
+    * * Display Name: Auto-Update Search API
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.

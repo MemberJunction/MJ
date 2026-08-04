@@ -60,6 +60,31 @@ ALTER TABLE [${flyway:defaultSchema}].[Entity]
            OR ([BaseView] IS NOT NULL AND [GeneratedBaseViewName] <> [BaseView]));
 GO
 
+-- Layering requires BaseViewGenerated = 0. The combination BaseViewGenerated = 1
+-- WITH an inner name is contradictory — the flag claims CodeGen writes BaseView,
+-- the name says the application owns it — and the two halves of CodeGen read
+-- different columns, so in that state they disagree:
+--
+--   · View GENERATION gates on `BaseViewGenerated || HasLayeredBaseView`, so the
+--     inner view is written.
+--   · The outer view's REFRESH and its GRANTs gate on `!BaseViewGenerated`, so
+--     both are skipped.
+--
+-- The result is an entity whose public surface is never granted and never
+-- refreshed, while CodeGen reports success. Nothing errors; the view is simply
+-- unreadable by the roles that should have it, and stale besides.
+--
+-- `EntityInfo.HasLayeredBaseView` deliberately ignores BaseViewGenerated — were it
+-- to honour it, this same combination would make CodeGen treat the entity as
+-- ordinary and OVERWRITE the application's hand-written BaseView. That fail-safe is
+-- the right default and stays; refusing the state here means it is never relied on.
+-- Together with the constraint above, the three documented arrangements are now the
+-- only reachable ones.
+ALTER TABLE [${flyway:defaultSchema}].[Entity]
+    ADD CONSTRAINT [CK_Entity_LayeredBaseView_RequiresCustomBaseView]
+    CHECK ([GeneratedBaseViewName] IS NULL OR [BaseViewGenerated] = 0);
+GO
+
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'When set, CodeGen generates the entity''s full base view under THIS name instead of BaseView, and the application owns BaseView — which is expected to wrap it (SELECT g.*, <extras> FROM <GeneratedBaseViewName> g). This gives an entity a custom base view WITHOUT inheriting the generated SQL: related-entity display joins, geo columns and recursive root-ID columns keep regenerating underneath, so a foreign key added later still appears. NULL (the default, and every pre-existing row) means the previous all-or-nothing behaviour: BaseViewGenerated alone decides whether CodeGen writes BaseView, and there is no second view. BaseView remains the public surface — entity field discovery, permissions and the generated CRUD procedures all target it. SQL SERVER ONLY: layering relies on sp_refreshview to re-resolve the application-owned outer view''s SELECT * against a regenerated inner view. PostgreSQL freezes a view''s column list at creation and has no refresh equivalent, so CodeGen rejects this column on PostgreSQL rather than let the outer view go silently stale.',
@@ -293,6 +318,10 @@ GO
 -- carrying the ParentChunk display column; pass 2 discovers that column and inserts it as a
 -- virtual EntityField. A third pass produced no output, confirming convergence.
 --
+-- The validator function NAMES are LLM-authored and are not stable across runs — regenerating
+-- will produce equivalent functions under different names. Do not treat a name change in a
+-- future run as a defect.
+--
 -- DO NOT EDIT BY HAND. If the hand-written DDL above changes, re-run CodeGen against a clean
 -- database and replace this entire generated section.
 -- ============================================================================================
@@ -301,7 +330,7 @@ GO
 
 /* SQL text to insert 4 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6711bda1-8259-45ac-b550-58e305d46db2' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'GeneratedBaseViewName')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '750c9831-e23f-4edf-85ed-acf1685bbceb' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'GeneratedBaseViewName')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -334,7 +363,7 @@ GO
          )
          VALUES
          (
-            '6711bda1-8259-45ac-b550-58e305d46db2',
+            '750c9831-e23f-4edf-85ed-acf1685bbceb',
             'E0238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Entities
             100146,
             'GeneratedBaseViewName',
@@ -364,7 +393,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd1562eee-e340-4897-920f-90893ef0b3eb' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AllowDirectSQLInsert')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4a020410-e5a6-4484-9f1e-88c5c010f42a' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AllowDirectSQLInsert')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -397,7 +426,7 @@ GO
          )
          VALUES
          (
-            'd1562eee-e340-4897-920f-90893ef0b3eb',
+            '4a020410-e5a6-4484-9f1e-88c5c010f42a',
             'E0238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Entities
             100147,
             'AllowDirectSQLInsert',
@@ -427,7 +456,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f48388fb-854a-4ed5-b9d3-33a3a15355c4' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AllowDirectSQLUpdate')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7e46d739-bfcc-4fff-a831-c38b8ad195c0' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AllowDirectSQLUpdate')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -460,7 +489,7 @@ GO
          )
          VALUES
          (
-            'f48388fb-854a-4ed5-b9d3-33a3a15355c4',
+            '7e46d739-bfcc-4fff-a831-c38b8ad195c0',
             'E0238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Entities
             100148,
             'AllowDirectSQLUpdate',
@@ -490,7 +519,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b9b6d771-83ec-49cb-a815-8776b306aa0e' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AllowDirectSQLDelete')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '81621c87-9505-456c-9c8e-6f955ec7c22c' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AllowDirectSQLDelete')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -523,7 +552,7 @@ GO
          )
          VALUES
          (
-            'b9b6d771-83ec-49cb-a815-8776b306aa0e',
+            '81621c87-9505-456c-9c8e-6f955ec7c22c',
             'E0238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Entities
             100149,
             'AllowDirectSQLDelete',
@@ -1749,663 +1778,12 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntity] TO [cdp_Developer], 
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntity] TO [cdp_Developer], [cdp_Integration];
 
-/* Set categories for 78 fields */
-
--- UPDATE Entity Field Category Info MJ: Entities.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '195817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.ParentID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1A5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.NameSuffix 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '164E17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.BaseTable 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '554D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.BaseView 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '564D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.BaseViewGenerated 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '964D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.SchemaName 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '574D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.VirtualEntity 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Virtual Entity',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5F4F17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.DisplayName 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D8FC1AEC-A3A9-4240-B9FE-0F84D3B46D1F' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AllowMultipleSubtypes 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '18B53A1B-EE59-4382-B902-85BAC79BCED0' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.CodeName 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'AA4217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.ClassName 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'AB4217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.BaseTableCodeName 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'AC4217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.ParentEntity 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1D5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.ParentBaseTable 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1E5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.ParentBaseView 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1F5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.Description 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.RelationshipDefaultDisplayType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F75817F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.UserFormGenerated 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '9A4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.EntityObjectSubclassName 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D84217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.EntityObjectSubclassImport 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4F4317F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.SupportsGeoCoding 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '886C982A-13B1-4EE2-8C89-A96B995BAD5D' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AutoUpdateSupportsGeoCoding 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A70E1DBA-0077-49CA-AEC4-CEE1203D3946' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AutoUpdateDescription 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F34E17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.TrackRecordChanges 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B94D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AuditRecordAccess 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C74D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AuditViewRuns 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C84D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.PreferredCommunicationField 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'EE4C17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.Icon 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B15717F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B9992893-7BD7-42EA-A2A8-48928D7A5CCE' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.DetectExternalChanges 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A507B1C9-ABA5-4ECF-8137-36BC6FEFA018' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.IncludeInAPI 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5B4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AllowAllRowsAPI 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7E4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AllowUpdateAPI 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '414F17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AllowCreateAPI 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7F4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AllowDeleteAPI 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '804D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.CustomResolverAPI 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '814D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AllowUserSearchAPI 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '444F17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.FullTextSearchEnabled 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1F4E17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.FullTextCatalog 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '204E17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.FullTextCatalogGenerated 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '214E17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.FullTextIndex 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '224E17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.FullTextIndexGenerated 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '234E17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.FullTextSearchFunction 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '244E17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.FullTextSearchFunctionGenerated 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '254E17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.UserViewMaxRows 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F84217F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.ScopeDefault 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BCA2D814-7530-48F8-9AB7-DCEF70AC5FC9' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.RowsToPackWithSchema 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C6AC9CC7-0C99-46B4-9940-C5A9E60EED0A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.RowsToPackSampleMethod 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'EFB53FA7-D868-4E1C-9932-A5E624092DC5' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.RowsToPackSampleCount 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4B3B3BCB-9E96-4FB0-B2B2-93C676C43261' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.RowsToPackSampleOrder 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '29690283-5206-48EA-ADF6-43C40DA3220B' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AutoUpdateFullTextSearch 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '788D2007-4088-405B-98CD-056B376DD4E1' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AutoUpdateAllowUserSearchAPI 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Auto-Update Allow User Search API',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5371AF90-DCF3-44C3-990B-95C29B088F0C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.TrustServerCacheCompletely 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '928FF8E1-3C3F-4A9D-AFCC-66808D59C151' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AllowCaching 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4F750011-FEAF-4635-A017-344C1F3851E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.spCreate 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8C4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.spUpdate 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8D4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.spDelete 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8E4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.spCreateGenerated 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8F4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.spUpdateGenerated 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '904D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.spDeleteGenerated 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '914D17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.CascadeDeletes 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5D4F17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.DeleteType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '115917F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AllowRecordMerge 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '125917F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.spMatch 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3E4F17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.AutoRowCountFrequency 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Auto-Row Count Frequency',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '2212928A-D5D0-4AE3-8F5A-25C4DFE8C373' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.RowCount 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '84C51291-65AB-4677-A0B6-5DACD698A255' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.RowCountRunAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5A02DE6F-6D75-46B7-B800-D42B82227D1A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D05717F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D15717F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entities.CanonicalSchemaName 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0465B56C-C528-4C49-807B-DD47A022D6D4' AND AutoUpdateCategory = 1;
+/* Set categories for 6 fields */
 
 -- UPDATE Entity Field Category Info MJ: Entities.ExternalDataSourceID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Integration',
+   Category = 'External Integration',
    GeneratedFormSection = 'Category',
    DisplayName = 'External Data Source',
    ExtendedType = NULL,
@@ -2416,7 +1794,7 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: Entities.ExternalObjectName 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Integration',
+   Category = 'External Integration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
@@ -2426,106 +1804,102 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: Entities.GeneratedBaseViewName 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Integration',
+   Category = 'Identity & Structure',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '6711BDA1-8259-45AC-B550-58E305D46DB2' AND AutoUpdateCategory = 1;
+   ID = '750C9831-E23F-4EDF-85ED-ACF1685BBCEB' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Entities.AllowDirectSQLInsert 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Integration',
+   Category = 'Procedures & Deletion',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'D1562EEE-E340-4897-920F-90893EF0B3EB' AND AutoUpdateCategory = 1;
+   ID = '4A020410-E5A6-4484-9F1E-88C5C010F42A' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Entities.AllowDirectSQLUpdate 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Integration',
+   Category = 'Procedures & Deletion',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'F48388FB-854A-4ED5-B9D3-33A3A15355C4' AND AutoUpdateCategory = 1;
+   ID = '7E46D739-BFCC-4FFF-A831-C38B8AD195C0' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Entities.AllowDirectSQLDelete 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Data Integration',
+   Category = 'Procedures & Deletion',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'B9B6D771-83EC-49CB-A815-8776B306AA0E' AND AutoUpdateCategory = 1;
+   ID = '81621C87-9505-456C-9C8E-6F955EC7C22C' AND AutoUpdateCategory = 1;
 
 /* Insert FieldCategoryInfo setting for entity */
 
                INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('cc067cf5-9146-4b6e-971d-1b4763527710', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'FieldCategoryInfo', '{"Data Integration":{"icon":"fa fa-plug","description":"Configuration for external data sources and direct database operations"}}', GETUTCDATE(), GETUTCDATE());
+               VALUES ('79e92137-7a7b-47a0-8de8-ec7f8bb91283', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'FieldCategoryInfo', '{"External Integration":{"icon":"fa fa-plug","description":"Settings for connecting and mapping to external data sources and objects"}}', GETUTCDATE(), GETUTCDATE());
 
 /* Update FieldCategoryIcons setting (legacy) */
 
                UPDATE [${flyway:defaultSchema}].[EntitySetting]
-               SET [Value] = '{"Data Integration":"fa fa-plug"}', [__mj_UpdatedAt] = GETUTCDATE()
+               SET [Value] = '{"External Integration":"fa fa-plug"}', [__mj_UpdatedAt] = GETUTCDATE()
                WHERE [EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [Name] = 'FieldCategoryIcons';
 
 /* Refresh custom base views for modified entities so schema changes are picked up */
 EXEC sp_refreshview '${flyway:defaultSchema}.vwEntities';
 
-/* Generated Validation Functions for MJ: AI Agent Types */
--- CHECK constraint for MJ: AI Agent Types: Field: CompactionTriggerPercent was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([CompactionTriggerPercent]>=(1) AND [CompactionTriggerPercent]<=(100))', 'public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
-	if (this.CompactionTriggerPercent != null && (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100)) {
-		result.Errors.push(new ValidationErrorInfo(
-			"CompactionTriggerPercent",
-			"Compaction trigger percentage must be between 1 and 100.",
-			this.CompactionTriggerPercent,
-			ValidationErrorType.Failure
-		));
-	}
-}', 'The compaction trigger percentage must be a value between 1 and 100 percent.', 'ValidateCompactionTriggerPercentRange', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'BE42811A-7C55-4C1E-A654-F7812897B633');
-
 /* Generated Validation Functions for MJ: Entities */
 -- CHECK constraint for MJ: Entities @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([AllowDirectSQLDelete]=(0) OR [DeleteType]=''Hard'')', 'public ValidateAllowDirectSQLDeleteAndDeleteType(result: ValidationResult) {
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([AllowDirectSQLDelete]=(0) OR [DeleteType]=''Hard'')', 'public ValidateDeleteTypeForDirectSQLDelete(result: ValidationResult) {
 	if (this.AllowDirectSQLDelete && this.DeleteType !== "Hard") {
 		result.Errors.push(new ValidationErrorInfo(
-			"AllowDirectSQLDelete",
-			"Direct SQL Delete can only be allowed when the Delete Type is set to ''Hard''.",
-			this.AllowDirectSQLDelete,
+			"DeleteType",
+			"Delete Type must be ''Hard'' if Allow Direct SQL Delete is enabled.",
+			this.DeleteType,
 			ValidationErrorType.Failure
 		));
 	}
-}', 'Direct SQL deletion is only permitted if the delete type is configured as ''Hard'' delete, ensuring data integrity is maintained for soft-deleted entities.', 'ValidateAllowDirectSQLDeleteAndDeleteType', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6');
+}', 'If direct SQL deletion is allowed, the delete type must be set to ''Hard'' to ensure data integrity.', 'ValidateDeleteTypeForDirectSQLDelete', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6');
 
             -- CHECK constraint for MJ: Entities @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([AllowDirectSQLInsert]=(0) AND [AllowDirectSQLUpdate]=(0) AND [AllowDirectSQLDelete]=(0) OR [TrackRecordChanges]=(0) AND [TrustServerCacheCompletely]=(0))', 'public ValidateDirectSQLAndCacheTracking(result: ValidationResult) {
-    const hasDirectSQL = this.AllowDirectSQLInsert || this.AllowDirectSQLUpdate || this.AllowDirectSQLDelete;
-    const hasTrackingOrCache = this.TrackRecordChanges || this.TrustServerCacheCompletely;
-
-    if (hasDirectSQL && hasTrackingOrCache) {
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([AllowDirectSQLInsert]=(0) AND [AllowDirectSQLUpdate]=(0) AND [AllowDirectSQLDelete]=(0) OR [TrackRecordChanges]=(0) AND [TrustServerCacheCompletely]=(0))', 'public ValidateDirectSQLAndTrackingConstraints(result: ValidationResult) {
+    if ((this.AllowDirectSQLInsert || this.AllowDirectSQLUpdate || this.AllowDirectSQLDelete) && (this.TrackRecordChanges || this.TrustServerCacheCompletely)) {
         result.Errors.push(new ValidationErrorInfo(
             "AllowDirectSQLInsert",
-            "Direct SQL operations (Insert, Update, Delete) cannot be enabled at the same time as Record Change Tracking or Trust Server Cache Completely.",
+            "Direct SQL operations (Insert, Update, Delete) cannot be enabled when Track Record Changes or Trust Server Cache Completely is enabled.",
             this.AllowDirectSQLInsert,
             ValidationErrorType.Failure
         ));
     }
-}', 'Direct SQL operations (Insert, Update, or Delete) cannot be enabled if either record change tracking or complete server cache trust is enabled.', 'ValidateDirectSQLAndCacheTracking', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6');
+}', 'Direct SQL operations (Insert, Update, and Delete) must be disabled if Track Record Changes or Trust Server Cache Completely is enabled, ensuring that cache integrity and change tracking are not bypassed.', 'ValidateDirectSQLAndTrackingConstraints', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6');
 
             -- CHECK constraint for MJ: Entities @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([GeneratedBaseViewName] IS NULL OR [BaseView] IS NOT NULL AND [GeneratedBaseViewName]<>[BaseView])', 'public ValidateGeneratedBaseViewNameComparedToBaseView(result: ValidationResult) {
-	if (this.GeneratedBaseViewName !== null && this.GeneratedBaseViewName !== undefined && this.GeneratedBaseViewName !== "") {
-		if (this.BaseView === null || this.BaseView === undefined || this.BaseView === "") {
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([GeneratedBaseViewName] IS NULL OR [BaseViewGenerated]=(0))', 'public ValidateGeneratedBaseViewNameAndBaseViewGenerated(result: ValidationResult) {
+    if (this.GeneratedBaseViewName != null && this.BaseViewGenerated) {
+        result.Errors.push(new ValidationErrorInfo(
+            "GeneratedBaseViewName",
+            "Generated Base View Name must be empty when Base View Generated is enabled.",
+            this.GeneratedBaseViewName,
+            ValidationErrorType.Failure
+        ));
+    }
+}', 'If the base view is marked as generated, the generated base view name must be null. A generated base view name can only be set when the base view is not marked as generated.', 'ValidateGeneratedBaseViewNameAndBaseViewGenerated', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6');
+
+            -- CHECK constraint for MJ: Entities @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
+INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([GeneratedBaseViewName] IS NULL OR [BaseView] IS NOT NULL AND [GeneratedBaseViewName]<>[BaseView])', 'public ValidateGeneratedBaseViewNameDifferentFromBaseView(result: ValidationResult) {
+	if (this.GeneratedBaseViewName != null && this.GeneratedBaseViewName.trim() !== "") {
+		if (this.BaseView == null || this.BaseView.trim() === "") {
 			result.Errors.push(new ValidationErrorInfo(
 				"GeneratedBaseViewName",
 				"A Base View must be specified when a Generated Base View Name is provided.",
@@ -2535,13 +1909,13 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedB
 		} else if (this.GeneratedBaseViewName === this.BaseView) {
 			result.Errors.push(new ValidationErrorInfo(
 				"GeneratedBaseViewName",
-				"The Generated Base View Name cannot be the same as the Base View Name.",
+				"The Generated Base View Name cannot be the same as the Base View name.",
 				this.GeneratedBaseViewName,
 				ValidationErrorType.Failure
 			));
 		}
 	}
-}', 'If a Generated Base View Name is specified, a Base View must also be defined, and the Generated Base View Name cannot be the same as the Base View name to prevent naming conflicts.', 'ValidateGeneratedBaseViewNameComparedToBaseView', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6');
+}', 'If a generated base view name is specified, a base view must also be defined, and the generated base view name cannot be the same as the base view name to prevent naming conflicts.', 'ValidateGeneratedBaseViewNameDifferentFromBaseView', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6');
 
 
 
@@ -2549,7 +1923,7 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedB
 
 /* SQL text to insert 1 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a7b21cb1-161f-4d06-83ae-523e3bf0cab7' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'ParentChunk')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4d201b4b-bedf-4475-a6b0-9ce3063072b3' OR (EntityID = '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21' AND Name = 'ParentChunk')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2582,7 +1956,7 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedB
          )
          VALUES
          (
-            'a7b21cb1-161f-4d06-83ae-523e3bf0cab7',
+            '4d201b4b-bedf-4475-a6b0-9ce3063072b3',
             '2324CD0B-D589-41A9-9F6F-EB5A4E7CEB21', -- Entity: MJ: Content Item Chunks
             100052,
             'ParentChunk',
@@ -3195,7 +2569,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Content Item Reference',
+   DisplayName = 'Content Item Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -3206,17 +2580,16 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Chunk Details',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Parent Chunk Reference',
+   DisplayName = 'Parent Chunk Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'A7B21CB1-161F-4D06-83AE-523E3BF0CAB7' AND AutoUpdateCategory = 1;
+   ID = '4D201B4B-BEDF-4475-A6B0-9CE3063072B3' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Content Item Chunks.RootParentChunkID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Root Parent Chunk ID',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -3334,7 +2707,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Start Time (ms)',
+   DisplayName = 'Start Milliseconds',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -3344,7 +2717,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'End Time (ms)',
+   DisplayName = 'End Milliseconds',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -3358,4 +2731,18 @@ SET
    CodeType = NULL
 WHERE 
    ID = 'D52720E3-05A7-41B2-8C00-C57D8767A930' AND AutoUpdateCategory = 1;
+
+/* Generated Validation Functions for MJ: AI Agent Types */
+-- CHECK constraint for MJ: AI Agent Types: Field: CompactionTriggerPercent was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
+INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([CompactionTriggerPercent]>=(1) AND [CompactionTriggerPercent]<=(100))', 'public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
+    if (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100) {
+        result.Errors.push(new ValidationErrorInfo(
+            "CompactionTriggerPercent",
+            "Compaction trigger percentage must be between 1 and 100.",
+            this.CompactionTriggerPercent,
+            ValidationErrorType.Failure
+        ));
+    }
+}', 'The compaction trigger percentage must be a value between 1 and 100 percent.', 'ValidateCompactionTriggerPercentRange', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'BE42811A-7C55-4C1E-A654-F7812897B633');
 

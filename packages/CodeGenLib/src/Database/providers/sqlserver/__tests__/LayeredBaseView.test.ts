@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SQLServerCodeGenProvider } from '../SQLServerCodeGenProvider';
+import { SQLCodeGenBase } from '../../../sql_codegen';
 import { EntityInfo } from '@memberjunction/core';
 import type { BaseViewGenerationContext } from '../../../codeGenDatabaseProvider';
 
@@ -157,5 +158,61 @@ describe('refresh and permissions for an application-owned base view', () => {
         const sql = provider.generateIfViewExistsSQL('orders', 'vwOrderHeaders', "EXEC sp_refreshview 'orders.vwOrderHeaders';");
         expect(sql).toContain("EXEC sp_refreshview ''orders.vwOrderHeaders'';");
         expect(sql).not.toContain("N'EXEC sp_refreshview 'orders");
+    });
+});
+
+/**
+ * STEP 4.5 — the refresh statements CodeGen writes into the MIGRATION LOG, which is the SQL that
+ * runs on staging and production rather than on the dev box.
+ *
+ * A layered entity has `BaseViewGenerated = 0`, so it qualifies as a "custom base view" entity here
+ * alongside genuinely hand-written ones. The two are not interchangeable: for a fully custom view
+ * the object is a standing prerequisite and a missing one should fail loudly, while a layered
+ * entity's outer view legitimately does not exist during the bootstrap pass. Emitting an unguarded
+ * refresh for both treats the bootstrap case as an error — and the run it breaks is the documented
+ * setup procedure.
+ */
+class RefreshProbe extends SQLCodeGenBase {
+    public build(entities: EntityInfo[]): string {
+        return this.buildCustomBaseViewRefreshSQL(entities);
+    }
+}
+
+describe('sp_refreshview emitted into the migration log', () => {
+    let probe: RefreshProbe;
+
+    beforeEach(() => {
+        probe = new RefreshProbe();
+        probe.DBProvider = new SQLServerCodeGenProvider();
+    });
+
+    const layered = (): EntityInfo =>
+        entity({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwOrderHeadersGenerated' });
+
+    it('refreshes the INNER view before the outer one', () => {
+        // The outer view selects `g.*` and caches its column list, so it must never be re-resolved
+        // against a stale inner. Asserted by position, since both statements name a view and a
+        // substring check alone would pass with the order reversed. The two anchors are chosen to
+        // be unambiguous: 'vwOrderHeaders' is a prefix of 'vwOrderHeadersGenerated', and the outer
+        // refresh is nested inside sp_executesql with its quotes doubled.
+        const sql = probe.build([layered()]);
+        const inner = sql.indexOf("sp_refreshview 'orders.vwOrderHeadersGenerated'");
+        const outer = sql.indexOf("OBJECT_ID('[orders].[vwOrderHeaders]'");
+        expect(inner).toBeGreaterThan(-1);
+        expect(outer).toBeGreaterThan(-1);
+        expect(inner).toBeLessThan(outer);
+    });
+
+    it('guards the outer refresh on the application-owned view existing', () => {
+        const sql = probe.build([layered()]);
+        expect(sql).toContain("IF OBJECT_ID('[orders].[vwOrderHeaders]', 'V') IS NOT NULL");
+    });
+
+    it('leaves a fully custom base view unguarded and unchanged', () => {
+        // Not a layering, so there is no inner view and no bootstrap window. A missing view here is
+        // a real misconfiguration and must stay a loud failure rather than a silent skip.
+        const sql = probe.build([entity({ BaseViewGenerated: false })]);
+        expect(sql).toContain("EXEC sp_refreshview 'orders.vwOrderHeaders';");
+        expect(sql).not.toContain('OBJECT_ID');
     });
 });

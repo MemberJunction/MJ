@@ -1084,10 +1084,30 @@ export class SQLCodeGenBase {
 
     /**
      * Builds a combined SQL string of sp_refreshview statements for the given entities.
+     *
+     * For a LAYERED entity the outer refresh is guarded on the application-owned `BaseView`
+     * existing, matching {@link generateCustomBaseViewRefreshAndPermissions}. On the first pass
+     * after layering is enabled the outer view cannot exist yet — it selects from the inner view
+     * that same pass creates — so an unguarded refresh here fails the documented setup procedure.
+     *
+     * The inner view is refreshed first, before the outer. That ordering is defensive rather than
+     * load-bearing: every entity reaching this method is in the modified/new list (see
+     * {@link getModifiedCustomBaseViewEntities}), and `logSQLForNewOrModifiedEntity` forces a
+     * modified entity's base view DDL into the same migration regardless of whether its text
+     * changed — so the inner view is already dropped and recreated in an earlier step, which
+     * resets its cached column list more thoroughly than a refresh would. The ordering is kept
+     * anyway so this path cannot become wrong if that coupling is ever loosened.
      */
     protected buildCustomBaseViewRefreshSQL(entities: EntityInfo[]): string {
         return entities
-            .map(e => this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.BaseView))
+            .map(e => {
+                const outer = this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.BaseView);
+                if (!e.HasLayeredBaseView) {
+                    return outer; // fully custom — one view, and it is a standing prerequisite
+                }
+                const inner = this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.GeneratedViewName);
+                return inner + '\n' + this.guardOnApplicationOwnedView(e, outer);
+            })
             .join('\n');
     }
 
