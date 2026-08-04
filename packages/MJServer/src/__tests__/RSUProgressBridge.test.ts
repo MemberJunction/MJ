@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -161,6 +161,43 @@ describe('RSUProgressBridge', () => {
         expect(abandoned.errors?.[0].code).toBe('rsu-run-abandoned');
         // The new run is open and untouched by the abandonment.
         expect(existsSync(join(secondDir, 'result.json'))).toBe(false);
+    });
+
+    it('reports liveness while a long step is in flight, and stops at step.end', async () => {
+        // CodeGen and compile run for minutes with no intermediate observer event. Without a
+        // heartbeat the stream goes silent for the whole step and a watcher cannot distinguish
+        // "compiling" from "hung".
+        vi.useFakeTimers();
+        try {
+            bridge.Observe(RUN_START);
+            const dir = runDir();
+            bridge.Observe({ Kind: 'step.start', Name: 'CodeGen', StepIndex: 5, StepTotal: 12 });
+
+            vi.advanceTimersByTime(95_000); // three 30s ticks
+            bridge.Observe({ Kind: 'step.end', Name: 'CodeGen', Status: 'success', DurationMs: 95_000, Message: 'ok' });
+            vi.advanceTimersByTime(120_000); // no further ticks once the step closed
+
+            vi.useRealTimers();
+            await settle();
+
+            const beats = readEvents(dir).filter(e => e.eventType === 'progress.heartbeat');
+            expect(beats).toHaveLength(3);
+            expect(beats[0].stage).toBe('CodeGen');
+            expect(beats[0].message).toMatch(/still running/);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not drop the position label for a zero-based step index', async () => {
+        // `stepIndex && stepTotal` would silently omit the label at index 0.
+        bridge.Observe(RUN_START);
+        const dir = runDir();
+        bridge.Observe({ Kind: 'step.start', Name: 'ValidateEnvironment', StepIndex: 0, StepTotal: 12 });
+        await settle();
+
+        const start = readEvents(dir).find(e => e.stage === 'ValidateEnvironment');
+        expect(start?.message).toBe('step 0 of 12');
     });
 
     it('ignores step and run.end events that arrive with no run open', async () => {

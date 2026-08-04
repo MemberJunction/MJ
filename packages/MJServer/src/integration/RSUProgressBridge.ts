@@ -24,6 +24,16 @@ import { LogError } from '@memberjunction/core';
 const RUN_STAGE = 'RSUPipeline';
 
 /**
+ * How often an in-flight step reports that it is still alive.
+ *
+ * RSU's expensive steps — CodeGen, TypeScript compile, npm install — run for minutes with no
+ * intermediate observer event, so without this the stream goes silent for the entire step and a
+ * watcher cannot tell "compiling" from "hung". 30s matches the interval the agent notification
+ * conventions ask for on long phases.
+ */
+const HEARTBEAT_INTERVAL_MS = 30_000;
+
+/**
  * Owns one emitter per RSU pipeline run and translates observer events into progress events.
  *
  * One instance per process. RSU runs are serialized by the pipeline lock, so at most one run is
@@ -32,6 +42,8 @@ const RUN_STAGE = 'RSUPipeline';
 export class RSUProgressBridge {
     private emitter: IntegrationProgressEmitter | null = null;
     private currentRunID: string | null = null;
+    /** Liveness timer for the step currently in flight — see {@link HEARTBEAT_INTERVAL_MS}. */
+    private heartbeat: ReturnType<typeof setInterval> | null = null;
 
     /**
      * @param emitterOptions passed through to each run's emitter. The only field that matters in
@@ -93,10 +105,13 @@ export class RSUProgressBridge {
     }
 
     private onStepStart(event: Extract<RSUObserverEvent, { Kind: 'step.start' }>): void {
-        this.emitter?.stageStart(event.Name, this.positionLabel(event.StepIndex, event.StepTotal));
+        if (!this.emitter) return;
+        this.emitter.stageStart(event.Name, this.positionLabel(event.StepIndex, event.StepTotal));
+        this.startHeartbeat(event.Name);
     }
 
     private onStepEnd(event: Extract<RSUObserverEvent, { Kind: 'step.end' }>): void {
+        this.stopHeartbeat();
         if (!this.emitter) return;
         // A failed step is a stage error, not a stage completion — the run may still continue (a
         // per-item migration failure does not abort the batch), so this is deliberately not fatal.
@@ -112,6 +127,7 @@ export class RSUProgressBridge {
     }
 
     private onRunEnd(event: Extract<RSUObserverEvent, { Kind: 'run.end' }>): void {
+        this.stopHeartbeat();
         const emitter = this.emitter;
         if (!emitter) return;
         this.emitter = null;
@@ -138,8 +154,31 @@ export class RSUProgressBridge {
         void terminal.catch(err => LogError(`RSUProgressBridge: terminal write failed — ${err}`));
     }
 
+    /**
+     * Starts reporting liveness for the step that just opened. Any previous timer is cleared first,
+     * so a missed `step.end` can never leave two timers running.
+     */
+    private startHeartbeat(stage: string): void {
+        this.stopHeartbeat();
+        const startedAt = Date.now();
+        this.heartbeat = setInterval(() => {
+            const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+            this.emitter?.heartbeat(stage, `${stage} still running — ${elapsedSec}s elapsed`);
+        }, HEARTBEAT_INTERVAL_MS);
+        // Never hold the process open on a progress timer.
+        this.heartbeat.unref?.();
+    }
+
+    /** Stops the liveness timer. Safe to call when none is running. */
+    private stopHeartbeat(): void {
+        if (!this.heartbeat) return;
+        clearInterval(this.heartbeat);
+        this.heartbeat = null;
+    }
+
     /** Closes an orphaned emitter so a leaked run does not stay in-flight forever. */
     private closeCurrent(reason: string): void {
+        this.stopHeartbeat();
         const emitter = this.emitter;
         this.emitter = null;
         this.currentRunID = null;
@@ -147,9 +186,16 @@ export class RSUProgressBridge {
             .catch(err => LogError(`RSUProgressBridge: abandon write failed — ${err}`));
     }
 
-    /** "step 4 of 12" — omitted entirely when the determinate counter isn't armed. */
+    /**
+     * "step 4 of 12" — omitted entirely when the determinate counter isn't armed.
+     *
+     * Explicit null/undefined checks rather than truthiness: a 0 index is falsy, and silently
+     * dropping the label for the first step of a 0-based counter would be a bug that only appears
+     * if the pipeline's numbering ever changes.
+     */
     private positionLabel(stepIndex?: number, stepTotal?: number): string | undefined {
-        return stepIndex && stepTotal ? `step ${stepIndex} of ${stepTotal}` : undefined;
+        if (stepIndex == null || stepTotal == null) return undefined;
+        return `step ${stepIndex} of ${stepTotal}`;
     }
 }
 
