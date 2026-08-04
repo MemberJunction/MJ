@@ -388,7 +388,17 @@ export async function GetLatestVersion(
     // releases — go straight to the scoped tag line.
     if (!ScopedTagPrefix(subpath ?? ParseGitHubUrl(repoUrl)?.Subpath)) {
         const releases = await ListGitHubReleases(repoUrl, options);
-        const stable = releases.find(r => !r.PreRelease && !r.Draft);
+        // GitHub returns releases newest-CREATED first, which is not newest-VERSION first: a patch
+        // backported to an older line after a major ships is the most recent release but the lower
+        // version, and `find` would offer it as the upgrade target. Order by semver precedence
+        // instead — but ONLY across tag names that really are repo-wide versions. A scoped release
+        // name (`@scope/pkg@1.3.0`) is not one; running the comparator over those reshuffles
+        // meaningless values into a different meaningless answer, so they keep GitHub's own order.
+        const stableReleases = releases.filter(r => !r.PreRelease && !r.Draft);
+        const versioned = stableReleases.filter(r => IsPlainVersionTag(r.TagName));
+        const stable = versioned.length > 0
+            ? versioned.sort((a, b) => CompareSemver(b.TagName, a.TagName))[0]
+            : stableReleases[0];
         if (stable) {
             return stable.TagName.replace(/^v/, '');
         }
@@ -506,6 +516,17 @@ export function CompareSemver(a: string, b: string): number {
         if (diff !== 0) return diff;
     }
     return ComparePrerelease(va.Prerelease, vb.Prerelease);
+}
+
+/**
+ * True when a tag name IS a repo-wide semver version (`1.2.3`, `v1.2.3-beta.1+sha`) rather than
+ * something that merely contains one. A scoped release name such as
+ * `@memberjunction/connector-wild-apricot@1.3.0` is not a repo-wide version, and comparing those
+ * by semver precedence produces an ordering with no meaning — `ParseSemver` reads the `-` inside
+ * `wild-apricot` as the prerelease delimiter.
+ */
+function IsPlainVersionTag(tagName: string): boolean {
+    return /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(tagName);
 }
 
 /** True when a version string carries a prerelease suffix (e.g. `1.2.0-beta.1`). */

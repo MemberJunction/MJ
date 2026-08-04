@@ -191,6 +191,48 @@ describe('GetLatestVersion', () => {
         expect(result).toBe('1.0.7');
     });
 
+    it('picks the highest stable RELEASE, not the most recently created one', async () => {
+        // A hotfix backported to an older line ships after a major: it is the newest release by
+        // creation date but the lower version, and offering it would be a downgrade prompt.
+        mocks.listReleases.mockResolvedValueOnce({
+            data: [
+                { tag_name: 'v1.9.1', prerelease: false, draft: false, created_at: '2026-05-01T00:00:00Z' },
+                { tag_name: 'v2.0.0', prerelease: false, draft: false, created_at: '2026-04-01T00:00:00Z' },
+            ],
+        });
+
+        expect(await GetLatestVersion('https://github.com/Acme/App', {})).toBe('2.0.0');
+    });
+
+    it('ignores a prerelease release that sorts above the newest stable one', async () => {
+        mocks.listReleases.mockResolvedValueOnce({
+            data: [
+                { tag_name: 'v2.1.0-beta.1', prerelease: true, draft: false, created_at: '2026-05-01T00:00:00Z' },
+                { tag_name: 'v1.9.1', prerelease: false, draft: false, created_at: '2026-04-20T00:00:00Z' },
+                { tag_name: 'v2.0.0', prerelease: false, draft: false, created_at: '2026-04-01T00:00:00Z' },
+            ],
+        });
+
+        expect(await GetLatestVersion('https://github.com/Acme/App', {})).toBe('2.0.0');
+    });
+
+    it('leaves scoped release tag names in GitHub order rather than reshuffling them', async () => {
+        // `@scope/pkg@1.2.3` is not a repo-wide version — ParseSemver reads the `-` inside
+        // `wild-apricot` as a prerelease delimiter, so ordering these by semver produces a
+        // different meaningless answer. Verified live against MemberJunction/Integrations, where
+        // sorting all 144 scoped releases moved the result from connector-wild-apricot@1.3.0 to
+        // connector-zendesk@1.1.2. Behavior here must match `next` exactly.
+        mocks.listReleases.mockResolvedValueOnce({
+            data: [
+                { tag_name: '@memberjunction/connector-wild-apricot@1.3.0', prerelease: false, draft: false, created_at: '2026-07-28T00:00:00Z' },
+                { tag_name: '@memberjunction/connector-orcid@1.1.3', prerelease: false, draft: false, created_at: '2026-07-28T00:00:00Z' },
+            ],
+        });
+
+        expect(await GetLatestVersion('https://github.com/Acme/App', {}))
+            .toBe('@memberjunction/connector-wild-apricot@1.3.0');
+    });
+
     it('returns null when neither releases nor tags exist', async () => {
         mocks.listReleases.mockResolvedValueOnce({ data: [] });
         mocks.listTags.mockResolvedValueOnce({ data: [] });
