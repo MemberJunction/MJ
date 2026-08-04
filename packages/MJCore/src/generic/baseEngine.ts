@@ -1,4 +1,4 @@
-import { BaseSingleton, MJEvent, MJEventType, MJGlobal } from "@memberjunction/global";
+import { BaseSingleton, MJEvent, MJEventType, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { BehaviorSubject, Observable, Subject } from "rxjs";
 import { buffer, debounceTime, filter } from "rxjs/operators";
@@ -1585,7 +1585,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // Compare all primary key values
             return primaryKeys.every((pk, idx) => {
                 const entityValue = (e as unknown as Record<string, unknown>)[pk.Name];
-                return entityValue === targetKeyValues[idx];
+                const targetValue = targetKeyValues[idx];
+                // UUID columns must compare case-insensitively: the SAME id can arrive with
+                // different casing depending on its source (a client-minted lowercase UUID from
+                // BaseEntity.NewRecord vs. an uppercase value loaded from SQL Server). A raw `===`
+                // then misses the match, and the caller's "not found → add it" branch appends a
+                // DUPLICATE copy of the row into the engine cache. Drive this off metadata
+                // (EntityFieldInfo.IsUniqueIdentifier, which is PG-aware) — never a string-shape
+                // heuristic. See guides/UUID_COMPARISON_GUIDE.md.
+                if (pk.IsUniqueIdentifier) {
+                    return UUIDsEqual(entityValue as string | null | undefined, targetValue as string | null | undefined);
+                }
+                return entityValue === targetValue;
             });
         });
     }
