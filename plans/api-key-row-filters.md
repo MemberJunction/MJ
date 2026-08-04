@@ -20,6 +20,15 @@
 > Migration written (§8 Phase 2). §9.2 (`full_access` semantics) also resolved: the combination is **invalid and rejected**,
 > not silently resolved either way — see §5.6.1. **No decisions remain blocking implementation.**
 >
+> **v2.3 changelog — post-approval review (PR #3409, MarceloT-BC; findings verified against source before adoption).**
+> All six findings held. (M1) `CheckRecordRLS` interpolates the PK unescaped — a client-reachable RLS bypass; fixed in WS1
+> alongside (M5) the raw numeric branch of the projection builder. (M2) `MarkupFilterText` substitutes `"undefined"` for
+> own-but-undefined properties and never escapes values — §5.4 now extends the fail-closed rule to the `{{User*}}` surface.
+> (M3) new cache invariant INV-3: fingerprint and WHERE must be computed for the same principal. (M4) the legacy RLS method
+> is deprecated with a no-new-callers repo guard. (M6) the `ReportResolver` injection upgraded to its own ticket. §9.8 ack
+> adopted with the error-message condition (key-wide deny must name cause + remedy); §9.4: `ActingCompanyIDs` registered
+> **list-capable** — cardinality treated as a one-way door. Four tickets enumerated in §5.10.
+>
 > **v2.2 changelog — post-review (PR #3409, cadam11).** All four review observations verified against source and adopted:
 > (1) §5.9's coverage claim was overstated — `query:run`/`query:test`/`dataset:read`/`report:run` bypass RLS entirely
 > (queries by documented design; the query cache carries **no user segment**); new §5.10 is the scope×RLS matrix, with v1
@@ -169,10 +178,12 @@ Scope rule schema — `APIKeyScope` (`migrations/v5/B202602151200__v5.0__Baselin
   literals first, then tests 12 patterns (`insert|update|delete|exec|execute|drop|--|/*|*/|union|xp_|;`). No rule for `OR`.
   `SQLExpressionValidator` (`packages/MJGlobal/src/SQLExpressionValidator.ts`) is richer but has the same
   strip-literals-then-keyword-match structure.
-- **Platform variants are not wired on the RLS path.** `RowLevelSecurityFilterInfo.GetPlatformFilterText()` exists
-  (`securityInfo.ts:452`), but `GetUserRowLevelSecurityWhereClause` calls `MarkupFilterText()`, which reads `this.FilterText`
-  directly. `MJRowLevelSecurityFilterEntity` exposes only `ID/Name/Description/FilterText` — there is no `PlatformVariants`
-  column on `RowLevelSecurityFilter`. Cross-platform filter text is an **open item, not a freebie**.
+- **Platform variants are not wired on the RLS path — and the code that suggests otherwise is dead.** To be precise, since
+  a careless reading invites wiring it up and assuming it works: `RowLevelSecurityFilterInfo` declares a `PlatformVariants`
+  property and a working `GetPlatformFilterText()` (`securityInfo.ts:414-455`), but **no `PlatformVariants` column exists on
+  the `RowLevelSecurityFilter` table** to feed it — the property is always null — and `GetUserRowLevelSecurityWhereClause`
+  calls `MarkupFilterText()`, which reads `this.FilterText` directly anyway. Making that path real needs a column, CodeGen,
+  and a call-site change. Cross-platform filter text is an **open item, not a freebie**.
 
 ---
 
@@ -235,6 +246,20 @@ To be precise about what changes, because an earlier draft's wording invited mis
 pre-image check stays at step 2b and `OnBeforeSaveExecute` stays at step 3; the post-image check is a *new* step inserted
 after hooks complete, so it validates final values. No existing hook's ordering or inputs change. The only difference hooks
 observe is that their mutations now land *inside* the authorization boundary instead of after it — which is the point.
+
+**Escaping fixes folded into WS1** (review findings M1/M5, both verified). `CheckRecordRLS` interpolates the primary-key
+value with **no quote escaping** (`GenericDatabaseProvider.ts:3895-3899`), while the `Load()`-by-PK path 90 lines earlier
+escapes and carries a comment calling the unescaped case an injection vector (`:3800-3804`) — the fix was made in one place
+and missed in the authorization check. It is reachable with client input: for entities with `TrackRecordChanges = false`,
+the update resolver does `LoadFromData(clientOldValues)` then `Save()` (`ResolverBase.ts:1250-1253`), so the PK value is
+client-supplied and `' OR '1'='1` makes the `SELECT COUNT(*)` pass RLS on a row the caller cannot see. WS1 rewrites this
+method — apply the same `''`-escaping as the Load path. Likewise `BuildCreateRLSProjections` (`:3930-3948`) escapes quoted
+fields but emits `String(val)` raw for non-quoted (numeric) fields; the generalized typed-CAST builder escapes/validates
+every branch (a numeric field's value must parse as a number or the save fails).
+
+**ReplayOnly** (`options.ReplayOnly`) skips the RLS checks but executes no SQL (`databaseProviderBase.ts:1286-1293`,
+`:1393` — `result = [entity.GetAll()]`), so no write escalation exists there; WS1 confirms after-save hooks stay safe on
+that path and otherwise leaves it alone.
 
 ### 3.3 Scope
 
@@ -367,11 +392,22 @@ export interface APIKeyActingContext {
     ActingPersonID?: string;
     /** Opaque per-integration scope value. */
     ActingScopeID?: string;
+    /** Companies the caller is acting for — LIST-capable (see cardinality note). */
+    ActingCompanyIDs?: string[];
 }
 ```
 
-Tokens `{{ActingOrganizationID}}`, `{{ActingPersonID}}`, `{{ActingScopeID}}` resolve in `MarkupFilterText` alongside the
-existing ones.
+Tokens `{{ActingOrganizationID}}`, `{{ActingPersonID}}`, `{{ActingScopeID}}`, and `{{ActingCompanyIDs}}` resolve in
+`MarkupFilterText` alongside the existing ones.
+
+**Cardinality is a one-way door — decided now, per review.** "Adding a token later is a typed code change" holds for adding
+*new* tokens, but not for changing an existing token's **shape**: a scalar token can only ever express
+`Col = '{{ActingCompanyID}}'`, and moving to a set later breaks every filter already authored against it. Accounting-style
+workloads (consolidated views, shared-services users across several companies) need sets on day one. So `ActingCompanyIDs`
+is **list-capable from the start**: `Col IN ({{ActingCompanyIDs}})`, with the registered validator checking each element
+(GUID), quoting and `''`-escaping each, and resolving an **empty or absent set to `(1=0)`** — same composition as §5.4's
+unresolved-token rule. The three scalar tokens stay scalar; that is now an explicit, documented one-way door for each.
+(`ActingCustomerID` was considered and rejected: customers modeled as organizations are covered by `ActingOrganizationID`.)
 
 This buys types without restating the schema (each token has a known validator — the two ID tokens are GUIDs,
 `ActingScopeID` is a bounded identifier), removes the typo class entirely (an unknown token is caught at rule save), and
@@ -450,6 +486,16 @@ matching nothing regardless of the expression's shape — and an error is logged
 an empty string into a predicate whose operator you do not control. (The existing `{{ScopeResourceID}}` → `''` behavior is
 out of scope to change here, but it has the same latent weakness and deserves its own ticket.)
 
+**The same rule must cover the existing `{{User*}}` surface, which WS3 makes load-bearing** (review finding M2, verified).
+`MarkupFilterText`'s guard is `val !== null && typeof val !== 'object'` (`securityInfo.ts:470`) — **`undefined` passes it**
+(`typeof undefined === 'undefined'`) and substitutes the literal string `"undefined"`. Run that through this section's own
+analysis: `Col <> '{{UserOrganizationID}}'` becomes `Col <> 'undefined'` and matches every row — fail-open on the existing
+token surface. `copyInitData` (`baseInfo.ts:20-42`) can produce own-but-`undefined` properties, so it is reachable. The same
+function also never `''`-escapes `String(val)`, so a user-sourced value containing an apostrophe breaks any filter that
+substitutes it — the same defect class WS2 fixes for the tenant header. WS3 therefore hardens `MarkupFilterText` itself:
+treat `undefined` exactly like `null` (unresolved), and `''`-escape every substituted scalar. Both changes are
+behavior-tightening for role RLS too and get their own regression tests.
+
 ### 5.5 🚨 Composition — and why it cannot live inside `GetUserRowLevelSecurityWhereClause`
 
 **This section is the correction that motivated v2.** v1 said the key filter would be added inside
@@ -486,7 +532,10 @@ Composition:
 - **AND across layers** — no layer can widen another. An exempt user gets `''` for the role term and the key term still
   applies. This is what makes "a key can be less than its owner" true.
 - `GetUserRowLevelSecurityWhereClause` keeps its current signature and semantics for backward compatibility; the new method
-  wraps it.
+  wraps it. **But the old name is a permanent fail-open trap** (review finding M4): it is the familiar name a future call
+  site will reach for, and it silently omits key filters. Mark it `@deprecated` pointing at
+  `GetEffectiveRowFilterWhereClause`, and add a repo test asserting no non-test caller exists outside the new method — the
+  nine-site migration is a one-time job; the guard against a tenth caller has to be permanent.
 
 **Call sites to migrate — the complete list, verified.** `GetUserRowLevelSecurityWhereClause` has **nine** callers outside
 tests. Every one is an enforcement point; a missed one is an unenforced path, so migrating all nine is part of the definition
@@ -616,6 +665,14 @@ principals collide and read each other's rows?
   role-iteration order, `Set` ordering, whitespace — silently splits or merges cache slots. Make the composition
   deterministic (stable ordering of the OR terms and the AND layers) and assert it.
 
+- **INV-3** (added per review, finding M3): the fingerprint clause and the WHERE clause must be computed **for the same
+  principal**. `ComputeRunViewRLSWhereClause` resolves `contextUser ?? this.CurrentUser` (`providerBase.ts:2191`) while
+  `InternalRunView` uses its own `user` variable (`GenericDatabaseProvider.ts:1590`). Divergence is harmless today (role
+  RLS, they generally agree), but once the clause is per-key, a divergence fingerprints the slot for one principal and
+  fills it with another's rows. INV-1/INV-2 cover *where* the clause is emitted and byte-stability — not *whose* it is.
+  Resolve the principal **once** per request and thread the same reference to both computations; assert identity in the
+  integration test.
+
 **Also flagged:** `baseEngine.ts:1525` and `:2005` call `GenerateRunViewFingerprint` with only two arguments — no RLS clause.
 Confirm no `BaseEngine` config caches an entity that carries RLS or a key filter; if one does, its cache slot is
 principal-agnostic and would collide.
@@ -675,6 +732,14 @@ ad-hoc-query surface's gate at implementation time), enforced in `Authorize()` a
 filtered key that can run an arbitrary saved query against the filtered entity reads it unfiltered — the filter would be
 decoration. Same "start strict, relax later is non-breaking" principle as the exact-entity rule.
 
+**Acked in review with one condition, adopted here.** The deny is **key-wide, not entity-wide**: one row filter on one
+entity revokes these four scopes for the whole key, and a key that does twenty things and needs a filter on one must be
+split in two. That consequence is accepted for v1 — but the remedy is not discoverable from a bare scope denial, so the
+**`AuthorizationError` must name the cause and the remedy**: *"denied: this API key carries a row filter (on `<entity>`),
+which is incompatible with `<scope>` because that path bypasses row-level security. Split the key, or remove the row
+filter."* Not just the scope that failed. This is a hard requirement, tested in §7.3 — it is the difference between a
+five-minute fix and a lost day when a filtered key's workload later grows into a saved Query.
+
 **The precise relaxation, for later, is asymmetric:**
 
 - **Datasets: implementable now.** `DatasetItem.EntityID` is a non-nullable FK, and the read path already joins it. "Deny
@@ -686,9 +751,17 @@ decoration. Same "start strict, relax later is non-breaking" principle as the ex
   `resolve.ts:530-562`, `MJQueryEntityExtended.ts:157-175`). A precise deny built on that mapping treats "no bridge rows" as
   "touches nothing" — fail-open. Any future relaxation must fail closed on absent bridge data.
 
-Also noted while verifying (outside this feature's scope, worth tickets): the query-path cache serving identical rows to all
-authorized principals is a pre-existing property worth revisiting independently, and
-`ReportResolver.CreateReportFromConversationDetailID` builds raw SQL by string-interpolating an ID (`ReportResolver.ts:92-104`).
+**Tickets to file** (per review — these evaporate when the plan doc goes stale; none are gated on this feature):
+
+1. **`ReportResolver.CreateReportFromConversationDetailID` SQL injection** — client-supplied `ConversationDetailID`
+   interpolated into raw `mssql.Request` SQL (`ReportResolver.ts:92-104`, verified). Live shipping code; deserves its own
+   issue and severity, not a closing aside. (Upgraded from "worth a ticket" on review pushback — correctly so.)
+2. **RLS exemption looseness** — exemption granted from the mere presence of a filter-less permission row, without checking
+   the permission is granted (§2.2, §6, §9.7).
+3. **Query cache carries no user segment** — all authorized principals share one cached result set
+   (`providerBase.ts:1859-1866`).
+4. **Integration suite: client-transport members hard-fail on missing `MJ_API_KEY` instead of skipping** — 19 pre-existing,
+   non-gating errors on every CI run (`config.ts:116` throws before the "MJAPI is not reachable" skip check can run).
 
 ---
 
@@ -778,7 +851,16 @@ regression tests — the ones that would pass against a broken implementation if
 - Startup refusal: filtered rule exists + `enforcementEnabled: false` → `Config()` throws
 - Startup refusal: filtered rule exists + `defaultBehaviorNoScopes: 'allow'` → `Config()` throws
 - **Filtered key requesting `query:run` / `query:test` / `dataset:read` / `report:run` → denied** **[FO]** (§5.10)
+- The §5.10 denial's `AuthorizationError` names the row filter as the cause and states the split-the-key remedy — not just
+  the failed scope
 - Unfiltered key requesting those scopes → unchanged *(regression)*
+- `{{ActingCompanyIDs}}` with a multi-element set → `IN` list with each element validated, quoted, escaped; empty or absent
+  set → `(1=0)` **[FO]**
+- `MarkupFilterText`: own-but-`undefined` property → treated as unresolved, never the literal string `"undefined"` **[FO]**
+- `MarkupFilterText`: substituted value containing `'` → escaped, filter still parses
+- `CheckRecordRLS` with a PK value containing `' OR '1'='1` → escaped, RLS check fails closed **[FO]** (WS1, finding M1)
+- Repo guard: no non-test caller of `GetUserRowLevelSecurityWhereClause` outside `GetEffectiveRowFilterWhereClause` **[FO]**
+- **INV-3**: fingerprint and WHERE computed from the same principal reference (integration tier, §5.7)
 - `ReportResolver` operation user comes from `GetUserFromPayload`, not a `UserCache` re-fetch (§5.6 row 11)
 
 ### 7.4 Integration — deterministic tier
