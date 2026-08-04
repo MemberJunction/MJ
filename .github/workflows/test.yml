@@ -21,6 +21,11 @@ on:
       - '.github/scripts/check-esm-imports.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # The DOM-spec guards/gates run in this workflow too.
+      - 'scripts/check-dom-spec-placement.mjs'
+      - 'scripts/check-spec-antipatterns.mjs'
+      - 'scripts/classify-explorer-components.mjs'
+      - 'scripts/dom-test-report.mjs'
       # The PG migration content detector's unit suite lives in __tests__ above but the
       # script itself lives in scripts/ — without this entry a detector-only PR never
       # runs its tests.
@@ -99,6 +104,34 @@ jobs:
           ENVEOF
           sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
 
+      # Fast pure-file guards (no build needed), all Phase-4 "keep tests honest" gates:
+      # 1) A *.dom.test.ts placed inside __tests__/ is silently excluded from BOTH projects
+      #    of a dual-preset package (and passWithNoTests hides the silence). Fails loud here.
+      # 2) Anti-pattern lint: vacuous assertions (expect(true), || true), skipped specs,
+      #    blanket schemas, any/never casts — the test-theater patterns human review kept
+      #    having to catch by hand in Phase 3.
+      # 3) Explorer DOM coverage gate: new Explorer components land as in-scope-uncovered by
+      #    default, so shipping a testable component without a DOM spec drops the percentage —
+      #    this fails the PR before the gap becomes silent. (Lenient 85 vs. the current 100.)
+      # 4) Generic DOM coverage ratchet: an ABSOLUTE cap on components with no spec and no
+      #    deferral annotation (a % bar is too coarse on a 350+ denominator). A newly shipped
+      #    untested Generic component pushes the count past the cap and fails the PR. Ratchet
+      #    the number DOWN as specs land — never up.
+      - name: DOM-spec placement guard
+        run: node scripts/check-dom-spec-placement.mjs packages
+
+      - name: DOM-spec anti-pattern lint
+        run: node scripts/check-spec-antipatterns.mjs packages
+
+      - name: Explorer DOM coverage gate
+        run: node scripts/classify-explorer-components.mjs --min 85
+
+      - name: Generic DOM coverage ratchet
+        run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=137
+
+      - name: Bootstrap DOM coverage ratchet
+        run: node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0
+
       # Decide what to run:
       #  - pull_request: only packages changed since the base branch PLUS everything that
       #    depends on them (turbo's `...[ref]` package-dependency selection).
@@ -138,13 +171,20 @@ jobs:
           # on CoreActions + react-test-harness, twice). The cap costs the common
           # small-PR case nothing: with fewer than 4 test tasks in scope it never
           # engages.
+          # `test:types` = the spec type-check gate (tsc --noEmit -p tsconfig.spec.json in
+          # each DOM-testing package). Vitest/esbuild is transpile-only — it strips types and
+          # silently erases broken `import type` statements — so without this gate a spec can
+          # be vitest-green while carrying real type errors (bit us in Phase 3). It runs
+          # BEFORE the test suite: seconds-cheap, fails fast, and builds are already cached.
           if [ -n "$TURBO_FILTER" ]; then
             echo "::group::Affected build"
             npx turbo run build --log-order=stream "$TURBO_FILTER"
             echo "::endgroup::"
+            npx turbo run test:types "$TURBO_FILTER"
             npx turbo run test --concurrency=4 "$TURBO_FILTER"
           else
             npm run build
+            npx turbo run test:types
             npm test -- --concurrency=4
           fi
 
