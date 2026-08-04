@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { Component, EventEmitter, Input, Output, forwardRef } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, NG_VALUE_ACCESSOR, type ControlValueAccessor } from '@angular/forms';
-import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { FormsModule } from '@angular/forms';
+import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider, StubDropdownComponent, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { APIScopesPanelComponent } from './api-scopes-panel.component';
 
 /**
@@ -15,10 +15,6 @@ import { APIScopesPanelComponent } from './api-scopes-panel.component';
  * Async ngOnInit flips IsLoading, so tests await microtasks then a non-strict detectChanges.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading { @Input() text = ''; @Input() showText = true; @Input() size = ''; }
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<span class="stub-empty">{{ Title }}</span>' })
-class StubEmptyState { @Input() Icon = ''; @Input() Title = ''; @Input() Message = ''; }
 @Component({ standalone: true, selector: 'mj-window', template: '<div class="stub-window"><ng-content></ng-content></div>' })
 class StubWindow {
   @Input() Width = 0; @Input() MinWidth = 0; @Input() MinHeight = 0; @Input() Resizable = false;
@@ -28,21 +24,11 @@ class StubWindow {
 class StubWindowTitlebar {}
 @Component({ standalone: true, selector: 'button[mjButton]', template: '<ng-content></ng-content>' })
 class StubButton { @Input() variant = ''; }
-@Component({
-  standalone: true,
-  selector: 'mj-dropdown',
-  template: '',
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubDropdown), multi: true }],
-})
-class StubDropdown implements ControlValueAccessor {
-  @Input() Data: unknown; @Input() TextField = ''; @Input() ValueField = ''; @Input() ValuePrimitive = false; @Input() DefaultItem: unknown;
-  writeValue(): void {} registerOnChange(): void {} registerOnTouched(): void {}
-}
 
 const scope = (over: Partial<Record<string, unknown>>) =>
   ({ ID: '', Name: '', Description: null, Category: 'Entities', ResourceType: null, ParentID: null, IsActive: true, FullPath: '', ...over });
 
-const UI = [StubLoading, StubEmptyState, StubWindow, StubWindowTitlebar, StubButton, StubDropdown];
+const UI = [StubLoadingComponent, StubEmptyStateComponent, StubWindow, StubWindowTitlebar, StubButton, StubDropdownComponent];
 
 async function render(scopes: unknown[], onSetup?: (instance: APIScopesPanelComponent) => void) {
   const provider = createFakeProvider({ runViewResults: scopes });
