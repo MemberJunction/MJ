@@ -571,10 +571,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           }
         }
 
-        // Set default app if URL doesn't specify one AND no app is active yet
+        // Bare-root landing: URL names no app and nothing is active yet. Land on the
+        // declared-default app (lowest Application.DefaultSequence — Home ships at -1),
+        // NOT apps[0]: the user-owned Sequence order is a display preference for the
+        // app switcher, and reordering it must never change where a session lands.
         const currentActiveApp = this.appManager.GetActiveApp();
         if (!appMatch && !currentActiveApp) {
-          await this.appManager.SetActiveApp(apps[0].ID);
+          await this.openLandingApp(apps);
         }
       })
     );
@@ -3032,9 +3035,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (this.appAccessDialog) {
         this.appAccessDialog.show(dialogConfig);
       } else {
-        // Fallback if dialog not available - redirect to first app
-        console.warn('App access dialog not available, redirecting to first app');
-        this.redirectToFirstApp(availableApps);
+        // Fallback if dialog not available - redirect to a working app
+        console.warn('App access dialog not available, redirecting to fallback app');
+        this.redirectToFallbackApp(availableApps);
       }
     }, 0);
   }
@@ -3118,7 +3121,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           this.appAccessDialog.show({ type: 'layout_error' });
         } else {
           // Direct redirect if dialog not available
-          this.redirectToFirstApp(availableApps);
+          this.redirectToFallbackApp(availableApps);
         }
       }, 0);
     }
@@ -3146,7 +3149,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       case 'redirect':
       case 'dismissed':
       default:
-        this.redirectToFirstApp(availableApps);
+        this.redirectToFallbackApp(availableApps);
         break;
     }
   }
@@ -3172,12 +3175,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         
           console.error('[ShellComponent] Failed to add application');
           this.appAccessDialog?.completeProcessing();
-          this.redirectToFirstApp(this.appManager.GetAllApps());
+          this.redirectToFallbackApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error adding app:', error);
       this.appAccessDialog?.completeProcessing();
-      this.redirectToFirstApp(this.appManager.GetAllApps());
+      this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
 
@@ -3193,12 +3196,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         await this.waitForAppAndNavigate(appId);
       } else {
         this.appAccessDialog?.completeProcessing();
-        this.redirectToFirstApp(this.appManager.GetAllApps());
+        this.redirectToFallbackApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error enabling app:', error);
       this.appAccessDialog?.completeProcessing();
-      this.redirectToFirstApp(this.appManager.GetAllApps());
+      this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
 
@@ -3228,9 +3231,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       await this.navigateToApp(systemApp);
       this.appAccessDialog?.completeProcessing();
     } else {
-      console.warn(`[ShellComponent] App ${appId} not found after waiting, redirecting to first app`);
+      console.warn(`[ShellComponent] App ${appId} not found after waiting, redirecting to fallback app`);
       this.appAccessDialog?.completeProcessing();
-      this.redirectToFirstApp(this.appManager.GetAllApps());
+      this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
 
@@ -3252,22 +3255,70 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.router.navigateByUrl(this.appManager.GetAppUrl(app));
   }
 
-  /**
-   * Redirect to the first available app (fallback)
-   */
   /** Case-insensitive UUID check whether an app is the currently active app. */
   public IsActiveApp(app: BaseApplication): boolean {
     return UUIDsEqual(app.ID, this.activeApp?.ID);
   }
 
-  private async redirectToFirstApp(apps: BaseApplication[]): Promise<void> {
-    if (apps.length > 0) {
-      const firstApp = apps[0];
-      await this.navigateToApp(firstApp);
-    } else {
-      // No apps available - this shouldn't happen, but handle gracefully
-      this.loading = false;
-      this.cdr.detectChanges();
+  /**
+   * Candidate order for landing and fallback navigation: the declared-default app
+   * first (lowest Application.DefaultSequence — Home ships at -1), then the rest of
+   * the user's apps in their Sequence order.
+   */
+  private landingCandidates(apps: BaseApplication[]): BaseApplication[] {
+    const landingApp = this.appManager.GetDefaultLandingApp();
+    if (!landingApp) {
+      return [...apps];
     }
+    return [landingApp, ...apps.filter(a => !UUIDsEqual(a.ID, landingApp.ID))];
+  }
+
+  /**
+   * Open the app a bare-root session should land on, falling through to the next
+   * candidate when one cannot open. Each candidate must produce a default tab BEFORE
+   * it is activated — activation hands the session to that app, and an app whose
+   * default tab cannot be built would otherwise become a dead entry point with no way
+   * back (the loading screen never clears and the user cannot navigate away). The
+   * actual tab opening still happens in the ActiveApp subscription.
+   */
+  private async openLandingApp(apps: BaseApplication[]): Promise<void> {
+    for (const candidate of this.landingCandidates(apps)) {
+      try {
+        const tabRequest = await candidate.CreateDefaultTab();
+        if (!tabRequest) {
+          LogError(`Landing app "${candidate.Name}" could not create a default tab, trying next candidate`);
+          continue;
+        }
+        await this.appManager.SetActiveApp(candidate.ID);
+        return;
+      } catch (error) {
+        LogError(`Landing app "${candidate.Name}" failed to activate, trying next candidate:`, undefined,
+          error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    // Every candidate failed — surface a terminal dialog instead of hanging the loading screen
+    LogError('No application could be opened as the landing app');
+    await this.handleNoAppsAvailable();
+  }
+
+  /**
+   * Redirect to a working app (fallback used by the app-access dialogs): declared-default
+   * app first, then the rest of the user's apps in order.
+   */
+  private async redirectToFallbackApp(apps: BaseApplication[]): Promise<void> {
+    for (const app of this.landingCandidates(apps)) {
+      try {
+        await this.navigateToApp(app);
+        return;
+      } catch (error) {
+        LogError(`Fallback navigation to "${app.Name}" failed, trying next candidate:`, undefined,
+          error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    // No apps available - this shouldn't happen, but handle gracefully
+    this.loading = false;
+    this.cdr.detectChanges();
   }
 }

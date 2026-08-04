@@ -2,8 +2,11 @@
  * Tests for base-application package:
  * - WorkspaceConfiguration defaults
  * - WorkspaceStateManager (tab management)
+ * - BaseApplication.CreateDefaultTab (isDefault nav-item resolution)
+ * - ApplicationManager.GetDefaultLandingApp (declared-default landing pick)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { BehaviorSubject } from 'rxjs';
 
 // Mock Angular
 vi.mock('@angular/core', () => ({
@@ -46,6 +49,13 @@ vi.mock('@memberjunction/core-entities', () => ({
   },
   MJWorkspaceEntity: class {},
   MJUserApplicationEntity: class {},
+  MJDashboardUserPreferenceEntity: class {},
+  DashboardEngine: {
+    Instance: {
+      Config: vi.fn().mockResolvedValue(undefined),
+      DashboardUserPreferences: [],
+    }
+  },
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -58,6 +68,8 @@ vi.mock('@memberjunction/global', () => ({
     }
   },
   MJEventType: { LoggedIn: 'LoggedIn' },
+  RegisterClass: () => (target: Function) => target,
+  UUIDsEqual: (a?: string, b?: string) => a?.toLowerCase() === b?.toLowerCase(),
 }));
 
 vi.mock('rxjs', async () => {
@@ -373,5 +385,82 @@ describe('WorkspaceStateManager', () => {
       manager.ClearLayout();
       expect(manager.GetConfiguration()!.layout).toBeUndefined();
     });
+  });
+});
+
+// ======================= BaseApplication.CreateDefaultTab =======================
+describe('BaseApplication.CreateDefaultTab', () => {
+  it('uses the nav item flagged isDefault, not the first item', async () => {
+    const { BaseApplication } = await import('../base-application');
+    const app = new BaseApplication({
+      ID: 'app-1',
+      Name: 'Test App',
+      DefaultNavItems: JSON.stringify([
+        { Label: 'First', ResourceType: 'Custom', DriverClass: 'FirstDashboard' },
+        { Label: 'Preferred', ResourceType: 'Custom', DriverClass: 'PreferredDashboard', isDefault: true },
+      ]),
+    });
+
+    const tab = await app.CreateDefaultTab();
+
+    expect(tab).not.toBeNull();
+    expect(tab!.Title).toBe('Preferred');
+    expect(tab!.Configuration!.driverClass).toBe('PreferredDashboard');
+  });
+
+  it('falls back to the first nav item when none is flagged isDefault', async () => {
+    const { BaseApplication } = await import('../base-application');
+    const app = new BaseApplication({
+      ID: 'app-1',
+      Name: 'Test App',
+      DefaultNavItems: JSON.stringify([
+        { Label: 'First', ResourceType: 'Custom', DriverClass: 'FirstDashboard' },
+        { Label: 'Second', ResourceType: 'Custom', DriverClass: 'SecondDashboard' },
+      ]),
+    });
+
+    const tab = await app.CreateDefaultTab();
+
+    expect(tab).not.toBeNull();
+    expect(tab!.Title).toBe('First');
+  });
+});
+
+// ======================= ApplicationManager.GetDefaultLandingApp =======================
+describe('ApplicationManager.GetDefaultLandingApp', () => {
+  async function makeManagerWithApps(appDefs: { ID: string; Name: string; DefaultSequence: number }[]) {
+    const { ApplicationManager } = await import('../application-manager');
+    const { BaseApplication } = await import('../base-application');
+    const manager = new ApplicationManager();
+    const apps = appDefs.map(def => new BaseApplication(def));
+    const applications$ = Reflect.get(manager, 'applications$') as BehaviorSubject<InstanceType<typeof BaseApplication>[]>;
+    applications$.next(apps);
+    return manager;
+  }
+
+  it('returns the app with the lowest DefaultSequence regardless of user Sequence order', async () => {
+    // User has dragged Accounting above Home (list order = user Sequence order);
+    // the landing pick must still be Home (DefaultSequence -1).
+    const manager = await makeManagerWithApps([
+      { ID: 'app-acc', Name: 'Accounting', DefaultSequence: 100 },
+      { ID: 'app-home', Name: 'Home', DefaultSequence: -1 },
+    ]);
+
+    expect(manager.GetDefaultLandingApp()!.Name).toBe('Home');
+  });
+
+  it('keeps the earlier app in Sequence order when DefaultSequence ties (degrades to first app)', async () => {
+    const manager = await makeManagerWithApps([
+      { ID: 'app-b', Name: 'Bravo', DefaultSequence: 100 },
+      { ID: 'app-a', Name: 'Alpha', DefaultSequence: 100 },
+    ]);
+
+    expect(manager.GetDefaultLandingApp()!.Name).toBe('Bravo');
+  });
+
+  it('returns null when the user has no apps', async () => {
+    const manager = await makeManagerWithApps([]);
+
+    expect(manager.GetDefaultLandingApp()).toBeNull();
   });
 });
