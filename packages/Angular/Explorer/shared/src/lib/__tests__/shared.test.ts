@@ -89,8 +89,18 @@ vi.mock('@memberjunction/ng-notifications', () => ({
   },
 }));
 
+// ui-layers refactor: shared.service now imports IsDescendantElement from
+// ng-shared-generic — unmocked, the real Angular lib loads in this node-env
+// suite and dies on partial-ivy JIT (PlatformLocation)
+vi.mock('@memberjunction/ng-shared-generic', () => ({
+  IsDescendantElement: vi.fn(() => false),
+}));
+
 vi.mock('@memberjunction/ng-base-types', () => ({
   BaseAngularComponent: class {},
+  // ui-layers refactor: shared.service registers itself as the record
+  // navigation adapter at construction
+  RecordNavigationAdapter: { Register: vi.fn(), Instance: { Register: vi.fn() } },
 }));
 
 vi.mock('@memberjunction/ng-base-application', () => ({

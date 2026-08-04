@@ -773,7 +773,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // If not, wait for it to be loaded before proceeding
     const config = this.workspaceManager.GetConfiguration();
     if (!config) {
-      // Configuration not loaded yet - wait for it
+      // Configuration not loaded yet — wait for it. TRACKED in
+      // this.subscriptions: the sub normally retires itself on the first
+      // non-null config, but if the component is destroyed while config is
+      // still null (failed load, fast navigation away), an untracked sub
+      // would outlive us and re-init a destroyed component when config
+      // finally lands. Unsubscribe is idempotent — self-retire + ngOnDestroy
+      // both firing is safe.
       const configSub = this.workspaceManager.Configuration.subscribe(loadedConfig => {
         if (loadedConfig) {
           configSub.unsubscribe();
@@ -781,6 +787,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           this.initializeGoldenLayout(forceCreateTabs);
         }
       });
+      this.subscriptions.push(configSub);
       return;
     }
 
