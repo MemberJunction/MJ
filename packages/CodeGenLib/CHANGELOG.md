@@ -1,5 +1,70 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/external-data-sources@6.0.0
+  - @memberjunction/external-data-source-mongodb@6.0.0
+  - @memberjunction/external-data-source-mysql@6.0.0
+  - @memberjunction/external-data-source-oracle@6.0.0
+  - @memberjunction/external-data-source-postgres@6.0.0
+  - @memberjunction/external-data-source-sqlserver@6.0.0
+  - @memberjunction/external-data-source-snowflake@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/postgresql-dataprovider@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/server-bootstrap-lite@6.0.0
+  - @memberjunction/ai-provider-bundle@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/cli-core@6.0.0
+  - @memberjunction/config@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+  - @memberjunction/sql-parser@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- 1e048ef: Fix MJ Explorer lazy module loading: chunks are now deduped by an explicit `chunkId` instead of loader source text (which collapsed all 18 chunks into one and stopped lazy-only registrations like `FeaturePipelinesResource` from ever loading), and lookups fall back to the subclass key alone so resolution survives build-mode renames of the base class (`_BaseResourceComponent`, `BaseResourceComponent2`). Failed chunk imports now retry on the next navigation instead of caching the rejection for the rest of the session. Downstream apps must regenerate their lazy config (`mj codegen manifest --lazy-config …`) after upgrading — generated entries changed shape from a loader function to `{ chunkId, load }`, and `GetSnapshot().chunkCount` was renamed `loadedChunkCount`.
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/server-bootstrap-lite@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/external-data-sources@5.51.0
+  - @memberjunction/external-data-source-mongodb@5.51.0
+  - @memberjunction/external-data-source-mysql@5.51.0
+  - @memberjunction/external-data-source-oracle@5.51.0
+  - @memberjunction/external-data-source-postgres@5.51.0
+  - @memberjunction/external-data-source-sqlserver@5.51.0
+  - @memberjunction/external-data-source-snowflake@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/core-entities-server@5.51.0
+  - @memberjunction/postgresql-dataprovider@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/ai-provider-bundle@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/cli-core@5.51.0
+  - @memberjunction/config@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+  - @memberjunction/sql-parser@5.51.0
+
 ## 5.50.0
 
 ### Minor Changes

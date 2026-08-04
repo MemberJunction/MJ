@@ -45,6 +45,7 @@ export default defineConfig({
             { label: 'Upgrading to v5', slug: 'upgrade-v5' },
           ],
         },
+        { label: 'Release Notes', collapsed: true, autogenerate: { directory: 'releases', collapsed: true } },
         { label: 'Architecture', slug: 'architecture' },
         { label: 'Building Apps on MJ', slug: 'custom-apps' },
         { label: 'Guides', collapsed: true, autogenerate: { directory: 'guides', collapsed: true } },

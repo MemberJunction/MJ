@@ -990,6 +990,8 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             /\binsert\b/, /\bupdate\b/, /\bdelete\b/,
             /\bexec\b/, /\bexecute\b/, /\bdrop\b/,
             /--/, /\/\*/, /\*\//, /\bunion\b/, /\bxp_/, /;/,
+            // Time-based blind injection vector — no legitimate filter/order-by clause uses WAITFOR.
+            /\bwaitfor\b/,
         ];
 
         for (const pattern of forbiddenPatterns) {

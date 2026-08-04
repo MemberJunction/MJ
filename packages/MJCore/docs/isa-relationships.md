@@ -500,9 +500,90 @@ WHERE Name = 'Persons';
 
 No other changes are needed — the existing IS-A infrastructure handles everything else automatically.
 
+## Creating a Child Record
+
+**Create the CHILD and set fields from anywhere in the chain. One save writes every table.**
+
+You do not create the parent and then attach a child to it. You create the child, set both its own
+fields and its ancestors', and save once — `BaseEntity` routes each field to the entity that owns it
+via `EntityInfo.ParentEntityFieldNames`, saves the chain root-first, and shares one primary key
+across every level.
+
+```typescript
+// Webinar IS-A Meeting IS-A Product
+const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+webinar.NewRecord();
+
+// Webinar's own fields
+webinar.RecordingURL = 'https://example.com/rec/123';
+webinar.MaxViewers   = 500;
+
+// Meeting's fields — one level up
+webinar.StartTime    = new Date('2026-03-01T15:00:00Z');
+webinar.Location     = 'Online';
+
+// Product's fields — two levels up. Set on the SAME object.
+webinar.Name         = 'Q1 Product Webinar';
+webinar.Status       = 'Active';
+webinar.CompanyID    = companyId;
+
+await webinar.Save();   // writes Product, then Meeting, then Webinar — one call
+```
+
+There is no depth limit: a field belonging to any ancestor is set on the child object and routed
+upward. `Get` reads back the same way, so `webinar.Name` returns the Product's `Name`.
+
+### Set the parent's required fields, or the save fails
+
+The most common IS-A mistake is forgetting a NOT NULL column that lives on an ANCESTOR table. The
+child's own fields are all present, the child looks complete, and the save still fails — because the
+parent insert is rejected first.
+
+```typescript
+const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+webinar.NewRecord();
+webinar.RecordingURL = 'https://example.com/rec/123';   // child fields only
+await webinar.Save();   // → false. Product.Name is NOT NULL and was never set.
+```
+
+From v5.50.0 the failure explains itself:
+
+```
+Failed to save parent entity 'Products': Name cannot be null; Status cannot be null
+```
+
+**Before v5.50.0 this returned `false` with `LatestResult === null` and an empty `ResultHistory`** —
+every result had been written to the parent object, which callers hold no reference to. If you are on
+an older version and a child save returns `false` with no message anywhere, this is almost certainly
+why; read `entity.ISAParent?.LatestResult` to see it.
+
+### Anti-pattern: creating the parent, then "attaching" a child
+
+```typescript
+// ❌ WRONG — this is not how IS-A works
+const product = await md.GetEntityObject<ProductEntity>('Products', contextUser);
+product.NewRecord();
+product.Name = 'Q1 Product Webinar';
+await product.Save();                       // parent row exists
+
+const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+webinar.NewRecord();
+webinar.Set('ID', product.ID);              // trying to adopt the parent's key
+webinar.RecordingURL = '...';
+await webinar.Save();                       // → false
+```
+
+`NewRecord()` starts a NEW chain, so this creates a second parent and then fights the first over the
+primary key. Use the correct form above instead: one `GetEntityObject` on the child, one `Save`.
+
+If you genuinely need to add a child to a parent row that ALREADY exists — a subtype decided after
+the fact — that is a different operation from creation, and IS-A's save path does not model it: it
+always saves the parent too, which fails if the parent is immutable or frozen by a trigger. Handle
+that case explicitly rather than expecting `Save()` to attach.
+
 ## NewRecord & ID Propagation
 
-When creating a new IS-A child record, the UUID is automatically shared across the entire chain:
+`NewRecord()` walks the chain and shares one UUID across every level:
 
 ```typescript
 const webinar = await md.GetEntityObject<WebinarEntity>('Webinars');
@@ -515,6 +596,8 @@ webinar.NewRecord();
 // 5. Propagates Meeting's ID to Product: product.Set('ID', 'abc-123')
 // Result: All three entities share 'abc-123' as their primary key
 ```
+
+You never set the ID yourself — that shared key IS the relationship.
 
 ## Provider Implementation
 
@@ -799,7 +882,9 @@ class BaseEntity {
 | Parent fields not appearing in view | `ParentID` not set on entity | Set `Entity.ParentID` to parent entity's ID |
 | "Field collision" error in CodeGen | Child table has column with same name as parent field | Rename the child column to avoid conflict |
 | Disjoint violation on save | Same ID exists in a sibling child entity | Each record can only be one child type |
-| Save fails with rollback | Parent entity validation failed | Check parent entity field requirements |
+| Save fails with rollback | Parent entity validation failed | Check parent entity field requirements — most often a NOT NULL column on an ANCESTOR table that was never set. See [Creating a Child Record](#creating-a-child-record) |
+| Save returns `false` with NO message, empty `ResultHistory` | Parent save failed on core **< 5.50.0**, where the result was recorded only on the parent object | Upgrade to 5.50.0+, which reports `Failed to save parent entity '<Name>': <detail>`. On older versions read `entity.ISAParent?.LatestResult` |
+| Child save fails after creating the parent separately | `NewRecord()` starts a NEW chain — it does not adopt an existing parent row | Create the CHILD and set the parent's fields on it; one `Save()` writes both |
 | Delete blocked on parent | Child records exist | Delete children first or enable `CascadeDeletes` |
 | `_parentEntity` is null | Entity not properly initialized | Ensure `GetEntityObject()` is used (not direct constructor) |
 | `ISAChild` is null after Load | Provider doesn't implement `FindISAChildEntity` | Update provider or use `ResolveLeafEntity()` static method |

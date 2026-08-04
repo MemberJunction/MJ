@@ -32,7 +32,7 @@
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, MJLruCache, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     ChatMessage,
@@ -292,6 +292,16 @@ export interface ExecuteRelayedToolInput {
      * the SAME interactive run (e.g. confirming a Query Builder task graph).
      */
     ResumeRunID?: string;
+    /**
+     * The id of the human this delegation is FOR, threaded into the delegated run's `userId`.
+     *
+     * The relayed-tool path may execute under an ELEVATED principal (a scoped anonymous magic-link
+     * caller's role deliberately cannot write the AI run entities — issue #3371), so `contextUser`
+     * is not always the person. `userId` is what stamps `MJ: AI Agent Runs.UserID` and scopes
+     * context memory, both of which must stay the visitor's. Absent ⇒ falls back to `contextUser.ID`,
+     * which is correct for every non-elevated caller.
+     */
+    AttributionUserID?: string;
 }
 
 /**
@@ -416,19 +426,28 @@ export class RealtimeClientSessionService {
      * whole row — including the STALE `Messages` it loaded — and perpetually clobber freshly-appended turns
      * back to an empty snapshot (the "transcript never persists" bug). Funnelling every write for a given
      * run through a single promise chain makes each load happen AFTER the prior save committed, so no writer
-     * overwrites another's field. Keyed by promptRunID; the entry is dropped on {@link finalizePromptRun}.
+     * overwrites another's field. Keyed by promptRunID; the entry is normally dropped on
+     * {@link finalizePromptRun}. Bounded with `MJLruCache` (rather than a plain `Map`) as a backstop: a
+     * session can be closed through a DIFFERENT `RealtimeClientSessionService` instance than the one that
+     * accumulated its write chain (e.g. `SessionManager`'s default construction, background janitor sweeps),
+     * in which case `finalizePromptRun`'s delete lands on the wrong object and this map's entry is
+     * never explicitly removed — the TTL/maxSize eviction here is what keeps that scenario bounded
+     * instead of an unbounded per-process leak.
      */
-    private readonly promptRunWriteChains = new Map<string, Promise<unknown>>();
+    private readonly promptRunWriteChains = new MJLruCache<string, Promise<unknown>>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000, // 4h backstop — generous vs. any realistic session duration
+    });
 
     /**
      * Serializes `task` against all other writes to the same `AIPromptRun` (see {@link promptRunWriteChains}).
      * Tasks run in call order; a failing task never breaks the chain for the next one. Returns the task's result.
      */
     private serializePromptRunWrite<T>(promptRunID: string, task: () => Promise<T>): Promise<T> {
-        const prior = this.promptRunWriteChains.get(promptRunID) ?? Promise.resolve();
+        const prior = this.promptRunWriteChains.Get(promptRunID) ?? Promise.resolve();
         const run = prior.then(task, task);
         // Store an error-swallowing tail so one failed write doesn't reject every queued write behind it.
-        this.promptRunWriteChains.set(promptRunID, run.then(() => undefined, () => undefined));
+        this.promptRunWriteChains.Set(promptRunID, run.then(() => undefined, () => undefined));
         return run;
     }
 
@@ -1122,7 +1141,7 @@ export class RealtimeClientSessionService {
             return true;
         });
         // Drop the per-run lock chain — no further writes are expected after finalize.
-        this.promptRunWriteChains.delete(promptRunID);
+        this.promptRunWriteChains.Delete(promptRunID);
     }
 
     /**
@@ -2394,6 +2413,10 @@ export class RealtimeClientSessionService {
             agent: target,
             conversationMessages: [{ role: 'user', content: requestText }],
             contextUser,
+            // Attribution and context-memory scope follow the PERSON, not the executing principal —
+            // see `ExecuteRelayedToolInput.AttributionUserID`. Undefined ⇒ base-agent falls back to
+            // `contextUser.ID`, preserving today's behavior for every non-elevated caller.
+            userId: input.AttributionUserID,
             provider,
             cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
             parentRun: parentRun ?? undefined,

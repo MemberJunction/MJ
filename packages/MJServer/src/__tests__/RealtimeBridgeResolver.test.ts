@@ -31,6 +31,12 @@ vi.mock('@memberjunction/ai-agents', () => ({
   FinalizeBridgeCoAgentRuns: vi.fn(),
   GetRealtimeModelVoices: vi.fn(),
   CreateBridgeRoomTranscriptSink: vi.fn(),
+  // SessionManager's constructor defaults to `new RealtimeClientSessionService()` when this resolver
+  // doesn't inject one (it never finalizes client-direct co-agent runs itself) — the mock must still
+  // export the class so that default construction doesn't throw.
+  RealtimeClientSessionService: class {
+    FinalizeCoAgentRun = vi.fn(async () => undefined);
+  },
 }));
 
 // Mock the meeting-recording registration so the thin resolver is tested in isolation (no MJStorage /

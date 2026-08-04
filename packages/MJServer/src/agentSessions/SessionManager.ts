@@ -8,6 +8,7 @@ import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import { GetHostInstanceID } from './HostInstance.js';
 import { writeReturningVisitorRecap } from './ReturningVisitorRecap.js';
+import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -78,7 +79,8 @@ const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
  * correct identity/provider and never pin the process-global provider.
  *
  * The only in-memory state it holds is a small per-session last-heartbeat-write timestamp map used
- * purely to coalesce {@link Heartbeat} writes; it carries no user or provider state across calls.
+ * purely to coalesce {@link Heartbeat} writes, plus the injected {@link RealtimeClientSessionService}
+ * used by {@link finalizeObservabilityRuns}; it carries no user or provider state across calls.
  *
  * Responsibilities:
  * - **Create** — authorize (`CanRun`), optionally mint a Conversation, persist an `Active` session.
@@ -94,6 +96,29 @@ const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
 export class SessionManager {
     /** session ID (lowercased) → epoch ms of its last persisted `LastActiveAt` write. */
     private heartbeatLastWrite = new Map<string, number>();
+
+    /**
+     * The {@link RealtimeClientSessionService} used to finalize a closing session's co-agent
+     * observability runs (see {@link finalizeObservabilityRuns}). Defaults to a fresh instance for
+     * callers that don't own a shared one (e.g. `SessionJanitor`, telephony services) — but a caller
+     * that itself created the co-agent's `AIPromptRun` writes through its OWN `RealtimeClientSessionService`
+     * (currently only `RealtimeClientSessionResolver`) MUST pass that same instance here. Otherwise
+     * finalize's internal per-run write-chain cleanup runs against a different object than the one that
+     * accumulated the chain, silently no-op'ing on the live instance (see the constructor param doc).
+     */
+    private readonly realtimeClientSessionService: RealtimeClientSessionService;
+
+    /**
+     * @param realtimeClientSessionService The shared {@link RealtimeClientSessionService} instance to
+     *   finalize observability runs through. Pass the SAME instance your resolver/service used to create
+     *   and write to the session's co-agent `AIAgentRun`/`AIPromptRun` (e.g.
+     *   `RealtimeClientSessionResolver`'s own field) so `CloseSession` can correctly clean up that
+     *   instance's per-run state. Omit only when this `SessionManager` never closes a client-direct
+     *   voice session it also originated observability writes for.
+     */
+    constructor(realtimeClientSessionService?: RealtimeClientSessionService) {
+        this.realtimeClientSessionService = realtimeClientSessionService ?? new RealtimeClientSessionService();
+    }
 
     /**
      * Authorize and create a new session. Flow:
@@ -230,10 +255,14 @@ export class SessionManager {
             return;
         }
         try {
-            await new RealtimeClientSessionService().FinalizeCoAgentRun(
+            // SCOPED-ANONYMOUS ELEVATION (issue #3371): the runs were CREATED under the system user
+            // for a scoped anonymous session, so an owner-initiated (or error) close must finalize
+            // under it too — the caller's role holds no grants on the AI run entities. Janitor and
+            // shutdown sweeps already close as the system user and pass through unchanged.
+            await this.realtimeClientSessionService.FinalizeCoAgentRun(
                 config.coAgentRunID ?? null,
                 config.promptRunID ?? null,
-                contextUser,
+                ResolveScopedAnonymousRunUser(contextUser),
                 provider,
                 true,
                 config.coAgentRunStepID ?? null,
