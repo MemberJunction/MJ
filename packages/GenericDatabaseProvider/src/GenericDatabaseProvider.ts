@@ -3904,7 +3904,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const pkWhere = entity.PrimaryKeys.map(pk => {
             const fieldInfo = entityInfo.FieldByName(pk.Name);
             const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
-            return `${this.QuoteIdentifier(pk.Name)}=${quotes}${pk.Value}${quotes}`;
+            // Escape embedded single quotes when the value is wrapped in quotes — see Load() above.
+            const safeVal = quotes ? String(pk.Value).replace(/'/g, "''") : pk.Value;
+            return `${this.QuoteIdentifier(pk.Name)}=${quotes}${safeVal}${quotes}`;
         }).join(' AND ');
 
         const sql = `SELECT COUNT(*) AS cnt FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${pkWhere} AND (${rlsWhereClause})`;
