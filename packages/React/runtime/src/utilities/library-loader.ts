@@ -133,16 +133,39 @@ export class LibraryLoader {
    * Load libraries based on the current configuration
    */
   static async loadLibrariesFromConfig(options?: ConfigLoadOptions, debug?: boolean): Promise<LibraryLoadResult> {
-    // Always load core runtime libraries first
+    // Load core runtime libraries in dependency order.
+    // ReactDOM's UMD factory captures `window.React` at execution time,
+    // so React MUST execute before ReactDOM. Loading them in parallel with
+    // async scripts causes an intermittent race condition where ReactDOM
+    // executes first and gets `undefined` for React, permanently breaking
+    // `createRoot` on that object instance.
     const coreLibraries = getCoreRuntimeLibraries(debug);
-    const corePromises = coreLibraries.map(lib =>
-      this.loadScript(lib.cdnUrl, lib.globalVariable, debug, lib.fallbackCdnUrls)
-    );
-    
-    const coreResults = await Promise.all(corePromises);
-    const React = coreResults.find((_, i) => coreLibraries[i].globalVariable === 'React');
-    const ReactDOM = coreResults.find((_, i) => coreLibraries[i].globalVariable === 'ReactDOM');
-    const Babel = coreResults.find((_, i) => coreLibraries[i].globalVariable === 'Babel');
+    const reactLib = coreLibraries.find(lib => lib.globalVariable === 'React');
+    const reactDOMLib = coreLibraries.find(lib => lib.globalVariable === 'ReactDOM');
+    const babelLib = coreLibraries.find(lib => lib.globalVariable === 'Babel');
+
+    // Phase 1: React must load first (ReactDOM depends on it)
+    let React: unknown;
+    if (reactLib) {
+      React = await this.loadScript(reactLib.cdnUrl, reactLib.globalVariable, debug, reactLib.fallbackCdnUrls);
+    }
+
+    // Phase 2: ReactDOM and Babel can load in parallel (both only depend on React)
+    const phase2Promises: Promise<unknown>[] = [];
+    const phase2Labels: string[] = [];
+
+    if (reactDOMLib) {
+      phase2Promises.push(this.loadScript(reactDOMLib.cdnUrl, reactDOMLib.globalVariable, debug, reactDOMLib.fallbackCdnUrls));
+      phase2Labels.push('ReactDOM');
+    }
+    if (babelLib) {
+      phase2Promises.push(this.loadScript(babelLib.cdnUrl, babelLib.globalVariable, debug, babelLib.fallbackCdnUrls));
+      phase2Labels.push('Babel');
+    }
+
+    const phase2Results = await Promise.all(phase2Promises);
+    const ReactDOM = phase2Labels.indexOf('ReactDOM') >= 0 ? phase2Results[phase2Labels.indexOf('ReactDOM')] : undefined;
+    const Babel = phase2Labels.indexOf('Babel') >= 0 ? phase2Results[phase2Labels.indexOf('Babel')] : undefined;
     
     // Expose React and ReactDOM as globals for UMD libraries that expect them
     // Many React component libraries (Recharts, Victory, etc.) expect these as globals
