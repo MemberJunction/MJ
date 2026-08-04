@@ -19,6 +19,10 @@ class GridStub {
   @Input() QueryInfo: MJQueryEntityExtended | null = null;
   @Input() Data: unknown; @Input() TotalRowCount = 0; @Input() PageNumber = 1; @Input() PageSize = 100;
   @Input() SelectionMode = ''; @Input() ShowToolbar = true; @Input() VisualConfig: unknown; @Input() IsLoading = false;
+  // The real grid declares this (query-data-grid.component.ts) and the viewer template binds it.
+  // A stub that omits an input the template binds is NG0303 at render time, which fails every
+  // test that gets far enough to render the grid — not just the ones that assert on export.
+  @Input() ExportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
   @Output() PageChange = new EventEmitter<unknown>();
   @Output() EntityLinkClick = new EventEmitter<QueryEntityLinkClickEvent>();
   @Output() RowDoubleClick = new EventEmitter<unknown>();
