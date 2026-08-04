@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/ng-base-application@6.0.0
+  - @memberjunction/ng-link-directives@6.0.0
+  - @memberjunction/ng-shared@6.0.0
+  - @memberjunction/ng-testing@6.0.0
+  - @memberjunction/ng-action-gallery@6.0.0
+  - @memberjunction/ng-actions@6.0.0
+  - @memberjunction/ng-agents@6.0.0
+  - @memberjunction/ng-ai-test-harness@6.0.0
+  - @memberjunction/ng-base-forms@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-code-editor@6.0.0
+  - @memberjunction/ng-deep-diff@6.0.0
+  - @memberjunction/ng-entity-relationship-diagram@6.0.0
+  - @memberjunction/ng-entity-viewer@6.0.0
+  - @memberjunction/ng-flow-editor@6.0.0
+  - @memberjunction/ng-join-grid@6.0.0
+  - @memberjunction/ng-list-management@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/ng-record-process-studio@6.0.0
+  - @memberjunction/ng-resource-permissions@6.0.0
+  - @memberjunction/ng-search@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/ng-timeline@6.0.0
+  - @memberjunction/ng-trees@6.0.0
+  - @memberjunction/ng-versions@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/templates-base-types@6.0.0
+  - @memberjunction/ng-tabstrip@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/ng-markdown@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/global@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes

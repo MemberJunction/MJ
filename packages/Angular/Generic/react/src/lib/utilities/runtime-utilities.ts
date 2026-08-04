@@ -12,6 +12,8 @@ import {
   LogError,
   BaseEntity,
   IEntityDataProvider,
+  IMetadataProvider,
+  IRunQueryProvider,
   UserInfo
 } from '@memberjunction/core';
 
@@ -49,23 +51,32 @@ import {
 @RegisterClass(RuntimeUtilities, 'RuntimeUtilities')
 export class RuntimeUtilities {
   private debug: boolean = false;
-  
+  /**
+   * The provider every read in the built utilities goes through. Set by {@link buildUtilities};
+   * defaults to the global provider when the host doesn't supply one.
+   */
+  private provider: IMetadataProvider = Metadata.Provider;
+
   /**
    * Builds the complete utilities object for React components
    * This is the main method that components will use
+   *
+   * @param provider the host's provider. A React component mounted under a non-default provider
+   *        passes its own `ProviderToUse`; omitting it falls back to the global default, named
+   *        explicitly rather than reached for via `new Metadata()`.
    */
-  public buildUtilities(debug: boolean = false): ComponentUtilities {
+  public buildUtilities(debug: boolean = false, provider?: IMetadataProvider): ComponentUtilities {
     this.debug = debug;
-    const md = new Metadata();  // global-provider-ok: utility — single-provider context
-    return this.SetupUtilities(md);
+    this.provider = provider ?? Metadata.Provider;
+    return this.SetupUtilities(this.provider);
   }
 
   /**
    * Sets up the utilities object - copied from skip-chat implementation
    */
-  private SetupUtilities(md: Metadata): ComponentUtilities {
-    const rv = new RunView();
-    const rq = new RunQuery();
+  private SetupUtilities(md: IMetadataProvider): ComponentUtilities {
+    const rv = RunView.FromMetadataProvider(md);
+    const rq = new RunQuery(md as unknown as IRunQueryProvider);
     const u: ComponentUtilities = {
       md: this.CreateSimpleMetadata(md),
       rv: this.CreateSimpleRunView(rv),
@@ -187,7 +198,7 @@ export class RuntimeUtilities {
    */
   private async listMLModels(filter?: SimpleMLListModelsFilter, contextUser?: UserInfo): Promise<SimpleMLModelInfo[]> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.provider);
       const result = await rv.RunView<MJMLModelEntity>(
         {
           EntityName: 'MJ: ML Models',
@@ -316,7 +327,7 @@ export class RuntimeUtilities {
     return value.replace(/'/g, "''");
   }
 
-  private CreateSimpleMetadata(md: Metadata): SimpleMetadata {
+  private CreateSimpleMetadata(md: IMetadataProvider): SimpleMetadata {
     return {
       Entities: md.Entities,
       GetEntityObject: (entityName: string) => {
