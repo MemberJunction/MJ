@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/cli
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-cli@6.0.0
+  - @memberjunction/codegen-lib@6.0.0
+  - @memberjunction/db-auto-doc@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/metadata-sync@6.0.0
+  - @memberjunction/open-app-engine@6.0.0
+  - @memberjunction/query-gen@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/server-bootstrap-lite@6.0.0
+  - @memberjunction/testing-cli@6.0.0
+  - @memberjunction/cli-core@6.0.0
+  - @memberjunction/config@6.0.0
+  - @memberjunction/installer@6.0.0
+  - @memberjunction/sql-converter@6.0.0
+  - @memberjunction/sqlglot-ts@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [1e048ef]
+- Updated dependencies [a8fc549]
+  - @memberjunction/codegen-lib@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-cli@5.51.0
+  - @memberjunction/server-bootstrap-lite@5.51.0
+  - @memberjunction/db-auto-doc@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/metadata-sync@5.51.0
+  - @memberjunction/open-app-engine@5.51.0
+  - @memberjunction/query-gen@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/testing-cli@5.51.0
+  - @memberjunction/cli-core@5.51.0
+  - @memberjunction/config@5.51.0
+  - @memberjunction/installer@5.51.0
+  - @memberjunction/sql-converter@5.51.0
+  - @memberjunction/sqlglot-ts@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes

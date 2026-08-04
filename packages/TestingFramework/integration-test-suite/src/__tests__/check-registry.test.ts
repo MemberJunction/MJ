@@ -37,6 +37,7 @@ import { ViewSecurityChecks } from '../checks/view-security.checks';
 import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
+import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -123,6 +124,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 6], // CV1-CV6 content vectorization pipeline (IT67)
+        ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
