@@ -74,7 +74,7 @@ const FORBIDDEN_PATTERNS: Record<UILayer, Array<[RegExp, string, string]>> = {
         [/\bnew\s+RunViews?\s*\(\s*\)/, 'new RunView()', 'binds the global provider — use RunView.FromMetadataProvider(this.ProviderToUse)'],
         [/\bnew\s+RunQuery\s*\(\s*\)/, 'new RunQuery()', 'binds the global provider — use this.RunQueryToUse'],
         [/\bnew\s+RunReport\s*\(\s*\)/, 'new RunReport()', 'binds the global provider — use this.RunReportToUse'],
-        [/\bnew\s+Metadata\s*\(\s*\)/, 'new Metadata()', 'binds the global provider — use this.ProviderToUse'], // global-provider-ok: detects the anti-pattern, does not use it
+        [/\bnew\s+Metadata\s*\(\s*\)/, 'new Metadata()', 'binds the global provider — use this.ProviderToUse'], // global-provider-ok: detection-pattern literal, not a call site
     ],
     surface: [],
     shell: [],

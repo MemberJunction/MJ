@@ -6,6 +6,7 @@ import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus"
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { CodeGenReporter } from "./codegen-reporter";
+import { normalizeSmartFieldResultShape } from "../Database/search-guardrails";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
@@ -335,7 +336,13 @@ export class AdvancedGeneration {
                 r.searchableFields ??= [];
                 r.searchPredicates ??= [];
                 r.fullTextSearchFields ??= [];
-                return r;
+                // Defensive shape cleanup for the search flags: dedupe searchableFields
+                // and reconcile contradictory states the LLM occasionally returns
+                // (allowUserSearch=false with searchableFields populated, empty fields
+                // with allowUserSearch=true). The full code-level guardrail pipeline runs
+                // in ManageMetadataBase.normalizeSearchFlagsInPlace; this is just the
+                // first-pass cleanup so any caller of identifyFields() gets a coherent result.
+                return normalizeSmartFieldResultShape(r);
             } else {
                 LogError(`AdvancedGeneration:Smart field identification failed or returned a non-object result: ${result.errorMessage ?? `got ${typeof result.result}`}`);
                 return null;
