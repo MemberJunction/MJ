@@ -67,7 +67,13 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (target: Function) => target,
-  MJGlobal: {},
+  MJGlobal: {
+    Instance: {
+      ClassFactory: {
+        GetRegistrationAsync: vi.fn(async () => ({ SubClass: class {} })),
+      },
+    },
+  },
   SafeJSONParse: vi.fn(),
   UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) => a === b,
 }));
@@ -145,5 +151,75 @@ describe('DashboardResource config dashboard loading', () => {
 
     expect(notifyLoadComplete).toHaveBeenCalledTimes(1);
     expect(detectChanges).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DashboardResource code-based dashboard error surfacing', () => {
+  /**
+   * BaseDashboard guarantees the loading screen is released when initDashboard()/loadData() throws
+   * — it logs, emits its `Error` output, then fires NotifyLoadComplete() in a finally. The host must
+   * LISTEN to that output, otherwise the spinner clears to a silent blank page and the user is told
+   * nothing. This asserts the host renders its error card, and that the subscription is wired
+   * BEFORE the first await in the load path (so an Error emitted during the dashboard's own
+   * ngOnInit — which Angular can run while the host awaits user state — is not missed).
+   */
+  it('surfaces a dashboard Error emitted while the host is still awaiting user state', async () => {
+    const { DashboardResource } = await import('./dashboard-resource.component');
+
+    const dashboardInstance = {
+      Error: new MockEventEmitter<Error>(),
+      OpenEntityRecord: new MockEventEmitter(),
+      UserStateChanged: new MockEventEmitter(),
+      LoadCompleteEvent: null as (() => void) | null,
+      Config: null as unknown,
+      Refresh: vi.fn(),
+    };
+
+    const viewContainer = {
+      createComponent: vi.fn(() => ({
+        instance: dashboardInstance,
+        hostView: { rootNodes: [{ style: {} }] },
+      })),
+    };
+
+    const markForCheck = vi.fn();
+    const resource = new DashboardResource(
+      viewContainer as any,
+      { detectChanges: vi.fn(), markForCheck } as any,
+    ) as any;
+
+    resource.containerElement = {
+      nativeElement: { innerHTML: 'old', appendChild: vi.fn() },
+    };
+    resource.navigationService = { OpenEntityRecord: vi.fn() };
+
+    // Hold the user-state load open so we can emit Error from inside that window.
+    let releaseUserState!: () => void;
+    resource.loadDashboardUserState = vi.fn(
+      () => new Promise(resolve => {
+        releaseUserState = () => resolve({ UserState: null });
+      }),
+    );
+
+    const loadPromise = resource.loadCodeBasedDashboard({
+      ID: 'dash-1',
+      Name: 'Broken Dashboard',
+      DriverClass: 'BrokenDashboard',
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(resource.errorMessage).toBeNull();
+
+    // The dashboard's guarded load failed while the host was still awaiting user state.
+    dashboardInstance.Error.emit(new Error('loadData blew up'));
+
+    expect(resource.errorMessage).toContain('Broken Dashboard');
+    expect(resource.errorDetails).toContain('loadData blew up');
+    expect(markForCheck).toHaveBeenCalled();
+
+    releaseUserState();
+    await loadPromise;
   });
 });

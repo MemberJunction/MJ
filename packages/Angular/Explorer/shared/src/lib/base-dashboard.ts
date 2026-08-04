@@ -62,6 +62,13 @@ export abstract class BaseDashboard extends BaseResourceComponent implements OnI
 
   /**
    * This method will result in the dashboard being reloaded.
+   *
+   * NOTE — this promise does NOT reject when the reload fails. A load error is caught, logged via
+   * `LogError` and surfaced on the {@link Error} output (see {@link runGuardedLoad}), and the
+   * promise then RESOLVES. That is deliberate: callers invoke `Refresh()` fire-and-forget (the
+   * container does), so rejecting here would produce an unhandled rejection rather than reaching
+   * anyone. If you need to know whether a refresh succeeded, subscribe to {@link Error} — do not
+   * rely on `await Refresh()` throwing.
    */
   public async Refresh(): Promise<void> {
     await this.runGuardedLoad(() => this.loadData());

@@ -109,8 +109,9 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
                 console.warn(
                     `[LoadComplete WATCHDOG] ${this.constructor.name} has NOT called NotifyLoadComplete() ` +
                     `within ${BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS / 1000}s — FAILING OPEN: forcing ` +
-                    `load-complete to release the app loading screen. This resource most likely errored or hung ` +
-                    `during load and never signalled; it is the cause of any "stuck loading" report. ` +
+                    `load-complete to release the app loading screen. This resource either errored/hung without ` +
+                    `signalling, or is simply still loading (a slow-but-healthy load re-signals harmlessly when ` +
+                    `it finishes). If you are chasing a "stuck loading" report, start here. ` +
                     `(tabId=${this.getTabId() || 'n/a'})`
                 );
                 // Fail-open: the shell's loading screen blocks on NotifyLoadComplete. A subclass that

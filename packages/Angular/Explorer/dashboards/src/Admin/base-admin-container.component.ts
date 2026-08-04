@@ -233,6 +233,13 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
         }
         const ref = this.contentHost.createComponent(reg.SubClass as Type<BaseDashboard>);
         const instance = ref.instance as BaseDashboard;
+        // BaseDashboard catches a failing initDashboard()/loadData(), emits Error and still signals
+        // load-complete — so without this subscription an embedded dashboard's load failure would
+        // render as a blank content pane with a console-only error. Surface it in LoadError, which
+        // the container already renders.
+        instance.Error.subscribe((err: Error) => {
+            this.LoadError = err.message;
+        });
         instance.Config = { dashboard, userState: undefined };
         instance.Refresh();
         return ref;

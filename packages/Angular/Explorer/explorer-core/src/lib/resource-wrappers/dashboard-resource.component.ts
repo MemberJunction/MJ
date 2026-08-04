@@ -728,6 +728,13 @@ export class DashboardResource extends BaseResourceComponent {
                 this.NotifyLoadComplete();
             };
 
+            // Same as the code-based path: surface the dashboard's own load failures instead of
+            // clearing the spinner to a silent blank page (see loadCodeBasedDashboard).
+            instance.Error.subscribe((err: Error) => {
+                this.setError('The Data Explorer could not be loaded.', err);
+                this.cdr.markForCheck();
+            });
+
             // Initialize dashboard (no database config needed for DataExplorer)
             const config: DashboardConfig = {
                 dashboard: null as unknown as MJDashboardEntity, // No database record
@@ -773,6 +780,17 @@ export class DashboardResource extends BaseResourceComponent {
             instance.LoadCompleteEvent = () => {
                 this.NotifyLoadComplete();
             };
+
+            // Surface the dashboard's own load failures in the host's error card. BaseDashboard
+            // guarantees the loading screen is released even when initDashboard()/loadData() throws
+            // (it emits Error, then NotifyLoadComplete in a finally) — without this subscription the
+            // spinner would clear to a blank/half-rendered dashboard with a console-only error.
+            // Subscribed immediately after creation, BEFORE the first await below, so an Error
+            // emitted during the instance's own ngOnInit isn't missed.
+            instance.Error.subscribe((err: Error) => {
+                this.setError(`The dashboard "${dashboard.Name}" could not be loaded.`, err);
+                this.cdr.markForCheck();
+            });
 
             // Initialize with dashboard data
             const userStateEntity = await this.loadDashboardUserState(dashboard.ID);

@@ -1,9 +1,14 @@
+// @vitest-environment jsdom
 /**
  * Tests for shared package utilities:
  * - SimpleTextFormatPipe
  * - URLPipe
  * - TitleService
  * - EventCodes / HtmlListType constants
+ *
+ * Runs under jsdom (see the environment docblock above) because the TitleService suite
+ * constructs Angular's `Title` with the ambient `document`. The package's default vitest
+ * environment is `node`, where `document` is undefined.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -57,6 +62,9 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 vi.mock('@memberjunction/global', () => ({
   MJGlobal: { Instance: { GetEventListener: vi.fn(() => ({ subscribe: vi.fn() })) } },
+  // SharedService's constructor self-registers in the global object store (BaseSingleton-style
+  // dedup). A fresh store per call keeps each test's instance independent.
+  GetGlobalObjectStore: vi.fn(() => ({})),
   MJEventType: { LoggedIn: 'LoggedIn', ComponentEvent: 'ComponentEvent' },
   ConvertMarkdownStringToHtmlList: vi.fn((type: string, text: string) => `<${type}>${text}</${type}>`),
   InvokeManualResize: vi.fn(),
@@ -254,7 +262,10 @@ describe('SharedService resource type mapping', () => {
     const svc = new SharedService(mjNotif as never, injector as never);
 
     expect(svc.mapResourceTypeNameToRouteSegment('Records')).toBe('record');
-    expect(svc.mapResourceTypeNameToRouteSegment('MJ: User Views')).toBe('view');
+    // Resource-type ROW names are unprefixed ('User Views') — the `MJ: ` prefix rule applies to
+    // ENTITY names, not to `MJ: Resource Types` row values. The caller passes `rt.Name` straight
+    // from those rows (see user-notifications.component.ts), and the baseline seeds N'User Views'.
+    expect(svc.mapResourceTypeNameToRouteSegment('User Views')).toBe('view');
     expect(svc.mapResourceTypeNameToRouteSegment('Dashboards')).toBe('dashboard');
     expect(svc.mapResourceTypeNameToRouteSegment('Reports')).toBe('report');
     expect(svc.mapResourceTypeNameToRouteSegment('Search Results')).toBe('search');
