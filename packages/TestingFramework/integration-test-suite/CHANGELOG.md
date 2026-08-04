@@ -1,5 +1,50 @@
 # @memberjunction/integration-test-suite
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/predictive-studio@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-bridge-base@6.0.0
+  - @memberjunction/ai-bridge-server@6.0.0
+  - @memberjunction/api-keys@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/codegen-lib@6.0.0
+  - @memberjunction/communication-types@6.0.0
+  - @memberjunction/communication-engine@6.0.0
+  - @memberjunction/notifications@6.0.0
+  - @memberjunction/communication-ms-graph@6.0.0
+  - @memberjunction/communication-expo-push@6.0.0
+  - @memberjunction/communication-gmail@6.0.0
+  - @memberjunction/communication-sendgrid@6.0.0
+  - @memberjunction/communication-twilio@6.0.0
+  - @memberjunction/content-autotagging@6.0.0
+  - @memberjunction/conversations-runtime@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/metadata-sync@6.0.0
+  - @memberjunction/open-app-engine@6.0.0
+  - @memberjunction/query-processor@6.0.0
+  - @memberjunction/record-set-processor-base@6.0.0
+  - @memberjunction/record-set-processor@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/scheduling-engine@6.0.0
+  - @memberjunction/search-engine@6.0.0
+  - @memberjunction/templates-base-types@6.0.0
+  - @memberjunction/templates@6.0.0
+  - @memberjunction/testing-integration@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/predictive-studio-core@6.0.0
+  - @memberjunction/global@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes
