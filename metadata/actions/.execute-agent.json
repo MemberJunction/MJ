@@ -15,7 +15,7 @@
       "AgentRunID — stay logged, which keeps a run diagnosable: follow AgentRunID into",
       "'MJ: AI Agent Runs' for the content, where it belongs and is already access-controlled.",
       "",
-      "REQUIRES ActionParam.LogValue, added by migration V202608011200__v5.52.x. This file",
+      "REQUIRES ActionParam.LogValue, added by migration V202608042200__v6.1.x. This file",
       "cannot be pushed until that migration and CodeGen have run — see",
       "plans/entity-action-workflow-extensions.md §6."
     ],

@@ -1,7 +1,7 @@
 # Entity Action Workflow Extensions
 
 > **Status:** Draft v0.1 (2026-08-01) — schema authored, engine work specified, not yet built.
-> **Migration:** [`migrations/v5/V202608011200__v5.52.x__EntityAction_Workflow_Extensions.sql`](../migrations/v5/V202608011200__v5.52.x__EntityAction_Workflow_Extensions.sql)
+> **Migration:** [`migrations/v5/V202608042200__v6.1.x__EntityAction_Workflow_Extensions.sql`](../migrations/v5/V202608042200__v6.1.x__EntityAction_Workflow_Extensions.sql)
 > **Driven by:** the BizApps Sales / Contracts workflow requirement — "when a Deal reaches Closed
 > Won, run a workflow, configurable per Deal Type and per Company." Generalized here because it is
 > a framework need, not a sales need.
