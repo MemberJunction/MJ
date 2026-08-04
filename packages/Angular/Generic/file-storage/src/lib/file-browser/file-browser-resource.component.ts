@@ -1,4 +1,9 @@
 import { Component } from '@angular/core';
+// This component IS an Explorer surface (layer 3) and does not belong in a Generic package.
+// Moving it is the correct fix, but it is registered in THREE CodeGen-generated manifests —
+// explorer-core's lazy-feature-config.ts and both Bootstrap packages' class registrations —
+// which must be regenerated against a database, not hand-edited. Tracked in MJ#3404.
+// mj-ui-layers-allow: known debt, blocked on a CodeGen run — not a blessing of the pattern.
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';

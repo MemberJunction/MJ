@@ -1,0 +1,89 @@
+name: Release Lines Guard
+
+# Guards release-lines.json (LTS process doc §4.1/§8):
+# - On PRs touching the file: structural validation + status-transition legality
+#   (candidate → certified/withdrawn, extend-only support windows, immutable
+#   certifiedBuild). CODEOWNERS separately requires the certification owner's
+#   review on these PRs.
+# - On direct pushes to next/main: only mechanical fields may change
+#   (edge.newest, lines.*.newest, lines.*.releases). A push whose commit arrived
+#   via a merged PR is exempt from the freeze — that change was PR-reviewed.
+
+on:
+  pull_request:
+    paths:
+      - 'release-lines.json'
+      - 'ci/release-lines.schema.json'
+      - 'ci/validate-release-lines.mjs'
+  push:
+    branches: [next, main]
+    paths:
+      - 'release-lines.json'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Run validator self-tests
+        run: node --test ci/validate-release-lines.test.mjs
+
+      - name: Validate structure and status transitions vs base branch
+        run: node ci/validate-release-lines.mjs --base "origin/${{ github.base_ref }}" --mode pr
+
+  guard-push:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # STATED ASSUMPTION (LTS process §8): this guard is the SECOND net, not the
+      # first. The next/main ruleset requires changes to arrive via pull request,
+      # so direct pushes are rejected before this workflow matters. That matters
+      # because this push check is evadable by design: `[skip ci]` in a commit
+      # message skips push-triggered workflows entirely, and the merged-PR
+      # exemption below inspects only the push's HEAD commit (a multi-commit push
+      # under a merged head gets structural checks only). If the ruleset ever
+      # drops the PR requirement, harden this guard the same day.
+      - name: Check whether this commit arrived via a merged PR
+        id: origin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MERGED_PRS=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '[.[] | select(.merged_at != null)] | length')
+          echo "merged_prs=$MERGED_PRS" >> "$GITHUB_OUTPUT"
+          echo "Commit ${{ github.sha }} belongs to $MERGED_PRS merged PR(s)"
+
+      - name: Enforce protected-field freeze (direct pushes only)
+        run: |
+          if [ "${{ steps.origin.outputs.merged_prs }}" != "0" ]; then
+            echo "Commit arrived via a merged PR — protected-field changes were PR-reviewed; running structural checks only."
+            node ci/validate-release-lines.mjs
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            echo "No parent to diff against (new branch or force push) — running structural checks only."
+            node ci/validate-release-lines.mjs
+          else
+            node ci/validate-release-lines.mjs --base "${{ github.event.before }}" --mode push
+          fi

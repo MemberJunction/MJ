@@ -69,7 +69,11 @@ export function applyOpenAppClientBootstrapBlock(content: string, clientEntries:
         // type — `unknown` states that precisely and needs no eslint escape hatch.
         lines.push('');
         lines.push(`export const OPEN_APP_CLIENT_MODULES: unknown[] = [${refs.join(', ')}];`);
-        lines.push('(globalThis as Record<string, unknown>).__mjOpenAppClientModules = OPEN_APP_CLIENT_MODULES;');
+        // Bracket access, not dot: `globalThis` is cast to `Record<string, unknown>`, so this
+        // property comes from an index signature. Consumers compile this generated file under
+        // their own tsconfig, and MJExplorer sets `noPropertyAccessFromIndexSignature: true`,
+        // which rejects dot access here (TS4111) and fails its build with zero JS emitted.
+        lines.push("(globalThis as Record<string, unknown>)['__mjOpenAppClientModules'] = OPEN_APP_CLIENT_MODULES;");
         result = `${result.replace(/\n+$/, '')}\n\n${OPEN_APP_BOOTSTRAP_BEGIN}\n${lines.join('\n')}\n${OPEN_APP_BOOTSTRAP_END}\n`;
     }
     return result;

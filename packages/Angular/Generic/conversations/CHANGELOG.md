@@ -1,5 +1,146 @@
 # @memberjunction/ng-conversations
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-client@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/ng-testing@6.0.0
+  - @memberjunction/ng-artifacts@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-code-editor@6.0.0
+  - @memberjunction/ng-composer@6.0.0
+  - @memberjunction/ng-container-directives@6.0.0
+  - @memberjunction/ng-media-player@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/ng-resource-permissions@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/ng-tasks@6.0.0
+  - @memberjunction/ng-user-routines@6.0.0
+  - @memberjunction/conversations-runtime@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-agent-client@6.0.0
+  - @memberjunction/ng-forms@6.0.0
+  - @memberjunction/ng-whiteboard@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/ai-realtime-client@6.0.0
+  - @memberjunction/ng-markdown@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-agent-client@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/ng-testing@5.51.0
+  - @memberjunction/ng-artifacts@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-code-editor@5.51.0
+  - @memberjunction/ng-composer@5.51.0
+  - @memberjunction/ng-container-directives@5.51.0
+  - @memberjunction/ng-media-player@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/ng-resource-permissions@5.51.0
+  - @memberjunction/ng-shared-generic@5.51.0
+  - @memberjunction/ng-tasks@5.51.0
+  - @memberjunction/ng-user-routines@5.51.0
+  - @memberjunction/conversations-runtime@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ng-agent-client@5.51.0
+  - @memberjunction/ng-forms@5.51.0
+  - @memberjunction/ng-whiteboard@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/ai-realtime-client@5.51.0
+  - @memberjunction/ng-markdown@5.51.0
+  - @memberjunction/ng-ui-components@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Minor Changes
+
+- d36131a: Assistant identity inputs for the message feed. `assistantDisplayName` and `assistantAvatarUrl` on `mj-conversation-chat-area` (both default `null` = today's engine-resolved agent identity) let a white-label host brand the AI side of the conversation through the component contract instead of `::ng-deep` on `.message-sender` / `.avatar-circle` internals. The override is display-only by design: `isConversationManager` and the run-details header/record link keep comparing the engine-resolved agent name, so relabeling the persona can never change routing or behavior decisions. A whitespace-only or failing avatar URL degrades back to the agent's Font Awesome icon, and identity changes restamp already-rendered messages so a branding config that resolves after first render still applies.
+- 8580aef: Brandable conversation export + an additive `headerActions` slot. `ExportBranding` (`brandTokens` / `logoUrl` / `title` / `trademark`), supplied via `exportBranding` on `mj-conversation-chat-area`, now applies across all four export formats: HTML gets theme colors as a sanitized `:root{}` block, an inlined data-URI logo, the title, and a styled trademark footer; markdown/text carry the title and trademark (markdown also references the logo); JSON emits a `branding` block. The HTML export's stylesheet was converted to `var(--mj-token, <legacyHex>)` where every fallback is the exact prior literal, so an unbranded export renders identically to previous releases and the JSON/markdown/text output is byte-identical.
+
+  Host CSS values baked into the exported document pass a safe-function **allowlist** (`var`/`calc`/`min`/`max`/`clamp`/`rgb`/`rgba`/`hsl`/`hsla`/`hwb`/`lab`/`lch`/`oklab`/`oklch`/`color`/`color-mix`) plus a rejection of declaration- and tag-escape characters. Blocking only `url()` would have let `image-set()`, `-webkit-image-set()`, `cross-fade()`, `image()`, and `src()` fetch a remote URL from an exported local file without ever writing the literal `url(`.
+
+  Also adds `exportButtonLabel` / `exportButtonIcon` for relabeling the header Export button, the download-free `ExportService.BuildExportContent()` and `SnapshotBrandTokens()` seams, and a seventh chat slot — `headerActions` — which appends host buttons inside the DEFAULT header's action strip (a projected `header` slot replaces the whole header and therefore suppresses it).
+
+  The theme snapshot captures a **chosen** mode rather than the live one: `ExportOptions.themeMode` (`'light'` | `'dark'`, default `'light'`, surfaced as a Theme dropdown in the export modal) reads the requested palette by briefly toggling `data-theme` on `documentElement` and restoring it synchronously. Without this, exporting during a dark session baked dark text onto the export's white page and produced an unreadable file. The exported `body` now carries `--mj-bg-page` / `--mj-text-primary` / `--mj-font-family` so a dark export is coherent and a themed export carries the brand's type; `.message` corners read `--mj-radius-md`, and the user-message tint moved from `--mj-status-info-bg` to `--mj-brand-accent-subtle` (status colors never re-theme, so info-blue bubbles would otherwise survive every rebrand). Each keeps the prior literal as its `var()` fallback, with one deliberate exception: the new `body` rule sets `color: var(--mj-text-primary, #333)`, where message text previously inherited the browser default (black). The same rule makes the export explicitly white-backed, so a reader whose browser defaults to a dark canvas no longer gets black-on-dark — an unbranded export is therefore _more_ robust than before, not merely unchanged.
+
+- 35fb5e3: White-label theming + chrome toggles for the conversation list panel. Nine new public design tokens (`--mj-chat-list-{bg,ink,hover-bg,active-bg,active-ink,active-hover-bg,accent,accent-ink,accent-hover}`) let a host remap the list off the stock brand-secondary rail and onto surface tokens so it matches the chat area; hover, border, divider, preview, badge, and placeholder tints all derive from the ink (or the active-row ink) via `color-mix`, so they follow a remap automatically. They resolve in the component's `:host` onto private `--conv-list-*` names — a custom property cannot name itself in its own fallback without forming a cycle, so the two-name indirection is required rather than stylistic.
+
+  Four chrome toggles (`showSearch`, `showNewConversationButton`, `showHeaderMenu`, `showSectionHeaders`, all default `true`) remove list chrome for embedded and end-user surfaces; the header strip drops out entirely when nothing would occupy it, and `showSectionHeaders=false` renders a flat, fully-expanded list. `mj-conversation-sidebar` passes all four through and now re-emits the list's `(conversationDeleted)` and `(refreshRequested)` outputs, which previously died at the sidebar boundary.
+
+  Defaults are unchanged with one exception: the rename-flash keyframes were hardcoded `rgba()` values that ignored theming entirely (inline `styles:` blocks in `.ts` files escape the repo's CSS token gate) and now run on brand/status tokens at the same alpha ramp — same animation, theme-following hue.
+
+- abab5dc: Per-type mention gating on the chat area. `allowAgentMentions`, `allowEntityMentions`, and `allowSkillCommands` (all default `true`, all under the pre-existing `allowMentions` master) forward host-level caps to `mj-ai-composer`'s existing `EnableAgentMentions` / `EnableEntityMentions` / `EnableSkillCommands` toggles, through every composer consumer — the empty state and both message inputs. No composer or trigger-provider logic changes; the composer already treated `@` agents, `#` entities, and `/` skills as three independent plugins, and only the forwarding was missing.
+
+  This lets a surface offer `/` skill commands while dropping `@` agent mentions. That matters because an `@` outranks the entire default-agent resolution chain, so a host pinned to one agent via `[defaultAgentId]` has not really pinned it while `@` is available. Disabling a type removes its trigger provider rather than hiding UI, and `allowMentions=false` still disables all three regardless of the per-type flags.
+
+### Patch Changes
+
+- 938ae80: Fix collection sharing end-to-end: run the share-create authorization gate against the entity's provider with the caller as contextUser (it previously rejected every share server-side), surface the real block reason instead of "Unknown error creating record", open shared collections from the Sharing Center via the Collections nav item, and polish the shared-indicator UI (badge sizing/styling, Shared chip, owner name resolution and truncation). Includes share-affordance gating for legacy null-OwnerID collections and regression tests for the create gate.
+- 28c1dcd: `showAgentRunDetails=false` now hides the whole agent run-details section rather than only its grid, and the gear button that opens the panel renders only when that panel would actually have content.
+
+  Previously the flag gated the run-detail grid but left the section's "… Run Details" header — and, more visibly, left the gear icon opening onto an empty popup. The gate now sits at the panel root, and `hasAgentDetailsPanelContent` mirrors the panel's three sibling blocks exactly (run details when enabled, associated tasks, and on non-last messages the delete/rating/pin overflow), so a white-labeled end-user surface with run details off and no message actions gets no gear at all. The rating arm is AND-gated on `messageStatus === 'Complete'` to match the template, which only renders the rating in that branch.
+
+  Default behavior is unchanged: with `showAgentRunDetails=true` the gate is unconditionally true, so the gear renders for every agent-run message exactly as before — including the pre-existing window where the run record hasn't loaded yet.
+
+- fe1b8e7: Repair `tsconfig.spec.json`, which two merge resolutions had left as invalid JSON by appending `include` entries without a preceding comma. `vitest.dom.shared.ts` hands that file to `@analogjs/vite-plugin-angular` as its `tsconfig`; with it unparseable, the plugin's TypeScript program no longer contained the component sources, so the AOT transform never ran for them and 9 DOM test files failed with `Component 'X' is not resolved`. The hand-enumerated file list is replaced with `src/**/*.ts` — the include the other Angular packages use — so it cannot drift out of sync with the files on disk again.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ng-artifacts@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/ng-testing@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-code-editor@5.50.0
+  - @memberjunction/ng-notifications@5.50.0
+  - @memberjunction/ng-resource-permissions@5.50.0
+  - @memberjunction/ng-shared-generic@5.50.0
+  - @memberjunction/ng-tasks@5.50.0
+  - @memberjunction/ng-user-routines@5.50.0
+  - @memberjunction/conversations-runtime@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/ai-agent-client@5.50.0
+  - @memberjunction/ng-composer@5.50.0
+  - @memberjunction/ng-container-directives@5.50.0
+  - @memberjunction/ng-media-player@5.50.0
+  - @memberjunction/interactive-component-types@5.50.0
+  - @memberjunction/ng-forms@5.50.0
+  - @memberjunction/ai-realtime-client@5.50.0
+  - @memberjunction/ng-markdown@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+  - @memberjunction/ng-whiteboard@5.50.0
+  - @memberjunction/ng-agent-client@5.50.0
+  - @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Minor Changes

@@ -1,5 +1,92 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ng-base-application@6.0.0
+  - @memberjunction/ng-entity-form-dialog@6.0.0
+  - @memberjunction/ng-entity-permissions@6.0.0
+  - @memberjunction/ng-shared@6.0.0
+  - @memberjunction/ng-simple-record-list@6.0.0
+  - @memberjunction/ng-base-forms@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-code-editor@6.0.0
+  - @memberjunction/ng-join-grid@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/ng-user-avatar@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-tabstrip@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ng-shared@5.51.0
+  - @memberjunction/ng-base-application@5.51.0
+  - @memberjunction/ng-entity-form-dialog@5.51.0
+  - @memberjunction/ng-entity-permissions@5.51.0
+  - @memberjunction/ng-simple-record-list@5.51.0
+  - @memberjunction/ng-base-forms@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-code-editor@5.51.0
+  - @memberjunction/ng-join-grid@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/ng-shared-generic@5.51.0
+  - @memberjunction/ng-user-avatar@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ng-tabstrip@5.51.0
+  - @memberjunction/ng-ui-components@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 1c991f7: Main-navigation overhaul for MJ Explorer's shell. Unified active-state language (brand-primary everywhere; app metadata colors demoted to icon-identity accents) with full design-token adoption across the shell chrome; priority+ overflow for header nav items (collapse into a "More" menu instead of clipping the action cluster); the app switcher rebuilt as a centered card launcher (filterable by name and description, per-user recents, per-user custom/A-Z sort toggle, Tab-focusable cards, native top-layer dialog with inert-background focus trap) with a compact anchored-panel mode for small app catalogs via the new Shell.AppSwitcher.Style instance-config key (launcher/compact/auto, default auto = compact under 8 apps); the switcher trigger now labeled with the current app name; omnibar and launcher unified onto one command-surface spec (radius, scrim, boxed input, kbd chips, footers — omnibar also gained a banner-aware top offset fixing a connectivity-banner overlap); Configure Apps now opens in-panel inside the launcher via a view swap, backed by a new chrome-free mj-user-app-config-content component (the mj-user-app-config full-screen dialog API is unchanged for existing consumers) with hover-reveal row actions, launcher card styling, an inline unsaved-changes guard, and touch-device support. No schema changes; requires browsers with native dialog showModal support (all evergreen browsers since 2022). Note: the previously-public AppNavComponent.appColor getter was removed (shell-internal).
+- 764d6f6: Fix three client-reported issues (search coverage, Configure App dialog, default-app provisioning):
+  - **C3 — Search coverage:** decouple the per-entity fetch depth from the global `topK` budget in both `EntitySearchProvider` and `FullTextSearchProvider` (new tunable `PerEntityFetchDepth`, default 15), so multi-entity searches no longer starve individual entities of results. Also lower `MIN_TERM_LENGTH` from 3 to 2 across the engine and both providers so short queries (e.g. "US", "AI") are searchable.
+  - **F1 — Configure App dialog glitch:** the `[(ShowDialog)]` setter now emits `ShowDialogChange`, so the app-switcher's flag round-trips correctly; the dialog resets its app lists on open/close and reloads the user's applications on a deferred microtask (avoids `ExpressionChangedAfterItHasBeenCheckedError`). Removed the redundant double-drive in the app switcher.
+  - **F2 — Default-app provisioning (`Status = 'Active'` filter):** the JWT new-user provisioning path selected default applications with `DefaultForNewUser` but **without** the `Status = 'Active'` check that the client self-heal path already applied, so an inactive app flagged `DefaultForNewUser` could be provisioned onto new users there. Both paths now use a single shared selector, `UserInfoEngine.GetDefaultApplicationsForNewUser`, which filters to Active + `DefaultForNewUser` in `DefaultSequence` order — eliminating the drift.
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ng-base-application@5.50.0
+  - @memberjunction/ng-entity-form-dialog@5.50.0
+  - @memberjunction/ng-entity-permissions@5.50.0
+  - @memberjunction/ng-shared@5.50.0
+  - @memberjunction/ng-simple-record-list@5.50.0
+  - @memberjunction/ng-base-forms@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-code-editor@5.50.0
+  - @memberjunction/ng-join-grid@5.50.0
+  - @memberjunction/ng-notifications@5.50.0
+  - @memberjunction/ng-shared-generic@5.50.0
+  - @memberjunction/ng-user-avatar@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/ng-tabstrip@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+  - @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

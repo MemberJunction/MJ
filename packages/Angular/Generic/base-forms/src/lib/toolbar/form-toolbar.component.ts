@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, TemplateRef, ChangeDetectorRef, inject, DoCheck } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
@@ -44,7 +45,7 @@ import {
   templateUrl: './form-toolbar.component.html',
   styleUrls: ['./form-toolbar.component.css']
 })
-export class MjFormToolbarComponent implements DoCheck {
+export class MjFormToolbarComponent extends BaseAngularComponent implements DoCheck {
   private cdr = inject(ChangeDetectorRef);
 
   // ---- Deprecated form reference (backward compat) ----
@@ -395,7 +396,7 @@ export class MjFormToolbarComponent implements DoCheck {
 
     this._chainsLoading = true;
 
-    DiscoverISADescendants(this.Record).then(descendants => {
+    DiscoverISADescendants(this.Record, this.ProviderToUse).then(descendants => {
       this.DescendantTree = BuildDescendantTree(descendants);
       this._chainsLoading = false;
       this.cdr.markForCheck();
