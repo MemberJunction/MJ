@@ -223,6 +223,34 @@ describe('Dataset Caching in GetDatasetByName', () => {
         );
     });
 
+    it('does NOT mark a non-metadata dataset write as provider-internal scaffolding', async () => {
+        // Target contract (PR #3425 review, finding C2 — RED until the scoping fix): the
+        // scaffolding exemption exists for MJ_Metadata, whose rows only the provider's own
+        // assembly steps mutate. Every OTHER dataset is served to arbitrary consumers
+        // (BaseEngine.Load hands `item.Results` — the live cached arrays — to every engine
+        // subclass), so those slots must stay under the defensive deep-freeze or the original
+        // corruption class stays open for the whole dataset path.
+        provider.setTrustLocalCache(true);
+        vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
+        cacheGetSpy.mockResolvedValue(null);
+
+        const itemRow = buildDatasetItemRow();
+        const entityData = [{ ID: '1', Name: 'ResourceType1', __mj_UpdatedAt: '2026-03-01T00:00:00.000Z' }];
+        provider.setExecuteSQLResults([
+            [itemRow],     // Dataset metadata
+            entityData,    // SQL batch result
+        ]);
+
+        const result = await provider.GetDatasetByName('ResourceTypes', undefined, mockUser);
+
+        expect(result.Success).toBe(true);
+        expect(cacheSetSpy).toHaveBeenCalledTimes(1);
+        // Assert on the effect, not the exact call shape: however the write is made, the
+        // exemption flag must not be set for a dataset that is not MJ_Metadata.
+        const optionsArg = cacheSetSpy.mock.calls[0]?.[8] as { ProviderInternalScaffolding?: boolean } | undefined;
+        expect(optionsArg?.ProviderInternalScaffolding).toBeFalsy();
+    });
+
     it('handles mixed cache hits and misses across multiple items', async () => {
         provider.setTrustLocalCache(true);
         vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);

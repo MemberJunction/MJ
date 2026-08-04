@@ -1,5 +1,5 @@
 /**
- * cache-immutability.checks.ts — the 'cache-immutability' bundle (F1–F12).
+ * cache-immutability.checks.ts — the 'cache-immutability' bundle (F1–F14).
  *
  * Proves, against the REAL server stack (live DB, real ProviderBase, real
  * LocalCacheManager, real storage provider), that cached row data cannot be corrupted by a
@@ -25,7 +25,7 @@
  * Order matters: F2/F3/F4/F5 read the slot F1 warms (shared 'f1' UniqueFilter tag), exactly
  * like the server-cache bundle's S1→S2→S3 chain.
  */
-import { RunView, RunQuery, Metadata } from '@memberjunction/core';
+import { RunView, RunQuery, Metadata, LocalCacheManager } from '@memberjunction/core';
 import type { MJEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { UniqueFilter } from '@memberjunction/testing-integration';
@@ -479,6 +479,132 @@ export const CacheImmutabilityChecks: NamedCheck[] = [
             } finally {
                 await setting.Delete().catch(() => undefined);
             }
+        }
+    },
+    {
+        Id: 'cache-immutability.F13',
+        Name: 'F13: cache write funnels tolerate binary payloads (varbinary rows arrive as Buffers) without throwing',
+        Fn: async (ctx): Promise<void> => {
+            // PR #3425 review, finding C1 — RED until the deep-freeze guards binary values.
+            // `Object.freeze` on a non-empty TypedArray THROWS ("Cannot freeze array buffer
+            // views with elements"); the mssql driver returns varbinary columns as Buffer, and
+            // `MJ: AI Result Cache.PromptEmbedding` is exactly that on a stock install with
+            // AllowCaching=1. The freeze runs outside every try/catch on the write path, so a
+            // binary-bearing row rejects SetRunViewResult — and with it RunView itself, which
+            // MJ documents as never throwing. This probes the REAL LocalCacheManager and
+            // storage provider in the live process; the synthetic entity name keeps the
+            // AllowCaching write gate fail-open regardless of environment config, and the ttl
+            // lets the probe slots expire on their own.
+            Assert(
+                ctx.Storage.SharesReferences,
+                'precondition: the freeze must be armed (reference-sharing storage provider), otherwise nothing here would be frozen and this check proves nothing'
+            );
+
+            const stamp = Date.now();
+            const fingerprint = `IT69-F13-binary-probe|${stamp}`;
+            const nowIso = new Date().toISOString();
+            const rows: Record<string, unknown>[] = [
+                { ID: 'f13-1', Name: 'binary probe', PromptEmbedding: new Uint8Array([1, 2, 3]), __mj_UpdatedAt: nowIso },
+            ];
+
+            let threw: unknown = null;
+            try {
+                await LocalCacheManager.Instance.SetRunViewResult(
+                    fingerprint,
+                    { EntityName: 'IT69 F13 Probe Entity' },
+                    rows,
+                    nowIso,
+                    undefined, undefined, undefined,
+                    60_000
+                );
+            } catch (e) {
+                threw = e;
+            }
+            Assert(threw === null, `a RunView cache write of binary-bearing rows must not throw (RunView is documented to never throw): ${String(threw)}`);
+
+            const stored = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+            Assert(stored !== null, 'vacuity guard: the probe write was declined by the write gates — nothing was frozen, so this check proved nothing');
+            const row = stored!.results[0] as Record<string, unknown>;
+            Assert(Object.isFrozen(row), 'the probe row must still be frozen — the binary VALUE is skipped, not the whole row');
+            Assert(!Object.isFrozen(row['PromptEmbedding']), 'the binary payload itself is unfreezable by spec and must be left unfrozen (accepted residual, like Date internal slots)');
+
+            // Same hazard on the RunQuery funnel — arbitrary SQL can select varbinary.
+            let queryThrew: unknown = null;
+            try {
+                await LocalCacheManager.Instance.SetRunQueryResult(
+                    `IT69-F13-binary-query|${stamp}`,
+                    'IT69 F13 binary probe query',
+                    [{ ID: 'q1', Vector: new Uint8Array([4, 5]) }],
+                    nowIso,
+                    1, undefined, 60_000
+                );
+            } catch (e) {
+                queryThrew = e;
+            }
+            Assert(queryThrew === null, `a RunQuery cache write of binary-bearing rows must not throw: ${String(queryThrew)}`);
+        }
+    },
+    {
+        Id: 'cache-immutability.F14',
+        Name: 'F14: non-metadata dataset rows are frozen shared state; MJ_Metadata keeps its scaffolding exemption',
+        Fn: async (ctx): Promise<void> => {
+            // PR #3425 review, finding C2 — RED until the ProviderInternalScaffolding exemption
+            // is scoped to the MJ_Metadata dataset. Today the single dataset-item write funnel
+            // exempts EVERY dataset, but GetDatasetByName is a public API: BaseEngine.Load hands
+            // `item.Results` — the live cached arrays — to every engine subclass in the process,
+            // so unfrozen dataset rows re-open the original corruption class for the whole
+            // dataset path. Target contract: only MJ_Metadata (whose rows the provider's own
+            // metadata assembly mutates in place, by design) stays mutable.
+            Assert(
+                ctx.Storage.SharesReferences,
+                'precondition: the freeze must be armed (reference-sharing storage provider)'
+            );
+            const md = new Metadata(); // global-provider-ok: integration test — single-provider process by design
+            const rv = new RunView();
+
+            // Data-driven: pick any live dataset that is not the metadata dataset.
+            const catalog = await rv.RunView({
+                EntityName: 'MJ: Datasets',
+                ExtraFilter: `Name <> 'MJ_Metadata'`,
+                Fields: ['ID', 'Name'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            }, ctx.User);
+            Assert(catalog.Success, `dataset catalog read failed: ${catalog.ErrorMessage}`);
+            if (catalog.Results.length === 0) {
+                Assert(true, 'no non-metadata datasets in this environment — dataset freeze scope not exercised');
+                return;
+            }
+            const datasetName = String((catalog.Results[0] as Record<string, unknown>)['Name']);
+
+            const ds = await md.GetAndCacheDatasetByName(datasetName, undefined, ctx.User);
+            if (!ds?.Success || !ds.Results?.length) {
+                Assert(true, `dataset '${datasetName}' did not load here (${ds?.Status ?? 'no result'}) — dataset freeze scope not exercised`);
+                return;
+            }
+
+            for (const item of ds.Results) {
+                Assert(
+                    Object.isFrozen(item.Results),
+                    `dataset '${datasetName}' item '${item.Code}': the cached row array must be frozen — an unfrozen dataset array is the P1 corruption class re-opened via GetDatasetByName`
+                );
+                if (item.Results.length > 0) {
+                    Assert(Object.isFrozen(item.Results[0]), `dataset '${datasetName}' item '${item.Code}': cached rows must be frozen`);
+                }
+            }
+
+            // The metadata dataset must KEEP its exemption — PostProcessEntityMetadata sorts
+            // this row array in place and attaches child collections; freezing it boots the
+            // process with no metadata at all — and the process's metadata must stay healthy.
+            const meta = await md.GetAndCacheDatasetByName('MJ_Metadata', undefined, ctx.User);
+            if (meta?.Success && meta.Results?.length) {
+                const entitiesItem = meta.Results.find(i => i.Code === 'Entities') ?? meta.Results[0];
+                Assert(
+                    !Object.isFrozen(entitiesItem.Results),
+                    `MJ_Metadata item '${entitiesItem.Code}' must stay exempt from the freeze (provider-internal scaffolding)`
+                );
+            }
+            Assert(md.Entities.length > 0, 'metadata must remain loaded and healthy after the dataset fetches');
         }
     }
 ];

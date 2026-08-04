@@ -89,7 +89,7 @@ describe('IntegrationCheckRegistry', () => {
 describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 32],
-        ['cache-immutability', CacheImmutabilityChecks, 12], // F1-F12 freeze-on-write runtime contract (IT69)
+        ['cache-immutability', CacheImmutabilityChecks, 14], // F1-F14 freeze-on-write runtime contract (IT69); F13/F14 added red-first for the PR #3425 review findings C1/C2
         ['client-cache', ClientCacheChecks, 13],
         ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
         ['rls-isolation', RlsIsolationChecks, 9],

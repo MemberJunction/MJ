@@ -269,4 +269,20 @@ describe('ProviderBase Server-Side Guards', () => {
             expect(wouldCoalesce).toBe(false);
         });
     });
+
+    // -----------------------------------------------------------------------
+    // ILocalStorageProvider runtime contract (PR #3425 review, finding M1)
+    // -----------------------------------------------------------------------
+    describe('ILocalStorageProvider runtime contract', () => {
+        it('SpyableLocalStorageProvider declares its reference-sharing semantics', () => {
+            // `SharesReferences` is REQUIRED on the interface so every implementer states its
+            // isolation semantics — but this package's tsconfig excludes __tests__ from tsc and
+            // vitest transpiles without type-checking, so a test-local implementer can silently
+            // omit it (TS2420 that nothing reports). At runtime that reads as `undefined` →
+            // falsy → LocalCacheManager treats the store as serializing and never arms the
+            // freeze. This runtime assertion is the backstop the type system can't provide here.
+            const sp: ILocalStorageProvider = new SpyableLocalStorageProvider();
+            expect(typeof sp.SharesReferences).toBe('boolean');
+        });
+    });
 });
