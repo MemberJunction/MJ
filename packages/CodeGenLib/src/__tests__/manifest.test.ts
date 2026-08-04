@@ -1193,6 +1193,12 @@ describe('Lazy Config Generation - Integration', () => {
         // Should have LAZY_FEATURE_CONFIG export
         expect(content).toContain('export const LAZY_FEATURE_CONFIG');
         expect(content).toContain('export const LAZY_FEATURE_CONFIG_COUNT');
+
+        // Each chunk must declare its own distinct chunkId — the registry dedupes loads by it,
+        // so a shared/derived id would collapse every chunk into one.
+        expect(content).toContain("chunkId: '@test/dashboards/ai.module'");
+        expect(content).toContain("chunkId: '@test/dashboards/actions.module'");
+        expect(content).not.toContain('featureLoader');
     });
 
     it('should not generate lazy config when lazyConfigPath is not set', async () => {

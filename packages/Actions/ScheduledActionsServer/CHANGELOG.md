@@ -1,5 +1,69 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-vectors-pinecone@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/actions-apollo@6.0.0
+  - @memberjunction/actions-content-autotag@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/scheduled-actions@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/ai-mistral@6.0.0
+  - @memberjunction/ai-openai@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-vectors-pinecone@5.51.0
+  - @memberjunction/ai-vector-sync@5.51.0
+  - @memberjunction/actions-apollo@5.51.0
+  - @memberjunction/actions-content-autotag@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/scheduled-actions@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/ai-mistral@5.51.0
+  - @memberjunction/ai-openai@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/actions-content-autotag@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/ai-vector-sync@5.50.0
+  - @memberjunction/actions-apollo@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/scheduled-actions@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/ai-vectors-pinecone@5.50.0
+  - @memberjunction/ai-mistral@5.50.0
+  - @memberjunction/ai-openai@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

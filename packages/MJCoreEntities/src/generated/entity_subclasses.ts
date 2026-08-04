@@ -7772,6 +7772,80 @@ export const MJAISkillPermissionSchema = z.object({
 export type MJAISkillPermissionEntityType = z.infer<typeof MJAISkillPermissionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Skill Search Scopes
+ */
+export const MJAISkillSearchScopeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SkillID: z.string().describe(`
+        * * Field Name: SkillID
+        * * Display Name: Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+        * * Description: The skill this grant belongs to.`),
+    SearchScopeID: z.string().describe(`
+        * * Field Name: SearchScopeID
+        * * Display Name: Search Scope ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+        * * Description: The Search Scope this skill may reach.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Active or Inactive. Inactive rows are ignored during resolution.`),
+    StartAt: z.date().nullable().describe(`
+        * * Field Name: StartAt
+        * * Display Name: Start At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional start of the window in which this grant is honoured. NULL = no lower bound. Evaluated against the current time on every resolution, so a window opening or closing needs no cache invalidation.`),
+    EndAt: z.date().nullable().describe(`
+        * * Field Name: EndAt
+        * * Display Name: End At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional end of the window in which this grant is honoured. NULL = no upper bound.`),
+    Priority: z.number().nullable().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Description: Lower numbers win when several granted scopes are candidates and none is marked IsDefault.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set, this scope is chosen for the skill ahead of Priority ordering.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Skill: z.string().describe(`
+        * * Field Name: Skill
+        * * Display Name: Skill
+        * * SQL Data Type: nvarchar(255)`),
+    SearchScope: z.string().describe(`
+        * * Field Name: SearchScope
+        * * Display Name: Search Scope
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJAISkillSearchScopeEntityType = z.infer<typeof MJAISkillSearchScopeSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Skill Sub Agents
  */
 export const MJAISkillSubAgentSchema = z.object({
@@ -7890,6 +7964,16 @@ export const MJAISkillSchema = z.object({
     *   * Auto
     *   * RequestedOnly
         * * Description: Controls whether this skill may ever be self-activated by an agent. Auto: the skill may appear in accepting agents' prompt catalogs and be activated mid-run on agent judgment — but only for agents whose own SkillActivationMode is also Auto (double gate). RequestedOnly (default): the skill is excluded from prompt catalogs entirely and can only be activated when the user explicitly requests it for the run (a /skill mention flowing through ExecuteAgentParams.requestedSkillIDs). All other activation gates (AcceptsSkills, skill Status, per-agent assignment, user Run permission) apply unchanged in both modes.`),
+    SearchScopeAccess: z.union([z.literal('All'), z.literal('Assigned'), z.literal('None')]).nullable().describe(`
+        * * Field Name: SearchScopeAccess
+        * * Display Name: Search Scope Access
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Assigned
+    *   * None
+        * * Description: Which Search Scopes this skill may reach when activated. None = grants no retrieval scope; Assigned = only scopes listed in AISkillSearchScope; All = any active scope. NULL behaves as None so existing skills are unaffected. Mirrors AIAgent.SearchScopeAccess so a skill and an agent are interchangeable principals to SearchScopePermissionResolver.`),
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User
@@ -27548,6 +27632,22 @@ export const MJSearchExecutionLogSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    AISkillID: z.string().nullable().describe(`
+        * * Field Name: AISkillID
+        * * Display Name: AI Skill ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+        * * Description: The AI Skill on whose behalf this search ran, or NULL for a search with no active skill. Mirrors AIAgentID: since a skill is a search principal in its own right (AISkill.SearchScopeAccess plus MJ: AI Skill Search Scopes rows can reach a scope the user's own roles do not grant), the log must record which skill was active or the entitlement decision cannot be reconstructed.`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: The tenant this search ran for, taken from SearchContext.PrimaryScopeRecordID. Lets a multi-tenant deployment partition, filter and retain search audit history per customer. NULL for untenanted searches. Named for the existing primary-scope concept rather than OrganizationID because a scope's primary scope may be a Company, Client or Practice.`),
+    ScopeDecisionJSON: z.string().nullable().describe(`
+        * * Field Name: ScopeDecisionJSON
+        * * Display Name: Scope Decision JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Serialized ScopeExplanation recording WHY this search could reach what it reached: the entitlement decision and the grant that produced it, every dimension with its provenance (CallerSupplied / ServerDerived / Default / DiscardedCaller / Absent), and each lane's rendered filter with its active-or-skipped status and reason. Identical in shape to the value returned by SearchEngine.ExplainScope(), so the dry-run an administrator previews before running a search is the same structure the audit log stores afterwards. NULL when the engine did not capture a decision (older writers, or a failure before scope resolution).`),
     SearchScope: z.string().nullable().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
@@ -27559,6 +27659,10 @@ export const MJSearchExecutionLogSchema = z.object({
     AIAgent: z.string().nullable().describe(`
         * * Field Name: AIAgent
         * * Display Name: AI Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    AISkill: z.string().nullable().describe(`
+        * * Field Name: AISkill
+        * * Display Name: AI Skill
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -27699,6 +27803,11 @@ export const MJSearchScopeEntitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RequiredMetadataKeys: z.string().nullable().describe(`
+        * * Field Name: RequiredMetadataKeys
+        * * Display Name: Required Metadata Keys
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of column or alias names the rendered ExtraFilter MUST reference for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if one is missing the lane is SKIPPED rather than queried, because a partially-rendered filter (an {% if %} clause dropped when its dimension was absent or discarded) is still valid SQL and silently widens the search. Same concept and same engine check as SearchScopeExternalIndex.RequiredMetadataKeys, applied to the SQL lane. NULL = no contract declared, which is the pre-migration behaviour.`),
     SearchScope: z.string().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope
@@ -27770,6 +27879,11 @@ export const MJSearchScopeExternalIndexSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RequiredMetadataKeys: z.string().nullable().describe(`
+        * * Field Name: RequiredMetadataKeys
+        * * Display Name: Required Metadata Keys
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of metadata key names the rendered MetadataFilter MUST constrain on for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if a key is missing the lane is SKIPPED rather than queried, because a partially-rendered filter silently widens the search. This also documents the ingest contract — these are the labels the writer must stamp on every document in the index, since a filter on a key that was never written either matches nothing or (on providers that ignore unknown keys) matches everything. NULL = no contract declared, which is the pre-migration behaviour.`),
     SearchScope: z.string().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope
@@ -27831,6 +27945,21 @@ export const MJSearchScopePermissionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    StartAt: z.date().nullable().describe(`
+        * * Field Name: StartAt
+        * * Display Name: Start At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional start of the window in which this grant applies. NULL = no lower bound. SearchScopePermission was the only member of this family without a time window, so temporary grants previously needed a bespoke mechanism.`),
+    EndAt: z.date().nullable().describe(`
+        * * Field Name: EndAt
+        * * Display Name: End At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional end of the window in which this grant applies. NULL = no upper bound.`),
+    PrimaryScopeRecordID: z.string().nullable().describe(`
+        * * Field Name: PrimaryScopeRecordID
+        * * Display Name: Primary Scope Record ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Optional tenant this grant is limited to, matched against SearchContext.PrimaryScopeRecordID at search time and type-checkable against the scope's own PrimaryScopeEntityID. NULL = applies to every tenant, which is the pre-migration behaviour for all existing rows. Deliberately NOT called OrganizationID: MJ is domain-agnostic and a scope's primary scope may be a Company, Client or Practice, so this reuses the existing primary-scope concept rather than inventing a parallel tenancy column.`),
     SearchScope: z.string().describe(`
         * * Field Name: SearchScope
         * * Display Name: Search Scope Name
@@ -54216,6 +54345,188 @@ export class MJAISkillPermissionEntity extends BaseEntity<MJAISkillPermissionEnt
 
 
 /**
+ * MJ: AI Skill Search Scopes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AISkillSearchScope
+ * * Base View: vwAISkillSearchScopes
+ * * @description Search Scopes an AI Skill may reach when activated, honoured when AISkill.SearchScopeAccess = 'Assigned'. Mirrors AIAgentSearchScope: Status plus an optional StartAt/EndAt window time-box a grant, and Priority/IsDefault pick among several. An empty table means no skill grants any scope - the pre-migration behaviour.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Skill Search Scopes')
+export class MJAISkillSearchScopeEntity extends BaseEntity<MJAISkillSearchScopeEntityType> {
+    /**
+    * Loads the MJ: AI Skill Search Scopes record from the database
+    * @param ID: string - primary key value to load the MJ: AI Skill Search Scopes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAISkillSearchScopeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SkillID
+    * * Display Name: Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    * * Description: The skill this grant belongs to.
+    */
+    get SkillID(): string {
+        return this.Get('SkillID');
+    }
+    set SkillID(value: string) {
+        this.Set('SkillID', value);
+    }
+
+    /**
+    * * Field Name: SearchScopeID
+    * * Display Name: Search Scope ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+    * * Description: The Search Scope this skill may reach.
+    */
+    get SearchScopeID(): string {
+        return this.Get('SearchScopeID');
+    }
+    set SearchScopeID(value: string) {
+        this.Set('SearchScopeID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Active or Inactive. Inactive rows are ignored during resolution.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartAt
+    * * Display Name: Start At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional start of the window in which this grant is honoured. NULL = no lower bound. Evaluated against the current time on every resolution, so a window opening or closing needs no cache invalidation.
+    */
+    get StartAt(): Date | null {
+        return this.Get('StartAt');
+    }
+    set StartAt(value: Date | null) {
+        this.Set('StartAt', value);
+    }
+
+    /**
+    * * Field Name: EndAt
+    * * Display Name: End At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional end of the window in which this grant is honoured. NULL = no upper bound.
+    */
+    get EndAt(): Date | null {
+        return this.Get('EndAt');
+    }
+    set EndAt(value: Date | null) {
+        this.Set('EndAt', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Description: Lower numbers win when several granted scopes are candidates and none is marked IsDefault.
+    */
+    get Priority(): number | null {
+        return this.Get('Priority');
+    }
+    set Priority(value: number | null) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set, this scope is chosen for the skill ahead of Priority ordering.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Skill
+    * * Display Name: Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Skill(): string {
+        return this.Get('Skill');
+    }
+
+    /**
+    * * Field Name: SearchScope
+    * * Display Name: Search Scope
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SearchScope(): string {
+        return this.Get('SearchScope');
+    }
+}
+
+
+/**
  * MJ: AI Skill Sub Agents - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AISkillSubAgent
@@ -54514,6 +54825,24 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
     }
     set ActivationMode(value: 'Auto' | 'RequestedOnly') {
         this.Set('ActivationMode', value);
+    }
+
+    /**
+    * * Field Name: SearchScopeAccess
+    * * Display Name: Search Scope Access
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Assigned
+    *   * None
+    * * Description: Which Search Scopes this skill may reach when activated. None = grants no retrieval scope; Assigned = only scopes listed in AISkillSearchScope; All = any active scope. NULL behaves as None so existing skills are unaffected. Mirrors AIAgent.SearchScopeAccess so a skill and an agent are interchangeable principals to SearchScopePermissionResolver.
+    */
+    get SearchScopeAccess(): 'All' | 'Assigned' | 'None' | null {
+        return this.Get('SearchScopeAccess');
+    }
+    set SearchScopeAccess(value: 'All' | 'Assigned' | 'None' | null) {
+        this.Set('SearchScopeAccess', value);
     }
 
     /**
@@ -105356,6 +105685,46 @@ export class MJSearchExecutionLogEntity extends BaseEntity<MJSearchExecutionLogE
     }
 
     /**
+    * * Field Name: AISkillID
+    * * Display Name: AI Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    * * Description: The AI Skill on whose behalf this search ran, or NULL for a search with no active skill. Mirrors AIAgentID: since a skill is a search principal in its own right (AISkill.SearchScopeAccess plus MJ: AI Skill Search Scopes rows can reach a scope the user's own roles do not grant), the log must record which skill was active or the entitlement decision cannot be reconstructed.
+    */
+    get AISkillID(): string | null {
+        return this.Get('AISkillID');
+    }
+    set AISkillID(value: string | null) {
+        this.Set('AISkillID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: The tenant this search ran for, taken from SearchContext.PrimaryScopeRecordID. Lets a multi-tenant deployment partition, filter and retain search audit history per customer. NULL for untenanted searches. Named for the existing primary-scope concept rather than OrganizationID because a scope's primary scope may be a Company, Client or Practice.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: ScopeDecisionJSON
+    * * Display Name: Scope Decision JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Serialized ScopeExplanation recording WHY this search could reach what it reached: the entitlement decision and the grant that produced it, every dimension with its provenance (CallerSupplied / ServerDerived / Default / DiscardedCaller / Absent), and each lane's rendered filter with its active-or-skipped status and reason. Identical in shape to the value returned by SearchEngine.ExplainScope(), so the dry-run an administrator previews before running a search is the same structure the audit log stores afterwards. NULL when the engine did not capture a decision (older writers, or a failure before scope resolution).
+    */
+    get ScopeDecisionJSON(): string | null {
+        return this.Get('ScopeDecisionJSON');
+    }
+    set ScopeDecisionJSON(value: string | null) {
+        this.Set('ScopeDecisionJSON', value);
+    }
+
+    /**
     * * Field Name: SearchScope
     * * Display Name: Search Scope Name
     * * SQL Data Type: nvarchar(200)
@@ -105380,6 +105749,15 @@ export class MJSearchExecutionLogEntity extends BaseEntity<MJSearchExecutionLogE
     */
     get AIAgent(): string | null {
         return this.Get('AIAgent');
+    }
+
+    /**
+    * * Field Name: AISkill
+    * * Display Name: AI Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AISkill(): string | null {
+        return this.Get('AISkill');
     }
 }
 
@@ -105770,6 +106148,19 @@ export class MJSearchScopeEntityEntity extends BaseEntity<MJSearchScopeEntityEnt
     }
 
     /**
+    * * Field Name: RequiredMetadataKeys
+    * * Display Name: Required Metadata Keys
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of column or alias names the rendered ExtraFilter MUST reference for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if one is missing the lane is SKIPPED rather than queried, because a partially-rendered filter (an {% if %} clause dropped when its dimension was absent or discarded) is still valid SQL and silently widens the search. Same concept and same engine check as SearchScopeExternalIndex.RequiredMetadataKeys, applied to the SQL lane. NULL = no contract declared, which is the pre-migration behaviour.
+    */
+    get RequiredMetadataKeys(): string | null {
+        return this.Get('RequiredMetadataKeys');
+    }
+    set RequiredMetadataKeys(value: string | null) {
+        this.Set('RequiredMetadataKeys', value);
+    }
+
+    /**
     * * Field Name: SearchScope
     * * Display Name: Search Scope
     * * SQL Data Type: nvarchar(200)
@@ -105983,6 +106374,19 @@ export class MJSearchScopeExternalIndexEntity extends BaseEntity<MJSearchScopeEx
     }
 
     /**
+    * * Field Name: RequiredMetadataKeys
+    * * Display Name: Required Metadata Keys
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of metadata key names the rendered MetadataFilter MUST constrain on for this lane to be considered safe, e.g. ["OrganizationID","ContentSourceID"]. Checked against the RENDERED filter at search time: if a key is missing the lane is SKIPPED rather than queried, because a partially-rendered filter silently widens the search. This also documents the ingest contract — these are the labels the writer must stamp on every document in the index, since a filter on a key that was never written either matches nothing or (on providers that ignore unknown keys) matches everything. NULL = no contract declared, which is the pre-migration behaviour.
+    */
+    get RequiredMetadataKeys(): string | null {
+        return this.Get('RequiredMetadataKeys');
+    }
+    set RequiredMetadataKeys(value: string | null) {
+        this.Set('RequiredMetadataKeys', value);
+    }
+
+    /**
     * * Field Name: SearchScope
     * * Display Name: Search Scope
     * * SQL Data Type: nvarchar(200)
@@ -106167,6 +106571,45 @@ export class MJSearchScopePermissionEntity extends BaseEntity<MJSearchScopePermi
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: StartAt
+    * * Display Name: Start At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional start of the window in which this grant applies. NULL = no lower bound. SearchScopePermission was the only member of this family without a time window, so temporary grants previously needed a bespoke mechanism.
+    */
+    get StartAt(): Date | null {
+        return this.Get('StartAt');
+    }
+    set StartAt(value: Date | null) {
+        this.Set('StartAt', value);
+    }
+
+    /**
+    * * Field Name: EndAt
+    * * Display Name: End At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional end of the window in which this grant applies. NULL = no upper bound.
+    */
+    get EndAt(): Date | null {
+        return this.Get('EndAt');
+    }
+    set EndAt(value: Date | null) {
+        this.Set('EndAt', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Optional tenant this grant is limited to, matched against SearchContext.PrimaryScopeRecordID at search time and type-checkable against the scope's own PrimaryScopeEntityID. NULL = applies to every tenant, which is the pre-migration behaviour for all existing rows. Deliberately NOT called OrganizationID: MJ is domain-agnostic and a scope's primary scope may be a Company, Client or Practice, so this reuses the existing primary-scope concept rather than inventing a parallel tenancy column.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
     }
 
     /**

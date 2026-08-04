@@ -1,5 +1,131 @@
 # Change Log - @memberjunction/core-entities
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Minor Changes
+
+- 12691e3: Content autotagging: metadata-driven vector config, chunk purge + backfill, and parity with the entity-vectorization pipeline
+
+  Brings the ContentSource / autotag embedding pipeline (`AutotagBaseEngine`) up to parity with the
+  EntityDocument pipeline, and wires up chunk lifecycle operations. All additive and opt-in — existing
+  setups behave identically. No schema/migration changes (config rides the `Configuration` JSONType).
+  - **Metadata-driven vector config** on the `Configuration` JSONType of both `ContentSource` and
+    `ContentType` (ContentSource overrides ContentType, then a hardcoded default):
+    - **`VectorIDStrategy`** (`'hash' | 'recordId'`, default `'recordId'`): `'recordId'` uses each
+      chunk's own id as its vector-DB id (purge-safe); `'hash'` is 5.49 EntityDocument parity and
+      unsafe with re-chunk + purge (documented).
+    - **`ChunkTextStorage`** (`'mixed' | 'alwaysChunk'`, default `'alwaysChunk'`): `'alwaysChunk'`
+      writes a `ContentItemChunk` row for every item and leaves `ContentItem.VectorRecordID` null;
+      `'mixed'` keeps single-chunk items' text/vector on the ContentItem.
+    - **`VectorMetadata`** — full structural parity with the entity pipeline's metadata control:
+      `FieldStrategy: 'all' | 'include' | 'exclude' | 'explicit'` (unset ⇒ the curated content
+      default, preserving historical behavior), per-field `Fields` overrides
+      (`Included`/`TruncationLimit`/`StoreAs`), `DefaultTruncationLimit`,
+      and `IncludeEntityIcon`/`IncludeUpdatedAt`/`IncludeTags`/`IncludeText` toggles. The runner mirrors
+      the entity side's decomposition (system/icon/updatedAt/display-field helpers, StoreAs coercion,
+      UUID normalization, truncation) driven off the ContentItem entity. Content-specific deviations:
+      `Entity` is always kept under `'explicit'` (so results stay labeled; record id recovers from the
+      vector id under the default `recordId` strategy), and `Tags` (not a ContentItem field) is a
+      toggle rather than a discovered field.
+  - **Chunk-Identity Contract** — chunk vectors now carry their own identity: `Entity='MJ: Content
+Item Chunks'`, `RecordID=<ContentItemChunk.ID>`, `ContentItemID`, `Sequence`. The chunk row PK is
+    minted up front and used as its identity (and, under `recordId`, its vector id), so a scoped
+    search hit returns the matched **chunk** id (not just the parent content item id) with no
+    search-side changes. Item-level ('mixed' single-chunk) vectors keep `MJ: Content Items` identity.
+  - **`AutotagBaseEngine.EmbedPendingChunks(user, {maxItems})`** — (re)embeds persisted
+    `ContentItemChunk` rows whose `EmbeddingStatus='Pending'`, for migration backfill and error
+    recovery. Bounded per run + rate-limited; best-effort per chunk.
+  - **Embedding dimensions** — the resolved infrastructure now carries `MJ: Vector Indexes.Dimensions`
+    and threads it into the embedding call (new optional `Dimensions` on `AIModelRunner`'s
+    `EmbeddingRunParams`, forwarded to `EmbedTexts`), so reduced-dimension indexes work in the autotag
+    path and the dedup-check query embeds at the matching size.
+  - **Provider routing** — the resolved infrastructure carries the parsed `VectorIndex.ProviderConfig`;
+    per-record `providerTemporaryDirectives` are built via `VectorDBBase.BuildProviderDirectives`
+    (e.g. Pinecone namespace from a configured source field) and `providerConfig` is passed to
+    `CreateRecords`. Only invoked when the index actually has a ProviderConfig.
+  - **`AutotagBaseEngine.PurgeDeletedChunks`** is now triggerable: the Autotag/Vectorize action gains
+    optional **`Purge`** (Phase 4) and **`EmbedPendingChunks`** (Phase 3) params, both independent of
+    Vectorize, both bounded by `MaxItems`, both best-effort.
+
+  Behavior note: the default `ChunkTextStorage='alwaysChunk'` + `VectorIDStrategy='recordId'` means
+  newly-embedded single-chunk items now get a `ContentItemChunk` row with a unique vector id instead
+  of an item-level hash id. Already-embedded (`EmbeddingStatus='Complete'`) items are not reprocessed,
+  so existing data is untouched until re-embedded; set `ChunkTextStorage='mixed'` per source to retain
+  the item-level single-chunk behavior.
+
+- 1afdc40: Content autotagging: persist vector-database record identifiers, and add the ContentItemChunk entity
+
+  Vectorized Content Items previously had no back-reference to their stored vectors, and chunked items produced multiple vectors with no record of which portion of the item each represented. This adds that provenance.
+  - **`ContentItem.VectorRecordID`** (new `NVARCHAR(100)` column) — the vector-database record id for an item embedded as a single vector, providing traceability from the item to its stored vector.
+  - **New `ContentItemChunk` entity** — `ContentItemID` / `Sequence` / `Text` / `VectorRecordID`. When an item's text is split into multiple embedding chunks, each chunk becomes a row here, linking the stored vector back to the specific portion of the parent item. `(ContentItemID, Sequence)` is intentionally NOT unique — superseded chunks are soft-deleted (kept as tombstones) so a chunk and its replacement can share a Sequence until purged.
+  - **`AutotagBaseEngine.VectorizeContentItems`** — after a successful upsert, persists the record ids: single-chunk items write `ContentItem.VectorRecordID`; multi-chunk items write ordered `ContentItemChunk` rows in a server-side transaction. For multi-chunk items the item-level `VectorRecordID` is left null — the chunk table is the source of truth. Each chunk gets a **unique, persistent per-chunk vector id** (not the old item-hash scheme) so a re-chunk's new rows never reuse a superseded chunk's vector id. Each chunk row is stamped `EmbeddingStatus='Complete'` with `LastEmbeddedAt` on creation.
+  - **Re-chunking is a soft-delete + append** — re-vectorizing an item marks its current live chunks `DeleteStatus='Pending'` (rows kept) and appends the new chunks, all in one SQL transaction (no third-party call inside it). **`AutotagBaseEngine.PurgeDeletedChunks`** then removes the superseded chunks' vectors from the vector database (`vectorDB.DeleteRecords`, bounded sub-batches + rate-limited) and flips them to `DeleteStatus='Deleted'` with `LastDeletedAt` — delete-vector-first so a mid-run failure stays retryable, and out-of-band from vectorization so the remote deletes can be batched to each provider's limits.
+  - **`ContentItem` also gains** a self-referencing `ParentID` (nullable FK, enabling a content-item hierarchy) and a nullable `DisplayLink` (`NVARCHAR(2000)`, a display/clickable URL).
+  - **`ContentItemChunk` also gains** status-lifecycle + tracking fields mirroring the `ContentItem` pattern: `EmbeddingStatus` / `TaggingStatus` (NOT NULL, default `Pending`; value list = ContentItem's plus `Active` and `Processed`), a nullable `DeleteStatus` (`Pending` / `Deleted`), and `LastEmbeddedAt` / `LastTaggedAt` / `LastDeletedAt` timestamps.
+  - **Standalone vectorization** (`@memberjunction/actions-content-autotag`) — the Autotag/Vectorize action now runs vectorization whenever `Vectorize=1`, decoupled from whether autotagging produced new items, so `Autotag=0, Vectorize=1` embeds pending content without re-tagging or `ForceReprocess`. `RunDirectVectorization` selects only items awaiting embedding (`EmbeddingStatus='Pending'`) and honors the `ContentSourceIDs` filter; `ForceReprocess` re-embeds everything.
+  - **Re-embed on change** — when a content item is (re)tagged because its content changed, `AutotagBaseEngine` resets its `EmbeddingStatus` to `Pending` as tagging begins, so the vectorization phase picks it up and re-embeds it.
+
+  Additive only; existing vectorization behavior is unchanged when items fit in a single chunk.
+
+### Patch Changes
+
+- 938ae80: Fix collection sharing end-to-end: run the share-create authorization gate against the entity's provider with the caller as contextUser (it previously rejected every share server-side), surface the real block reason instead of "Unknown error creating record", open shared collections from the Sharing Center via the Collections nav item, and polish the shared-indicator UI (badge sizing/styling, Shared chip, owner name resolution and truncation). Includes share-affordance gating for legacy null-OwnerID collections and regression tests for the create gate.
+- 623dfc5: Break CodeGen FK cycle between AIAgentRun, AIPromptRun, and ConversationDetail. Move SummaryPromptRunID from ConversationDetail to a new ConversationCompactionRun audit table. Remove AgentRunID from AIPromptRun (derivable via AIAgentRunStep.TargetLogID). Remove agentRunId from AIPromptParams and all write sites across the prompt/agent stack.
+- 8ce3356: Follow-up polish for #3275 (resolves #3287) — no behavior change:
+  - **Export the vector-config interfaces** from `@memberjunction/content-autotagging` with TSDoc
+    (`ResolvedVectorInfrastructure`, `ResolvedVectorStorageConfig`, `EmbeddingChunk`, `PersistedChunk`,
+    `ChunkPurgeStats`, `ChunkEmbedStats`, and the `VectorIDStrategy` / `ChunkTextStorage` /
+    `VectorMetadataConfig` / `VectorMetadataFieldConfig` aliases) so downstream consumers can reason
+    about resolved vector infrastructure.
+  - **`AutotagBaseEngine` chunk-record shaping is now subclass-overridable**: the per-chunk record
+    construction is extracted into a new `protected buildVectorRecord(...)`, and `buildVectorRecords`
+    plus its collaborators (`resolveChunkVectorId`, `buildVectorMetadata`, `buildProviderDirectives`,
+    `resolveItemVectorStorageConfig`, `isItemLevelVector`) are now `protected` with TSDoc.
+  - **O(1) by-id lookups in `KnowledgeHubMetadataEngine`**: `GetContentSourceByID`,
+    `GetContentTypeByID`, `GetContentSourceTypeByID`, `GetContentFileTypeByID` (plus the existing
+    `GetVectorIndexByID` / `GetEntityDocumentByID`) are now backed by lazily-built id indexes that
+    self-invalidate on the engine's `DataChange$`. `AutotagBaseEngine` now routes its by-id lookups
+    through these helpers instead of repeated `.find()` scans.
+
+- ce6374c: Artifact engine no longer bulk-loads versions at boot; cache guarded.
+- 764d6f6: Fix three client-reported issues (search coverage, Configure App dialog, default-app provisioning):
+  - **C3 — Search coverage:** decouple the per-entity fetch depth from the global `topK` budget in both `EntitySearchProvider` and `FullTextSearchProvider` (new tunable `PerEntityFetchDepth`, default 15), so multi-entity searches no longer starve individual entities of results. Also lower `MIN_TERM_LENGTH` from 3 to 2 across the engine and both providers so short queries (e.g. "US", "AI") are searchable.
+  - **F1 — Configure App dialog glitch:** the `[(ShowDialog)]` setter now emits `ShowDialogChange`, so the app-switcher's flag round-trips correctly; the dialog resets its app lists on open/close and reloads the user's applications on a deferred microtask (avoids `ExpressionChangedAfterItHasBeenCheckedError`). Removed the redundant double-drive in the app switcher.
+  - **F2 — Default-app provisioning (`Status = 'Active'` filter):** the JWT new-user provisioning path selected default applications with `DefaultForNewUser` but **without** the `Status = 'Active'` check that the client self-heal path already applied, so an inactive app flagged `DefaultForNewUser` could be provisioned onto new users there. Both paths now use a single shared selector, `UserInfoEngine.GetDefaultApplicationsForNewUser`, which filters to Active + `DefaultForNewUser` in `DefaultSequence` order — eliminating the drift.
+
+- 0ba33b3: Client-issue batch fixes. Exports (Query viewer, Data Explorer, and User Views) now cover the FULL result set — capped at 100k with an over-cap warning — instead of just the on-screen page, and the Data Explorer toolbar Export button opens a unified Excel/CSV/JSON dialog for every view type (Grid/Cards/Map/Timeline). UI-role users can now create and manage Lists, with owner-scoped delete (or Developer/Integration) enforced server-side on BOTH Lists and List Details — a List Detail's authorization is scoped through its parent List's owner, so a user can't delete membership rows of lists they don't own. Also: grid quick-filter matches hidden columns, primary-key integer columns render without thousands separators, the Queries search-box icon/placeholder overlap is fixed, and the streaming thinking-tag stripper no longer leaks partial `<think>`/`</think>` tags split across chunks — and now flushes a genuine trailing tag-prefix (e.g. a response ending in `<`) at end of stream instead of dropping it.
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [623dfc5]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/interactive-component-types@5.50.0
+  - @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @memberjunction/ng-ui-components
 
+## 6.0.0
+
+## 5.51.0
+
+## 5.50.0
+
 ## 5.49.0
 
 ## 5.48.0

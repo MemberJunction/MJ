@@ -1,5 +1,132 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/external-data-sources@6.0.0
+  - @memberjunction/external-data-source-mongodb@6.0.0
+  - @memberjunction/external-data-source-mysql@6.0.0
+  - @memberjunction/external-data-source-oracle@6.0.0
+  - @memberjunction/external-data-source-postgres@6.0.0
+  - @memberjunction/external-data-source-sqlserver@6.0.0
+  - @memberjunction/external-data-source-snowflake@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/postgresql-dataprovider@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/server-bootstrap-lite@6.0.0
+  - @memberjunction/ai-provider-bundle@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/cli-core@6.0.0
+  - @memberjunction/config@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+  - @memberjunction/sql-parser@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- 1e048ef: Fix MJ Explorer lazy module loading: chunks are now deduped by an explicit `chunkId` instead of loader source text (which collapsed all 18 chunks into one and stopped lazy-only registrations like `FeaturePipelinesResource` from ever loading), and lookups fall back to the subclass key alone so resolution survives build-mode renames of the base class (`_BaseResourceComponent`, `BaseResourceComponent2`). Failed chunk imports now retry on the next navigation instead of caching the rejection for the rest of the session. Downstream apps must regenerate their lazy config (`mj codegen manifest --lazy-config …`) after upgrading — generated entries changed shape from a loader function to `{ chunkId, load }`, and `GetSnapshot().chunkCount` was renamed `loadedChunkCount`.
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/server-bootstrap-lite@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/external-data-sources@5.51.0
+  - @memberjunction/external-data-source-mongodb@5.51.0
+  - @memberjunction/external-data-source-mysql@5.51.0
+  - @memberjunction/external-data-source-oracle@5.51.0
+  - @memberjunction/external-data-source-postgres@5.51.0
+  - @memberjunction/external-data-source-sqlserver@5.51.0
+  - @memberjunction/external-data-source-snowflake@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/core-entities-server@5.51.0
+  - @memberjunction/postgresql-dataprovider@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/ai-provider-bundle@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/cli-core@5.51.0
+  - @memberjunction/config@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+  - @memberjunction/sql-parser@5.51.0
+
+## 5.50.0
+
+### Minor Changes
+
+- 54a037f: Gate reverse-relationship emission on actual GraphQL type availability, and add an opt-in `includeSchemas` scope.
+  - **Reverse-relationship emission is now decided by the generated entity set, not a schema/package heuristic.** A reverse-relationship (child-array) `@Field`/`@FieldResolver` references the related entity's GraphQL type by bare class name, so it only compiles when that class is declared in the file being generated. `isRelatedTypeOutOfScope` now answers that from `GeneratedTypeAvailability` — the exact set of entities handed to the generator for the file — with one exception: a core (`__mj`) related entity in a non-core file, which resolves through the `mj_core_schema_server_object_types` namespace import. The previous predicate inferred the set from the `entityPackageName` schema→package map alone, but `runCodeGen` narrows the generated entities by _both_ that map and the `excludeSchemas`/inclusion filters, so anything dropped by the latter still produced a dangling reference (`TS2304: Cannot find name`) — the break seen when a base Open App is generated alongside a dependent app that foreign-keys into it. The gate emits exactly the compilable subset of prior output, so any run that compiled before is unaffected.
+  - **New opt-in `includeSchemas` config (positive scope).** When set, CodeGen processes only the listed schemas. It is resolved into `excludeSchemas` — pure sugar over the existing exclude mechanism (in-scope ⇔ named in `includeSchemas` and not in `excludeSchemas`; no implicit includes, so the core schema must be listed explicitly). The authoritative resolution runs in `ManageMetadataBase.manageMetadata` against the **database's** schema list, so schemas MJ has never seen are excluded before `createNewEntities()` discovers their tables; a second idempotent pass in `runCodeGen` keeps the scope applied on the `--skipdb` path. Lets an Open App scope its CodeGen to its own schema without hand-maintaining an exclude list of every other installed app. Absent/empty leaves classic exclude-only behavior unchanged.
+
+  Both `GraphQLServerGeneratorBase` signature changes are additive (a new optional trailing `availability` parameter), so existing subclasses and callers keep compiling and retain their previous behavior.
+
+### Patch Changes
+
+- a3bd648: Fix two External Data Sources read/codegen bugs.
+
+  External read paths now resolve the remote object name via a new per-driver `ResolveObjectName(entity)` method on `BaseExternalDataSourceDriver`. SQL drivers (`BaseSqlExternalDataSourceDriver`) schema-qualify a bare name with the entity's `SchemaName` so objects in a non-default schema (e.g. medallion bronze/silver/gold, or any multi-schema source) resolve correctly; non-SQL drivers (e.g. MongoDB) return the name verbatim as a literal collection. The read router (`ExternalDataSourceReadRouterImpl`) no longer schema-qualifies the name itself, so a schema-qualified name can never reach a driver that treats the name literally — fixing a case where a MongoDB collection read would target a non-existent `schema.collection`.
+
+  CodeGen entity-subclass generation now hoists and de-duplicates the base-class import (e.g. `ReadOnlyExternalBaseEntity`) into the file header once per file instead of once per entity, fixing a TS2300 duplicate-identifier error in generated files that contain 2+ external entities. The import is hoisted only for entities that actually emit a class (those with a primary key), so a skipped PK-less entity can't leave a dangling import.
+
+- 76c0ffb: Exclude externally-owned entity schemas from generated GraphQL server code. `generateGraphQLServerCode` received the unfiltered `nonCoreEntities` list, so a package configured with external schemas emitted `@ObjectType` classes for entities owned by sibling packages. When two such packages were loaded together, `buildSchemaSync` threw `Schema must contain uniquely named types but contains multiple types named "..."` and the API crash-looped at boot. GraphQL generation now uses the same external-schema-filtered list already used for entity subclass and Angular generation.
+
+  Withholding those entities also withholds their `@ObjectType` class declarations, so relationship members that named them would have been dangling identifiers. A local entity with a one-to-many to an externally-owned entity emitted `@Field(() => [<external>_])` and a matching `@FieldResolver`, neither of which resolves once the class is no longer declared in the file — turning the boot crash into a TypeScript compile error. Those members are now omitted (with a comment naming the relationship) when the related entity's schema is owned by another package. MJ-core related entities are unaffected: they resolve through the `mj_core_schema_server_object_types` namespace import rather than a local declaration.
+
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [a3bd648]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/server-bootstrap-lite@5.50.0
+  - @memberjunction/external-data-sources@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/core-entities-server@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/config@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/external-data-source-mongodb@5.50.0
+  - @memberjunction/external-data-source-mysql@5.50.0
+  - @memberjunction/external-data-source-oracle@5.50.0
+  - @memberjunction/external-data-source-postgres@5.50.0
+  - @memberjunction/external-data-source-sqlserver@5.50.0
+  - @memberjunction/external-data-source-snowflake@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/postgresql-dataprovider@5.50.0
+  - @memberjunction/ai-provider-bundle@5.50.0
+  - @memberjunction/cli-core@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+  - @memberjunction/sql-parser@5.50.0
+
 ## 5.49.0
 
 ### Minor Changes

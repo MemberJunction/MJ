@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntityInfo, Metadata } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, IMetadataProvider, Metadata } from '@memberjunction/core';
 
 /**
  * Represents a descendant entity discovered in an IS-A hierarchy.
@@ -92,12 +92,15 @@ const MAX_DEPTH = 10;
  *          Returns empty array if the entity has no children.
  */
 export async function DiscoverISADescendants(
-  record: BaseEntity
+  record: BaseEntity,
+  provider?: IMetadataProvider
 ): Promise<IsaDescendantInfo[]> {
   const entityInfo = record.EntityInfo;
   if (!entityInfo?.IsParentType) return [];
 
-  const md = new Metadata();  // global-provider-ok: utility — single-provider context
+  // Callers in a multi-provider tree pass their own `ProviderToUse`; omitting it falls back to
+  // the global default, named explicitly rather than reached for via `new Metadata()`.
+  const md = provider ?? Metadata.Provider;
   const results: IsaDescendantInfo[] = [];
   const visited = new Set<string>([entityInfo.Name]);
 
@@ -110,7 +113,7 @@ export async function DiscoverISADescendants(
  * and recurses into any child that is itself a parent type.
  */
 async function walkDescendants(
-  md: Metadata,
+  md: IMetadataProvider,
   loadedEntity: BaseEntity,
   parentInfo: EntityInfo,
   primaryKey: CompositeKey,
@@ -132,7 +135,7 @@ async function walkDescendants(
  * so we load each child to discover deeper levels.
  */
 async function walkOverlappingChildren(
-  md: Metadata,
+  md: IMetadataProvider,
   loadedEntity: BaseEntity,
   parentInfo: EntityInfo,
   primaryKey: CompositeKey,
@@ -171,7 +174,7 @@ async function walkOverlappingChildren(
  * itself be an overlapping parent, requiring async discovery.
  */
 async function walkDisjointChain(
-  md: Metadata,
+  md: IMetadataProvider,
   loadedEntity: BaseEntity,
   parentInfo: EntityInfo,
   primaryKey: CompositeKey,
