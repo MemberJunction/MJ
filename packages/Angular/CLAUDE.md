@@ -76,6 +76,13 @@ There is a known multi-provider migration in flight — many existing Angular co
 
 ## 🚨 CRITICAL: Routing Rules 🚨
 
+> These rules are one boundary of MJ's four-layer UX architecture (L0 runtime → L1 widget →
+> L2 composite → L3 Explorer surface). The full model — including the `Before*`/`After*`
+> cancelable event contract that replaces routing below L3, the per-layer data-access rules,
+> the package split, and the `npm run check:ui-layers` gate that enforces all of it — is in
+> **[/guides/UI_LAYERING_GUIDE.md](../../guides/UI_LAYERING_GUIDE.md)**. Read it before
+> building new UI here or in any MJ app repo.
+
 ### Generic Components MUST NOT Import Router
 
 Components in `packages/Angular/Generic/` are reusable across any Angular application (MJ Explorer, custom apps, embedded widgets). They **MUST NOT** import `Router`, `ActivatedRoute`, or any `@angular/router` types directly.

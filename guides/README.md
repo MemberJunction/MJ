@@ -95,6 +95,14 @@ If you're about to start work in one of the areas below, **read the guide first*
   - How the auto-generated lazy config is produced by `mj codegen manifest --lazy-config`
   - Troubleshooting lazy loading issues
 - **[Navigation and Routing Guide](NAVIGATION_AND_ROUTING_GUIDE.md)** — How the shell owns URL state, back/forward navigation, adding URL-synced sub-navigation to a component.
+- **[UI Layering Guide](UI_LAYERING_GUIDE.md)** — 🚨 **The standard for every MJ repo and every app built on MJ.** The four-layer UX architecture that makes components reusable instead of copy-pasted: **L0** pure-TS domain runtime → **L1** presentational widgets (props in, events out, no data access) → **L2** composite widgets (may read data, but only through `ProviderToUse`; never navigate) → **L3** Explorer surfaces (entity forms + resource/dashboard components, the only layer allowed to touch `NavigationService`). Covers:
+  - The two hard boundaries — no Router/Explorer imports below L3, no domain logic at L3 — and the "which layer is this?" decision table
+  - The `Before*` / `After*` **cancelable event contract** (`Cancel` + `CancelReason`, `After*` suppressed on the canceled path), naming conventions, and why `Before*` handlers must be synchronous
+  - Data access per layer and the multi-provider rule that makes it matter
+  - **Package split** (`*-entities` / `*-engine-base` / `*-ng-widgets` / `*-ng`) with the allowed-dependency table
+  - **Enforcement** — `npm run check:ui-layers`, opt-in per package via `"mjUILayer"`, self-contained so app repos and external teams copy one file
+  - A step-by-step recipe for migrating an existing 400-line do-everything screen
+  - **Read before building any new UI in any MJ repo**, and before adding a component to a Generic package.
 - **[Optimistic-UI Save Pattern](OPTIMISTIC_UI_SAVE_PATTERN.md)** — ⚠️ *Status: proposal for review, not yet an adopted convention.* Documents a pattern several Angular surfaces adopted independently (render the user's action immediately, reconcile after `Save()` resolves) plus a proposed framework hook (`EntitySaveOptions.OnValidated`) that generalizes it. Includes two competing implementations — generic vs. inline — for reviewers to compare before any codebase-wide sweep. Read for context on perceived-latency work on chat/list/settings surfaces; **do not treat as settled guidance until the proposal is resolved.**
 - **[Media Player package](../packages/Angular/Generic/media-player/README.md)** — The generic `mj-media-player` (zero-MJ-dep audio/video player: transport, real waveform scrubber, playback speed, ±skip, time-synced transcript, multi-track video grid) and the MJStorage-bound `mj-storage-media-player` wrapper (resolves an `MJ: Files` id to a permission-gated, Range-streamed `/media` URL with server-supplied waveform peaks). Used by the artifact audio/video viewers + previews and the realtime session-review overlay.
 
