@@ -11,6 +11,7 @@
     "build": "npm run clean && ngc",
     "clean": "rimraf dist",
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "test:watch": "vitest"
   },
   "keywords": [

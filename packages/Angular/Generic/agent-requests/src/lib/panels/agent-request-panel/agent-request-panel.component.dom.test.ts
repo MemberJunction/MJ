@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
+import { AgentResponseForm } from '@memberjunction/ai-core-plus';
 import { query, queryAll, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import { AgentRequestPanelComponent, AgentRequestPanelResult } from './agent-request-panel.component';
 
@@ -18,10 +19,25 @@ import { AgentRequestPanelComponent, AgentRequestPanelResult } from './agent-req
  * The pure getters (PriorityLabel/PriorityClass/IsActionable/etc.) are exercised by
  * the class-level node spec in src/__tests__/agent-request-panel.test.ts.
  *
- * `mj-dynamic-form` / `mj-dynamic-form-response` / `mj-loading` are unknown elements
- * here (CUSTOM_ELEMENTS_SCHEMA) — they only render on branches we don't assert across,
- * and stubbing the real DynamicFormsModule adds nothing to these presentational checks.
+ * `mj-dynamic-form` / `mj-dynamic-form-response` are replaced with explicit
+ * standalone stubs (below) so the template compiles without a blanket schema —
+ * they only render on branches these presentational checks don't assert across
+ * (a populated ResponseSchema / ResponseData), so stubbing the real
+ * DynamicFormsModule adds nothing here.
  */
+
+@Component({ standalone: true, selector: 'mj-dynamic-form', template: '' })
+class DynamicFormStubComponent {
+  @Input() FormDefinition: AgentResponseForm | null = null;
+  @Input() Disabled = false;
+}
+
+@Component({ standalone: true, selector: 'mj-dynamic-form-response', template: '' })
+class DynamicFormResponseStubComponent {
+  @Input() FormDefinition: AgentResponseForm | null = null;
+  @Input() ResponseData: string | null = null;
+  @Input() DisplayMode = '';
+}
 
 interface RequestStub {
   ID: string;
@@ -68,10 +84,9 @@ function render(inputs: {
 }): ComponentFixture<AgentRequestPanelComponent> {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
-    imports: [CommonModule, FormsModule],
+    imports: [CommonModule, FormsModule, DynamicFormStubComponent, DynamicFormResponseStubComponent],
     declarations: [AgentRequestPanelComponent],
     providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } }],
-    schemas: [CUSTOM_ELEMENTS_SCHEMA],
   });
   const fixture = TestBed.createComponent(AgentRequestPanelComponent);
   if (inputs.Request !== undefined) fixture.componentRef.setInput('Request', inputs.Request);

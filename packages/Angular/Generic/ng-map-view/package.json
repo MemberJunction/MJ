@@ -10,6 +10,7 @@
   "scripts": {
     "build": "ngc",
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
