@@ -70,7 +70,7 @@ export interface StandardCheck {
     Id: string;
     /** One line, imperative: what the check enforces. */
     Title: string;
-    /** MJ version that introduced this check, e.g. `'5.51.0'`. */
+    /** MJ version that introduced this check, e.g. `'6.0.0'`. */
     Since: string;
     /** Severity `adopt` writes for a NEW adopter. Never applied to an already-configured repo. */
     DefaultSeverity: Exclude<Severity, 'off'>;

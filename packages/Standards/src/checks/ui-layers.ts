@@ -295,7 +295,7 @@ function readLayer(packageDir: string): { Name: string; Layer: UILayer | null | 
 export const UILayersCheck: StandardCheck = {
     Id: 'ui-layers',
     Title: 'Widgets must not import Router or MJ Explorer, and must read through ProviderToUse',
-    Since: '5.51.0',
+    Since: '6.0.0',
     DefaultSeverity: 'error',
     DocsUrl: 'https://github.com/MemberJunction/MJ/blob/next/guides/UI_LAYERING_GUIDE.md',
     Description:

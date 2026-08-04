@@ -9,7 +9,7 @@ on:
       - 'packages/**/package.json'
       - '.mj-standards.json'
       - 'packages/Standards/**'
-      - '.github/workflows/ci-ui-layers.yml'
+      - '.github/workflows/ci-standards.yml'
 
 jobs:
   standards:

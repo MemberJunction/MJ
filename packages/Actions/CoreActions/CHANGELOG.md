@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-manager@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/clustering-engine@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-mcp-client@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/code-execution@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/communication-types@6.0.0
+  - @memberjunction/communication-engine@6.0.0
+  - @memberjunction/content-autotagging@6.0.0
+  - @memberjunction/external-change-detection@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/lists@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/react-linter@6.0.0
+  - @memberjunction/record-set-processor-base@6.0.0
+  - @memberjunction/record-set-processor@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/search-engine@6.0.0
+  - @memberjunction/esignature@6.0.0
+  - @memberjunction/geo-core@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/ai-betty-bot@6.0.0
+  - @memberjunction/lists-base@6.0.0
+  - @memberjunction/export-engine@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+
 ## 5.51.0
 
 ### Patch Changes

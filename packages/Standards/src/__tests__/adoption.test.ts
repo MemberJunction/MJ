@@ -28,13 +28,13 @@ describe('config validation', () => {
     it('refuses an invalid severity rather than silently disabling the check', () => {
         writeFileSync(
             join(repo, '.mj-standards.json'),
-            JSON.stringify({ StandardsVersion: '5.51.0', Checks: { 'ui-layers': { Severity: 'errr' } } }),
+            JSON.stringify({ StandardsVersion: '6.0.0', Checks: { 'ui-layers': { Severity: 'errr' } } }),
         );
         expect(() => LoadConfig(repo)).toThrow(/Severity/);
     });
 
     it('round-trips through save and load', () => {
-        const config: StandardsConfig = { StandardsVersion: '5.51.0', Checks: { 'ui-layers': { Severity: 'warn' } } };
+        const config: StandardsConfig = { StandardsVersion: '6.0.0', Checks: { 'ui-layers': { Severity: 'warn' } } };
         SaveConfig(repo, config);
         expect(LoadConfig(repo).Checks['ui-layers'].Severity).toBe('warn');
     });
@@ -42,7 +42,7 @@ describe('config validation', () => {
 
 describe('Adopt', () => {
     it('creates a config and enables checks at or below the adopted version', () => {
-        const result = Adopt({ RepoRoot: repo, Version: '5.51.0' });
+        const result = Adopt({ RepoRoot: repo, Version: '6.0.0' });
         expect(result.Config.Checks['ui-layers']).toBeDefined();
         expect(existsSync(join(repo, '.mj-standards.json'))).toBe(true);
     });
@@ -53,15 +53,15 @@ describe('Adopt', () => {
     });
 
     it('never lowers a severity a repo has raised', () => {
-        SaveConfig(repo, { StandardsVersion: '5.51.0', Checks: { 'ui-layers': { Severity: 'warn' } } });
-        const result = Adopt({ RepoRoot: repo, Version: '5.51.0' });
+        SaveConfig(repo, { StandardsVersion: '6.0.0', Checks: { 'ui-layers': { Severity: 'warn' } } });
+        const result = Adopt({ RepoRoot: repo, Version: '6.0.0' });
         // `adopt` gets repos started; it does not reset them to the defaults.
         expect(result.Config.Checks['ui-layers'].Severity).toBe('warn');
     });
 
     it('leaves StandardsVersion alone without --upgrade', () => {
         SaveConfig(repo, { StandardsVersion: '5.40.0', Checks: {} });
-        const result = Adopt({ RepoRoot: repo, Version: '5.51.0' });
+        const result = Adopt({ RepoRoot: repo, Version: '6.0.0' });
         // THE core property: upgrading the package must not change what a repo enforces.
         expect(result.Config.StandardsVersion).toBe('5.40.0');
         expect(result.Config.Checks['ui-layers']).toBeUndefined();
@@ -69,22 +69,22 @@ describe('Adopt', () => {
 
     it('bumps StandardsVersion and enables newer checks with --upgrade', () => {
         SaveConfig(repo, { StandardsVersion: '5.40.0', Checks: {} });
-        const result = Adopt({ RepoRoot: repo, Version: '5.51.0', Upgrade: true });
-        expect(result.Config.StandardsVersion).toBe('5.51.0');
+        const result = Adopt({ RepoRoot: repo, Version: '6.0.0', Upgrade: true });
+        expect(result.Config.StandardsVersion).toBe('6.0.0');
         expect(result.Config.Checks['ui-layers']).toBeDefined();
     });
 
     it('writes nothing on a dry run', () => {
-        Adopt({ RepoRoot: repo, Version: '5.51.0', DryRun: true, Ci: 'github', AddNpmScript: true });
+        Adopt({ RepoRoot: repo, Version: '6.0.0', DryRun: true, Ci: 'github', AddNpmScript: true });
         expect(existsSync(join(repo, '.mj-standards.json'))).toBe(false);
         expect(existsSync(join(repo, '.github/workflows/mj-standards.yml'))).toBe(false);
     });
 
     it('writes a CI workflow, and never overwrites an existing one', () => {
-        Adopt({ RepoRoot: repo, Version: '5.51.0', Ci: 'github' });
+        Adopt({ RepoRoot: repo, Version: '6.0.0', Ci: 'github' });
         const path = join(repo, '.github/workflows/mj-standards.yml');
         writeFileSync(path, 'name: hand-edited\n');
-        const second = Adopt({ RepoRoot: repo, Version: '5.51.0', Ci: 'github' });
+        const second = Adopt({ RepoRoot: repo, Version: '6.0.0', Ci: 'github' });
         expect(readFileSync(path, 'utf8')).toBe('name: hand-edited\n');
         expect(second.Actions.some((a) => a.Kind === 'skipped' && a.What.includes('mj-standards.yml'))).toBe(true);
     });
@@ -94,7 +94,7 @@ describe('Adopt', () => {
             join(repo, 'package.json'),
             JSON.stringify({ name: 'demo', scripts: { 'mj:standards': 'custom' } }, null, 2),
         );
-        Adopt({ RepoRoot: repo, Version: '5.51.0', AddNpmScript: true });
+        Adopt({ RepoRoot: repo, Version: '6.0.0', AddNpmScript: true });
         const manifest = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8')) as { scripts: Record<string, string> };
         expect(manifest.scripts['mj:standards']).toBe('custom');
     });
@@ -102,7 +102,7 @@ describe('Adopt', () => {
 
 describe('RunStandards', () => {
     it('does not run a check the repo has not adopted', async () => {
-        const summary = await RunStandards(repo, { StandardsVersion: '5.51.0', Checks: {} });
+        const summary = await RunStandards(repo, { StandardsVersion: '6.0.0', Checks: {} });
         expect(summary.Outcomes).toHaveLength(0);
         expect(summary.Available.map((a) => a.Check.Id)).toContain('ui-layers');
     });
@@ -115,7 +115,7 @@ describe('RunStandards', () => {
     it('does not run an `off` check, and does not list it as available either', async () => {
         // The repo has seen it and said no — nagging about it would train people to ignore output.
         const summary = await RunStandards(repo, {
-            StandardsVersion: '5.51.0',
+            StandardsVersion: '6.0.0',
             Checks: { 'ui-layers': { Severity: 'off' } },
         });
         expect(summary.Outcomes).toHaveLength(0);
@@ -125,7 +125,7 @@ describe('RunStandards', () => {
     it('reports a config key that matches no registered check', async () => {
         // The repo believes it is enforcing something it is not. Silence would be worse.
         const summary = await RunStandards(repo, {
-            StandardsVersion: '5.51.0',
+            StandardsVersion: '6.0.0',
             Checks: { 'ui-layerz': { Severity: 'error' } },
         });
         expect(summary.UnknownCheckIds).toEqual(['ui-layerz']);
@@ -138,7 +138,7 @@ describe('RunStandards', () => {
         writeFileSync(join(pkg, 'src', 'a.ts'), `import { Router } from '@angular/router';`);
 
         const warn = await RunStandards(repo, {
-            StandardsVersion: '5.51.0',
+            StandardsVersion: '6.0.0',
             Roots: ['packages'],
             Checks: { 'ui-layers': { Severity: 'warn' } },
         });
@@ -146,7 +146,7 @@ describe('RunStandards', () => {
         expect(ExitCodeFor(warn)).toBe(0);
 
         const error = await RunStandards(repo, {
-            StandardsVersion: '5.51.0',
+            StandardsVersion: '6.0.0',
             Roots: ['packages'],
             Checks: { 'ui-layers': { Severity: 'error' } },
         });
