@@ -8,7 +8,6 @@ import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -306,28 +305,22 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     private PublishProgressUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, { 
-            message: JSON.stringify({
-                resolver: 'RunAIAgentResolver',
-                type: 'ExecutionProgress',
-                status: 'ok',
-                data,
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunAIAgentResolver',
+            type: 'ExecutionProgress',
+            status: 'ok',
+            data,
+        }), userPayload);
     }
 
 
     private PublishStreamingUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, { 
-            message: JSON.stringify({
-                resolver: 'RunAIAgentResolver',
-                type: 'StreamingContent',
-                status: 'ok',
-                data,
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunAIAgentResolver',
+            type: 'StreamingContent',
+            status: 'ok',
+            data,
+        }), userPayload);
     }
 
     /**
@@ -814,17 +807,15 @@ export class RunAIAgentResolver extends ResolverBase {
                 LogStatus(`📬 Notification sent via ${channelList} (ID: ${result.inAppNotificationId})`);
 
                 // Publish real-time notification event so client updates immediately
-                pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                    userPayload: JSON.stringify(userPayload),
-                    message: JSON.stringify({
-                        type: 'notification',
-                        notificationId: result.inAppNotificationId,
-                        action: 'create',
-                        title: `${agentName} completed your request`,
-                        message: message,
-                        conversationId: conversationId
-                    })
-                });
+                // NOTE (B49): normalized from a malformed no-sessionId payload
+                this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+                    type: 'notification',
+                    notificationId: result.inAppNotificationId,
+                    action: 'create',
+                    title: `${agentName} completed your request`,
+                    message: message,
+                    conversationId: conversationId
+                }), userPayload);
 
                 LogStatus(`📡 Published notification event to client`);
             } else if (!result.success) {
@@ -926,16 +917,14 @@ export class RunAIAgentResolver extends ResolverBase {
                 LogStatus(`📬 Feedback request notification sent (ID: ${notifResult.inAppNotificationId})`);
 
                 // Publish real-time notification event
-                pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                    userPayload: JSON.stringify(userPayload),
-                    message: JSON.stringify({
-                        type: 'notification',
-                        notificationId: notifResult.inAppNotificationId,
-                        action: 'create',
-                        title: `${agentName} needs your input`,
-                        message: truncatedMessage
-                    })
-                });
+                // NOTE (B49): normalized from a malformed no-sessionId payload
+                this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+                    type: 'notification',
+                    notificationId: notifResult.inAppNotificationId,
+                    action: 'create',
+                    title: `${agentName} needs your input`,
+                    message: truncatedMessage
+                }), userPayload);
             } else if (!notifResult.success) {
                 LogError(`Feedback request notification failed: ${notifResult.errors?.join(', ')}`);
             }
@@ -1294,6 +1283,7 @@ export class RunAIAgentResolver extends ResolverBase {
         const pulse = startLivenessPulse({
             pubSub,
             sessionId,
+            ownerUserId: userPayload.userRecord.ID,
             resolver: 'RunAIAgentResolver',
             readStatus: () => runRef.current
                 ? { runId: runRef.current.ID, status: runRef.current.Status }

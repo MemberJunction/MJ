@@ -1,5 +1,112 @@
 # @memberjunction/core-entities-server
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/tag-engine@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-vectordb@6.0.0
+  - @memberjunction/ai-vector-dupe@6.0.0
+  - @memberjunction/ai-vectors-memory@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/doc-utils@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/integration-pk-classifier@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/scheduling-engine@6.0.0
+  - @memberjunction/ai-provider-bundle@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/predictive-studio-core@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-converter@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+  - @memberjunction/sql-parser@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/scheduling-engine@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/tag-engine@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/ai-vectordb@5.51.0
+  - @memberjunction/ai-vector-dupe@5.51.0
+  - @memberjunction/ai-vectors-memory@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/doc-utils@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/integration-engine@5.51.0
+  - @memberjunction/integration-pk-classifier@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/ai-provider-bundle@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/predictive-studio-core@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-converter@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+  - @memberjunction/sql-parser@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 0ba33b3: Client-issue batch fixes. Exports (Query viewer, Data Explorer, and User Views) now cover the FULL result set — capped at 100k with an over-cap warning — instead of just the on-screen page, and the Data Explorer toolbar Export button opens a unified Excel/CSV/JSON dialog for every view type (Grid/Cards/Map/Timeline). UI-role users can now create and manage Lists, with owner-scoped delete (or Developer/Integration) enforced server-side on BOTH Lists and List Details — a List Detail's authorization is scoped through its parent List's owner, so a user can't delete membership rows of lists they don't own. Also: grid quick-filter matches hidden columns, primary-key integer columns render without thousands separators, the Queries search-box icon/placeholder overlap is fixed, and the streaming thinking-tag stripper no longer leaks partial `<think>`/`</think>` tags split across chunks — and now flushes a genuine trailing tag-prefix (e.g. a response ending in `<`) at end of stream instead of dropping it.
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [ae992d2]
+- Updated dependencies [f749574]
+- Updated dependencies [deb02b4]
+- Updated dependencies [45d762d]
+- Updated dependencies [764d6f6]
+- Updated dependencies [aa491dc]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [1e0008f]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/sql-converter@5.50.0
+  - @memberjunction/integration-engine@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/predictive-studio-core@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/tag-engine@5.50.0
+  - @memberjunction/ai-vector-dupe@5.50.0
+  - @memberjunction/doc-utils@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/integration-pk-classifier@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/scheduling-engine@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/ai-vectors-memory@5.50.0
+  - @memberjunction/ai-provider-bundle@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+  - @memberjunction/sql-parser@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

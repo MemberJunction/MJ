@@ -32,7 +32,7 @@
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, MJLruCache, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseRealtimeModel,
     ChatMessage,
@@ -292,6 +292,16 @@ export interface ExecuteRelayedToolInput {
      * the SAME interactive run (e.g. confirming a Query Builder task graph).
      */
     ResumeRunID?: string;
+    /**
+     * The id of the human this delegation is FOR, threaded into the delegated run's `userId`.
+     *
+     * The relayed-tool path may execute under an ELEVATED principal (a scoped anonymous magic-link
+     * caller's role deliberately cannot write the AI run entities — issue #3371), so `contextUser`
+     * is not always the person. `userId` is what stamps `MJ: AI Agent Runs.UserID` and scopes
+     * context memory, both of which must stay the visitor's. Absent ⇒ falls back to `contextUser.ID`,
+     * which is correct for every non-elevated caller.
+     */
+    AttributionUserID?: string;
 }
 
 /**
@@ -416,19 +426,28 @@ export class RealtimeClientSessionService {
      * whole row — including the STALE `Messages` it loaded — and perpetually clobber freshly-appended turns
      * back to an empty snapshot (the "transcript never persists" bug). Funnelling every write for a given
      * run through a single promise chain makes each load happen AFTER the prior save committed, so no writer
-     * overwrites another's field. Keyed by promptRunID; the entry is dropped on {@link finalizePromptRun}.
+     * overwrites another's field. Keyed by promptRunID; the entry is normally dropped on
+     * {@link finalizePromptRun}. Bounded with `MJLruCache` (rather than a plain `Map`) as a backstop: a
+     * session can be closed through a DIFFERENT `RealtimeClientSessionService` instance than the one that
+     * accumulated its write chain (e.g. `SessionManager`'s default construction, background janitor sweeps),
+     * in which case `finalizePromptRun`'s delete lands on the wrong object and this map's entry is
+     * never explicitly removed — the TTL/maxSize eviction here is what keeps that scenario bounded
+     * instead of an unbounded per-process leak.
      */
-    private readonly promptRunWriteChains = new Map<string, Promise<unknown>>();
+    private readonly promptRunWriteChains = new MJLruCache<string, Promise<unknown>>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000, // 4h backstop — generous vs. any realistic session duration
+    });
 
     /**
      * Serializes `task` against all other writes to the same `AIPromptRun` (see {@link promptRunWriteChains}).
      * Tasks run in call order; a failing task never breaks the chain for the next one. Returns the task's result.
      */
     private serializePromptRunWrite<T>(promptRunID: string, task: () => Promise<T>): Promise<T> {
-        const prior = this.promptRunWriteChains.get(promptRunID) ?? Promise.resolve();
+        const prior = this.promptRunWriteChains.Get(promptRunID) ?? Promise.resolve();
         const run = prior.then(task, task);
         // Store an error-swallowing tail so one failed write doesn't reject every queued write behind it.
-        this.promptRunWriteChains.set(promptRunID, run.then(() => undefined, () => undefined));
+        this.promptRunWriteChains.Set(promptRunID, run.then(() => undefined, () => undefined));
         return run;
     }
 
@@ -990,21 +1009,50 @@ export class RealtimeClientSessionService {
         return finalized;
     }
 
-    /** Finds the still-`Running` prompt-run + run-step ids for a co-agent run (orphan finalize path). */
+    /**
+     * Finds the still-`Running` prompt-run + run-step ids for a co-agent run (orphan finalize path).
+     *
+     * `AIPromptRun.AgentRunID` was dropped in v5.50 (Break_CodeGen_Cycle_Remove_PromptRun_AgentRunID);
+     * filtering prompt runs on it now fails outright and yields no rows. The relationship is derived
+     * through the run's Prompt-type steps instead — `AIAgentRunStep.TargetLogID` points at the prompt
+     * run — which is the replacement path that migration's design notes prescribe.
+     */
     private async findCoAgentChildLogIds(
         coAgentRunID: string,
         contextUser: UserInfo,
     ): Promise<{ PromptRunID: string | null; StepID: string | null }> {
         const rv = new RunView();
-        const results = await rv.RunViews([
-            { EntityName: 'MJ: AI Prompt Runs', ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`, Fields: ['ID'], ResultType: 'simple' },
-            { EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`, Fields: ['ID'], ResultType: 'simple' },
-        ], contextUser);
-        const firstId = (r: { Success: boolean; Results: unknown[] } | undefined): string | null => {
-            const first = r?.Success ? (r.Results[0] as { ID?: string } | undefined) : undefined;
-            return first?.ID ?? null;
-        };
-        return { PromptRunID: firstId(results[0]), StepID: firstId(results[1]) };
+        const steps = await rv.RunView<{ ID: string; StepType: string; TargetLogID: string | null }>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${this.escapeSqlLiteral(coAgentRunID)}' AND Status='Running'`,
+            Fields: ['ID', 'StepType', 'TargetLogID'],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!steps.Success) {
+            LogError(`RealtimeClientSessionService.findCoAgentChildLogIds: step lookup failed for co-agent run ${coAgentRunID}: ${steps.ErrorMessage}`);
+            return { PromptRunID: null, StepID: null };
+        }
+
+        const stepID = steps.Results[0]?.ID ?? null;
+        const promptLogIDs = steps.Results.filter(s => s.StepType === 'Prompt' && s.TargetLogID).map(s => s.TargetLogID!);
+        if (promptLogIDs.length === 0) {
+            return { PromptRunID: null, StepID: stepID };
+        }
+
+        // Re-check Status on the prompt runs themselves: a Prompt step can still be Running while its
+        // underlying prompt run has already landed, and this path only finalizes what is still open.
+        const inList = promptLogIDs.map(id => `'${this.escapeSqlLiteral(id)}'`).join(',');
+        const promptRuns = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: AI Prompt Runs',
+            ExtraFilter: `ID IN (${inList}) AND Status='Running'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+        }, contextUser);
+        if (!promptRuns.Success) {
+            LogError(`RealtimeClientSessionService.findCoAgentChildLogIds: prompt-run lookup failed for co-agent run ${coAgentRunID}: ${promptRuns.ErrorMessage}`);
+            return { PromptRunID: null, StepID: stepID };
+        }
+        return { PromptRunID: promptRuns.Results[0]?.ID ?? null, StepID: stepID };
     }
 
     /** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */
@@ -1093,7 +1141,7 @@ export class RealtimeClientSessionService {
             return true;
         });
         // Drop the per-run lock chain — no further writes are expected after finalize.
-        this.promptRunWriteChains.delete(promptRunID);
+        this.promptRunWriteChains.Delete(promptRunID);
     }
 
     /**
@@ -2365,6 +2413,10 @@ export class RealtimeClientSessionService {
             agent: target,
             conversationMessages: [{ role: 'user', content: requestText }],
             contextUser,
+            // Attribution and context-memory scope follow the PERSON, not the executing principal —
+            // see `ExecuteRelayedToolInput.AttributionUserID`. Undefined ⇒ base-agent falls back to
+            // `contextUser.ID`, preserving today's behavior for every non-elevated caller.
+            userId: input.AttributionUserID,
             provider,
             cancellationToken: this.combineSignals(request.AbortSignal, input.AbortSignal),
             parentRun: parentRun ?? undefined,

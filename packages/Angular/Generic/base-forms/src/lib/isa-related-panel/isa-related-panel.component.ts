@@ -4,6 +4,7 @@ import {
   OnChanges, SimpleChanges, ViewEncapsulation
 } from '@angular/core';
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormNavigationEvent, EntityHierarchyNavigationEvent } from '../types/navigation-events';
 import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from './isa-hierarchy-utils';
 
@@ -38,7 +39,7 @@ import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from './i
   templateUrl: './isa-related-panel.component.html',
   styleUrls: ['./isa-related-panel.component.css']
 })
-export class MjIsaRelatedPanelComponent implements OnChanges {
+export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements OnChanges {
   private cdr = inject(ChangeDetectorRef);
 
   /** The entity record currently displayed in the form */
@@ -140,7 +141,7 @@ export class MjIsaRelatedPanelComponent implements OnChanges {
   private async DiscoverDescendants(): Promise<void> {
     if (!this.Record) return;
 
-    const descendants = await DiscoverISADescendants(this.Record);
+    const descendants = await DiscoverISADescendants(this.Record, this.ProviderToUse);
     const tree = BuildDescendantTree(descendants);
     this.RelatedItems.push(...tree);
   }

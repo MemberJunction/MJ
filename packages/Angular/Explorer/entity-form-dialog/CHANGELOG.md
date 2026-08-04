@@ -1,5 +1,53 @@
 # Change Log - @memberjunction/ng-entity-form-dialog
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ng-shared@6.0.0
+  - @memberjunction/ng-base-forms@6.0.0
+  - @memberjunction/ng-container-directives@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ng-shared@5.51.0
+  - @memberjunction/ng-base-forms@5.51.0
+  - @memberjunction/ng-container-directives@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ng-ui-components@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ng-shared@5.50.0
+  - @memberjunction/ng-base-forms@5.50.0
+  - @memberjunction/ng-container-directives@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+  - @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

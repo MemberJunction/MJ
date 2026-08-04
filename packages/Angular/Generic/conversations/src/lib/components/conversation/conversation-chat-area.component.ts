@@ -36,6 +36,7 @@ import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
+import type { ExportBranding } from '../../services/export.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -138,12 +139,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input() suppressNewConversationEmptyState = false;
 
   /**
-   * Host-level cap for @-mention autocomplete (agents and users).
-   * Defaults true. Hosts addressing a single fixed agent (e.g. Form Builder
-   * cockpit pinned to the Form Builder agent) should set false so the user
-   * can't accidentally redirect a turn to a different agent.
+   * Host-level MASTER cap for the composer's mention/command triggers.
+   * Defaults true. When false, ALL triggers (@ agents, # entities, / skills)
+   * are off regardless of the per-type flags below. Hosts addressing a single
+   * fixed agent (e.g. Form Builder cockpit) can set false wholesale.
    */
   @Input() allowMentions = true;
+
+  /**
+   * Per-type caps under {@link allowMentions}, all default true. Let a host keep
+   * one trigger while dropping another — e.g. a white-label surface pinned to a
+   * default agent that wants to offer `/` skill-commands but NOT `@` agent
+   * mentions (an `@` overrides the pinned default agent in message routing).
+   * Effective only when `allowMentions` is also true.
+   */
+  @Input() allowAgentMentions = true;
+  @Input() allowEntityMentions = true;
+  @Input() allowSkillCommands = true;
 
   /**
    * Host-level cap for attachments. Defaults true. When false, the host
@@ -204,6 +216,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input() showSuggestedPrompts = true;
   /** Show the message list's sticky date header + jump-to-date navigation. */
   @Input() showDateNavigation = true;
+
+  // --- Assistant identity overrides (both default null = engine-resolved agent
+  //     identity, today's behavior). White-label hosts brand the AI side of the
+  //     message feed — the persona NAME shown on AI messages and an IMAGE avatar
+  //     replacing the Font Awesome agent icon — through the component contract
+  //     instead of ::ng-deep on .message-sender / .avatar-circle internals.
+  //     Complements agentCharacterConfig, which covers only the presence strip. ---
+  /** Display name for AI messages (e.g. a per-tenant persona). Null = the agent record's name. */
+  @Input() assistantDisplayName: string | null = null;
+  /** Image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
+  @Input() assistantAvatarUrl: string | null = null;
 
   private _isNewConversation: boolean = false;
   @Input()
@@ -291,6 +314,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** Show the Export button in the conversation header. Default true. */
   @Input() showExportButton: boolean = true;
+
+  /** Label for the header Export button (white-label hosts relabel it, e.g. "Download"). */
+  @Input() exportButtonLabel: string = 'Export';
+
+  /** Font Awesome class(es) for the header Export button's icon. */
+  @Input() exportButtonIcon: string = 'fas fa-download';
+
+  /**
+   * Branding applied to exported files (theme tokens / logo / title) — forwarded
+   * to the export modal, where it also defaults the "Include branding" checkbox
+   * on. See `ExportBranding` in the export service. Null (default) keeps the
+   * stock unthemed export.
+   */
+  @Input() exportBranding: ExportBranding | null = null;
 
   /** Show the Share button in the conversation header. Default true. */
   @Input() showShareButton: boolean = true;
@@ -3802,7 +3839,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async findMostRecentComponentArtifactId(): Promise<string | null> {
     if (!this.conversationId || !this.currentUser) return null;
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       // Get all conversation detail IDs for this conversation, newest first.
       const detailsResult = await rv.RunView<MJConversationDetailEntity>(
         {

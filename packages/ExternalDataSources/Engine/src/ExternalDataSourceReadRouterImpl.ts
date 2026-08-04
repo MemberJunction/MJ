@@ -84,7 +84,10 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
         }
       }
       const viewParams: ExternalViewParams = {
-        objectName: entity.ExternalObjectName || entity.BaseTable || entity.Name,
+        // Object-name resolution is the driver's job: SQL drivers schema-qualify with the entity's
+        // SchemaName, non-SQL drivers (e.g. MongoDB) use the name verbatim as a literal collection.
+        // The router stays dialect-agnostic and never munges the name itself.
+        objectName: driver.ResolveObjectName(entity),
         fields: params.Fields && params.Fields.length ? params.Fields : undefined,
         filter: (params.ExtraFilter as string) || undefined,
         orderBy,
@@ -136,7 +139,7 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
           Date.now() - start,
         );
       }
-      const objectName = entity.ExternalObjectName || entity.BaseTable || entity.Name;
+      const objectName = driver.ResolveObjectName(entity);
       const row = await driver.LoadSingle<ExternalRow>(dataSource, objectName, primaryKeys, contextUser);
       return {
         Success: true,

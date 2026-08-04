@@ -98,9 +98,10 @@ export class ReportResolverExtended extends ResolverBase {
                    ON
                       cd.ConversationID = c.ID
                    WHERE
-                      cd.ID='${ConversationDetailID}'`;
+                      cd.ID=@ConversationDetailID`;
 
       const request = new mssql.Request(dataSource);
+      request.input('ConversationDetailID', mssql.UniqueIdentifier, ConversationDetailID);
       const result = await request.query(sql);
       if (!result || !result.recordset || result.recordset.length === 0) throw new Error('Unable to retrieve converation details');
       const skipData: { title?: string; reportTitle?: string; userExplanation?: string; messages?: unknown[] } = JSON.parse(result.recordset[0].Message);

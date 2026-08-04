@@ -1,5 +1,54 @@
 # @memberjunction/ng-action-gallery
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ng-ai-test-harness@6.0.0
+  - @memberjunction/ng-container-directives@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ng-ai-test-harness@5.51.0
+  - @memberjunction/ng-container-directives@5.51.0
+  - @memberjunction/ng-shared-generic@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ng-ui-components@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- dd04a24: Declare phantom dependencies surfaced by strict installs: MJServer now declares `@types/express` (devDependency — express type imports across `src/`; pinned `^4.17.25` because that is the copy MJServer has always compiled against via its `@types/compression` dependency, and `express-rate-limit`'s handler types bind to it — the v5 types migration is a separate change) and `@memberjunction/integration-engine-base` (dependency — imported by `IntegrationDiscoveryResolver`); ng-action-gallery now declares `@memberjunction/ng-test-utils` (devDependency — imported by its DOM test). npm's hoisting hid these; strict package managers (pnpm) fail on them. No behavior change.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ng-ai-test-harness@5.50.0
+  - @memberjunction/ng-shared-generic@5.50.0
+  - @memberjunction/ng-container-directives@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+  - @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes
