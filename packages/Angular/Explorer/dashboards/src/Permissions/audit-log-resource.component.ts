@@ -1,7 +1,7 @@
 import { AfterViewInit, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { PermissionAuditEntry } from '@memberjunction/core';
 import { MJPermissionDomainEntity, PermissionEngine, ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
 import { PermissionsUserOption, loadPermissionsUsers, parseAuditFilterParams } from './permissions-shared';
@@ -90,7 +90,7 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
      */
     private publishAgentContext(): void {
         const userFilterName = this.UserFilter
-            ? this.Users.find((u) => u.ID === this.UserFilter)?.Name ?? null
+            ? this.Users.find((u) => UUIDsEqual(u.ID, this.UserFilter))?.Name ?? null
             : null;
         const context = buildAuditLogAgentContext({
             DomainFilter: this.DomainFilter,
@@ -251,7 +251,7 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
         if (!needle) return null;
         const byCandidate = resolvePermissionsCandidate(input, this.Users.map((u) => ({ ID: u.ID, Name: u.Name })));
         if (byCandidate) {
-            return this.Users.find((u) => u.ID === byCandidate.ID) ?? null;
+            return this.Users.find((u) => UUIDsEqual(u.ID, byCandidate.ID)) ?? null;
         }
         return (
             this.Users.find((u) => u.Email.trim().toLowerCase() === needle) ??

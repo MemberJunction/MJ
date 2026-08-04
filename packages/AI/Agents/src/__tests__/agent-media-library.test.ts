@@ -98,6 +98,18 @@ describe('resolveAgentMediaCollectionID', () => {
         runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
         expect(await resolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1')).toBeNull();
     });
+
+    it("looks the agent up via the canonical 'MJ: AI Agents' entity name", async () => {
+        // The AIAgent entity was renamed to 'MJ: AI Agents' in v5; the unprefixed name no longer
+        // resolves in metadata, so RunView throws "Entity AI Agents not found in metadata" and the
+        // realtime media kit silently never loads.
+        runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ DefaultMediaCollectionID: 'agent-col' }] });
+        await resolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1');
+        expect(runViewMock).toHaveBeenCalledWith(
+            expect.objectContaining({ EntityName: 'MJ: AI Agents' }),
+            USER,
+        );
+    });
 });
 
 describe('resolveAgentMediaManifest', () => {

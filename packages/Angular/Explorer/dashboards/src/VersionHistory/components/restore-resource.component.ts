@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJVersionLabelRestoreEntityType } from '@memberjunction/core-entities';
@@ -98,7 +98,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
             .slice(0, RESTORE_LIST_CAP)
             .map(r => ({ ID: r.ID ?? '', Name: r.VersionLabel ?? '', Status: r.Status ?? '' }));
         const selected = this.ExpandedRestoreId
-            ? this.Restores.find(r => r.ID === this.ExpandedRestoreId)
+            ? this.Restores.find(r => UUIDsEqual(r.ID, this.ExpandedRestoreId))
             : undefined;
         const context = buildVersionHistoryRestoreAgentContext({
             TotalRestores: this.TotalRestores,

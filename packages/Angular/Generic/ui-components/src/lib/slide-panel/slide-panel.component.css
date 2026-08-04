@@ -41,7 +41,12 @@
 }
 
 .sp-panel.visible {
-    transform: translateX(0);
+    /* `none` (not translateX(0)) on purpose: a non-none transform makes this panel
+       the containing block for position:fixed DESCENDANTS (dropdown panels, popovers
+       that position via getBoundingClientRect viewport math), displacing them
+       offscreen. `none` interpolates as the identity matrix, so the slide-in
+       animation is unaffected while open-state descendants get the real viewport. */
+    transform: none;
 }
 
 /* ================================================================= */

@@ -1135,7 +1135,7 @@ export class SyncEngine {
   }
   
   /**
-   * Process file content with {@include} references
+   * Process file content with `{@include}` references
    * 
    * Recursively processes a file's content to resolve `{@include path}` references.
    * Include references use JSDoc-style syntax and support:
@@ -1156,7 +1156,7 @@ export class SyncEngine {
    * const content = 'This is a {@include ./shared/header.md} example';
    * 
    * // Resolves to:
-   * const result = await processFileContentWithIncludes('/path/to/file.md', content);
+   * const result = await processFileContentWithIncludes(content, '/path/to/file.md');
    * // 'This is a [contents of header.md] example'
    * ```
    */
@@ -1204,8 +1204,12 @@ export class SyncEngine {
           new Set(visitedPaths) // Pass a copy to allow the same file in different branches
         );
         
-        // Replace the {@include} reference with the processed content
-        processedContent = processedContent.replace(fullMatch, processedInclude);
+        // Replace the {@include} reference with the processed content.
+        // Use a replacement FUNCTION so the included content is inserted verbatim —
+        // a string replacement would interpret its special `$`-sequences ($$, $&,
+        // $`, $') as replacement patterns and mangle the content. (Only those four
+        // are special for a string search; $n stays literal.)
+        processedContent = processedContent.replace(fullMatch, () => processedInclude);
       } catch (error) {
         // Enhance error message with context
         throw new Error(`Failed to process {@include ${trimmedPath}} in ${filePath}: ${error}`);

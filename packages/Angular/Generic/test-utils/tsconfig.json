@@ -4,8 +4,12 @@
     "rootDir": "./src",
     "declaration": true,
     "sourceMap": true,
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    // This package is "type": "module" and loaded by Node's native ESM
+    // resolver (Vitest externalized deps). nodenext makes tsc enforce explicit
+    // .js extensions on relative specifiers, which "bundler" resolution would
+    // silently tolerate (same bug class as GitHub issue #3137).
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "target": "ES2022",
     "lib": ["ES2022", "DOM"],
     "strict": true,
@@ -14,5 +18,5 @@
     "experimentalDecorators": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "src/__tests__"]
 }

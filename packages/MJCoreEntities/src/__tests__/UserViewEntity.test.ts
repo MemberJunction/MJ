@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ============================================================================
 // Mocks must be defined before importing the module under test
@@ -6,7 +6,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => () => {},
-    MJGlobal: { Instance: { GetGlobalObjectStore: () => ({}) } }
+    MJGlobal: { Instance: { GetGlobalObjectStore: () => ({}) } },
+    // Case-insensitive UUID equality — enough for the permission/ownership checks under test.
+    UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) =>
+        (a ?? '').toLowerCase() === (b ?? '').toLowerCase(),
 }));
 
 vi.mock('@memberjunction/core', () => {
@@ -129,6 +132,9 @@ import type {
     ViewDisplayMode,
     ViewTimelineState,
 } from '../custom/MJUserViewEntityExtended';
+
+// Resolves to the vi.mock above — lets the UserCanView specs drive ResourceTypes + perm level.
+import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
 
 // ============================================================================
 // Helper: create a MJUserViewEntityExtended with optional initial property values
@@ -1373,5 +1379,87 @@ describe('MJUserViewEntityExtended', () => {
             (view as Record<string, unknown>)['_ViewEntityInfo'] = mockEntity;
             expect(view.ViewEntityInfo).toBe(mockEntity);
         });
+    });
+});
+
+// ============================================================================
+// UserCanView — resource-type resolution (regression for the .Name vs .Entity bug)
+// ============================================================================
+//
+// CalculateUserCanView()'s non-owner branch resolves the "User Views" resource type to look
+// up the caller's permission level. The seeded ResourceType has Name 'User Views' and Entity
+// 'MJ: User Views'. The pre-fix code matched rt.Name === 'MJ: User Views', never found the
+// row, and threw — which propagated out of UserViewEngine.GetAccessibleViewsForEntity()'s
+// `.filter(v => v.UserCanView)` and emptied the whole view selector. These specs pin the
+// corrected behavior: resolve via .Entity (through ViewResourceTypeID), never throw, and honor
+// ContextCurrentUser like UserCanEdit/UserCanDelete.
+describe('MJUserViewEntityExtended - UserCanView resource-type resolution', () => {
+    const engine = ResourcePermissionEngine.Instance as unknown as {
+        ResourceTypes: Array<{ ID: string; Name: string; Entity: string }>;
+        GetUserResourcePermissionLevel: ReturnType<typeof vi.fn>;
+    };
+
+    // Seeded like production: unprefixed Name, 'MJ: ' prefix lives on Entity.
+    const USER_VIEWS_RT = { ID: 'rt-user-views', Name: 'User Views', Entity: 'MJ: User Views' };
+
+    function makeView(opts: { userID: string; currentUserID: string; contextUserID?: string }): MJUserViewEntityExtended {
+        const view = new MJUserViewEntityExtended();
+        const props = view as Record<string, unknown>;
+        props['ID'] = 'view-1';
+        props['UserID'] = opts.userID;
+        props['IsSaved'] = true;
+        // BaseEntity.ProviderToUse is stubbed by the mock — supply a provider with a CurrentUser.
+        props['ProviderToUse'] = { CurrentUser: { ID: opts.currentUserID, Type: 'User' } };
+        if (opts.contextUserID) {
+            props['ContextCurrentUser'] = { ID: opts.contextUserID, Type: 'User' };
+        }
+        return view;
+    }
+
+    beforeEach(() => {
+        engine.ResourceTypes = [USER_VIEWS_RT];
+        engine.GetUserResourcePermissionLevel.mockReset();
+    });
+
+    afterEach(() => {
+        // Restore the module-level defaults so we don't bleed into other suites.
+        engine.ResourceTypes = [];
+        engine.GetUserResourcePermissionLevel.mockReset();
+    });
+
+    it('returns true for the owner without consulting resource permissions', () => {
+        const view = makeView({ userID: 'user-1', currentUserID: 'user-1' });
+        expect(view.UserCanView).toBe(true);
+        expect(engine.GetUserResourcePermissionLevel).not.toHaveBeenCalled();
+    });
+
+    it('resolves the resource type by .Entity (not .Name) and grants a non-owner access when a permission level exists', () => {
+        engine.GetUserResourcePermissionLevel.mockReturnValue('View');
+        const view = makeView({ userID: 'owner-x', currentUserID: 'user-1' });
+
+        // Regression: the old rt.Name === 'MJ: User Views' lookup threw against this seeding.
+        expect(view.UserCanView).toBe(true);
+        expect(engine.GetUserResourcePermissionLevel).toHaveBeenCalledWith('rt-user-views', 'view-1', { ID: 'user-1', Type: 'User' });
+    });
+
+    it('denies a non-owner when no permission level exists — and does not throw', () => {
+        engine.GetUserResourcePermissionLevel.mockReturnValue(null);
+        const view = makeView({ userID: 'owner-x', currentUserID: 'user-1' });
+        expect(() => view.UserCanView).not.toThrow();
+        expect(view.UserCanView).toBe(false);
+    });
+
+    it('evaluates ownership against ContextCurrentUser when set (server-side precedence)', () => {
+        // Context user IS the owner → owner short-circuit, no perm lookup, even though the global user differs.
+        const view = makeView({ userID: 'ctx-user', currentUserID: 'global-user', contextUserID: 'ctx-user' });
+        expect(view.UserCanView).toBe(true);
+        expect(engine.GetUserResourcePermissionLevel).not.toHaveBeenCalled();
+    });
+
+    it('uses ContextCurrentUser for the permission check when the context user is not the owner', () => {
+        engine.GetUserResourcePermissionLevel.mockReturnValue('Edit');
+        const view = makeView({ userID: 'owner-x', currentUserID: 'global-user', contextUserID: 'ctx-user' });
+        expect(view.UserCanView).toBe(true);
+        expect(engine.GetUserResourcePermissionLevel).toHaveBeenCalledWith('rt-user-views', 'view-1', { ID: 'ctx-user', Type: 'User' });
     });
 });

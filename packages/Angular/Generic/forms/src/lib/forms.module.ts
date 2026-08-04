@@ -47,6 +47,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
 // MJ UI components
 import { MJButtonDirective, MJNumericInputComponent, MJDatepickerComponent } from '@memberjunction/ng-ui-components';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 // Components
 import { DynamicFormComponent } from './dynamic-form/dynamic-form.component';
@@ -65,7 +66,8 @@ import { DynamicFormResponseComponent } from './dynamic-form-response/dynamic-fo
         ReactiveFormsModule,
         MJButtonDirective,
         MJNumericInputComponent,
-        MJDatepickerComponent
+        MJDatepickerComponent,
+        MarkdownModule
     ],
     exports: [
         DynamicFormComponent,

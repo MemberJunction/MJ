@@ -8,47 +8,23 @@
     "Color": "#2050c8",
     "DefaultNavItems": [
       {
-        "Label": "Home",
-        "Icon": "fa-solid fa-gauge-high",
+        "Label": "Predictions",
+        "Icon": "fa-solid fa-wand-magic-sparkles",
         "ResourceType": "Custom",
-        "DriverClass": "PredictiveStudioHomeResource",
+        "DriverClass": "PredictiveStudioPredictionsResource",
         "isDefault": true
       },
       {
-        "Label": "Training Pipelines",
-        "Icon": "fa-solid fa-diagram-project",
+        "Label": "Studio",
+        "Icon": "fa-solid fa-flask-vial",
         "ResourceType": "Custom",
-        "DriverClass": "PredictiveStudioPipelinesResource"
+        "DriverClass": "PredictiveStudioStudioResource"
       },
       {
-        "Label": "Algorithm Catalog",
-        "Icon": "fa-solid fa-shapes",
-        "ResourceType": "Custom",
-        "DriverClass": "PredictiveStudioCatalogResource"
-      },
-      {
-        "Label": "Experiments",
-        "Icon": "fa-solid fa-flask",
-        "ResourceType": "Custom",
-        "DriverClass": "PredictiveStudioExperimentsResource"
-      },
-      {
-        "Label": "Model Registry",
+        "Label": "Models",
         "Icon": "fa-solid fa-cubes",
         "ResourceType": "Custom",
-        "DriverClass": "PredictiveStudioRegistryResource"
-      },
-      {
-        "Label": "Models in Production",
-        "Icon": "fa-solid fa-satellite-dish",
-        "ResourceType": "Custom",
-        "DriverClass": "PredictiveStudioProductionResource"
-      },
-      {
-        "Label": "Compare Runs",
-        "Icon": "fa-solid fa-chart-column",
-        "ResourceType": "Custom",
-        "DriverClass": "PredictiveStudioCompareResource"
+        "DriverClass": "PredictiveStudioModelsResource"
       }
     ]
   },
@@ -59,7 +35,7 @@
     "ID": "299C9272-8D38-40CA-85D4-0980F2C9FAD1"
   },
   "sync": {
-    "lastModified": "2026-06-28T22:48:10.614Z",
-    "checksum": "b0df671a9d2a9c5421ebe590f8a52a06480f8cd5f9d8169cb217263e6c4515e1"
+    "lastModified": "2026-07-01T17:33:48.298Z",
+    "checksum": "e3f4cc9b1f2543a4a053c99833214ea576c3b5fa30dcb381b0a0104e7a99af00"
   }
 }

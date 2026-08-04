@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT31 - Startup Mode",
+    "Description": "Proof of the configurable startup mode ('full' | 'task') against the live process's real @RegisterForStartup registration set (deterministic, no model calls, no fixtures). SM1: a task-mode Startup executes ZERO registered engines while still succeeding and marking startup complete (LocalCacheManager init runs in both modes). SM2: an engine still lazy-loads on demand via its own Config() after the task-mode boot — the first-touch-pays-the-load contract. SM3: a full-mode Startup executes every sync registration, restoring canonical behavior. The bundle's lifecycle Teardown re-runs full mode best-effort so the process always ends in the canonical state.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Task mode executes zero engines; lazy Config still loads on demand; full mode executes every sync registration."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "startup-mode"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F1229933-5A20-4A1A-989E-B057432E1823"
+  },
+  "sync": {
+    "lastModified": "2026-07-21T03:44:42.899Z",
+    "checksum": "a73fca665b4604e3fe67d84ab4d04fcff90c198518a328c6a8debc93dd693713"
+  }
+}

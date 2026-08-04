@@ -1,4 +1,4 @@
-import { BaseEntity, EntityPermissionType, EntitySaveOptions, RunView } from '@memberjunction/core';
+import { BaseEntity, EntityPermissionType, EntitySaveOptions, IMetadataProvider, RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 import { MJCollectionPermissionEntity } from '../../generated/entity_subclasses';
@@ -73,7 +73,9 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
     private async callerMayShareCollection(): Promise<boolean> {
         const user = this.ContextCurrentUser;
         if (!user) return false;
-        const rv = new RunView();
+        // Must use this entity's provider and pass the caller as contextUser — the
+        // server's global provider has no CurrentUser, so an unscoped RunView fails there.
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse as unknown as IMetadataProvider);
         const [ownerResult, grantResult] = await rv.RunViews([
             {
                 EntityName: 'MJ: Collections',
@@ -89,7 +91,7 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
                 MaxRows: 1,
                 ResultType: 'simple',
             },
-        ]);
+        ], user);
         const ownerId = ownerResult.Success
             ? (ownerResult.Results?.[0] as { OwnerID?: string | null } | undefined)?.OwnerID
             : undefined;

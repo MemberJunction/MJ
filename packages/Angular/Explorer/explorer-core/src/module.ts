@@ -34,6 +34,7 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
 import { DashboardPreferencesDialogComponent } from './lib/dashboard-preferences-dialog/dashboard-preferences-dialog.component';
@@ -98,6 +99,7 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
     LiveKitRoomResource,
   ],
   imports: [
+    MarkdownModule,
     AppRoutingModule,
     CommonModule,
     FormsModule,

@@ -19,6 +19,8 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
+import { PlanModePreference } from '../../utils/plan-mode-preference';
+import { MarkdownService } from '@memberjunction/ng-markdown';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -105,6 +107,48 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   @Input() public messageExtraTemplate: TemplateRef<unknown> | null = null;
 
+  // --- Host-level feature gates (forwarded from mj-conversation-chat-area) ---
+  // All default true so existing consumers are unaffected; set false to remove
+  // the affordance entirely (the control is not rendered, not merely disabled).
+  /** Show the per-message agent run-detail grid (run ID, step/token counts, $ cost). */
+  @Input() public showAgentRunDetails: boolean = true;
+  /** Show the per-message reaction buttons (like / comment). */
+  @Input() public showReactions: boolean = true;
+  /** Show the per-message thumbs rating control on completed AI messages. */
+  @Input() public showMessageRating: boolean = true;
+  /** Allow pinning messages (the per-message pin button). */
+  @Input() public allowPinning: boolean = true;
+  /** Allow editing the user's own messages (the per-message edit button). */
+  @Input() public allowMessageEdit: boolean = true;
+  /** Allow deleting the user's own messages (the per-message delete button). */
+  @Input() public allowMessageDelete: boolean = true;
+  /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
+  @Input() public assistantDisplayName: string | null = null;
+  /** Host image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
+  @Input()
+  public set assistantAvatarUrl(value: string | null) {
+    if (value !== this._assistantAvatarUrl) {
+      this._assistantAvatarUrl = value;
+      // A new URL gets a fresh chance even if the previous one 404'd.
+      this.assistantAvatarFailed = false;
+    }
+  }
+  public get assistantAvatarUrl(): string | null {
+    return this._assistantAvatarUrl;
+  }
+  private _assistantAvatarUrl: string | null = null;
+
+  /** The last assistantAvatarUrl failed to load — fall back to the icon branch. */
+  public assistantAvatarFailed = false;
+
+  /** The avatar image URL actually rendered: trimmed, and null after a load error
+   *  so a broken/whitespace URL degrades to the agent icon instead of a broken-image glyph. */
+  public get effectiveAssistantAvatarUrl(): string | null {
+    if (this.assistantAvatarFailed) return null;
+    const url = this._assistantAvatarUrl?.trim();
+    return url ? url : null;
+  }
+
   @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public retryClicked = new EventEmitter<MJConversationDetailEntity>();
@@ -166,12 +210,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _cachedDisplayMessage: string = '';
   private _cachedMessageText: string = '';
 
+  // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
+  private mentionAutocomplete = MentionAutocompleteService.Instance;
+
   constructor(
     private cdRef: ChangeDetectorRef,
     private mentionParser: MentionParserService,
-    private mentionAutocomplete: MentionAutocompleteService,
     private uiCommandHandler: UICommandHandlerService,
-    private agentService: ConversationAgentService
+    private agentService: ConversationAgentService,
+    private markdownService: MarkdownService
   ) {
     super();
   }
@@ -348,11 +395,28 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.message.Role?.trim().toLowerCase() === 'ai';
   }
 
+  /**
+   * The agent identity as shown in the UI: the ENGINE-resolved identity (see
+   * {@link engineAgentInfo}) with the host's `assistantDisplayName` override
+   * applied to the name when set. Internal logic that must compare against the
+   * real agent name (e.g. {@link isConversationManager}) uses `engineAgentInfo`
+   * directly, so a display override can never change routing/behavior decisions.
+   */
   public get aiAgentInfo(): { name: string; iconClass: string; role: string } | null {
+    const info = this.engineAgentInfo;
+    if (!info) return null;
+    const override = this.assistantDisplayName?.trim();
+    return override ? { ...info, name: override } : info;
+  }
+
+  /** The engine-resolved agent identity — no host display overrides applied.
+   *  Protected (not private) so the template's run-details header — which labels
+   *  the REAL agent's diagnostics and record link — can read it directly. */
+  protected get engineAgentInfo(): { name: string; iconClass: string; role: string } | null {
     if (!this.isAIMessage) return null;
 
     // Get agent ID from denormalized field (populated when message is created)
-    const agentID = (this.message as any).AgentID;
+    const agentID = this.message.AgentID;
 
     // Look up agent from AIEngineBase cache
     if (agentID && AIEngineBase.Instance?.Agents) {
@@ -431,9 +495,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // the code-const Sage fallback. Replaces the previous hardcoded 'Sage'
     // name check. Returns false until the agent service has cached the
     // resolved agent (warmed by message-input's first routing call).
+    // Compares the ENGINE-resolved name deliberately: a host assistantDisplayName
+    // override renames what the user SEES, never what the component decides.
     const cmName = this.agentService.ConversationManagerAgentName;
     if (!cmName) return false;
-    return this.aiAgentInfo?.name === cmName;
+    return this.engineAgentInfo?.name === cmName;
   }
 
   public get displayMessage(): string {
@@ -515,6 +581,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     let iconClass = '';
     let logoURL = '';
     let configPresetName = '';
+    let inlineStyle = '';
 
     // Look up actual name and icon if ID provided
     if (content.type === 'agent' && agents) {
@@ -549,11 +616,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       const query = this.mentionAutocomplete.getAvailableQueries().find(q => UUIDsEqual(q.ID, content.id));
       if (query) name = query.Name;
       iconClass = this.normalizeIconClass(this.mentionAutocomplete.getQueriesEntityIcon());
+    } else if (content.type === 'skill') {
+      const skill = AIEngineBase.Instance?.Skills?.find(s => UUIDsEqual(s.ID, content.id));
+      if (skill) name = skill.Name;
+      iconClass = this.normalizeIconClass(skill?.IconClass || 'fa-solid fa-wand-magic-sparkles');
+      // Per-skill accent color (AISkill.Color) overrides the standard skill green — same
+      // logic as the composer chip (mention-editor's createMentionChip). Keep in sync.
+      if (skill?.Color) {
+        inlineStyle = ` style="background: ${this.escapeHtml(skill.Color)}; border-color: rgba(255, 255, 255, 0.35);"`;
+      }
     }
 
     const escapedName = this.escapeHtml(name);
     const typeClass =
-      content.type === 'agent' || content.type === 'entity' || content.type === 'query' ? content.type : 'user';
+      content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' ? content.type : 'user';
 
     // Build preset indicator HTML if present
     const presetIndicator = configPresetName
@@ -562,11 +638,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
-      return `<span class="mention-badge ${typeClass}"><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
-      return `<span class="mention-badge ${typeClass}">${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}>${escapedName}${presetIndicator}</span>`;
     }
   }
 
@@ -635,6 +711,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const choiceTypes = ['buttongroup', 'radio', 'dropdown', 'checkbox'];
     if (field.type && choiceTypes.includes(field.type) && field.displayValue) {
       return FormResponseUtils.EscapeHtml(field.displayValue);
+    }
+
+    // Textarea values render as formatted Markdown — agent-authored long-form content
+    // (e.g. the approved Plan in the plan-approval response) is Markdown by convention,
+    // and the submitted-form pill should look as good as the live form's preview did.
+    // Script safety: the whole message passes through mj-markdown's stripJavaScript.
+    if (field.type === 'textarea' && typeof field.value === 'string' && field.value.trim().length > 0) {
+      try {
+        return `<div class="field-answer-markdown">${this.markdownService.parse(field.value)}</div>`;
+      } catch {
+        // fall through to the escaped-plaintext path below
+      }
     }
 
     // Delegate type-aware formatting to shared utility (no schema question available here)
@@ -1089,6 +1177,43 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Whether the agent-run gear's expanded panel would actually render anything —
+   * used to gate the gear button itself so it doesn't appear as a dead control
+   * that opens an empty popup. The panel hosts, in order: the run-details section
+   * (only when `showAgentRunDetails`), associated tasks, and (non-last messages
+   * only) the delete / rating / pin overflow. With `showAgentRunDetails=false` and
+   * none of those enabled — a white-labeled end-user surface — the gear vanishes
+   * entirely instead of opening onto nothing.
+   *
+   * Each arm below mirrors the corresponding template condition EXACTLY; keep them
+   * in lockstep with `message-item.component.html`'s `.agent-details-panel` block.
+   *
+   * Defaults leave it unchanged: with `showAgentRunDetails=true` (the default) this
+   * is unconditionally true, so the gear renders exactly as before — including the
+   * pre-existing window where `agentRun` hasn't loaded yet and the panel is briefly
+   * empty. That window is deliberately preserved (byte-identical defaults) rather
+   * than fixed here.
+   */
+  public get hasAgentDetailsPanelContent(): boolean {
+    // Run-details enabled → gear shows for any agent-run message (the button
+    // already AND-gates hasAgentRun), exactly as before the gate existed — even
+    // before the agentRun object finishes loading. This keeps the default
+    // (showAgentRunDetails=true) byte-identical.
+    if (this.showAgentRunDetails) return true;
+    if (this.detailTasks.length > 0) return true;
+    if (!this.isLastMessage) {
+      if (this.allowMessageDelete && this.isConversationOwner) return true;
+      if (this.allowPinning) return true;
+      // The rating only renders inside the template's `messageStatus === 'Complete'`
+      // branch, so an incomplete/errored message must NOT count it as content —
+      // otherwise the gear reappears over an empty panel, which is the whole bug
+      // this getter exists to prevent.
+      if (this.showMessageRating && this.messageStatus === 'Complete') return true;
+    }
+    return false;
+  }
+
+  /**
    * Toggle the agent details panel expansion
    */
   public async toggleAgentDetails(): Promise<void> {
@@ -1331,6 +1456,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return;
     }
 
+    // Plan-approval semantics: approving a plan is a HIGHER-ORDER signal, not just a form
+    // reply — it ends the plan phase, so the conversation switches out of Plan Mode and the
+    // follow-up run executes the approved plan instead of planning again. Rejection leaves
+    // Plan Mode on so the agent re-plans (the optional feedback field steers it).
+    this.applyPlanDecision(formData);
+
     // Create formatted message using ConversationUtility
     const formMessage = ConversationUtility.CreateFormResponse(
       'formSubmit', // Generic action name
@@ -1350,11 +1481,33 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Detects a plan-approval form submission (the Plan Mode HITL card — identified by its
+   * 'plan' + 'decision' questions, see BaseAgent.buildPlanApprovalForm) and applies the
+   * decision's conversation-level effect: APPROVE switches this conversation out of Plan
+   * Mode (plan phase complete — execute); REJECT intentionally leaves it on (re-plan).
+   */
+  private applyPlanDecision(formData: Record<string, unknown>): void {
+    const form = this.responseForm;
+    const isPlanForm =
+      !!form?.questions.some(q => q.id === 'plan') &&
+      !!form?.questions.some(q => q.id === 'decision');
+    if (!isPlanForm) {
+      return;
+    }
+    if (formData['decision'] === 'approve' && this.message.ConversationID) {
+      PlanModePreference.Set(this.message.ConversationID, false);
+    }
+  }
+
+  /**
    * Handle actionable command execution
    */
   public async onCommandExecuted(command: ActionableCommand): Promise<void> {
     try {
-      await this.uiCommandHandler.executeActionableCommand(command);
+      await this.uiCommandHandler.executeActionableCommand(command, {
+        conversationId: this.message.ConversationID,
+        conversationDetailId: this.message.ID
+      });
     } catch (error) {
       console.error('Failed to execute command:', command, error);
     }

@@ -65,3 +65,12 @@ npx playwright test --config e2e/playwright.config.ts --list
   toggle across its 3 layouts, the visual-DAG pipeline builder, the
   action-forward home), plus that the docked copilot toggle opens the embedded
   chat. Relies on `data-testid` hooks in the PS templates.
+- **`specs/user-routines.spec.ts`** — User Routines in the Chat app: the
+  sidebar Routines section renders (bottom-pinned, permission-gated), then the
+  full **live** story — create an every-minute "Sage says hi" routine through
+  the slide-in editor (agent tree picker, Advanced cron), let the REAL
+  1-minute dispatcher inside MJAPI claim and run it (nothing mocked; requires
+  a working AI setup for Sage), assert the Success chip, the history row with
+  its in-app-notification bell and linked Agent-run record, then delete the
+  routine through the UI (cleanup is guaranteed via try/finally). Budget ~8
+  minutes for the live test.

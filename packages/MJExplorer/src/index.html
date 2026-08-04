@@ -21,6 +21,11 @@
         var saved = localStorage.getItem('mj-theme');
         var isDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+        // Restore the org brand overlay attribute so the layout/selectors match on the
+        // first frame. The overlay CSS is a session Blob re-injected at login bootstrap,
+        // so brand colors repaint then; this only prevents a structural mismatch flash.
+        var overlay = localStorage.getItem('mj-theme-overlay');
+        if (overlay) document.documentElement.setAttribute('data-theme-overlay', overlay);
       } catch (e) { /* swallow — theme just falls back to light */ }
     })();
   </script>
@@ -37,7 +42,40 @@
   <!-- Leaflet MarkerCluster for grouping dense markers -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="" />
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
+  <!--
+    MarkerCluster is a Leaflet UMD plugin: it must attach to the global `L`
+    that core Leaflet defines. Loading it as a plain <script> during <head>
+    parse is fragile in some app/bundler boot sequences — the plugin's UMD
+    wrapper can resolve to a non-browser (AMD/CommonJS) target instead of
+    window.L, so it loads with no error yet never registers
+    L.markerClusterGroup, and map clustering silently falls back to plain
+    markers. Deferring the load until after `window.load` (when core Leaflet
+    and the global environment have settled) forces the browser-global branch
+    and makes attachment reliable across deployments.
+  -->
+  <script>
+    (function () {
+      function loadMarkerCluster() {
+        var s = document.createElement('script');
+        s.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+        s.crossOrigin = '';
+        s.onload = function () {
+          if (typeof L === 'undefined' || typeof L.markerClusterGroup !== 'function') {
+            console.warn('[map] leaflet.markercluster loaded but did not attach to global L; clustering disabled.');
+          }
+        };
+        s.onerror = function () {
+          console.warn('[map] failed to load leaflet.markercluster; clustering disabled.');
+        };
+        document.head.appendChild(s);
+      }
+      if (document.readyState === 'complete') {
+        loadMarkerCluster();
+      } else {
+        window.addEventListener('load', loadMarkerCluster);
+      }
+    })();
+  </script>
 </head>
 <body>
 <app-root></app-root> 

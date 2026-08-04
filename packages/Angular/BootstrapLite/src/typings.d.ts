@@ -17,6 +17,10 @@ declare module '@memberjunction/ng-explorer-core' {
     export const EntityRecordResource: unknown;
     export const ListDetailResource: unknown;
     export const NotificationsResource: unknown;
+    export const OmnibarAgentProvider: unknown;
+    export const OmnibarCommandProvider: unknown;
+    export const OmnibarRecordProvider: unknown;
+    export const OmnibarSearchProvider: unknown;
     export const QueryResource: unknown;
     export const SearchResultsResource: unknown;
     export const UserViewResource: unknown;

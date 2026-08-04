@@ -2,7 +2,7 @@ import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef,
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { MJListEntity, MJListCategoryEntity, MJListDetailEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListEntityExtended, MJListCategoryEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
@@ -256,11 +256,13 @@ interface CategoryNode {
             <i class="fa-solid fa-copy"></i>
             Duplicate
           </button>
-          <div class="menu-divider"></div>
-          <button class="menu-item danger" (click)="confirmDeleteList()">
-            <i class="fa-solid fa-trash"></i>
-            Delete
-          </button>
+          @if (CanDeleteSelectedList) {
+            <div class="menu-divider"></div>
+            <button class="menu-item danger" (click)="confirmDeleteList()">
+              <i class="fa-solid fa-trash"></i>
+              Delete
+            </button>
+          }
         </div>
       }
     
@@ -1075,6 +1077,20 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   contextMenuY = 0;
   selectedContextList: MJListEntity | null = null;
 
+  /**
+   * Whether the current user may DELETE the context-menu's list — the same shared ownership rule
+   * the server enforces (owner, or a Developer/Integration user). This "My Lists" view is
+   * owner-scoped, so for the standard case it's the owner and resolves true; the gate makes it
+   * correct-by-construction (and consistent with the Browse view) rather than an unconditional button.
+   */
+  public get CanDeleteSelectedList(): boolean {
+    const list = this.selectedContextList;
+    if (!list) {
+      return false;
+    }
+    return MJListEntityExtended.UserCanDelete(list.UserID, this.ProviderToUse.CurrentUser);
+  }
+
   // Create/Edit dialog
   showCreateDialog = false;
   editingList: MJListEntity | null = null;
@@ -1247,8 +1263,10 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         return;
       }
 
-      // Load lists, categories, and item counts in parallel
-      const [listsResult, categoriesResult, detailsResult] = await rv.RunViews([
+      // Load lists and categories in parallel; item counts follow as a
+      // batched set of count_only queries (index-seek COUNTs server-side)
+      // instead of transferring every membership row to the client.
+      const [listsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Lists',
           ExtraFilter: `UserID = '${userId}'`,
@@ -1259,11 +1277,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
           EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'MJ: List Details',
-          ExtraFilter: `ListID IN (SELECT ID FROM __mj.List WHERE UserID = '${userId}')`,
-          ResultType: 'simple'
         }
       ]);
 
@@ -1274,7 +1287,6 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
       const lists = listsResult.Results as MJListEntity[];
       this.categories = categoriesResult.Results as MJListCategoryEntity[];
-      const details = detailsResult.Results as Array<{ ListID: string }>;
 
       // Build category map
       this.categoryMap.clear();
@@ -1282,11 +1294,17 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         this.categoryMap.set(cat.ID, cat);
       }
 
-      // Count items per list
+      // Count items per list — one batched round trip
       const itemCounts = new Map<string, number>();
-      for (const detail of details) {
-        const count = itemCounts.get(detail.ListID) || 0;
-        itemCounts.set(detail.ListID, count + 1);
+      if (lists.length > 0) {
+        const countResults = await rv.RunViews(lists.map(list => ({
+          EntityName: 'MJ: List Details',
+          ExtraFilter: `ListID = '${list.ID}'`,
+          ResultType: 'count_only' as const
+        })));
+        countResults.forEach((res, idx) => {
+          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+        });
       }
 
       // Build entity info
@@ -1640,6 +1658,15 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
     const listToDelete = this.listToDelete;
     const listName = listToDelete.Name;
+
+    // Defense-in-depth: re-check the shared ownership rule before deleting (the server is the true
+    // enforcement point, but this fails fast with a clean message).
+    if (!MJListEntityExtended.UserCanDelete(listToDelete.UserID, this.ProviderToUse.CurrentUser)) {
+      this.notificationService.CreateSimpleNotification(
+        `You don't have permission to delete "${listName}".`, 'error', 6000,
+      );
+      return;
+    }
 
     this.isDeleting = true;
     this.cdr.detectChanges();

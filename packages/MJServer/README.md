@@ -142,6 +142,15 @@ module.exports = {
     },
   },
 
+  // Engine pre-warm during startup: 'full' (all @RegisterForStartup engines run at
+  // boot — MJAPI's default) or 'task' (skip pre-warm; engines lazy-load on first
+  // touch — the CLI/mj-sync/CodeGen default). MJ_STARTUP_MODE overrides per
+  // invocation. See packages/MJAPI/CLAUDE.md "Startup Mode" for the full
+  // precedence chain and trade-offs.
+  startup: {
+    mode: 'full',
+  },
+
   restApiOptions: {
     enabled: true,
     includeEntities: ['User*', 'Entity*'],

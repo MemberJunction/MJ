@@ -79,7 +79,7 @@
         }
       </div>
       <div class="chat-actions chat-actions-buttons">
-        @if (pinnedMessages.length > 0) {
+        @if (allowPinning && pinnedMessages.length > 0) {
           <button class="pin-chip" [class.active]="showPinsPanel" (click)="showPinsPanel = !showPinsPanel" title="View pinned messages">
             <i class="fas fa-thumbtack"></i>
             <span class="pin-chip-count">{{ pinnedMessages.length }}</span>
@@ -124,9 +124,9 @@
           </mj-conversation-agent-picker>
         }
         @if (showExportButton) {
-          <button mjButton variant="flat" size="sm" (click)="exportConversation()" title="Export conversation">
-            <i class="fas fa-download"></i>
-            <span class="btn-label">Export</span>
+          <button mjButton variant="flat" size="sm" (click)="exportConversation()" [title]="exportButtonLabel + ' conversation'">
+            <i [class]="exportButtonIcon"></i>
+            <span class="btn-label">{{ exportButtonLabel }}</span>
           </button>
         }
         @if (showShareButton && canShareConversation) {
@@ -137,6 +137,17 @@
             <i class="fas fa-share-nodes"></i>
             <span class="btn-label">Share</span>
           </button>
+        }
+        <!-- headerActions slot — ADDITIVE host buttons rendered after the stock
+             actions (unlike the `header` slot, which replaces the whole header
+             and therefore never reaches this branch). For visual parity,
+             projected buttons should use mjButton variant="flat" size="sm". -->
+        @if (slotTemplate('headerActions'); as t) {
+          <ng-container *ngTemplateOutlet="t; context: {
+            $implicit: conversation,
+            conversationId: conversationId,
+            isProcessing: isProcessing
+          }"></ng-container>
         }
       </div>
     </div>
@@ -165,10 +176,15 @@
       [class.full-width]="!showArtifactPanel"
       [class.hidden]="isArtifactPaneMaximized">
       @if (isLoadingConversation) {
-        <!-- Loading State - Show centered spinner while conversation loads (checked FIRST to prevent empty state flash) -->
-        <div class="conversation-loading-state">
-          <mj-loading text="Loading conversation..." size="large"></mj-loading>
-        </div>
+        <!-- Loading State - checked FIRST to prevent empty state flash. The branch
+             always short-circuits the panes below; showLoadingState only controls
+             whether the built-in spinner renders (hosts with their own loading
+             chrome set it false and get a blank pane instead). -->
+        @if (showLoadingState) {
+          <div class="conversation-loading-state">
+            <mj-loading text="Loading conversation..." size="large"></mj-loading>
+          </div>
+        }
       } @else if ((isNewConversation || !conversationId) && !suppressNewConversationEmptyState) {
         <!-- emptyState slot — when a consumer projects mjChatSlot="emptyState",
              they take over the entire empty-state region (including any send
@@ -188,12 +204,20 @@
         } @else {
           <mj-conversation-empty-state
             [currentUser]="currentUser"
+            [initialDraft]="GetInitialDraftFor(null)"
+            (initialDraftApplied)="OnComposerDraftApplied()"
+            (DraftStateChanged)="OnDraftStateChanged(null, $event)"
+            (ComposerBlurred)="OnComposerBlurred()"
             [disabled]="isProcessing"
             [showSidebarToggle]="showSidebarToggle"
             [overlayMode]="overlayMode"
             [greeting]="emptyStateConfig?.greeting ?? emptyStateGreeting"
+            [showSuggestedPrompts]="showSuggestedPrompts"
             [enableAttachments]="enableAttachments && allowAttachments"
             [enableMentions]="allowMentions"
+            [enableAgentMentions]="allowAgentMentions"
+            [enableEntityMentions]="allowEntityMentions"
+            [enableSkillCommands]="allowSkillCommands"
             [maxAttachments]="maxAttachments"
             [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
             [acceptedFileTypes]="acceptedFileTypes"
@@ -211,11 +235,21 @@
           <div class="chat-input-container">
             <div class="message-input-container-wrapper">
               <mj-message-input
+                #emptyStateInput
                 [emptyStateMode]="true"
+                [initialDraft]="GetInitialDraftFor(null)"
+                (initialDraftApplied)="OnComposerDraftApplied()"
+            (DraftStateChanged)="OnDraftStateChanged(null, $event)"
+            (ComposerBlurred)="OnComposerBlurred()"
                 [currentUser]="currentUser"
                 [disabled]="isProcessing"
                 [enableAttachments]="enableAttachments && allowAttachments"
                 [enableMentions]="allowMentions"
+                [enableAgentMentions]="allowAgentMentions"
+                [enableEntityMentions]="allowEntityMentions"
+                [enableSkillCommands]="allowSkillCommands"
+                [enablePlanMode]="allowPlanMode"
+                [enableRealtime]="allowRealtime"
                 [maxAttachments]="maxAttachments"
                 [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
                 [acceptedFileTypes]="acceptedFileTypes"
@@ -235,6 +269,16 @@
           }
           <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
             <mj-conversation-message-list
+              [showEmptyFill]="showEmptyFill"
+              [showDateNavigation]="showDateNavigation"
+              [showAgentRunDetails]="showAgentRunDetails"
+              [showReactions]="showReactions"
+              [showMessageRating]="showMessageRating"
+              [allowPinning]="allowPinning"
+              [allowMessageEdit]="allowMessageEdit"
+              [allowMessageDelete]="allowMessageDelete"
+              [assistantDisplayName]="assistantDisplayName"
+              [assistantAvatarUrl]="assistantAvatarUrl"
               [messages]="messages"
               [conversation]="conversation"
               [currentUser]="currentUser"
@@ -293,6 +337,9 @@
                   <mj-message-input
                     #messageInput
                     [hidden]="inputRef.conversationId !== conversationId"
+                    [initialDraft]="GetInitialDraftFor(inputRef.conversationId)"
+                    (DraftStateChanged)="OnDraftStateChanged(inputRef.conversationId, $event)"
+                    (ComposerBlurred)="OnComposerBlurred()"
                     [conversationId]="inputRef.conversationId"
                     [conversationName]="inputRef.conversationName"
                     [currentUser]="currentUser"
@@ -309,11 +356,18 @@
                     [disabled]="isProcessing || isReadOnlyView"
                     [enableAttachments]="enableAttachments && allowAttachments"
                     [enableMentions]="allowMentions"
+                    [enableAgentMentions]="allowAgentMentions"
+                    [enableEntityMentions]="allowEntityMentions"
+                    [enableSkillCommands]="allowSkillCommands"
+                    [enablePlanMode]="allowPlanMode"
+                    [enableRealtime]="allowRealtime"
                     [maxAttachments]="maxAttachments"
                     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
                     [acceptedFileTypes]="acceptedFileTypes"
-                    [initialMessage]="inputRef.conversationId === conversationId ? pendingMessage : null"
-                    [initialAttachments]="inputRef.conversationId === conversationId ? pendingAttachments : null"
+                    [initialMessage]="shouldDeliverPendingMessageTo(inputRef.conversationId) ? pendingMessage : null"
+                    [initialAttachments]="shouldDeliverPendingMessageTo(inputRef.conversationId) ? pendingAttachments : null"
+                    (initialMessageAutoSendStarted)="onInitialMessageAutoSendStarted($event)"
+                    (initialMessageAutoSendFailed)="onInitialMessageAutoSendFailed($event)"
                     (messageSent)="onMessageSent($event)"
                     (agentResponse)="onAgentResponse($event)"
                     (agentRunDetected)="onAgentRunDetected($event)"
@@ -321,8 +375,8 @@
                     (messageComplete)="onMessageComplete($event)"
                     (artifactCreated)="onArtifactCreated($event)"
                     (conversationRenamed)="onConversationRenamed($event)"
-                    (intentCheckStarted)="onIntentCheckStarted()"
-                    (intentCheckCompleted)="onIntentCheckCompleted()"
+                    (intentCheckStarted)="onIntentCheckStarted($event)"
+                    (intentCheckCompleted)="onIntentCheckCompleted($event)"
                     (beforeAgentTurn)="beforeAgentTurn.emit($event)"
                     (afterAgentTurn)="afterAgentTurn.emit($event)"
                     (uploadStateChanged)="onUploadStateChanged($event)">
@@ -376,7 +430,7 @@
     </mj-artifact-share-modal>
 
     <!-- Pinned Messages Panel (overlay) -->
-    @if (showPinsPanel) {
+    @if (allowPinning && showPinsPanel) {
       <mj-pinned-messages-panel
         [pinnedMessages]="pinnedMessages"
         (closed)="showPinsPanel = false"
@@ -435,7 +489,11 @@
 }
 
 <!-- Export Modal -->
+<!-- [branding] is bound BEFORE [isVisible] deliberately: Angular sets inputs in
+     template order within a change-detection pass, and the modal's isVisible setter
+     reads `branding` to default its "Include branding" checkbox on a fresh open. -->
 <mj-export-modal
+  [branding]="exportBranding"
   [isVisible]="showExportModal"
   [conversation]="conversation || undefined"
   [currentUser]="currentUser"

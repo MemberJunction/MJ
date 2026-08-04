@@ -1,5 +1,320 @@
 # @memberjunction/ai-prompts
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/credentials@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/templates-base-types@6.0.0
+  - @memberjunction/templates@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/credentials@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/templates-base-types@5.51.0
+  - @memberjunction/templates@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Minor Changes
+
+- 12691e3: Content autotagging: metadata-driven vector config, chunk purge + backfill, and parity with the entity-vectorization pipeline
+
+  Brings the ContentSource / autotag embedding pipeline (`AutotagBaseEngine`) up to parity with the
+  EntityDocument pipeline, and wires up chunk lifecycle operations. All additive and opt-in — existing
+  setups behave identically. No schema/migration changes (config rides the `Configuration` JSONType).
+  - **Metadata-driven vector config** on the `Configuration` JSONType of both `ContentSource` and
+    `ContentType` (ContentSource overrides ContentType, then a hardcoded default):
+    - **`VectorIDStrategy`** (`'hash' | 'recordId'`, default `'recordId'`): `'recordId'` uses each
+      chunk's own id as its vector-DB id (purge-safe); `'hash'` is 5.49 EntityDocument parity and
+      unsafe with re-chunk + purge (documented).
+    - **`ChunkTextStorage`** (`'mixed' | 'alwaysChunk'`, default `'alwaysChunk'`): `'alwaysChunk'`
+      writes a `ContentItemChunk` row for every item and leaves `ContentItem.VectorRecordID` null;
+      `'mixed'` keeps single-chunk items' text/vector on the ContentItem.
+    - **`VectorMetadata`** — full structural parity with the entity pipeline's metadata control:
+      `FieldStrategy: 'all' | 'include' | 'exclude' | 'explicit'` (unset ⇒ the curated content
+      default, preserving historical behavior), per-field `Fields` overrides
+      (`Included`/`TruncationLimit`/`StoreAs`), `DefaultTruncationLimit`,
+      and `IncludeEntityIcon`/`IncludeUpdatedAt`/`IncludeTags`/`IncludeText` toggles. The runner mirrors
+      the entity side's decomposition (system/icon/updatedAt/display-field helpers, StoreAs coercion,
+      UUID normalization, truncation) driven off the ContentItem entity. Content-specific deviations:
+      `Entity` is always kept under `'explicit'` (so results stay labeled; record id recovers from the
+      vector id under the default `recordId` strategy), and `Tags` (not a ContentItem field) is a
+      toggle rather than a discovered field.
+  - **Chunk-Identity Contract** — chunk vectors now carry their own identity: `Entity='MJ: Content
+Item Chunks'`, `RecordID=<ContentItemChunk.ID>`, `ContentItemID`, `Sequence`. The chunk row PK is
+    minted up front and used as its identity (and, under `recordId`, its vector id), so a scoped
+    search hit returns the matched **chunk** id (not just the parent content item id) with no
+    search-side changes. Item-level ('mixed' single-chunk) vectors keep `MJ: Content Items` identity.
+  - **`AutotagBaseEngine.EmbedPendingChunks(user, {maxItems})`** — (re)embeds persisted
+    `ContentItemChunk` rows whose `EmbeddingStatus='Pending'`, for migration backfill and error
+    recovery. Bounded per run + rate-limited; best-effort per chunk.
+  - **Embedding dimensions** — the resolved infrastructure now carries `MJ: Vector Indexes.Dimensions`
+    and threads it into the embedding call (new optional `Dimensions` on `AIModelRunner`'s
+    `EmbeddingRunParams`, forwarded to `EmbedTexts`), so reduced-dimension indexes work in the autotag
+    path and the dedup-check query embeds at the matching size.
+  - **Provider routing** — the resolved infrastructure carries the parsed `VectorIndex.ProviderConfig`;
+    per-record `providerTemporaryDirectives` are built via `VectorDBBase.BuildProviderDirectives`
+    (e.g. Pinecone namespace from a configured source field) and `providerConfig` is passed to
+    `CreateRecords`. Only invoked when the index actually has a ProviderConfig.
+  - **`AutotagBaseEngine.PurgeDeletedChunks`** is now triggerable: the Autotag/Vectorize action gains
+    optional **`Purge`** (Phase 4) and **`EmbedPendingChunks`** (Phase 3) params, both independent of
+    Vectorize, both bounded by `MaxItems`, both best-effort.
+
+  Behavior note: the default `ChunkTextStorage='alwaysChunk'` + `VectorIDStrategy='recordId'` means
+  newly-embedded single-chunk items now get a `ContentItemChunk` row with a unique vector id instead
+  of an item-level hash id. Already-embedded (`EmbeddingStatus='Complete'`) items are not reprocessed,
+  so existing data is untouched until re-embedded; set `ChunkTextStorage='mixed'` per source to retain
+  the item-level single-chunk behavior.
+
+### Patch Changes
+
+- 623dfc5: Break CodeGen FK cycle between AIAgentRun, AIPromptRun, and ConversationDetail. Move SummaryPromptRunID from ConversationDetail to a new ConversationCompactionRun audit table. Remove AgentRunID from AIPromptRun (derivable via AIAgentRunStep.TargetLogID). Remove agentRunId from AIPromptParams and all write sites across the prompt/agent stack.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/credentials@5.50.0
+  - @memberjunction/templates-base-types@5.50.0
+  - @memberjunction/templates@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- c5e4b9e: Agent conversation compaction: durable cross-turn summaries stored on the conversation (Sequence + SummaryPromptRunID, budget knobs on AIAgentType/AIAgent, Compaction run steps), conversation-history retrieval tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange), edit handling with OriginalMessageChanged flagging and a wired chat edit affordance, plus hardening fixes: failed message expansions now surface a reason to the model (breaks an unbounded retry loop), json5 ESM import fix restores the local JSON-repair tier, and SQLConverter no longer truncates PG column comments at escaped apostrophes.
+- b52ffa8: Fix four silent-failure bugs found while triaging the open issue backlog. Each one looked correct from the outside while doing nothing, or doing the wrong thing, at runtime. No schema changes.
+
+  **`BaseLLM` silently truncated streamed responses (`@memberjunction/ai`).** The streaming chunk loop caught any mid-stream error, logged it, and then finalized the response as a **success**. A dropped connection, a provider fault, or an abort part-way through a stream produced truncated content that the caller was told was complete — under every provider, for every streaming consumer. Genuine failures now surface as failures; cancellation is still routed to the driver's `finalizeStreamingResponse`, since providers differ on whether an abort throws there or simply ends iteration.
+
+  **No LLM driver honored `ChatParams.cancellationToken`** (13 provider packages). The field existed on `ChatParams` and zero drivers read it, so an aborted or timed-out request abandoned the promise while the socket kept streaming and pinning buffers. Now forwarded to the SDK across all 19 drivers — 13 fixed directly, the remaining 6 inheriting from `OpenAILLM` / `GeminiLLM` — on both the streaming and non-streaming paths. The mechanism differs per provider and was verified rather than assumed — Bedrock takes `abortSignal` (not `signal`); Ollama has no per-request hook at all, so the signal is threaded through a custom `fetch`; and `Inception` overrides both chat paths without calling `super`, so it does not inherit the fix from `OpenAILLM` despite appearing to. An abort is reported `Fatal` / `canFailover: false`, because `ErrorAnalyzer` otherwise classifies it as retriable — meaning a request the user just cancelled would have been retried.
+
+  **Prompt execution could not be bounded (`@memberjunction/ai-prompts`, `@memberjunction/ai-core-plus`).** On the single-model path the model call was awaited with no bound unless the caller hand-supplied an `AbortSignal`, so a hung provider connection never resolved. Adds a per-request `AIPromptParams.timeoutMS` and a typed `AIPromptTimeoutError` that `ErrorAnalyzer` classifies as retriable, so a timeout now flows into the existing retry/failover machinery instead of hanging. The timeout and any caller-supplied token compose — neither is discarded. Enforcement lives in `executeModel`, the one method the parallel coordinator also inherits, so the single-model and parallel paths cannot diverge. (Issue #3064 was filed as "`AIPromptRunner` does not enforce `AIPrompt.TimeoutMS`", but that column does not exist — the bound could not be expressed at all. A prompt-level column is tracked separately in #3133.)
+
+  **A malformed deny-list silently disarmed the Predictive Studio leakage guard** (`@memberjunction/predictive-studio*`, `@memberjunction/core-entities-server`, `@memberjunction/ng-dashboards`). Pasting a bracketed list into the pipeline editor produced `DenyFields: ["[CheckInTime", …, "Status]"]`; the deny-set then matched nothing, so the most dangerous leak columns trained completely unguarded and the save was accepted. The editor no longer manufactures the bad input, a new `MJMLTrainingPipelineEntityServer.ValidateAsync` rejects it at save, and the dominance threshold is clamped at enforcement time so rows written before this validation existed cannot disable the guard. Also unifies `DEFAULT_DOMINANCE_THRESHOLD`, which was defined twice with different values (`0.85` vs `0.6`) — agent-authored pipelines had been held to a materially laxer guard than hand-authored ones.
+
+  **Dead CSS shipped to production (`@memberjunction/ng-dashboards`, `@memberjunction/ng-conversations`).** These packages build with bare `ngc` — no Sass step — so `styleUrls` content is embedded verbatim. Native CSS nesting makes `&:hover` accidentally work, but it cannot do string concatenation, so every `&__elem` / `&--modifier` rule was silently dropped. Three components were affected. **This resurrects styling that has never rendered**: the realtime media-surface tab bar had no active-tab indicator, and evidence playback had no active-turn highlight and no played-progress color on its waveform. A new `check:ui-ngc-scss` CI gate prevents the trap re-arming.
+
+  Also fixes `@memberjunction/ai-azure`, whose unit tests had never actually run — the package had test files and a vitest config but no `test` script.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [9d6e3d9]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/templates@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/credentials@5.49.0
+  - @memberjunction/templates-base-types@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/credentials@5.48.0
+  - @memberjunction/templates-base-types@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/credentials@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/templates-base-types@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- ef3e802: feat(prompt-config): scope-aware prompt run-settings override (ScopedPromptConfig + resolver)
+
+  The run-settings sibling of `ScopedPromptPart`. Where `ScopedPromptPart` scope-overrides a
+  prompt's TEXT, `ScopedPromptConfig` scope-overrides a prompt's RUN SETTINGS — model/vendor, AI
+  configuration, sampling knobs (temperature/topP/topK/minP/penalties/seed/stopSequences),
+  response format, and effort level — for an `AIPrompt`, narrowed by the SAME polymorphic scope the
+  agent runtime already carries (`PrimaryScopeEntity`/`PrimaryScopeRecordID` + `SecondaryScopes`).
+  Any MJ app can tune which model a prompt runs on and how it samples, per scope, by editing rows.
+  - **Entity** `__mj.ScopedPromptConfig` — scope columns (mirroring `ScopedPromptPart`) + nullable
+    override columns; `Status`/`Priority`. Whole-row-wins by specificity (SecondaryScopes match >
+    PrimaryScopeRecord > global, tie-broken by `Priority`); each non-null column overrides the
+    prompt default, a NULL column inherits it.
+  - **`ScopedPromptConfigResolver`** (`@memberjunction/ai-agents`) — cached on `AIEngine`
+    (`ScopedPromptConfigs`); pluggable via `@RegisterClass`; resolves the single most-specific
+    in-scope config. `ApplyScopedPromptConfig` overlays it onto the run params
+    (model/vendor → `override`, configuration → `configurationId`, effort → `effortLevel`, sampling
+    knobs → `additionalParameters`).
+  - **`BaseAgent` wiring** — `preparePromptParams` resolves + applies the config using the run's
+    existing scope, right before the params are returned. **Runtime-explicit overrides still win.**
+  - `StopSequences` overlays as a trimmed `string[]` (the comma-delimited column is split before it
+    reaches `additionalParameters`, matching the runner's array contract — not the raw string).
+  - Unit tests for the resolver (cascade / priority / status / null-column inherit / runtime-wins,
+    plus the StopSequences-array and ResponseFormat mappings).
+  - **`@memberjunction/ai-prompts`** — two `AIPromptRunner` fixes:
+    1. **Response format override is honored** — the run now prefers `additionalParameters.responseFormat`
+       (set by `ApplyScopedPromptConfig`) over the prompt's own `ResponseFormat`, keeping `'Any'`-means-
+       silent semantics. Previously a `ScopedPromptConfig.ResponseFormat` was a no-op (the runner only
+       read `prompt.ResponseFormat`).
+    2. **`Messages` logging** — records caller-supplied `conversationMessages` to `AIPromptRun.Messages`
+       even without a template-rendered system prompt (previously dropped for the
+       `templateMessageRole='none'` path, leaving `Messages` null).
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/credentials@5.46.0
+  - @memberjunction/templates-base-types@5.46.0
+  - @memberjunction/templates@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/credentials@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/templates-base-types@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/credentials@5.45.0
+  - @memberjunction/templates-base-types@5.45.0
+  - @memberjunction/templates@5.45.0
+  - @memberjunction/ai@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-engine-base@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/templates@5.44.0
+  - @memberjunction/credentials@5.44.0
+  - @memberjunction/templates-base-types@5.44.0
+
 ## 5.43.0
 
 ### Minor Changes

@@ -143,6 +143,42 @@ def test_feature_importance_present_for_tree_models() -> None:
     assert all(v >= 0 for v in body["feature_importance"].values())
 
 
+def test_per_record_contributions_present_for_linear_classifier() -> None:
+    """P1-5: a linear classifier (logistic regression) returns per-row signed contributions."""
+    req = _train_request("logistic_regression", "classification")
+    body = client.post("/train", json=req).json()
+    pred_rows = [
+        {fs["Name"]: 0.9 for fs in req["feature_schema"]},
+        {fs["Name"]: -0.7 for fs in req["feature_schema"]},
+    ]
+    out = _predict(body["artifact_b64"], None, body["fitted_preprocessing"], req["feature_schema"], pred_rows)
+    for pred in out["predictions"]:
+        contribs = pred.get("contributions")
+        assert contribs, "linear model should carry per-record contributions"
+        assert all("feature" in c and "value" in c for c in contribs)
+        # ranked by magnitude, descending
+        mags = [abs(c["value"]) for c in contribs]
+        assert mags == sorted(mags, reverse=True)
+
+
+def test_per_record_contributions_present_for_linear_regressor() -> None:
+    """P1-5: a linear regressor (ridge) also returns per-row signed contributions."""
+    req = _train_request("ridge", "regression")
+    body = client.post("/train", json=req).json()
+    pred_rows = [{fs["Name"]: 0.4 for fs in req["feature_schema"]}]
+    out = _predict(body["artifact_b64"], None, body["fitted_preprocessing"], req["feature_schema"], pred_rows)
+    assert out["predictions"][0].get("contributions"), "linear regressor should carry contributions"
+
+
+def test_per_record_contributions_absent_for_tree_model() -> None:
+    """P1-5: a tree model (random forest) has no exact per-row attribution → contributions is None."""
+    req = _train_request("random_forest", "classification")
+    body = client.post("/train", json=req).json()
+    pred_rows = [{fs["Name"]: 0.5 for fs in req["feature_schema"]}]
+    out = _predict(body["artifact_b64"], None, body["fitted_preprocessing"], req["feature_schema"], pred_rows)
+    assert out["predictions"][0].get("contributions") is None
+
+
 def test_logistic_regression_rejects_regression() -> None:
     req = _train_request("logistic_regression", "regression")
     req["problem_type"] = "regression"

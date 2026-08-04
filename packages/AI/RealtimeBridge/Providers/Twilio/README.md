@@ -106,3 +106,30 @@ all with no network.
 ```bash
 cd packages/AI/Providers/BridgeTwilio && npm run test
 ```
+
+### Production REST wiring (`RealTwilioRestClient`)
+
+`RealTwilioRestClient` is the production `ITwilioRestLike` over the real `twilio` SDK (an
+`optionalDependency`, lazily loaded — the package still builds/tests with no `twilio` install). It maps
+`CreateCall` → `client.calls.create({ to, from, twiml, statusCallback })` and `UpdateCall` →
+`client.calls(sid).update({ status, twiml })`. Construct it with credentials resolved from MJ config
+(API-key pair preferred over the account auth token); pass it as the `Rest` half of `RealTwilioBindings`
+(the `MediaPump` half is the Media-Streams websocket, owned by the MJAPI telephony ingress). Unit-tested
+via an injected fake `twilio` factory — no network.
+
+### Credential-gated integration test (NOT in CI)
+
+`real-twilio-bindings.integration.test.ts` places a real outbound call and ends it. It is `skipIf`-gated
+on these env vars and never runs in CI (it spends real money + dials real PSTN):
+
+| Env var | Purpose |
+|---|---|
+| `TWILIO_TEST_ACCOUNT_SID` | Twilio Account SID (`AC…`). |
+| `TWILIO_TEST_AUTH_TOKEN` | Account auth token. |
+| `TWILIO_TEST_FROM` | A Twilio number you own (caller-id). |
+| `TWILIO_TEST_TO` | A capped-spend test number that auto-answers. |
+| `TWILIO_TEST_STREAM_URL` | (optional) the `wss://…/telephony/twilio/media` URL for the `<Connect><Stream>`. |
+
+Run locally: `npm run test -- real-twilio-bindings.integration`. The full media round-trip (audio through
+the agent) needs the MJAPI ingress + a publicly reachable stream URL — see the T1 ingress notes + manual
+runbook.

@@ -1,5 +1,204 @@
 # Change Log - @memberjunction/actions
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/code-execution@6.0.0
+  - @memberjunction/action-runtime@6.0.0
+  - @memberjunction/doc-utils@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/code-execution@5.51.0
+  - @memberjunction/action-runtime@5.51.0
+  - @memberjunction/doc-utils@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/action-runtime@5.50.0
+  - @memberjunction/doc-utils@5.50.0
+  - @memberjunction/code-execution@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 7db8ef5: Fix the broken unit tests on `next` caused by `vi.mock('@memberjunction/global')` factories that don't expose `RequiresSubclass`. The module graphs under test now declare `@RequiresSubclass()`, so a mock omitting it throws `No "RequiresSubclass" export is defined on the mock` at module init.
+
+  This covers the **complete** set of currently-failing suites (verified by a full `turbo run test` — exactly these two packages fail on this gap): `@memberjunction/actions` (`ActionEngine` / `EntityActionEngine` tests) and `@memberjunction/ai-vector-sync` (`entityDocumentConfig` test). Added the missing no-op decorator to each. Test-only change.
+
+  Note: ~200 other test files also mock `@memberjunction/global` without listing `RequiresSubclass`, but they pass today — their module-under-test never imports a `@RequiresSubclass()`-decorated class (or they spread the real module). Those are latent, not failing, and are intentionally left untouched to keep this fix reviewable; a shared-mock refactor to kill the latent class is a separate cleanup.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/code-execution@5.49.0
+  - @memberjunction/action-runtime@5.49.0
+  - @memberjunction/doc-utils@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/code-execution@5.48.0
+  - @memberjunction/action-runtime@5.48.0
+  - @memberjunction/doc-utils@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/code-execution@5.47.0
+  - @memberjunction/action-runtime@5.47.0
+  - @memberjunction/doc-utils@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/code-execution@5.46.0
+  - @memberjunction/action-runtime@5.46.0
+  - @memberjunction/doc-utils@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.45.1
+- @memberjunction/actions-base@5.45.1
+- @memberjunction/code-execution@5.45.1
+- @memberjunction/action-runtime@5.45.1
+- @memberjunction/doc-utils@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/code-execution@5.45.0
+  - @memberjunction/action-runtime@5.45.0
+  - @memberjunction/doc-utils@5.45.0
+  - @memberjunction/ai@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/action-runtime@5.44.0
+  - @memberjunction/doc-utils@5.44.0
+  - @memberjunction/code-execution@5.44.0
+
 ## 5.43.0
 
 ### Minor Changes

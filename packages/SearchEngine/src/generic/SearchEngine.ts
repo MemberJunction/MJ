@@ -26,6 +26,8 @@ import {
     MJSearchProviderEntity,
     MJSearchScopeEntity,
     MJSearchExecutionLogEntity,
+    MJAIAgentEntity,
+    MJAISkillEntity,
     ScopeBundle
 } from '@memberjunction/core-entities';
 import { BaseSingleton, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -42,6 +44,8 @@ import {
     ScopeEntityConstraint,
     ScopeStorageConstraint,
     FusionWeightsByProvider,
+    DimensionExplanation,
+    ScopePrincipals,
 } from './search.types';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList } from './SearchFusion';
@@ -51,6 +55,38 @@ import { BaseReRanker } from './BaseReRanker';
 import { NoopReRanker, LoadNoopReRanker } from './NoopReRanker';
 import { RerankerBudgetGuard } from '../rerankers/RerankerBudgetGuard';
 import { RenderScopeTemplate, RenderScopeJsonTemplate } from './ScopeTemplateRenderer';
+import { LaneKindForIndexType } from './ScopeValueEscaper';
+import { CheckRenderedTemplate, CheckRequiredMetadataKeys, ParseRequiredMetadataKeys } from './ScopeFilterGuard';
+import { ScopeDimensionResolver } from './ScopeDimensionResolver';
+import {
+    ScopeExplanation,
+    ExplainScopeInput,
+    LaneExplanation,
+    EntitlementExplanation,
+} from './ScopeExplanation';
+import { DefaultSearchScopePermissionResolver } from '../permissions/SearchScopePermissionResolver';
+
+/**
+ * Collects lane problems keyed by the lane's **row ID** instead of throwing.
+ *
+ * Present ⇒ the caller is EXPLAINING a hypothetical search and wants every broken lane in one
+ * pass. Absent ⇒ the caller is RUNNING a real search and the first unusable restriction must
+ * abort it, because the alternative is querying that lane unfiltered.
+ *
+ * Keyed by row ID rather than by display name: two `SearchScopeEntity` rows over the SAME
+ * entity is a legitimate configuration (two different `ExtraFilter`s), and keying by the entity
+ * name made them collide — one broken lane then reported its sibling as skipped too.
+ */
+type LaneProblemCollector = Map<string, string>;
+
+/**
+ * Emitted whenever a scope configures no lanes at all — which in MJ means UNSCOPED, not narrow.
+ * Shared by the dry run and the search path so both produce identical wording.
+ */
+const UNBOUNDED_SCOPE_DIAGNOSTIC =
+    'this scope configures NO lanes (no external indexes, entities, or storage accounts). ' +
+    'That is not a narrow scope — providers read an empty configuration as UNSCOPED, so it ' +
+    'searches everything available to them with no filter.';
 
 // Keep the default re-ranker registration alive under tree-shaking
 LoadNoopReRanker();
@@ -161,12 +197,14 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     private _defaultOverfetchFactor = 2;
 
     /**
-     * Minimum trimmed query length we accept. One- and two-character queries against
-     * a `LIKE '%term%'` fan-out are essentially full-database scans with negligible
+     * Minimum trimmed query length we accept. A single-character query against a
+     * `LIKE '%term%'` fan-out is essentially a full-database scan with negligible
      * relevance — the providers also enforce this, but we short-circuit here to
-     * avoid the cache lookup and provider dispatch overhead too.
+     * avoid the cache lookup and provider dispatch overhead too. Set to 2 (was 3) so
+     * legitimate short queries aren't silently dropped (bug C3); must stay in lockstep
+     * with the providers' MIN_TERM_LENGTH.
      */
-    private static readonly MIN_TERM_LENGTH = 3;
+    private static readonly MIN_TERM_LENGTH = 2;
 
     /**
      * Result cache TTL. 30s balances "user resubmits the same prefix" wins against
@@ -179,6 +217,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     private static readonly CACHE_MAX_ENTRIES = 500;
 
     private _cache: Map<string, { result: SearchResult; expires: number }> = new Map();
+
+    private _dimensionResolver = new ScopeDimensionResolver();
+
+    /**
+     * Resolver for a scope's declared Search Context dimensions. Overridable so a host can
+     * supply additional derivation sources (e.g. an external signal) without forking the engine.
+     */
+    protected get dimensionResolver(): ScopeDimensionResolver {
+        return this._dimensionResolver;
+    }
 
     /** Access the cached provider metadata from SearchEngineBase */
     protected get Base(): SearchEngineBase {
@@ -287,6 +335,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     SourceCounts: undefined,
                     ContextUser: contextUser,
                     AIAgentID: params.AIAgentID ?? null,
+                    AISkillID: params.AISkillID ?? null,
+                    PrimaryScopeRecordID: params.SearchContext?.PrimaryScopeRecordID ?? null,
                 });
                 return this.buildErrorResult('Query cannot be empty', startTime);
             }
@@ -345,6 +395,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // ──────────────────────────────────────────────────────────
             let sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
             let fusedResults: SearchResultItem[];
+            // Per-scope decisions, captured for SearchExecutionLog.ScopeDecisionJSON. Empty on
+            // the unconstrained path, which resolves no scope and therefore decides nothing.
+            const scopeDecisions: ScopeExplanation[] = [];
 
             if (isUnconstrained) {
                 const labeledLists = await this.executeProviders(
@@ -371,6 +424,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                         bundle,
                         params.SearchContext,
                         params.FusionWeightsOverride,
+                        this.principalsFrom(params),
                         onProviderResolved,
                     )
                 ));
@@ -383,6 +437,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     sc.Entity += r.sourceCounts.Entity;
                     sc.Storage += r.sourceCounts.Storage;
                     perScopeFused.set(r.scopeID, r.fused);
+                    scopeDecisions.push(r.decision);
                 }
                 sourceCounts = sc;
 
@@ -455,6 +510,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 SourceCounts: sourceCounts,
                 ContextUser: contextUser,
                 AIAgentID: params.AIAgentID ?? null,
+                AISkillID: params.AISkillID ?? null,
+                PrimaryScopeRecordID: params.SearchContext?.PrimaryScopeRecordID ?? null,
+                ScopeDecisions: scopeDecisions,
             });
 
             const finalResult: SearchResult = {
@@ -486,6 +544,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 SourceCounts: undefined,
                 ContextUser: contextUser,
                 AIAgentID: params.AIAgentID ?? null,
+                AISkillID: params.AISkillID ?? null,
+                PrimaryScopeRecordID: params.SearchContext?.PrimaryScopeRecordID ?? null,
             });
             return this.buildErrorResult(msg, startTime);
         }
@@ -641,19 +701,89 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     /**
-     * Build a stable cache key for a search. Includes the user identity so RLS
-     * scopes never bleed across users, plus the trimmed query, MaxResults,
-     * MinScore, and a deterministic projection of Filters.
+     * Deterministically serialize a value with object keys sorted, so that two
+     * logically-identical inputs always produce the same string.
+     *
+     * `JSON.stringify` preserves *insertion* order, which means a caller that builds
+     * `SecondaryScopes` by spreading (a common pattern) can emit the same dimensions in
+     * different orders across calls. Left unsorted that causes avoidable cache misses;
+     * sorted, identity is stable. Array order is PRESERVED — see buildCacheKey for why
+     * `ScopeIDs` order is significant.
      */
-    private buildCacheKey(trimmed: string, params: SearchParams, contextUser: UserInfo): string {
+    protected stableStringify(value: unknown): string {
+        if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+        if (Array.isArray(value)) return `[${value.map((v) => this.stableStringify(v)).join(',')}]`;
+        const entries = Object.entries(value as Record<string, unknown>)
+            .filter(([, v]) => v !== undefined)
+            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${this.stableStringify(v)}`).join(',')}}`;
+    }
+
+    /**
+     * Build a stable cache key for a search.
+     *
+     * The key must include EVERY input that can change the result set, or the cache
+     * will serve one caller's results to another. Two of those inputs were previously
+     * missing and both are tenancy/authorization-relevant:
+     *
+     *  - `SearchContext` — carries `PrimaryScopeRecordID` (the TENANT) and the
+     *    `SecondaryScopes` dimensions. Omitting it meant a user with access to two
+     *    tenants could be served the other tenant's results for up to the cache TTL,
+     *    and that two searches differing only by dimension (channel, skill, …)
+     *    collided. This is the reason for the fix.
+     *  - `ScopeIDs` — determines which corpora are searched at all.
+     *
+     * Also folded in: `Mode`, `FusionWeightsOverride` and `PermissionOverfetchFactor`
+     * (all change ranking or the candidate pool, so they change results) and
+     * `AIAgentID` (conservative: agent identity participates in scope resolution and
+     * per-agent overrides upstream; including it can only cost a miss, never leak).
+     *
+     * `ScopeIDs` order is deliberately NOT sorted: it is behaviourally significant,
+     * because cross-scope reranker config and budget are taken from the first scope in
+     * the array that supplies one. Two different orderings can therefore produce
+     * different results and must not share a key.
+     *
+     * The whole projection is emitted through `stableStringify` so key-order variation
+     * in `SecondaryScopes` doesn't fragment the cache. The user ID stays as a readable
+     * prefix for debuggability.
+     *
+     * Note this runs AFTER scope resolution in `searchInternal`, so nothing here is
+     * circular. Entitlement is resolved by the CALLERS (`__Scoped_Search`, the
+     * GraphQL resolvers), which deny before reaching the engine; the engine therefore
+     * never caches across an allow/deny boundary.
+     */
+    protected buildCacheKey(trimmed: string, params: SearchParams, contextUser: UserInfo): string {
         const userKey = (contextUser as unknown as { ID?: string })?.ID ?? 'anonymous';
         const f = params.Filters ?? {};
-        const filterKey = JSON.stringify({
-            EntityNames: f.EntityNames ? [...f.EntityNames].sort() : undefined,
-            SourceTypes: f.SourceTypes ? [...f.SourceTypes].sort() : undefined,
-            Tags: f.Tags ? [...f.Tags].sort() : undefined,
-        });
-        return `${userKey}|${trimmed}|${params.MaxResults ?? this._defaultMaxResults}|${params.MinScore ?? 0}|${filterKey}`;
+        const projection = {
+            // Order-insensitive: sorted so equivalent filter sets share an entry.
+            Filters: {
+                EntityNames: f.EntityNames ? [...f.EntityNames].sort() : undefined,
+                SourceTypes: f.SourceTypes ? [...f.SourceTypes].sort() : undefined,
+                Tags: f.Tags ? [...f.Tags].sort() : undefined,
+            },
+            MaxResults: params.MaxResults ?? this._defaultMaxResults,
+            MinScore: params.MinScore ?? 0,
+            Mode: params.Mode ?? undefined,
+            // Order-SENSITIVE — do not sort (see doc comment).
+            ScopeIDs: params.ScopeIDs ?? undefined,
+            SearchContext: params.SearchContext
+                ? {
+                      PrimaryScopeEntityID: params.SearchContext.PrimaryScopeEntityID ?? undefined,
+                      PrimaryScopeRecordID: params.SearchContext.PrimaryScopeRecordID ?? undefined,
+                      SecondaryScopes: params.SearchContext.SecondaryScopes ?? undefined,
+                  }
+                : undefined,
+            FusionWeightsOverride: params.FusionWeightsOverride ?? undefined,
+            PermissionOverfetchFactor: params.PermissionOverfetchFactor ?? undefined,
+            AIAgentID: params.AIAgentID ?? undefined,
+            // Same reasoning as AIAgentID, and Phase D is what makes it load-bearing: a skill is
+            // a principal that can reach a scope the user's own roles do not grant, and it binds
+            // into expansion queries. Two searches identical but for the active skill are NOT
+            // interchangeable, so they must not share a cache entry.
+            AISkillID: params.AISkillID ?? undefined,
+        };
+        return `${userKey}|${trimmed}|${this.stableStringify(projection)}`;
     }
 
     /** Insert into the LRU cache, evicting oldest entries when over capacity. */
@@ -694,6 +824,353 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     // ────────────────────────────────────────────────────────────────
+    // Dry run — explain the bound without executing a search
+    // ────────────────────────────────────────────────────────────────
+
+    /**
+     * Resolve the entire access chain for one or more scopes and report what a search WOULD be
+     * able to reach — **without querying any provider**.
+     *
+     * This is the answer to a question the platform previously could not answer at all: *"as
+     * this user, with this skill active, for this tenant — what is in bounds?"* Every input to
+     * that decision is transient. A grant applies because a time window is open right now; a
+     * dimension is discarded because it was caller-authored on a `ServerDerived` key; a lane is
+     * skipped because its filter lost an `{% if %}` clause. Afterwards, none of it is visible:
+     * a correctly-bounded result set and an accidentally-widened one look identical.
+     *
+     * Note the distinction from {@link PreviewSearch}, which is a real search capped at a few
+     * results. This runs **no** search — it reports the bound, not a sample of what is inside
+     * it. A sample cannot show you an over-broad bound, because the extra documents it would
+     * newly permit are exactly the ones you did not think to look for.
+     *
+     * Two properties make the output trustworthy:
+     *
+     *  - It takes the **same untrusted `SearchContext` a real caller would send**, so the
+     *    preview shows the anti-spoof discard actually happening. A dry run that only accepted
+     *    pre-sanitized input would hide the one thing worth previewing.
+     *  - It reports **every** broken lane in one pass rather than throwing on the first, so a
+     *    misconfigured scope can be fixed in one sitting instead of one error per re-run.
+     *
+     * Unlike a real search this never throws for a scope-level problem; a scope that would fail
+     * closed comes back with `Reachable: false` and the reason, since "it would have failed"
+     * is precisely the finding the caller asked for.
+     *
+     * @param input   scopes to explain plus the hypothetical caller context and principals
+     * @param contextUser the user to evaluate entitlement for
+     * @returns one explanation per requested scope, in the order requested
+     */
+    public async ExplainScope(input: ExplainScopeInput, contextUser: UserInfo): Promise<ScopeExplanation[]> {
+        const explanations: ScopeExplanation[] = [];
+        for (const scopeID of input.ScopeIDs) {
+            explanations.push(await this.explainOneScope(scopeID, input, contextUser));
+        }
+        return explanations;
+    }
+
+    /**
+     * Build the principal set a dimension's expansion query may bind.
+     *
+     * Exists so the real search path and the `ExplainScope` dry run cannot construct principals
+     * differently. They already did once: `ExplainScope` passed the agent and the search path
+     * passed nothing, so any scope deriving its bound from `AgentID` previewed one bound and
+     * searched with another. A single conversion site makes that class of drift unrepresentable
+     * rather than merely fixed.
+     *
+     * Accepts anything carrying the two principal IDs, which both `SearchParams` and
+     * `ExplainScopeInput` do.
+     */
+    protected principalsFrom(source: { AIAgentID?: string | null; AISkillID?: string | null }): ScopePrincipals {
+        return { AgentID: source.AIAgentID ?? null, SkillID: source.AISkillID ?? null };
+    }
+
+    /** Explain a single scope. Never throws — a failure to resolve IS the explanation. */
+    private async explainOneScope(
+        scopeID: string,
+        input: ExplainScopeInput,
+        contextUser: UserInfo
+    ): Promise<ScopeExplanation> {
+        const bundle = this.Base.GetScopeBundle(scopeID);
+        const scope = bundle?.Scope ?? this.Base.GetActiveScopeByID(scopeID);
+        if (!bundle || !scope) {
+            return this.buildUnresolvableExplanation(scopeID, input, contextUser);
+        }
+
+        const entitlement = await this.explainEntitlement(scopeID, input, contextUser);
+
+        // Resolve dimensions against the caller's UNSANITIZED context, exactly as a real search
+        // would. A ScopeDimensionError means the search would have failed closed — that is a
+        // legitimate result here, so it is reported rather than propagated.
+        let dimensions: DimensionExplanation[] = [];
+        const diagnostics: string[] = [];
+        let effectiveContext: SearchContext | undefined;
+        let dimensionFailure: string | null = null;
+        try {
+            const resolved = await this.dimensionResolver.Resolve({
+                Scope: scope,
+                CallerContext: input.SearchContext,
+                ContextUser: contextUser,
+                Principals: this.principalsFrom(input),
+            });
+            dimensions = resolved.Provenance;
+            diagnostics.push(...resolved.Diagnostics);
+            effectiveContext = resolved.Context;
+        } catch (e) {
+            dimensionFailure = e instanceof Error ? e.message : String(e);
+            diagnostics.push(`dimension resolution FAILED — a real search would be refused: ${dimensionFailure}`);
+        }
+
+        // With dimensions unresolved there is no context to render lanes against, so every lane
+        // is reported as skipped for that reason rather than rendered against a partial bound.
+        const lanes = dimensionFailure
+            ? this.buildAllLanesSkipped(bundle, `dimension resolution failed: ${dimensionFailure}`)
+            : this.explainLanes(bundle, effectiveContext);
+
+        // A scope with NO lanes at all is not a narrow scope — it is MJ's widest. Empty child
+        // collections are collapsed to `undefined` by buildScopeConstraints, and every provider
+        // reads that as "unscoped": all entities, all indexes, no filter. Treating zero lanes as
+        // unreachable inverted the one finding a reviewer most needs, so it is called out
+        // explicitly instead.
+        const hasLanes = lanes.length > 0;
+        if (!hasLanes) {
+            diagnostics.push(UNBOUNDED_SCOPE_DIAGNOSTIC);
+        }
+        const canRetrieve = hasLanes ? lanes.some((l) => l.Status === 'Active') : true;
+
+        return {
+            ScopeID: scope.ID,
+            ScopeName: scope.Name,
+            Entitlement: entitlement,
+            Dimensions: dimensions,
+            Lanes: lanes,
+            Diagnostics: diagnostics,
+            Reachable: entitlement.Allowed && canRetrieve && !dimensionFailure,
+            Unbounded: !hasLanes,
+            ResolvedContext: effectiveContext,
+        };
+    }
+
+    /** Resolve entitlement for the dry run, including the skill and tenant principals. */
+    private async explainEntitlement(
+        scopeID: string,
+        input: ExplainScopeInput,
+        contextUser: UserInfo
+    ): Promise<EntitlementExplanation> {
+        const principals = {
+            UserID: contextUser.ID ?? null,
+            AgentID: input.AIAgentID ?? null,
+            SkillID: input.AISkillID ?? null,
+            PrimaryScopeRecordID: input.SearchContext?.PrimaryScopeRecordID ?? null,
+        };
+        try {
+            const [agent, skill] = await Promise.all([
+                this.loadPrincipal<MJAIAgentEntity>('MJ: AI Agents', input.AIAgentID, contextUser),
+                this.loadPrincipal<MJAISkillEntity>('MJ: AI Skills', input.AISkillID, contextUser),
+            ]);
+            const permission = await DefaultSearchScopePermissionResolver.ResolveEffectivePermission({
+                User: contextUser,
+                SearchScopeID: scopeID,
+                Agent: agent,
+                Skill: skill,
+                PrimaryScopeRecordID: principals.PrimaryScopeRecordID,
+                ContextUser: contextUser,
+            });
+            return {
+                Allowed: permission.Allowed,
+                Level: permission.Level,
+                Source: permission.Source,
+                Reason: permission.Reason,
+                Principals: principals,
+            };
+        } catch (e) {
+            // A resolver failure must read as "denied", never as "allowed" — an explanation that
+            // fails open would be worse than no explanation at all.
+            const msg = e instanceof Error ? e.message : String(e);
+            return {
+                Allowed: false,
+                Level: 'None',
+                Source: 'NoGrant',
+                Reason: `entitlement could not be resolved, reported as denied: ${msg}`,
+                Principals: principals,
+            };
+        }
+    }
+
+    /** Load an agent or skill principal by ID; null when no ID was supplied. */
+    private async loadPrincipal<T extends MJAIAgentEntity | MJAISkillEntity>(
+        entityName: string,
+        id: string | null | undefined,
+        contextUser: UserInfo
+    ): Promise<T | null> {
+        if (!id) return null;
+        const entity = await this.ProviderToUse.GetEntityObject<T>(entityName, contextUser);
+        const loaded = await entity.Load(id);
+        return loaded ? entity : null;
+    }
+
+    /**
+     * Render every lane and report which would run.
+     *
+     * Reuses `buildScopeConstraints` with a collector rather than duplicating the render logic.
+     * That matters more than it looks: a separate "explain" renderer would be a second
+     * implementation of the guard rules, free to drift from the enforcing one, and a preview
+     * that disagrees with what actually runs is worse than having no preview.
+     */
+    /**
+     * Turn already-built constraints plus a problem map into per-lane explanations.
+     *
+     * Takes the constraints rather than rebuilding them. The previous version called
+     * `buildScopeConstraints` itself, which meant the SEARCH path re-rendered every Nunjucks
+     * template a second time on every scope of every query purely to produce a log record —
+     * pure waste on the hottest path in the engine.
+     *
+     * Both callers still share one rendering pass, which is what keeps the dry run honest:
+     * a separate explain-only renderer would be a second implementation of the guard rules,
+     * free to drift from the enforcing one.
+     */
+    private buildLaneExplanations(
+        bundle: ScopeBundle,
+        constraints: ScopeConstraints,
+        problems: LaneProblemCollector
+    ): LaneExplanation[] {
+        const lanes: LaneExplanation[] = [];
+
+        for (const row of bundle.ExternalIndexes) {
+            const rendered = constraints.ExternalIndexes?.find((c) => UUIDsEqual(c.SearchScopeExternalIndexID, row.ID));
+            lanes.push({
+                Kind: 'ExternalIndex',
+                Target: row.ExternalIndexName ?? row.ID,
+                LaneID: row.ID,
+                Status: problems.has(row.ID) ? 'Skipped' : 'Active',
+                RenderedFilter: this.stringifyFilter(rendered?.MetadataFilter),
+                RequiredMetadataKeys: this.safeRequiredKeys(row.RequiredMetadataKeys),
+                Reason: problems.get(row.ID),
+            });
+        }
+
+        for (const row of bundle.Entities) {
+            const rendered = constraints.Entities?.find((c) => UUIDsEqual(c.SearchScopeEntityID, row.ID));
+            lanes.push({
+                Kind: 'Entity',
+                Target: this.lookupEntityName(row.EntityID) || row.EntityID,
+                LaneID: row.ID,
+                Status: problems.has(row.ID) ? 'Skipped' : 'Active',
+                RenderedFilter: rendered?.ExtraFilter ?? null,
+                RequiredMetadataKeys: this.safeRequiredKeys(row.RequiredMetadataKeys),
+                Reason: problems.get(row.ID),
+            });
+        }
+
+        for (const row of bundle.StorageAccounts) {
+            const rendered = constraints.StorageAccounts?.find((c) => UUIDsEqual(c.SearchScopeStorageAccountID, row.ID));
+            lanes.push({
+                Kind: 'StorageAccount',
+                Target: row.FileStorageAccountID,
+                LaneID: row.ID,
+                // FolderPath is a path prefix, not an access bound, so it is deliberately
+                // unguarded here — consistent with buildScopeConstraints.
+                Status: 'Active',
+                RenderedFilter: rendered?.FolderPath ?? null,
+            });
+        }
+
+        return lanes;
+    }
+
+    /** Render every lane for a DRY RUN, collecting problems instead of throwing on the first. */
+    private explainLanes(bundle: ScopeBundle, effectiveContext: SearchContext | undefined): LaneExplanation[] {
+        const problems: LaneProblemCollector = new Map();
+        try {
+            const constraints = this.buildScopeConstraints(bundle, effectiveContext, problems);
+            return this.buildLaneExplanations(bundle, constraints, problems);
+        } catch (e) {
+            // buildScopeConstraints should not throw with a collector present, but a template
+            // renderer can still fail for reasons the guards do not model.
+            const msg = e instanceof Error ? e.message : String(e);
+            return this.buildAllLanesSkipped(bundle, `constraint building threw: ${msg}`);
+        }
+    }
+
+    /** Every lane, reported as skipped for one shared reason. */
+    private buildAllLanesSkipped(bundle: ScopeBundle, reason: string): LaneExplanation[] {
+        return [
+            ...bundle.ExternalIndexes.map((row): LaneExplanation => ({
+                Kind: 'ExternalIndex',
+                Target: row.ExternalIndexName ?? row.ID,
+                LaneID: row.ID,
+                Status: 'Skipped',
+                RenderedFilter: null,
+                RequiredMetadataKeys: this.safeRequiredKeys(row.RequiredMetadataKeys),
+                Reason: reason,
+            })),
+            ...bundle.Entities.map((row): LaneExplanation => ({
+                Kind: 'Entity',
+                Target: this.lookupEntityName(row.EntityID) || row.EntityID,
+                LaneID: row.ID,
+                Status: 'Skipped',
+                RenderedFilter: null,
+                RequiredMetadataKeys: this.safeRequiredKeys(row.RequiredMetadataKeys),
+                Reason: reason,
+            })),
+            ...bundle.StorageAccounts.map((row): LaneExplanation => ({
+                Kind: 'StorageAccount',
+                Target: row.FileStorageAccountID,
+                LaneID: row.ID,
+                Status: 'Skipped',
+                RenderedFilter: null,
+                Reason: reason,
+            })),
+        ];
+    }
+
+    /** Explanation for a scope that is inactive, missing, or otherwise not loadable. */
+    private buildUnresolvableExplanation(
+        scopeID: string,
+        input: ExplainScopeInput,
+        contextUser: UserInfo
+    ): ScopeExplanation {
+        return {
+            ScopeID: scopeID,
+            ScopeName: '(not found)',
+            Entitlement: {
+                Allowed: false,
+                Level: 'None',
+                Source: 'NoGrant',
+                Reason: 'the scope is inactive, expired, or does not exist, so no search can use it',
+                Principals: {
+                    UserID: contextUser.ID ?? null,
+                    AgentID: input.AIAgentID ?? null,
+                    SkillID: input.AISkillID ?? null,
+                    PrimaryScopeRecordID: input.SearchContext?.PrimaryScopeRecordID ?? null,
+                },
+            },
+            Dimensions: [],
+            Lanes: [],
+            Diagnostics: [`scope "${scopeID}" is not an active scope`],
+            Reachable: false,
+            // Not "known to be bounded" — the scope could not be loaded, so nothing about its
+            // configuration was observed. It is unreachable either way.
+            Unbounded: false,
+        };
+    }
+
+    /** Parse a lane's required-key contract for display; a malformed one reports as empty. */
+    private safeRequiredKeys(raw: string | null | undefined): string[] | undefined {
+        try {
+            const keys = ParseRequiredMetadataKeys(raw);
+            return keys.length ? keys : undefined;
+        } catch {
+            // The malformed declaration is already reported as the lane's skip reason.
+            return undefined;
+        }
+    }
+
+    /** Render a filter of unknown shape as a display string. */
+    private stringifyFilter(filter: unknown): string | null {
+        if (filter === null || filter === undefined) return null;
+        return typeof filter === 'string' ? filter : JSON.stringify(filter);
+    }
+
+    // ────────────────────────────────────────────────────────────────
     // Scope resolution
     // ────────────────────────────────────────────────────────────────
 
@@ -728,16 +1205,72 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         bundle: ScopeBundle,
         searchContext: SearchContext | undefined,
         agentFusionWeights: FusionWeightsByProvider | undefined,
+        /**
+         * Principals available to bind into a dimension's expansion query.
+         *
+         * These MUST match what `ExplainScope` passes. When they did not, a scope whose
+         * `expansionQueryID` binds `AgentID` derived one bound in the dry run and a different
+         * one at search time — making the preview quietly wrong in the only direction anybody
+         * cares about.
+         */
+        principals: ScopePrincipals,
         onProviderResolved?: OnProviderResolved,
     ): Promise<{
         scopeID: string;
         fused: SearchResultItem[];
         sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+        /**
+         * What this scope decided — dimension provenance and per-lane outcomes.
+         *
+         * `Entitlement` is null here by design: the engine does not gate scopes on
+         * SearchScopePermission, the caller that selects them does. Fabricating an "allowed"
+         * would make an unevaluated search read as authorized in the audit log.
+         */
+        decision: ScopeExplanation;
     }> {
         const scope = bundle.Scope;
         const scopeConfig = this.parseJson(scope.ScopeConfig);
-        const constraints = this.buildScopeConstraints(bundle, searchContext);
+        // Resolve this scope's DECLARED dimensions before building any constraint. For a scope
+        // with no declaration this returns the caller's context untouched (legacy behaviour);
+        // for a declared scope it discards caller-supplied values for ServerDerived keys,
+        // enforces value grammars, applies narrowingOf as a meet, and gives strictValidation
+        // teeth. A ScopeDimensionError propagates so the search fails CLOSED.
+        const dimensionResult = await this.dimensionResolver.Resolve({
+            Scope: bundle.Scope,
+            CallerContext: searchContext,
+            ContextUser: contextUser,
+            Principals: principals,
+        });
+        for (const note of dimensionResult.Diagnostics) {
+            LogStatus(`SearchEngine: scope "${bundle.Scope.Name}" — ${note}`);
+        }
+        const effectiveContext = dimensionResult.Context;
+        const constraints = this.buildScopeConstraints(bundle, effectiveContext);
         const perProviderQueryTransforms = constraints.QueryTransforms ?? {};
+
+        // Capture the decision for the audit log, REUSING the constraints just built rather
+        // than re-rendering every template a second time. Reaching this line means every lane
+        // guard passed (buildScopeConstraints throws otherwise), so the problem map is empty
+        // and every lane is Active.
+        const unbounded = bundle.ExternalIndexes.length === 0
+            && bundle.Entities.length === 0
+            && bundle.StorageAccounts.length === 0;
+        const decision: ScopeExplanation = {
+            ScopeID: scope.ID,
+            ScopeName: scope.Name,
+            Entitlement: null,
+            Dimensions: dimensionResult.Provenance,
+            Lanes: this.buildLaneExplanations(bundle, constraints, new Map()),
+            // Same warning the dry run emits. The two paths produce one shape, so they should
+            // produce the same prose too — an auditor reading a log row should not have to know
+            // it was written by the search path rather than by a preview.
+            Diagnostics: unbounded
+                ? [...dimensionResult.Diagnostics, UNBOUNDED_SCOPE_DIAGNOSTIC]
+                : dimensionResult.Diagnostics,
+            Reachable: true,
+            Unbounded: unbounded,
+            ResolvedContext: effectiveContext,
+        };
 
         // Determine which providers this scope participates in (SearchScopeProvider rows)
         const scopeProviderIDs = new Set(bundle.Providers.map(p => NormalizeUUID(p.SearchProviderID)));
@@ -755,7 +1288,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             return {
                 scopeID: scope.ID,
                 fused: [],
-                sourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 }
+                sourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+                decision: { ...decision, Reachable: false,
+                    Diagnostics: [...decision.Diagnostics, 'no applicable providers for this scope'] },
             };
         }
 
@@ -831,38 +1366,157 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         const fusionWeights = agentFusionWeights ?? scopeWeights;
 
         const fused = this._fusion.Fuse(labeled, topK, fusionWeights);
-        return { scopeID: scope.ID, fused, sourceCounts };
+        return { scopeID: scope.ID, fused, sourceCounts, decision };
     }
 
     /**
      * Assemble a `ScopeConstraints` for a single scope: Nunjucks-render each template
      * field against the `SearchContext`, then hand the rendered values to providers.
      */
+    /**
+     * Fail a search CLOSED when a scope field that RESTRICTS was authored but did not render
+     * usably (see `CheckRenderedTemplate`).
+     *
+     * Throwing rather than dropping the offending row is deliberate. Dropping it would empty
+     * the row collection, and `buildScopeConstraints` collapses an empty collection to
+     * `undefined` — which every provider reads as "unscoped", i.e. all entities / all indexes
+     * with no filter. So the surgical-looking fix is the one that widens; failing the search
+     * is the one that doesn't. A broken restricting template is a misconfiguration and should
+     * be loud and actionable, never silently degraded into a wider search.
+     */
+    protected assertRestrictingTemplateRendered(
+        source: string | null | undefined,
+        rendered: unknown,
+        fieldName: string,
+        scopeLabel: string,
+        rowLabel: string,
+        laneID: string,
+        collector?: LaneProblemCollector
+    ): void {
+        const check = CheckRenderedTemplate(source, rendered);
+        if (check.Status !== 'unusable') return;
+        this.reportLaneProblem(
+            `SearchEngine: scope ${scopeLabel} — ${fieldName} for "${rowLabel}" could not be rendered safely, so the search was NOT run. ${check.Reason}`,
+            laneID,
+            collector
+        );
+    }
+
+    /**
+     * Enforce a lane's `RequiredMetadataKeys` contract (Phase E).
+     *
+     * The rendered filter must mention every key the author declared. This is the only guard
+     * that catches a filter which rendered *partially* — where an optional `{% if %}` clause
+     * disappeared because its dimension was absent or discarded, leaving a non-empty filter
+     * that passes every other check while restricting on strictly less than intended.
+     */
+    protected assertRequiredMetadataKeys(
+        declaration: string | null | undefined,
+        laneID: string,
+        rendered: unknown,
+        scopeLabel: string,
+        rowLabel: string,
+        collector?: LaneProblemCollector
+    ): void {
+        let requiredKeys: string[];
+        try {
+            requiredKeys = ParseRequiredMetadataKeys(declaration);
+        } catch (e) {
+            // A contract that cannot be parsed must not degrade to "no contract" — that would
+            // turn a typo in the declaration into an unguarded lane.
+            this.reportLaneProblem(
+                `SearchEngine: scope ${scopeLabel} — lane "${rowLabel}" has an unreadable RequiredMetadataKeys declaration, so the lane cannot be trusted. ${e instanceof Error ? e.message : String(e)}`,
+                laneID,
+                collector
+            );
+            return;
+        }
+        if (requiredKeys.length === 0) return;
+
+        const check = CheckRequiredMetadataKeys(rendered, requiredKeys);
+        if (check.Status !== 'unusable') return;
+        this.reportLaneProblem(
+            `SearchEngine: scope ${scopeLabel} — lane "${rowLabel}" failed its RequiredMetadataKeys contract, so the search was NOT run. ${check.Reason}`,
+            laneID,
+            collector
+        );
+    }
+
+    /**
+     * Route a lane problem to the right place: throw when enforcing a real search, record when
+     * explaining a hypothetical one.
+     *
+     * A dry run must be able to report *every* broken lane in one pass. If it threw on the first
+     * one, an administrator would fix a scope one error at a time, re-running after each — and
+     * the whole point of the preview is to see the entire picture before anything runs.
+     */
+    private reportLaneProblem(message: string, laneID: string, collector?: LaneProblemCollector): void {
+        if (collector) {
+            collector.set(laneID, message);
+            LogStatus(message);
+            return;
+        }
+        LogError(message);
+        throw new Error(message);
+    }
+
     private buildScopeConstraints(
         bundle: ScopeBundle,
-        searchContext: SearchContext | undefined
+        searchContext: SearchContext | undefined,
+        collector?: LaneProblemCollector
     ): ScopeConstraints {
-        const externalIndexes: ScopeExternalIndexConstraint[] = bundle.ExternalIndexes.map(row => ({
-            SearchScopeExternalIndexID: row.ID,
-            IndexType: row.IndexType,
-            VectorIndexID: row.VectorIndexID ?? undefined,
-            ExternalIndexName: row.ExternalIndexName ?? undefined,
-            ExternalIndexConfig: this.parseJson(row.ExternalIndexConfig),
-            MetadataFilter: RenderScopeJsonTemplate(row.MetadataFilter, searchContext)
-        }));
+        const scopeLabel = `${bundle.Scope.Name} (${bundle.Scope.ID})`;
 
-        const entities: ScopeEntityConstraint[] = bundle.Entities.map(row => ({
-            SearchScopeEntityID: row.ID,
-            EntityID: row.EntityID,
-            EntityName: this.lookupEntityName(row.EntityID),
-            ExtraFilter: row.ExtraFilter ? RenderScopeTemplate(row.ExtraFilter, searchContext) : undefined,
-            UserSearchString: row.UserSearchString ? RenderScopeTemplate(row.UserSearchString, searchContext) : undefined
-        }));
+        const externalIndexes: ScopeExternalIndexConstraint[] = bundle.ExternalIndexes.map(row => {
+            const rowLabel = row.ExternalIndexName ?? row.ID;
+            // §5.4: values are escaped for THIS lane's dialect automatically, derived from IndexType.
+            const laneKind = LaneKindForIndexType(row.IndexType);
+            const metadataFilter = RenderScopeJsonTemplate(row.MetadataFilter, searchContext, undefined, laneKind);
+            this.assertRestrictingTemplateRendered(row.MetadataFilter, metadataFilter, 'MetadataFilter', scopeLabel, rowLabel, row.ID, collector);
+            this.assertRequiredMetadataKeys(row.RequiredMetadataKeys, row.ID, metadataFilter, scopeLabel, rowLabel, collector);
+            // ExternalIndexConfig is JSON (namespace/routing), regardless of the filter dialect.
+            const externalIndexConfig = RenderScopeTemplate(row.ExternalIndexConfig, searchContext, undefined, 'json');
+            // ExternalIndexConfig can carry tenant routing (e.g. Pinecone `namespace`), so a
+            // silent render failure here can widen retrieval just like a filter can.
+            this.assertRestrictingTemplateRendered(row.ExternalIndexConfig, externalIndexConfig, 'ExternalIndexConfig', scopeLabel, rowLabel, row.ID, collector);
+            return {
+                SearchScopeExternalIndexID: row.ID,
+                IndexType: row.IndexType,
+                VectorIndexID: row.VectorIndexID ?? undefined,
+                ExternalIndexName: row.ExternalIndexName ?? undefined,
+                ExternalIndexConfig: this.parseJson(externalIndexConfig),
+                MetadataFilter: metadataFilter
+            };
+        });
+
+        const entities: ScopeEntityConstraint[] = bundle.Entities.map(row => {
+            // The entity lane is T-SQL, so single quotes must be doubled.
+            const extraFilter = row.ExtraFilter ? RenderScopeTemplate(row.ExtraFilter, searchContext, undefined, 'sql') : undefined;
+            const entityLabel = this.lookupEntityName(row.EntityID) || row.EntityID;
+            this.assertRestrictingTemplateRendered(row.ExtraFilter, extraFilter, 'ExtraFilter', scopeLabel, entityLabel, row.ID, collector);
+            // The SQL lane loses a guarded clause exactly the way an index lane does — same
+            // renderer, same SearchContext, same optional {% if %} blocks — and it is the lane
+            // that reads the operational database, so it gets the same contract.
+            this.assertRequiredMetadataKeys(row.RequiredMetadataKeys, row.ID, extraFilter, scopeLabel, entityLabel, collector);
+            return {
+                SearchScopeEntityID: row.ID,
+                EntityID: row.EntityID,
+                EntityName: this.lookupEntityName(row.EntityID),
+                ExtraFilter: extraFilter,
+                // UserSearchString and FolderPath are NOT restrictions — they shape the query
+                // text / a path prefix — so a soft render there cannot widen an access bound
+                // and is deliberately left unguarded.
+                // 'none' deliberately: this becomes QUERY TEXT, not syntax. Escaping it would corrupt
+                // the search rather than protect it, and it cannot express a bound.
+                UserSearchString: row.UserSearchString ? RenderScopeTemplate(row.UserSearchString, searchContext, undefined, 'none') : undefined
+            };
+        });
 
         const storage: ScopeStorageConstraint[] = bundle.StorageAccounts.map(row => ({
             SearchScopeStorageAccountID: row.ID,
             FileStorageAccountID: row.FileStorageAccountID,
-            FolderPath: row.FolderPath ? RenderScopeTemplate(row.FolderPath, searchContext) : undefined
+            // Path traversal, not quoting, is the risk on a storage lane.
+            FolderPath: row.FolderPath ? RenderScopeTemplate(row.FolderPath, searchContext, undefined, 'path') : undefined
         }));
 
         // Per-provider query transforms: resolved from SearchScopeProvider.QueryTransformTemplateID
@@ -1323,6 +1977,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         StartTime: number;
         ContextUser: UserInfo;
         AIAgentID?: string | null;
+        AISkillID?: string | null;
+        PrimaryScopeRecordID?: string | null;
     }): Promise<void> {
         await this.logSearchExecution({
             Status: 'Forbidden',
@@ -1336,6 +1992,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             SourceCounts: undefined,
             ContextUser: input.ContextUser,
             AIAgentID: input.AIAgentID ?? null,
+            AISkillID: input.AISkillID ?? null,
+            PrimaryScopeRecordID: input.PrimaryScopeRecordID ?? null,
         });
     }
 
@@ -1361,6 +2019,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number };
         ContextUser: UserInfo;
         AIAgentID?: string | null;
+        AISkillID?: string | null;
+        PrimaryScopeRecordID?: string | null;
+        /** Per-scope decisions captured during this search (Phase F provenance). */
+        ScopeDecisions?: ScopeExplanation[];
     }): Promise<void> {
         try {
             const log = await this.ProviderToUse.GetEntityObject<MJSearchExecutionLogEntity>(
@@ -1370,6 +2032,15 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             log.SearchScopeID = input.ScopeIDs && input.ScopeIDs.length > 0 ? input.ScopeIDs[0] : null;
             log.UserID = input.ContextUser.ID ?? null;
             log.AIAgentID = input.AIAgentID ?? null;
+            log.AISkillID = input.AISkillID ?? null;
+            log.PrimaryScopeRecordID = input.PrimaryScopeRecordID ?? null;
+            // ScopeDecisionJSON answers "why could this search reach what it reached" — the
+            // dimension provenance and per-lane outcomes, which are otherwise gone the moment
+            // the search returns. Same shape ExplainScope() produces, so a preview taken at
+            // configuration time is directly comparable with what actually ran.
+            log.ScopeDecisionJSON = input.ScopeDecisions?.length
+                ? JSON.stringify(input.ScopeDecisions)
+                : null;
             log.Query = input.Query;
             log.TotalDurationMs = Date.now() - input.StartTime;
             log.ResultCount = input.ResultCount;

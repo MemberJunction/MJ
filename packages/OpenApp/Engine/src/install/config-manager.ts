@@ -14,7 +14,9 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { compileFunction } from 'node:vm';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
+import { ResolveServerPackagePath } from './workspace-paths.js';
 
 /** Config file name. All MJ projects use mj.config.cjs. */
 const CONFIG_FILE_NAME = 'mj.config.cjs';
@@ -41,6 +43,12 @@ export interface ConfigOperationResult {
     Success: boolean;
     /** Error message if the operation failed */
     ErrorMessage?: string;
+    /**
+     * Non-fatal per-file problems from a multi-config write: at least one config was updated,
+     * but another could not be (e.g. a re-export config with no object literal to insert into).
+     * Present only when the operation succeeded overall.
+     */
+    Warnings?: string[];
 }
 
 /**
@@ -52,34 +60,24 @@ export interface ConfigOperationResult {
  */
 export function AddServerDynamicPackages(
     repoRoot: string,
-    manifest: MJAppManifest
+    manifest: MJAppManifest,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
-    }
     const serverPackages = GetServerPackagesFromManifest(manifest);
 
     if (serverPackages.length === 0) {
         return { Success: true };
     }
 
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = EnsureDynamicPackagesSection(content);
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update dynamicPackages.server', (input) => {
+        let content = EnsureDynamicPackagesSection(input);
         content = EnsureDynamicArrayPresent(content, 'server');
 
         for (const entry of serverPackages) {
             content = AddEntryToDynamicArray(content, entry, 'server');
         }
-
-        writeFileSync(configPath, content, 'utf-8');
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update config: ${message}` };
-    }
+        return content;
+    });
 }
 
 /**
@@ -97,34 +95,24 @@ export function AddServerDynamicPackages(
  */
 export function AddClientDynamicPackages(
     repoRoot: string,
-    manifest: MJAppManifest
+    manifest: MJAppManifest,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
-    }
     const clientPackages = GetClientPackagesFromManifest(manifest);
 
     if (clientPackages.length === 0) {
         return { Success: true };
     }
 
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = EnsureDynamicPackagesSection(content);
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update dynamicPackages.client', (input) => {
+        let content = EnsureDynamicPackagesSection(input);
         content = EnsureDynamicArrayPresent(content, 'client');
 
         for (const entry of clientPackages) {
             content = AddEntryToDynamicArray(content, entry, 'client');
         }
-
-        writeFileSync(configPath, content, 'utf-8');
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update config: ${message}` };
-    }
+        return content;
+    });
 }
 
 /**
@@ -138,23 +126,10 @@ export function AddClientDynamicPackages(
  */
 export function RemoveServerDynamicPackages(
     repoRoot: string,
-    appName: string
+    appName: string,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
-    }
-
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = RemoveEntriesForApp(content, appName);
-        writeFileSync(configPath, content, 'utf-8');
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update config: ${message}` };
-    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'remove dynamicPackages entries', (content) => RemoveEntriesForApp(content, appName));
 }
 
 /**
@@ -168,32 +143,147 @@ export function RemoveServerDynamicPackages(
 export function ToggleServerDynamicPackages(
     repoRoot: string,
     appName: string,
-    enabled: boolean
+    enabled: boolean,
+    serverPackagePath?: string
 ): ConfigOperationResult {
-    const configPath = resolveConfigPath(repoRoot);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
-    }
-
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = ToggleEntriesForApp(content, appName, enabled);
-        writeFileSync(configPath, content, 'utf-8');
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update config: ${message}` };
-    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'toggle dynamicPackages entries', (content) => ToggleEntriesForApp(content, appName, enabled));
 }
 
 /**
- * Resolves the path to the MJ config file.
- * Returns the absolute path if it exists, or undefined if not found.
+ * Resolves EVERY MJ config file that a consumer of `dynamicPackages` may load, nearest first:
+ *   1. ServerPackagePath (e.g. apps/MJAPI/mj.config.cjs) — what MJAPI loads when started from
+ *      its own workspace (`npm run start --workspace=apps/MJAPI` sets cwd there).
+ *   2. Repo root (mj.config.cjs) — what `mj codegen manifest --open-app-client-bootstrap`
+ *      loads (it resolves from the CLIENT workspace, so it never sees a server-workspace
+ *      config), and what a container / App Service deploy loads when only the root config
+ *      ships in the artifact.
+ *
+ * Writing to ONE of these is not enough (#3271). A server-workspace-only write leaves the
+ * client bootstrap manifest with `0 client packages wired` — the app's @RegisterClass
+ * decorators never fire — and leaves a root-config deployment loading no server package at
+ * all, so the API's GraphQL schema silently lacks every one of the app's types while
+ * `__mj.OpenApp` still reports the app Active. Both entries therefore go to every config a
+ * consumer might read; a duplicate entry is harmless (AddEntryToDynamicArray is idempotent),
+ * whereas a missing one fails silently and is very hard to diagnose from the symptoms.
  */
-function resolveConfigPath(repoRoot: string): string | undefined {
-    const candidate = resolve(repoRoot, CONFIG_FILE_NAME);
-    return existsSync(candidate) ? candidate : undefined;
+function resolveConfigPaths(repoRoot: string, serverPackagePath?: string): string[] {
+    const paths: string[] = [];
+    // Detect the layout when it isn't configured, so an unconfigured host still gets the
+    // server-workspace config written and not just the root one (#3270 + #3271).
+    const effectiveServerPath = ResolveServerPackagePath(repoRoot, serverPackagePath);
+    const serverConfig = resolve(repoRoot, effectiveServerPath, CONFIG_FILE_NAME);
+    if (existsSync(serverConfig)) paths.push(serverConfig);
+    const rootConfig = resolve(repoRoot, CONFIG_FILE_NAME);
+    if (existsSync(rootConfig) && !paths.includes(rootConfig)) paths.push(rootConfig);
+    return paths;
+}
+
+/**
+ * True when a config has no object literal of its own and simply re-exports another config:
+ *
+ *     module.exports = require('../../mj.config.cjs');
+ *
+ * This is what `packages/MJAPI/mj.config.cjs` ships as — in the monorepo AND in an `mj install`
+ * distribution. There is nothing to inject into it, and nothing SHOULD be: it re-exports the root
+ * config, which is itself a target in {@link resolveConfigPaths} and does get written. Recognising
+ * the shape keeps the expected case a silent no-op instead of a "skipped a config file" warning on
+ * every install, while a genuinely malformed or unsupported config still surfaces as one.
+ *
+ * Note `module.exports = { ...require('../../mj.config.cjs') }` deliberately does NOT match — that
+ * spread form HAS an object literal, so it is editable and inserting into it is correct.
+ */
+function IsDelegatingConfig(content: string): boolean {
+    return /module\.exports\s*=\s*require\s*\(/.test(content);
+}
+
+/**
+ * Applies `edit` to every config returned by {@link resolveConfigPaths}.
+ *
+ * Two asymmetries matter here:
+ *
+ * 1. The ROOT config is load-bearing for two of the three consumers — the client bootstrap
+ *    manifest step (which resolves from the CLIENT workspace and so only ever sees root) and any
+ *    container / App Service deploy that ships only the root config. Failing to write root while
+ *    some other target succeeded would report success and silently re-create #3271, so a root
+ *    write failure is FATAL even when another config was updated.
+ * 2. A non-root target may legitimately be un-editable, and is collected as a warning. The only
+ *    such shape in practice is a delegating config, which {@link IsDelegatingConfig} skips
+ *    silently before we ever try to edit it.
+ *
+ * `operation` names the caller's intent so a failure keeps the diagnostic specificity these
+ * messages had before they were funnelled through one helper (e.g. "update excludeSchemas").
+ */
+function ApplyToConfigs(
+    repoRoot: string,
+    serverPackagePath: string | undefined,
+    operation: string,
+    edit: (content: string) => string
+): ConfigOperationResult {
+    const rootConfig = resolve(repoRoot, CONFIG_FILE_NAME);
+    const configPaths = resolveConfigPaths(repoRoot, serverPackagePath);
+    if (configPaths.length === 0) {
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
+    }
+
+    const warnings: string[] = [];
+    let updated = 0;
+    let delegated = 0;
+
+    for (const configPath of configPaths) {
+        try {
+            const content = readFileSync(configPath, 'utf-8');
+            // Re-exports another config in this list — correct to leave alone, so stay quiet.
+            if (IsDelegatingConfig(content)) {
+                delegated++;
+                continue;
+            }
+            WriteConfigChecked(configPath, edit(content));
+            updated++;
+        }
+        catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (configPath === rootConfig) {
+                // Fatal: see asymmetry (1) above.
+                return { Success: false, ErrorMessage: `Failed to ${operation} in ${configPath}: ${message}` };
+            }
+            warnings.push(`${configPath}: ${message}`);
+        }
+    }
+
+    if (updated === 0) {
+        const detail = warnings.length > 0
+            ? warnings.join('; ')
+            : delegated > 0
+                ? `every candidate config only re-exports another config, so there was nowhere to write. Expected an object literal in ${rootConfig}.`
+                : 'no candidate config had an injectable config object.';
+        return { Success: false, ErrorMessage: `Failed to ${operation}: ${detail}` };
+    }
+    return { Success: true, Warnings: warnings.length > 0 ? warnings : undefined };
+}
+
+/**
+ * Writes updated mj.config.cjs content, but ONLY after verifying it still parses as valid
+ * JavaScript. Every edit in this module is string surgery; this post-write parse guard turns a
+ * malformed edit — from this code OR any future change, including config shapes the brace/comment
+ * scanner can't perfectly handle (e.g. regex literals containing braces) — into a LOUD failure
+ * that leaves the file UNTOUCHED, instead of silently shipping a broken config that breaks the
+ * next `require('mj.config.cjs')` (the mj migrate / codegen / build steps an install runs) — #2975.
+ *
+ * `compileFunction` parses the content (throwing SyntaxError on malformed JS) WITHOUT executing
+ * it, so the `require(...)` / `process.env` references in a real config never run. It throws on
+ * failure so the caller's existing try/catch surfaces it as `{ Success: false, ErrorMessage }`.
+ */
+function WriteConfigChecked(configPath: string, content: string): void {
+    try {
+        compileFunction(content);
+    } catch (parseError: unknown) {
+        const message = parseError instanceof Error ? parseError.message : String(parseError);
+        throw new Error(
+            `the edit would produce invalid JavaScript (${message}); the file was left unchanged. ` +
+            `This is a bug in the Open App config editor — please report it with your mj.config.cjs shape.`,
+        );
+    }
+    writeFileSync(configPath, content, 'utf-8');
 }
 
 /**
@@ -311,8 +401,13 @@ function AddEntryToDynamicArray(content: string, entry: DynamicPackageEntry, arr
     }
     const arrayIndex = dynMatch.index + arrayRel.index;
 
-    const startupLine = entry.StartupExport ? `\n        StartupExport: '${entry.StartupExport}',` : '';
-    const entryStr = `\n      {\n        PackageName: '${entry.PackageName}',${startupLine}\n        AppName: '${entry.AppName}',\n        Enabled: ${entry.Enabled}\n      },`;
+    // JSON.stringify every manifest-sourced value: it emits a quoted, fully-escaped JS string
+    // literal, so a value containing quotes/backslashes/newlines can never terminate the literal
+    // and inject executable code into mj.config.cjs (which is `require`d — i.e. EXECUTED — by
+    // every mj migrate / codegen / build step). String concatenation of single-quoted values was
+    // an injection vector for any hostile manifest.
+    const startupLine = entry.StartupExport ? `\n        StartupExport: ${JSON.stringify(entry.StartupExport)},` : '';
+    const entryStr = `\n      {\n        PackageName: ${JSON.stringify(entry.PackageName)},${startupLine}\n        AppName: ${JSON.stringify(entry.AppName)},\n        Enabled: ${entry.Enabled}\n      },`;
 
     // Find the closing bracket of the target array
     const arrayStart = arrayIndex + arrayRel[0].length;
@@ -433,27 +528,235 @@ function FindMatchingBracket(content: string, openPos: number): number {
 }
 
 /**
- * Inserts a section just before the closing brace of the `module.exports = { ... }` object
- * literal. Anchoring to that brace (via FindMatchingBracket) is correct even when the file
- * has trailing code or a later `};` — unlike `lastIndexOf('};')`, which lands in the wrong
- * block for `module.exports = { ... }; function helper() { ... };` and corrupts the config
- * (B4). Throws (rather than silently corrupting) when module.exports is not a direct object
- * literal — e.g. `module.exports = config;` — so the caller fails loudly.
+ * Returns the index of the last *significant* character (not whitespace, not inside a string
+ * literal, and not inside a `//` line or block comment) within `content[0, end)`, or -1 if
+ * there is none. Mirrors {@link FindMatchingBracket}'s string/comment state machine so a `//`
+ * inside a value like `'http://x'`, or a brace/quote inside a string, is never miscounted.
+ */
+function LastSignificantCharIndex(content: string, end: number): number {
+    let pos = 0;
+    let last = -1;
+    let inString: string | null = null;
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    while (pos < end) {
+        const ch = content[pos];
+
+        if (inLineComment) {
+            if (ch === '\n') inLineComment = false;
+            pos++;
+            continue;
+        }
+        if (inBlockComment) {
+            if (ch === '*' && content[pos + 1] === '/') { inBlockComment = false; pos += 2; continue; }
+            pos++;
+            continue;
+        }
+        if (inString) {
+            if (ch === '\\') { pos += 2; continue; } // skip escaped char
+            if (ch === inString) { inString = null; last = pos; } // the closing quote is significant
+            pos++;
+            continue;
+        }
+
+        if (ch === '/' && content[pos + 1] === '/') { inLineComment = true; pos += 2; continue; }
+        if (ch === '/' && content[pos + 1] === '*') { inBlockComment = true; pos += 2; continue; }
+        if (ch === '"' || ch === "'" || ch === '`') { inString = ch; last = pos; pos++; continue; }
+
+        if (ch !== ' ' && ch !== '\t' && ch !== '\r' && ch !== '\n') {
+            last = pos;
+        }
+        pos++;
+    }
+    return last;
+}
+
+/**
+ * Ensures the object body in `before` (the text up to — but excluding — an object's closing
+ * brace) is comma-terminated, so a new property spliced in right after it is a valid sibling
+ * (#2975). No-op when the preceding token is already a comma, or when the body is empty.
+ * `openBracePos` is the index of the object's own opening `{`; the inserted section carries
+ * its own trailing comma, so an otherwise-empty literal stays valid.
+ */
+function EnsureTrailingComma(before: string, openBracePos: number): string {
+    const idx = LastSignificantCharIndex(before, before.length);
+    if (idx <= openBracePos || before[idx] === ',') {
+        return before;
+    }
+    return before.slice(0, idx + 1) + ',' + before.slice(idx + 1);
+}
+
+/**
+ * Inserts a section just before the closing brace of the config object exported by
+ * `module.exports`. Supports two patterns:
+ *
+ *   1. `module.exports = { ... }` — inline object literal (insert before its closing `}`)
+ *   2. `module.exports = config;` — variable reference (find the variable's object literal
+ *      declaration and insert before ITS closing `}`)
+ *
+ * Anchoring to the correct closing brace (via FindMatchingBracket) is correct even when the
+ * file has trailing code — unlike `lastIndexOf('};')`, which lands in the wrong block (B4).
  */
 function InsertBeforeModuleExportsClose(content: string, section: string): string {
-    const exportMatch = content.match(/module\.exports\s*=\s*\{/);
-    if (!exportMatch || exportMatch.index === undefined) {
-        throw new Error(
-            'Could not find a `module.exports = { ... }` object literal in mj.config.cjs to insert into. ' +
-            'If module.exports references a variable (e.g. `module.exports = config;`), add the section manually.',
-        );
+    // Try pattern 1: module.exports = { ... }
+    const inlineMatch = content.match(/module\.exports\s*=\s*\{/);
+    if (inlineMatch && inlineMatch.index !== undefined) {
+        const bracePos = content.indexOf('{', inlineMatch.index);
+        const closePos = FindMatchingBracket(content, bracePos);
+        if (closePos === -1) {
+            throw new Error('Could not locate the closing brace of module.exports in mj.config.cjs.');
+        }
+        const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
+        return before + section + content.slice(closePos);
     }
-    const bracePos = content.indexOf('{', exportMatch.index);
-    const closePos = FindMatchingBracket(content, bracePos);
-    if (closePos === -1) {
-        throw new Error('Could not locate the closing brace of module.exports in mj.config.cjs.');
+
+    // Try pattern 2: module.exports = someVar;
+    const varMatch = content.match(/module\.exports\s*=\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*;/);
+    if (varMatch && varMatch.index !== undefined) {
+        const varName = varMatch[1];
+        // Find the variable's object literal: const/let/var varName = { ... }
+        const declPattern = new RegExp(`(?:const|let|var)\\s+${EscapeRegex(varName)}\\s*=\\s*\\{`);
+        const declMatch = content.match(declPattern);
+        if (declMatch && declMatch.index !== undefined) {
+            const bracePos = content.indexOf('{', declMatch.index);
+            const closePos = FindMatchingBracket(content, bracePos);
+            if (closePos === -1) {
+                throw new Error(`Could not locate the closing brace of '${varName}' object in mj.config.cjs.`);
+            }
+            const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
+            return before + section + content.slice(closePos);
+        }
     }
-    return content.slice(0, closePos) + section + content.slice(closePos);
+
+    throw new Error(
+        'Could not find a config object in mj.config.cjs to insert into. ' +
+        'Expected either `module.exports = { ... }` or `module.exports = <variable>;` where the variable is declared as an object literal.',
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXCLUDE SCHEMAS (CodeGen)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Adds an app's schema to the `excludeSchemas` array in mj.config.cjs.
+ *
+ * CodeGen uses `excludeSchemas` to skip entity discovery, view generation,
+ * and Angular component generation for schemas owned by external apps.
+ * Without this, CodeGen will pick up app-owned tables (e.g. flyway_schema_history)
+ * and create unwanted entity metadata.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param schemaName - The schema name to exclude
+ * @param serverPackagePath - Optional server package path for config resolution
+ * @returns Operation result
+ */
+export function AddExcludeSchema(
+    repoRoot: string,
+    schemaName: string,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    if (!schemaName) {
+        return { Success: true };
+    }
+
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update excludeSchemas', (input) =>
+        AddSchemaToExcludeArray(EnsureExcludeSchemasSection(input), schemaName));
+}
+
+/**
+ * Removes an app's schema from the `excludeSchemas` array in mj.config.cjs.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param schemaName - The schema name to remove from exclusion
+ * @param serverPackagePath - Optional server package path for config resolution
+ * @returns Operation result
+ */
+export function RemoveExcludeSchema(
+    repoRoot: string,
+    schemaName: string,
+    serverPackagePath?: string
+): ConfigOperationResult {
+    if (!schemaName) {
+        return { Success: true };
+    }
+
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'remove schema from excludeSchemas', (content) =>
+        RemoveSchemaFromExcludeArray(content, schemaName));
+}
+
+/**
+ * Ensures the config file has an excludeSchemas array.
+ * If it doesn't exist, adds one inside the module.exports object.
+ */
+function EnsureExcludeSchemasSection(content: string): string {
+    if (/excludeSchemas\s*:/.test(content)) {
+        return content;
+    }
+
+    const section = `\n  excludeSchemas: [],\n`;
+    return InsertBeforeModuleExportsClose(content, section);
+}
+
+/**
+ * Adds a schema name to the first excludeSchemas array if not already present.
+ */
+function AddSchemaToExcludeArray(content: string, schemaName: string): string {
+    // Check if the schema is already in the array (case-insensitive)
+    const alreadyExists = new RegExp(
+        `excludeSchemas\\s*:\\s*\\[[^\\]]*['"]${EscapeRegex(schemaName)}['"]`,
+        'i'
+    );
+    if (alreadyExists.test(content)) {
+        return content;
+    }
+
+    // Find the first excludeSchemas array's closing bracket
+    const arrayMatch = content.match(/excludeSchemas\s*:\s*\[/);
+    if (!arrayMatch || arrayMatch.index === undefined) {
+        return content;
+    }
+
+    const openBracketPos = arrayMatch.index + arrayMatch[0].length - 1;
+    const closingBracket = FindMatchingBracket(content, openBracketPos);
+    if (closingBracket === -1) {
+        return content;
+    }
+
+    // Check if the array has existing entries to determine formatting.
+    // JSON.stringify: quoted + escaped literal, so the value can't break out of the string
+    // and inject code into the executed config (see AddEntryToDynamicArray).
+    const arrayContent = content.slice(openBracketPos + 1, closingBracket).trim();
+    const entry = arrayContent.length > 0
+        ? `, ${JSON.stringify(schemaName)}`
+        : JSON.stringify(schemaName);
+
+    return content.slice(0, closingBracket) + entry + content.slice(closingBracket);
+}
+
+/**
+ * Removes a schema name from all excludeSchemas arrays in the config.
+ */
+function RemoveSchemaFromExcludeArray(content: string, schemaName: string): string {
+    // Remove the schema entry (with optional leading comma+space or trailing comma+space).
+    // Both quote styles accepted: AddSchemaToExcludeArray now writes JSON.stringify (double
+    // quotes), while pre-existing configs hold single-quoted entries.
+    const patterns = [
+        // Entry with leading comma: , 'schemaName'
+        new RegExp(`,\\s*['"]${EscapeRegex(schemaName)}['"]`, 'gi'),
+        // Entry with trailing comma (first in array): 'schemaName',
+        new RegExp(`['"]${EscapeRegex(schemaName)}['"]\\s*,\\s*`, 'gi'),
+        // Sole entry: 'schemaName'
+        new RegExp(`['"]${EscapeRegex(schemaName)}['"]`, 'gi'),
+    ];
+
+    for (const pattern of patterns) {
+        if (pattern.test(content)) {
+            return content.replace(pattern, '');
+        }
+    }
+    return content;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -473,7 +776,8 @@ function InsertBeforeModuleExportsClose(content: string, section: string): strin
  */
 export function AddEntityPackageMapping(
     repoRoot: string,
-    manifest: MJAppManifest
+    manifest: MJAppManifest,
+    serverPackagePath?: string
 ): ConfigOperationResult {
     const schemaName = manifest.schema?.name;
     if (!schemaName) {
@@ -485,22 +789,8 @@ export function AddEntityPackageMapping(
         return { Success: true }; // No entities package found → nothing to map
     }
 
-    const configPath = resolveConfigPath(repoRoot);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
-    }
-
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = EnsureEntityPackageNameSection(content);
-        content = AddEntityPackageEntry(content, schemaName, entityPkg);
-        writeFileSync(configPath, content, 'utf-8');
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to update entityPackageName config: ${message}` };
-    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'update entityPackageName', (input) =>
+        AddEntityPackageEntry(EnsureEntityPackageNameSection(input), schemaName, entityPkg));
 }
 
 /**
@@ -512,27 +802,15 @@ export function AddEntityPackageMapping(
  */
 export function RemoveEntityPackageMapping(
     repoRoot: string,
-    schemaName: string
+    schemaName: string,
+    serverPackagePath?: string
 ): ConfigOperationResult {
     if (!schemaName) {
         return { Success: true };
     }
 
-    const configPath = resolveConfigPath(repoRoot);
-    if (!configPath) {
-        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
-    }
-
-    try {
-        let content = readFileSync(configPath, 'utf-8');
-        content = RemoveEntityPackageEntry(content, schemaName);
-        writeFileSync(configPath, content, 'utf-8');
-        return { Success: true };
-    }
-    catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { Success: false, ErrorMessage: `Failed to remove entityPackageName mapping: ${message}` };
-    }
+    return ApplyToConfigs(repoRoot, serverPackagePath, 'remove entityPackageName mapping', (content) =>
+        RemoveEntityPackageEntry(content, schemaName));
 }
 
 /**
@@ -615,7 +893,9 @@ function AddEntityPackageEntry(content: string, schemaName: string, packageName:
     }
 
     const bracePos = content.indexOf('{', recordMatch.index);
-    const entryStr = `\n    '${schemaName}': '${packageName}',`;
+    // JSON.stringify both key and value — quoted + escaped, so neither can break out of its
+    // string literal and inject code into the executed config (see AddEntryToDynamicArray).
+    const entryStr = `\n    ${JSON.stringify(schemaName)}: ${JSON.stringify(packageName)},`;
 
     // Insert right after the opening brace
     return content.slice(0, bracePos + 1) + entryStr + content.slice(bracePos + 1);

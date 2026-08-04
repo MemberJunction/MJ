@@ -23,9 +23,11 @@ import {
   MJRefreshButtonComponent,
   MJLeftNavComponent,
   MJLeftNavContentComponent,
+  MJSwitchComponent,
   MJTabNavComponent,
   MJEmptyStateComponent,
-  MJAlertComponent
+  MJAlertComponent,
+  MJAccordionModule
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -50,6 +52,10 @@ import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.
 // via the lazy loading system when ApplicationManager calls CreateInstanceAsync.
 import { HomeApplication } from './Home/home-application';
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
+import { ThemeStudioDashboardComponent } from './ThemeStudio/theme-studio-dashboard.component';
+import { ThemeStudioResourceComponent } from './ThemeStudio/theme-studio-resource.component';
+import { ThemeManagerDashboardComponent } from './ThemeStudio/theme-manager-dashboard.component';
+import { ThemeManagerResourceComponent } from './ThemeStudio/theme-manager-resource.component';
 // Developer Tools
 import { AppStateInspectorComponent } from './DevTools/app-state-inspector.component';
 import { LayoutInspectorComponent } from './DevTools/layout-inspector.component';
@@ -105,6 +111,10 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     BulkOperationsRunHistoryComponent,
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
+    ThemeStudioDashboardComponent,
+    ThemeStudioResourceComponent,
+    ThemeManagerDashboardComponent,
+    ThemeManagerResourceComponent,
     ActionPinConfigDialogComponent,
     ActionPinRunnerDialogComponent,
     SystemDiagnosticsComponent,
@@ -169,9 +179,11 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     MJRefreshButtonComponent,
     MJLeftNavComponent,
     MJLeftNavContentComponent,
+    MJSwitchComponent,
     MJTabNavComponent,
     MJEmptyStateComponent,
     MJAlertComponent,
+    MJAccordionModule,
     ContainerDirectivesModule,
     SharedGenericModule,
     RecordProcessStudioComponent,
@@ -195,6 +207,10 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     BulkOperationsRunHistoryComponent,
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
+    ThemeStudioDashboardComponent,
+    ThemeStudioResourceComponent,
+    ThemeManagerDashboardComponent,
+    ThemeManagerResourceComponent,
     SystemDiagnosticsComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,

@@ -58,20 +58,17 @@
 
       <div class="app-groups">
         @for (group of ApplicationGroups; track TrackByAppId($index, group)) {
-          <div class="app-group" [class.expanded]="group.Expanded" [class.has-roles]="group.Roles.length > 0">
-            <!-- Application Header Row -->
-            <div class="app-group-header" (click)="ToggleGroup(group)">
-              <div class="app-header-left">
-                <i class="fa-solid" [ngClass]="group.Expanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-                <span class="app-name">{{ group.ApplicationName }}</span>
-                <span class="role-count-badge" [class.open-access]="group.Roles.length === 0">
-                  {{ GetRoleCountLabel(group) }}
-                </span>
-              </div>
-            </div>
+          <mj-accordion-panel Size="sm" [FlushBody]="true"
+              [Expanded]="group.Expanded"
+              (ExpandedChange)="OnGroupExpandedChange(group, $event)">
+            <ng-template mjAccordionTitle>
+              <span class="app-name">{{ group.ApplicationName }}</span>
+              <span class="role-count-badge" [class.open-access]="group.Roles.length === 0">
+                {{ GetRoleCountLabel(group) }}
+              </span>
+            </ng-template>
 
-            <!-- Expanded Content -->
-            @if (group.Expanded) {
+            <ng-template mjAccordionBody>
               <div class="app-group-content">
                 <!-- Existing Role Assignments -->
                 @if (group.Roles.length > 0) {
@@ -140,8 +137,8 @@
                   </button>
                 </div>
               </div>
-            }
-          </div>
+            </ng-template>
+          </mj-accordion-panel>
         }
       </div>
     }

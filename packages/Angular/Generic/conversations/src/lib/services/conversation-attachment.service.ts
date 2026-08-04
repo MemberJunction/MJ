@@ -14,7 +14,7 @@ import {
   AttachmentType
 } from '@memberjunction/ai-core-plus';
 import { MessageAttachment } from '../components/message/message-item.component';
-import { PendingAttachment } from '../components/mention/mention-editor.component';
+import { PendingAttachment } from '@memberjunction/ng-composer';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { UUIDsEqual } from '@memberjunction/global';
 

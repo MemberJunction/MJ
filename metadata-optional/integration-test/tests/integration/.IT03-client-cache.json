@@ -1,0 +1,31 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT03 - Client GraphQL Cache Integrity",
+    "Description": "Ports client-cache-tests.ts C1-C13 against a running MJAPI via GraphQLDataProvider (CacheLocal opt-in, smart-cache current/stale). C13 verifies AggregateResults are returned in the caller's requested order over the GraphQL transport. Requires a separately-running MJAPI + MJ_API_KEY; the bundle preflights MJAPI and fails fast when unreachable. CI provisioning of MJAPI is deferred to Phase 5, so this test is seeded Skip on the DB-only suite membership.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Per-field-subset client cache slots correct; stamp-less responses not cached; revalidation round-trips work; AggregateResults returned in the caller's requested order."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "client-cache",
+          "config": {
+            "runMutationTests": false
+          }
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "7A2F0CCF-24A1-446C-9A36-5798640C03B3"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T18:38:01.016Z",
+    "checksum": "e4c81e1e49a88ee5f515cbc38817d9fa492e5c564fcaa4234f250cedd85c3107"
+  }
+}

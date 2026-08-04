@@ -4,6 +4,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, LogError } from '@memberjunction/core';
 import { CollectionPermission, CollectionPermissionService } from '../../services/collection-permission.service';
 import { UUIDsEqual } from '@memberjunction/global';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 
 interface TreeNode {
   collection: MJCollectionEntity;
@@ -183,7 +184,7 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
   public draggedNode: TreeNode | null = null;
   public dragOverNodeId: string | null = null;
 
-  constructor(private permissionService: CollectionPermissionService) {
+  constructor(private permissionService: CollectionPermissionService, private confirmService: MJConfirmService) {
   super();}
 
   ngOnInit() {
@@ -310,7 +311,7 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
       }
     }
 
-    if (!confirm(`Delete collection "${collection.Name}"?`)) return;
+    if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Collection', message: `Delete collection "${collection.Name}"?` }))) return;
 
     try {
       const deleted = await collection.Delete();

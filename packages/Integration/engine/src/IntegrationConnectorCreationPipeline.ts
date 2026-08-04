@@ -244,10 +244,20 @@ export class IntegrationConnectorCreationPipeline {
         emitter.stageStart('Introspect', 'Discovering objects and fields via connector');
         const startMs = Date.now();
         try {
+            // U11 — determinate discovery progress: surface scanned/total on the structured
+            // stream (IntegrationTailRunEvents carries counts) so a client can render a real
+            // "scanned N of M objects" bar. Throttled to every 10 objects (+ the final one) so a
+            // large catalog doesn't flood the artifact.
+            let lastEmitted = 0;
+            const onProgress = (scanned: number, total: number): void => {
+                if (scanned - lastEmitted < 10 && scanned !== total) return;
+                lastEmitted = scanned;
+                emitter.heartbeat('Introspect', `scanned ${scanned}/${total} objects`, { processed: scanned, totalKnown: total });
+            };
             const schema = await opts.Connector.IntrospectSchema(
                 opts.CompanyIntegration,
                 opts.ContextUser,
-                opts.IntrospectOptions
+                { ...(opts.IntrospectOptions ?? {}), OnProgress: onProgress }
             );
 
             // UNIVERSAL additive runtime-object discovery — the single chokepoint EVERY connector
@@ -286,8 +296,9 @@ export class IntegrationConnectorCreationPipeline {
                                 Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
                                 IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
                                 Precision: f.Precision ?? null, Scale: f.Scale ?? null, DefaultValue: f.DefaultValue ?? null,
-                                IsPrimaryKey: f.IsPrimaryKey ?? false, IsUniqueKey: f.IsUniqueKey, IsReadOnly: f.IsReadOnly,
-                                IsForeignKey: f.IsForeignKey ?? false, ForeignKeyTarget: f.ForeignKeyTarget ?? null,
+                                // U1 — preserve `undefined` (no opinion); `?? false` fabricated a "not a PK/FK" opinion
+                                IsPrimaryKey: f.IsPrimaryKey, IsUniqueKey: f.IsUniqueKey, IsReadOnly: f.IsReadOnly,
+                                IsForeignKey: f.IsForeignKey, ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                             }));
                             existing.PrimaryKeyFields = dfields.filter(f => f.IsPrimaryKey).map(f => f.Name);
                             existing.Relationships = dfields
@@ -330,10 +341,11 @@ export class IntegrationConnectorCreationPipeline {
                         Precision: f.Precision ?? null,
                         Scale: f.Scale ?? null,
                         DefaultValue: f.DefaultValue ?? null,
-                        IsPrimaryKey: f.IsPrimaryKey ?? false,
+                        // U1 — preserve `undefined` (no opinion); `?? false` fabricated a "not a PK/FK" opinion
+                        IsPrimaryKey: f.IsPrimaryKey,
                         IsUniqueKey: f.IsUniqueKey,
                         IsReadOnly: f.IsReadOnly,
-                        IsForeignKey: f.IsForeignKey ?? false,
+                        IsForeignKey: f.IsForeignKey,
                         ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                     })),
                     PrimaryKeyFields: fields.filter(f => f.IsPrimaryKey).map(f => f.Name),

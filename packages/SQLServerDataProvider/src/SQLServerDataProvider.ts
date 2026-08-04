@@ -315,14 +315,36 @@ export class SQLServerDataProvider
   private _datetimeOffsetTestComplete: boolean = false;
   /**
    * Per-entity base-view column order — the view's column NAMES in physical (`column_id`) order,
-   * keyed by `'<schema>.<baseview>'` lowercased. Populated once in {@link Config} (after metadata
-   * load) by a single `sys.columns` query over all views. {@link getAllEntityColumnsSQL} declares the
-   * save-capture `@ResultTable` in this order so it matches the view that the positional
-   * `INSERT INTO @ResultTable EXEC ...` is filled from — authoritative for ANY view layout
-   * (CodeGen-generated, computed-column-in-the-middle, or hand-maintained). A missing key (or a view
-   * column with no matching field) falls back to the metadata-derived non-virtual-then-virtual order.
+   * keyed by `'<schema>.<baseview>'` lowercased. Populated in {@link Config} (after metadata
+   * load) from the per-pool shared cache (see {@link _viewColumnOrderCacheByPool}).
+   * {@link getAllEntityColumnsSQL} declares the save-capture `@ResultTable` in this order so it
+   * matches the view that the positional `INSERT INTO @ResultTable EXEC ...` is filled from —
+   * authoritative for ANY view layout (CodeGen-generated, computed-column-in-the-middle, or
+   * hand-maintained). A missing key (or a view column with no matching field) falls back to the
+   * metadata-derived non-virtual-then-virtual order.
    */
   private _viewColumnOrderCache: Map<string, string[]> = new Map();
+
+  /**
+   * Process-wide view-column-order cache, scoped PER CONNECTION POOL and shared across provider
+   * instances. MJServer creates 1–2 fresh, fully-Config()'d provider instances per GraphQL request
+   * (read-write + read-only) around the same boot-time pools; without this sharing, the full
+   * `sys.columns` scan in {@link loadViewColumnOrderCache} ran once or twice on EVERY request
+   * (issue #3102 — ~9.6k scans/day in production vs the ~2 needed).
+   *
+   * Keyed by the `ConnectionPool` object (NOT by `schema.view` alone) because one process can hold
+   * providers to different databases (RW + RO datasources, multi-DB tooling) where the same
+   * `schema.view` has different physical column orders — a process-global map would serve one
+   * database's column order to another's provider and silently reintroduce the positional
+   * `@ResultTable` mis-routing this cache exists to prevent. A WeakMap lets pools (and their cache)
+   * be collected if a pool is discarded.
+   *
+   * The value is the load PROMISE (not the resolved Map) so concurrent per-request Config() calls
+   * de-duplicate onto a single in-flight scan. Invalidated on metadata refresh (see
+   * {@link Refresh} / {@link InvalidateViewColumnOrderCache}) so view changes from
+   * migrations/CodeGen are picked up without a server restart.
+   */
+  private static _viewColumnOrderCacheByPool = new WeakMap<sql.ConnectionPool, Promise<Map<string, string[]>>>();
 
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
@@ -431,44 +453,90 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Loads every view's column order (name, in `column_id` order) from `sys.columns` in a single query
-   * and caches it by `'<schema>.<view>'`. Used by {@link getAllEntityColumnsSQL} to declare the
-   * save-capture `@ResultTable` in the view's actual physical order — the order SQL Server uses when it
-   * fills the table via the positional `INSERT INTO @ResultTable EXEC <sp>` (the sp ends in
-   * `SELECT * FROM <BaseView>`). Best-effort: any failure leaves the cache empty, and
-   * getAllEntityColumnsSQL falls back to the metadata-derived order. Runs once at {@link Config}.
+   * Resolves this instance's view-column-order cache from the per-pool shared cache, scanning
+   * `sys.columns` only when this pool has no (valid) entry yet. Used by
+   * {@link getAllEntityColumnsSQL} to declare the save-capture `@ResultTable` in the view's actual
+   * physical order — the order SQL Server uses when it fills the table via the positional
+   * `INSERT INTO @ResultTable EXEC <sp>` (the sp ends in `SELECT * FROM <BaseView>`).
+   *
+   * Concurrency: the shared entry is the scan PROMISE, so simultaneous per-request Config() calls
+   * against the same pool share one in-flight scan. Best-effort: a failed scan leaves this
+   * instance's cache empty (getAllEntityColumnsSQL falls back to the metadata-derived order) and
+   * removes the shared entry so the next Config() retries instead of pinning the failure.
    */
   private async loadViewColumnOrderCache(): Promise<void> {
+    const pool = this._pool;
+    let scanPromise = SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool);
+    if (!scanPromise) {
+      scanPromise = this.scanViewColumnOrder();
+      SQLServerDataProvider._viewColumnOrderCacheByPool.set(pool, scanPromise);
+    }
     try {
-      const viewOrderSQL = `SELECT s.name AS SchemaName, o.name AS ViewName, c.name AS ColumnName
-                   FROM sys.columns c
-                     INNER JOIN sys.objects o ON c.object_id = o.object_id
-                     INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
-                   WHERE o.type = 'V'
-                   ORDER BY s.name, o.name, c.column_id`;
-      const rows: Array<{ SchemaName: string; ViewName: string; ColumnName: string }> = await this.ExecuteSQL(viewOrderSQL, null, {
-        ignoreLogging: true,
-        description: 'load view column order for save-capture @ResultTable alignment',
-      });
-      const cache = new Map<string, string[]>();
-      for (const r of rows ?? []) {
-        const key = `${r.SchemaName}.${r.ViewName}`.toLowerCase();
-        let cols = cache.get(key);
-        if (!cols) {
-          cols = [];
-          cache.set(key, cols);
-        }
-        cols.push(r.ColumnName);
-      }
-      this._viewColumnOrderCache = cache;
-      LogStatusEx({
-        message: `SQLServerDataProvider: cached column order for ${cache.size} view(s) (save-capture @ResultTable alignment)`,
-        verboseOnly: true,
-      });
+      this._viewColumnOrderCache = await scanPromise;
     } catch (e) {
-      // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order
+      // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order.
+      // Drop the shared entry (only if it's still OUR failed promise) so a later Config() can retry.
+      if (SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool) === scanPromise) {
+        SQLServerDataProvider._viewColumnOrderCacheByPool.delete(pool);
+      }
+      this._viewColumnOrderCache = new Map();
       LogStatus(`SQLServerDataProvider: view column-order prefetch failed; save-capture will use metadata order. ${e}`);
     }
+  }
+
+  /**
+   * Runs the actual `sys.columns` scan — every view's column names in `column_id` order, keyed by
+   * `'<schema>.<view>'` lowercased. One query for the whole database; called at most once per
+   * connection pool per process (plus once per metadata refresh) via the shared per-pool cache.
+   */
+  private async scanViewColumnOrder(): Promise<Map<string, string[]>> {
+    const viewOrderSQL = `SELECT s.name AS SchemaName, o.name AS ViewName, c.name AS ColumnName
+                 FROM sys.columns c
+                   INNER JOIN sys.objects o ON c.object_id = o.object_id
+                   INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                 WHERE o.type = 'V'
+                 ORDER BY s.name, o.name, c.column_id`;
+    const rows: Array<{ SchemaName: string; ViewName: string; ColumnName: string }> = await this.ExecuteSQL(viewOrderSQL, null, {
+      ignoreLogging: true,
+      description: 'load view column order for save-capture @ResultTable alignment',
+    });
+    const cache = new Map<string, string[]>();
+    for (const r of rows ?? []) {
+      const key = `${r.SchemaName}.${r.ViewName}`.toLowerCase();
+      let cols = cache.get(key);
+      if (!cols) {
+        cols = [];
+        cache.set(key, cols);
+      }
+      cols.push(r.ColumnName);
+    }
+    LogStatusEx({
+      message: `SQLServerDataProvider: cached column order for ${cache.size} view(s) (save-capture @ResultTable alignment)`,
+      verboseOnly: true,
+    });
+    return cache;
+  }
+
+  /**
+   * Invalidates the shared view-column-order cache for a connection pool, so the next Config()
+   * against that pool re-reads `sys.columns`. Call after out-of-band DDL that creates or alters
+   * views (migrations, direct SQL) when a metadata {@link Refresh} isn't also being performed —
+   * Refresh() invalidates automatically.
+   */
+  public static InvalidateViewColumnOrderCache(pool: sql.ConnectionPool): void {
+    SQLServerDataProvider._viewColumnOrderCacheByPool.delete(pool);
+  }
+
+  /**
+   * Metadata refresh invalidates this pool's shared view-column-order cache before re-running
+   * Config, so view changes from migrations/CodeGen (the same events that change metadata) are
+   * picked up by the subsequent rescan instead of serving a stale column order until restart.
+   */
+  public override async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
+    if (this.AllowRefresh && this._pool) {
+      SQLServerDataProvider.InvalidateViewColumnOrderCache(this._pool);
+    }
+    return super.Refresh(providerToUse);
   }
 
   /**

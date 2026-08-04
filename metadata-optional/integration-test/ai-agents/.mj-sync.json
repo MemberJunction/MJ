@@ -1,0 +1,31 @@
+{
+  "entity": "MJ: AI Agents",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".it-agents.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name LIKE 'IT:%'",
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "TypeID": {
+        "entity": "MJ: AI Agent Types",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": {
+        "entity": "MJ: AI Agent Prompts",
+        "foreignKey": "AgentID"
+      }
+    }
+  }
+}

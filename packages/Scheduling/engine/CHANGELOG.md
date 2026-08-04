@@ -1,5 +1,315 @@
 # @memberjunction/scheduling-engine
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/notifications@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/record-set-processor@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/scheduling-engine-base@6.0.0
+  - @memberjunction/templates@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/scheduling-base-types@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [c382605]
+- Updated dependencies [a8fc549]
+  - @memberjunction/ai-agents@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/record-set-processor@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/notifications@5.51.0
+  - @memberjunction/integration-engine@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/scheduling-engine-base@5.51.0
+  - @memberjunction/templates@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/scheduling-base-types@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [1e0008f]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-agents@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/integration-engine@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/notifications@5.50.0
+  - @memberjunction/record-set-processor@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/scheduling-engine-base@5.50.0
+  - @memberjunction/templates@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/scheduling-base-types@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 88d707b: Communication **DryRun** send mode + a real HTML-body fallback fix.
+  - **DryRun seam (new capability)** — `Message.DryRun` and `MessageResult.DryRun` on the base contract (`communication-types`), threaded through the engine and honored by all five shipping providers (SendGrid, Gmail, Twilio, MS Graph, Expo Push). When `DryRun` is true a provider runs its **full** preflight + payload construction and reports success **without** contacting its external service, stamping `MessageResult.DryRun = true`. Lets scheduled jobs and tests exercise the entire send pipeline with zero real messages sent. `scheduling-engine` passes the flag through on scheduled communication sends.
+  - **B64 fix (`communication-engine`)** — `ProcessedMessageServer.Process` derives the HTML body from the BodyTemplate (its HTML content render, or the documented rendered-text fallback), then the trailing `else` branch unconditionally overwrote it with `HTMLBody || ''` — so any message without an explicit HTMLBody/HTMLBodyTemplate shipped an **empty** HTML body, making the fallback dead code. The derived value is now preserved (`HTMLBody || ProcessedHTMLBody || ''`).
+
+- 70113b1: Align the integrations framework — resolution overlay, EM/EFM lifecycle, sync locking, watermark backfill, and the U1–U5/U7/U10/U11 upstream defects.
+
+  **Engine (`integration-engine`)**
+  - U1: `IntrospectSchema`/creation-pipeline mappings propagate `undefined` PK/FK flags instead of coercing to `false` — a sample's silence can no longer wipe a declared primary key (`SourceFieldInfo.IsPrimaryKey/IsForeignKey` widened to optional).
+  - Semantic overlay (`decideSemanticOverlay`): Description / DisplayName / IncrementalWatermarkField are external-wins-when-present, curated-fallback-when-silent (per-attribute overlay precedence).
+  - Content-hash basis: the content-hash match/write covers MAPPED fields only — a newly-appearing custom key no longer forces a row rewrite. Custom-key candidates + sizing statistics are aggregated in-memory per sync (`SyncResult.CustomKeyStats`, `foldCustomKeyStats`, `inferColumnTypeFromStats`) and flow to the promotion callback regardless of row skips. **Operational note (one-time):** because the content-hash basis becomes mapped-only, the first sync after this deploys re-hashes and re-writes every overflow-carrying row exactly once — a bounded one-time load spike plus Record-Changes churn — after which stored hashes converge and steady-state (skip-unchanged) writes resume.
+  - Maintenance lock (`AcquireMaintenanceLock`/`ReleaseMaintenanceLock`/`GetMaintenanceLock`): syncs refuse while a metadata refresh / schema evolution / RSU pipeline runs for the connection.
+  - U3: live sync progress is monotonic under concurrency (`RatchetProgressSnapshot`).
+  - U11: `IntrospectSchemaOptions.OnProgress` — determinate discovery progress (scanned/total).
+
+  **Server (`server`)**
+  - `IntegrationSchemaEvolution` is now the full re-resolution refresh: re-resolution → diff → removed objects' entity/field maps disabled (data kept) → changed objects' field maps reconciled + Pull watermarks reset (U10, backfills new columns) → new objects' tables created with entity maps born DISABLED (`autoEnableNewObjects` opts in) → RSU. Extended output: NewObjects/RemovedObjects/ChangedObjects/WatermarksReset.
+  - `IntegrationApplyAll`/`ApplyAllBatch`: `UnselectedAction` ('disable' default) — objects absent from the selection get their entity + field maps disabled; re-selection re-enables both. First-ever apply defaults to a FULL sync.
+  - U7: schedule creation is unique per (connection, job kind) — update-in-place instead of duplicates.
+  - U5: boot-time assert when RSU's additionalSchemaInfo write path diverges from CodeGen's read path.
+  - DAG exposure: `IntegrationListSourceObjects` items carry `DependsOn` parent names.
+  - U11: RSU status/progress expose CurrentStepName/StepIndex/StepTotal; pipeline steps carry StepIndex/StepTotal.
+
+  **SchemaEngine / schema-builder**
+  - additionalSchemaInfo per-table REPLACE semantics for soft FKs (`ClearForeignKeysForTables`) — a refresh's resolution replaces the prior run's FK entries for its tables.
+  - `RSUPendingWork`: `UnselectedAction` + `CreateDisabled` for the post-restart consumer; U11 step-index fields.
+
+  **CodeGenLib / PostgreSQLDataProvider**
+  - U2: `spUpdateExistingEntityFieldsFromSchema` honors `IsSoftPrimaryKey` on BOTH dialects (PG emitter + SQL Server migration) — schema sync no longer wipes resolved soft PKs.
+  - U4: a keyless entity now throws a named "has no primary key" error instead of emitting malformed record-change SQL.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [505c8b5]
+- Updated dependencies [48fa886]
+- Updated dependencies [314f667]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [5473e9a]
+- Updated dependencies [bc388e3]
+- Updated dependencies [373c5f6]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+- Updated dependencies [9d6e3d9]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-agents@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/integration-engine@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/templates@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/notifications@5.49.0
+  - @memberjunction/record-set-processor@5.49.0
+  - @memberjunction/scheduling-engine-base@5.49.0
+  - @memberjunction/scheduling-base-types@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [2143b98]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai-agents@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/notifications@5.48.0
+  - @memberjunction/integration-engine@5.48.0
+  - @memberjunction/record-set-processor@5.48.0
+  - @memberjunction/scheduling-engine-base@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/scheduling-base-types@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [936a286]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sqlserver-dataprovider@5.47.0
+  - @memberjunction/ai-agents@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/notifications@5.47.0
+  - @memberjunction/integration-engine@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/record-set-processor@5.47.0
+  - @memberjunction/scheduling-engine-base@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/global@5.47.0
+  - @memberjunction/scheduling-base-types@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-agents@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/notifications@5.46.0
+  - @memberjunction/integration-engine@5.46.0
+  - @memberjunction/record-set-processor@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/scheduling-engine-base@5.46.0
+  - @memberjunction/templates@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/scheduling-base-types@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ai-agents@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/record-set-processor@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/sqlserver-dataprovider@5.45.1
+  - @memberjunction/notifications@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/actions@5.45.1
+  - @memberjunction/integration-engine@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/scheduling-engine-base@5.45.1
+  - @memberjunction/scheduling-base-types@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- c1f2d3d: User Routines (P1.5): user-owned scheduled/monitoring routines that run an Agent, Action, or Prompt on a cron schedule. New UserRoutine/UserRoutineRecipient/UserRoutineRun schema; UserRoutineDispatcherDriver scheduled-job driver (1-minute sweep, claim-before-run, bounded concurrency, per-routine isolation, runs as the owner, Template-driven notifications with OnChange result-hash detection, RequestedSkillIDs pre-arming for Agent targets); pure UserRoutineProcessor schedule/notify primitives shared with MJUserRoutineEntityServer (NextRunAt on save, cron validation) and MJUserRoutineRecipientEntityServer (User-xor-Email); lazy non-startup UserRoutineEngine; new @memberjunction/ng-user-routines widget set (list/editor/history + command-center composite + slide-in, cancelable Before/After events, Agent-only creation with categorical ng-trees picker); conversations bottom-sidebar Routines section gated by ShowRoutines input AND entity-Read permission (hosted in both the generic workspace sidebar and Explorer's Chat wrapper); Routines Explorer app; pure cron preset/describe helpers now in @memberjunction/global (CronUtils); mj-tree gains a DefaultExpansion input ('first-level' | 'all' | 'none'); BaseScheduledJob gains IsHighFrequencyByDesign so by-design pollers (the routine dispatcher) opt out of the high-frequency cron warning; Agent-target routines run inside a dedicated per-routine Conversation (Application-scoped via the Routines app so it stays out of the default chat list; RunAgentInConversation writes proper user/assistant turns; standalone fallback when the app is absent); UserRoutine.ConversationID schema + open-conversation and open-execution-record event chains through the conversations hosts; server-side cascade delete (recipients + run bookkeeping) so routines that have run delete cleanly; agent picker is a compact mj-tree-dropdown (DefaultExpansion pass-through added); mj-slide-panel settles to transform:none when open so position:fixed descendants (dropdown panels) keep true viewport coordinates; time-relative sidebar/card/history text is snapshot-based (NG0100 fix); 16-test live integration suite + live Playwright E2E; Explorer notifications page rebuilt (day-grouped cards, sanitized HTML + Markdown message rendering with expand/collapse previews, snapshot relative times, removal of a test harness that created junk Conversations on Mark-All-Read) and the seeded routine notification template gains a compact Markdown Text body that the dispatcher now prefers for in-app delivery (the HTML document stays for email); new @memberjunction/ng-composer package extracts the conversations message composer (mention editor + dropdown + message input box) so the routine editor's InitialMessage field uses the mention editor without an ng-conversations dependency cycle — and the composer's mention/command triggers are PLUGGABLE: a generic ComposerTriggerProvider contract (TriggerChar/Key/Priority/GetSuggestions, generic MentionSuggestion with provider-supplied presets) with two supply modes (explicit [TriggerProviders] list, or ClassFactory discovery via @RegisterClass(ComposerTriggerProvider,'<key>') filtered by [ExcludedTriggerKeys]), leaving ng-composer with ZERO AI knowledge; the AI plugins moved to ng-conversations (composer-plugins: 'agent-mentions' '@' agents+users w/ configuration presets, 'record-mentions' '#' entities+queries, 'skill-commands' '/' skills — tree-shake-guarded by LoadComposerPlugins(); MentionAutocompleteService moved back to ng-conversations as a BaseSingleton engine shared by plugins and components) plus a new mj-ai-composer wrapped component that proxies the full mj-message-input-box surface with the AI triggers built in and familiar EnableAgentMentions/EnableEntityMentions/EnableSkillCommands convenience flags (the chat composer now uses it); the routine editor uses discovery mode with agent-mentions excluded.
+
+### Patch Changes
+
+- d461df0: Auto-restart scheduled-job polling when a job is activated after MJAPI boot. Adds a JobsChanged$ notification on the base engine (covering local and cross-server changes) that wakes a suspended poll timer, and re-applies the Active-only filter on event-driven refreshes.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [19ec4b0]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [f99cbc1]
+- Updated dependencies [11d5b4e]
+- Updated dependencies [fbee64c]
+- Updated dependencies [81a8aa2]
+- Updated dependencies [82ca89b]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+- Updated dependencies [d461df0]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/ai-agents@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/integration-engine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/scheduling-engine-base@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/notifications@5.45.0
+  - @memberjunction/record-set-processor@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/templates@5.45.0
+  - @memberjunction/scheduling-base-types@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [eb38a42]
+- Updated dependencies [3633fbb]
+- Updated dependencies [d88568e]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [91842c3]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-agents@5.44.0
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/record-set-processor@5.44.0
+  - @memberjunction/sqlserver-dataprovider@5.44.0
+  - @memberjunction/actions-base@5.44.0
+  - @memberjunction/actions@5.44.0
+  - @memberjunction/integration-engine@5.44.0
+  - @memberjunction/scheduling-engine-base@5.44.0
+  - @memberjunction/scheduling-base-types@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT14 - Predictive Studio Stack Seams",
+    "Description": "Live, full-stack (headless) coverage of Predictive Studio's STACK SEAMS over the real provider — deterministic + sidecar-free (only an internal PS5 live-train leg is gated behind PS_INTEGRATION=1). PS1: ML entity CRUD round-trips through SQLServerDataProvider with typed fields intact (Pipeline/Model/Scoring Binding). PS2: the pipeline ↔ model ↔ binding FK lineage reads back correctly. PS3: the 'ML Model' Record Set Processing work type resolves the MLModelInferenceProcessor through the substrate's pluggable RecordProcessorRegistry (the exact seam RecordProcessExecutor.buildProcessor falls through to). PS4: the four PS Actions (Train / Score / Run Experiment / Promote) exist in metadata with their params + result codes and the @RegisterClass drivers resolve. PS5: invoking Train ML Model with a missing PipelineID fails cleanly (VALIDATION_ERROR, no throw). Creates + deletes all its own ML fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "ML entities round-trip with typed fields; the 'ML Model' work-type seam resolves the scoring processor; the four PS Actions are registered; a missing-PipelineID train fails cleanly."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "predictive-studio"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "909EAC40-9BB3-4D99-A08A-F498908768F0"
+  },
+  "sync": {
+    "lastModified": "2026-07-02T19:15:10.388Z",
+    "checksum": "818b195ce0f2eaed740799218d813c156e5316dec79fe261d2484f6f7621e331"
+  }
+}

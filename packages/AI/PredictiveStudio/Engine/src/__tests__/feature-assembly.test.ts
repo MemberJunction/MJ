@@ -303,3 +303,125 @@ describe('LeakageGuard', () => {
     expect(detectSingleFeatureDominance({}, 0.6).Dominant).toBe(false);
   });
 });
+
+describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + hard fail', () => {
+  // A model whose pipeline selects a virtual/denormalized column (e.g. `MembershipType`, joined into
+  // the entity view but absent from the base table). At score time the upstream scope may hand us rows
+  // with that column dropped — the bug that produced 2,137 identical predictions.
+  const steps: FeatureStepGraph = {
+    Steps: [{ Id: 's', Kind: 'select', Columns: ['AutoRenew', 'MembershipType'] }],
+  };
+  const base = {
+    targetEntityName: 'Members',
+    sources,
+    steps,
+    asOf: { Mode: 'none' as const },
+    leakageGuard: noLeakGuard,
+  };
+
+  it('hydrates a required feature column missing from the scored rows by re-reading the entity view', async () => {
+    // Score-time rows: narrow projection dropped MembershipType.
+    const narrowRows: SourceRow[] = [
+      { ID: 'm1', AutoRenew: 1 },
+      { ID: 'm2', AutoRenew: 0 },
+    ];
+    // The view (what training read) has the full, VARIED values.
+    const viewRows: SourceRow[] = [
+      { ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' },
+      { ID: 'm2', AutoRenew: 0, MembershipType: 'Student' },
+    ];
+    const dataAccess = new InMemoryDataAccess({ Members: viewRows });
+
+    const result = await new FeatureAssemblyExecutor().assemble({
+      ...base,
+      records: narrowRows,
+      dataAccess,
+      context: 'on-demand',
+    });
+
+    expect(result.matrix.columns).toEqual(['AutoRenew', 'MembershipType']);
+    // The dropped column was re-read from the view and VARIES across rows — no skew, no constant.
+    expect(result.matrix.rows[0]).toEqual([1, 'Individual']);
+    expect(result.matrix.rows[1]).toEqual([0, 'Student']);
+  });
+
+  it('hard-fails when a required feature column cannot be resolved at score time', async () => {
+    const narrowRows: SourceRow[] = [{ ID: 'm1', AutoRenew: 1 }];
+    // The view fixture ALSO lacks MembershipType → hydration cannot fill it → refuse to score.
+    const dataAccess = new InMemoryDataAccess({ Members: [{ ID: 'm1', AutoRenew: 1 }] });
+
+    await expect(
+      new FeatureAssemblyExecutor().assemble({ ...base, records: narrowRows, dataAccess, context: 'on-demand' }),
+    ).rejects.toThrow(/required feature column\(s\) \[MembershipType\] are absent/);
+  });
+
+  it('produces an identical matrix whether the column arrives inline (train) or via hydrate (score)', async () => {
+    const fullRows: SourceRow[] = [
+      { ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' },
+      { ID: 'm2', AutoRenew: 0, MembershipType: 'Student' },
+    ];
+    const narrowRows: SourceRow[] = [
+      { ID: 'm1', AutoRenew: 1 },
+      { ID: 'm2', AutoRenew: 0 },
+    ];
+
+    // Train context: full rows inline, no re-read needed.
+    const train = await new FeatureAssemblyExecutor().assemble({
+      ...base,
+      records: fullRows,
+      dataAccess: new InMemoryDataAccess({ Members: fullRows }),
+      context: 'train',
+    });
+    // Score context: narrow rows + hydrate from the same view → must be byte-for-byte identical.
+    const score = await new FeatureAssemblyExecutor().assemble({
+      ...base,
+      records: narrowRows,
+      dataAccess: new InMemoryDataAccess({ Members: fullRows }),
+      context: 'on-demand',
+    });
+
+    expect(score.matrix).toEqual(train.matrix);
+  });
+
+  it("hydrates the AsOfStrategy 'column' date when the scored rows' projection dropped it", async () => {
+    // Real-world repro: Event No-Show Risk (AsOf column = RegistrationDate). The on-demand scope
+    // handed rows without RegistrationDate → every record failed at resolveAsOfDate → 0/6747 +
+    // circuit breaker. The as-of column must be hydrated exactly like a feature column.
+    const narrowRows: SourceRow[] = [
+      { ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' },
+      { ID: 'm2', AutoRenew: 0, MembershipType: 'Student' },
+    ];
+    const viewRows: SourceRow[] = [
+      { ID: 'm1', AutoRenew: 1, MembershipType: 'Individual', RegistrationDate: '2026-01-10T00:00:00Z' },
+      { ID: 'm2', AutoRenew: 0, MembershipType: 'Student', RegistrationDate: '2026-02-20T00:00:00Z' },
+    ];
+
+    const result = await new FeatureAssemblyExecutor().assemble({
+      ...base,
+      asOf: { Mode: 'column', Column: 'RegistrationDate' },
+      records: narrowRows,
+      dataAccess: new InMemoryDataAccess({ Members: viewRows }),
+      context: 'on-demand',
+    });
+
+    // Without hydration this throws "AsOfStrategy column 'RegistrationDate' is missing…" per record.
+    expect(result.matrix.rows).toHaveLength(2);
+    expect(result.matrix.rows[0]).toEqual([1, 'Individual']);
+  });
+
+  it("hard-fails when the AsOfStrategy 'column' date cannot be resolved at score time", async () => {
+    // The view fixture ALSO lacks RegistrationDate → hydration cannot fill it → refuse to assemble
+    // via the required-columns guardrail (not a per-record resolveAsOfDate crash).
+    const rows: SourceRow[] = [{ ID: 'm1', AutoRenew: 1, MembershipType: 'Individual' }];
+
+    await expect(
+      new FeatureAssemblyExecutor().assemble({
+        ...base,
+        asOf: { Mode: 'column', Column: 'RegistrationDate' },
+        records: rows,
+        dataAccess: new InMemoryDataAccess({ Members: rows }),
+        context: 'on-demand',
+      }),
+    ).rejects.toThrow(/required feature column\(s\) \[RegistrationDate\] are absent/);
+  });
+});

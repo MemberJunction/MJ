@@ -183,6 +183,17 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
   }
 
   /**
+   * Set an application group's expanded state from the accordion panel's
+   * (ExpandedChange) output. Preserves the side-effects of {@link ToggleGroup}
+   * (change detection + agent-context re-emit) while taking the explicit value.
+   */
+  OnGroupExpandedChange(group: ApplicationGroup, expanded: boolean): void {
+    group.Expanded = expanded;
+    this.cdr.detectChanges();
+    this.publishAgentContext();
+  }
+
+  /**
    * Toggle CanAccess for a specific role assignment.
    */
   ToggleCanAccess(row: ApplicationRoleRow): void {

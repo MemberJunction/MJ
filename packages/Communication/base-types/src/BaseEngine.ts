@@ -161,6 +161,9 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
             Subject: processedMessage.ProcessedSubject,
             HTMLBody: processedMessage.ProcessedHTMLBody,
             TextBody: processedMessage.ProcessedBody,
+            // Dry-run sends are audited like real sends but explicitly marked so the log row can
+            // never be mistaken for a real delivery (see Message.DryRun on the base contract).
+            ...(processedMessage.DryRun ? { DryRun: true } : {}),
       });
       
       if (await log.Save()) {

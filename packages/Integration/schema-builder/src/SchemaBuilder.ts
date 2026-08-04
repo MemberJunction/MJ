@@ -145,9 +145,14 @@ export class SchemaBuilder {
             const existingContent = this.ReadFileIfExists(input.AdditionalSchemaInfoPath);
             const existingConfig = this.SoftFKEmitter.ParseExistingConfig(existingContent);
             const withPKs = this.SoftFKEmitter.MergeSoftPKs(existingConfig, allConfigs);
+            // This run's PK/FK resolution REPLACES the prior run's entries for the
+            // tables it covers (adds new, removes gone) — clear their FKs before the rebuild so
+            // a stale FK never outlives the resolution that once declared it. Clearing happens
+            // even when allSoftFKs is empty (a table that lost every FK ends clear).
+            const cleared = this.SoftFKEmitter.ClearForeignKeysForTables(withPKs, allConfigs);
             const merged = allSoftFKs.length > 0
-                ? this.SoftFKEmitter.MergeSchemaConfig(withPKs, allSoftFKs)
-                : withPKs;
+                ? this.SoftFKEmitter.MergeSchemaConfig(cleared, allSoftFKs)
+                : cleared;
             output.AdditionalSchemaInfoUpdate = this.SoftFKEmitter.EmitConfigFile(
                 input.AdditionalSchemaInfoPath, merged
             );
@@ -221,9 +226,17 @@ export class SchemaBuilder {
         // Step 2: Build RSU pipeline input from SchemaBuilder output
         const rsuInput = this.BuildRSUInput(schemaOutput, input, rsuOptions);
 
-        // Step 3: Execute the RSU pipeline
+        // Step 3: Execute the RSU pipeline.
+        //
+        // Retrying wrapper, not the bare RunPipeline: this is the path every `ApplyAll` /
+        // `ApplyAllBatch` install runs through, and its expensive middle steps
+        // (ExecuteMigration, RunCodeGen, CompileTypeScript, RestartMJAPI) fail transiently —
+        // a dropped connection during the migration, an EBUSY during compile, an MJAPI that
+        // isn't back up yet. `RunPipelineWithRetry` already whitelists exactly those four
+        // steps and refuses to retry validation or git; the callers simply never used it, so
+        // an install died on a hiccup that a 5s backoff would have absorbed.
         const rsm = RuntimeSchemaManager.Instance;
-        const pipelineResult = await rsm.RunPipeline(rsuInput);
+        const pipelineResult = await rsm.RunPipelineWithRetry(rsuInput);
 
         return { SchemaOutput: schemaOutput, PipelineResult: pipelineResult };
     }
@@ -235,7 +248,7 @@ export class SchemaBuilder {
     public BuildRSUInput(
         schemaOutput: SchemaBuilderOutput,
         input: SchemaBuilderInput,
-        rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean }
+        rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean; AdditionalSchemaInfoAuthoritative?: boolean }
     ): RSUPipelineInput {
         // Combine all migration file contents into a single SQL block
         const migrationSQL = schemaOutput.MigrationFiles
@@ -258,6 +271,7 @@ export class SchemaBuilder {
             Description: `Integration: ${input.SourceType} — ${affectedTables.join(', ')}`,
             AffectedTables: affectedTables,
             AdditionalSchemaInfo: schemaOutput.AdditionalSchemaInfoUpdate?.Content,
+            AdditionalSchemaInfoAuthoritative: rsuOptions?.AdditionalSchemaInfoAuthoritative,
             MetadataFiles: metadataFiles.length > 0 ? metadataFiles : undefined,
             SkipGitCommit: rsuOptions?.SkipGitCommit,
             SkipRestart: rsuOptions?.SkipRestart,

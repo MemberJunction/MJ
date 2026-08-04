@@ -52,6 +52,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
   private destroy$ = new Subject<void>();
+  private artifactLoadToken = 0;
 
   public artifact: MJArtifactEntity | null = null;
   public artifactVersion: MJArtifactVersionEntity | null = null;
@@ -290,25 +291,49 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.destroy$.complete();
   }
 
+  private isCurrentArtifactLoad(artifactId: string, loadToken: number): boolean {
+    return loadToken === this.artifactLoadToken && UUIDsEqual(artifactId, this.artifactId);
+  }
+
+  private clearLoadedArtifactState(): void {
+    this.artifact = null;
+    this.artifactVersion = null;
+    this.allVersions = [];
+    this.versionAttributes = [];
+    this.jsonContent = '';
+    this.displayMarkdown = null;
+    this.displayHtml = null;
+    this.artifactCollections = [];
+    this.currentVersionCollections = [];
+    this.primaryCollection = null;
+    this.artifactTypeDriverClass = null;
+    this.artifactContentCategory = null;
+    this.clearLinksData();
+  }
+
   private async loadArtifact(targetVersionNumber?: number): Promise<void> {
+    const artifactId = this.artifactId;
+    const loadToken = ++this.artifactLoadToken;
+    const isCurrentLoad = () => this.isCurrentArtifactLoad(artifactId, loadToken);
+
     try {
       this.isLoading = true;
       this.error = null;
-
-      // Clear links data from previous artifact to prevent stale Links tab
-      this.clearLinksData();
+      this.clearLoadedArtifactState();
 
       const md = this.ProviderToUse;
 
       // Load artifact — assign to local first to avoid mid-cycle icon flicker
       const artifactEntity = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
-      const loaded = await artifactEntity.Load(this.artifactId);
+      const loaded = await artifactEntity.Load(artifactId);
+      if (!isCurrentLoad()) {
+        return;
+      }
 
       if (!loaded) {
         this.error = 'Failed to load artifact';
         return;
       }
-      this.artifact = artifactEntity;
 
       // PERF: Batch load version metadata, collection associations, and conversation links
       // in a single RunViews call. Content is excluded here — loaded on-demand for the selected version.
@@ -317,7 +342,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         {
           // [0] Version metadata (lightweight — no Content field)
           EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID='${this.artifactId}'`,
+          ExtraFilter: `ArtifactID='${artifactId}'`,
           OrderBy: 'VersionNumber DESC',
           Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'Description', '__mj_CreatedAt', '__mj_UpdatedAt'],
           ResultType: 'simple'
@@ -326,7 +351,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           // [1] Collection associations for all versions of this artifact
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `ArtifactVersionID IN (
-            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
+            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
           )`,
           Fields: ['ID', 'CollectionID', 'ArtifactVersionID', 'Sequence'],
           ResultType: 'simple'
@@ -335,13 +360,16 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           // [2] Conversation detail artifact links (for Links tab)
           EntityName: 'MJ: Conversation Detail Artifacts',
           ExtraFilter: `ArtifactVersionID IN (
-            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
+            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
           )`,
           Fields: ['ID', 'ConversationDetailID', 'ArtifactVersionID'],
           MaxRows: 1,
           ResultType: 'simple'
         }
       ], this.currentUser);
+      if (!isCurrentLoad()) {
+        return;
+      }
 
       const [versionsResult, collectionsResult, convDetailResult] = batchResults;
 
@@ -350,7 +378,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         return;
       }
 
-      // Store version metadata as simple objects (used for dropdown display)
+      this.artifact = artifactEntity;
       this.allVersions = versionsResult.Results as MJArtifactVersionEntity[];
 
       // Determine which version to display
@@ -366,9 +394,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
       // PERF: Start artifact type resolution and selected version content load in parallel
       const [, selectedVersionEntity] = await Promise.all([
-        this.loadArtifactType(),
+        this.loadArtifactType(artifactEntity.Type, artifactId, loadToken),
         this.loadVersionContent(versionToLoad.ID as string)
       ]);
+      if (!isCurrentLoad()) {
+        return;
+      }
 
       if (selectedVersionEntity) {
         this.artifactVersion = selectedVersionEntity;
@@ -380,16 +411,25 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
 
       // PERF: Process collection and links data in parallel (uses already-fetched batch data)
       await Promise.all([
-        this.processCollectionAssociations(collectionsResult),
-        this.processLinksData(collectionsResult, convDetailResult)
+        this.processCollectionAssociations(collectionsResult, artifactId, loadToken),
+        this.processLinksData(collectionsResult, convDetailResult, artifactId, loadToken)
       ]);
+      if (!isCurrentLoad()) {
+        return;
+      }
 
       // Load version attributes (depends on selected version being set)
-      await this.loadVersionAttributes();
+      await this.loadVersionAttributes(artifactId, loadToken);
     } catch (err) {
+      if (!isCurrentLoad()) {
+        return;
+      }
       console.error('Error loading artifact:', err);
       this.error = 'Error loading artifact: ' + (err as Error).message;
     } finally {
+      if (!isCurrentLoad()) {
+        return;
+      }
       this.isLoading = false;
       this.updateArtifactIcon();
       this.cdr.detectChanges();
@@ -422,22 +462,29 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     this.originConversationVersionId = null;
   }
 
-  private async loadArtifactType(): Promise<void> {
-    // Reset on every load so a previous artifact's values don't bleed into the next
+  private async loadArtifactType(artifactTypeName: string | null | undefined = this.artifact?.Type, artifactId: string = this.artifactId, loadToken: number = this.artifactLoadToken): Promise<void> {
+    const isCurrentLoad = () => this.isCurrentArtifactLoad(artifactId, loadToken);
     this.artifactTypeDriverClass = null;
     this.artifactContentCategory = null;
 
-    if (!this.artifact?.Type) {
+    if (!artifactTypeName) {
       return;
     }
 
     try {
       await ArtifactMetadataEngine.Instance.Config(false, this.currentUser);
+      if (!isCurrentLoad()) {
+        return;
+      }
 
-      const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(this.artifact.Type);
+      const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(artifactTypeName);
       if (artifactType) {
         // Resolve DriverClass by traversing parent hierarchy if needed
-        this.artifactTypeDriverClass = await this.resolveDriverClassForType(artifactType);
+        const driverClass = await this.resolveDriverClassForType(artifactType);
+        if (!isCurrentLoad()) {
+          return;
+        }
+        this.artifactTypeDriverClass = driverClass;
         this.artifactContentCategory = artifactType.ContentCategory;
       }
     } catch (err) {
@@ -446,7 +493,8 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
   }
 
-  private async loadVersionAttributes(): Promise<void> {
+  private async loadVersionAttributes(artifactId: string = this.artifactId, loadToken: number = this.artifactLoadToken): Promise<void> {
+    const isCurrentLoad = () => this.isCurrentArtifactLoad(artifactId, loadToken);
     if (!this.artifactVersion) return;
 
     try {
@@ -456,6 +504,9 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
         ResultType: 'simple'
       }, this.currentUser);
+      if (!isCurrentLoad()) {
+        return;
+      }
 
       if (result.Success && result.Results) {
         this.versionAttributes = result.Results;
@@ -477,9 +528,14 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         this.setActiveTabToFirstAvailable();
       }
     } catch (err) {
+      if (!isCurrentLoad()) {
+        return;
+      }
       console.error('Error loading version attributes:', err);
     } finally {
-      this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
+      if (isCurrentLoad()) {
+        this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
+      }
     }
   }
 
@@ -633,9 +689,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    * Accepts the batch result from loadArtifact() to avoid duplicate queries.
    */
   private async processCollectionAssociations(
-    collectionsResult?: { Success: boolean; Results: Record<string, unknown>[] }
+    collectionsResult?: { Success: boolean; Results: Record<string, unknown>[] },
+    artifactId: string = this.artifactId,
+    loadToken: number = this.artifactLoadToken
   ): Promise<void> {
-    if (!this.artifactId) return;
+    if (!artifactId) return;
+    const isCurrentLoad = () => this.isCurrentArtifactLoad(artifactId, loadToken);
 
     try {
       // If no pre-fetched data, fetch it (used by selectVersion/saveToCollections reload)
@@ -647,12 +706,15 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         const result = await rv.RunView<{ ID: string; CollectionID: string; ArtifactVersionID: string; Sequence: number }>({
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `ArtifactVersionID IN (
-            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
+            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
           )`,
           Fields: ['ID', 'CollectionID', 'ArtifactVersionID', 'Sequence'],
           ResultType: 'simple'
         }, this.currentUser);
         collectionRows = (result.Success ? result.Results : []) as Record<string, unknown>[];
+      }
+      if (!isCurrentLoad()) {
+        return;
       }
 
       // Store as simple objects — these are read-only display data
@@ -676,16 +738,25 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
                              (this.artifactCollections[0] as unknown as Record<string, unknown>).CollectionID as string;
         if (collectionId) {
           const md = this.ProviderToUse;
-          this.primaryCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
-          await this.primaryCollection.Load(collectionId);
+          const primaryCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+          await primaryCollection.Load(collectionId);
+          if (!isCurrentLoad()) {
+            return;
+          }
+          this.primaryCollection = primaryCollection;
         }
       } else {
         this.primaryCollection = null;
       }
     } catch (err) {
+      if (!isCurrentLoad()) {
+        return;
+      }
       console.error('Error processing collection associations:', err);
     } finally {
-      this.cdr.detectChanges();
+      if (isCurrentLoad()) {
+        this.cdr.detectChanges();
+      }
     }
   }
 
@@ -915,9 +986,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
    */
   private async processLinksData(
     collectionsResult?: { Success: boolean; Results: Record<string, unknown>[] },
-    convDetailResult?: { Success: boolean; Results: Record<string, unknown>[] }
+    convDetailResult?: { Success: boolean; Results: Record<string, unknown>[] },
+    artifactId: string = this.artifactId,
+    loadToken: number = this.artifactLoadToken
   ): Promise<void> {
-    if (!this.artifactId) return;
+    if (!artifactId) return;
+    const isCurrentLoad = () => this.isCurrentArtifactLoad(artifactId, loadToken);
 
     // Clear old links data first to prevent stale data from previous artifact
     this.clearLinksData();
@@ -934,12 +1008,15 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         const result = await rv.RunView<{ ID: string; CollectionID: string; ArtifactVersionID: string }>({
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `ArtifactVersionID IN (
-            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
+            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
           )`,
           Fields: ['ID', 'CollectionID', 'ArtifactVersionID'],
           ResultType: 'simple'
         }, this.currentUser);
         collectionRows = (result.Success ? result.Results : []) as Record<string, unknown>[];
+      }
+      if (!isCurrentLoad()) {
+        return;
       }
 
       // Get unique collection IDs and load collection details
@@ -955,6 +1032,9 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           Fields: ['ID', 'Name', 'UserID', 'Description'],
           ResultType: 'simple'
         }, this.currentUser);
+        if (!isCurrentLoad()) {
+          return;
+        }
 
         if (collectionsEntityResult.Success && collectionsEntityResult.Results) {
           this.allCollections = collectionsEntityResult.Results as unknown as MJCollectionEntity[];
@@ -979,25 +1059,35 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
           convDetailRows = (result.Success ? result.Results : []) as Record<string, unknown>[];
         }
       }
+      if (!isCurrentLoad()) {
+        return;
+      }
 
       // Load origin conversation if we have a link
       if (convDetailRows.length > 0) {
         const conversationDetailId = (convDetailRows[0]['ConversationDetailID'] || convDetailRows[0].ConversationDetailID) as string;
         const artifactVersionId = (convDetailRows[0]['ArtifactVersionID'] || convDetailRows[0].ArtifactVersionID) as string;
 
+        if (!isCurrentLoad()) {
+          return;
+        }
         this.originConversationVersionId = artifactVersionId;
 
         // Load conversation detail to get conversation ID
         const conversationDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
         const detailLoaded = await conversationDetail.Load(conversationDetailId);
+        if (!isCurrentLoad()) {
+          return;
+        }
 
         if (detailLoaded && conversationDetail.ConversationID) {
           const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', this.currentUser);
           const loaded = await conversation.Load(conversationDetail.ConversationID);
+          if (!isCurrentLoad()) {
+            return;
+          }
 
           if (loaded) {
-            this.originConversation = conversation;
-
             // Check if user has access (is owner or participant)
             const userIsOwner = UUIDsEqual(conversation.UserID, this.currentUser.ID);
 
@@ -1008,19 +1098,28 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
               Fields: ['ID'],
               ResultType: 'simple'
             }, this.currentUser);
+            if (!isCurrentLoad()) {
+              return;
+            }
 
             const userIsParticipant = participantResult.Success &&
                                        participantResult.Results &&
                                        participantResult.Results.length > 0;
 
+            this.originConversation = conversation;
             this.hasAccessToOriginConversation = userIsOwner || userIsParticipant;
           }
         }
       }
     } catch (error) {
+      if (!isCurrentLoad()) {
+        return;
+      }
       console.error('Error loading links data:', error);
     } finally {
-      this.cdr.detectChanges();
+      if (isCurrentLoad()) {
+        this.cdr.detectChanges();
+      }
     }
   }
 

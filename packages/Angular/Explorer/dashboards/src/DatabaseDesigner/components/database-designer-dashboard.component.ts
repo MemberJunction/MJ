@@ -19,7 +19,7 @@ import {
     inject, ViewChild, AfterViewInit,
 } from '@angular/core';
 import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { ResourceData } from '@memberjunction/core-entities';
 import { CompositeKey, EntityInfo, Metadata } from '@memberjunction/core';
 
@@ -325,8 +325,7 @@ export class DatabaseDesignerDashboardComponent extends BaseDashboard implements
 
     /** Resolve the `EntityInfo` for a registered entity name (for DisplayName + RelatedEntities). */
     private lookupEntityInfo(entityName: string): EntityInfo | undefined {
-        // global-provider-ok: client-side Angular dashboard, single provider; metadata-only read.
-        return new Metadata().EntityByName(entityName);
+        return new Metadata().EntityByName(entityName); // global-provider-ok: client-side Angular dashboard, single provider; metadata-only read.
     }
 
     /** The on-screen DISPLAY label for an accessible entity (DisplayName, else prefix-stripped Name). */
@@ -493,7 +492,7 @@ export class DatabaseDesignerDashboardComponent extends BaseDashboard implements
         if (!candidate) {
             return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, this.buildEntityCandidates()) };
         }
-        const entity = this.Entities.find(e => e.entityId === candidate.ID);
+        const entity = this.Entities.find(e => UUIDsEqual(e.entityId, candidate.ID));
         if (!entity) {
             return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, this.buildEntityCandidates()) };
         }

@@ -24,6 +24,12 @@
 # The token file IS hex values by definition.
 packages/Angular/Generic/shared/src/lib/_tokens.scss
 
+# Category 0: Design Token Definitions
+# Docs-site (Astro Starlight) theme file — defines the Starlight accent
+# token ramp (--sl-color-accent-*) in hex; not Angular component CSS and
+# has no access to the --mj-* token system.
+docs-site/src/styles/custom.css
+
 # Category 2: Dark Theme Definitions
 # Self-contained retro-terminal dark theme using local --perfmon-* properties.
 packages/Angular/Explorer/dashboards/src/SystemDiagnostics/system-diagnostics.component.css

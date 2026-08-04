@@ -247,9 +247,7 @@
                   <i class="fa-solid fa-microchip" style="color: var(--mj-text-muted);"></i>
                   Models
                   @if (promptModels.length > 0) {
-                    <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                      {{ promptModels.length }}
-                    </span>
+                    <span class="mj-accordion-badge">{{ promptModels.length }}</span>
                   }
                   <span style="color: var(--mj-text-muted); font-size: 0.8em; font-weight: normal; margin-left: 8px;">
                     <i class="fa-solid fa-info-circle" title="Models are tried in order from top to bottom. The first available model will be used."></i>
@@ -690,9 +688,7 @@
                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                   <i class="fa-solid fa-sliders" style="color: var(--mj-text-muted);"></i>
                   Template Parameters
-                  <span class="badge" style="background: var(--mj-brand-primary); color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
-                    {{ templateParams.length }}
-                  </span>
+                  <span class="mj-accordion-badge">{{ templateParams.length }}</span>
                   <span style="color: var(--mj-text-muted); font-size: 0.8em; font-weight: normal; margin-left: 8px;">
                     <i class="fa-solid fa-info-circle" title="These parameters are defined in the template and will be available when executing this prompt"></i>
                     Parameters defined in the template

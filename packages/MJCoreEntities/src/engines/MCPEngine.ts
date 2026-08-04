@@ -107,21 +107,21 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * Gets all cached MCP servers
      */
     public get Servers(): MJMCPServerEntity[] {
-        return this._Servers;
+        return this.GetConfigData<MJMCPServerEntity>('_Servers');
     }
 
     /**
      * Gets all cached MCP server connections
      */
     public get Connections(): MJMCPServerConnectionEntity[] {
-        return this._Connections;
+        return this.GetConfigData<MJMCPServerConnectionEntity>('_Connections');
     }
 
     /**
      * Gets all cached MCP server tools
      */
     public get Tools(): MJMCPServerToolEntity[] {
-        return this._Tools;
+        return this.GetConfigData<MJMCPServerToolEntity>('_Tools');
     }
 
     /**
@@ -129,7 +129,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * For current-user-only access, use {@link GetFavoritesByUser}.
      */
     public get Favorites(): MJMCPToolFavoriteEntity[] {
-        return this._Favorites;
+        return this.GetConfigData<MJMCPToolFavoriteEntity>('_Favorites');
     }
 
     /**
@@ -211,7 +211,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of servers with Status = 'Active'
      */
     public get ActiveServers(): MJMCPServerEntity[] {
-        return this._Servers.filter(s => s.Status === 'Active');
+        return this.GetConfigData<MJMCPServerEntity>('_Servers').filter(s => s.Status === 'Active');
     }
 
     /**
@@ -220,7 +220,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of connections with Status = 'Active'
      */
     public get ActiveConnections(): MJMCPServerConnectionEntity[] {
-        return this._Connections.filter(c => c.Status === 'Active');
+        return this.GetConfigData<MJMCPServerConnectionEntity>('_Connections').filter(c => c.Status === 'Active');
     }
 
     /**
@@ -229,7 +229,7 @@ export class MCPEngine extends BaseEngine<MCPEngine> {
      * @returns Array of tools with Status = 'Active'
      */
     public get ActiveTools(): MJMCPServerToolEntity[] {
-        return this._Tools.filter(t => t.Status === 'Active');
+        return this.GetConfigData<MJMCPServerToolEntity>('_Tools').filter(t => t.Status === 'Active');
     }
 
     /**

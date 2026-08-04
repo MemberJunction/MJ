@@ -37,6 +37,18 @@ const githubRepoRegex = /^https:\/\/github\.com\/.+\/.+$/;
 /** Tag: lowercase alphanumeric + hyphens, max 50 chars */
 const tagRegex = /^[a-z0-9-]{1,50}$/;
 
+/**
+ * npm package name (optionally scoped), per npm's own naming rules — lowercase URL-safe
+ * characters only, no quotes/spaces/shell metacharacters. Defence in depth for the config
+ * writer (which additionally JSON.stringify-escapes every value it injects into
+ * mj.config.cjs): the config writer is not the only consumer of these values, so hostile
+ * names are rejected at manifest validation, before any engine code touches them.
+ */
+const npmPackageNameRegex = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+
+/** A single JavaScript identifier — the only valid shape for a named export to call at startup. */
+const jsIdentifierRegex = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
 // ── Publisher ─────────────────────────────────────────────
 
 const publisherSchema = z.object({
@@ -53,9 +65,9 @@ const packageRoleSchema = z.enum([
 ]);
 
 const packageEntrySchema = z.object({
-    name: z.string().min(1).max(200),
+    name: z.string().max(214).regex(npmPackageNameRegex, 'Package name must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)'),
     role: packageRoleSchema,
-    startupExport: z.string().optional(),
+    startupExport: z.string().regex(jsIdentifierRegex, 'startupExport must be a single JavaScript identifier').optional(),
 }).refine(
     (pkg) => pkg.role !== 'bootstrap' || (pkg.startupExport != null && pkg.startupExport.length > 0),
     { message: 'startupExport is required for packages with the "bootstrap" role', path: ['startupExport'] }
@@ -84,7 +96,7 @@ const dbSchemaSchema = z.object({
      *  Used by CodeGen to resolve per-schema imports. If omitted, the install
      *  engine auto-detects it from packages.shared (first library-role package
      *  whose name contains "entities"). */
-    entityPackage: z.string().min(1).optional(),
+    entityPackage: z.string().max(214).regex(npmPackageNameRegex, 'entityPackage must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)').optional(),
 });
 
 // ── Migrations ────────────────────────────────────────────
@@ -132,9 +144,20 @@ const configurationSchema = z.object({
 // ── Hooks ─────────────────────────────────────────────────
 
 const hooksSchema = z.object({
+    // Shell-command hooks (run via execSync in the consumer repo root, no DB/context).
     postInstall: z.string().optional(),
     postUpgrade: z.string().optional(),
     preRemove: z.string().optional(),
+    // In-process JS hook MODULE SPECIFIERS, resolved from the consumer's node_modules
+    // (i.e. one of the app's own installed packages — NOT a repo-relative path, because
+    // the engine only downloads the manifest + migration .sql files, never the app's
+    // source/scripts). The orchestrator imports the module and awaits its default export,
+    // passing the live OrchestratorContext + interactive prompt callbacks. This enables
+    // interactive, DB-aware setup/teardown (e.g. a guided config wizard) with no execSync
+    // timeout and no need to self-bootstrap a DB connection.
+    postInstallModule: z.string().optional(),
+    postUpgradeModule: z.string().optional(),
+    preRemoveModule: z.string().optional(),
 });
 
 // ── Full Manifest ─────────────────────────────────────────

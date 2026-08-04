@@ -1270,6 +1270,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         try {
             entity.RegisterTransactionPreprocessing();
 
+            // External-data-source entities are read-only — MJ is never the system of record for
+            // remote data. Refuse writes at the provider layer so the guarantee holds regardless of
+            // the generated base class (ReadOnlyExternalBaseEntity covers the normal path — returning
+            // false per the Save contract — before ever reaching here). This provider-level backstop
+            // exists only for the edge case where a custom subclass replaces ReadOnlyExternalBaseEntity;
+            // it intentionally THROWS (a hard stop for a should-never-happen misconfiguration) rather
+            // than returning false, since by this point the normal read-only path has been bypassed.
+            // No-op for MJ-DB entities (ExternalDataSourceID null).
+            if (entity.EntityInfo.ExternalDataSourceID)
+                throw new Error(`Save() not allowed for ${entity.EntityInfo.Name}: it is sourced from an external data source (read-only).`);
+
             const bNewRecord = !entity.IsSaved;
             if (!options) options = new EntitySaveOptions();
             const bReplay = !!options.ReplayOnly;
@@ -1441,6 +1452,14 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const entityResult = new BaseEntityResult();
         try {
             entity.RegisterTransactionPreprocessing();
+
+            // External-data-source entities are read-only (see Save) — refuse deletes at the provider
+            // layer regardless of the generated base class. The normal path (ReadOnlyExternalBaseEntity)
+            // returns false before reaching here; this backstop intentionally throws only for the
+            // custom-subclass edge case that bypasses it. No-op for MJ-DB entities.
+            if (entity.EntityInfo.ExternalDataSourceID)
+                throw new Error(`Delete() not allowed for ${entity.EntityInfo.Name}: it is sourced from an external data source (read-only).`);
+
             if (!options) options = new EntityDeleteOptions();
             const bReplay = options.ReplayOnly;
 
@@ -2141,6 +2160,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     deletionLog.Set('Status', d.Success ? 'Complete' : 'Error');
                     if (!d.Success) deletionLog.Set('ProcessingLog', d.Message);
                     if (!(await deletionLog.Save())) throw new Error('Error saving record merge deletion log');
+                    d.RecordMergeDeletionLogID = deletionLog.Get('ID') as string;
                 }
             } else {
                 throw new Error('Error saving record merge log');

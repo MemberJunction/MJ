@@ -64,6 +64,22 @@ export interface MessageProgressUpdate {
     stepCount?: number;
     /** Which backend resolver published this update. */
     resolver?: 'TaskOrchestrator' | 'RunAIAgentResolver' | string;
+    /**
+     * Present when this update carries streamed final-response content (a
+     * RunAIAgentResolver `type:'streaming'` message whose `kind` marks it as
+     * user-facing reply text). Deltas are accumulated service-side, so
+     * `content` is always the FULL reply text so far — renderers assign it,
+     * they never need to append. `message` mirrors `content` so consumers
+     * unaware of streaming still show something sensible.
+     */
+    streaming?: {
+        /** Full accumulated reply text so far. */
+        content: string;
+        /** False on the final chunk of the stream. */
+        isPartial: boolean;
+        /** Content discriminator from the server (currently 'final-response'). */
+        kind: string;
+    };
 }
 
 /** Callback type for progress updates. */
@@ -90,6 +106,16 @@ const RECONNECTION_DELAY_MS = 5_000;
 export class ConversationStreaming {
     private pushStatusSubscription?: Subscription;
     private readonly callbackRegistry = new Map<string, MessageProgressCallback[]>();
+    /**
+     * Per-message accumulation of streamed final-response deltas, keyed by
+     * conversationDetailId and stamped with the producing agentRunId. The server
+     * publishes token DELTAS (see BaseLLM's OnContent contract); we accumulate
+     * here so every registered callback always receives the full reply text so
+     * far. The run stamp guarantees a new run's stream can never splice onto a
+     * dead run's leftovers on the same message. Entries are cleared on the
+     * stream's final chunk, on completion, on reconnection, and on dispose.
+     */
+    private readonly streamingAccumulator = new Map<string, { agentRunId: string; text: string }>();
     private readonly recentCompletions = new Map<
         string,
         { conversationDetailId: string; agentRunId: string; timestamp: Date }
@@ -253,6 +279,7 @@ export class ConversationStreaming {
         }
         this.callbackRegistry.clear();
         this.recentCompletions.clear();
+        this.streamingAccumulator.clear();
         this.completionEvents$.complete();
         this.connectionStatus$.complete();
         this.initialized = false;
@@ -348,6 +375,12 @@ export class ConversationStreaming {
             const progress = data.progress as Record<string, unknown> | undefined;
             const type = data.type as string | undefined;
 
+            // Streamed content chunk — accumulate + surface final-response text.
+            if (type === 'streaming') {
+                await this.routeStreamingContent(data, agentRun);
+                return;
+            }
+
             // Completion message — clear the task, broadcast, and remember for replay.
             if (type === 'complete') {
                 const agentRunId = (data.agentRunId as string | undefined) ?? '';
@@ -365,6 +398,9 @@ export class ConversationStreaming {
                 }
 
                 if (conversationDetailId) {
+                    // The run is over — drop any partial stream accumulation for the message.
+                    this.streamingAccumulator.delete(conversationDetailId);
+
                     this.recentCompletions.set(conversationDetailId, {
                         conversationDetailId,
                         agentRunId,
@@ -429,6 +465,74 @@ export class ConversationStreaming {
         }
     }
 
+    /**
+     * Route a RunAIAgentResolver `type:'streaming'` chunk. Only chunks the server
+     * marked with a renderable `kind` (currently 'final-response' — deltas of the
+     * user-facing reply) are surfaced; unmarked chunks are raw prompt output (e.g.
+     * a Loop agent's streamed JSON turn envelope) and are dropped, preserving the
+     * pre-streaming behavior for agents that don't opt in.
+     *
+     * Deltas are accumulated per message so callbacks always receive the FULL
+     * reply text so far (renderers assign, never append). The accumulator entry
+     * is cleared on the stream's final chunk and again on run completion.
+     */
+    private async routeStreamingContent(
+        data: Record<string, unknown>,
+        agentRun: Record<string, unknown> | undefined
+    ): Promise<void> {
+        const streaming = data.streaming as
+            | { content?: string; isPartial?: boolean; kind?: string }
+            | undefined;
+
+        if (streaming?.kind !== 'final-response') {
+            return; // raw prompt stream — not user-facing content; keep dropping it
+        }
+
+        const conversationDetailId = agentRun?.ConversationDetailID as string | undefined;
+        if (!conversationDetailId) {
+            console.warn('[ConversationStreaming] Streaming chunk missing conversationDetailId', {
+                agentName: agentRun?.Agent,
+            });
+            return;
+        }
+
+        // A message can be re-streamed by a different run (retry; overlapping runs;
+        // a chunk landing after 'complete' re-created the entry) — key accumulation
+        // to the producing run so a dead run's leftover prefix can never splice onto
+        // a new stream. agentRunId rides on every streaming payload.
+        const agentRunId = (data.agentRunId as string | undefined) ?? '';
+        const isPartial = streaming.isPartial !== false;
+        const prev = this.streamingAccumulator.get(conversationDetailId);
+        const prefix = prev && prev.agentRunId === agentRunId ? prev.text : '';
+        const accumulated = prefix + (streaming.content ?? '');
+        if (isPartial) {
+            this.streamingAccumulator.set(conversationDetailId, { agentRunId, text: accumulated });
+        } else {
+            this.streamingAccumulator.delete(conversationDetailId);
+        }
+
+        // Nothing renderable yet (e.g. a lone empty final chunk) — dispatching an
+        // empty string would blank the progress text already in the bubble.
+        if (!accumulated) return;
+
+        const callbacks = this.callbackRegistry.get(conversationDetailId) ?? [];
+        if (callbacks.length === 0) return;
+
+        const progressUpdate: MessageProgressUpdate = {
+            message: accumulated,
+            taskName: (agentRun?.Agent as string | undefined) ?? 'Agent',
+            conversationDetailId,
+            resolver: 'RunAIAgentResolver',
+            streaming: {
+                content: accumulated,
+                isPartial,
+                kind: streaming.kind,
+            },
+        };
+
+        await this.dispatchCallbacks(callbacks, progressUpdate, conversationDetailId);
+    }
+
     /** Invoke every callback registered for `conversationDetailId`, swallowing per-callback errors. */
     private async dispatchCallbacks(
         callbacks: MessageProgressCallback[],
@@ -453,6 +557,12 @@ export class ConversationStreaming {
         if (this.reconnectionTimeout) {
             clearTimeout(this.reconnectionTimeout);
         }
+        // Chunks published while the subscription is down are gone — appending
+        // post-reconnect deltas onto the kept prefix would render a reply with a
+        // silent hole in the middle. Drop partial accumulations (the completion
+        // flow still delivers the correct final message), which also keeps
+        // abandoned entries from lingering for the session.
+        this.streamingAccumulator.clear();
         this.connectionStatus$.next('reconnecting');
         this.reconnectionTimeout = setTimeout(() => {
             console.log('[ConversationStreaming] Attempting to reconnect...');

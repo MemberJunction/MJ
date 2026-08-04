@@ -80,7 +80,11 @@ export class ProcessedMessageServer extends ProcessedMessage {
             }
         }
         else {
-            this.ProcessedHTMLBody = this.HTMLBody || '';
+            // Preserve an HTML body already DERIVED from the BodyTemplate above (its HTML content
+            // render, or the rendered-text fallback). Unconditionally assigning HTMLBody || ''
+            // clobbered that derivation to an empty string whenever no explicit HTMLBody was set —
+            // making the documented fallback dead code (found by templates.TP7, bug B64).
+            this.ProcessedHTMLBody = this.HTMLBody || this.ProcessedHTMLBody || '';
         }
 
         if (this.SubjectTemplate) {

@@ -1,5 +1,291 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-vectors@6.0.0
+  - @memberjunction/ai-vectordb@6.0.0
+  - @memberjunction/ai-vectors-pinecone@6.0.0
+  - @memberjunction/credentials@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/templates-base-types@6.0.0
+  - @memberjunction/templates@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/ai-vectors@5.51.0
+  - @memberjunction/ai-vectordb@5.51.0
+  - @memberjunction/ai-vectors-pinecone@5.51.0
+  - @memberjunction/credentials@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/templates-base-types@5.51.0
+  - @memberjunction/templates@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [9efcfe6]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/ai-vectors@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/credentials@5.50.0
+  - @memberjunction/templates-base-types@5.50.0
+  - @memberjunction/templates@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/ai-vectors-pinecone@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 7db8ef5: Fix the broken unit tests on `next` caused by `vi.mock('@memberjunction/global')` factories that don't expose `RequiresSubclass`. The module graphs under test now declare `@RequiresSubclass()`, so a mock omitting it throws `No "RequiresSubclass" export is defined on the mock` at module init.
+
+  This covers the **complete** set of currently-failing suites (verified by a full `turbo run test` — exactly these two packages fail on this gap): `@memberjunction/actions` (`ActionEngine` / `EntityActionEngine` tests) and `@memberjunction/ai-vector-sync` (`entityDocumentConfig` test). Added the missing no-op decorator to each. Test-only change.
+
+  Note: ~200 other test files also mock `@memberjunction/global` without listing `RequiresSubclass`, but they pass today — their module-under-test never imports a `@RequiresSubclass()`-decorated class (or they spread the real module). Those are latent, not failing, and are intentionally left untouched to keep this fix reviewable; a shared-mock refactor to kill the latent class is a separate cleanup.
+
+- 15e3017: Add optional embedding dimensions, per-record Pinecone namespace routing, and scope-level provider config support.
+
+  **`@memberjunction/ai`** — Add optional `dimensions` field to `EmbedTextParams`, `EmbedTextsParams`, and `EmbedContentParams`. When provided, overrides the model's native output dimension (only effective on models that support it, e.g. OpenAI `text-embedding-3-*`).
+
+  **`@memberjunction/ai-openai`** — `OpenAIEmbedding.EmbedText` and `embedBatch` now forward `params.dimensions` to the OpenAI embeddings API when set.
+
+  **`@memberjunction/ai-vectordb`** — Three additive changes to the vector DB abstraction layer:
+  - `VectorRecord` gains an optional `providerTemporaryDirectives` field — an MJ-internal routing map set by ingestion and stripped before any external upsert.
+  - `QueryParamsBase` gains an optional `providerConfig` field — an opaque blob sourced from the scope's rendered `ExternalIndexConfig`, threaded through to the driver at query time.
+  - `VectorDBBase` gains a `BuildProviderDirectives(sourceRecord, providerConfig)` hook (default: returns `{}`) that drivers override to extract per-record routing values (e.g. namespace) from the raw source row.
+  - `CreateRecord` and `CreateRecords` signatures gain an optional `providerConfig` parameter.
+
+  **`@memberjunction/ai-vectors-pinecone`** — Full namespace routing support:
+  - `BuildProviderDirectives` reads `providerConfig.namespaceField`, looks up that field on each source record, and returns `{ namespace: '<value>' }` so records are routed to the correct Pinecone namespace during ingestion.
+  - `CreateRecords` groups a mixed batch by namespace and issues one `upsert` per distinct namespace; falls back to a single-namespace path when no per-record directives are present.
+  - `QueryIndex` extracts `providerConfig.namespace`, calls `index.namespace(ns)` when present, and strips the field before passing params to the Pinecone SDK.
+  - `providerTemporaryDirectives` is stripped from each `VectorRecord` before any upsert call.
+
+  **`@memberjunction/ai-vector-sync`** — Sync pipeline now reads `VectorIndex.Dimensions` and `VectorIndex.ProviderConfig` and threads them through:
+  - `Dimensions` is forwarded to `EmbedTexts` so the embedding model produces vectors at the configured size.
+  - `ProviderConfig` (parsed from JSON) is forwarded to `upsertBatchToVectorDB`, which passes it to `BuildProviderDirectives` per record and to `CreateRecords`.
+  - Metadata value storage is now type-aware: SQL numeric types (`int`, `float`, `decimal`, etc.) are stored as JS numbers; a new `storeAs` field config supports `'epochSeconds'` and `'epochMilliseconds'` for datetime columns, `'number'`, and `'boolean'`.
+
+  **`@memberjunction/search-engine`** — `ExternalIndexConfig` on scope external-index rows is now treated as a Nunjucks template: it is rendered against the caller's `SearchContext` before being JSON-parsed. The rendered object (e.g. `{ namespace: '<orgId>' }`) is forwarded as `providerConfig` through `VectorSearchProvider.queryOneIndex` to the vector DB driver. `VectorIndex.Dimensions` is also forwarded to the query-time embedding call.
+
+- 78a5e44: Vector sync: portable record IDs, minimal-metadata mode, and explicit-inclusion field fixes
+  - **New `vectorIdStrategy` on `EntityDocumentConfiguration`** — `'hash'` (default, unchanged SHA-1 behavior) or `'recordId'`, which uses the source record's primary key value directly as the vector database ID. UUIDs are normalized to lowercase for SQL Server / PostgreSQL portability; composite PK values are joined with `||`; empty keys and IDs over the 512-byte provider limit fail loudly.
+  - **New `fieldStrategy: 'explicit'`** — vector metadata contains EXACTLY the configured fields: the system-injected keys (`RecordID`, `Entity`, `TemplateID`) are omitted and `includeEntityIcon` / `includeUpdatedAt` flip to opt-in. Existing `'all'` / `'include'` / `'exclude'` strategies are byte-for-byte unchanged.
+  - **Explicit inclusion now wins over type heuristics** — under `'include'` / `'explicit'`, fields listed with `included: true` are honored even when the implicit-eligibility filter would skip them (uniqueidentifiers, PKs, `__mj_*` fields). Only genuinely unstorable binary column types are refused, with a logged warning instead of a silent drop. Uniqueidentifier metadata values are normalized to lowercase so metadata filters behave identically across database platforms.
+  - **SearchEngine `VectorSearchProvider`** — when a match's metadata omits the `Entity` key (e.g. indexes populated with `fieldStrategy: 'explicit'`), the provider now resolves a fallback entity name from the index's entity documents (cached per index, only when unambiguous) instead of labeling results `Unknown`. Record identity already falls back to the vector ID when `RecordID` metadata is absent.
+
+  Note: switching an already-populated index to `vectorIdStrategy: 'recordId'` orphans vectors written under the old hashed IDs — purge or re-create the index (or use a fresh namespace) when changing strategy.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [9d6e3d9]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/ai-vectordb@5.49.0
+  - @memberjunction/ai-vectors-pinecone@5.49.0
+  - @memberjunction/templates@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/ai-vectors@5.49.0
+  - @memberjunction/credentials@5.49.0
+  - @memberjunction/templates-base-types@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-vectors@5.48.0
+  - @memberjunction/ai-vectordb@5.48.0
+  - @memberjunction/ai-vectors-pinecone@5.48.0
+  - @memberjunction/credentials@5.48.0
+  - @memberjunction/templates-base-types@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/ai-vectors@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/ai-vectors-pinecone@5.47.0
+  - @memberjunction/credentials@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/templates-base-types@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/ai-vectors@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/ai-vectors-pinecone@5.46.0
+  - @memberjunction/credentials@5.46.0
+  - @memberjunction/templates-base-types@5.46.0
+  - @memberjunction/templates@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-vectors@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/ai-vectors-pinecone@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/ai-vectordb@5.45.1
+  - @memberjunction/credentials@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/templates-base-types@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-vectors@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/ai-vectors-pinecone@5.45.0
+  - @memberjunction/credentials@5.45.0
+  - @memberjunction/templates-base-types@5.45.0
+  - @memberjunction/templates@5.45.0
+  - @memberjunction/ai@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [3633fbb]
+- Updated dependencies [1367fbb]
+- Updated dependencies [5396d90]
+- Updated dependencies [89ea055]
+- Updated dependencies [7279819]
+- Updated dependencies [d44e430]
+- Updated dependencies [6f74b17]
+- Updated dependencies [be5ab50]
+- Updated dependencies [aa9102d]
+- Updated dependencies [2f926df]
+- Updated dependencies [863a10d]
+- Updated dependencies [2f9b863]
+  - @memberjunction/ai-core-plus@5.44.0
+  - @memberjunction/aiengine@5.44.0
+  - @memberjunction/core-entities@5.44.0
+  - @memberjunction/core@5.44.0
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ai@5.44.0
+  - @memberjunction/ai-vectordb@5.44.0
+  - @memberjunction/ai-prompts@5.44.0
+  - @memberjunction/ai-vectors@5.44.0
+  - @memberjunction/templates@5.44.0
+  - @memberjunction/ai-vectors-pinecone@5.44.0
+  - @memberjunction/credentials@5.44.0
+  - @memberjunction/templates-base-types@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

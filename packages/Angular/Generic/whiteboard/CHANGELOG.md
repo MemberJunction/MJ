@@ -1,5 +1,105 @@
 # @memberjunction/ng-whiteboard
 
+## 6.0.0
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@6.0.0
+- @memberjunction/ng-markdown@6.0.0
+- @memberjunction/ng-ui-components@6.0.0
+- @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@5.51.0
+- @memberjunction/ng-markdown@5.51.0
+- @memberjunction/ng-ui-components@5.51.0
+- @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@5.50.0
+- @memberjunction/ng-markdown@5.50.0
+- @memberjunction/ng-ui-components@5.50.0
+- @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [9c07270]
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ng-markdown@5.49.0
+  - @memberjunction/ng-ui-components@5.49.0
+  - @memberjunction/ng-code-editor@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@5.48.0
+- @memberjunction/ng-markdown@5.48.0
+- @memberjunction/ng-ui-components@5.48.0
+- @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@5.47.0
+- @memberjunction/ng-markdown@5.47.0
+- @memberjunction/ng-ui-components@5.47.0
+- @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@5.46.0
+- @memberjunction/ng-markdown@5.46.0
+- @memberjunction/ng-ui-components@5.46.0
+- @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@5.45.1
+- @memberjunction/ng-markdown@5.45.1
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [13716e4]
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ng-code-editor@5.45.0
+  - @memberjunction/ng-markdown@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- 0476455: Migrate inline empty-state placeholders to the canonical `<mj-empty-state>` component across Explorer and Generic Angular packages (UI-consistency objective O4), wiring the component into the packages that needed it (and adding `@memberjunction/ng-ui-components` as a dependency where missing). Also fixes reset-filter CTA correctness in three picker dialogs (sub-agent selector, add-action, action gallery) where the handler cleared only a subset of the active filter dimensions, and refines the UI adoption measurement script with a transparent three-tier empty-state count (raw widened → non-placeholder false-positives → wrappers-around-migrated → genuine).
+- Updated dependencies [5396d90]
+- Updated dependencies [f8be8a0]
+- Updated dependencies [1e5e449]
+- Updated dependencies [0476455]
+  - @memberjunction/global@5.44.0
+  - @memberjunction/ng-ui-components@5.44.0
+  - @memberjunction/ng-code-editor@5.44.0
+  - @memberjunction/ng-markdown@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

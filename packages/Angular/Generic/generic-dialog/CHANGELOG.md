@@ -1,5 +1,70 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 6.0.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [13716e4]
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/ng-ui-components@5.45.0
+
+## 5.44.0
+
+### Patch Changes
+
+- Updated dependencies [f8be8a0]
+- Updated dependencies [1e5e449]
+- Updated dependencies [0476455]
+  - @memberjunction/ng-ui-components@5.44.0
+
 ## 5.43.0
 
 ### Patch Changes

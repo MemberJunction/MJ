@@ -18,7 +18,7 @@
 
 import { RunView, LogError, LogStatus, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import type { FeatureImportance, LeakageGuard } from '@memberjunction/predictive-studio-core';
+import { DOMINANCE_THRESHOLD_DEFAULT, type FeatureImportance, type LeakageGuard } from '@memberjunction/predictive-studio-core';
 
 import { detectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
 import { ModelScoringActionGenerator } from './model-scoring-action-generator';
@@ -27,9 +27,6 @@ import type {
   PromoteModelRequest,
   PromoteModelOutcome,
 } from './promote-model.action';
-
-/** Default single-feature-dominance threshold when a pipeline doesn't specify one. */
-const DEFAULT_DOMINANCE_THRESHOLD = 0.6;
 
 /** Canonical UUID shape (8-4-4-4-12 hex), case-insensitive. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -149,7 +146,7 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     // pipelineId is interpolated into a SQL filter — only a UUID is valid. A
     // missing/malformed id falls back to the default threshold (never concatenated).
     if (!isUuid(pipelineId)) {
-      return DEFAULT_DOMINANCE_THRESHOLD;
+      return DOMINANCE_THRESHOLD_DEFAULT;
     }
     const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
     const result = await rv.RunView<MJMLTrainingPipelineEntity>(
@@ -163,14 +160,14 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
       contextUser,
     );
     if (!result.Success || result.Results.length === 0) {
-      return DEFAULT_DOMINANCE_THRESHOLD;
+      return DOMINANCE_THRESHOLD_DEFAULT;
     }
     const guard = this.parseJson<LeakageGuard>(result.Results[0].LeakageGuard, {
       DenyFields: [],
-      SingleFeatureDominanceThreshold: DEFAULT_DOMINANCE_THRESHOLD,
+      SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT,
     });
     const threshold = guard.SingleFeatureDominanceThreshold;
-    return Number.isFinite(threshold) ? threshold : DEFAULT_DOMINANCE_THRESHOLD;
+    return Number.isFinite(threshold) ? threshold : DOMINANCE_THRESHOLD_DEFAULT;
   }
 
   // ----- transition ----------------------------------------------------------

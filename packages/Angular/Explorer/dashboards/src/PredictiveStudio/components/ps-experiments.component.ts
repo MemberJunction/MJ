@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, Input, OnInit, ViewEncapsulation, inject 
 import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
   MJExperimentSessionEntity,
@@ -47,7 +48,7 @@ interface BudgetGaugeVM {
   selector: 'ps-experiments',
   imports: [CommonModule, MJButtonDirective, PSConfirmModalComponent],
   encapsulation: ViewEncapsulation.None,
-  styleUrls: ['../predictive-studio.shared.scss', './ps-experiments.component.scss'],
+  styleUrls: ['../predictive-studio.shared.css', './ps-experiments.component.css'],
   template: `
     <div class="ps-panel ps-experiments" data-testid="ps-experiments-panel">
       @if (!session) {
@@ -228,7 +229,7 @@ export class PSExperimentsComponent implements OnInit {
   }
 
   public get session(): MJExperimentSessionEntity | undefined {
-    return this.engine?.Sessions.find((s) => s.ID === this.sessionId);
+    return this.engine?.Sessions.find((s) => UUIDsEqual(s.ID, this.sessionId));
   }
 
   public get iterationCountLabel(): string {

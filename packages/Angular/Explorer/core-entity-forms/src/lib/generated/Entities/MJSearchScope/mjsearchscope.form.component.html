@@ -389,6 +389,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Skill Search Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAISkillSearchScopes"
+        SectionName="AI Skill Search Scopes"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAISkillSearchScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Skill Search Scopes','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Skill Search Scopes')"
+                [AllowLoad]="IsSectionExpanded('mJAISkillSearchScopes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAISkillSearchScopes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

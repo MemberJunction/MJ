@@ -10,13 +10,14 @@
  */
 
 import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
-import { MJVectorIndexEntity, MJVectorDatabaseEntity } from '@memberjunction/core-entities';
+import { MJVectorIndexEntity, MJVectorDatabaseEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
 import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeExternalIndexConstraint } from './search.types';
+import { CheckScopeJsonFilter, ScopeFilterCheck } from './ScopeFilterGuard';
 
 /**
  * Provides vector similarity search across all configured vector indexes.
@@ -203,6 +204,10 @@ export class VectorSearchProvider extends BaseSearchProvider {
             }
 
             const apiKey = GetAIAPIKey(model.DriverClass);
+            // All indexes in this model group share the same embedding model; they should also
+            // share the same dimension config. Take the first non-null Dimensions value —
+            // undefined means "use the model's native default".
+            const dimensions = indexes.find(idx => idx.Dimensions != null)?.Dimensions ?? undefined;
             // Check embedding cache before calling the model
             const cacheKey = `${model.DriverClass}::${query}`;
             let queryVector = this.getCachedEmbedding(cacheKey);
@@ -224,7 +229,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 // and fall back to Name when APIName isn't set or is empty.
                 // `||` (not `??`) so an empty-string `APIName` also falls back.
                 const modelName = model.APIName || model.Name;
-                const embedResult = await embeddingInstance.EmbedText({ text: query, model: modelName });
+                const embedResult = await embeddingInstance.EmbedText({ text: query, model: modelName, dimensions });
                 if (!embedResult?.vector?.length) {
                     LogError(`VectorSearchProvider: Failed to embed with ${model.Name}`);
                     return [];
@@ -239,8 +244,20 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 const perIndexRow = scopedRows?.find(
                     r => r.VectorIndexID && UUIDsEqual(r.VectorIndexID, vectorIndex.ID)
                 );
-                const mergedFilter = this.mergeMetadataFilters(filter, perIndexRow?.MetadataFilter);
-                return this.queryOneIndex(vectorIndex, queryVector!, query, topK, mergedFilter, contextUser)
+                const merge = this.mergeMetadataFilters(filter, perIndexRow?.MetadataFilter);
+                if (merge.Status === 'unusable') {
+                    // FAIL CLOSED. A filter was authored for this index but cannot be applied,
+                    // so querying would silently drop the scope's restriction — including the
+                    // tenant clause — and read the entire index. Skip this index instead.
+                    LogError(
+                        `VectorSearchProvider: skipping index "${vectorIndex.Name}" because its scope MetadataFilter cannot be applied — ${merge.Reason}. ` +
+                        `The index is NOT queried, because running it unfiltered would ignore the scope's tenant/permission push-down.`
+                    );
+                    return Promise.resolve([] as SearchResultItem[]);
+                }
+                const mergedFilter = merge.Status === 'usable' ? merge.Value : undefined;
+                const providerConfig = perIndexRow?.ExternalIndexConfig as Record<string, unknown> | undefined;
+                return this.queryOneIndex(vectorIndex, queryVector!, query, topK, mergedFilter, providerConfig, contextUser)
                     .catch(error => {
                         LogError(`VectorSearchProvider: Error querying index "${vectorIndex.Name}": ${error}`);
                         return [] as SearchResultItem[];
@@ -263,6 +280,10 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * wiring in the active data-provider connection and passing the original query text so the
      * provider can fuse a keyword (full-text) component with the vector search in one statement.
      * Otherwise it falls back to the standard external `QueryIndex` path.
+     *
+     * @param providerConfig - Optional opaque config blob passed through to the vector DB
+     *   driver. Each driver reads the keys it understands (e.g. Pinecone reads `namespace`).
+     *   Sourced from the scope's rendered `ExternalIndexConfig`. Ignored by the colocated path.
      */
     private async queryOneIndex(
         vectorIndex: MJVectorIndexEntity,
@@ -270,6 +291,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         queryText: string,
         topK: number,
         filter: object | undefined,
+        providerConfig: Record<string, unknown> | undefined,
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
         const rv = new RunView();
@@ -309,7 +331,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 fusion: 'rrf',
                 includeMetadata: true,
             }, contextUser);
-            return this.convertMatches(colocated.matches, vectorIndex.Name);
+            const fallbackEntity = await this.getFallbackEntityName(colocated.matches, vectorIndex, contextUser);
+            return this.convertMatches(colocated.matches, vectorIndex.Name, fallbackEntity);
         }
 
         // contextUser is passed as the 2nd arg per VectorDBBase.QueryIndex's
@@ -323,23 +346,73 @@ export class VectorSearchProvider extends BaseSearchProvider {
             topK,
             includeMetadata: true,
             filter,
+            providerConfig,
         }, contextUser);
 
         if (!response.success || !response.data?.matches) {
             return [];
         }
 
-        return this.convertMatches(response.data.matches, vectorIndex.Name);
+        const fallbackEntity = await this.getFallbackEntityName(response.data.matches, vectorIndex, contextUser);
+        return this.convertMatches(response.data.matches, vectorIndex.Name, fallbackEntity);
+    }
+
+    /**
+     * Resolve a fallback entity name for matches whose metadata omits the `Entity` key
+     * (e.g. indexes populated with fieldStrategy 'explicit'). Only does the lookup when
+     * at least one match actually needs it.
+     */
+    private async getFallbackEntityName(
+        matches: Array<{ metadata?: Record<string, unknown> }> | undefined,
+        vectorIndex: MJVectorIndexEntity,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        if (!matches?.some(m => !m.metadata?.['Entity'])) {
+            return null;
+        }
+        return this.resolveIndexEntityName(vectorIndex.ID, contextUser);
+    }
+
+    /**
+     * Resolve the entity name an index serves by inspecting its entity documents.
+     *
+     * Sourced from `KnowledgeHubMetadataEngine` rather than a `RunView` — Entity Documents
+     * are small in number and change infrequently, and the engine already caches them
+     * (event-driven auto-refresh on entity change, per `BaseEngine`), so a per-query RunView
+     * here would be pure waste. `Config()` is a no-op once loaded, so this call is cheap on
+     * every invocation.
+     *
+     * Unambiguous only when every entity document targeting the index vectorizes the same
+     * entity — otherwise returns null and results stay 'Unknown'.
+     */
+    private async resolveIndexEntityName(vectorIndexID: string, contextUser: UserInfo): Promise<string | null> {
+        try {
+            await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
+
+            const distinct = new Set(
+                KnowledgeHubMetadataEngine.Instance.EntityDocuments
+                    .filter(d => UUIDsEqual(d.VectorIndexID, vectorIndexID) && d.Entity)
+                    .map(d => d.Entity)
+            );
+
+            return distinct.size === 1 ? (distinct.values().next().value ?? null) : null;
+        } catch (error) {
+            // A fallback display name is a nice-to-have — never let a resolution failure
+            // sink the actual query results for this index.
+            LogError(`VectorSearchProvider: Failed to resolve entity name for vector index ${vectorIndexID}: ${error}`);
+            return null;
+        }
     }
 
     /** Convert vector DB matches to SearchResultItem[] */
     private convertMatches(
         matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
-        indexName: string
+        indexName: string,
+        fallbackEntityName?: string | null
     ): SearchResultItem[] {
         return matches.map(match => {
             const meta = match.metadata ?? {};
-            const entityName = (meta['Entity'] as string) ?? 'Unknown';
+            const entityName = (meta['Entity'] as string) ?? fallbackEntityName ?? 'Unknown';
             // Vector metadata stores RecordID in CompositeKey URL format: "FieldName|Value" or "F1|V1||F2|V2"
             // Use CompositeKey to properly parse it, then extract just the values for consistent
             // matching with entity search results (which use plain record IDs)
@@ -439,31 +512,22 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * so scope and user filters compose conjunctively. Scope filter may be either an
      * object (already parsed) or a JSON string — both are accepted.
      */
-    private mergeMetadataFilters(
+    protected mergeMetadataFilters(
         baseFilter: object | undefined,
         scopeFilter: unknown
-    ): object | undefined {
-        if (scopeFilter == null) return baseFilter;
-
-        let parsed: object | undefined;
-        if (typeof scopeFilter === 'string') {
-            const trimmed = scopeFilter.trim();
-            if (!trimmed) return baseFilter;
-            try {
-                parsed = JSON.parse(trimmed);
-            } catch {
-                LogError(`VectorSearchProvider: Scope MetadataFilter is not valid JSON — skipping: ${trimmed.substring(0, 120)}`);
-                return baseFilter;
-            }
-        } else if (typeof scopeFilter === 'object') {
-            parsed = scopeFilter as object;
-        } else {
-            return baseFilter;
+    ): ScopeFilterCheck<object> {
+        const check = CheckScopeJsonFilter(scopeFilter);
+        // A filter was authored but is unusable — propagate so the caller fails the index
+        // closed. Previously this returned `baseFilter` (usually `undefined`), which meant
+        // an unparseable filter silently became NO filter and the query read the whole index.
+        if (check.Status === 'unusable') return check;
+        if (check.Status === 'absent') {
+            return baseFilter ? { Status: 'usable', Value: baseFilter } : { Status: 'absent' };
         }
-
-        if (!parsed) return baseFilter;
-        if (!baseFilter) return parsed;
-        return { $and: [baseFilter, parsed] };
+        return {
+            Status: 'usable',
+            Value: baseFilter ? { $and: [baseFilter, check.Value] } : check.Value,
+        };
     }
 
     /** Build metadata filter from SearchFilters for vector DB queries */

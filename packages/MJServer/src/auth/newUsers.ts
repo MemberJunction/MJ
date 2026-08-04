@@ -2,7 +2,7 @@ import { ApplicationInfo, DatabaseProviderBase, EntitySaveOptions, LogError, Log
 import { RegisterClass } from "@memberjunction/global";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { configInfo } from "../config.js";
-import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityType, MJApplicationEntityEntityType } from "@memberjunction/core-entities";
+import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityType, MJApplicationEntityEntityType, UserInfoEngine } from "@memberjunction/core-entities";
 
 export class NewUserBase {
     public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<MJUserEntity | null> {
@@ -90,10 +90,11 @@ export class NewUserBase {
                         }
                     } else {
                         LogStatus(`No UserApplications configured, using DefaultForNewUser applications for new user ${user.Name}`);
-                        applicationsToCreate = md.Applications
-                            .filter(a => a.DefaultForNewUser)
-                            .sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
-                        LogStatus(`Found ${applicationsToCreate.length} applications with DefaultForNewUser=true`);
+                        // Bug F2: use the shared selector, which filters to Active apps flagged
+                        // DefaultForNewUser (in DefaultSequence order). This path previously omitted the
+                        // Status = 'Active' check, so an inactive default app could be provisioned here.
+                        applicationsToCreate = UserInfoEngine.GetDefaultApplicationsForNewUser(md);
+                        LogStatus(`Found ${applicationsToCreate.length} active applications with DefaultForNewUser=true`);
                     }
 
                     for (const [appIndex, application] of applicationsToCreate.entries()) {

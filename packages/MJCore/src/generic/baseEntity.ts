@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
@@ -14,7 +14,13 @@ import { z } from 'zod';
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
  * used properties from the entity field metadata.
+ *
+ * Marked `@OptionalKeyedSpecialization()`: hydration probes the ClassFactory with a
+ * `'<Entity>.<Field>'` key for EVERY field so that a per-field subclass CAN be registered, but
+ * none ever has been in practice — falling back to `EntityField` itself is the designed common
+ * case, not a resolution failure, so the factory must not warn about it.
  */
+@OptionalKeyedSpecialization()
 export class EntityField {
     /**
      * Static object containing the value ranges for various SQL number types. 
@@ -2354,10 +2360,40 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Saves the current state of the object to the database. Uses the active provider to handle the actual saving of the record.
      * If the record is new, it will be created, if it already exists, it will be updated.
-     * 
+     *
      * Debounces multiple calls so that if Save() is called again while a save is in progress,
      * the second call will simply receive the same result as the first.
-     * 
+     *
+     * ## IS-A entities: one Save() writes the whole chain
+     *
+     * For a Table-Per-Type child, this saves EVERY level — root first, then down to this entity —
+     * inside one transaction, with a single primary key shared across all of them. Set fields
+     * belonging to any ancestor directly on this object; {@link Set} routes each one to the entity
+     * that owns it. There is no depth limit.
+     *
+     * ```typescript
+     * // Webinar IS-A Meeting IS-A Product
+     * const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+     * webinar.NewRecord();
+     * webinar.RecordingURL = '...';   // Webinar's own
+     * webinar.StartTime    = start;   // Meeting's
+     * webinar.Name         = 'Q1';    // Product's — set on the SAME object
+     * await webinar.Save();           // writes Product, Meeting, Webinar
+     * ```
+     *
+     * Do NOT create the parent separately and then try to attach a child to it — `NewRecord()`
+     * starts a new chain rather than adopting an existing parent row, so that produces a second
+     * parent and a primary-key conflict.
+     *
+     * If a PARENT level fails validation, this returns false and the failure is reported on THIS
+     * entity's result as `Failed to save parent entity '<Name>': <detail>`. The commonest cause is a
+     * NOT NULL column on an ancestor table that was never set — the child looks complete and the
+     * save still fails. (Before v5.50.0 that result was recorded only on the parent object, so the
+     * caller saw `false` with a null `LatestResult` and an empty `ResultHistory`.)
+     *
+     * @see {@link ISAParent} to inspect the parent instance directly
+     * @see packages/MJCore/docs/isa-relationships.md — "Creating a Child Record"
+     *
      * @param options
      * @returns Promise<boolean>
      */
@@ -2443,6 +2479,35 @@ export abstract class BaseEntity<T = unknown> {
                 if (!parentResult) {
                     // Parent save failed — rollback if we started the transaction
                     await this.RollbackISATransaction(isISAInitiator);
+
+                    // RECORD the failure on THIS entity's ResultHistory before returning. Without
+                    // this the caller gets `false` with LatestResult === null and an empty
+                    // ResultHistory, because every result was written to the PARENT object — which
+                    // callers have no reference to (`_parentEntity` is private). The diagnosis is
+                    // then invisible: e.g. saving an IS-A child whose parent has NOT NULL columns
+                    // the child never set fails with literally no message anywhere the caller can
+                    // reach. Mirrors the transaction-group-failure and catch-block paths below.
+                    if (currentResultCount === this.ResultHistory.length) {
+                        const parentLatest = this._parentEntity.LatestResult;
+                        const parentErrors = parentLatest?.Errors ?? [];
+                        // A failed parent commonly reports its detail ONLY in Errors (validation
+                        // failures leave Message empty), so fall back to the error text rather than
+                        // handing the caller a message that says nothing.
+                        const detail =
+                            parentLatest?.Message ||
+                            parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
+                            'no error detail was reported by the parent';
+                        newResult.Success = false;
+                        newResult.Type = this.IsSaved ? 'update' : 'create';
+                        newResult.Message =
+                            `Failed to save parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
+                        // Surface the parent's field-level errors so the caller can act on them.
+                        newResult.Errors = parentErrors;
+                        newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                        newResult.EndedAt = new Date();
+                        this.RegisterResultHistoryEntry(newResult);
+                    }
+
                     return false;
                 }
             }
@@ -2536,18 +2601,30 @@ export abstract class BaseEntity<T = unknown> {
                         else {
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
-                                if (success && results) {
-                                    const transItem = results.find(r => r.Transaction.BaseEntity === this);
-                                    if (transItem) {
-                                        this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
-                                    }
-                                    else {
-                                        // should never get here, but if we do, we need to throw an error
-                                        throw new Error('Transaction group did not return a result for the entity object');
-                                    }
+                                const transItem = success && results ? results.find(r => r.Transaction.BaseEntity === this) : undefined;
+                                if (transItem) {
+                                    this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                 }
                                 else {
-                                    throw error; // push this to the catch block below and that will add to the result history
+                                    // The transaction group failed / rolled back, OR (should never happen) reported success
+                                    // without a result for this entity. Either way, RECORD the failure on ResultHistory rather
+                                    // than throwing. This handler runs ASYNCHRONOUSLY — after Save() has already returned true and
+                                    // its enclosing try/catch has unwound — so a throw here has no catch to reach: rxjs routes a
+                                    // throwing next-handler to reportUnhandledError, which re-throws it on a fresh tick, producing
+                                    // an uncaughtException that exits the whole host process (MJServer only guards
+                                    // unhandledRejection). The transaction has already rolled back and Submit() returns false; the
+                                    // caller's error handling still runs. Mirrors the Delete() transaction-group-failure path below.
+                                    const err = error ?? (success ? new Error('Transaction group did not return a result for the entity object') : undefined);
+                                    if (currentResultCount === this.ResultHistory.length) {
+                                        // no new result was recorded elsewhere, so add one here (mirrors Save()'s own catch block)
+                                        newResult.Success = false;
+                                        newResult.Type = saveSubType ?? (this.IsSaved ? 'update' : 'create');
+                                        newResult.Message = err?.message ?? (err != null ? String(err) : 'Transaction group failed');
+                                        newResult.Errors = err?.Errors || [];
+                                        newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                        newResult.EndedAt = new Date();
+                                        this.RegisterResultHistoryEntry(newResult);
+                                    }
                                 }
                             });
                             return true;
@@ -3247,6 +3324,34 @@ export abstract class BaseEntity<T = unknown> {
                             if (!parentResult) {
                                 // Parent delete failed — rollback if we started the transaction
                                 await this.RollbackISATransaction(isISAInitiator);
+
+                                // RECORD the failure on THIS entity's ResultHistory before returning —
+                                // symmetric with the parent-SAVE-failure path in _InnerSave. Without this
+                                // the caller gets `false` with LatestResult === null and an empty
+                                // ResultHistory, because every result was written to the PARENT object,
+                                // which callers have no reference to (`_parentEntity` is private). Note
+                                // THIS entity's own row was already deleted successfully above; it is the
+                                // parent-chain delete that failed and rolled the transaction back.
+                                if (currentResultCount === this.ResultHistory.length) {
+                                    const parentLatest = this._parentEntity.LatestResult;
+                                    const parentErrors = parentLatest?.Errors ?? [];
+                                    // A failed parent commonly reports its detail ONLY in Errors, so fall
+                                    // back to the error text rather than a message that says nothing.
+                                    const detail =
+                                        parentLatest?.Message ||
+                                        parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
+                                        'no error detail was reported by the parent';
+                                    newResult.Success = false;
+                                    newResult.Type = 'delete';
+                                    newResult.Message =
+                                        `Failed to delete parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
+                                    // Surface the parent's field-level errors so the caller can act on them.
+                                    newResult.Errors = parentErrors;
+                                    newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                    newResult.EndedAt = new Date();
+                                    this.RegisterResultHistoryEntry(newResult);
+                                }
+
                                 return false;
                             }
                         }
@@ -3278,14 +3383,24 @@ export abstract class BaseEntity<T = unknown> {
                                 this.NewRecord(); // will trigger a new record event here too
                             }
                             else {
-                                // transaction failed, so we need to add a new result to the history here
-                                newResult.Success = false;
-                                newResult.Type = 'delete'
-                                newResult.Message = error && error.message? error.message : error;
-                                newResult.Errors = error.Errors || [];
-                                newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
-                                newResult.EndedAt = new Date();
-                                this.RegisterResultHistoryEntry(newResult);
+                                // Transaction group failed / rolled back. RECORD the failure instead of
+                                // letting this async handler throw — exactly like the Save() subscriber above.
+                                // `error` may be UNDEFINED: the GraphQL-client transaction group signals
+                                // failure by RETURNING failed result items (no thrown error), so the old
+                                // `error.Errors` was a TypeError, which rxjs re-throws on a fresh tick as an
+                                // uncaughtException that exits the host process. Treat `error` as
+                                // possibly-absent, and guard on currentResultCount so a provider that already
+                                // recorded the failure (real providers do, before the notification fires)
+                                // isn't double-recorded.
+                                if (currentResultCount === this.ResultHistory.length) {
+                                    newResult.Success = false;
+                                    newResult.Type = 'delete';
+                                    newResult.Message = error?.message ?? (error != null ? String(error) : 'Transaction group failed');
+                                    newResult.Errors = error?.Errors || [];
+                                    newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                    newResult.EndedAt = new Date();
+                                    this.RegisterResultHistoryEntry(newResult);
+                                }
                             }
                         });
                     }

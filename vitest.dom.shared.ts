@@ -34,9 +34,7 @@ const domSetupFile = fileURLToPath(new URL('./vitest.dom.setup.ts', import.meta.
 // (extends the build config, re-includes specs). We auto-detect it relative to
 // the package's working directory; if absent, analog falls back to discovery.
 const specTsconfig = resolve(process.cwd(), 'tsconfig.spec.json');
-const angularOptions = existsSync(specTsconfig)
-  ? { jit: false, tsconfig: specTsconfig }
-  : { jit: false };
+const angularOptions = existsSync(specTsconfig) ? { jit: false, tsconfig: specTsconfig } : { jit: false };
 
 export default defineConfig({
   plugins: [
@@ -50,11 +48,30 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: [domSetupFile],
     testTimeout: 30000,
+    // Match the test timeout so setup hooks that cold-import a heavy module graph don't
+    // flake against the stingy 10s hook default (see vitest.shared.ts for the rationale).
+    hookTimeout: 30000,
     restoreMocks: true,
     passWithNoTests: true,
-    // Angular's compiled output references `globalThis` symbols; pooling in a
-    // single fork keeps the test environment stable across files.
+    // Angular's compiled output references `globalThis` symbols, so we run in a
+    // forked process (not threads). Each DOM spec file carries a full Angular AOT
+    // compile + jsdom (~1.5 GB/worker); with the default (CPU-count workers) ONE
+    // package can spawn ~nproc heavy workers, and several DOM packages running
+    // concurrently under turbo multiply that until CI's 16 GB runner OOMs
+    // (SIGKILL / exit 137). `maxWorkers: 2` bounds each package to 2 heavy
+    // workers — big suites still run ~2-wide (much faster than serial) while peak
+    // memory stays bounded. Paired with a turbo `--concurrency` cap on the CI
+    // FULL-suite path (see .github/workflows/test.yml), so the worst case
+    // (all DOM packages at once) is `concurrency × 2` workers, not `packages × nproc`.
     pool: 'forks',
+    maxWorkers: 2,
+    minWorkers: 1,
+    // In a dual-preset package the node + dom projects share a config; Vitest 4
+    // forbids sibling projects with the SAME groupOrder but DIFFERENT maxWorkers.
+    // The node preset keeps the default (unbounded) worker count, so put the dom
+    // project in its own later group — node group runs, then the memory-bounded
+    // dom group. Harmless for single-preset dom packages (one group).
+    sequence: { groupOrder: 1 },
     include: ['src/**/__tests__/**/*.test.ts', 'src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/generated/**'],
     coverage: {
@@ -62,12 +79,7 @@ export default defineConfig({
       // List EVERY source file, not just the ones a test imported — so untested
       // components surface as 0% instead of silently vanishing from the report.
       include: ['src/**/*.ts'],
-      exclude: [
-        'src/**/*.test.ts',
-        'src/**/index.ts',
-        'src/**/public-api.ts',
-        'src/**/*.module.ts',
-      ],
+      exclude: ['src/**/*.test.ts', 'src/**/index.ts', 'src/**/public-api.ts', 'src/**/*.module.ts'],
       reporter: ['text', 'html'],
     },
   },

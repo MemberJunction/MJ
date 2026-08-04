@@ -615,6 +615,41 @@ export class SQLServerDialect extends SQLDialect {
         };
     }
 
+    /**
+     * SQL Server FK-graph query for cascade planning — reads the `sys.foreign_keys` catalog.
+     * Returns one row per FK column with `childNullable` (from `sys.columns.is_nullable`) and
+     * `colCount` (columns in the constraint, for composite exclusion). Both parent + child are
+     * filtered to `schema`. Schema is embedded as a literal (no bind params) so it runs via
+     * `ExecuteSQL(sql)`.
+     */
+    ForeignKeyGraphSQL(schema: string): string {
+        const s = this.QuoteStringLiteral(schema);
+        // Disabled FKs (fk.is_disabled = 1) are intentionally NOT filtered: a disabled FK can't block
+        // the Entity delete, so including it only yields an extra, conservative-safe child clear.
+        // ORDER BY fk.name makes edge order — and therefore statement + dry-run order — deterministic.
+        return (
+            'SELECT rt.name AS parentTable, rc.name AS parentRefCol, pt.name AS childTable, ' +
+            'pc.name AS childCol, pc.is_nullable AS childNullable, fk.name AS fkName, ' +
+            '(SELECT COUNT(*) FROM sys.foreign_key_columns x WHERE x.constraint_object_id = fk.object_id) AS colCount ' +
+            'FROM sys.foreign_keys fk ' +
+            'JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id ' +
+            'JOIN sys.objects rt ON rt.object_id = fk.referenced_object_id ' +
+            'JOIN sys.schemas rs ON rs.schema_id = rt.schema_id ' +
+            'JOIN sys.columns rc ON rc.object_id = fk.referenced_object_id AND rc.column_id = fkc.referenced_column_id ' +
+            'JOIN sys.objects pt ON pt.object_id = fk.parent_object_id ' +
+            'JOIN sys.schemas ps ON ps.schema_id = pt.schema_id ' +
+            'JOIN sys.columns pc ON pc.object_id = fk.parent_object_id AND pc.column_id = fkc.parent_column_id ' +
+            `WHERE rs.name = ${s} AND ps.name = ${s} ` +
+            'ORDER BY fk.name'
+        );
+    }
+
+    AtomicBatchScript(statements: string[]): string {
+        if (!statements || !statements.length) return '';
+        const body = statements.join(';\n');
+        return `SET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\nSET XACT_ABORT ON;\nBEGIN TRANSACTION;\n${body};\nCOMMIT TRANSACTION;`;
+    }
+
     // ─── IIF ─────────────────────────────────────────────────────────
 
     IIF(condition: string, trueVal: string, falseVal: string): string {

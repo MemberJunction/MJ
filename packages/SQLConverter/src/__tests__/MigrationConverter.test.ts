@@ -19,6 +19,76 @@ const passthrough: TSQLToPGTranspiler = {
   transpile: async (tsql) => ({ sql: tsql.split(/\nGO\n/), unhandled: [] }),
 };
 
+describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
+  it('flags suspiciousEmptyOutput when substantive kept T-SQL vanishes (no output, no gaps)', async () => {
+    // A "vanishing" transpiler simulates the RC1 failure mode at the conversion layer: the
+    // classifier fed real DDL to the dialect, but nothing came out and nothing was reported.
+    // The dialect's own EMPTY-EMISSION guard should prevent this, but convertMigration must
+    // catch it as belt-and-suspenders — never a clean result over content that disappeared.
+    const vanishing: TSQLToPGTranspiler = { transpile: async () => ({ sql: [], unhandled: [] }) };
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: vanishing });
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
+    // …and it is surfaced as a gap so the CLI fails the run rather than shipping an empty file.
+    expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+  });
+
+  it('does NOT flag a normal conversion; reports source/emitted counts', async () => {
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough });
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
+    expect(r.reconciliation.sourceStatements).toBeGreaterThan(0);
+    expect(r.reconciliation.emittedStatements).toBeGreaterThan(0);
+  });
+
+  it('does NOT flag a legitimate reseed/regen marker (classifier found nothing translatable)', async () => {
+    // A pure mj-sync metadata file legitimately produces an empty marker — trust the
+    // classifier, do not second-guess it at the reconciliation layer.
+    const sql = [
+      '-- MetadataSync push operation',
+      "DECLARE @Name_da319a9d NVARCHAR(100) = N'X';",
+      "INSERT INTO [__mj].[AIModel] ([ID],[Name]) VALUES ('aaaa', @Name_da319a9d);",
+    ].join('\n');
+    const r = await convertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
+    expect(r.status).toBe('reseed-or-regen-only');
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
+    expect(r.reconciliation.emittedStatements).toBe(0);
+  });
+
+  it('does NOT flag suspiciousEmptyOutput when the dialect intentionally DROPPED the content', async () => {
+    // An all-dropped file (e.g. kept T-SQL is only an actionless ALTER that PG discards) emits
+    // nothing and reports nothing, but the content did not VANISH — it was accounted as dropped.
+    // The guard must look at `dropped` too, or it false-positives on a legitimate empty output.
+    const allDropped: TSQLToPGTranspiler = {
+      transpile: async () => ({ sql: [], unhandled: [], dropped: [{ kind: 'ALTER-ACTIONLESS', snippet: 'ALTER TABLE x' }] }),
+    };
+    const sql = 'ALTER TABLE [__mj].[Widget] ADD CONSTRAINT CK CHECK (ISJSON([X]) = 1);';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: allDropped });
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
+    expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(false);
+  });
+
+  it('flags a hand-authored object silently dropped to a clean marker (issue #3252 Phase 4)', async () => {
+    // A hand-authored VIEW whose name does NOT match a CodeGen convention (so `mj codegen` will
+    // NOT regenerate it) can be routed to an empty marker by the classifier. Returning a clean
+    // reseed/regen marker there is exactly the RC1 silent-drop class — the marker path must
+    // reconcile source statements against what was kept/reported before trusting the emptiness.
+    const sql = 'CREATE VIEW [__mj].[CustomerSummary] AS SELECT [ID], [Total] FROM [__mj].[Orders];';
+    const r = await convertMigration(sql, 'V_CustomerSummary.sql', { transpiler: passthrough });
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
+    expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+  });
+
+  it('reflects a dialect ACCOUNTING-LEAK in reconciliation', async () => {
+    const leaky: TSQLToPGTranspiler = {
+      transpile: async (t) => ({ sql: [t], unhandled: [{ kind: 'ACCOUNTING-LEAK', snippet: 'parsed=3 but …' }] }),
+    };
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: leaky });
+    expect(r.reconciliation.accountingLeak).toBe(true);
+  });
+});
+
 describe('convertMigration', () => {
   it('transpiles regular DDL and drops the CodeGen block', async () => {
     const sql = [
@@ -231,6 +301,78 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
     const kept = extractKeptTSQL(sql, 'B202605291452__v5.38.x__Baseline.sql');
     expect(kept.tsql).toContain('INSERT INTO [__mj].[Entity]');
     expect(kept.tsql).not.toContain('vwTs');
+  });
+
+  it('drops auto-generated FK indexes (IDX_AUTO_MJ_FKEY_*) — regenerated collision-safe by codegen', () => {
+    // Two long SS FK-index names truncate to the same 63-char PG identifier → collision. They are
+    // CodeGen output, so drop them here and let native PG codegen re-emit (truncation + hash).
+    const sql = snapshot(
+      'CREATE TABLE [__mj].[T] ([ID] INT);',
+      'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
+      'CREATE INDEX [IDX_AUTO_MJ_FKEY_CommunicationProviderMessageType_CommunicationBaseMessageTypeID] ON [__mj].[CommunicationProviderMessageType] ([CommunicationBaseMessageTypeID]);',
+      'CREATE INDEX [IDX_Custom_HandAuthored] ON [__mj].[T] ([ID]);', // hand-authored → kept
+    );
+    const kept = extractKeptTSQL(sql, 'B202605291452__v5.38.x__Baseline.sql');
+    expect(kept.tsql).not.toContain('IDX_AUTO_MJ_FKEY_');
+    expect(kept.tsql).toContain('IDX_Custom_HandAuthored');
+    expect(kept.droppedObjects.some((o) => o.includes('auto FK'))).toBe(true);
+  });
+});
+
+describe('extractKeptTSQL — hand-written trigger not misclassified (issue #3252 RC2)', () => {
+  // The bare `trg` alternative in CODEGEN_NAME classified EVERY trigger as a CodeGen object,
+  // flipping this hand-written-trigger file into statement-mode where the trigger was DROPPED
+  // and the file reported a clean 'converted' with empty T-SQL. It must be needs-hand-authoring.
+  const handTrigger = [
+    '-- Fix: concurrent same-conversation inserts deadlock (hand-authored PG port required)',
+    'GO',
+    'CREATE OR ALTER TRIGGER [${flyway:defaultSchema}].[trgConversationDetail_AssignSequence]',
+    'ON [${flyway:defaultSchema}].[ConversationDetail]',
+    'AFTER INSERT AS',
+    'BEGIN',
+    '    SET NOCOUNT ON;',
+    '    UPDATE [${flyway:defaultSchema}].[ConversationDetail] SET [Sequence] = 1;',
+    'END',
+    'GO',
+  ].join('\n');
+
+  it('routes a hand trigger to needs-hand-authoring, never silently dropped', () => {
+    const kept = extractKeptTSQL(handTrigger, 'V202607202110__v5.49.x__Fix_ConversationDetail_Sequence_Deadlock.sql');
+    expect(kept.status).toBe('needs-hand-authoring');
+    // The file is flagged as carrying a hand-written routine (banner-mode evidence is the
+    // matched CREATE … TRIGGER keyword), and the trigger body survives into the kept T-SQL
+    // so a human can author the PG port — NOT dropped with an empty 'converted' stub.
+    expect(kept.handProcedural.length).toBeGreaterThan(0);
+    expect(kept.handProcedural.some((h) => /TRIGGER/i.test(h))).toBe(true);
+    expect(kept.tsql).toContain('trgConversationDetail_AssignSequence');
+  });
+
+  it('still classifies a CodeGen trgUpdate* trigger as a regenerated codegen object', () => {
+    // A genuine snapshot (has a vw* codegen object) with a trgUpdate trigger stays in
+    // statement-mode and the trgUpdate trigger is dropped (regenerated by mj codegen).
+    const snapshot = [
+      'CREATE TABLE [__mj].[T] ([ID] INT);',
+      'CREATE VIEW [__mj].[vwT] AS SELECT * FROM [__mj].[T];',
+      'CREATE TRIGGER [__mj].[trgUpdateT] ON [__mj].[T] AFTER UPDATE AS BEGIN SET NOCOUNT ON; END;',
+    ].join('\nGO\n');
+    const kept = extractKeptTSQL(snapshot, 'B202605291452__v5.38.x__Baseline.sql');
+    expect(kept.droppedObjects.some((o) => o.includes('trgUpdateT'))).toBe(true);
+    expect(kept.tsql).not.toContain('trgUpdateT');
+  });
+
+  it('a lone codegen trigger (no vw/sp) does NOT flip an unbannered file into statement-mode', () => {
+    // Defense-in-depth (2b): only a vw*/sp* codegen-object marks a genuine squashed snapshot.
+    // A file whose only "codegen object" is a trigger (or index) must stay banner-mode, where
+    // its hand ALTER is transpiled and the trigger is flagged — NOT statement-mode, where a
+    // lone false-positive could drop OTHER batches. Without 2b this file flips to statement
+    // mode (the trigger is a codegen-object) and reports a clean 'converted'.
+    const sql = [
+      'ALTER TABLE [__mj].[Foo] ADD [Bar] INT NULL;',
+      'CREATE TRIGGER [__mj].[trgUpdateFoo] ON [__mj].[Foo] AFTER UPDATE AS BEGIN SET NOCOUNT ON; END;',
+    ].join('\nGO\n');
+    const kept = extractKeptTSQL(sql, 'V_Some_Hand_File.sql');
+    expect(kept.status).toBe('needs-hand-authoring');
+    expect(kept.tsql).toContain('[Bar]'); // the hand ALTER survives, not dropped by a bad flip
   });
 });
 

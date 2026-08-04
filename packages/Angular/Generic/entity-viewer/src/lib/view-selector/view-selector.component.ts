@@ -127,6 +127,8 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   public SearchText: string = '';
 
   private destroy$ = new Subject<void>();
+  /** Guards the one-time reactive subscription to UserViewEngine set up in {@link ensureEngineSubscription}. */
+  private subscribedToEngine = false;
   private get metadata() { return this.ProviderToUse; }
 
   constructor(private cdr: ChangeDetectorRef) { super(); }
@@ -134,7 +136,7 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['Entity']) {
       if (this.Entity) {
-        this.LoadViews();
+        void this.LoadViews();
       } else {
         this.MyViews = [];
         this.SharedViews = [];
@@ -154,7 +156,14 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   }
 
   /**
-   * Load views for the current entity
+   * Ensure the {@link UserViewEngine} cache is loaded, establish a one-time reactive
+   * subscription to it, and (re)derive the view lists for the current entity.
+   *
+   * The subscription is what keeps this dropdown correct: BaseEntity `.Save()`/`.Delete()`
+   * on a User View auto-invalidates the engine cache (an in-place array mutation), which
+   * emits on `ObserveProperty('_views')`. So when the workspace creates, updates, duplicates,
+   * or deletes a view, the list here re-derives automatically — no manual reload required,
+   * and no stale-cache race between a fire-and-forget reload and the async cache update.
    */
   public async LoadViews(): Promise<void> {
     if (!this.Entity) {
@@ -165,12 +174,51 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
     this.cdr.detectChanges();
 
     try {
-      const userId = this.metadata.CurrentUser?.ID;
-
-      // Use UserViewEngine cache instead of a direct RunView to avoid redundant DB calls.
-      // The engine is initialized once and caches all views; GetAccessibleViewsForEntity()
-      // already filters by owned + shared and checks UserCanView.
+      // Load once; subsequent calls are cheap no-ops. We never force a refresh here — the
+      // reactive subscription below keeps the lists fresh once data has changed.
       await UserViewEngine.Instance.Config(false);
+    } catch (error) {
+      console.error('Failed to load views:', error);
+    } finally {
+      this.IsLoading = false;
+    }
+
+    this.ensureEngineSubscription();
+    this.recomputeViews();
+  }
+
+  /**
+   * Subscribe (once for the component's lifetime) to the engine's cached `_views` array.
+   * The BehaviorSubject replays the current array on subscribe and re-emits on every
+   * subsequent create/update/delete/refresh, so {@link recomputeViews} runs whenever the
+   * underlying data actually changes.
+   */
+  private ensureEngineSubscription(): void {
+    if (this.subscribedToEngine) {
+      return;
+    }
+    this.subscribedToEngine = true;
+    UserViewEngine.Instance
+      .ObserveProperty<MJUserViewEntityExtended>('_views')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.recomputeViews());
+  }
+
+  /**
+   * Re-derive the owned/shared view lists for the current entity from the engine cache.
+   * `GetAccessibleViewsForEntity()` already filters by owned + shared and checks UserCanView.
+   */
+  private recomputeViews(): void {
+    if (!this.Entity) {
+      this.MyViews = [];
+      this.SharedViews = [];
+      this.SelectedView = null;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    try {
+      const userId = this.metadata.CurrentUser?.ID;
       const accessibleViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(this.Entity.ID);
 
       // Separate into owned and shared
@@ -185,9 +233,8 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
       // Update selected view reference
       this.updateSelectedViewFromId();
     } catch (error) {
-      console.error('Failed to load views:', error);
+      console.error('Failed to derive views:', error);
     } finally {
-      this.IsLoading = false;
       this.cdr.detectChanges();
     }
   }

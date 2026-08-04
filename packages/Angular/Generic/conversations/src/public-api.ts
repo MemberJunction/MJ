@@ -23,6 +23,9 @@ export * from './lib/services/export.service';
 export * from './lib/services/notification.service';
 export * from './lib/services/toast.service';
 export * from './lib/services/mention-parser.service';
+// AI-aware mention suggestion engine (BaseSingleton — use MentionAutocompleteService.Instance).
+// NOTE: the generic MentionSuggestion TYPE lives in @memberjunction/ng-composer — import it
+// from there directly (no re-exports between packages).
 export * from './lib/services/mention-autocomplete.service';
 export * from './lib/services/collection-permission.service';
 export * from './lib/services/artifact-permission.service';
@@ -42,16 +45,26 @@ export * from './lib/services/delegation-result-parser';
 export * from './lib/components/workspace/conversation-workspace.component';
 export * from './lib/components/navigation/conversation-navigation.component';
 export * from './lib/components/sidebar/conversation-sidebar.component';
+export * from './lib/components/sidebar/routines-section.component';
 export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
 export * from './lib/components/conversation/conversation-empty-state.component';
 export * from './lib/components/message/message-item.component';
 export * from './lib/components/message/message-list.component';
 export * from './lib/components/message/message-input.component';
-export * from './lib/components/message/message-input-box.component';
+// AI-aware composer wrapper (mj-ai-composer): mj-message-input-box + the three AI trigger
+// plugins built in, proxying the input box's full inputs/outputs/methods surface.
+export * from './lib/components/composer/ai-composer.component';
+// Composer trigger-provider plugins ('@' / '#' / '/') — ClassFactory-registered; also
+// directly instantiable for explicit provider lists.
+export * from './lib/composer-plugins/base-conversation-mention.provider';
+export * from './lib/composer-plugins/agent-mention.provider';
+export * from './lib/composer-plugins/record-mention.provider';
+export * from './lib/composer-plugins/skill-command.provider';
+export * from './lib/composer-plugins/load-composer-plugins';
+// NOTE: MessageInputBoxComponent, MentionEditorComponent (+ PendingAttachment), and
+// MentionDropdownComponent live in @memberjunction/ng-composer — import from there directly.
 export * from './lib/components/message/conversation-message-rating.component';
-export * from './lib/components/mention/mention-dropdown.component';
-export * from './lib/components/mention/mention-editor.component';
 export * from './lib/components/collection/collection-tree.component';
 export * from './lib/components/collection/collection-view.component';
 export * from './lib/components/collection/collections-full-view.component';
@@ -73,6 +86,29 @@ export * from './lib/components/toast/toast.component';
 export * from './lib/components/global-tasks/global-tasks-panel.component';
 export * from './lib/components/attachment/image-viewer.component';
 export * from './lib/components/overlay/chat-overlay.component';
+
+// Components declared AND exported by ConversationsModule but previously missing
+// from public-api. They are used in the templates of exported components (e.g.
+// mj-conversation-chat-area), so a consumer app compiling in Angular's
+// local-compilation / HMR mode fails to build (NG3004: "Unable to import
+// component … not exported from @memberjunction/ng-conversations") unless every
+// module-exported component is importable from the package entry point.
+export * from './lib/components/collection/artifact-create-modal.component';
+export * from './lib/components/collection/collection-form-modal.component';
+export * from './lib/components/conversation/conversation-agent-picker.component';
+export * from './lib/components/conversation/conversation-mode-picker.component';
+export * from './lib/components/conversation/pinned-messages-panel.component';
+export * from './lib/components/dialogs/input-dialog.component';
+export * from './lib/components/dialogs/rating-dialog.component';
+export * from './lib/components/export/export-modal.component';
+export * from './lib/components/library/library-full-view.component';
+export * from './lib/components/members/members-modal.component';
+export * from './lib/components/message/actionable-commands.component';
+export * from './lib/components/search/search-panel.component';
+export * from './lib/components/shared/user-picker.component';
+export * from './lib/components/tasks/tasks-dropdown.component';
+export * from './lib/components/thread/thread-panel.component';
+export * from './lib/directives/search-shortcut.directive';
 
 // PR 2c — Widget extension surface (slots, events, design tokens)
 export * from './lib/services/conversations-runtime-bootstrap.service';
@@ -127,3 +163,4 @@ export * from './lib/components/realtime/media/media-channel-tools';
 export * from './lib/components/realtime/media/realtime-media-surface.component';
 // Time-aligned Evidence Playback component (recorded session audio synced to the transcript).
 export * from './lib/components/realtime/evidence-playback/realtime-evidence-playback.component';
+export * from './lib/services/composer-draft-store';

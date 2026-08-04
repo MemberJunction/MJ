@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MJ Mobile · Data Explorer</title>
+<meta name="viewport" content="width=393, initial-scale=1">
+<style>
+  :root {
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --surface-2: #f6f5ef;
+    --ink: #0d0d10;
+    --ink-2: #4a4a52;
+    --ink-3: #8a8a93;
+    --line: rgba(13,13,16,0.06);
+    --brand: #264FAF;
+    --brand-soft: rgba(38,79,175,0.08);
+    --positive: #1a8a5f;
+    --positive-soft: rgba(26,138,95,0.10);
+    --warn: #b87a1f;
+    --warn-soft: rgba(184,122,31,0.12);
+    --shadow-lg: 0 24px 60px rgba(13,13,16,0.10);
+    --shadow-card: 0 1px 2px rgba(13,13,16,0.04), 0 8px 20px rgba(13,13,16,0.06);
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif; background: #e8e6df; color: var(--ink); min-height: 100vh; }
+  .device-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 32px 16px; }
+  .device { width: 393px; height: 852px; background: var(--bg); border-radius: 54px; box-shadow: var(--shadow-lg), 0 0 0 12px #1a1a1f, 0 0 0 13px #2a2a30; position: relative; overflow: hidden; }
+  .dynamic-island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 124px; height: 36px; background: #000; border-radius: 20px; z-index: 10; }
+  .home-indicator { position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; background: #0d0d10; border-radius: 3px; opacity: 0.85; }
+  .statusbar { height: 54px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+  .nav-top { height: 56px; display: flex; align-items: center; gap: 6px; padding: 0 14px; }
+  .icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 11px; color: var(--ink); }
+
+  .hero-block { padding: 8px 22px 6px; }
+  .hero-block h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.025em; }
+  .hero-block p { margin: 6px 0 0; color: var(--ink-3); font-size: 14px; line-height: 1.5; }
+
+  .search {
+    margin: 16px 18px 4px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    height: 46px;
+    border-radius: 14px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 14px;
+    color: var(--ink-3);
+    font-size: 14.5px;
+    box-shadow: var(--shadow-card);
+  }
+
+  .tile-grid {
+    padding: 14px 14px 8px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 16px 14px 14px;
+    box-shadow: var(--shadow-card);
+    min-height: 130px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .tile.wide { grid-column: span 2; }
+  .tile-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .tile-icon.entities { background: var(--brand-soft); color: var(--brand); }
+  .tile-icon.queries { background: var(--positive-soft); color: var(--positive); }
+  .tile-icon.dashboards { background: var(--warn-soft); color: var(--warn); }
+  .tile-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin-top: 14px; }
+  .tile-sub { font-size: 12px; color: var(--ink-3); margin-top: 3px; }
+  .tile-stat {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-top: 10px;
+    font-size: 11.5px; font-weight: 600;
+    color: var(--ink-2);
+  }
+
+  .section-label { padding: 24px 22px 8px; font-size: 11px; font-weight: 700; color: var(--ink-3); letter-spacing: 0.12em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+  .recents { padding: 0 14px; display: grid; gap: 6px; }
+  .recent-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+  .recent-icon {
+    width: 30px; height: 30px; border-radius: 8px;
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .recent-icon.entities { background: var(--brand-soft); color: var(--brand); }
+  .recent-icon.queries { background: var(--positive-soft); color: var(--positive); }
+  .recent-icon.dashboards { background: var(--warn-soft); color: var(--warn); }
+  .recent-body { flex: 1; min-width: 0; }
+  .recent-title { font-size: 14px; font-weight: 600; }
+  .recent-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 1px; }
+  .recent-arrow { color: var(--ink-3); }
+</style>
+</head>
+<body>
+<div class="device-wrap">
+  <div class="device">
+    <div class="dynamic-island"></div>
+    <div class="statusbar">
+      <div>9:41</div>
+      <div style="display:inline-flex; gap:6px; align-items:center;">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="6" width="3" height="6" rx="1"/><rect x="5" y="3" width="3" height="9" rx="1"/><rect x="10" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="26" height="12" viewBox="0 0 26 12" fill="currentColor"><rect x="0" y="1" width="22" height="10" rx="2.5" fill="none" stroke="currentColor"/><rect x="2" y="3" width="18" height="6" rx="1"/><rect x="23" y="4" width="2" height="4" rx="0.5"/></svg>
+      </div>
+    </div>
+    <div class="nav-top">
+      <button class="icon-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <div style="flex:1"></div>
+    </div>
+
+    <div class="hero-block">
+      <h1>Data Explorer</h1>
+      <p>Browse entities, run queries, view dashboards.</p>
+    </div>
+
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+      Search entities, queries, dashboards
+    </div>
+
+    <div class="tile-grid">
+      <div class="tile">
+        <div class="tile-icon entities">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        </div>
+        <div>
+          <div class="tile-title">Entities</div>
+          <div class="tile-sub">Browse records by type</div>
+          <div class="tile-stat">412 entities</div>
+        </div>
+      </div>
+      <div class="tile">
+        <div class="tile-icon queries">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6a9 3 0 0018 0V5"/><path d="M3 11v6a9 3 0 0018 0v-6"/></svg>
+        </div>
+        <div>
+          <div class="tile-title">Queries</div>
+          <div class="tile-sub">Run saved queries</div>
+          <div class="tile-stat">38 available</div>
+        </div>
+      </div>
+      <div class="tile wide">
+        <div class="tile-icon dashboards">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+        </div>
+        <div>
+          <div class="tile-title">Dashboards</div>
+          <div class="tile-sub">Note: most dashboards are built for desktop and may not render optimally on mobile.</div>
+          <div class="tile-stat">12 shared with you</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">Recently viewed</div>
+    <div class="recents">
+      <div class="recent-row">
+        <div class="recent-icon entities">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        </div>
+        <div class="recent-body">
+          <div class="recent-title">Opportunities</div>
+          <div class="recent-meta">Yesterday · 247 records</div>
+        </div>
+        <span class="recent-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+      <div class="recent-row">
+        <div class="recent-icon queries">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6a9 3 0 0018 0V5"/></svg>
+        </div>
+        <div class="recent-body">
+          <div class="recent-title">High-value at-risk renewals</div>
+          <div class="recent-meta">2d ago · Last run 9:08 AM</div>
+        </div>
+        <span class="recent-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+      <div class="recent-row">
+        <div class="recent-icon dashboards">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+        </div>
+        <div class="recent-body">
+          <div class="recent-title">Sales pulse</div>
+          <div class="recent-meta">3d ago · 6 parts</div>
+        </div>
+        <span class="recent-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+      </div>
+    </div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+</body>
+</html>

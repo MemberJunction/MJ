@@ -324,6 +324,9 @@ export class GraphQLAIClient {
                 validateAck: (ack) => ack?.success === true,
                 isCompletionEvent: (parsed) => this.isAgentCompletionEvent(parsed),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
+                // Headless clients (no PushStatusUpdates channel) run synchronously; the resolver
+                // returns the full result inline in the mutation ack rather than over PubSub.
+                extractSyncResult: (ack) => this.extractAgentResultFromAck(ack),
                 onMessage: (parsed) => {
                     this.captureAgentRunId(parsed, runIdRef);
                     if (params.onProgress) this.forwardAgentProgress(parsed, params.onProgress);
@@ -356,7 +359,9 @@ export class GraphQLAIClient {
                 $createNotification: Boolean,
                 $sourceArtifactId: String,
                 $sourceArtifactVersionId: String,
-                $fireAndForget: Boolean
+                $fireAndForget: Boolean,
+                $planMode: Boolean,
+                $requestedSkillIDs: [String!]
             ) {
                 RunAIAgent(
                     agentId: $agentId,
@@ -373,7 +378,9 @@ export class GraphQLAIClient {
                     createNotification: $createNotification,
                     sourceArtifactId: $sourceArtifactId,
                     sourceArtifactVersionId: $sourceArtifactVersionId,
-                    fireAndForget: $fireAndForget
+                    fireAndForget: $fireAndForget,
+                    planMode: $planMode,
+                    requestedSkillIDs: $requestedSkillIDs
                 ) {
                     success
                     errorMessage
@@ -425,6 +432,9 @@ export class GraphQLAIClient {
         // Add source artifact tracking for versioning (GraphQL resolver-level concern)
         if (sourceArtifactId !== undefined) variables.sourceArtifactId = sourceArtifactId;
         if (sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = sourceArtifactVersionId;
+        // Per-request Plan Mode + user-requested skills (symmetric with the conversation-detail path).
+        if (params.planMode !== undefined) variables.planMode = params.planMode;
+        if (params.requestedSkillIDs !== undefined) variables.requestedSkillIDs = params.requestedSkillIDs;
 
         return variables;
     }
@@ -514,6 +524,9 @@ export class GraphQLAIClient {
                 isCompletionEvent: (parsed) =>
                     this.isConversationDetailCompletionEvent(parsed, params.conversationDetailId),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
+                // Headless clients (no PushStatusUpdates channel) run synchronously; the resolver
+                // returns the full result inline in the mutation ack rather than over PubSub.
+                extractSyncResult: (ack) => this.extractAgentResultFromAck(ack),
                 onMessage: params.onProgress
                     ? (parsed) => this.forwardConversationDetailProgress(parsed, params.onProgress!)
                     : undefined,
@@ -543,6 +556,8 @@ export class GraphQLAIClient {
                 $lastRunId: String,
                 $autoPopulateLastRunPayload: Boolean,
                 $configurationId: String,
+                $planMode: Boolean,
+                $requestedSkillIDs: [String!],
                 $createArtifacts: Boolean,
                 $createNotification: Boolean,
                 $sourceArtifactId: String,
@@ -559,6 +574,8 @@ export class GraphQLAIClient {
                     lastRunId: $lastRunId,
                     autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
                     configurationId: $configurationId,
+                    planMode: $planMode,
+                    requestedSkillIDs: $requestedSkillIDs,
                     createArtifacts: $createArtifacts,
                     createNotification: $createNotification,
                     sourceArtifactId: $sourceArtifactId,
@@ -597,6 +614,8 @@ export class GraphQLAIClient {
         if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
         if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
         if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
+        if (params.planMode !== undefined) variables.planMode = params.planMode;
+        if (params.requestedSkillIDs !== undefined) variables.requestedSkillIDs = params.requestedSkillIDs;
         if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
         if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
         if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
@@ -714,6 +733,32 @@ export class GraphQLAIClient {
         return {
             success: data.success as boolean,
             agentRun: undefined,
+        } as ExecuteAgentResult;
+    }
+
+    /**
+     * Extract an ExecuteAgentResult from a SYNCHRONOUS mutation ack.
+     *
+     * Used on the headless-client path: when the data provider has no PushStatusUpdates
+     * channel, FireAndForgetHelper runs the mutation with `fireAndForget: false`, so the
+     * resolver awaits the run and returns the full sanitized result inline in the mutation's
+     * own return payload (`{ success, errorMessage, executionTimeMs, result }`). The `result`
+     * field is the same JSON the completion event carries, so the parsed shape — including
+     * `agentRun` (with its ID and settled Status) — matches the PubSub-completion path.
+     */
+    private extractAgentResultFromAck(ack: Record<string, unknown>): ExecuteAgentResult {
+        const resultJson = ack.result as string | undefined;
+        if (resultJson) {
+            const parsed = SafeJSONParse(resultJson) as ExecuteAgentResult | null;
+            if (parsed) {
+                return parsed;
+            }
+        }
+        // Fallback: the ack carried no parseable result payload — surface success + any error message.
+        return {
+            success: ack.success as boolean,
+            agentRun: undefined,
+            errorMessage: ack.errorMessage as string | undefined,
         } as ExecuteAgentResult;
     }
 
@@ -1748,6 +1793,17 @@ export interface RunAIAgentFromConversationDetailParams {
      * Configuration ID to use
      */
     configurationId?: string;
+
+    /**
+     * Whether Plan Mode is requested for this run (requires the agent's SupportsPlanMode capability)
+     */
+    planMode?: boolean;
+
+    /**
+     * Skill IDs the user requested via `/skill-name` mentions. The server intersects these with the
+     * agent's accepted skills AND the user's Run permission before any are activated.
+     */
+    requestedSkillIDs?: string[];
 
     /**
      * Whether to create artifacts from the agent's payload

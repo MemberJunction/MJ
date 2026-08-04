@@ -129,7 +129,7 @@ export class TreeComponent implements OnInit, OnDestroy {
         return this._selectedIDs;
     }
 
-    /** Initially expanded node IDs (null = auto-expand first level) */
+    /** Initially expanded node IDs (null = defer to DefaultExpansion) */
     private _expandedIDs: string[] | null = null;
     @Input()
     set ExpandedIDs(value: string[] | null) {
@@ -138,6 +138,14 @@ export class TreeComponent implements OnInit, OnDestroy {
     get ExpandedIDs(): string[] | null {
         return this._expandedIDs;
     }
+
+    /**
+     * Initial expansion applied when ExpandedIDs is null:
+     * 'first-level' (default) expands only the root branches, 'all' expands every
+     * branch (small pickers where the whole catalog should be visible), 'none'
+     * starts fully collapsed.
+     */
+    @Input() DefaultExpansion: 'first-level' | 'all' | 'none' = 'first-level';
 
     /** Show expand/collapse all buttons */
     private _showExpandCollapseAll: boolean = false;
@@ -1399,11 +1407,20 @@ export class TreeComponent implements OnInit, OnDestroy {
      */
     private applyInitialExpansion(): void {
         if (this._expandedIDs === null) {
-            // Auto-expand first level
-            for (const node of this.Nodes) {
-                if (node.Type === 'branch') {
-                    node.Expanded = true;
-                }
+            switch (this.DefaultExpansion) {
+                case 'all':
+                    this.expandAllRecursive(this.Nodes);
+                    break;
+                case 'none':
+                    break;
+                default:
+                    // Auto-expand first level
+                    for (const node of this.Nodes) {
+                        if (node.Type === 'branch') {
+                            node.Expanded = true;
+                        }
+                    }
+                    break;
             }
         } else {
             // Expand specified nodes

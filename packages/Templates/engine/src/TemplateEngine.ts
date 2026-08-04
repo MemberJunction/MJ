@@ -89,10 +89,8 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         this._oneTimeLoadingComplete = true;
 
         this._templateLoader = new TemplateEntityLoader();
-        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
-
-        // Add custom filters
-        this.addCustomFilters();
+        this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
+        this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
 
         // get all of the extensions that are registered and register them with nunjucks
         const extensions = MJGlobal.Instance.ClassFactory.GetAllRegistrations(TemplateExtensionBase);
@@ -122,22 +120,40 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
 
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();
-        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
-        
-        // Add custom filters
-        this.addCustomFilters();
+        this._nunjucksEnv = this.createConfiguredNunjucksEnv(true);
+        this._nunjucksEnvNoAutoescape = undefined; // rebound lazily against the fresh loader on next no-autoescape render
     }
 
     private _nunjucksEnv: nunjucks.Environment;
+    /**
+     * Lazily-created sibling of {@link _nunjucksEnv} with `autoescape: false`, used only by
+     * {@link RenderTemplateSimple} when a caller opts out of escaping (e.g. plain-text email subject lines,
+     * where `Acme & Co` must not become `Acme &amp; Co`). Mirrors the main env's custom filters but — like
+     * {@link SetupNunjucks} — intentionally omits the registered extensions; this env serves ad-hoc string
+     * renders, not the stored-Template extension surface. Reset to `undefined` whenever the loader is rebuilt.
+     */
+    private _nunjucksEnvNoAutoescape?: nunjucks.Environment;
     private _templateLoader: TemplateEntityLoader;
 
     /**
-     * Adds custom filters to the Nunjucks environment
+     * Builds a Nunjucks environment bound to the shared template loader with our custom filters applied.
+     * Single source of truth for env construction so the autoescape and no-autoescape environments never drift.
+     * @param autoescape whether the environment HTML-escapes rendered output
      */
-    private addCustomFilters(): void {
+    private createConfiguredNunjucksEnv(autoescape: boolean): nunjucks.Environment {
+        const env = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape, dev: true });
+        this.addCustomFilters(env);
+        return env;
+    }
+
+    /**
+     * Adds custom filters to the given Nunjucks environment
+     * @param env the environment to register the filters on
+     */
+    private addCustomFilters(env: nunjucks.Environment): void {
         // Add a json filter for converting objects to JSON strings
         // This is similar to the built-in 'dump' filter but with more control
-        this._nunjucksEnv.addFilter('json', (obj: any, indent: number = 2) => {
+        env.addFilter('json', (obj: any, indent: number = 2) => {
             try {
                 return JSON.stringify(obj, null, indent);
             } catch (error) {
@@ -146,7 +162,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         });
 
         // Add a jsoninline filter for compact JSON output
-        this._nunjucksEnv.addFilter('jsoninline', (obj: any) => {
+        env.addFilter('jsoninline', (obj: any) => {
             try {
                 return JSON.stringify(obj);
             } catch (error) {
@@ -155,7 +171,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
         });
 
         // Add a jsonparse filter for parsing JSON strings
-        this._nunjucksEnv.addFilter('jsonparse', (str: string) => {
+        env.addFilter('jsonparse', (str: string) => {
             try {
                 return JSON.parse(str);
             } catch (error) {
@@ -251,13 +267,16 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * Simple rendering utilty method. Use this to render any valid Nunjucks Template within the Nunjucks environment created by the Template Engine
      * without having to use the stored metadata (Templates/Template Contents/Template Params/etc) within the MJ database. This is useful when you have 
      * a template that is stored elsewhere or dynamically created and you just want to render it with some data.
-     * @param templateText 
-     * @param data 
-     * @returns 
+     * @param templateText
+     * @param data
+     * @param options optional render controls. `autoescape` (default `true`) toggles HTML-entity escaping — pass
+     *   `false` for plain-text contexts such as email subject lines, where `Acme & Co` must not become `Acme &amp; Co`.
+     * @returns
      */
-    public async RenderTemplateSimple(templateText: string, data: any): Promise<TemplateRenderResult> {
+    public async RenderTemplateSimple(templateText: string, data: any, options?: { autoescape?: boolean }): Promise<TemplateRenderResult> {
         try {
-            const template = this.createNunjucksTemplate(templateText);
+            const env = this.getSimpleRenderEnv(options?.autoescape ?? true);
+            const template = this.createNunjucksTemplate(templateText, env);
             const result = await this.renderTemplateAsync(template, data);
             return {
                 Success: true,
@@ -299,12 +318,28 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
     }
 
     /**
-     * Simple utility method to create a new Nunjucks template object and bind it to our Nunjucks environment.
-     * @param templateText 
-     * @returns 
+     * Simple utility method to create a new Nunjucks template object and bind it to a Nunjucks environment.
+     * @param templateText
+     * @param env the environment to bind to; defaults to the shared autoescape environment
+     * @returns
      */
-    protected createNunjucksTemplate(templateText: string): any {
-        return new nunjucks.Template(templateText, this._nunjucksEnv);
+    protected createNunjucksTemplate(templateText: string, env: nunjucks.Environment = this._nunjucksEnv): any {
+        return new nunjucks.Template(templateText, env);
+    }
+
+    /**
+     * Resolves the Nunjucks environment for an ad-hoc {@link RenderTemplateSimple} render. The autoescape:false
+     * variant is created lazily on first use and cached, so callers that never opt out pay nothing.
+     * @param autoescape whether the returned environment HTML-escapes output
+     */
+    private getSimpleRenderEnv(autoescape: boolean): nunjucks.Environment {
+        if (autoescape) {
+            return this._nunjucksEnv;
+        }
+        if (!this._nunjucksEnvNoAutoescape) {
+            this._nunjucksEnvNoAutoescape = this.createConfiguredNunjucksEnv(false);
+        }
+        return this._nunjucksEnvNoAutoescape;
     }
 
     public ClearTemplateCache() {

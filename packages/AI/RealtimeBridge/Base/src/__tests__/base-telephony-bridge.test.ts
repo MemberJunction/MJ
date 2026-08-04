@@ -12,6 +12,9 @@ import {
     DIRECTION_CONFIG_KEY,
     FROM_NUMBER_CONFIG_KEY,
     INBOUND_CALL_ID_CONFIG_KEY,
+    INBOUND_SAMPLE_RATE_CONFIG_KEY,
+    OUTBOUND_SAMPLE_RATE_CONFIG_KEY,
+    TELEPHONY_SAMPLE_RATE,
 } from '../base-telephony-bridge';
 import { RealtimeBridgeContext, IBridgeProviderFeatures } from '../base-realtime-bridge';
 import { BridgeMediaFrame } from '../media-tracks';
@@ -105,7 +108,14 @@ function ctx(
         Features: features,
         ProviderName: 'Twilio',
         Address: address,
-        Configuration: { [FROM_NUMBER_CONFIG_KEY]: '+15559876543', ...config },
+        // Default to telephony-native 8 kHz on both legs so media plumbing tests assert byte
+        // pass-through; resampling is exercised explicitly by overriding these in the resample test.
+        Configuration: {
+            [FROM_NUMBER_CONFIG_KEY]: '+15559876543',
+            [INBOUND_SAMPLE_RATE_CONFIG_KEY]: TELEPHONY_SAMPLE_RATE,
+            [OUTBOUND_SAMPLE_RATE_CONFIG_KEY]: TELEPHONY_SAMPLE_RATE,
+            ...config,
+        },
     };
 }
 
@@ -225,6 +235,28 @@ describe('BaseTelephonyBridge — media', () => {
         await bridge.Connect(ctx());
         bridge.SendMedia('audio-out', { Track: 'audio-out', Base64: 'AQID' }); // [1,2,3]
         expect(new Uint8Array(sdk.SentAudio[0])).toEqual(new Uint8Array([1, 2, 3]));
+    });
+
+    it('resamples model-rate audio to the carrier 8 kHz on both legs (no "deep/slow" pitch error)', async () => {
+        const bridge = makeBridge(sdk);
+        const heard: BridgeMediaFrame[] = [];
+        bridge.OnMedia((f) => heard.push(f));
+        // OpenAI-style 24 kHz model on both legs — the production case.
+        await bridge.Connect(ctx(TEL_FEATURES, { [INBOUND_SAMPLE_RATE_CONFIG_KEY]: 24000, [OUTBOUND_SAMPLE_RATE_CONFIG_KEY]: 24000 }));
+
+        // Outbound: 24 kHz model audio (1200 PCM16 samples = 2400 bytes) must shrink ~3× to 8 kHz.
+        const outboundSamples = 1200;
+        bridge.SendMedia('audio-out', { Track: 'audio-out', Bytes: new ArrayBuffer(outboundSamples * 2) });
+        const sentSamples = sdk.SentAudio[0].byteLength / 2;
+        expect(sentSamples).toBeGreaterThan(outboundSamples / 3 - 5);
+        expect(sentSamples).toBeLessThan(outboundSamples / 3 + 5);
+
+        // Inbound: 8 kHz caller audio (400 samples) must grow ~3× to the model's 24 kHz.
+        const inboundSamples = 400;
+        sdk.DriveInboundAudio(new ArrayBuffer(inboundSamples * 2));
+        const heardSamples = heard[0].Bytes!.byteLength / 2;
+        expect(heardSamples).toBeGreaterThan(inboundSamples * 3 - 5);
+        expect(heardSamples).toBeLessThan(inboundSamples * 3 + 5);
     });
 
     it('drops outbound audio when not connected', () => {

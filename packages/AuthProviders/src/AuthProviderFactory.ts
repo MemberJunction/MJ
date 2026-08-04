@@ -9,6 +9,7 @@ import './providers/MSALProvider.js';
 import './providers/OktaProvider.js';
 import './providers/CognitoProvider.js';
 import './providers/GoogleProvider.js';
+import './providers/WorkOSProvider.js';
 import './providers/MagicLinkProvider.js';
 
 /**

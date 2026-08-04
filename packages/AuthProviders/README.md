@@ -9,7 +9,9 @@ This package gives the MJ server (and any other Node.js consumer) a uniform, plu
 - Extract a normalized `AuthUserInfo` from provider-specific claim shapes
 - Register additional providers at runtime via the MJ class-factory system
 
-It ships with first-class support for **Auth0**, **Microsoft Entra ID / MSAL**, **Okta**, **AWS Cognito**, and **Google Identity Platform**, and is the extension point used to plug custom providers into [`@memberjunction/server`](../MJServer/README.md).
+It ships with first-class support for **Auth0**, **Microsoft Entra ID / MSAL**, **Okta**, **AWS Cognito**, **Google Identity Platform**, and **WorkOS (AuthKit)**, and is the extension point used to plug custom providers into [`@memberjunction/server`](../MJServer/README.md).
+
+> **Integrating WorkOS?** See the dedicated end-to-end guide: **[WORKOS.md](WORKOS.md)** — it covers the browser + server setup and the two WorkOS-specific gotchas (the required `email` JWT Template and matching the `aud` claim).
 
 ## When to use this package
 
@@ -67,6 +69,7 @@ This package is a Node.js / server-side package. It depends on:
 │           ├─ @RegisterClass(BaseAuthProvider, 'okta')            │
 │           ├─ @RegisterClass(BaseAuthProvider, 'cognito')         │
 │           ├─ @RegisterClass(BaseAuthProvider, 'google')          │
+│           ├─ @RegisterClass(BaseAuthProvider, 'workos')          │
 │           └─ @RegisterClass(BaseAuthProvider, 'your-custom')     │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -95,6 +98,7 @@ Each built-in provider is registered with the MJ class factory under a lowercase
 | `okta`     | `OktaProvider`    | `clientId`, `domain`                                     |
 | `cognito`  | `CognitoProvider` | `clientId`, `region`, `userPoolId`                       |
 | `google`   | `GoogleProvider`  | `clientId`                                               |
+| `workos`   | `WorkOSProvider`  | `clientId` (see [WORKOS.md](WORKOS.md) for the required `email` JWT Template + `aud`) |
 
 Every provider also requires the base fields: `name`, `type`, `issuer`, `audience`, `jwksUri`. See [`AuthProviderConfig`](../MJCore/src/generic/authTypes.ts) for the full shape.
 
@@ -124,10 +128,22 @@ module.exports = {
       audience: 'https://api.example.com',
       jwksUri: 'https://tenant.auth0.com/.well-known/jwks.json',
     },
+    {
+      name: 'workos-prod',
+      type: 'workos',
+      clientId: process.env.WORKOS_CLIENT_ID, // client_01H...
+      issuer: `https://api.workos.com/user_management/${process.env.WORKOS_CLIENT_ID}`,
+      jwksUri: `https://api.workos.com/sso/jwks/${process.env.WORKOS_CLIENT_ID}`,
+      audience: process.env.WORKOS_CLIENT_ID, // must match the token's `aud` — see WORKOS.md
+    },
     // ...add more providers here
   ],
 };
 ```
+
+> **WorkOS needs two extra steps** beyond this config — an `email` JWT Template (its access tokens
+> omit email, which MJ keys users on) and matching the `aud` claim. The full walkthrough is in
+> **[WORKOS.md](WORKOS.md)**.
 
 > **Multiple audiences on the same issuer.** When two MJ apps share an Auth0 domain but use different client IDs, register both as separate entries — `AuthProviderFactory.getAllByIssuer()` returns every match so the validator can try each audience.
 
@@ -227,7 +243,7 @@ export class KeycloakProvider extends BaseAuthProvider {
 // Then in mj.config.cjs use type: 'keycloak'
 ```
 
-> **Important:** because the provider is loaded via class-factory metadata and not by direct reference, your bundler may tree-shake it out. Make sure the file containing the `@RegisterClass` decorator is imported (directly or transitively) before `AuthProviderFactory.createProvider()` runs. The built-in providers do this from [`AuthProviderFactory.ts`](src/AuthProviderFactory.ts); follow the same pattern in your own entry point or a manifest. See the class-registration manifest discussion in the [root project guide](../../CLAUDE.md) for background.
+> **Important:** because the provider is loaded via class-factory metadata and not by direct reference, your bundler may tree-shake it out. Make sure the file containing the `@RegisterClass` decorator is imported (directly or transitively) before `AuthProviderFactory.createProvider()` runs. The built-in providers do this from [`AuthProviderFactory.ts`](src/AuthProviderFactory.ts); follow the same pattern in your own entry point or a manifest. See the class-registration manifest discussion in [packages/CodeGenLib/CLAUDE.md](../CodeGenLib/CLAUDE.md) for background.
 
 ## API reference
 
@@ -293,8 +309,8 @@ A `GraphQLError` with `extensions.code = 'JWT_EXPIRED'` and `extensions.expiryDa
 
 ## Project guidelines
 
-- Class registration & tree-shaking caveats: see the manifest section of the [root project guide](../../CLAUDE.md)
-- Singleton best practices: see the `BaseSingleton` rules in the [root project guide](../../CLAUDE.md)
+- Class registration & tree-shaking caveats: see the manifest section of [packages/CodeGenLib/CLAUDE.md](../CodeGenLib/CLAUDE.md)
+- Singleton best practices: see the `BaseSingleton` rules in [.claude/rules/typescript-style.md](../../.claude/rules/typescript-style.md)
 
 ## License
 

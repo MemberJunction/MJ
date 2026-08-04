@@ -1,0 +1,38 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Probe Skill",
+      "Description": "Harmless probe skill bundling the Calculate Expression action; used by the agent-skills-live bundle (mj-integration-test — safe to delete)",
+      "Instructions": "@file:templates/it-probe-skill.skill.md",
+      "Status": "Active",
+      "ActivationMode": "RequestedOnly",
+      "Category": "Integration Test",
+      "IconClass": "fa-solid fa-vial",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Calculate Expression"
+          },
+          "primaryKey": {
+            "ID": "AC2566E0-B83C-4739-AA22-95EC23C8764E"
+          },
+          "sync": {
+            "lastModified": "2026-07-21T13:49:41.160Z",
+            "checksum": "ca0769e138a5247e975981892edc83df3d86cc09b4c2842570fb76645b09edf1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3F55E5E2-E946-4AB8-82C9-7F937AB8F5C0"
+    },
+    "sync": {
+      "lastModified": "2026-07-21T13:49:41.142Z",
+      "checksum": "39898ca05da2a625d8438d272674f4b9a214ec9feb5c41482673a2ff8d191a1c"
+    }
+  }
+]
