@@ -472,6 +472,38 @@ function AddEntryToDynamicArray(content: string, entry: DynamicPackageEntry, arr
  * An entry block whose PackageName cannot be parsed is left in place: this function deletes config
  * the user may have hand-edited, so an unrecognized shape must be a no-op rather than a guess.
  */
+/**
+ * Points a surviving entry block at the StartupExport the NEW manifest declares.
+ *
+ * Pruning by PackageName alone is not enough to converge the config: when a version renames its
+ * startup export, the package stays in the keep-set, so the block survives byte-identical AND the
+ * subsequent Add is skipped by the (PackageName, AppName) idempotency check — leaving the OLD
+ * export name in the config forever. ServerBootstrap then reads `mod[StartupExport]`, gets
+ * `undefined` for a name the new version no longer exports, skips it because it is not a function,
+ * and still logs `(ran <old name>)`. The registrations that export exists to perform never happen,
+ * with nothing red anywhere.
+ *
+ * Only the StartupExport value is touched, so `Enabled: false` and any hand-formatting survive.
+ * When the manifest declares no export for this package the block is left alone — dropping a line
+ * the operator may have added by hand is a guess, and the entry-removal path already covers a
+ * server package that genuinely stopped declaring one.
+ */
+function RetargetStartupExport(block: string, expectedExport: string | undefined): string {
+    if (!expectedExport) return block;
+
+    const existing = block.match(/StartupExport:\s*(['"])(?:[^'"\\]|\\.)*\1/);
+    if (existing) {
+        // Function form: a `$` in the export name must not be read as a replacement pattern.
+        return block.replace(existing[0], () => `StartupExport: ${JSON.stringify(expectedExport)}`);
+    }
+
+    // No StartupExport line at all (hand-edited config): add one after PackageName so the entry
+    // matches what the manifest asks for.
+    const packageLine = block.match(/PackageName:\s*(['"])(?:[^'"\\]|\\.)*\1,?/);
+    if (!packageLine) return block;
+    return block.replace(packageLine[0], () => `${packageLine[0]}\n        StartupExport: ${JSON.stringify(expectedExport)},`);
+}
+
 function PruneEntriesForApp(content: string, manifest: MJAppManifest, arrayName: 'server' | 'client'): string {
     const location = LocateDynamicArray(content, arrayName);
     if (!location) return content;
@@ -479,7 +511,7 @@ function PruneEntriesForApp(content: string, manifest: MJAppManifest, arrayName:
     const manifestEntries = arrayName === 'server'
         ? GetServerPackagesFromManifest(manifest)
         : GetClientPackagesFromManifest(manifest);
-    const keep = new Set(manifestEntries.map((e) => e.PackageName));
+    const keep = new Map(manifestEntries.map((e) => [e.PackageName, e.StartupExport]));
 
     const body = content.slice(location.OpenBracketPos, location.ClosePos);
     // Same entry-block shape as RemoveEntriesForApp: [^{}] keeps the match inside a single entry
@@ -491,7 +523,8 @@ function PruneEntriesForApp(content: string, manifest: MJAppManifest, arrayName:
     const prunedBody = body.replace(entryPattern, (block) => {
         const packageMatch = block.match(/PackageName:\s*['"]([^'"]+)['"]/);
         if (!packageMatch) return block;
-        return keep.has(packageMatch[1]) ? block : '';
+        if (!keep.has(packageMatch[1])) return '';
+        return RetargetStartupExport(block, keep.get(packageMatch[1]));
     });
     if (prunedBody === body) return content;
 

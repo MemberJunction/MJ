@@ -291,4 +291,87 @@ describe('PruneDynamicPackagesNotInManifest — upgrade no longer accumulates', 
 
         expect(result.Success).toBe(true);
     });
+
+    // ── Convergence is by entry, not just by package name ────────────────
+
+    /** Same package name as sharedManifest(), but a different startup export. */
+    function renamedExportManifest(startupExport: string) {
+        return {
+            name: 'mj-bizapps-common',
+            packages: {
+                shared: [{ name: '@mj-biz-apps/common-shared', role: 'bootstrap', startupExport }],
+            },
+        } as unknown as Parameters<typeof PruneDynamicPackagesNotInManifest>[1];
+    }
+
+    it('retargets a surviving entry when the new version RENAMED its startup export', () => {
+        // Keeping by PackageName alone leaves the old export name in place forever: the block
+        // survives byte-identical AND the follow-up Add is skipped by the (PackageName, AppName)
+        // idempotency check. ServerBootstrap then reads mod['LoadShared'], gets undefined, skips
+        // it because it is not a function, and still logs "(ran LoadShared)".
+        setupConfigFile(bareConfig());
+        AddServerDynamicPackages(REPO_ROOT, sharedManifest());
+        const v1 = writtenContent();
+        expect(v1).toContain('LoadShared');
+
+        vi.resetAllMocks();
+        setupConfigFile(v1);
+        const result = PruneDynamicPackagesNotInManifest(REPO_ROOT, renamedExportManifest('LoadSharedV2'));
+
+        expect(result.Success).toBe(true);
+        const pruned = writtenContent();
+        assertValidConfig(pruned);
+        expect(arrayBody(pruned, 'server')).toContain('LoadSharedV2');
+        expect(arrayBody(pruned, 'server')).not.toContain('LoadShared,');
+        expect(arrayBody(pruned, 'server')).not.toContain(`LoadShared"`);
+        // the package itself is kept, not removed and re-added
+        expect(arrayBody(pruned, 'server')).toContain('@mj-biz-apps/common-shared');
+    });
+
+    it('retargets WITHOUT resetting Enabled: false', () => {
+        // The retarget must edit only the StartupExport value — an operator-disabled entry that is
+        // removed and re-added comes back with the default Enabled: true.
+        setupConfigFile(bareConfig());
+        AddServerDynamicPackages(REPO_ROOT, sharedManifest());
+        const v1 = writtenContent();
+        vi.resetAllMocks();
+        setupConfigFile(v1);
+        ToggleServerDynamicPackages(REPO_ROOT, 'mj-bizapps-common', false);
+        const disabled = writtenContent();
+        expect(disabled).toContain('Enabled: false');
+
+        vi.resetAllMocks();
+        setupConfigFile(disabled);
+        const result = PruneDynamicPackagesNotInManifest(REPO_ROOT, renamedExportManifest('LoadSharedV2'));
+
+        expect(result.Success).toBe(true);
+        const pruned = writtenContent();
+        assertValidConfig(pruned);
+        expect(arrayBody(pruned, 'server')).toContain('LoadSharedV2');
+        expect(pruned).toContain('Enabled: false');
+    });
+
+    it('leaves another app\'s identically-named package on its own export', () => {
+        setupConfigFile(bareConfig());
+        AddServerDynamicPackages(REPO_ROOT, sharedManifest());
+        const step1 = writtenContent();
+        vi.resetAllMocks();
+        setupConfigFile(step1);
+        AddServerDynamicPackages(REPO_ROOT, sharedManifest('innocent-bystander'));
+        const step2 = writtenContent();
+
+        vi.resetAllMocks();
+        setupConfigFile(step2);
+        PruneDynamicPackagesNotInManifest(REPO_ROOT, renamedExportManifest('LoadSharedV2'));
+
+        const pruned = writtenContent();
+        assertValidConfig(pruned);
+        // the bystander's entry still names the export IT declared
+        const bystander = arrayBody(pruned, 'server')
+            .split('{')
+            .find((b) => b.includes('innocent-bystander'));
+        expect(bystander).toBeDefined();
+        expect(bystander).toContain('LoadShared');
+        expect(bystander).not.toContain('LoadSharedV2');
+    });
 });
