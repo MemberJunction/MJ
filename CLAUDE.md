@@ -92,6 +92,8 @@ Unit tests passing is necessary but **not sufficient** — the integration tier 
 
 **The generated ORM is the schema's source of truth** — not migration SQL. Migrations are append-only history; the entity classes reflect the net result.
 
+**CodeGen reads JSONType definitions from the database, not from `metadata/`.** Run `mj sync push` **before** `mj codegen`, or CodeGen regenerates from stale definitions and *silently deletes* properties from the generated types. Full ordering + why it's silent: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+
 **Build commands:**
 ```bash
 npm run build            # all packages, from repo root
@@ -146,7 +148,9 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ### Guides — the complete index is [`guides/README.md`](guides/README.md)
 
-40 cross-cutting "read this before you build that" guides, categorized. **Consult the index before starting work in an unfamiliar area** — these capture patterns already litigated. Frequently needed: [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
+41 cross-cutting "read this before you build that" guides, categorized. **Consult the index before starting work in an unfamiliar area** — these capture patterns already litigated. Frequently needed: [UI Layering](guides/UI_LAYERING_GUIDE.md), [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
+
+**UI work is layered — L0 runtime → L1 widget → L2 composite → L3 Explorer surface.** Nothing below L3 imports `@angular/router` or an Explorer package; nothing at L3 holds domain logic. Read [`guides/UI_LAYERING_GUIDE.md`](guides/UI_LAYERING_GUIDE.md) before building any UI, in this repo or any MJ app repo.
 
 ### Skills — load only when invoked
 
@@ -161,6 +165,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ```bash
 npm run check:ui          # design-token + button gates on changed CSS/SCSS (mirrors the PR gate)
+npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
 ```

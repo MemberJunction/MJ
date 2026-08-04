@@ -39,6 +39,16 @@ Single entry path: **`mj test`** (dispatched from `MJ: Tests` / `MJ: Test Suites
 - **Nightly:** add the live-model tier. It needs working provider API keys in the environment — see the warning below.
 - Provider keys are read from the environment / `mj.config.cjs`. **A keyless leg is NOT safe: the live tier FAILS, it does not skip.** There is no credential preflight in the live bundles, so an absent key surfaces as an ordinary red test — verified by blanking `AI_VENDOR_API_KEY__*` and re-running a previously-green bundle, which failed at fixture setup (`agent-rag-search fixture setup failed: sentinel note save: undefined`) and exited 1, with no skip message anywhere. Gate a keyless CI leg by **not selecting the live suite**, not by relying on a graceful degrade.
 
+### PostgreSQL — run the suite as a platform matrix (REQUESTED)
+
+The suite is authored to be **platform-portable** (checks use `UUIDsEqual` for casing, avoid T-SQL-isms, reference views by unqualified `schema.view`), so the intent is to run **the same deterministic tier against a PostgreSQL backend** in addition to SQL Server — a two-cell platform matrix. Point `mj.config.cjs` / the `PG_*` env vars at a migrated PostgreSQL database (see the root CLAUDE.md "CodeGen Database Connections" and "Switching Database Platforms" sections) and run the same `npm run test:integration`.
+
+Two things to expect, both normal:
+1. **A few checks may surface accidental SQL-Server-isms** on the first PG run (a check that assumed a T-SQL behavior). Report these — they're portability fixes for the suite, not product bugs.
+2. **PG-divergence coverage (catalog Domain 8) is authored separately** by the dev team — the things that genuinely differ on PG (lowercase UUIDs, schema-name casing folding / `CanonicalSchemaName`, PG-specific SQL). Running the SS-authored suite on PG is the build-engineer's matrix; authoring the divergence checks is dev work.
+
+Treat a clean PG run of the deterministic tier as the goal; escalate SS-isms to the dev team rather than editing checks in the build.
+
 ## Reading the results
 
 - Console prints `[SUMMARY] N/M passed (X%)` and per-bundle lines; a failure shows `✗ FAILED` with the failing check's oracle message (e.g. `Oracle 'codegen-determinism.CD6' failed: …`).

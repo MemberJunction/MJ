@@ -75,7 +75,7 @@ async function createConversationTurn(ctx: IntegrationCheckContext, text: string
 /** Resolve the winning run id and record it for FK-safe teardown; fail loudly if no run landed. */
 async function landRun(ctx: IntegrationCheckContext, result: Awaited<ReturnType<typeof runAgentOverWire>>, fallbackFilter: string, label: string): Promise<string> {
     await sleep(AGENT_LIVE_SETTLE_MS);
-    const runId = await resolveRunId(result, ctx.User, fallbackFilter);
+    const runId = await resolveRunId(result, ctx.User, fallbackFilter, ctx.Provider);
     Assert(!!runId, `${label}: an AI Agent Run landed (result.agentRun or fallback query)`);
     fixture(ctx).LiveRunIds.push(runId!);
     return runId!;
@@ -127,7 +127,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
             // AP2. AL2's contract is the STEP lineage + linkage (TargetLogID set), asserted below.
             await verifyAgentRun(runId, ctx.User, true, { skipActionLogs: true });
 
-            const steps = await getRunSteps(runId, ctx.User);
+            const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
             const types = steps.map(s => s.StepType);
             // P-compliance: the model took the instructed action (an Actions step naming Calculate Expression).
             const actionStep = steps.find(s => s.StepType === 'Actions' && (s.StepName ?? '').toLowerCase().includes('calculate expression'));
@@ -148,11 +148,11 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
             const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), toolLoop, userTurn('Calculate 6*7 using your action.'));
             const runId = await landRun(ctx, result, `AgentID='${toolLoop.ID}' AND Status<>'Running'`, 'AL3');
 
-            const steps = await getRunSteps(runId, ctx.User);
+            const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
             const actionStep = steps.find(s => s.StepType === 'Actions' && (s.StepName ?? '').toLowerCase().includes('calculate expression'));
             Assert(!!actionStep, 'AL3 [model-noncompliance:] the instructed Calculate Expression action ran (prerequisite for the carry-into-context assertion)');
 
-            const promptRuns = await getPromptRuns(runId, ctx.User);
+            const promptRuns = await getPromptRuns(runId, ctx.User, ctx.Provider);
             Assert(promptRuns.length >= 2, `AL3: at least two prompt runs (a result-consuming turn exists) — got ${promptRuns.length}`);
             // 42 is the ACTION's deterministic output for 6*7 (pure code), not model prose — so any prompt
             // run whose assembled Messages contains it proves action results are folded back into context.
@@ -169,7 +169,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
             const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), toolLoop, userTurn('Calculate 6*7 using your action.'));
             const runId = await landRun(ctx, result, `AgentID='${toolLoop.ID}' AND Status<>'Running'`, 'AL4');
 
-            const promptRuns = await getPromptRuns(runId, ctx.User);
+            const promptRuns = await getPromptRuns(runId, ctx.User, ctx.Provider);
             const sum = sumPromptRunTokens(promptRuns);
             Assert(sum > 0, `AL4: child prompt runs recorded tokens (Σ=${sum} > 0)`);
 
@@ -231,7 +231,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
                 await sleep(AGENT_LIVE_SETTLE_MS);
 
                 const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), failover, userTurn('ping'));
-                const runId = await resolveRunId(result, ctx.User, `AgentID='${failover.ID}'`);
+                const runId = await resolveRunId(result, ctx.User, `AgentID='${failover.ID}'`, ctx.Provider);
                 if (runId) {
                     fixture(ctx).LiveRunIds.push(runId);
                     await sleep(AGENT_LIVE_SETTLE_MS);
@@ -245,7 +245,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
                     Assert(row!.Status !== 'Running', `AL6: the failed run finalized (not stuck Running)`);
                     Assert(!!row!.ErrorMessage && String(row!.ErrorMessage).length > 0, 'AL6: an ErrorMessage was recorded on the failed run');
                     // Any steps that were created must still be terminal (no orphan Running step on the failure path).
-                    const steps = await getRunSteps(runId, ctx.User);
+                    const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
                     Assert(steps.every(s => s.Status !== 'Running' && s.CompletedAt != null), 'AL6: every step finalized on the failure path');
                 } else {
                     // No run row created at all is also an acceptable clean failure (nothing to leak).
@@ -275,7 +275,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
                 const runId = await landRun(ctx, result, `AgentID='${failover.ID}' AND Status<>'Running'`, 'AL7');
                 await verifyAgentRun(runId, ctx.User, true);
 
-                const promptRuns = await getPromptRuns(runId, ctx.User);
+                const promptRuns = await getPromptRuns(runId, ctx.User, ctx.Provider);
                 Assert(promptRuns.length >= 1, 'AL7: the run recorded at least one prompt run');
                 // Structural failover proof: the winning model persisted on the AIPromptRun is the secondary
                 // binding\'s model, never the deactivated primary\'s (swapping models never rewrites this check).

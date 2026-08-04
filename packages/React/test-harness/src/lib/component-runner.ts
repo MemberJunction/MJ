@@ -116,6 +116,40 @@ export interface ComponentExecutionOptions extends LinterOptions {
    * Defaults to false to preserve existing behavior for other harness users.
    */
   fullPageScreenshot?: boolean;
+
+  /**
+   * When true, the harness wraps `utilities.rv.RunView`, `RunViews`, and
+   * `rq.RunQuery` with tracking counters and waits for all in-flight data
+   * calls to complete before capturing the screenshot.
+   *
+   * "Data idle" is defined as: pending call count has been 0 for at least
+   * `dataIdleStabilizationMs` (default 750ms). This debounced approach
+   * handles cascading calls where one RunView's results trigger another
+   * (e.g., load claims → extract policy IDs → load policies).
+   *
+   * If no data calls are made within the initial render + async wait period,
+   * the screenshot is taken immediately (no extra delay).
+   *
+   * Defaults to false to preserve existing behavior.
+   */
+  waitForDataIdle?: boolean;
+
+  /**
+   * How long (ms) pending must remain at 0 before declaring data idle.
+   * Higher values are safer for deeply cascading call chains but add latency.
+   * Only used when `waitForDataIdle` is true.
+   * @default 750
+   */
+  dataIdleStabilizationMs?: number;
+
+  /**
+   * Maximum time (ms) to wait for data idle before giving up and taking
+   * the screenshot anyway. Prevents hanging on components that never finish
+   * loading (e.g., infinite polling, broken error handling).
+   * Only used when `waitForDataIdle` is true.
+   * @default 15000
+   */
+  dataIdleTimeoutMs?: number;
 }
 
 export interface ComponentExecutionResult {
@@ -1142,6 +1176,39 @@ export class ComponentRunner {
           warnings.push(warn);
         }
       });
+
+      // Wait for all data calls (RunView, RunViews, RunQuery) to complete before
+      // capturing the screenshot. Uses a debounced idle check: pending must be 0
+      // for `stabilizationMs` to handle cascading calls (e.g., load claims →
+      // extract IDs → load policies). Falls back to timeout if data never settles.
+      if (options.waitForDataIdle) {
+        const stabilizationMs = options.dataIdleStabilizationMs ?? 750;
+        const timeoutMs = options.dataIdleTimeoutMs ?? 15000;
+
+        try {
+          await page.waitForFunction(
+            (stabMs: number) => {
+              const w = window as any;
+              const pending: number = w.__testHarnessDataPending || 0;
+              const lastCompleted: number = w.__testHarnessDataLastCompletedAt || 0;
+              const callCount: number = w.__testHarnessDataCallCount || 0;
+              // No data calls made — nothing to wait for
+              if (callCount === 0) return true;
+              // Still have calls in flight
+              if (pending > 0) return false;
+              // All calls done — wait for stabilization window
+              return (Date.now() - lastCompleted) >= stabMs;
+            },
+            stabilizationMs,
+            { timeout: timeoutMs }
+          );
+
+          // Give React one more render cycle to process the final setState
+          await page.waitForTimeout(500);
+        } catch {
+          // Timeout — data never settled. Take the screenshot anyway.
+        }
+      }
 
       // Get the rendered HTML with size protection
       // Node.js has a maximum string length of ~536MB (0x1fffffe8 characters)
@@ -2592,6 +2659,37 @@ export class ComponentRunner {
         // Updated existing Metadata.Provider with mock data
       }
     });
+
+    // When waitForDataIdle is enabled, wrap data-fetching functions with tracking
+    // counters so the harness can detect when all async data calls have completed.
+    if (options.waitForDataIdle) {
+      await page.evaluate(() => {
+        const w = window as any;
+        w.__testHarnessDataPending = 0;
+        w.__testHarnessDataCallCount = 0;
+        w.__testHarnessDataLastCompletedAt = 0;
+
+        const utils = w.__mjUtilities;
+
+        // Wrap a single async function with pending-call tracking
+        function wrapWithTracking<T extends (...args: any[]) => Promise<any>>(fn: T): T {
+          return (async (...args: any[]) => {
+            w.__testHarnessDataPending++;
+            w.__testHarnessDataCallCount++;
+            try {
+              return await fn(...args);
+            } finally {
+              w.__testHarnessDataPending--;
+              w.__testHarnessDataLastCompletedAt = Date.now();
+            }
+          }) as unknown as T;
+        }
+
+        utils.rv.RunView = wrapWithTracking(utils.rv.RunView);
+        utils.rv.RunViews = wrapWithTracking(utils.rv.RunViews);
+        utils.rq.RunQuery = wrapWithTracking(utils.rq.RunQuery);
+      });
+    }
   }
 
   /**

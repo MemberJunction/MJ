@@ -204,7 +204,7 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     // Lazy initialization - only create default utilities when needed
     if (!this._utilities) {
       const runtimeUtils = createRuntimeUtilities();
-      this._utilities = runtimeUtils.buildUtilities(this.enableLogging);
+      this._utilities = runtimeUtils.buildUtilities(this.enableLogging, this.ProviderToUse);
       if (this.enableLogging) {
         console.log('MJReactComponent: Auto-initialized utilities using createRuntimeUtilities()');
       }
@@ -1396,8 +1396,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     this.isInitialized = false;
     this.capturedData = [];
 
-    // Trigger registry cleanup
-    this.adapter.getRegistry().cleanup();
+    // Trigger registry cleanup (guard: adapter may not be initialized if
+    // React bootstrap failed or was destroyed during retry)
+    if (this.adapter.isInitialized()) {
+      this.adapter.getRegistry().cleanup();
+    }
   }
 
   /**

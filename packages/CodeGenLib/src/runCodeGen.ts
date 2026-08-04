@@ -11,6 +11,7 @@ import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
+import { applyIncludeSchemaScope } from './Database/schema-scope';
 import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
@@ -206,6 +207,14 @@ export class RunCodeGenBase {
         }
         return m;
       });
+
+      // Secondary application of the opt-in `includeSchemas` scope, against the schemas present in
+      // metadata. The authoritative pass runs inside ManageMetadataBase.manageMetadata against the
+      // DATABASE's schema list (it is the one that can see never-before-seen schemas); this one exists
+      // so the scope still applies on the `--skipdb` path, which skips manageMetadata entirely but
+      // still generates files from configInfo.excludeSchemas. applyIncludeSchemaScope is idempotent, so
+      // running both is safe and the second pass is a no-op when the first already ran.
+      applyIncludeSchemaScope(Array.from(new Set(md.Entities.map((e) => e.SchemaName))), configInfo);
 
       const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase)!;
       const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase)!;
@@ -500,6 +509,16 @@ export class RunCodeGenBase {
         (e) => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()
       );
 
+      // Entities whose schemas are owned by OTHER packages (see entityPackageName map). They must be
+      // excluded from every artifact this package emits — GraphQL ObjectTypes included. If two packages
+      // both emit an ObjectType for the same entity, graphql-js rejects the unified schema at boot with
+      // "Schema must contain uniquely named types but contains multiple types named ..." and the API
+      // crash-loops.
+      const externalSchemas = getExternalEntitySchemas().map(s => s.toLowerCase());
+      const localNonCoreEntities = externalSchemas.length > 0
+        ? nonCoreEntities.filter(e => !externalSchemas.includes(e.SchemaName.toLowerCase()))
+        : nonCoreEntities;
+
       const isVerbose = configInfo?.verboseOutput ?? false;
       if (!isVerbose) startSpinner('Generating TypeScript code...');
 
@@ -524,7 +543,7 @@ export class RunCodeGenBase {
           ? (configInfo.entityPackageName || 'mj_generatedentities')
           : 'mj_generatedentities';
         const ok = await reporter.phase('generateGraphQL', async () =>
-          graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, entityPackageName, false),
+          graphQLGenerator.generateGraphQLServerCode(localNonCoreEntities, graphqlOutputDir, entityPackageName, false),
         );
         if (!ok) {
           failSpinner('Error generating GraphQL Resolver code');
@@ -544,11 +563,6 @@ export class RunCodeGenBase {
           return false;
         } else if (isVerbose) succeedSpinner('CORE Entity Subclass Code generated');
       }
-
-      const externalSchemas = getExternalEntitySchemas().map(s => s.toLowerCase());
-      const localNonCoreEntities = externalSchemas.length > 0
-        ? nonCoreEntities.filter(e => !externalSchemas.includes(e.SchemaName.toLowerCase()))
-        : nonCoreEntities;
 
       const entitySubClassOutputDir = outputDir('EntitySubClasses', true)!;
       if (entitySubClassOutputDir) {
