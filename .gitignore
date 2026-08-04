@@ -108,7 +108,9 @@ packages/MJExplorer/src/environments/environment.development.ts
 packages/MJExplorer/src/environments/environment.staging.ts
 packages/MJExplorer/src/environments/environment.ts
 Schema Files/
-/docs/
+# generated TypeDoc output — but hand-written decision records are tracked
+/docs/*
+!/docs/decisions/
 SQL Scripts/generated/
 **/SQL Scripts/generated/
 *.old
