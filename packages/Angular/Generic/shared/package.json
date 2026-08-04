@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
     "build": "npm run clean && ngc && npm run copy-assets",
     "copy-assets": "cpy 'src/lib/_tokens.scss' dist/lib --flat",
     "clean": "rimraf dist",
