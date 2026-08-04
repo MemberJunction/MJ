@@ -47,7 +47,13 @@ vi.mock('@memberjunction/sql-dialect', () => ({
 }));
 
 vi.mock('../Misc/status_logging', () => ({ logError: vi.fn(), logStatus: vi.fn() }));
-vi.mock('../Config/config', () => ({ mjCoreSchema: '__mj', resolveEntityPackageName: () => 'pkg' }));
+// getExternalEntitySchemas: no schema→package map in these cases, so nothing is externally owned.
+// (Externally-owned-schema behaviour has its own file: graphql-external-schema-filter.test.ts.)
+vi.mock('../Config/config', () => ({
+  mjCoreSchema: '__mj',
+  resolveEntityPackageName: () => 'pkg',
+  getExternalEntitySchemas: () => [],
+}));
 vi.mock('../Misc/util', () => ({
   makeDir: vi.fn(),
   sortBySequenceAndCreatedAt: (items: unknown[]) => [...items],

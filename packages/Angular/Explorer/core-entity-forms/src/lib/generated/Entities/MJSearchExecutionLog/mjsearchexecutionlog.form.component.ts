@@ -19,6 +19,7 @@ export class MJSearchExecutionLogFormComponent extends BaseFormComponent {
             { sectionKey: 'initiatorDetails', sectionName: 'Initiator Details', isExpanded: true },
             { sectionKey: 'searchExecution', sectionName: 'Search Execution', isExpanded: true },
             { sectionKey: 'rerankerDetails', sectionName: 'Reranker Details', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

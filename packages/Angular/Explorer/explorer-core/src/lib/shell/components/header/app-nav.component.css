@@ -1,18 +1,43 @@
+:host {
+  display: block;
+  min-width: 0;
+  position: relative;
+}
+/* Always clipped: if the fit arithmetic is ever a few px off (badge widths,
+   font fallbacks), the row clips inside its own box instead of painting over
+   the header's action cluster. The More dropdown renders outside this row. */
 .nav-list {
   display: flex;
-  gap: 4px;
+  flex-wrap: nowrap;
+  gap: var(--mj-space-1);
+  overflow: hidden;
+}
+.nav-list .nav-item {
+  flex-shrink: 0;
+}
+/* Tight mode: even one item + More can't fit, so the lone visible pill
+   yields with an ellipsis and the More button stays whole. */
+.nav-list.tight .nav-item:not(.nav-more-btn) {
+  flex-shrink: 1;
+  min-width: 0;
+}
+.nav-list.tight .nav-item:not(.nav-more-btn) > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .nav-list .nav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 6px;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-4);
+  border-radius: var(--mj-radius-md);
   text-decoration: none;
   color: var(--mj-text-secondary);
-  font-weight: 500;
-  font-size: 14px;
-  transition: all 0.15s;
+  font-weight: var(--mj-font-medium);
+  font-size: var(--mj-text-sm);
+  white-space: nowrap;
+  transition: all var(--mj-transition-fast);
   position: relative;
   cursor: pointer;
   user-select: none;
@@ -21,35 +46,43 @@
   background: var(--mj-bg-surface-hover);
   color: var(--mj-text-primary);
 }
+.nav-list .nav-item:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
+}
+/* Active = brand-primary everywhere; the app's metadata color is an identity
+   accent (icon glyphs), never a state color. Shared active-tint recipe:
+   color-mix(in srgb, var(--mj-brand-primary) 10%, transparent) — keep in sync
+   across nav pills, pinned app buttons, launcher cards, and omnibar rows. */
 .nav-list .nav-item.active {
-  background: color-mix(in srgb, var(--app-color, var(--mj-brand-primary)) 12%, var(--mj-bg-surface));
-  color: var(--app-color, var(--mj-brand-primary));
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-brand-primary);
 }
 .nav-list .nav-item.active i {
-  color: var(--app-color, var(--mj-brand-primary));
+  color: var(--mj-brand-primary);
 }
 .nav-list .nav-item i {
-  font-size: 16px;
+  font-size: var(--mj-text-base);
 }
 .nav-list .nav-item.no-icon {
-  padding-left: 12px;
-  padding-right: 12px;
+  padding-left: var(--mj-space-3);
+  padding-right: var(--mj-space-3);
 }
 .nav-list .nav-item .badge {
   background: var(--mj-status-error);
-  color: white;
-  border-radius: 10px;
-  padding: 2px 6px;
+  color: var(--mj-text-inverse);
+  border-radius: var(--mj-radius-full);
+  padding: var(--mj-space-0-5) var(--mj-space-1-5);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--mj-font-semibold);
   min-width: 18px;
   text-align: center;
 }
 
 /* Dynamic nav items (recent orphan resources) — separator and dimming */
 .nav-list .nav-item:not(.dynamic) + .nav-item.dynamic {
-  margin-left: 4px;
-  padding-left: 16px;
+  margin-left: var(--mj-space-1);
+  padding-left: var(--mj-space-4);
   border-left: 1px solid var(--mj-border-default);
 }
 .nav-list .nav-item.dynamic:not(.active) {
@@ -73,8 +106,8 @@
   color: var(--mj-text-disabled);
   font-size: 10px;
   cursor: pointer;
-  transition: all 0.15s;
-  margin-left: -2px;
+  transition: all var(--mj-transition-fast);
+  margin-left: calc(-1 * var(--mj-space-0-5));
 }
 .nav-list .nav-item.dynamic:hover .dismiss-btn {
   display: flex;
@@ -84,15 +117,128 @@
   color: var(--mj-text-secondary);
 }
 
+/* ---- Priority+ overflow: the More button + dropdown ---- */
+.nav-more-btn .more-count {
+  background: var(--mj-bg-surface-active);
+  color: var(--mj-text-secondary);
+  border-radius: var(--mj-radius-full);
+  padding: var(--mj-space-0-5) var(--mj-space-1-5);
+  font-size: 11px;
+  font-weight: var(--mj-font-semibold);
+  min-width: 18px;
+  text-align: center;
+  line-height: var(--mj-leading-none);
+}
+.nav-more-btn.active .more-count {
+  background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+  color: var(--mj-brand-primary);
+}
+.nav-more-dropdown {
+  position: absolute;
+  top: calc(100% + var(--mj-space-2));
+  left: 0; /* Overridden by the measured [style.left.px] anchor */
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  box-shadow: var(--mj-shadow-lg);
+  min-width: 200px;
+  width: max-content;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: var(--mj-space-1) 0;
+  z-index: 10000;
+}
+.nav-more-item {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2-5);
+  padding: var(--mj-space-2-5) var(--mj-space-4);
+  cursor: pointer;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-text-secondary);
+  white-space: nowrap;
+  transition: all var(--mj-transition-fast);
+}
+.nav-more-item i {
+  width: 18px;
+  text-align: center;
+  font-size: var(--mj-text-base);
+}
+.nav-more-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+.nav-more-item:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: -2px;
+}
+.nav-more-item.active {
+  /* Shared active-tint recipe */
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-brand-primary);
+}
+.nav-more-item .badge {
+  background: var(--mj-status-error);
+  color: var(--mj-text-inverse);
+  border-radius: var(--mj-radius-full);
+  padding: var(--mj-space-0-5) var(--mj-space-1-5);
+  font-size: 11px;
+  font-weight: var(--mj-font-semibold);
+  min-width: 18px;
+  text-align: center;
+}
+.nav-more-item .dismiss-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mj-text-disabled);
+  font-size: 10px;
+  cursor: pointer;
+}
+.nav-more-item.dynamic:hover .dismiss-btn {
+  display: flex;
+}
+
+/* ---- Skeleton pills shown while nav items load ---- */
+.nav-skeleton {
+  display: flex;
+  gap: var(--mj-space-1);
+}
+.nav-skeleton-pill {
+  height: 34px;
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-sunken);
+  animation: nav-skeleton-pulse 1.2s ease-in-out infinite;
+}
+@keyframes nav-skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-skeleton-pill {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
 /* Mobile drawer vertical layout */
 :host-context(.mobile-nav-content) .nav-list {
   flex-direction: column;
-  gap: 2px;
-  padding: 0 12px;
+  gap: var(--mj-space-0-5);
+  padding: 0 var(--mj-space-3);
 }
 :host-context(.mobile-nav-content) .nav-list .nav-item {
-  padding: 12px 16px;
-  border-radius: 8px;
+  padding: var(--mj-space-3) var(--mj-space-4);
+  border-radius: var(--mj-radius-md);
+  min-height: 48px; /* Touch-target parity with the app switcher's mobile items */
+  box-sizing: border-box;
 }
 :host-context(.mobile-nav-content) .nav-list .nav-item i {
   width: 20px;

@@ -28,6 +28,11 @@ import type { EmbeddingRunResult } from '@memberjunction/ai-prompts'
 import { AIPromptParams } from '@memberjunction/ai-core-plus'
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
 import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
+import {
+    FIXED_WINDOW_SEGMENTER_KEY,
+    FixedWindowSegmentationOptions,
+    ResolveSegmenter,
+} from '@memberjunction/ai-segmentation'
 import { VectorDBBase, VectorRecord, BaseResponse } from '@memberjunction/ai-vectordb'
 import { TagEngine } from '@memberjunction/tag-engine'
 import { TagEngineBase } from '@memberjunction/tag-engine-base'
@@ -37,7 +42,7 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities'
  * Resolved vector infrastructure for a specific (embeddingModel + vectorIndex) pair.
  * Items sharing the same pair are batched together for efficient processing.
  */
-interface ResolvedVectorInfrastructure {
+export interface ResolvedVectorInfrastructure {
     embedding: BaseEmbeddings;
     vectorDB: VectorDBBase;
     indexName: string;
@@ -59,16 +64,27 @@ interface ResolvedVectorInfrastructure {
 }
 
 /**
- * Vector-storage behavior resolved for a single content item, derived from its ContentSource
- * configuration (falling back to its ContentType defaults, then hardcoded defaults). Union types
- * are derived from the generated JSONType interface so they track the metadata definition — see
- * {@link resolveItemVectorStorageConfig}.
+ * How a chunk's vector-DB record id is derived — `'recordId'` (the chunk's own PK, purge-safe) or
+ * `'hash'` (deterministic, EntityDocument-parity). Derived from the generated JSONType interface so
+ * it tracks the metadata definition. See {@link AutotagBaseEngine.resolveChunkVectorID}.
  */
-type VectorIDStrategy = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorIDStrategy']>;
-type ChunkTextStorage = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['ChunkTextStorage']>;
-type VectorMetadataConfig = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorMetadata']>;
-type VectorMetadataFieldConfig = NonNullable<VectorMetadataConfig['Fields']>[string];
-interface ResolvedVectorStorageConfig {
+export type VectorIDStrategy = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorIDStrategy']>;
+/**
+ * Whether an item always embeds as chunk rows (`'alwaysChunk'`) or embeds as a single item-level
+ * vector when it fits in one chunk (`'mixed'`). Derived from the generated JSONType interface.
+ */
+export type ChunkTextStorage = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['ChunkTextStorage']>;
+/** Vector-metadata shaping config (field strategy, per-field rules, curated toggles). Derived from the generated JSONType interface. */
+export type VectorMetadataConfig = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorMetadata']>;
+/** Per-field vector-metadata rule (inclusion, truncation, StoreAs coercion). Derived from {@link VectorMetadataConfig}. */
+export type VectorMetadataFieldConfig = NonNullable<VectorMetadataConfig['Fields']>[string];
+
+/**
+ * Vector-storage behavior resolved for a single content item, derived from its ContentSource
+ * configuration (falling back to its ContentType defaults, then hardcoded defaults). Produced by
+ * {@link AutotagBaseEngine.resolveItemVectorStorageConfig}.
+ */
+export interface ResolvedVectorStorageConfig {
     vectorIDStrategy: VectorIDStrategy;
     chunkTextStorage: ChunkTextStorage;
     /** How vector metadata is shaped (undefined ⇒ the curated default set). */
@@ -88,31 +104,31 @@ const DEFAULT_CHUNK_TEXT_STORAGE: ChunkTextStorage = 'alwaysChunk';
 
 /**
  * One embedding unit produced from a ContentItem: a slice of its text plus the id minted for the
- * chunk up front. `chunkId` becomes BOTH the ContentItemChunk row's PK and its vector-DB id (under
+ * chunk up front. `chunkID` becomes BOTH the ContentItemChunk row's PK and its vector-DB id (under
  * the 'recordId' strategy), so it is known at metadata-build time — which lets a chunk vector carry
  * its own identity ({@link buildVectorMetadata}) even though the chunk row is written later.
  */
-interface EmbeddingChunk {
+export interface EmbeddingChunk {
     item: MJContentItemEntity;
     chunkIndex: number;
     text: string;
-    chunkId: string;
+    chunkID: string;
 }
 
 /**
  * A chunk whose vector has been upserted and is ready to be written as a ContentItemChunk row.
- * `chunkId` becomes the row PK; `vectorRecordID` is the id the vector was actually stored under
- * (equal to chunkId under 'recordId', a hash under 'hash').
+ * `chunkID` becomes the row PK; `vectorRecordID` is the id the vector was actually stored under
+ * (equal to chunkID under 'recordId', a hash under 'hash').
  */
-interface PersistedChunk {
+export interface PersistedChunk {
     chunkIndex: number;
     text: string;
     vectorRecordID: string;
-    chunkId: string;
+    chunkID: string;
 }
 
 /** Running tally for a PurgeDeletedChunks pass. */
-interface ChunkPurgeStats {
+export interface ChunkPurgeStats {
     /** Chunks whose vector was removed from the store and row flipped to 'Deleted'. */
     purged: number;
     /** Chunks that could not be purged this run (left 'Pending', retried next run). */
@@ -122,7 +138,7 @@ interface ChunkPurgeStats {
 }
 
 /** Running tally for an EmbedPendingChunks pass. */
-interface ChunkEmbedStats {
+export interface ChunkEmbedStats {
     /** Chunks whose text was embedded, upserted, and row flipped to EmbeddingStatus='Complete'. */
     embedded: number;
     /** Chunks that could not be embedded this run (left 'Pending', retried next run). */
@@ -800,7 +816,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const hasPreviousResults = Object.keys(previousResults).length > 0;
 
         // Check if this source type requires content type validation in the prompt
-        const sourceType = this.ContentSourceTypes.find(st => UUIDsEqual(st.ID, params.contentSourceTypeID));
+        const sourceType = this.khEngine.GetContentSourceTypeByID(params.contentSourceTypeID);
         const sourceConfig = sourceType?.ConfigurationObject;
         const requiresContentType = sourceConfig?.RequiresContentType !== false;
 
@@ -852,7 +868,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (!contentSourceID) {
             return null;
         }
-        const source = this.khEngine.ContentSources.find(s => UUIDsEqual(s.ID, contentSourceID));
+        const source = this.khEngine.GetContentSourceByID(contentSourceID);
         if (!source) {
             return null;
         }
@@ -870,7 +886,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         const prompt = this.getAutotagPrompt();
         const tokenLimit = this.resolveTokenLimit(params.modelID);
-        const chunks = this.chunkExtractedText(params.text, tokenLimit);
+        const chunks = await this.chunkExtractedText(params.text, tokenLimit);
 
         if (chunks.length === 0 || (chunks.length === 1 && (!chunks[0] || chunks[0].trim().length === 0))) {
             LogError(`[Autotag] No text to process for item ${params.contentItemID}`);
@@ -997,29 +1013,64 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Chunks text using the shared TextChunker utility for token-aware splitting.
-     * Falls back to simple character-based splitting when TextChunker is not available.
+     * Registration key of the segmentation strategy this engine uses.
+     *
+     * Defaults to `FixedWindow`, which reproduces the engine's historical token-window
+     * behavior exactly — routing through the strategy layer is a refactor, not a behavior
+     * change. Override in a subclass (or, once the config field lands, resolve it from the
+     * Content Source / Content Type `Configuration`) to opt into structure-aware
+     * (`StructuralText`), topic-aware (`SemanticText`), or transcript-based (`Transcript`)
+     * segmentation.
+     *
+     * @see [Content Segmentation Guide](../../../../../guides/CONTENT_SEGMENTATION_GUIDE.md)
      */
-    public chunkExtractedText(text: string, tokenLimit: number): string[] {
+    protected resolveSegmenterKey(): string {
+        return FIXED_WINDOW_SEGMENTER_KEY;
+    }
+
+    /**
+     * Run the resolved segmentation strategy over `text` and return its text payloads.
+     *
+     * Returns null when segmentation fails, so callers can apply their own fallback rather
+     * than silently embedding nothing.
+     */
+    protected async segmentTextForChunking(
+        text: string,
+        options: FixedWindowSegmentationOptions
+    ): Promise<string[] | null> {
+        const segmenter = ResolveSegmenter(this.resolveSegmenterKey(), FIXED_WINDOW_SEGMENTER_KEY);
+        const result = await segmenter.Segment({ Text: text, Options: options });
+        if (!result.Success) {
+            LogError(`[Autotag] Segmentation failed (${result.SegmenterKey}): ${result.ErrorMessage ?? 'unknown error'}`);
+            return null;
+        }
+        const texts = result.Segments.map(s => s.Text ?? '').filter(t => t.trim().length > 0);
+        return texts.length > 0 ? texts : null;
+    }
+
+    /**
+     * Chunks text for the LLM tagging pass, sized to the *tagging model's* context window.
+     *
+     * Note the budget here is deliberately independent of the embedding budget
+     * ({@link MAX_EMBEDDING_TOKENS}) — these two chunk sites feed different consumers and
+     * must not be collapsed into one call. Tagging chunks are transient and never persisted.
+     */
+    public async chunkExtractedText(text: string, tokenLimit: number): Promise<string[]> {
         try {
             const maxChunkTokens = Math.ceil(tokenLimit / 1.5);
 
+            // Short-circuit: text that already fits is passed through verbatim, preserving its
+            // original whitespace (a segmenter would return a normalized reflow of the same text).
             if (text.length <= maxChunkTokens * 4) {
                 return [text];
             }
 
-            try {
-                const chunkParams: ChunkTextParams = {
-                    Text: text,
-                    MaxChunkTokens: maxChunkTokens,
-                    OverlapTokens: Math.ceil(maxChunkTokens * 0.1),
-                    Strategy: 'sentence',
-                };
-                const chunks = TextChunker.ChunkText(chunkParams);
-                return chunks.map(c => c.Text);
-            } catch {
-                return this.fallbackChunkText(text, maxChunkTokens);
-            }
+            const segments = await this.segmentTextForChunking(text, {
+                MaxSegmentTokens: maxChunkTokens,
+                OverlapTokens: Math.ceil(maxChunkTokens * 0.1),
+                TextStrategy: 'sentence',
+            });
+            return segments ?? this.fallbackChunkText(text, maxChunkTokens);
         } catch {
             LogError('Could not chunk the text');
             return [text];
@@ -1295,7 +1346,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetContentItemParams(contentTypeID: string): { modelID: string; minTags: number; maxTags: number } {
-        const contentType = this.ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
+        const contentType = this.khEngine.GetContentTypeByID(contentTypeID);
         if (!contentType) {
             throw new Error(`Content Type with ID ${contentTypeID} not found in cached metadata`);
         }
@@ -1307,7 +1358,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetContentSourceTypeName(contentSourceTypeID: string): string {
-        const sourceType = this.ContentSourceTypes.find(st => UUIDsEqual(st.ID, contentSourceTypeID));
+        const sourceType = this.khEngine.GetContentSourceTypeByID(contentSourceTypeID);
         if (!sourceType) {
             throw new Error(`Content Source Type with ID ${contentSourceTypeID} not found in cached metadata`);
         }
@@ -1315,7 +1366,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public GetContentTypeName(contentTypeID: string): string {
-        const contentType = this.ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
+        const contentType = this.khEngine.GetContentTypeByID(contentTypeID);
         if (!contentType) {
             throw new Error(`Content Type with ID ${contentTypeID} not found in cached metadata`);
         }
@@ -1624,7 +1675,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const batch = items.slice(i, i + batchSize);
 
             // Build chunks for each item — items with long text produce multiple chunks
-            const allChunks = this.buildChunksForBatch(batch);
+            const allChunks = await this.buildChunksForBatch(batch);
 
             const texts = allChunks.map(c => c.text);
             // Rate limit embedding API call
@@ -1692,18 +1743,18 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Build text chunks for a batch of content items. Items with long text
      * produce multiple chunks via TextChunker.
      */
-    private buildChunksForBatch(
+    private async buildChunksForBatch(
         batch: MJContentItemEntity[]
-    ): EmbeddingChunk[] {
+    ): Promise<EmbeddingChunk[]> {
         const allChunks: EmbeddingChunk[] = [];
         for (const item of batch) {
-            const chunks = this.buildEmbeddingChunks(item);
+            const chunks = await this.buildEmbeddingChunks(item);
             for (let ci = 0; ci < chunks.length; ci++) {
                 // Mint a stable per-chunk id up front. This becomes BOTH the ContentItemChunk row's
                 // PK and (under the 'recordId' strategy) its vector-DB id, so a re-chunk produces
                 // NEW rows with NEW ids — old (soft-deleted) and new chunks never collide on a
                 // vector id, which is what makes the purge safe.
-                allChunks.push({ item, chunkIndex: ci, text: chunks[ci], chunkId: uuidv4() });
+                allChunks.push({ item, chunkIndex: ci, text: chunks[ci], chunkID: uuidv4() });
             }
         }
         return allChunks;
@@ -1714,7 +1765,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * each item's storage config once and shares the item-level-vs-chunk decision between the
      * vector id and the metadata so the two always agree.
      */
-    private buildVectorRecords(
+    protected buildVectorRecords(
         allChunks: EmbeddingChunk[],
         vectors: number[][],
         tagMap: Map<string, string[]>,
@@ -1727,21 +1778,46 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // The ContentItem entity metadata drives config-selected display fields (types, MaxLength,
         // eligibility). Resolved once per batch — every chunk shares the same source entity.
         const contentItemEntity = this.ProviderToUse.EntityByName('MJ: Content Items');
-        return allChunks.map((chunk, idx) => {
-            const count = countByItem.get(chunk.item.ID) ?? 1;
-            const config = this.resolveItemVectorStorageConfig(chunk.item);
-            const itemLevel = this.isItemLevelVector(config, count);
-            const record: VectorRecord = {
-                id: this.resolveChunkVectorId(chunk, config, itemLevel),
-                values: vectors[idx],
-                metadata: this.buildVectorMetadata(chunk, itemLevel, tagMap.get(chunk.item.ID), config, contentItemEntity)
-            };
-            const directives = this.buildProviderDirectives(chunk.item, infra);
-            if (directives) {
-                record.providerTemporaryDirectives = directives;
-            }
-            return record;
-        });
+        return allChunks.map((chunk, idx) =>
+            this.buildVectorRecord(chunk, vectors[idx], countByItem.get(chunk.item.ID) ?? 1, tagMap.get(chunk.item.ID), contentItemEntity, infra)
+        );
+    }
+
+    /**
+     * Build the single {@link VectorRecord} for one embedding chunk. Resolves the item's storage
+     * config, decides item-level-vs-chunk once, and shares that decision between the vector id and
+     * the metadata so the two always agree. `protected` so subclasses can override per-record
+     * shaping (id, metadata, or provider directives) without reimplementing the batch loop in
+     * {@link buildVectorRecords}.
+     *
+     * @param chunk              The embedding unit (item slice + minted chunk id).
+     * @param vector             The embedding produced for `chunk`.
+     * @param chunkCountForItem  Total chunks produced for `chunk.item` this batch — drives the
+     *                           item-level-vs-chunk decision ({@link isItemLevelVector}).
+     * @param tags               Resolved tag names for `chunk.item`, if any.
+     * @param contentItemEntity  The 'MJ: Content Items' entity metadata, for display-field resolution.
+     * @param infra              Resolved vector infrastructure (source of provider directives).
+     */
+    protected buildVectorRecord(
+        chunk: EmbeddingChunk,
+        vector: number[],
+        chunkCountForItem: number,
+        tags: string[] | undefined,
+        contentItemEntity: EntityInfo | undefined,
+        infra: ResolvedVectorInfrastructure
+    ): VectorRecord {
+        const config = this.resolveItemVectorStorageConfig(chunk.item);
+        const itemLevel = this.isItemLevelVector(config, chunkCountForItem);
+        const record: VectorRecord = {
+            id: this.resolveChunkVectorID(chunk, config, itemLevel),
+            values: vector,
+            metadata: this.buildVectorMetadata(chunk, itemLevel, tags, config, contentItemEntity)
+        };
+        const directives = this.buildProviderDirectives(chunk.item, infra);
+        if (directives) {
+            record.providerTemporaryDirectives = directives;
+        }
+        return record;
     }
 
     /**
@@ -1753,7 +1829,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Namespace is resolved from the parent ContentItem (org-level), the same source for a chunk's
      * vector as for an item-level vector.
      */
-    private buildProviderDirectives(
+    protected buildProviderDirectives(
         item: MJContentItemEntity,
         infra: ResolvedVectorInfrastructure
     ): Record<string, unknown> | undefined {
@@ -1765,24 +1841,24 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /**
      * Choose the vector-DB record id for one chunk based on the item's resolved config.
-     * - 'recordId' (default): the chunk's own id (chunkId), which is also the ContentItemChunk PK.
+     * - 'recordId' (default): the chunk's own id (chunkID), which is also the ContentItemChunk PK.
      *   Purge-safe — a re-chunk mints fresh ids, so a superseded chunk and its replacement never
      *   collide.
      * - 'hash': deterministic. An item-level single vector uses the bare item hash; every other
      *   case uses a per-(item, chunkIndex) hash. Deterministic ⇒ unsafe with re-chunk + purge
      *   (documented on the config), but preserves 5.49 EntityDocument parity when opted into.
      */
-    private resolveChunkVectorId(
+    protected resolveChunkVectorID(
         chunk: EmbeddingChunk,
         config: ResolvedVectorStorageConfig,
         isItemLevel: boolean
     ): string {
         if (config.vectorIDStrategy === 'hash') {
             return isItemLevel
-                ? this.contentItemVectorId(chunk.item.ID)
-                : this.contentItemChunkVectorId(chunk.item.ID, chunk.chunkIndex);
+                ? this.contentItemVectorID(chunk.item.ID)
+                : this.contentItemChunkVectorID(chunk.item.ID, chunk.chunkIndex);
         }
-        return chunk.chunkId;
+        return chunk.chunkID;
     }
 
     /**
@@ -1812,7 +1888,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const c = allChunks[idx];
             const key = NormalizeUUID(c.item.ID);
             const list = byItem.get(key) ?? [];
-            list.push({ chunkIndex: c.chunkIndex, text: c.text, vectorRecordID: String(records[idx].id), chunkId: c.chunkId });
+            list.push({ chunkIndex: c.chunkIndex, text: c.text, vectorRecordID: String(records[idx].id), chunkID: c.chunkID });
             byItem.set(key, list);
         }
 
@@ -1891,12 +1967,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         for (const chunk of chunks) {
             const row = await md.GetEntityObject<MJContentItemChunkEntity>('MJ: Content Item Chunks', contextUser);
             row.NewRecord();
-            // Pin the row PK to the id minted up front (chunkId) so the chunk's identity is stable
+            // Pin the row PK to the id minted up front (chunkID) so the chunk's identity is stable
             // and known before it is written — it is the same value put in the vector metadata's
             // RecordID (Chunk-Identity Contract), so a search hit resolves to this row by id.
             // NewRecord() applies an explicit PK last, so this overrides the auto-generated uuid.
-            row.ID = chunk.chunkId;
-            // VectorRecordID is the id the vector was actually upserted under (equal to chunkId
+            row.ID = chunk.chunkID;
+            // VectorRecordID is the id the vector was actually upserted under (equal to chunkID
             // under 'recordId', a hash under 'hash'). A re-chunk mints fresh ids for its new rows,
             // so a superseded (soft-deleted) chunk and its replacement never share one — which is
             // what makes PurgeDeletedChunks safe.
@@ -2222,7 +2298,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /**
-     * Pair each persisted chunk with its parent item as an {@link EmbeddingChunk} (chunkId = the
+     * Pair each persisted chunk with its parent item as an {@link EmbeddingChunk} (chunkID = the
      * chunk's existing PK, so the vector id + metadata identity match the live write path). Chunks
      * with empty text or a missing parent are counted as skipped and dropped.
      */
@@ -2239,7 +2315,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 stats.skipped++;
                 continue;
             }
-            embeddable.push({ row, chunk: { item, chunkIndex: row.Sequence, text, chunkId: row.ID } });
+            embeddable.push({ row, chunk: { item, chunkIndex: row.Sequence, text, chunkID: row.ID } });
         }
         return embeddable;
     }
@@ -2273,7 +2349,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const records: VectorRecord[] = embeddable.map((e, idx) => {
             const config = this.resolveItemVectorStorageConfig(e.chunk.item);
             const record: VectorRecord = {
-                id: this.resolveChunkVectorId(e.chunk, config, false),
+                id: this.resolveChunkVectorID(e.chunk, config, false),
                 values: runResult.Vectors[idx],
                 metadata: this.buildVectorMetadata(e.chunk, false, tagMap.get(e.chunk.item.ID), config, contentItemEntity),
             };
@@ -2453,7 +2529,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         vectorIndexID: string,
         _contextUser: UserInfo
     ): Promise<ResolvedVectorInfrastructure> {
-        const vectorIndex = this.khEngine.GetVectorIndexById(vectorIndexID);
+        const vectorIndex = this.khEngine.GetVectorIndexByID(vectorIndexID);
         if (!vectorIndex) {
             throw new Error(`Vector index ${vectorIndexID} not found in KnowledgeHubMetadataEngine cache`);
         }
@@ -2562,7 +2638,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     /** SHA-1 deterministic vector ID for a content item */
-    private contentItemVectorId(contentItemId: string): string {
+    private contentItemVectorID(contentItemId: string): string {
         return crypto.createHash('sha1').update(`content-item_${contentItemId}`).digest('hex');
     }
 
@@ -2572,7 +2648,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * (contentItemId, chunkIndex), which is exactly what makes 'hash' unsafe with re-chunk +
      * purge — a re-chunk that produces the same index reuses the id (documented on the config).
      */
-    private contentItemChunkVectorId(contentItemId: string, chunkIndex: number): string {
+    private contentItemChunkVectorID(contentItemId: string, chunkIndex: number): string {
         return crypto.createHash('sha1').update(`content-item-chunk_${contentItemId}_${chunkIndex}`).digest('hex');
     }
 
@@ -2581,11 +2657,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * ContentSource override -> ContentType default -> hardcoded default. Reads the strongly-typed
      * ConfigurationObject accessors emitted by CodeGen for each entity's Configuration JSONType.
      */
-    private resolveItemVectorStorageConfig(item: MJContentItemEntity): ResolvedVectorStorageConfig {
-        const source = this.khEngine.ContentSources.find(s => UUIDsEqual(s.ID, item.ContentSourceID));
+    protected resolveItemVectorStorageConfig(item: MJContentItemEntity): ResolvedVectorStorageConfig {
+        const source = this.khEngine.GetContentSourceByID(item.ContentSourceID);
         const srcCfg = source?.ConfigurationObject;
 
-        const contentType = this.ContentTypes.find(t => UUIDsEqual(t.ID, item.ContentTypeID));
+        const contentType = this.khEngine.GetContentTypeByID(item.ContentTypeID);
         const typeCfg = contentType?.ConfigurationObject;
 
         return {
@@ -2602,7 +2678,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * always writes a chunk row (item-level id stays null). buildVectorRecords and
      * persistVectorReferences share this predicate so the vector id and its persistence agree.
      */
-    private isItemLevelVector(config: ResolvedVectorStorageConfig, chunkCount: number): boolean {
+    protected isItemLevelVector(config: ResolvedVectorStorageConfig, chunkCount: number): boolean {
         return config.chunkTextStorage === 'mixed' && chunkCount === 1;
     }
 
@@ -2617,7 +2693,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Build the text to embed for a content item, and chunk it if it exceeds
      * the embedding model's token limit. Returns one or more text chunks.
      */
-    private buildEmbeddingChunks(item: MJContentItemEntity): string[] {
+    private async buildEmbeddingChunks(item: MJContentItemEntity): Promise<string[]> {
         const parts: string[] = [];
         if (item.Name) parts.push(item.Name);
         if (item.Description) parts.push(item.Description);
@@ -2631,25 +2707,23 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             return [full];
         }
 
-        // Chunk using TextChunker for token-aware splitting
         LogStatus(`[Autotag] Chunking embedding text for "${item.Name}" (${full.length} chars, ~${Math.ceil(full.length / 4)} tokens)`);
-        try {
-            const chunkParams: ChunkTextParams = {
-                Text: full,
-                MaxChunkTokens: AutotagBaseEngine.MAX_EMBEDDING_TOKENS,
-                OverlapTokens: 100,
-            };
-            const chunks = TextChunker.ChunkText(chunkParams);
-            LogStatus(`[Autotag] Split into ${chunks.length} chunks for embedding`);
-            return chunks.map(c => c.Text);
-        } catch {
-            // Fallback: simple character-based splitting
-            const result: string[] = [];
-            for (let i = 0; i < full.length; i += charLimit) {
-                result.push(full.substring(i, i + charLimit));
-            }
-            return result;
+        const segments = await this.segmentTextForChunking(full, {
+            MaxSegmentTokens: AutotagBaseEngine.MAX_EMBEDDING_TOKENS,
+            OverlapTokens: 100,
+            TextStrategy: 'sentence',
+        });
+        if (segments) {
+            LogStatus(`[Autotag] Split into ${segments.length} chunks for embedding`);
+            return segments;
         }
+
+        // Fallback: simple character-based splitting
+        const result: string[] = [];
+        for (let i = 0; i < full.length; i += charLimit) {
+            result.push(full.substring(i, i + charLimit));
+        }
+        return result;
     }
 
     /**
@@ -2668,7 +2742,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * `Entity` is kept so content search results stay labeled (record id is recovered from the
      * vector id under the default 'recordId' strategy).
      */
-    private buildVectorMetadata(
+    protected buildVectorMetadata(
         chunk: EmbeddingChunk,
         isItemLevel: boolean,
         tags: string[] | undefined,
@@ -2720,7 +2794,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (isItemLevel) {
             meta['RecordID'] = chunk.item.ID;
         } else {
-            meta['RecordID'] = chunk.chunkId;
+            meta['RecordID'] = chunk.chunkID;
             meta['ContentItemID'] = chunk.item.ID;
             meta['Sequence'] = chunk.chunkIndex;
         }

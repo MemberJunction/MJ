@@ -2360,10 +2360,40 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Saves the current state of the object to the database. Uses the active provider to handle the actual saving of the record.
      * If the record is new, it will be created, if it already exists, it will be updated.
-     * 
+     *
      * Debounces multiple calls so that if Save() is called again while a save is in progress,
      * the second call will simply receive the same result as the first.
-     * 
+     *
+     * ## IS-A entities: one Save() writes the whole chain
+     *
+     * For a Table-Per-Type child, this saves EVERY level — root first, then down to this entity —
+     * inside one transaction, with a single primary key shared across all of them. Set fields
+     * belonging to any ancestor directly on this object; {@link Set} routes each one to the entity
+     * that owns it. There is no depth limit.
+     *
+     * ```typescript
+     * // Webinar IS-A Meeting IS-A Product
+     * const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+     * webinar.NewRecord();
+     * webinar.RecordingURL = '...';   // Webinar's own
+     * webinar.StartTime    = start;   // Meeting's
+     * webinar.Name         = 'Q1';    // Product's — set on the SAME object
+     * await webinar.Save();           // writes Product, Meeting, Webinar
+     * ```
+     *
+     * Do NOT create the parent separately and then try to attach a child to it — `NewRecord()`
+     * starts a new chain rather than adopting an existing parent row, so that produces a second
+     * parent and a primary-key conflict.
+     *
+     * If a PARENT level fails validation, this returns false and the failure is reported on THIS
+     * entity's result as `Failed to save parent entity '<Name>': <detail>`. The commonest cause is a
+     * NOT NULL column on an ancestor table that was never set — the child looks complete and the
+     * save still fails. (Before v5.50.0 that result was recorded only on the parent object, so the
+     * caller saw `false` with a null `LatestResult` and an empty `ResultHistory`.)
+     *
+     * @see {@link ISAParent} to inspect the parent instance directly
+     * @see packages/MJCore/docs/isa-relationships.md — "Creating a Child Record"
+     *
      * @param options
      * @returns Promise<boolean>
      */
@@ -2449,6 +2479,35 @@ export abstract class BaseEntity<T = unknown> {
                 if (!parentResult) {
                     // Parent save failed — rollback if we started the transaction
                     await this.RollbackISATransaction(isISAInitiator);
+
+                    // RECORD the failure on THIS entity's ResultHistory before returning. Without
+                    // this the caller gets `false` with LatestResult === null and an empty
+                    // ResultHistory, because every result was written to the PARENT object — which
+                    // callers have no reference to (`_parentEntity` is private). The diagnosis is
+                    // then invisible: e.g. saving an IS-A child whose parent has NOT NULL columns
+                    // the child never set fails with literally no message anywhere the caller can
+                    // reach. Mirrors the transaction-group-failure and catch-block paths below.
+                    if (currentResultCount === this.ResultHistory.length) {
+                        const parentLatest = this._parentEntity.LatestResult;
+                        const parentErrors = parentLatest?.Errors ?? [];
+                        // A failed parent commonly reports its detail ONLY in Errors (validation
+                        // failures leave Message empty), so fall back to the error text rather than
+                        // handing the caller a message that says nothing.
+                        const detail =
+                            parentLatest?.Message ||
+                            parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
+                            'no error detail was reported by the parent';
+                        newResult.Success = false;
+                        newResult.Type = this.IsSaved ? 'update' : 'create';
+                        newResult.Message =
+                            `Failed to save parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
+                        // Surface the parent's field-level errors so the caller can act on them.
+                        newResult.Errors = parentErrors;
+                        newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                        newResult.EndedAt = new Date();
+                        this.RegisterResultHistoryEntry(newResult);
+                    }
+
                     return false;
                 }
             }
@@ -3265,6 +3324,34 @@ export abstract class BaseEntity<T = unknown> {
                             if (!parentResult) {
                                 // Parent delete failed — rollback if we started the transaction
                                 await this.RollbackISATransaction(isISAInitiator);
+
+                                // RECORD the failure on THIS entity's ResultHistory before returning —
+                                // symmetric with the parent-SAVE-failure path in _InnerSave. Without this
+                                // the caller gets `false` with LatestResult === null and an empty
+                                // ResultHistory, because every result was written to the PARENT object,
+                                // which callers have no reference to (`_parentEntity` is private). Note
+                                // THIS entity's own row was already deleted successfully above; it is the
+                                // parent-chain delete that failed and rolled the transaction back.
+                                if (currentResultCount === this.ResultHistory.length) {
+                                    const parentLatest = this._parentEntity.LatestResult;
+                                    const parentErrors = parentLatest?.Errors ?? [];
+                                    // A failed parent commonly reports its detail ONLY in Errors, so fall
+                                    // back to the error text rather than a message that says nothing.
+                                    const detail =
+                                        parentLatest?.Message ||
+                                        parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
+                                        'no error detail was reported by the parent';
+                                    newResult.Success = false;
+                                    newResult.Type = 'delete';
+                                    newResult.Message =
+                                        `Failed to delete parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
+                                    // Surface the parent's field-level errors so the caller can act on them.
+                                    newResult.Errors = parentErrors;
+                                    newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                    newResult.EndedAt = new Date();
+                                    this.RegisterResultHistoryEntry(newResult);
+                                }
+
                                 return false;
                             }
                         }

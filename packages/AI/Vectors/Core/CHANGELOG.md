@@ -1,5 +1,68 @@
 # Change Log - @memberjunction/ai-vectors
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-vectordb@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-vectordb@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 9efcfe6: Add `@memberjunction/ai-segmentation` — pluggable content segmentation for RAG ingestion, and fix two latent bugs in `TextChunker`.
+
+  **New package `@memberjunction/ai-segmentation`** turns chunking into a registered, swappable strategy resolved through the MJ class factory, the same way `BaseEmbeddings` and `VectorDBBase` providers already work. `BaseSegmenter` is a template-method base: a new strategy implements one method (`SegmentCore`) and the base handles validation, the token ceiling (splitting oversized segments while preserving titles and rebasing offsets), undersized merging, sequence numbering, `ParentIndex` → `ParentSequence` remapping after splits, cycle-safe depth, and provenance stamping. Ships four segmenters:
+  - `StructuralText` — markdown/HTML heading structure → sections with real parent/child hierarchy; the recommended text default.
+  - `SemanticText` — LLM topic boundaries via `AIPromptRunner` (a tracked `MJ: AI Prompt Run`), skipping the call for short documents and degrading to `StructuralText` on any failure.
+  - `Transcript` — timed cues → audio/video **chapters** with `StartMs`/`EndMs`, optional per-speaker sub-chapters, each carrying a media reference _and_ the transcript text.
+  - `FixedWindow` — universal fallback: token windows for text, duration windows for untranscribed media.
+
+  The package sits above `@memberjunction/ai-prompts` so the LLM segmenter can use real, versioned prompt metadata with cost attribution; `ai-vectors` cannot depend on `ai-prompts` (`ai-prompts → templates → ai-provider-bundle → ai-vectors-pinecone → ai-vectors` is circular).
+
+  **`@memberjunction/ai-vectors` — `TextChunker` fixes** (no API change):
+  - **Chunk offsets were wrong for repeated text.** `buildChunkFromUnits` resolved each chunk's start with `indexOf` from position 0, so any recurring sentence (boilerplate, a repeated header) made later chunks report the _first_ occurrence — a chunk truly spanning offsets 61–86 reported 0–86. Offsets are chunk provenance, so this silently corrupted the link from a search hit back to its source passage. Now resolved with a single forward-cursor pass, which is also O(n) instead of O(n²).
+  - **`chunkByFixed` could never terminate** when `OverlapTokens >= MaxChunkTokens`, because the start cursor moved backwards each iteration. Overlap is now capped at half the window and the loop guarantees forward progress.
+
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

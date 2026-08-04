@@ -1,5 +1,84 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-entity-action-ux@6.0.0
+  - @memberjunction/ng-filter-builder@6.0.0
+  - @memberjunction/ng-list-management@6.0.0
+  - @memberjunction/ng-map-view@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/ng-record-changes@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/ng-timeline@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-export-service@6.0.0
+  - @memberjunction/ng-pagination@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/export-engine@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-entity-action-ux@5.51.0
+  - @memberjunction/ng-filter-builder@5.51.0
+  - @memberjunction/ng-list-management@5.51.0
+  - @memberjunction/ng-map-view@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/ng-record-changes@5.51.0
+  - @memberjunction/ng-shared-generic@5.51.0
+  - @memberjunction/ng-timeline@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ng-export-service@5.51.0
+  - @memberjunction/ng-pagination@5.51.0
+  - @memberjunction/ng-ui-components@5.51.0
+  - @memberjunction/export-engine@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 0ba33b3: Client-issue batch fixes. Exports (Query viewer, Data Explorer, and User Views) now cover the FULL result set — capped at 100k with an over-cap warning — instead of just the on-screen page, and the Data Explorer toolbar Export button opens a unified Excel/CSV/JSON dialog for every view type (Grid/Cards/Map/Timeline). UI-role users can now create and manage Lists, with owner-scoped delete (or Developer/Integration) enforced server-side on BOTH Lists and List Details — a List Detail's authorization is scoped through its parent List's owner, so a user can't delete membership rows of lists they don't own. Also: grid quick-filter matches hidden columns, primary-key integer columns render without thousands separators, the Queries search-box icon/placeholder overlap is fixed, and the streaming thinking-tag stripper no longer leaks partial `<think>`/`</think>` tags split across chunks — and now flushes a genuine trailing tag-prefix (e.g. a response ending in `<`) at end of stream instead of dropping it.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-entity-action-ux@5.50.0
+  - @memberjunction/ng-list-management@5.50.0
+  - @memberjunction/ng-map-view@5.50.0
+  - @memberjunction/ng-notifications@5.50.0
+  - @memberjunction/ng-record-changes@5.50.0
+  - @memberjunction/ng-shared-generic@5.50.0
+  - @memberjunction/ng-filter-builder@5.50.0
+  - @memberjunction/ng-timeline@5.50.0
+  - @memberjunction/ng-export-service@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+  - @memberjunction/ng-pagination@5.50.0
+  - @memberjunction/export-engine@5.50.0
+  - @memberjunction/global@5.50.0
+
 ## 5.49.0
 
 ### Patch Changes

@@ -54,6 +54,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() parentMessageId?: string; // Optional: for replying in threads
   @Input() enableAttachments: boolean = true; // Whether to show attachment button (based on agent modality support)
   @Input() enableMentions: boolean = true; // Whether to enable @-mention autocomplete (agents/users). Hosts addressing a single fixed agent (e.g. Form Builder cockpit) typically set false.
+  // Per-type caps under enableMentions (all default true) — forwarded to the AI composer's
+  // EnableAgentMentions/EnableEntityMentions/EnableSkillCommands. Let a host keep '/' skill
+  // commands while dropping '@' agent mentions (which would override a pinned default agent).
+  @Input() enableAgentMentions: boolean = true;
+  @Input() enableEntityMentions: boolean = true;
+  @Input() enableSkillCommands: boolean = true;
   @Input() enablePlanMode: boolean = true; // Whether the composer shows the Plan Mode toggle. Hosts that don't expose plan-mode workflows set false.
   @Input() enableRealtime: boolean = true; // Whether the composer shows the realtime voice-call launcher/options. Hosts without a voice experience set false.
   @Input() maxAttachments: number = 10; // Maximum number of attachments per message

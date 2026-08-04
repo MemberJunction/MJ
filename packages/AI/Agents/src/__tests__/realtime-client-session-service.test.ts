@@ -1174,6 +1174,26 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         expect(passed.autoPopulateLastRunPayload).toBeUndefined();
     });
 
+    it('threads AttributionUserID into the run as userId (issue #3371)', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput({ AttributionUserID: 'visitor-1' }), makeDelegateRequest());
+
+        // The run row + context-memory scope follow the PERSON, even when the relay executes under
+        // an elevated principal — base-agent reads `userId` ahead of `contextUser.ID`.
+        expect(runAgentMock.mock.calls[0][0].userId).toBe('visitor-1');
+    });
+
+    it('leaves userId undefined when no AttributionUserID is supplied, falling back to contextUser', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(runAgentMock.mock.calls[0][0].userId).toBeUndefined();
+    });
+
     it('returns the question + surfaces PausedRunID when the run is AwaitingFeedback', async () => {
         runAgentMock.mockResolvedValue({
             success: true,

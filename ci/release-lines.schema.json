@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/MemberJunction/MJ/next/ci/release-lines.schema.json",
+  "title": "MemberJunction release lines",
+  "description": "One source of truth for release channels, certified lines, and per-era platform manifests. See plans/lts-process.md §4.1. Status transitions merge only via PR (CODEOWNERS-gated); publish workflows may append mechanical fields (edge.newest, edge.releases, lines.*.newest, lines.*.releases) only. ci/validate-release-lines.mjs is the authoritative CI validator; this schema serves editors and external tooling.",
+  "type": "object",
+  "required": ["edge", "eras", "lines"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "edge": {
+      "type": "object",
+      "required": ["newest"],
+      "additionalProperties": false,
+      "properties": {
+        "newest": {
+          "description": "Newest Edge prerelease (X.Y.Z-edge.N), or null before the first Edge-era release.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+-edge\\.\\d+$" }
+          ]
+        },
+        "releases": {
+          "description": "Per-release dbImpact ledger for the current Edge stream — appended mechanically by publish, pruned at each candidate cut (the candidate is the stream's tip, so the accumulated impact becomes the new line's starting point).",
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^\\d+\\.\\d+\\.\\d+-edge\\.\\d+$": {
+              "type": "object",
+              "required": ["dbImpact"],
+              "additionalProperties": false,
+              "properties": {
+                "dbImpact": { "enum": ["none", "metadata", "repair", "schema"] },
+                "labels": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "eras": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^\\d+$": {
+          "type": "object",
+          "required": ["platform"],
+          "additionalProperties": false,
+          "properties": {
+            "platform": {
+              "description": "The era's infrastructure contract: exact or range pins for Angular, Node, TypeScript, zone.js, pnpm, etc. mj app tooling derives npm overrides from this block.",
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "lines": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^\\d+\\.\\d+$": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "enum": ["candidate", "certified", "maintenance", "eol", "withdrawn"] },
+            "certifiedBuild": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+            "newest": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+            "candidateDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+            "certifiedDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+            "supportEnds": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+            "upgradeImpact": { "enum": ["none", "config", "breaking"] },
+            "releases": {
+              "type": "object",
+              "additionalProperties": false,
+              "patternProperties": {
+                "^\\d+\\.\\d+\\.\\d+$": {
+                  "type": "object",
+                  "required": ["dbImpact"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "dbImpact": { "enum": ["none", "metadata", "repair", "schema"] },
+                    "labels": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            },
+            "scorecard": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}

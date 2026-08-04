@@ -436,4 +436,108 @@ describe('convertFile (BatchConverter)', () => {
     // Should include cleanup
     expect(result.OutputSQL).toContain('DROP TABLE IF EXISTS');
   });
+
+  // ============================================================
+  // Bare EXEC mj-sync delete (issue #3253)
+  // ============================================================
+  it('should convert a bare EXEC spDelete (mj-sync delete) into a DO/PERFORM block', () => {
+    // mj-sync emits record deletions with inline params and no DECLARE block.
+    // v5.45's spDeleteComponentRegistry was silently dropped for this shape.
+    const sql = `EXEC [__mj].[spDeleteComponentRegistry] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';`;
+    const result = convertFile(makeConfig(sql));
+    expect(result.Stats.Errors).toBe(0);
+    expect(result.OutputSQL).toContain('DO $mj$');
+    expect(result.OutputSQL).toContain(
+      `PERFORM __mj."spDeleteComponentRegistry"(p_ID := 'B2F8C247-D22E-4991-9A69-0F73954A68D6')`
+    );
+    expect(result.OutputSQL).not.toContain('SKIPPED');
+  });
+
+  it('should keep an mj-sync delete alongside DECLARE-block saves (the v5.45 file shape)', () => {
+    const sql = [
+      '-- Save MJ: API Scopes (core SP call only)',
+      'DECLARE @ID_ec2d744b UNIQUEIDENTIFIER,',
+      '@Name_ec2d744b NVARCHAR(100)',
+      'SET',
+      "  @ID_ec2d744b = '411AA5E8-7F8E-4092-B6B1-9566847E2A3A'",
+      'SET',
+      "  @Name_ec2d744b = N'search'",
+      'EXEC [__mj].[spCreateAPIScope] @ID = @ID_ec2d744b, @Name = @Name_ec2d744b',
+      'GO',
+      '',
+      '-- Delete MJ: Component Registries (core SP call only)',
+      "EXEC [__mj].[spDeleteComponentRegistry] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';",
+      'GO',
+    ].join('\n');
+    const result = convertFile(makeConfig(sql));
+    expect(result.Stats.Errors).toBe(0);
+    expect(result.OutputSQL).toContain('PERFORM __mj."spCreateAPIScope"');
+    expect(result.OutputSQL).toContain(
+      `PERFORM __mj."spDeleteComponentRegistry"(p_ID := 'B2F8C247-D22E-4991-9A69-0F73954A68D6')`
+    );
+    expect(result.OutputSQL).not.toContain('SKIPPED');
+  });
+
+  it('should convert a delete that rides in the same batch as a save (no GO separator)', () => {
+    // Older mj-sync emitters wrote a whole session as one GO-less batch, so a delete
+    // could trail a DECLARE-block save. Without its own GO the delete used to be
+    // swallowed by the preceding block and lost with no SKIPPED trace (issue #3253).
+    const sql = [
+      'DECLARE @ID_aa UNIQUEIDENTIFIER,',
+      '@Name_aa NVARCHAR(100)',
+      'SET',
+      "  @ID_aa = '411AA5E8-7F8E-4092-B6B1-9566847E2A3A'",
+      'SET',
+      "  @Name_aa = N'search'",
+      'EXEC [__mj].[spCreateAPIScope] @ID = @ID_aa, @Name = @Name_aa;',
+      '',
+      '-- Delete MJ: Component Registries (core SP call only)',
+      "EXEC [__mj].[spDeleteComponentRegistry] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';",
+    ].join('\n');
+    const result = convertFile(makeConfig(sql));
+    expect(result.Stats.Errors).toBe(0);
+    expect(result.OutputSQL).toContain('PERFORM __mj."spCreateAPIScope"');
+    expect(result.OutputSQL).toContain(
+      `PERFORM __mj."spDeleteComponentRegistry"(p_ID := 'B2F8C247-D22E-4991-9A69-0F73954A68D6')`
+    );
+    expect(result.OutputSQL).not.toContain('SKIPPED');
+  });
+
+  it('should skip visibly rather than assign to variables it never declared', () => {
+    // Allowing DECLARE-less blocks (for mj-sync deletes) must not extend to blocks that
+    // DO carry SET assignments — those need a DECLARE section for their p_ variables.
+    // A DECLARE whose type the parser cannot read (here a dotted user type) yields zero
+    // declared vars, and emitting the SETs anyway produces PL/pgSQL that fails at apply
+    // time with `"p_id_a" is not a known variable`. A visible skip is the honest output.
+    const sql = [
+      'DECLARE @ID_a dbo.MyUuidType',
+      'SET',
+      "  @ID_a = '411AA5E8-7F8E-4092-B6B1-9566847E2A3A'",
+      "EXEC [__mj].[spCreateAPIScope] @ID = '411AA5E8-7F8E-4092-B6B1-9566847E2A3A', @Name = N'search';",
+    ].join('\n');
+    const result = convertFile(makeConfig(sql));
+    expect(result.OutputSQL).toContain('SKIPPED');
+    expect(result.OutputSQL).not.toMatch(/^\s*p_\w+ :=/m);
+  });
+
+  it('should skip when only SOME of the declared variables parsed', () => {
+    // The dangerous case is partial, not total: `@A_aa INT` parses and
+    // `@B_aa dbo.MyType` does not, so the block still has a DECLARE section and any
+    // "were there zero declared vars?" check waves it through. The emitted block then
+    // declares p_A_aa, assigns p_B_aa, and passes it to the sproc — PL/pgSQL that
+    // fails at apply time. The invariant is per-variable: every p_ name the block
+    // uses must be one the block declared.
+    const sql = [
+      'DECLARE @A_aa INT,',
+      '@B_aa dbo.MyType',
+      'SET',
+      '  @A_aa = 1',
+      'SET',
+      "  @B_aa = N'hello'",
+      'EXEC [__mj].[spCreateThing] @ID = @A_aa, @Name = @B_aa;',
+    ].join('\n');
+    const result = convertFile(makeConfig(sql));
+    expect(result.OutputSQL).toContain('SKIPPED');
+    expect(result.OutputSQL).not.toMatch(/^\s*p_B_aa :=/m);
+  });
 });
