@@ -100,7 +100,7 @@
     "check:peer-deps": "node .github/scripts/check-internal-peer-deps.mjs packages",
     "check:esm:test": "vitest run --config .github/scripts/vitest.config.mts",
     "check:claude-md": "node .github/scripts/check-claude-md.mjs",
-    "check:ui-layers": "node .github/scripts/check-ui-layers.mjs packages/Angular --require-declared && node .github/scripts/check-ui-layers.mjs packages",
+    "check:ui-layers": "mj standards check --check ui-layers",
     "change": "changeset",
     "version": "changeset version",
     "mergemain": "node ci/merge_main.mjs",
@@ -113,7 +113,8 @@
     "test:aggregate": "node unit-testing/tools/aggregate-results.js ",
     "test:markdown": "node unit-testing/tools/generate-markdown.js ",
     "test:integration": "MJ_INTEGRATION_TEST=1 mj test suite \"Integration Tests \u2014 Deterministic\"",
-    "test:e2e": "playwright test --config e2e/playwright.config.ts"
+    "test:e2e": "playwright test --config e2e/playwright.config.ts",
+    "check:standards": "mj standards check"
   },
   "repository": {
     "type": "git",

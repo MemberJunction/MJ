@@ -45,8 +45,12 @@ Packages here declare their layer in their own `package.json` and are checked by
 ```
 
 ```bash
-npm run check:ui-layers        # from the repo root
+npm run check:standards        # from the repo root — every adopted standard
+mj standards check --check ui-layers   # just this one
 ```
+
+The check ships in [`@memberjunction/standards`](../../Standards/README.md); this repo's adoption
+lives in `.mj-standards.json`.
 
 Beyond Router, the `widgets` layer also bans `@memberjunction/ng-shared` (`SharedService`,
 `BaseResourceComponent`, `NavigationService`) and global-provider construction
@@ -54,7 +58,7 @@ Beyond Router, the `widgets` layer also bans `@memberjunction/ng-shared` (`Share
 [../CLAUDE.md](../CLAUDE.md)).
 
 **Every package in this tree is declared and passing.** There is no "not looked at yet" state
-left here — `npm run check:ui-layers` covers all of `packages/Angular/**`, and the PR check runs
+left here — `mj standards check` covers all of `packages/Angular/**`, and the PR check runs
 on every PR that touches it.
 
 The one standing exception is marked in source with `mj-ui-layers-allow` and a reason:
