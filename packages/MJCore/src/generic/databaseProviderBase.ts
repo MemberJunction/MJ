@@ -1351,6 +1351,27 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     await this.OnBeforeSaveExecute(entity, user, options, saveContext);
                 }
 
+                // Step 3b: Post-image RLS check for UPDATES. The pre-image check at step 2b
+                // validates the row as it exists in the database, which cannot catch an update
+                // that moves a row OUT of the caller's Update filter (e.g. reassigning a row's
+                // owning organization to one the caller doesn't belong to — privilege
+                // escalation, not just a leak). This runs AFTER the before-save hooks by
+                // design: hooks can mutate field values, including filter-referenced ones, and
+                // the authorization boundary must cover the values that actually get written.
+                // Nothing existing moves — step 2b and step 3 keep their order; this is a new
+                // step. Post-image failure gets a specific message (unlike step 2b's
+                // deliberately generic one): the caller demonstrably has access to the row, so
+                // the diagnostic leaks nothing.
+                if (!bReplay && !bNewRecord) {
+                    const postImagePass = await this.CheckUpdateRLSPostImage(entity, user);
+                    if (!postImagePass) {
+                        entityResult.Success = false;
+                        entityResult.EndedAt = new Date();
+                        entityResult.Message = `Access denied: the requested changes would move this ${entity.EntityInfo.Name} record outside your permitted row scope`;
+                        throw new Error(entityResult.Message);
+                    }
+                }
+
                 // Step 4: Generate provider-specific SQL
                 const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user);
 
@@ -1593,6 +1614,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Subclasses must implement the actual RLS check logic.
      */
     protected abstract CheckCreateRLS(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean>;
+
+    /**
+     * Checks whether an UPDATE's pending (post-image) field values still pass the
+     * Update RLS filter. The pre-image check ({@link CheckRecordRLS}) validates the
+     * row as stored; this validates the row as it WILL be after the update, so a
+     * caller cannot move a row they legitimately own outside their own row scope
+     * (a privilege escalation the pre-image check cannot see). Runs after the
+     * before-save hooks so it validates the final values. Subclasses must
+     * implement; return true when no Update filter applies.
+     */
+    protected abstract CheckUpdateRLSPostImage(
         entity: BaseEntity,
         user: UserInfo
     ): Promise<boolean>;

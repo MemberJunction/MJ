@@ -102,4 +102,10 @@ jobs:
             exit 0
           fi
           git commit -m "chore(codegen): artifacts from CI codegen run for v6.1 RowFilterID migration" -m "Generated on a fresh SQL Server with all committed migrations (incl. V202608041553__v6.1.x__APIKey_Scope_RowFilterID) and committed metadata applied. Produced by the temporary codegen-once workflow; see its header for why CodeGen could not run in the dev session."
+          # The branch may have advanced while this run migrated + generated
+          # (the dev session keeps pushing implementation commits). Rebase the
+          # artifact commit onto the current tip rather than failing the push;
+          # generated files are disjoint from hand-written code, so conflicts
+          # are not expected — if one occurs, fail loudly rather than force.
+          git pull --rebase origin claude/api-key-row-filters-98ev39
           git push origin HEAD:claude/api-key-row-filters-98ev39

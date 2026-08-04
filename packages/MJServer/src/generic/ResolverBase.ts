@@ -999,7 +999,7 @@ export class ResolverBase {
       ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
     if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
-    return entityInfo.GetUserRowLevelSecurityWhereClause(user, type, returnPrefix);
+    return entityInfo.GetEffectiveRowFilterWhereClause(user, type, returnPrefix);
   }
 
   protected async createAuditLogRecord(

@@ -29,6 +29,7 @@ import {
     EntityInfo,
     EntityFieldInfo,
     EntityFieldTSType,
+    EntityPermissionType,
     UserInfo,
     BaseEntity,
     CompositeKey,
@@ -434,7 +435,7 @@ describe('GenericDatabaseProvider', () => {
                 DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
-                GetUserRowLevelSecurityWhereClause: () => '',
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const entity = {
@@ -471,7 +472,7 @@ describe('GenericDatabaseProvider', () => {
                 DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
-                GetUserRowLevelSecurityWhereClause: () => '',
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const entity = {
@@ -504,7 +505,7 @@ describe('GenericDatabaseProvider', () => {
                 DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => true,
-                GetUserRowLevelSecurityWhereClause: () => '',
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const entity = {
@@ -542,7 +543,7 @@ describe('GenericDatabaseProvider', () => {
                 DatetimeFields: [],
                 RelatedEntities: [],
                 UserExemptFromRowLevelSecurity: () => opts.exempt,
-                GetUserRowLevelSecurityWhereClause: () => opts.exempt ? '' : opts.rlsClause,
+                GetEffectiveRowFilterWhereClause: () => opts.exempt ? '' : opts.rlsClause,
             } as unknown as EntityInfo;
         }
 
@@ -627,10 +628,10 @@ describe('GenericDatabaseProvider', () => {
     });
 
     describe('CheckRecordRLS — exemption via centralized clause', () => {
-        it('returns true when GetUserRowLevelSecurityWhereClause returns empty (exempt user)', async () => {
+        it('returns true when GetEffectiveRowFilterWhereClause returns empty (exempt user)', async () => {
             const entityInfo = {
                 UserExemptFromRowLevelSecurity: () => true,
-                GetUserRowLevelSecurityWhereClause: () => '',
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
             const entity = { EntityInfo: entityInfo } as unknown as BaseEntity;
 
