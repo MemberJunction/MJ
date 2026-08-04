@@ -474,7 +474,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     InvocationType: invocationTypeEntity,
                     ContextUser: user,
                 });
-                results.push(result);
+                // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
+                // outside it — the action never ran, so there is no result to report.
+                if (result) {
+                    results.push(result);
+                }
             }
             return results;
         } catch (e) {
